@@ -1,5 +1,5 @@
-#import "dev"
 
-#macro from2 YAY
 
-#okay(1,9,3)
+fn a() {
+    okay();
+}

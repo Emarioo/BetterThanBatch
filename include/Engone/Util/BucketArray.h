@@ -158,7 +158,7 @@ struct BucketArray {
     /*
 	@return Pointer to the newly added element. nullptr if spot wasn't available.
     @param requestedIndex The index where you want your new element to be. Note that the index isn't available if there already is an element there.
-    @param value A pointer to the value of the new element. Note that a memcpy occurs. Value can be nullptr for zero initialized data.
+    @param value A pointer to the value of the new element. Value can be nullptr for default initialization 'new T()'.
     */
     T* requestSpot(int requestedIndex, T* value) {
 		if (m_valuesPerBucket == 0) {

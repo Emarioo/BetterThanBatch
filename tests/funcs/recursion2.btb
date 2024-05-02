@@ -1,0 +1,8 @@
+
+#import "./recursion.btb"
+
+fn second_1(n: i32) -> i32 {
+    if(n == 1)
+        return n;
+    return n + second_0(n-1);
+}

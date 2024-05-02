@@ -5,53 +5,59 @@
 // #import "Logger"
 // log(823.32)
 
+// fn first(n: i32) -> i32 {
+//     if(n == 1)
+//         return n;
+//     return n + second(n-1);
+// }
+// fn second(n: i32) -> i32 {
+//     if(n == 1)
+//         return n;
+//     return n + first(n-1);
+// }
+
+
+// return first(5);
+
+// #import "Lang"
 // #import "Logger"
 
-// global fun_step: i32 = 0;
-// global while_step: i32 = 0;
 
-// // turn on/off printing
-// // #macro step(V, N, ...) { _test V; N; V = N + 1; prints(...); }
-// #macro step(V, N, ...) { _test V; N; V = N + 1; }
+// #import "./dev2.btb"
 
-// fn fun(i: i32){
-//     fun_step = 0;
-    
-//     defer step(fun_step, 2, "fun1 defer\n")
-//     defer step(fun_step, 1, "fun2 defer\n")
-//     if(i >1){
-//         step(fun_step, 0, "before return\n")
-//         return
-//     }
-//     step(fun_step, 0, "end of fun\n")
+// fn okay() {
+//     // n();
+//     // fn n() -> i32 {
+//     //     return 2;
+//     // }
 // }
+// // okay()
+// a()
 
-// i := -1;
-// while i < 10; {
-//     i++;
-//     base := while_step;
-//     // printi(i);
-//     // printc('\n');
-    
-//     // printi(i);
-//     // prints(" - ");
-//     // printi(while_step);
-//     // printc('\n');
-    
-//     defer step(while_step, base + 2,"while defer\n")
-//     if(i>5){
-//         step(while_step, base + 0, "before break\n")
-//         if(i==8){
-//             while_step += 1; // steps in if won't run so we add the steps here since "while defer"" expects 2 steps
-//             continue;
-//         }
-//         defer step(while_step, base + 1, "if defer\n");
-//         continue;
-//     }
-//     while_step += 2; // steps in if won't run so we add the steps here since "while defer"" expects 2 steps
-//     fun(i);
-//     // printi(base + 1);
-//     // prints(" - ");
-//     // printi(while_step);
-//     // printc('\n');
+// #import "tests/funcs/recursion.btb"
+// #import "./dev.btb"
+
+// a: char[];
+
+// a := "okay"
+
+// return second_0(5);
+
+// struct Soul {
+//     ko: i32;
+//     numsi: f32;
 // }
+// struct App {
+//     a: i32;
+//     soul: Soul;
+//     tr: bool;
+// }
+// app: App;
+// app.a = 932
+// app.tr = true
+// app.soul.numsi = 232.232
+// app.soul.ko = 2
+
+// std_print_any("yoo!", true);
+
+// log(lang_members.len);

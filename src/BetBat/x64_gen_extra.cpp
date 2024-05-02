@@ -540,10 +540,15 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 FIX_PRE_IN_OPERAND(1)
                 FIX_PRE_OUT_OPERAND(0)
                 emit_mov_reg_mem(reg0->reg, reg1->reg, base->control, imm);
-                if(IS_CONTROL_SIGNED(base->control)) {
-                    emit_movsx(reg0->reg,reg0->reg,base->control);
-                } else {
-                    emit_movzx(reg0->reg,reg0->reg,base->control);
+                
+                // Assert((0 != IS_CONTROL_FLOAT(base->control)) == reg0->floaty);
+
+                if(!IS_CONTROL_FLOAT(base->control) && !reg0->floaty) {
+                    if(IS_CONTROL_SIGNED(base->control)) {
+                        emit_movsx(reg0->reg,reg0->reg,base->control);
+                    } else {
+                        emit_movzx(reg0->reg,reg0->reg,base->control);
+                    }
                 }
                 FIX_POST_OUT_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
@@ -820,7 +825,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 // We move the args on stack to registers.
                 // TODO: We could improve by directly moving args to registers
                 //  but it's more complicated.
-                Assert(push_offset == 0);
+                // Assert(push_offset == 0); push_offset does not have to be zero
                 switch(base->call) {
                     case BETCALL: break;
                     case STDCALL: {

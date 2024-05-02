@@ -1562,8 +1562,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         
         TypeId argType = {};
         SignalIO result = SIGNAL_FAILURE;
-        if(expression->hasImplicitThis() && i == 0) {
-            Assert(false); // shouldn't run?
+        if(expression->isMemberCall() && i == 0) {
             // method call and first argument which is 'this'
             bool nonReference = false;
             result = generateReference(arg, &argType, -1, &nonReference);
@@ -1582,19 +1581,21 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         } else {
             DynamicArray<TypeId> tempTypes{};
             result = generateExpression(arg, &tempTypes);
-            if(tempTypes.size()>0) {
-                TypeId argType = tempTypes[0];
-                // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
-                bool wasSafelyCasted = performSafeCast(argType, funcImpl->argumentTypes[i].typeId);
-                if(!wasSafelyCasted && !info.hasErrors()){
-                    ERR_SECTION(
-                        ERR_HEAD2(arg->location)
-                        ERR_MSG("Cannot cast argument of type " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(funcImpl->argumentTypes[i].typeId) << ". This is the function: '"<<astFunc->name<<"'. (function may be an overloaded operator)")
-                        ERR_LINE2(arg->location,"bad argument")
-                    )
+            if(result == SIGNAL_SUCCESS) {
+                if(tempTypes.size()>0) {
+                    TypeId argType = tempTypes[0];
+                    // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
+                    bool wasSafelyCasted = performSafeCast(argType, funcImpl->argumentTypes[i].typeId);
+                    if(!wasSafelyCasted && !info.hasErrors()){
+                        ERR_SECTION(
+                            ERR_HEAD2(arg->location)
+                            ERR_MSG("Cannot cast argument of type " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(funcImpl->argumentTypes[i].typeId) << ". This is the function: '"<<astFunc->name<<"'. (function may be an overloaded operator)")
+                            ERR_LINE2(arg->location,"bad argument")
+                        )
+                    }
+                } else {
+                    Assert(info.hasForeignErrors());
                 }
-            } else {
-                Assert(info.hasForeignErrors());
             }
         }
     }
@@ -2232,7 +2233,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 if(!typeInfo){
                     ERR_SECTION(
                         ERR_HEAD2(expression->location)
-                        ERR_MSG("'"<<compiler->lexer.tostring(expression->location)<<"' cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"")
+                        ERR_MSG(""<<compiler->lexer.tostring(expression->location)<<" cannot be converted to Slice<char> because Slice doesn't exist. Slice is defined in <preload> and this is probably a bug in the compiler.")
                     )
                     return SIGNAL_FAILURE;
                 }
@@ -5871,6 +5872,8 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
             context.debugFunction = dfun;
             context.bytecode->addExportedFunction("main", context.tinycode->index);
             
+            context.generatePreload();
+
             context.generateBody(scope);
             // TestGenerate(context.builder);
             

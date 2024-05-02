@@ -81,6 +81,7 @@ struct PreprocContext : PhaseContext {
     u32 new_import_id=0;
     lexer::Import* new_lexer_import = nullptr;
     u32 import_id=0;
+    lexer::Import* old_lexer_import = nullptr;
     Preprocessor::Import* current_import = nullptr;
     u32 head=0;
     

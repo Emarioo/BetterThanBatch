@@ -57,6 +57,7 @@
             "program": "${workspaceFolder}/bin/btb.exe",
             "args": ["--test"],
             // "args": ["--test"],
+            // "args": ["--test"],
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],
             // "args": ["-pm", "dev*"],
             // "args": ["-dev"],

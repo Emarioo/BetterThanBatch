@@ -79,8 +79,11 @@ void Bytecode::ensureAlignmentInData(int alignment){
     Assert(alignment > 0);
     // TODO: Check that alignment is a power of 2
     lock_global_data.lock();
+    defer { lock_global_data.unlock(); };
     int misalign = alignment - (dataSegment.used % alignment);
-    if(misalign == alignment) return;
+    if(misalign == alignment) {
+        return;
+    }
     if(dataSegment.max < dataSegment.used + misalign){
         int oldMax = dataSegment.max;
         bool yes = dataSegment.resize(dataSegment.max*2 + 100);
@@ -90,11 +93,11 @@ void Bytecode::ensureAlignmentInData(int alignment){
     int index = dataSegment.used;
     memset((char*)dataSegment.data() + index,'_',misalign);
     dataSegment.used+=misalign;
-    lock_global_data.unlock();
 }
 int Bytecode::appendData(const void* data, int size){
     Assert(size > 0);
     lock_global_data.lock();
+    defer { lock_global_data.unlock(); };
     if(dataSegment.max < dataSegment.used + size){
         int oldMax = dataSegment.max;
         dataSegment._reserve(dataSegment.max*2 + 2*size);
@@ -107,7 +110,6 @@ int Bytecode::appendData(const void* data, int size){
         memset((char*)dataSegment.data() + index,'_',size);
     }
     dataSegment.used+=size;
-    lock_global_data.unlock();
     return index;
 }
 
@@ -171,7 +173,8 @@ void BytecodeBuilder::emit_pop(BCRegister reg) {
     }
 #endif
 
-    Assert(pushed_offset < 0); // we have a bug if we popped a value that didn't exist
+    // TODO: Disable assert if there was an error.
+    // Assert(pushed_offset < 0); // we have a bug if we popped a value that didn't exist
 
     emit_opcode(BC_POP);
     emit_operand(reg);
@@ -339,7 +342,8 @@ void BytecodeBuilder::emit_ptr_to_params(BCRegister reg, int imm16) {
 }
 void BytecodeBuilder::emit_ret() {
     // We have a bug if we pushed more or less values than we popped.
-    Assert(pushed_offset == 0);
+    // TODO: We need to notify builder that an error occured because we shouldn't assert if so.
+    // Assert(pushed_offset == 0);
     emit_opcode(BC_RET);
 }
 void BytecodeBuilder::emit_jmp(int pc) {

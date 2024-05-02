@@ -486,8 +486,14 @@ struct ASTExpression : ASTNode {
     void setUnsafeCast(bool yes) { unsafeCast = yes; }
 
     bool implicitThisArg = false;
+    // true if this argument is implicit
     bool hasImplicitThis() const { return implicitThisArg; }
     void setImplicitThis(bool yes) { implicitThisArg = yes; }
+
+    bool memberCall = false; // rename to method call?
+    // true if call is a method
+    bool isMemberCall() const { return memberCall; }
+    void setMemberCall(bool yes) { memberCall = yes; }
 
     bool postAction = false;
     bool isPostAction() const { return postAction; }
@@ -916,10 +922,22 @@ struct AST {
 
     // returns true if successful, out_enum/member contains what was found.
     // returns false if not found. This could also mean that the enum was enclosed, if so the out parameters may tell you the enum that would have matched if it wasn't enclosed (it allows you to be more specific with error messages).
-    bool findEnumMember(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member);
+    bool findEnumMember(ScopeId scopeId, const StringView& name, ASTEnum** out_enum, int* out_member);
 
     void removeIdentifier(ScopeId scopeId, const StringView& name);
     void removeIdentifier(Identifier* identifier);
+
+    struct ScopeIterator {
+        ContentOrder next_order = 0;
+        ScopeInfo* next_scope = 0;
+    private:
+        QuickArray<ScopeInfo*> search_scopes;
+        QuickArray<ContentOrder> content_orders;
+        int search_index = 0;
+        friend class AST;
+    };
+    ScopeIterator createScopeIterator(ScopeId scopeId, ContentOrder order);
+    ScopeInfo* iterate(ScopeIterator& iterator);
         
     u32 getTypeSize(TypeId typeId);
     u32 getTypeAlignedSize(TypeId typeId);

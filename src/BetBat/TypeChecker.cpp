@@ -587,7 +587,6 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
 
     // TinyArray<TypeId> tempTypes{};
     // TINY_ARRAY(TypeId, tempTypes, 2);
-    // SAVEPOINT
     if(operatorOverloadAttempt){
         Assert(operatorArgs);
         if(operatorArgs->size() != 2) {
@@ -632,7 +631,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             tempTypes.resize(0);
             CheckExpression(info,scopeId,argExpr,&tempTypes, false);
             Assert(tempTypes.size()==1); // should be void at least
-            if(expr->hasImplicitThis() && i==0){
+            if(expr->isMemberCall() && i==0){
                 /* You can do this
                     l: List;
                     p := &l;
@@ -659,7 +658,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     FnOverloads* fnOverloads = nullptr;
     StructImpl* parentStructImpl = nullptr;
     ASTStruct* parentAstStruct = nullptr;
-    if(expr->hasImplicitThis()){
+    if(expr->isMemberCall()){
         // Assert(expr->args->size()>0);
         // ASTExpression* thisArg = expr->args->get(0);
         Assert(expr->args.size()>0);
@@ -761,6 +760,8 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
                 auto& argImpl = overload->funcImpl->argumentTypes[i];
                 auto& arg = overload->astFunc->arguments[i];;
+                if(!arg.defaultValue)
+                    continue;
                 tempTypes.resize(0);
                 SignalIO result = CheckExpression(info, scopeId, arg.defaultValue,&tempTypes,false);
                 //  DynamicArray<TypeId> temp{};
@@ -1194,8 +1195,13 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             bool found = true;
             for (u32 j=0;j<expr->nonNamedArgs;j++){
                 // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
+                lexer::SourceLocation loc = overload.astFunc->arguments[j+lessArguments].location;
+                if(loc.tok.type == lexer::TOKEN_NONE) {
+                    // bad token
+                    loc = expr->location;
+                }
                 TypeId argType = CheckType(info, overload.astFunc->scopeId,overload.astFunc->arguments[j+lessArguments].stringType,
-                    overload.astFunc->arguments[j+lessArguments].location,nullptr);
+                    loc,nullptr);
                 // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
                 // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
                 if(!info.ast->castable(argTypes[j], argType)){
@@ -1378,7 +1384,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                 // Perhaps it's an enum member?
                 int memberIndex = -1;
                 ASTEnum* astEnum = nullptr;
-                bool found = info.ast->findEnumMember(scopeId, expr->name, info.getCurrentOrder(), &astEnum, &memberIndex);
+                bool found = info.ast->findEnumMember(scopeId, expr->name, &astEnum, &memberIndex);
                 if(found){
                     expr->enum_ast = astEnum;
                     expr->enum_member = memberIndex;
@@ -1761,8 +1767,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             // }
             TypeId theType = CheckType(info, scopeId, "Range", expr->location, nullptr);
             if(outTypes) outTypes->add(theType);
-            break;
-        }
+        } break;
         case AST_INITIALIZER: {
             // Assert(expr->args);
             // for(auto now : *expr->args){
@@ -1782,8 +1787,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             if(outTypes)
                 outTypes->add(ti);
             expr->versions_castType[info.currentPolyVersion] = ti;
-            break;
-        }
+        } break;
         case AST_CAST: {
             // DynamicArray<TypeId> temp{};
             Assert(expr->left);
@@ -2767,10 +2771,13 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                     varinfo = info.ast->getVariableByIdentifier(varname.identifier);
                 } else {
                     // DECLARE NEW VARIABLE(S)
-                    if(!varname.versions_assignType[info.currentPolyVersion].isValid() && info.hasErrors()) {
-                        // Assert(info.hasErrors());
-                        continue;
-                    }
+
+                    // The code below should have caused less errors but it causes more errors because of undeclared identifiers
+                    // if(!varname.versions_assignType[info.currentPolyVersion].isValid() && info.hasErrors()) {
+                    //     // Assert(info.hasErrors());
+                    //     continue;
+                    // }
+
                     // We begin by matching the varname in ASTStatement with an identifier and VariableInfo
 
                     // Infer type

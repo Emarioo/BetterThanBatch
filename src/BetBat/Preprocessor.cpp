@@ -483,15 +483,20 @@ SignalIO PreprocContext::parseImport() {
             }
             return SIGNAL_SUCCESS; // we failed semantically, but not syntactically
         } else {
-            // preprocessor->lock_imports.lock();
-            // preprocessor->imports.requestSpot(dep_id-1,nullptr);
-            // preprocessor->lock_imports.unlock();
-            
-            imp->import_dependencies.add(dep_id);
-            if(has_as)
-                compiler->addDependency(import_id, dep_id, view_as);
-            else
-                compiler->addDependency(import_id, dep_id);
+            if(dep_id == import_id) {
+                ERR_SECTION(
+                    ERR_HEAD2(str_token)   
+                    ERR_MSG_COLORED("A file cannot import itself because there is no point in doing that.")
+                    ERR_LINE2(str_token,"here")
+                )
+            } else {
+                // log::out << "depend " << dep_id << " " << path <<" from "<<old_lexer_import->path<< "\n";
+                imp->import_dependencies.add(dep_id);
+                if(has_as)
+                    compiler->addDependency(import_id, dep_id, view_as);
+                else
+                    compiler->addDependency(import_id, dep_id);
+            }
         }
     }
     return SIGNAL_SUCCESS;
@@ -1303,8 +1308,8 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
     context.setup_token_iterator();
     
     if(context.evaluateTokens) {
-        auto old_imp = lexer->getImport_unsafe(import_id);
-        std::string name = old_imp->path;
+        context.old_lexer_import = lexer->getImport_unsafe(import_id);
+        std::string name = context.old_lexer_import->path;
         
         context.new_import_id = lexer->createImport(name, &context.new_lexer_import);
         Assert(context.new_import_id != 0);
@@ -1315,7 +1320,9 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
         context.current_import = imports.get(import_id-1);
         lock_imports.unlock();
     } else {
+        context.old_lexer_import = lexer->getImport_unsafe(import_id);
         lock_imports.lock();
+        // log::out << "Preproc imp "<<import_id<<"\n";
         context.current_import = imports.requestSpot(import_id-1, nullptr);
         lock_imports.unlock();
         Assert(context.current_import);
@@ -1501,6 +1508,9 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name) {
         lock_imports.lock();
         Import* imp = imports.get(id-1);
         lock_imports.unlock();
+        // may happen if import wasn't preprocessed and added to 'imports'
+        // it was added to Compiler.imports but didn't process it before being
+        // here.
         Assert(imp);
         
         auto pair = imp->rootMacros.find(name);

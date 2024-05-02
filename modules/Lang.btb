@@ -16,6 +16,8 @@
      If you make changes in this file!
 */
 
+// #import "Logger"
+
 enum @enclosed @specified lang_Primitive : u8 {
     NONE            = 0,
     STRUCT          = 1,

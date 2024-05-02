@@ -18,3 +18,16 @@ tracy
 
 # I often name stdout output from program 'out', no need to commit that
 out
+
+# Sometimes I test some assembly or C++ and create new
+# temporary files at the root of the project. The stuff below
+# filters that out.
+
+*.s
+!*/*.s
+
+*.asm
+!*/*.asm
+
+*.cpp
+!*/*.cpp

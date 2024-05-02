@@ -166,14 +166,13 @@ enum TaskType : u32 {
     TASK_LEX                  = 0x1, // lex and import-preprocess
     TASK_PREPROCESS_AND_PARSE = 0x2,
 
-    TASK_TYPE_ENUMS        = 0x10,
-    TASK_TYPE_STRUCTS      = 0x20,
-    TASK_TYPE_FUNCTIONS    = 0x40,
-    TASK_TYPE_BODIES       = 0x80,
+    TASK_TYPE_ENUMS           = 0x10,
+    TASK_TYPE_STRUCTS         = 0x20,
+    TASK_TYPE_FUNCTIONS       = 0x40,
+    TASK_TYPE_BODIES          = 0x80,
     
-    TASK_GEN_BYTECODE      = 0x100,
-    
-    // TASK_GENERATE_TARGET   = 0x200,
+    TASK_GEN_BYTECODE         = 0x100,
+    TASK_GEN_MACHINE_CODE     = 0x200,
 };
 struct CompilerTask {
     TaskType type;
@@ -182,8 +181,6 @@ struct CompilerTask {
     bool no_change = false;
 };
 struct CompilerImport {
-    // bool busy = false;
-    // bool finished = false;
     TaskType state = TASK_NONE;
     std::string path; // file path (sometimes name for preloaded imports)
     
@@ -191,6 +188,8 @@ struct CompilerImport {
     u32 preproc_import_id=0;
 
     ScopeId scopeId = 0;
+
+    DynamicArray<TinyBytecode*> tinycodes;
     
     struct Dep {
         u32 id;
@@ -203,6 +202,7 @@ struct CompilerImport {
     };
     DynamicArray<Lib> libraries;
 };
+extern const char* const PRELOAD_NAME;
 struct Compiler {
     void cleanup() {
         X64Program::Destroy(program);
@@ -220,6 +220,8 @@ struct Compiler {
         importDirectories.cleanup();
         linkDirectives.cleanup();
     }
+
+
     lexer::Lexer lexer{};
     preproc::Preprocessor preprocessor{};
     TypeChecker typeChecker{};
@@ -233,9 +235,10 @@ struct Compiler {
     CompileOptions* options = nullptr;
 
     u32 initial_import_id = 0;
+    u32 preload_import_id = 0;
 
     bool have_generated_global_data = false; // move elsewhere?
-    
+    bool compiler_got_stuck = false;
     
     BucketArray<CompilerImport> imports{256};
     long volatile globalUniqueCounter = 0; // type must be long volatile because of _InterlockedIncrement
@@ -254,8 +257,9 @@ struct Compiler {
     void run(CompileOptions* options);
     
     // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
+    // adds task if new import was created
     u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "", std::string* assumed_path_on_error = nullptr);
-    u32 addImport(const std::string& path, const std::string& dir_of_origin_file = "");
+    // addImport existed but was removed because of addOrFindImport
     void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "");
     void addLibrary(u32 import_id, const std::string& path, const std::string& as_name = "");
     

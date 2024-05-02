@@ -31,3 +31,39 @@ base2 = .{7}
 // move test case elsewhere
 fn get() -> Slice<i32> { return Slice<i32>{null,5}; }
 _test 8; ptr := &(get()[2])
+
+@TEST_CASE(methods)
+
+struct A {
+    n: i32;
+    fn k() -> i32 { 
+        return u();
+    }
+    fn u() -> i32 {
+        return n + 2
+    }
+}
+a: A = A{23}
+_test 23; a.k()
+
+
+@TEST_CASE(methods_poly)
+struct Poly<T> {
+    t: u32;
+
+    fn first() -> i32 {
+        return second();
+    }
+    fn second() -> i32 {
+        #import "Logger"
+        log("second, size",sizeof T)
+        sizeof T;
+        return 0;
+    }
+}
+
+a: Poly<i32>;
+b: Poly<i64>;
+
+a.first();
+b.first();

@@ -410,21 +410,21 @@ struct QuickArray {
         _reserve(0);
     }
 
-    // QuickArray(QuickArray<T>& arr) = delete;
-    // QuickArray<T>& operator=(const QuickArray<T>& arr) = delete;
-    // QuickArray<T>& operator=(const QuickArray<T>& arr) {
-    //     // if(arr.used>0){
-    //         // engone::log::out << "copy "<<arr.used<<"\n";
-    //     // }
-    //     bool yes = _reserve(arr.max);
-    //     Assert(yes);
-    //     yes = resize(arr.used);
-    //     Assert(yes);
-    //     for(int i=0;i<used;i++){
-    //         _ptr[i] = arr._ptr[i];
-    //     }
-    //     return *this;
+    QuickArray(QuickArray<T>& arr) {
+        stealFrom(arr);
+    }
+    QuickArray<T>& operator=(QuickArray<T>& arr) {
+        stealFrom(arr);
+        return *this;
+    }
+    // QuickArray(const QuickArray<T>& arr) {
+    //     = delete;
     // }
+
+    QuickArray<T>& operator=(const QuickArray<T>& arr) {
+        Assert(arr.size() == 0);
+        return *this;
+    }
 
     // DynamicArray(const DynamicArray<T>& arr) = delete;
     // QuickArray(const QuickArray<T>& arr) = delete;

@@ -262,6 +262,7 @@ SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed)
             if(depth == 0) {
                 break;
             }
+            info.advance();
             Assert(strings.size() >= 2);
             strings[strings.size()-2].append(strings.last());
             strings.last().clear();
@@ -1338,7 +1339,9 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     tmp->nonNamedArgs++;
                     values.pop();
                     
-                    tmp->setImplicitThis(true);
+                    // tmp->setImplicitThis(true);
+                    
+                    tmp->setMemberCall(true);
 
                     // Parse the other arguments
                     int count = 0;
@@ -2330,7 +2333,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         break;
                     }
                 } else {
-                    if(OpPrecedence(op1)>=OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
+                    if(IsSingleOp(op2) || OpPrecedence(op1) >= OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
                     // if(OpPrecedence(op1)>OpPrecedence(op2)){ // this code cause this: 3 = 3-1-1
                         nowOp = op1;
                         ops[ops.size()-2] = op2;

@@ -450,7 +450,15 @@ namespace dwarf {
                         WRITE_LEB(0); // end of members in enum
                         
                         *sibling_ref4 = stream->getWriteHead() - offset_section;
-                        
+                    } else if (queuedType == AST_FUNC_REFERENCE) {
+                        // TODO: Implement function references/pointers
+                        log::out << " func ref (not implemented)\n";
+                        allType.reference[0] = stream->getWriteHead() - offset_section;
+                        WRITE_LEB(abbrev_base_type)
+
+                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        stream->write1(8); // size
+                        stream->write1(DW_ATE_unsigned);
                     } else {
                         Assert(queuedType.getId() < AST_TRUE_PRIMITIVES);
                         // other type

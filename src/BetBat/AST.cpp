@@ -303,34 +303,49 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
         StringView ns;
         StringView real_name;
         DecomposeNamespace(name, &ns, &real_name);
-        ScopeId nextScopeId = startScopeId;
-        ContentOrder nextOrder = contentOrder;
+        // ScopeId nextScopeId = startScopeId;
+        // ContentOrder nextOrder = contentOrder;
         lock_variables.lock();
         defer { lock_variables.unlock(); };
         if(ns.len == 0) {
-            WHILE_TRUE_N(1000) {
-                ScopeInfo* si = getScope(nextScopeId);
-                Assert(si);
-                auto pair = si->identifierMap.find(real_name);
-                if(pair != si->identifierMap.end() && pair->second.order <= nextOrder){
-                // if(pair != si->identifierMap.end() && pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+            auto iterator = createScopeIterator(startScopeId, contentOrder);
+            while(iterate(iterator)) {
+                auto scope = iterator.next_scope;
+                auto order = iterator.next_order;
+
+                auto pair = scope->identifierMap.find(real_name);
+                if (pair == scope->identifierMap.end())
+                    continue;
+                    
+                // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+                if (pair->second.order <= order) {
                     return &pair->second;
                 }
-                for(int i=0;i<(int)si->sharedScopes.size();i++){
-                    ScopeInfo* usingScope = si->sharedScopes[i];
-                    auto pair = usingScope->identifierMap.find(real_name);
-                    // TODO: Check used scope recursively
-                    if(pair != usingScope->identifierMap.end()){
-                        return &pair->second;
-                    }
-                }
-                if(nextScopeId == 0 && si->parent == 0){
-                    // quit when we checked global
-                    break;
-                }
-                nextScopeId = si->parent;
-                nextOrder = si->contentOrder;
             }
+
+            // WHILE_TRUE_N(1000) {
+            //     ScopeInfo* si = getScope(nextScopeId);
+            //     Assert(si);
+            //     auto pair = si->identifierMap.find(real_name);
+            //     if(pair != si->identifierMap.end() && pair->second.order <= nextOrder){
+            //     // if(pair != si->identifierMap.end() && pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+            //         return &pair->second;
+            //     }
+            //     for(int i=0;i<(int)si->sharedScopes.size();i++){
+            //         ScopeInfo* usingScope = si->sharedScopes[i];
+            //         auto pair = usingScope->identifierMap.find(real_name);
+            //         // TODO: Check used scope recursively
+            //         if(pair != usingScope->identifierMap.end()){
+            //             return &pair->second;
+            //         }
+            //     }
+            //     if(nextScopeId == 0 && si->parent == 0){
+            //         // quit when we checked global
+            //         break;
+            //     }
+            //     nextScopeId = si->parent;
+            //     nextOrder = si->contentOrder;
+            // }
         } else {
             Assert(false); // namespace broken   
         }
@@ -348,6 +363,51 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
             return &pair->second;
         }
         return nullptr;
+    }
+    return nullptr;
+}
+
+AST::ScopeIterator AST::createScopeIterator(ScopeId scopeId, ContentOrder order){
+    ScopeIterator iter{};
+    auto s = getScope(scopeId);
+    if(!s)
+        return iter;
+
+    iter.search_scopes.add(s);
+    iter.content_orders.add(order);
+    return iter;
+}
+ScopeInfo* AST::iterate(ScopeIterator& iterator){
+    auto add = [&](ScopeInfo* s, ContentOrder order) {
+        // TODO: Optimize
+        for (int i=0;i<iterator.search_index;i++) {
+            if(iterator.search_scopes[i] == s) {
+                return;
+            }
+        }
+        iterator.search_scopes.add(s);
+        iterator.content_orders.add(order);
+    };
+    
+    while(iterator.search_index < iterator.search_scopes.size()) {
+        ScopeInfo* info = iterator.search_scopes[iterator.search_index];
+        auto order = iterator.content_orders[iterator.search_index];
+        iterator.search_index++;
+        
+        for(auto s : info->sharedScopes) {
+            add(s, CONTENT_ORDER_MAX);
+        }
+        
+        if(info->id != info->parent) {
+            if(info->id == info->parent)
+                continue;
+            auto s = getScope(info->parent);
+            add(s, info->contentOrder);
+        }
+        
+        iterator.next_scope = info;
+        iterator.next_order = order;
+        return info;
     }
     return nullptr;
 }
@@ -370,7 +430,7 @@ void AST::removeIdentifier(ScopeId scopeId, const StringView &name) {
     }
     lock_variables.unlock();
 }
-bool AST::findEnumMember(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member) {
+bool AST::findEnumMember(ScopeId scopeId, const StringView& name, ASTEnum** out_enum, int* out_member) {
     StringView ns;
     StringView real_name;
     DecomposeNamespace(name, &ns, &real_name);
@@ -378,39 +438,66 @@ bool AST::findEnumMember(ScopeId scopeId, const StringView& name, ContentOrder c
 
     Assert(out_enum && out_member);
 
-    ScopeId nextScopeId = scopeId;
-    ContentOrder nextOrder = contentOrder;
-    WHILE_TRUE {
-        ScopeInfo* si = getScope(nextScopeId);
-        Assert(si);
-        if(si->astScope) {
-            for(auto& astEnum : si->astScope->enums) {
-                if((astEnum->rules & ASTEnum::ENCLOSED) && *out_enum != nullptr) {
-                    continue;
-                }
-                for(int i=0;i<astEnum->members.size();i++){
-                    auto& mem = astEnum->members[i];
-                    // NOTE: We still check enclosed enums because it is useful to know
-                    //  which member/enum could have matched if it wasn't enclosed when no other enum/member matches.
-                    if(mem.name == real_name) {
-                        *out_enum = astEnum;
-                        *out_member = i;
-                        if(astEnum->rules & ASTEnum::ENCLOSED) {
-                            break;
-                        } else {
-                            return true;
-                        }
+    auto iter = createScopeIterator(scopeId, CONTENT_ORDER_MAX); // content order is irrelevant
+    while(iterate(iter)) {
+        auto scope = iter.next_scope;
+
+        if(!scope->astScope)
+            continue;
+        
+        for(auto& astEnum : scope->astScope->enums) {
+            if((astEnum->rules & ASTEnum::ENCLOSED) && *out_enum != nullptr) {
+                continue;
+            }
+            for(int i=0;i<astEnum->members.size();i++){
+                auto& mem = astEnum->members[i];
+                // NOTE: We still check enclosed enums because it is useful to know
+                //  which member/enum could have matched if it wasn't enclosed when no other enum/member matches.
+                if(mem.name == real_name) {
+                    *out_enum = astEnum;
+                    *out_member = i;
+                    if(astEnum->rules & ASTEnum::ENCLOSED) {
+                        break;
+                    } else {
+                        return true;
                     }
                 }
             }
         }
-        if(nextScopeId == 0 && si->parent == 0){
-            // quit when we checked global
-            break;
-        }
-        nextScopeId = si->parent;
-        nextOrder = si->contentOrder;
     }
+    // ScopeId nextScopeId = scopeId;
+    // ContentOrder nextOrder = contentOrder;
+    // WHILE_TRUE {
+    //     ScopeInfo* si = getScope(nextScopeId);
+    //     Assert(si);
+    //     if(si->astScope) {
+    //         for(auto& astEnum : si->astScope->enums) {
+    //             if((astEnum->rules & ASTEnum::ENCLOSED) && *out_enum != nullptr) {
+    //                 continue;
+    //             }
+    //             for(int i=0;i<astEnum->members.size();i++){
+    //                 auto& mem = astEnum->members[i];
+    //                 // NOTE: We still check enclosed enums because it is useful to know
+    //                 //  which member/enum could have matched if it wasn't enclosed when no other enum/member matches.
+    //                 if(mem.name == real_name) {
+    //                     *out_enum = astEnum;
+    //                     *out_member = i;
+    //                     if(astEnum->rules & ASTEnum::ENCLOSED) {
+    //                         break;
+    //                     } else {
+    //                         return true;
+    //                     }
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     if(nextScopeId == 0 && si->parent == 0){
+    //         // quit when we checked global
+    //         break;
+    //     }
+    //     nextScopeId = si->parent;
+    //     nextOrder = si->contentOrder;
+    // }
     return false;
 }
 bool AST::castable(TypeId from, TypeId to){
@@ -1198,6 +1285,8 @@ ScopeInfo* AST::findScope(StringView name, ScopeId scopeId, bool search_parent_s
     using namespace engone;
     StringView nextName = name;
     ScopeId nextScopeId = scopeId;
+
+    Assert(false); // incomplete namespaces
     
     WHILE_TRUE {
         ScopeInfo* scope = getScope(nextScopeId);
@@ -1468,34 +1557,45 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
         } Assert(false); // incomplete here
     } else {
         // Find base type in parent scopes
-        ScopeId nextScopeId = scopeId;
-        // log::out << "find "<<typeString<<"\n";
-        WHILE_TRUE_N(1000) {
-            ScopeInfo* scope = getScope(nextScopeId);
-            if(!scope) return {};
-            // for(auto& pair : scope->nameTypeMap){
-            //     log::out <<" "<<pair.first << " : " <<pair.second->id.getId() << "\n";
-            // }
+        auto iter = createScopeIterator(scopeId, CONTENT_ORDER_MAX);
+        while(iterate(iter)) {
+            auto scope = iter.next_scope;
+
             auto pair = scope->nameTypeMap.find(typeName);
             if(pair!=scope->nameTypeMap.end()){
                 typeInfo = pair->second;
                 break;
             }
-            bool brea=false;
-            for(int i=0;i<(int)scope->sharedScopes.size();i++){
-                ScopeInfo* usingScope = scope->sharedScopes[i];
-                auto pair = usingScope->nameTypeMap.find(typeName);
-                if(pair != usingScope->nameTypeMap.end()){
-                    typeInfo = pair->second;
-                    brea = true;
-                    break;
-                }
-            }
-            if(brea) break;
-            if(nextScopeId==scope->parent) // prevent infinite loop
-                break;
-            nextScopeId = scope->parent;
         }
+
+        // ScopeId nextScopeId = scopeId;
+        // // log::out << "find "<<typeString<<"\n";
+        // WHILE_TRUE_N(1000) {
+        //     ScopeInfo* scope = getScope(nextScopeId);
+        //     if(!scope) return {};
+        //     // for(auto& pair : scope->nameTypeMap){
+        //     //     log::out <<" "<<pair.first << " : " <<pair.second->id.getId() << "\n";
+        //     // }
+        //     auto pair = scope->nameTypeMap.find(typeName);
+        //     if(pair!=scope->nameTypeMap.end()){
+        //         typeInfo = pair->second;
+        //         break;
+        //     }
+        //     bool brea=false;
+        //     for(int i=0;i<(int)scope->sharedScopes.size();i++){
+        //         ScopeInfo* usingScope = scope->sharedScopes[i];
+        //         auto pair = usingScope->nameTypeMap.find(typeName);
+        //         if(pair != usingScope->nameTypeMap.end()){
+        //             typeInfo = pair->second;
+        //             brea = true;
+        //             break;
+        //         }
+        //     }
+        //     if(brea) break;
+        //     if(nextScopeId==scope->parent) // prevent infinite loop
+        //         break;
+        //     nextScopeId = scope->parent;
+        // }
     }
     if(!typeInfo) {
         return {};
@@ -1523,7 +1623,6 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
         out.setPointerLevel(pointerLevel);
         return out;
     }
-
 }
 
 TypeInfo *AST::getBaseTypeInfo(TypeId id) {

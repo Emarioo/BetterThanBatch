@@ -440,16 +440,47 @@ void Compiler::processImports() {
             //     LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" finished: "<<im->import_id<<" ("<<TrimCWD(im->path)<<")\n")
             //     continue;
             // }
+            // TODO: Optimize dependency checking
+            // TODO: Some checks don't respect nested dependencies.
             bool missing_dependency = false;
             if(task.type == TASK_PREPROCESS_AND_PARSE) {
+                // Before preprocessing we must make sure all imports that are linked in any way
+                // are lexed before preprocessing.
+                DynamicArray<u32> checked_ids{};
+                DynamicArray<u32> ids_to_check{};
+                ids_to_check.add(task.import_id);
                 CompilerImport* im = imports.get(task.import_id-1);
-                for(int j=0;j<im->dependencies.size();j++) {
-                    CompilerImport* dep = imports.get(im->dependencies[j].id-1);
-                    // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
+                while(ids_to_check.size()) {
+                    // CompilerImport* dep = imports.get(im->dependencies[j].id-1);
+                    u32 id = ids_to_check.last();
+                    CompilerImport* dep = imports.get(id-1);
+                    ids_to_check.pop();
+                    checked_ids.add(id);
+
+                    Assert(dep);
+                    
                     if(!dep || !(dep->state & TASK_LEX)) {
-                        LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        if(ids_to_check.size() == 0)  {
+                            // direct dependency
+                            LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        } else {
+                            // inherited dependency
+                            LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"-->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        }
                         missing_dependency = true;
                         break;
+                    }
+
+                    for(auto& it : dep->dependencies) {
+                        bool checked = false;
+                        for(auto& it2 : checked_ids) {
+                            if(it.id == it2) {
+                                    checked = true;
+                                    break;
+                            }
+                        }
+                        if(checked) continue;
+                        ids_to_check.add(it.id);
                     }
                 }
             } else if (task.type == TASK_TYPE_ENUMS) { // when we are about to check functions
@@ -468,7 +499,7 @@ void Compiler::processImports() {
                 for(int j=0;j<im->dependencies.size();j++) {
                     CompilerImport* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
-                    if(!dep || !(dep->state & TASK_TYPE_STRUCTS)) {
+                    if(!dep || !(dep->state & TASK_TYPE_ENUMS)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
                         break;
@@ -493,11 +524,29 @@ void Compiler::processImports() {
                 //   we have left instead of iterating all tasks every time.
                 for(int i=0;i<tasks.size();i++) {
                     CompilerTask& t = tasks[i];
-                    if(t.type != TASK_GEN_BYTECODE) {
+                    // TODO: We may only have tasks to generate bytecodes but a thread
+                    //   may have taken out a task and be working on it right now.
+                    //   Redesign this
+                    if(t.type < TASK_GEN_BYTECODE) {
                         // LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
                         // we miss a dependency in that all other imports have
                         // not been type checked yet
+                        break;
+                    }
+                }
+            } else if (task.type == TASK_GEN_MACHINE_CODE) {
+                // TinyBytecodes must be generated so that we can apply function relocations.
+                // relocation.funcImpl->tinycode_id may be zero otherwise.
+                // You could designate tinycodes to functions in type checker.
+                // Then we know that all funcimpls have tinycode_ids.
+                
+                CompilerImport* im = imports.get(task.import_id-1);
+                for(int j=0;j<im->dependencies.size();j++) {
+                    CompilerImport* dep = imports.get(im->dependencies[j].id-1);
+                    if(!dep || !(dep->state & TASK_GEN_BYTECODE)) {
+                        LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        missing_dependency = true;
                         break;
                     }
                 }
@@ -526,6 +575,7 @@ void Compiler::processImports() {
                 break;
             } else {
                 log::out << log::RED << "ERROR: Some tasks have dependencies that cannot be computed. Bug in compiler?\n";
+                compiler_got_stuck = true;
                 lock_imports.unlock();
                 break;
             }
@@ -601,17 +651,14 @@ void Compiler::processImports() {
                 }
                 
                 LOG(CAT_PROCESSING_DETAILED, log::GRAY
-                    << ", tokens: "<<tokens
+                    << " tokens: "<<tokens
                     << "\n")
                 
                 if(!options->only_preprocess) {
-                    auto what = parser::ParseImport(imp->preproc_import_id, this);
-                    // TODO: Handle return value?
-                    // ast->appendToMainBody(what); // nocheckin
-                    ast->shareWithGlobalScope(what);
+                    auto my_scope = parser::ParseImport(imp->preproc_import_id, this);
                     
                     // ast->print();
-                    imp->scopeId = what->scopeId;
+                    imp->scopeId = my_scope->scopeId;
 
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     picked_task.type = TASK_TYPE_ENUMS;
@@ -622,16 +669,19 @@ void Compiler::processImports() {
                 CompilerImport* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
 
-                // nocheckin TODO: what if the dependencies haven't been parsed. This is ensured to happen with
-                //  circular dependencies
+                // We share scopes here when we know that all imports have been parsed
+                // and have scopes we can throw around.
                 for(int i=0;i<imp->dependencies.size();i++) {
                     auto dep = imports.get(imp->dependencies[i].id-1);
-                    Assert(dep->scopeId != 0); // can't possibly be global scope
-                    auto scope = ast->getScope(dep->scopeId);
-                    scope->sharedScopes.add(scope);
-                    // TODO: Handle named import. We can't just add it like this. nameScopeMap won't work either because it's
-                    //   not seen as a dependency I think.
+                    auto dep_scope = ast->getScope(dep->scopeId);
+                    my_scope->sharedScopes.add(dep_scope);
                 }
+
+                if(imp->path == PRELOAD_NAME) {
+                    auto global_scope = ast->getScope(ast->globalScopeId);
+                    global_scope->sharedScopes.add(my_scope);
+                }
+
                 int prev_errors = options->compileStats.errors;
                 TypeCheckEnums(ast, my_scope->astScope, this);
                 bool had_errors = options->compileStats.errors > prev_errors;
@@ -642,7 +692,7 @@ void Compiler::processImports() {
                     tasks.add(picked_task); // nocheckin, lock tasks
                 }
             } else if(picked_task.type == TASK_TYPE_STRUCTS) {
-                CompilerImport* imp = imports.get(picked_task.import_id-1);
+                CompilerImport* imp = imports.get(picked_task.import_id-1); // nocheckin, lock imports, this is not the only spot
                 auto my_scope = ast->getScope(imp->scopeId);
                 
                 bool ignore_errors = true;
@@ -721,11 +771,10 @@ void Compiler::processImports() {
 
                 int prev_errors = options->compileStats.errors;
 
-                DynamicArray<TinyBytecode*> tinycodes{};
                 if(initial_import_id == imp->import_id) {
-                    auto yes = GenerateScope(my_scope->astScope, this, imp, &tinycodes, true);
+                    auto yes = GenerateScope(my_scope->astScope, this, imp, &imp->tinycodes, true);
                 } else {
-                    auto yes = GenerateScope(my_scope->astScope, this, imp, &tinycodes, false);
+                    auto yes = GenerateScope(my_scope->astScope, this, imp, &imp->tinycodes, false);
                 }
 
                 bool new_errors = false;
@@ -739,21 +788,29 @@ void Compiler::processImports() {
                     //     t->print(0,-1,bytecode,nullptr,true);
                     // }
                     
-                    switch(options->target) {
-                        case TARGET_BYTECODE: {
-                            // do nothing
-                        } break;
-                        case TARGET_WINDOWS_x64:
-                        case TARGET_UNIX_x64: {
-                            for(auto t : tinycodes)
-                                GenerateX64(this, t);
-                        } break;
-                    }
-                    
                     imp->state = (TaskType)(imp->state | picked_task.type);
+                    picked_task.type = TASK_GEN_MACHINE_CODE;
+                    picked_task.import_id = imp->import_id;
+                    tasks.add(picked_task); // nocheckin, lock tasks
                 }
-                // imp->state = TASK_NONE;
+            } else if(picked_task.type == TASK_GEN_MACHINE_CODE) {
+                auto imp = imports.get(picked_task.import_id-1);
+                // auto my_scope = ast->getScope(imp->scopeId);
+
+                switch(options->target) {
+                    case TARGET_BYTECODE: {
+                        // do nothing
+                    } break;
+                    case TARGET_WINDOWS_x64:
+                    case TARGET_UNIX_x64: {
+                        for(auto t : imp->tinycodes)
+                            GenerateX64(this, t);
+                    } break;
+                }
+                    
+                imp->state = (TaskType)(imp->state | picked_task.type);
             } else {
+                Assert(false);
                 // LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 // imp->finished = true;
             }
@@ -849,7 +906,6 @@ void Compiler::run(CompileOptions* options) {
         }
     }
 
-
     importDirectories.add(options->modulesDirectory);
     
     preprocessor.init(&lexer, this);
@@ -876,27 +932,7 @@ void Compiler::run(CompileOptions* options) {
         options->compileStats.errors++;
         return;
     }
-    u32 import_id = 0;
-    if(options->source_buffer.buffer) {
-        StringBuilder builder{};
-        // We ignore source_buffer.startColumn
-        for(int i=0;i<options->source_buffer.startLine-1;i++){
-            builder.append("\n");
-        }
-        builder.append(options->source_buffer.buffer, options->source_buffer.size);
-        auto virtual_path = options->source_buffer.origin;
-        lexer.createVirtualFile(virtual_path, &builder);
-        import_id = addImport(virtual_path);
-    } else {
-        import_id = addImport(options->source_file);
-    }
-
-    if(import_id == 0) {
-        log::out << log::RED << "Could not find '"<<options->source_file << "'\n";
-        options->compileStats.errors++;
-        return;
-    }
-    initial_import_id = import_id;
+    
     
     bool skip_preload = false;
     // skip_preload = true;
@@ -904,6 +940,7 @@ void Compiler::run(CompileOptions* options) {
         log::out << log::YELLOW << "Preload is skipped!\n";
     }
     if(!skip_preload) {
+        // should preload exist in modules?
         StringBuilder preload{};
         preload +=
         "struct Slice<T> {"
@@ -938,22 +975,31 @@ void Compiler::run(CompileOptions* options) {
             preload += "#macro LINKER_GCC #endmacro\n";
         }
         
-        auto virtual_path = "<preload>";
+        auto virtual_path = PRELOAD_NAME;
         lexer.createVirtualFile(virtual_path, &preload); // add before creating import
-        u32 preload_import_id = 0; // move to function scope in case other parts of this function need preload_import_id?
-        preload_import_id = addImport(virtual_path);
+        preload_import_id = addOrFindImport(virtual_path);
         Assert(preload_import_id); // nocheckin
-        
-        CompilerTask task{TASK_LEX};
-        task.import_id = preload_import_id;
-        tasks.add(task);
-        
-        addDependency(import_id, preload_import_id);
     }
-    
-    CompilerTask task{TASK_LEX};
-    task.import_id = import_id;
-    tasks.add(task);
+
+    if(options->source_buffer.buffer) {
+        StringBuilder builder{};
+        // We ignore source_buffer.startColumn
+        for(int i=0;i<options->source_buffer.startLine-1;i++){
+            builder.append("\n");
+        }
+        builder.append(options->source_buffer.buffer, options->source_buffer.size);
+        auto virtual_path = options->source_buffer.origin;
+        lexer.createVirtualFile(virtual_path, &builder);
+        initial_import_id = addOrFindImport(virtual_path);
+    } else {
+        // preload is added as dependency automatically
+        initial_import_id = addOrFindImport(options->source_file);
+    }
+    if(initial_import_id == 0) {
+        log::out << log::RED << "Could not find '"<<options->source_file << "'\n";
+        options->compileStats.errors++;
+        return;
+    }
     
     int thread_count = 1;
     DynamicArray<engone::Thread> threads{};
@@ -1021,6 +1067,9 @@ void Compiler::run(CompileOptions* options) {
     if(!options->useDebugInformation && program)
         program->debugInformation = nullptr;
     
+    if(compiler_got_stuck) {
+        return;
+    }
 
     switch(options->target){
         case TARGET_BYTECODE: {
@@ -1173,7 +1222,8 @@ void Compiler::run(CompileOptions* options) {
             default: Assert(false);
         }
     } else {
-        log::out << log::BLACK << "not executing program\n";
+        if(!options->silent)
+            log::out << log::BLACK << "not executing program\n";
     }
 
     if(options->compileStats.errors==0) {
@@ -1181,33 +1231,6 @@ void Compiler::run(CompileOptions* options) {
             options->compileStats.printSuccess(options);
         }
     }
-}
-u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origin_file) {
-    Path abs_path = findSourceFile(path, dir_of_origin_file);
-    if(abs_path.text.empty()) {
-        return 0; // file does not exist? caller should throw error
-    }
-    CompilerImport imp{};
-    lock_imports.lock();
-    // BucketArray<Import>::Iterator iter{};
-    // while(imports.iterate(iter)) {
-    //     if(iter.ptr->path == abs_path.text) {
-    //         u32 id = iter.ptr->import_id;
-    //         lock_imports.unlock();
-    //         return id;
-    //     }
-    // }
-    imp.path = abs_path.text;
-    lexer::Import* intern_imp;
-    imp.import_id = lexer.createImport(imp.path, &intern_imp);
-    Assert(imp.import_id!=0);
-    // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add import: "<<imp.import_id<<" ("<<path<<")\n")
-    
-    auto yes = imports.requestSpot(imp.import_id-1, &imp);
-    Assert(yes);
-    lock_imports.unlock();
-    
-    return imp.import_id;
 }
 u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error) {
     Path abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
@@ -1232,7 +1255,18 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     
     auto yes = imports.requestSpot(imp.import_id-1, &imp);
     Assert(yes);
+
+    CompilerTask task{TASK_LEX};
+    task.import_id = imp.import_id;
+    tasks.add(task);
+    
     lock_imports.unlock();
+
+    if(preload_import_id != 0) {
+        // preload_import_id may be zero because we add the initial source file first
+        // and then create the preload import. We manually add preload as dependency to initial import in Compiler::run
+        addDependency(yes->import_id, preload_import_id);
+    }
     
     return imp.import_id;
 }
@@ -1240,20 +1274,8 @@ void Compiler::addDependency(u32 import_id, u32 dep_import_id, const std::string
     lock_imports.lock();
     auto imp = imports.get(import_id-1);
     Assert(imp);
-    // imports.requestSpot(dep_import_id-1,nullptr);
     imp->dependencies.add({dep_import_id, as_name});
-    bool found = false;
-    for(int i=0;i<tasks.size();i++) {
-        if(tasks[i].import_id == dep_import_id) {
-            found = true;
-            break;
-        }
-    }
-    if(!found) {
-        CompilerTask task{TASK_LEX};
-        task.import_id = dep_import_id;
-        tasks.add(task);
-    }
+
     lock_imports.unlock();
     // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add depend: "<<import_id<<"->"<<dep_import_id<<" ("<<TrimCWD(imp->path)<<")\n")
 }
@@ -1390,3 +1412,4 @@ static const char* annotation_names[]{
     "custom",
 
 };
+static const char* const PRELOAD_NAME = "<preload>";

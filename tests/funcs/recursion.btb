@@ -1,0 +1,23 @@
+
+
+@TEST_CASE(recursive_functions)
+
+#import "./recursion2.btb"
+
+fn first(n: i32) -> i32 {
+    if(n == 1)
+        return n;
+    return n + first(n-1);
+}
+_test 1+2+3+4+5; first(5);
+
+fn second_0(n: i32) -> i32 {
+    if(n == 1)
+        return n;
+    return n + second_1(n-1);
+}
+
+_test 1+2+3+4+5; second_0(5);
+
+
+// TODO: Recursive methods
