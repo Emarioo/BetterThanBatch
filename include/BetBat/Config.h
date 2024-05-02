@@ -1,5 +1,7 @@
 #pragma once
 
+
+
 #ifdef WIN32
 #define OS_WINDOWS
 #elif defined(_linux_)
@@ -40,6 +42,7 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 #endif
 
 // #define RUN_TEST_SUITE
+// #define RUN_TESTS "tests/simple/operations.btb"
 // #define RUN_TESTS "tests/simple/garb.btb"
 
 #define DEBUG

@@ -385,6 +385,25 @@ std::string BriefString(const std::string& path, int max, bool skip_cwd){
     }
     return path;
 }
+
+std::string StringFromExitCode(u32 exit_code) {
+    #define _STATUS_ACCESS_VIOLATION         0xC0000005
+    #define _STATUS_ILLEGAL_INSTRUCTION      0xC000001D
+    #define _STATUS_FLOAT_DIVIDE_BY_ZERO     0xC000008E
+    #define _STATUS_INTEGER_DIVIDE_BY_ZERO   0xC0000094
+    #define _STATUS_STACK_OVERFLOW           0xC00000FD
+    #define _STATUS_DLL_NOT_FOUND            0xC0000135
+    switch(exit_code) {
+        case _STATUS_ACCESS_VIOLATION:          return "Access violation";
+        case _STATUS_ILLEGAL_INSTRUCTION:       return "Illegal instruction";
+        case _STATUS_FLOAT_DIVIDE_BY_ZERO:      return "Division by zero (float)";
+        case _STATUS_INTEGER_DIVIDE_BY_ZERO:    return "Division by zero (integer)";
+        case _STATUS_STACK_OVERFLOW:            return "Stack overflow";
+        case _STATUS_DLL_NOT_FOUND:             return "Missing DLL";
+        default: return "";
+    }
+}
+
 /*
 
 Some example code with pipes

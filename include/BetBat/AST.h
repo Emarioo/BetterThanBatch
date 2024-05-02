@@ -579,7 +579,7 @@ struct ASTStatement : ASTNode {
         std::string name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
         int arrayLength=-1;
-        // bool declaration = false;
+        bool declaration = false; // multi var. assignment may not declare variables
         PolyVersions<TypeId> versions_assignType{}; // is inferred from expression in type checker
         // true if variable declares a new variable (it does if it has a type)
         // false if variable implicitly declares a new type OR assigns to an existing variable
@@ -623,7 +623,7 @@ struct ASTStatement : ASTNode {
         // QuickArray<ASTExpression*> returnValues{};
     QuickArray<ASTExpression*> arrayValues; // for array initialized
     // };
-    PolyVersions<DynamicArray<TypeId>> versions_expressionTypes; // types from firstExpression
+    PolyVersions<QuickArray<TypeId>> versions_expressionTypes; // types from firstExpression
 
 
     bool rangedForLoop=false; // otherwise sliced for loop
@@ -710,7 +710,7 @@ struct ASTEnum : ASTNode {
         bool ignoreRules = false;
         lexer::SourceLocation location;
     };
-    QuickArray<Member> members{};
+    DynamicArray<Member> members{};
 
     enum Rules : u32 {
         NONE = 0,

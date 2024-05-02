@@ -20,6 +20,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     //  - registers aren't saved between calls and jumps
     
     bool logging = false;
+    // logging = true;
     
     DynamicArray<Arg> accessed_params;
 
@@ -35,7 +36,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         InstructionOpcode opcode = (InstructionOpcode)instructions[pc];
         pc++;
         
-        // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
         if(logging) {
             tinycode->print(prev_pc, prev_pc + 1, bytecode);
             log::out << "\n";
@@ -96,7 +96,10 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         return t == BC_MOV_RM
         || t == BC_MOV_RM_DISP16
         || t == BC_LI32
+        || t == BC_LI64
         || t == BC_MOV_RR
+        || t == BC_CAST
+        || t == BC_STRLEN
         ;
     };
     // auto IS_WALL=[&](InstructionOpcode t) {
@@ -108,7 +111,14 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     // TODO: Option to turn on/off optimizations?
     //   We turn them off for speed or to check if the normal generator works fine while the optimization code has a bug in it.
 
-    // #define ENABLE_X64_OPTIMIZATIONS
+    #define ENABLE_X64_OPTIMIZATIONS
+
+    // TODO: If we have this bytecode:
+    //     li a, 5
+    //     add f, a
+    //     mov_mr [locals], f
+    //   The generator will just accept it even though f has an undefined value.
+    //   We want to assert these cases because it's a bug in the bytecode generator.
 
     // TODO: Optimize out unecessary push and pop (push/pop in sequence after each other)
     // TODO: Allocate some temporary space to store values instead of pushing and popping them.
@@ -186,7 +196,10 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             // NOTE: We assume that registers aren't used between calls. The bytecode should have asserts so it doesn't happen.
             clear_register_map();
         }
-        if(n->base->opcode == BC_JMP || n->base->opcode == BC_JZ || n->base->opcode == BC_JNZ) {
+        // IMPORTANT: We don't clear on JZ or JNZ. This could be really bad.
+        //   But if the generator 
+        // if(n->base->opcode == BC_JMP || n->base->opcode == BC_JZ || n->base->opcode == BC_JNZ) {
+        if(n->base->opcode == BC_JMP) {
             Assert(bc_push_list.size() == 0);
             clear_register_map();
             // can we detect whether the register map is empty?
@@ -243,7 +256,9 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             }
             continue;
         }
-        
+
+        // TODO: Rework IS_ESSENTIAL, IS_START and so on.
+        //   We should group the instructions better.
     
         // TODO: What if two operands refer to the same register
         if(IS_ESSENTIAL(n->base->opcode)) {
@@ -266,6 +281,22 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         // }
                         map_reg(n,0);
                     }
+                    }
+                } else if(n->base->opcode == BC_MOV_MR || n->base->opcode == BC_MOV_MR_DISP16 || n->base->opcode == BC_JNZ || n->base->opcode == BC_JZ) {
+                    auto base = (InstBase_op1*)n->base;
+                    if(IS_GENERAL_REG(base->op0)) {
+                        auto& v = bc_register_map[base->op0];
+                        auto recipient = v.used_by;
+                        auto reg_nr = v.reg_nr;
+                        if(recipient) {
+                            n->reg0 = recipient->regs[reg_nr];
+                            map_reg(n,0);
+                        } else {
+                            n->reg0 = alloc_artifical_reg(n->bc_index);
+                            map_reg(n,0);
+                        }
+                    } else if(base->op0 == BC_REG_LOCALS) {
+                        n->reg0 = alloc_artifical_reg(-1, X64_REG_BP); // we don't free BP and don't pass bc_index
                     }
                 } else {
                     auto base = (InstBase_op1*)n->base;
@@ -333,7 +364,10 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
             } else Assert(false);
         }
-
+        if(n->base->opcode == BC_ROUND || n-> base->opcode == BC_SQRT) {
+            suggest_artifical_float(n->reg0);
+            suggest_artifical_size(n->reg0, 4);
+        }
         if(instruction_contents[n->base->opcode] & BASE_ctrl) {
             int off = 1;
             if(instruction_contents[n->base->opcode] & BASE_op1)
@@ -362,19 +396,20 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         }
     }
 
-    // for(auto i : insts_to_delete) {
-    //     auto n = inst_list[i];
-    //     log::out <<log::RED<<"del "<<n->bc_index<<": "<< *n <<"\n";
-
-    //     inst_list.removeAt(i);
-    // }
+    for(auto i : insts_to_delete) {
+        auto n = inst_list[i];
+        // log::out <<log::RED<<"del "<<n->bc_index<<": "<< *n <<"\n";
+        // don't accidently comment out the remove
+        inst_list.removeAt(i);
+    }
 
     // for(auto n : inst_list) {
     //     log::out << *n << "\n";
     // }
     
     // TODO: Assert that we don't allocate in operands
-    #define FIX_PRE_IN_OPERAND(N) auto reg##N = get_and_alloc_artifical_reg(n->reg##N);
+    #define FIX_PRE_IN_OPERAND(N) auto reg##N = get_artifical_reg(n->reg##N);
+    // #define FIX_PRE_IN_OPERAND(N) auto reg##N = get_and_alloc_artifical_reg(n->reg##N);
     #define FIX_PRE_OUT_OPERAND(N) auto reg##N = get_and_alloc_artifical_reg(n->reg##N);
 
     #define FIX_POST_IN_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_register(reg##N->reg);
@@ -624,7 +659,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit_sub_imm32(X64_REG_SP, (i32)base->imm16);
                     emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_SP);
                     emit1(OPCODE_MOV_REG_RM);
-                    emit_modrm(MODE_REG, reg0->reg, X64_REG_SP);
+                    emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), X64_REG_SP);
 
                     FIX_POST_OUT_OPERAND(0)                
                 } else {
@@ -1294,14 +1329,15 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             reg0->reg = X64_REG_INVALID;
                             reg0->floaty = false;
                             reg0->size = 0;
-                            FIX_PRE_IN_OPERAND(0);
+                            FIX_PRE_OUT_OPERAND(0);
                             
-                            emit_prefix(0, X64_REG_INVALID, reg0->reg);
+                            // WE NEED REX TO SET SIL, DIL and not DH, BH
+                            emit_prefix(PREFIX_REX, X64_REG_INVALID, reg0->reg);
                             emit2(setType);
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                             
                             // do we need more stuff or no? I don't think so?
-                            emit_prefix(0, X64_REG_INVALID, reg0->reg);
+                            emit_prefix(PREFIX_REX, X64_REG_INVALID, reg0->reg);
                             emit2(OPCODE_2_MOVZX_REG_RM8);
                             emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg0->reg));
 
@@ -1319,9 +1355,27 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         case BC_MUL: {
                             // TODO: Handle signed/unsigned multiplication (using InstructionControl)
                             if(is_signed) {
-                                emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
-                                emit2(OPCODE_2_IMUL_REG_RM);
-                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
+                                auto reg = reg0->reg;
+                                auto rm = reg1->reg;
+                                // int size = 1 << GET_CONTROL_SIZE(control);
+                                if(size == 1) {
+                                    emit_movsx(reg, reg, CONTROL_8B);
+                                    emit_movsx(rm, rm, CONTROL_8B);
+                                    emit1(PREFIX_16BIT);
+                                    emit_prefix(0, reg, rm);
+                                    emit2(OPCODE_2_IMUL_REG_RM);
+                                } else if(size == 2) {
+                                    emit1(PREFIX_16BIT);
+                                    emit_prefix(0, reg, rm);
+                                    emit2(OPCODE_2_IMUL_REG_RM);
+                                } else if(size == 4) {
+                                    emit_prefix(0, reg, rm);
+                                    emit2(OPCODE_2_IMUL_REG_RM);
+                                } else if(size == 8) {
+                                    emit_prefix(PREFIX_REXW, reg, rm);
+                                    emit2(OPCODE_2_IMUL_REG_RM);
+                                } else Assert(false);
+                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(rm));
                             } else {
                                 X64Register real_reg1 = reg1->reg;
 
@@ -1348,10 +1402,29 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                                     emit_mov_reg_reg(X64_REG_A, reg0->reg);
                                 }
                                 
-                                // TODO: Sized operations
-                                emit_prefix(PREFIX_REXW, X64_REG_INVALID, real_reg1);
-                                emit1(OPCODE_MUL_AX_RM_SLASH_4);
-                                emit_modrm_slash(MODE_REG, 4, CLAMP_EXT_REG(real_reg1));
+                                auto reg = X64_REG_INVALID;
+                                auto rm = real_reg1;
+                                if(size == 1) {
+                                    emit_movzx(reg, reg, CONTROL_8B);
+                                    emit_prefix(PREFIX_REX, reg, rm);
+                                    emit1(OPCODE_MUL_A8_RM8_SLASH_4);
+                                    emit_movzx(reg, reg, CONTROL_8B);
+                                } else if(size == 2) {
+                                    emit1(PREFIX_16BIT);
+                                    emit_prefix(0, reg, rm);
+                                    emit1(OPCODE_MUL_A_RM_SLASH_4);
+                                } else if(size == 4) {
+                                    emit_prefix(0, reg, rm);
+                                    emit1(OPCODE_MUL_A_RM_SLASH_4);
+                                } else if(size == 8) {
+                                    emit_prefix(PREFIX_REXW, reg, rm);
+                                    emit1(OPCODE_MUL_A_RM_SLASH_4);
+                                } else Assert(false);
+                                emit_modrm_slash(MODE_REG, 4, CLAMP_EXT_REG(rm));
+
+                                // emit_prefix(PREFIX_REXW, X64_REG_INVALID, real_reg1);
+                                // emit1(OPCODE_MUL_AX_RM_SLASH_4);
+                                // emit_modrm_slash(MODE_REG, 4, CLAMP_EXT_REG(real_reg1));
                                 
                                 if(reg0->reg != X64_REG_A) {
                                     emit_mov_reg_reg(reg0->reg, X64_REG_A);
@@ -1447,6 +1520,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             emit1(OPCODE_TEST_RM_REG);
                             emit_modrm(MODE_REG, CLAMP_EXT_REG(reg1->reg), CLAMP_EXT_REG(reg1->reg));
 
+                            emit1(PREFIX_REX);
                             emit2(OPCODE_2_SETE_RM8); // SETZ/SETE
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                         } break;
@@ -1457,6 +1531,13 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             emit_operation(OPCODE_OR_REG_RM, reg0->reg, reg1->reg, control);
                         } break;
                         case BC_BXOR: {
+                            auto base = (InstBase_op2_ctrl*)n->base;
+                            if(base->op0 == base->op1) {
+                                // BXOR is special if you use the same registers.
+                                // It's just an output
+                                reg0 = get_and_alloc_artifical_reg(n->reg0);
+                                reg1 = get_and_alloc_artifical_reg(n->reg1);
+                            }
                             emit_operation(OPCODE_XOR_REG_RM, reg0->reg, reg1->reg, control);
                         } break;
                         case BC_BLSHIFT:
@@ -1509,8 +1590,8 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             // TODO: There is an optimization for NOT EQUAL where we use XOR.
                             //   BUT, that would kind of be a 64-bit bool so we don't do that.
                             if(GET_CONTROL_SIZE(control) == CONTROL_8B) {
-                                // we used REXW so that we access low bits of R8-R15 and not high bits of ax, cx (ah,ch) i think?
-                                emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
+                                // we use rex to access sil, dil NOT dh, bh
+                                emit_prefix(PREFIX_REX, reg0->reg, reg1->reg);
                                 emit1(OPCODE_CMP_REG8_RM8);
                             } else {
                                 if(GET_CONTROL_SIZE(control) == CONTROL_16B) {
@@ -1548,7 +1629,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                                 default: Assert(false);
                             }
                             
-                            emit_prefix(0, X64_REG_INVALID, reg0->reg);
+                            emit_prefix(PREFIX_REX, X64_REG_INVALID, reg0->reg);
                             emit2(setType);
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                             
@@ -1559,7 +1640,12 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
                 
                 FIX_POST_IN_OPERAND(0);
-                FIX_POST_IN_OPERAND(1);
+                auto base2 = (InstBase_op2_ctrl*)n->base;
+                if(opcode == BC_BXOR && base2->op0 == base2->op1) {
+                    // don't free second register, 'BXOR a, a' is special
+                } else {
+                    FIX_POST_IN_OPERAND(1);
+                }
             } break;
             
             case BC_DIV: // these require specific registers
@@ -1571,6 +1657,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 bool is_modulo = opcode == BC_MOD;
                 bool is_signed = IS_CONTROL_SIGNED(base->control);
+                int size = 1 << GET_CONTROL_SIZE(base->control);
                 
                 if(IS_CONTROL_FLOAT(base->control)) {
                     // Assert(false);
@@ -1634,12 +1721,148 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         }
                     } else Assert(false);
                 } else {
-                    // TODO: Handled signed/unsigned
-                    // TODO: Optimize
-
                     Assert(reg0->reg != reg1->reg);
                     
                     if(is_signed) {
+                        X64Register real_reg1 = reg1->reg;
+                        
+                        bool pushed_a = false;
+                        bool pushed_d = false;
+
+                        if(reg1->reg == X64_REG_A || reg1->reg == X64_REG_D) {
+                            real_reg1 = RESERVED_REG0;
+                            emit_mov_reg_reg(real_reg1, reg1->reg);
+                        }
+                        if(reg1->reg != X64_REG_D && reg0->reg != X64_REG_D) {
+                            if(!is_register_free(X64_REG_D)) {
+                                emit_push(X64_REG_D);
+                                pushed_d = true;
+                            }
+                        }
+                        if(reg1->reg != X64_REG_A && reg0->reg != X64_REG_A) {
+                            if(!is_register_free(X64_REG_A)) {
+                                emit_push(X64_REG_A);
+                                pushed_a = true;
+                            }
+                        }
+                        if(reg0->reg != X64_REG_A) {
+                            emit_mov_reg_reg(X64_REG_A, reg0->reg);
+                        }
+
+                        auto reg = X64_REG_INVALID;
+                        auto rm = real_reg1;
+                        if(size == 1) {
+                            // TODO: Check if this is fine for 8-bit.
+                            emit1(PREFIX_16BIT);
+                            emit1(OPCODE_CDQ);
+                            emit_prefix(PREFIX_REX, reg, rm);
+                            emit1(OPCODE_IDIV_A8_RM8_SLASH_7);
+                        } else if(size == 2) {
+                            emit1(PREFIX_16BIT);
+                            emit1(OPCODE_CDQ);
+                            emit1(PREFIX_16BIT);
+                            emit_prefix(0, reg, rm);
+                            emit1(OPCODE_IDIV_A_RM_SLASH_7);
+                        } else if(size == 4) {
+                            emit1(OPCODE_CDQ);
+                            emit_prefix(0, reg, rm);
+                            emit1(OPCODE_IDIV_A_RM_SLASH_7);
+                        } else if(size == 8) {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_CDQ);
+                            emit_prefix(PREFIX_REXW, reg, rm);
+                            emit1(OPCODE_IDIV_A_RM_SLASH_7);
+                        } else Assert(false);
+                        emit_modrm_slash(MODE_REG, 7, CLAMP_EXT_REG(rm));
+
+                        if(reg0->reg == X64_REG_A && reg1->reg == X64_REG_D) {
+                            if(is_modulo) {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_D);
+                            } else {
+
+                            }
+                            emit_mov_reg_reg(reg1->reg, real_reg1);
+                        } else if(reg0->reg == X64_REG_D && reg1->reg == X64_REG_A) {
+                            if(is_modulo) {
+
+                            } else {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_A);
+                            }
+
+                            emit_mov_reg_reg(reg1->reg, real_reg1);
+                        } else if(reg0->reg == X64_REG_A) {
+                            if(is_modulo) {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_D);
+                            } else {
+
+                            }
+                            if(!is_register_free(X64_REG_D)) {
+                                emit_pop(X64_REG_D);
+                            }
+                        } else if(reg0->reg == X64_REG_D) {
+                            if(is_modulo) {
+                                
+                            } else {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_A);
+                            }
+                            if(!is_register_free(X64_REG_A)) {
+                                emit_pop(X64_REG_A);
+                            }
+                        } else if(reg1->reg == X64_REG_A) {
+                            if(is_modulo) {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_D);
+                            } else {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_A);
+                            }
+                            emit_mov_reg_reg(reg1->reg, real_reg1);
+                            if(!is_register_free(X64_REG_D)) {
+                                emit_pop(X64_REG_D);
+                            }
+                        } else if(reg1->reg == X64_REG_D) {
+                            if(is_modulo) {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_D);
+                            } else {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_A);
+                            }
+                            emit_mov_reg_reg(reg1->reg, real_reg1);
+
+                            if(!is_register_free(X64_REG_A)) {
+                                emit_pop(X64_REG_A);
+                            }
+                        }  else {
+                            if(is_modulo) {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_D);
+                            } else {
+                                emit_mov_reg_reg(reg0->reg, X64_REG_A);
+                            }
+                            if(!is_register_free(X64_REG_A)) {
+                                emit_pop(X64_REG_A);
+                            }
+                            if(!is_register_free(X64_REG_D)) {
+                                emit_pop(X64_REG_D);
+                            }
+                        }
+
+                        if(is_modulo) {
+                            // Most of the time you want (-5 % 3) + 3 = 1
+                            // and not -5 % 3 = -2.
+                            // so we just do that add for convenience.
+                            
+                            Assert(size == 4 || size == 8); // TODO: Handle 8-bit and 16-bit compare
+
+                            emit_prefix(size == 8 ? PREFIX_REXW : 0, X64_REG_INVALID, reg0->reg);
+                            emit1(OPCODE_CMP_RM_IMM8_SLASH_7);
+                            emit_modrm_slash(MODE_REG, 7, reg0->reg);
+                            emit1((u8)0);
+                            
+                            emit1(OPCODE_JGE_REL8);
+                            int offset_jmp = code_size();
+                            emit1((u8)0);
+
+                            emit_operation(OPCODE_ADD_REG_RM, X64_REG_D, rm, base->control);
+
+                            fix_jump_here_imm8(offset_jmp);
+                        }                        
 
                     } else {
                         X64Register real_reg1 = reg1->reg;
@@ -1696,10 +1919,35 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         // reg1 is divisor
                         // reg0 must be moved to A
                         // we require D to be zeroed
+                        
+                        auto reg = X64_REG_INVALID;
+                        auto rm = real_reg1;
+                        if(size == 1) {
+                            // 8-bit divide puts result in AL and AH, annoying.
+                            // so we just zero upper bits and use 16-bit divide instead.
+                            // emit_prefix(PREFIX_REX, reg, rm);
+                            // emit1(OPCODE_DIV_A8_RM8_SLASH_6);
+                            emit_movzx(X64_REG_A, X64_REG_A, CONTROL_8B);
+                            emit_movzx(rm, rm, CONTROL_8B);
+                            emit1(PREFIX_16BIT);
+                            emit_prefix(0, reg, rm);
+                            emit1(OPCODE_DIV_A_RM_SLASH_6);
+                        } else if(size == 2) {
+                            emit1(PREFIX_16BIT);
+                            emit_prefix(0, reg, rm);
+                            emit1(OPCODE_DIV_A_RM_SLASH_6);
+                        } else if(size == 4) {
+                            emit_prefix(0, reg, rm);
+                            emit1(OPCODE_DIV_A_RM_SLASH_6);
+                        } else if(size == 8) {
+                            emit_prefix(PREFIX_REXW, reg, rm);
+                            emit1(OPCODE_DIV_A_RM_SLASH_6);
+                        } else Assert(false);
+                        emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(rm));
 
-                        emit_prefix(PREFIX_REXW, X64_REG_INVALID, real_reg1);
-                        emit1(OPCODE_DIV_AX_RM_SLASH_6);
-                        emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(real_reg1));
+                        // emit_prefix(PREFIX_REXW, X64_REG_INVALID, real_reg1);
+                        // emit1(OPCODE_DIV_A_RM_SLASH_6);
+                        // emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(real_reg1));
                         
                         // A smust be moved to reg0
                         // reg1 is left unchanged
@@ -1787,7 +2035,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit1(OPCODE_TEST_RM_REG);
                 emit_modrm(MODE_REG, CLAMP_EXT_REG(reg1->reg), CLAMP_EXT_REG(reg1->reg));
                 
-                emit_prefix(0, reg0->reg, X64_REG_INVALID);
+                emit_prefix(PREFIX_REX, reg0->reg, X64_REG_INVALID);
                 emit2(OPCODE_2_SETE_RM8);
                 emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
 
@@ -2542,16 +2790,15 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     X64Register fin = reg2->reg;
                     X64Register tmp = X64_REG_A;
 
-                    u8 prefix = PREFIX_REXW;
-                    emit1(PREFIX_REXW);
+                    emit_prefix(PREFIX_REXW, fin, dst);
                     emit1(OPCODE_ADD_RM_REG);
-                    emit_modrm(MODE_REG, fin, dst);
+                    emit_modrm(MODE_REG, CLAMP_EXT_REG(fin), CLAMP_EXT_REG(dst));
 
                     int offset_loop = code_size();
 
-                    emit1(PREFIX_REXW);
+                    emit_prefix(PREFIX_REXW, fin, dst);
                     emit1(OPCODE_CMP_REG_RM);
-                    emit_modrm(MODE_REG, dst, fin);
+                    emit_modrm(MODE_REG, CLAMP_EXT_REG(dst), CLAMP_EXT_REG(fin));
 
                     emit1(OPCODE_JE_IMM8);
                     int offset_jmp_imm = code_size();
@@ -2572,11 +2819,11 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     if(batch_size == 1) {
                         emit_prefix(PREFIX_REXW, X64_REG_INVALID, dst);
                         emit1(OPCODE_INC_RM_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, dst);
+                        emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(dst));
 
                         emit_prefix(PREFIX_REXW, X64_REG_INVALID, src);
                         emit1(OPCODE_INC_RM_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, src);
+                        emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(src));
                     } else {
                         emit_add_imm32(dst, batch_size);
                         emit_add_imm32(src, batch_size);
@@ -2730,8 +2977,9 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit_mov_reg_reg(X64_REG_A, old);
                 
                 emit1(PREFIX_LOCK);
+                emit_prefix(0, reg_new, ptr);
                 emit2(OPCODE_2_CMPXCHG_RM_REG);
-                emit_modrm(MODE_DEREF, reg_new, ptr);
+                emit_modrm(MODE_DEREF, CLAMP_EXT_REG(reg_new), CLAMP_EXT_REG(ptr));
                 // RAX will be set to the original value in ptr
 
                 emit_mov_reg_reg(ptr, X64_REG_A);
@@ -2740,23 +2988,32 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 FIX_POST_IN_OPERAND(1)
                 FIX_POST_IN_OPERAND(2)
             } break;
-            case BC_ROUND:
-            case BC_SQRT: {
+            case BC_ROUND: {
                 FIX_PRE_IN_OPERAND(0)
 
                 X64Register reg = reg0->reg;
 
                 emit4(OPCODE_4_ROUNDSS_REG_RM_IMM8);
-                emit_modrm(MODE_REG, reg, reg);
+                emit_modrm(MODE_REG, CLAMP_XMM(reg), CLAMP_XMM(reg));
                 emit1((u8)0); // immediate describes rounding mode. 0 means "round to" which I believe will
                 // choose the number that is closest to the actual number. There where round toward, up, and toward as well (round to is probably a good default).
+
+                FIX_POST_IN_OPERAND(0)
+            } break;
+            case BC_SQRT: {
+                FIX_PRE_IN_OPERAND(0)
+
+                X64Register reg = reg0->reg;
+
                 emit3(OPCODE_3_SQRTSS_REG_RM);
-                emit_modrm(MODE_REG, reg, reg);
+                emit_modrm(MODE_REG, CLAMP_XMM(reg), CLAMP_XMM(reg));
 
                 FIX_POST_IN_OPERAND(0)
             } break;
             case BC_TEST_VALUE: {
                 #ifdef DISABLE_BC_TEST_VALUE
+                FIX_POST_IN_OPERAND(0)
+                FIX_POST_IN_OPERAND(1)
                 continue;
                 #endif
 
@@ -2787,8 +3044,11 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit_push(X64_REG_DI);
                 }
 
-                emit_mov_reg_reg(RESERVED_REG0, reg0->reg);
-                emit_mov_reg_reg(RESERVED_REG1, reg1->reg);
+                emit_mov_reg_reg(RESERVED_REG0, reg0->reg, reg0->size);
+                emit_movzx(RESERVED_REG0, RESERVED_REG0, base->control);
+                emit_mov_reg_reg(RESERVED_REG1, reg1->reg, reg1->size);
+                emit_movzx(RESERVED_REG1, RESERVED_REG1, base->control);
+
 
                 #ifdef OS_WINDOWS
                 /*

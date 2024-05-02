@@ -24,13 +24,7 @@
 #define TOKEN_ALPHANUM 0x10 // token has only characters for names like a-Z 0-9 _ NOTE THAT A QUOTED STRING IS NOT ALPHANUM, its quoted
 #define TOKEN_NUMERIC 0x20 // token consists of numbers maybe hex or decimal
 
-struct TextBuffer {
-    std::string origin;
-    char* buffer = nullptr;
-    int size = 0;
-    int startLine = 1;
-    int startColumn = 1;
-};
+
 
 struct TokenRange;
 struct TokenStream;

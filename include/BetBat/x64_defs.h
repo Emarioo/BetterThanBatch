@@ -65,17 +65,17 @@ About x64:
 // note that the bytes are swapped
 #define OPCODE_2_IMUL_REG_RM (u16)0xAF0F
 
-#define OPCODE_IMUL_AX_RM_SLASH_5 (u8)0xF7
-#define OPCODE_IMUL_AX_RM8_SLASH_5 (u8)0xF6
+#define OPCODE_IMUL_A_RM_SLASH_5 (u8)0xF7
+#define OPCODE_IMUL_A8_RM8_SLASH_5 (u8)0xF6
 
-#define OPCODE_MUL_AX_RM_SLASH_4 (u8)0xF7
-#define OPCODE_MUL_AX_RM8_SLASH_4 (u8)0xF6
+#define OPCODE_MUL_A_RM_SLASH_4 (u8)0xF7
+#define OPCODE_MUL_A8_RM8_SLASH_4 (u8)0xF6
 
-#define OPCODE_IDIV_AX_RM_SLASH_7 (u8)0xF7
-#define OPCODE_IDIV_AX_RM8_SLASH_7 (u8)0xF6
+#define OPCODE_IDIV_A_RM_SLASH_7 (u8)0xF7
+#define OPCODE_IDIV_A8_RM8_SLASH_7 (u8)0xF6
 
-#define OPCODE_DIV_AX_RM_SLASH_6 (u8)0xF7
-#define OPCODE_DIV_AX_RM8_SLASH_6 (u8)0xF6
+#define OPCODE_DIV_A_RM_SLASH_6 (u8)0xF7
+#define OPCODE_DIV_A8_RM8_SLASH_6 (u8)0xF6
 
 // sign extends EAX into EDX, useful for IDIV
 #define OPCODE_CDQ (u8)0x99
@@ -102,6 +102,7 @@ About x64:
 #define OPCODE_TEST_RM_REG (u8)0x85
 
 #define OPCODE_JL_REL8 (u8)0x7C
+#define OPCODE_JGE_REL8 (u8)0x7D
 #define OPCODE_JS_REL8 (u8)0x78
 
 #define OPCODE_NOT_RM_SLASH_2 (u8)0xF7
@@ -256,6 +257,7 @@ About x64:
 #define PREFIX_REXR (u8)0b01000100
 // 64-bit operands will be used
 #define PREFIX_REXW (u8)0b01001000
+// needed with 8-bit operand to access sil and dil instead of dh and bh
 #define PREFIX_REX (u8)0b01000000
 #define PREFIX_16BIT (u8)0x66
 #define PREFIX_LOCK (u8)0xF0

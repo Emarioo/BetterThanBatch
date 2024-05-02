@@ -55,7 +55,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
-            "args": ["--test","*/operations.btb"],
+            "args": ["--test"],
             // "args": ["--test"],
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],
             // "args": ["-pm", "dev*"],

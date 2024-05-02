@@ -146,6 +146,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         new_tokens++;
         new_source_tokens++;
         new_tokens_len--;
+        // log::out << "Tok "<<new_tokens->type << "\n";
         if(new_tokens_len == 0)
             reserv_tokens();
         *new_tokens = {};
@@ -153,6 +154,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     };
 
     auto UPDATE_SOURCE = [&](int line, int column){
+        // log::out << "Src "<<line << " "<<column << "\n";
         // new_tokens->line = line;
         // new_tokens->column = column;
         new_source_tokens->line = line;
@@ -209,12 +211,14 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     bool isSingleQuotes = false;
     bool inComment = false;
     bool inEnclosedComment = false;
+    int nested_comment_depth = 0;
     
     bool isNumber = false;
     bool isAlpha = false; // alpha and then alphanumeric
     bool isDecimal = false;
 
     bool inHexidecimal = false;
+    bool inBinary = false;
     // int commentNestDepth = 0; // C doesn't have this and it's not very good. /*/**/*/
     
     bool canBeDot = false; // used to deal with decimals (eg. 255.92) as one token
@@ -262,32 +266,24 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     // Bug counter: 1
                     if(!foundNonSpaceOnLine) {
                         lexer_import->blank_lines++;
-                        // outStream->blankLines++;
                         foundNonSpaceOnLine = false;
                     } else
                         lexer_import->lines++;
-                        // outStream->lines++;
                     update_flags(TOKEN_FLAG_NEWLINE);
-                    // if(file->chunk_indices.size()!=0) {
-                    // // if(outStream->length()!=0)
-                    //     Chunk* chunk = chunks.get(file->chunk_indicesds.last()-1);
-                    //     chunk->tokens.last().flags |= TOKEN_FLAG_NEWLINE;
-                    //     // outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;   
-                    // }
                 }
-                // @optimize TODO: move forward to characters at a time
-                //   since */ has two characters. By jumping two characters
-                //   we are faster and still guarrranteed to hit either * or /.
-                //   Then do some checks to sync back to normal. This won't work.
-                //   When counting lines since each character has to be checked.
-                //   But you can also consider using a loop here which runs very litte and
-                //   predictable code.
 
                 if(chr=='*'&&nextChr=='/'){
                     index++;
-                    inComment=false;
-                    inEnclosedComment=false;
-                    // _TLOG(log::out << "// : End comment\n";)
+                    nested_comment_depth--;
+                    if(nested_comment_depth == 0) {
+                        inComment=false;
+                        inEnclosedComment=false;
+                        // _TLOG(log::out << "// : End comment\n";)
+                    }
+                }
+                if(chr=='/'&&nextChr=='*'){
+                    nested_comment_depth++;
+                    index++;
                 }
             }else{
                 // I tried to optimize comment parsing at one point but it wasn't any faster.
@@ -479,6 +475,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     if(chr == '0' && nextChr == 'x') {
                         inHexidecimal = true;
                     }
+                    if(chr == '0' && nextChr == 'b') {
+                        inBinary = true;
+                    }
                 } else {
                     canBeDot = false;
                     isAlpha = true;
@@ -497,8 +496,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         bool nextLiteralSuffix = false;
         {
             char tmp = nextChr | 32;
-            if(isNumber && isDecimal && !inHexidecimal) {
-                nextLiteralSuffix = !inHexidecimal && isNumber && ((tmp>='a'&&tmp<='z') || nextChr == '_');
+            if(isNumber && isDecimal && !inHexidecimal && !inBinary) {
+                nextLiteralSuffix = !inHexidecimal && !inBinary && isNumber && ((tmp>='a'&&tmp<='z') || nextChr == '_');
             }
         }
         if(str_start != str_end && (isDelim || isQuotes || isComment || isSpecial || nextLiteralSuffix || index==length)){
@@ -519,6 +518,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 new_tokens->type = TOKEN_LITERAL_DECIMAL;
             else if(inHexidecimal)
                 new_tokens->type = TOKEN_LITERAL_HEXIDECIMAL;
+            else if(inBinary)
+                new_tokens->type = TOKEN_LITERAL_BINARY;
             else if(isNumber) // should come after hexidecimal
                 new_tokens->type = TOKEN_LITERAL_INTEGER;
             else {
@@ -612,6 +613,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             isAlpha=false;
             isDecimal=false;
             inHexidecimal = false;
+            inBinary = false;
 
             // token = {};
             str_start = 0;
@@ -623,12 +625,10 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             inComment=true;
             if(chr=='/' && nextChr=='*'){
                 inEnclosedComment=true;
+                nested_comment_depth=1;
             }
             UPDATE_SOURCE(ln,col);
-            // new_tokens->line = ln;
-            // new_tokens->column = col;
             lexer_import->comment_lines++;
-            // outStream->commentCount++;
             index++; // skip the next slash
             // _TLOG(log::out << "// : Begin comment\n";)
             continue;
@@ -640,8 +640,6 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             // token.str = (char*)outStream->tokenData.used;
             // token.length = 0;
             UPDATE_SOURCE(ln,col);
-            // new_tokens->line = ln;
-            // new_tokens->column = col;
             
             new_tokens->type = TOKEN_LITERAL_STRING;
             // quote_token = appendToken(file_id, token.type, token.flags, token_line, token_column);
@@ -657,14 +655,10 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             if(chr=='@'){
                 Token anot = {};
                 int anot_start = index;
-                // anot.str = (char*)outStream->tokenData.used;
                 int anot_line = ln;
                 int anot_column = col;
                 int anot_end = index;
-                // anot.length = 1;
-                // anot.flags = TOKEN_SUFFIX_SPACE;
                 
-                // outStream->addData(chr);
                 bool bad=false;
                 // TODO: Code below WILL have some edge cases not accounted for. Check it out.
                 while(index<length){
@@ -696,8 +690,6 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                             index--; // go back, we didn't consume the characters
                         break;
                     }
-                    // outStream->addData(chr);
-                    // anot.length++;
                     anot_end++;
                     if (index==length){
                         break;
@@ -707,8 +699,6 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 new_tokens->type = TOKEN_ANNOTATION;
                 new_tokens->flags = anot.flags;
                 UPDATE_SOURCE(anot_line, anot_column);
-                // new_tokens->line = anot_line;
-                // new_tokens->column = anot_column;
                 
                 APPEND_DATA(text+anot_start, anot_end - anot_start);
                 
@@ -718,13 +708,10 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             
             // this scope only adds special token
             _TLOG(log::out << chr;)
-            // token = {};
             str_start = index-1;
             str_end = str_start+1;
             bool has_data = true;
-            // token.str = (char*)outStream->tokenData.used;
-            // token.length = 1;
-            // outStream->addData(chr);
+
             if(chr == ':' && nextChr == ':') {
                 index++;
                 column++;
@@ -752,16 +739,13 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 (chr=='&'&&nextChr=='&')||
                 // (chr=='>'&&nextChr=='>')|| // Arrows can be combined because they are used with polymorphism.
                 // (chr=='<'&&nextChr=='<')|| // It would mess up the parsing.
-                // (chr==':'&&nextChr==':')|| handled above
                 (chr=='.'&&nextChr=='.')||
                 (chr=='|'&&nextChr=='|')
                 ){
                 index++;
                 column++;
-                // token.length++;
                 str_end++;
                 _TLOG(log::out << nextChr;)
-                // outStream->addData(nextChr);
             }
             if(index<length)
                 nextChr = text[index]; // code below needs the updated nextChr
@@ -769,15 +753,13 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 nextChr = 0;
             
             UPDATE_SOURCE(ln,col);
-            // new_tokens->line = ln;
-            // new_tokens->column = col;
+
             if(nextChr =='\n')
                 new_tokens->flags = TOKEN_FLAG_NEWLINE;
             else if(nextChr==' ')
                 new_tokens->flags = TOKEN_FLAG_SPACE;
             // _TLOG(log::out << " : Add " << token <<"\n";)
             _TLOG(log::out << " : special\n";)
-            // outStream->addToken(token);
             
             if(!has_data) {
                 INCREMENT_TOKEN(); 
@@ -796,7 +778,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     }
     if(!foundHashtag){
         // preprocessor not necessary, save time by not running it.
-        // outStream->enabled &= ~LAYER_PREPROCESSOR;
+        // If only #import were used (no #macro, no #if) then
+        // we can handle that here and save time while using imports.
+        // saving time when no imports are used doesn't help much.
         // _TLOG(log::out<<log::LIME<<"Couldn't find #. Disabling preprocessor.\n";)
     }
     
@@ -805,15 +789,6 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     //         engone::log::out << log::LIME<<" #import '"<<str.name << "' as "<<str.as<<"'\n";
     //     }   
     // )
-    // token.str = (char*)outStream->tokenData.data + (u64)token.str;
-    // token.tokenIndex = outStream->length()-1;
-    // token.tokenStream = outStream;
-    // outStream->finalizePointers();
-    
-    // if(token.length!=0){
-    //     // error happened in a way where we need to add a line feed
-    //     _TLOG(log::out << "\n";)
-    // }
 
     // README: Seemingly strange tokens can appear if you miss a quote somewhere.
     //  This is not a bug. It happens since quoted tokens are allowed across lines.
@@ -822,6 +797,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     
     Assert(last_chunk->tokens.used >= new_tokens_len); // I have a feeling there is a bug here.
     last_chunk->tokens.used -= new_tokens_len; // we didn't use all tokens we requested so we "give them back"
+    last_chunk->sources.used -= new_tokens_len;
+    
     
     // TokenInfo* last_token=nullptr;
     // if(last_chunk->tokens.size() > 0)
@@ -848,24 +825,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
 
     // Last token should have line feed.
     update_flags(TOKEN_FLAG_NEWLINE);
-    // if(outStream->length()>0)
-    //     outStream->get(outStream->length()-1).flags |=TOKEN_SUFFIX_LINE_FEED;
-
-    // if(outStream->tokens.used!=0){
-    //     Token* lastToken = ((Token*)outStream->tokens.data+outStream->tokens.used-1);
-    //     int64 extraSpace = (int64)outStream->tokenData.data + outStream->tokenData.max - (int64)lastToken->str - lastToken->length;
-    //     int64 extraSpace2 = outStream->tokenData.max-outStream->tokenData.used;
-        
-    //     if(extraSpace!=extraSpace2)
-    //         log::out << log::RED<<"TokenError: Used memory in tokenData does not match last token's used memory ("<<outStream->tokenData.used<<" != "<<((int64)lastToken->str - (int64)outStream->tokenData.data + lastToken->length)<<")\n";
-            
-    //     if(extraSpace<0||extraSpace2<0)
-    //         log::out << log::RED<<"TokenError: Buffer of tokenData was to small (estimated "<<outStream->tokenData.max<<" but needed "<<outStream->tokenData.used<<" bytes)\n'";
-        
-    //     if(extraSpace!=extraSpace2 || extraSpace<0 || extraSpace2<0)
-    //         goto Tokenize_END;
-    // }
     
+    Assert(last_chunk->tokens.size() == last_chunk->sources.size());
+
 Tokenize_END:
     // log::out << "Last: "<<outStream->get(outStream->length()-1)<<"\n";
     return file_id;
@@ -1805,6 +1767,8 @@ u64 ConvertHexadecimal(const StringView& view) {
     return hex;
 }
 std::string Lexer::getline(SourceLocation location) {
+    Assert(location.tok.type != TOKEN_NONE);
+
     auto imp = getImport_unsafe(location);
 
     u32 cindex, tindex;
@@ -1872,6 +1836,67 @@ Lexer::VirtualFile* Lexer::findVirtualFile(const std::string& virtual_path) {
         }
     }
     return nullptr;
+}
+bool Lexer::isIntegerLiteral(Token token, i64* value) {
+    auto& type = token.type;
+
+    if(!(type == TOKEN_LITERAL_BINARY || type == TOKEN_LITERAL_INTEGER || type == TOKEN_LITERAL_HEXIDECIMAL || (type == TOKEN_LITERAL_STRING && (token.flags & TOKEN_FLAG_SINGLE_QUOTED)))) {
+        return false;
+    }
+
+    if(!value) return true;
+
+    const char* data = nullptr;
+    int len = getStringFromToken(token, &data);
+
+    if(type == TOKEN_LITERAL_INTEGER) {
+        i64 num = 0;
+        for(int i=0;i<len;i++) {
+            char chr = data[i];
+            if(chr == '_') continue;
+            if(!(chr >= '0' && chr <= '9')) {
+                Assert(false);
+                return false;
+            }
+            num += chr - '0';
+            num *= 10;
+        }
+        *value = num;
+    } else if(type == TOKEN_LITERAL_BINARY) {
+        i64 num = 0;
+        for(int i=2;i<len;i++) { // i=2 -> skip '0b'
+            char chr = data[i];
+            if(chr == '_') continue;
+            if(!(chr >= '0' && chr <= '1')) {
+                // Assert(false);
+                return false;
+            }
+            num += chr - '0';
+            num *= 2;
+        }
+        *value = num;
+    } else if(type == TOKEN_LITERAL_HEXIDECIMAL) {
+        i64 num = 0;
+        for(int i=2;i<len;i++) { // i=2 -> skip '0x'
+            char chr = data[i];
+            if(chr == '_') continue;
+            if(!((chr >= '0' && chr <= '9') || ((chr|32) >= 'a' && (chr|32)<='f'))) {
+                // Assert(false);
+                return false;
+            }
+            if(chr >= '0' && chr <= '9')
+                num += chr - '0';
+            else
+                num += (chr|32) - 'a' + 10;
+            num *= 16;
+        }
+        *value = num;
+    } else if (type == TOKEN_LITERAL_STRING) {
+        Assert(len == 1);
+        *value = *data;
+    } else Assert(false);
+
+    return true;
 }
 }
 

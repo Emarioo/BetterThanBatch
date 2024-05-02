@@ -277,10 +277,14 @@ namespace engone {
 	bool StartProgram(char* commandLine, u32 flags=0, int* exitCode=0, APIFile inFile={}, APIFile outFile={}, APIFile errFile={});
 
 	APIPipe PipeCreate(u64 pipeBuffer, bool inheritRead, bool inheritWrite);
-	void PipeDestroy(APIPipe pipe);
+	// Set close_read, close_write if you want to close a specific end of the pipe
+	// The pipe is destroyed when both ends are closed
+	void PipeDestroy(APIPipe pipe, bool close_read = true, bool close_write = true);
 	u64 PipeRead(APIPipe pipe,void* buffer, u64 size);
 	u64 PipeWrite(APIPipe pipe,void* buffer, u64 size);
+	// Do not close the returned file
 	APIFile PipeGetRead(APIPipe pipe);
+	// Do not close the returned file
 	APIFile PipeGetWrite(APIPipe pipe);
 
 	bool SetStandardOut(APIFile file);

@@ -367,21 +367,6 @@ struct Bytecode {
 
     DebugInformation* debugInformation = nullptr;
 
-    // This is debug data for interpreter
-    // QuickArray<u32> debugSegment{}; // indices to debugLocations
-    
-    // struct Location {
-    //     u32 line=0;
-    //     u32 column=0;
-    //     std::string file{};
-    //     std::string desc{};
-    //     std::string preDesc{};
-    //     void* stream = nullptr;
-    //     // You are not supposed to access any content in the stream. It is just here to compare against other stream pointers.
-    //     // GenInfo::addInstruction needs the stream pointer.
-    // };
-    // DynamicArray<Location> debugLocations;
-
     DynamicArray<std::string> linkDirectives;
 
     // Assembly or bytecode dump after the compilation is done.
@@ -438,18 +423,6 @@ struct Bytecode {
     // DynamicArray<Symbol> exportedSymbols; // usually function names
     // bool exportSymbol(const std::string& name, u32 instructionIndex);
 
-    // const Location* getLocation(u32 instructionIndex, u32* locationIndex = nullptr);
-    // Location* setLocationInfo(const TokenRange& token, u32 InstructionIndex=-1, u32* locationIndex = nullptr);
-    // Location* setLocationInfo(const char* preText, u32 InstructionIndex=-1);
-    // // use same location as said register
-    // Location* setLocationInfo(u32 locationIndex, u32 instructionIndex=-1);
-    
-    // -1 as index will add text to next instruction
-    // void addDebugText(const char* str, int length, u32 instructionIndex=-1);
-    // void addDebugText(const std::string& text, u32 instructionIndex=-1);
-    // void addDebugText(Token& token, u32 instructionIndex=-1);
-    // const char* getDebugText(u32 instructionIndex);
-
     // returns an offset relative to the beginning of the data segment where data was placed.
     // data may be nullptr which will give you space with zero-initialized data.
     int appendData(const void* data, int size);
@@ -459,28 +432,8 @@ struct Bytecode {
 
     // int appendData_late(void** out_ptr, int size);
 
-    // void printInstruction(u32 index, bool printImmediates);
-    // Returns the number of immediates an instruction uses.
-    // When getting the next instruction you should skip by the amount of 
-    // immediates.
-    // u32 immediatesOfInstruction(u32 index);
-
-    // bool add_notabug(Instruction inst);
-    // bool addIm_notabug(i32 data);
-    // inline Instruction& get(uint index){
-    //     return *((Instruction*)instructionSegment.data + index);
-    // }
-    // inline i32& getIm(u32 index){
-    //     return *((i32*)instructionSegment.data() + index);
-    // }
-
-    // inline int length(){
-    //     return instructionSegment.used;
-    // }
     bool removeLast();
-
     void printStats();
-    
     void print();
 };
     
@@ -495,6 +448,8 @@ struct BytecodeBuilder {
     void emit_pop(BCRegister reg);
     void emit_li32(BCRegister reg, i32 imm);
     void emit_li64(BCRegister reg, i64 imm);
+    // calls li32 or li64 based on size
+    void emit_li(BCRegister reg, i64 imm, int size);
     
     void emit_incr(BCRegister reg, i32 imm);
 
@@ -556,6 +511,9 @@ struct BytecodeBuilder {
     
     void emit_cast(BCRegister to, BCRegister from, InstructionControl control, u8 from_size, u8 to_size);
     
+    // void emit_asm();
+    void emit_fake_push(); // useful with inline assembly
+
     void emit_memzero(BCRegister dst, BCRegister size_reg, u8 batch);
     void emit_memcpy(BCRegister dst, BCRegister src, BCRegister size_reg);
     void emit_strlen(BCRegister len_reg, BCRegister src_reg);

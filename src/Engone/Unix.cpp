@@ -937,13 +937,18 @@ namespace engone {
 		pipes[pipeIndex] = info;
 		return {pipeIndex++};
 	}
-	void PipeDestroy(APIPipe pipe){
+	void PipeDestroy(APIPipe pipe, bool close_read, bool close_write){
 		auto& info = pipes[pipe.internal];
-		if(info.readFD)
+		if(info.readFD && close_read) {
 			close(info.readFD);
-		if(info.writeFD)
+			info.readFD = 0;
+		}
+		if(info.writeFD && close_write) {
 			close(info.writeFD);
-		pipes.erase(pipe.internal);
+			info.writeFD = 0;
+		}
+		if(!info.readFD && !info.writeFD)
+			pipes.erase(pipe.internal);
 	}
 	u64 PipeRead(APIPipe pipe, void* buffer, u64 size){
 		auto& info = pipes[pipe.internal];

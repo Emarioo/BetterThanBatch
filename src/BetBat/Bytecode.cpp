@@ -135,10 +135,21 @@ void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 tes
     emit_imm32(test_location);
 }
 void BytecodeBuilder::emit_push(BCRegister reg) {
+    // IMPORTANT: DON'T FORGET TO CHANGE emit_fake_push WHEN MODIFYING THIS FUNCTION!
     if(disable_code_gen) return;
 
     emit_opcode(BC_PUSH);
     emit_operand(reg);
+    pushed_offset -= 8;
+    if(pushed_offset < pushed_offset_max)
+        pushed_offset_max = pushed_offset;
+}
+void BytecodeBuilder::emit_fake_push() {
+    if(disable_code_gen) return;
+
+    // emit_opcode(BC_PUSH);
+    // emit_operand(reg);
+    // we dont emit any instructions, we just change the state of the builder
     pushed_offset -= 8;
     if(pushed_offset < pushed_offset_max)
         pushed_offset_max = pushed_offset;
@@ -160,6 +171,8 @@ void BytecodeBuilder::emit_pop(BCRegister reg) {
     }
 #endif
 
+    Assert(pushed_offset < 0); // we have a bug if we popped a value that didn't exist
+
     emit_opcode(BC_POP);
     emit_operand(reg);
     pushed_offset += 8;
@@ -173,6 +186,17 @@ void BytecodeBuilder::emit_li64(BCRegister reg, i64 imm){
     emit_opcode(BC_LI64);
     emit_operand(reg);
     emit_imm64(imm);
+}
+void BytecodeBuilder::emit_li(BCRegister reg, i64 imm, int size){
+    if(size == 4) {
+        emit_opcode(BC_LI32);
+        emit_operand(reg);
+        emit_imm32(imm);
+    } else {
+        emit_opcode(BC_LI64);
+        emit_operand(reg);
+        emit_imm64(imm);
+    }
 }
 void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm) {
     Assert(imm != 0); // incrementing by 0 is dumb
@@ -314,6 +338,8 @@ void BytecodeBuilder::emit_ptr_to_params(BCRegister reg, int imm16) {
     emit_imm16(imm16);
 }
 void BytecodeBuilder::emit_ret() {
+    // We have a bug if we pushed more or less values than we popped.
+    Assert(pushed_offset == 0);
     emit_opcode(BC_RET);
 }
 void BytecodeBuilder::emit_jmp(int pc) {

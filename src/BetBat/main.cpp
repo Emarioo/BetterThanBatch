@@ -103,7 +103,7 @@ int main(int argc, const char** argv){
         for(auto s : strs) {
             tests.add(s);
         }
-        VerifyTests(tests);
+        VerifyTests(&options, tests);
         #else
         // if(options.target == TARGET_BYTECODE){
         //     options.executeOutput = true;

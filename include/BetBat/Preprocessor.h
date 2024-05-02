@@ -67,16 +67,15 @@ private:
     
     friend class PreprocContext;
 };
-struct PreprocContext {
+struct PreprocContext : PhaseContext {
     Preprocessor* preprocessor=nullptr;
     lexer::Lexer* lexer=nullptr;
-    Compiler* compiler=nullptr;
+    Reporter* reporter=nullptr;
+    
+    PreprocContext() : info(*this) { } // well this is dumb
+    PreprocContext& info;
 
-    struct {
-        Reporter* reporter = nullptr;
-        bool ignoreErrors = false;
-        int errors=0;
-    } info; // struct because error macros expects info.reporter and some other fields
+    bool ignoreErrors = false; // used with @no-code (unused in preprocessor but MessageTool needs it in generator and therefore also here, not elegant)
     
     bool evaluateTokens=false;
     u32 new_import_id=0;

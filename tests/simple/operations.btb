@@ -6,6 +6,9 @@ _test 3; 1- -2;
 _test -1; 2-3;
 _test 6; -2*-3;
 _test 0; 2/3;
+_test cast<u32>0x8000_0000; cast<u32>0x3 * cast<u32>0x8000_0000;
+_test 0; cast<u32>2/cast<u32>3;
+_test 0; cast<u32>2/cast<u32>3;
 _test 499; cast<i32>((0.5 % 0.15)*10000);
 
 // TEST OPERATIONS WITH 64-bit numbers like 99999999999999!
@@ -61,8 +64,9 @@ _test 69; 8+1*(5-8%6+4*3%1%7-4-7+7+(8+7))*4+5%(6/2+(6+8/4*1*5*2*6));
 @TEST_CASE(special)
 
 
-_test (5u - 9u) % 7u; 3
-_test (5.2 - 9.3) % 6.0; 1.9
+_test (5 - 9) % 7; 3
+_test (5u - 9u) % 7u; 0 // note that unsigned subtraction will overflow to a big number which remaineder happens to be 0
+_test cast<i32>(((5.2 - 9.3) % 6.0) * 10000); 18999 // precision issues
 
 var: u32 = 2;
 varf: f32 = -12415.92913

@@ -120,3 +120,5 @@ struct DeferStruct {
     // std::function<void()>& _func;
     std::function<void()> _func;
 };
+
+std::string StringFromExitCode(u32 exit_code);

@@ -24,9 +24,6 @@
             )
 
 namespace preproc {
-/* #####################
-    NEW PREPROCESSOR
-#######################*/
 
 SignalIO PreprocContext::parseMacroDefinition() {
     using namespace engone;
@@ -156,7 +153,7 @@ SignalIO PreprocContext::parseMacroDefinition() {
         lexer::Token token = gettok();
         advance();
         if(token.type == '#'){
-            if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
+            if((token.flags&lexer::TOKEN_FLAG_SPACE)||(token.flags&lexer::TOKEN_FLAG_NEWLINE)){
                 continue;
                 // ERR_SECTION(
                 // ERR_HEAD2(token, "SPACE AFTER "<<token<<"!\n";
@@ -238,6 +235,7 @@ SignalIO PreprocContext::parseMacroDefinition() {
 SignalIO PreprocContext::parseLink(){
     using namespace engone;
     // ZoneScopeC(tracy::Color::Wheat);
+
 
     lexer::Token name_token = gettok();
     if(name_token.type != lexer::TOKEN_LITERAL_STRING){
@@ -1298,7 +1296,7 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
     context.lexer = lexer;
     context.preprocessor = this;
     context.compiler = compiler;
-    context.info.reporter = &compiler->reporter;
+    context.reporter = &compiler->reporter;
     context.import_id = import_id;
     context.evaluateTokens = phase2;
     
@@ -1332,6 +1330,14 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
         switch(signal){
         case SIGNAL_SUCCESS: break;
         default: Assert(false);
+        }
+    }
+    
+    if(context.evaluateTokens) {
+        auto imp = context.new_lexer_import;
+        if(imp->chunks.size()) {
+            auto last_chunk = imp->chunks.last();
+            Assert(last_chunk->tokens.size() == last_chunk->sources.size());
         }
     }
 

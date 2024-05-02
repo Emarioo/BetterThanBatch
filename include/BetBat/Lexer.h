@@ -1,6 +1,3 @@
-/*
-    Version 2 of the tokenizer/lexer
-*/
 #pragma once
 
 #include "Engone/Logger.h"
@@ -13,6 +10,15 @@
 #include "BetBat/Util/Utility.h"
 #include "BetBat/Util/Perf.h"
 #include "BetBat/Util/StringBuilder.h"
+
+// Used by TestSuite
+struct TextBuffer {
+    std::string origin;
+    char* buffer = nullptr;
+    int size = 0;
+    int startLine = 1;
+    int startColumn = 1;
+};
 
 namespace lexer {
 
@@ -255,6 +261,8 @@ namespace lexer {
         std::string getStdStringFromToken(Token tok);
 
         std::string getline(SourceLocation location);
+
+        bool isIntegerLiteral(Token token, i64* value = nullptr);
 
         std::string tostring(Token token);
         std::string tostring(SourceLocation token) { return tostring(token.tok); }

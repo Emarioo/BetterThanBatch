@@ -611,40 +611,17 @@ SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, 
     }
     return SIGNAL_SUCCESS;
 }
-// This function is useless since rewrite 0.2.1. Remove it?
 SignalIO GenContext::generateArtificialPush(TypeId typeId) {
     using namespace engone;
     if(typeId == AST_VOID) {
         return SIGNAL_FAILURE;
     }
-    // if(baseReg!=0) {
-    //     Assert(DECODE_REG_SIZE(baseReg) == 8 && DECODE_REG_TYPE(baseReg) != BC_AX);
-    // }
     TypeInfo *typeInfo = 0;
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
     u32 size = ast->getTypeSize(typeId);
     if(!typeInfo || !typeInfo->astStruct) {
-        // enum works here too
-        BCRegister reg = BC_REG_T0;
-        // if(offset == 0){
-        //     // If you are here to optimize some instructions then you are out of luck.
-        //     // I checked where GeneratePush is used whether ADDI can LI can be removed and
-        //     // replaced with a MOV_MR_DISP32 but those instructions come from GenerateReference.
-        //     // What you need is a system to optimise away instructions while adding them (like pop after push)
-        //     // or an optimizer which runs after the generator.
-        //     // You need something more sophisticated to optimize further basically.
-        //     builder.emit_mov_rm(baseReg, reg, (u8)size});
-        // }else{
-        //     // IMPORTANT: Understand the issue before changing code here. We always use
-        //     // disp32 because the converter asserts when using frame pointer.
-        //     // "Use addModRM_disp32 instead". We always use disp32 to avoid the assert.
-        //     // Well, the assert occurs anyway.
-        //     builder.emit_({BC_MOV_MR_DISP32, baseReg, reg, (u8)size});
-        //     info.addImm(offset);
-        //     }
-        // }
-        // builder.emit_push(reg, true);
+        builder.emit_fake_push();
     } else {
         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
             auto& member = typeInfo->astStruct->members[i];
@@ -2333,7 +2310,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             //   You don't want duplicate inline assembly.
             if(!info.disableCodeGeneration) {
                 u32 start = bytecode->rawInlineAssembly.used;
-                Assert(false); // nocheckin, rewrite removed token range
+
+                // Assert(false); // nocheckin, rewrite removed token range
                 // +2 and -1 to avoid adding "asm { }"
                 #ifdef gone
                 TokenRange range{};
@@ -2549,8 +2527,6 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             builder.emit_pop(reg);
             builder.emit_lnot(reg, reg);
             builder.emit_push(reg);
-            // builder.emit_({BC_NOT, reg, reg2});
-            // builder.emit_push(reg2);
 
             outTypeIds->add(AST_BOOL);
         }
@@ -3097,9 +3073,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 BCRegister regFinal = BC_REG_A;
                 BCRegister regValue = BC_REG_D;
 
-                builder.emit_bxor(regFinal, regFinal, size);
                 builder.emit_pop(regValue);
-                builder.emit_sub(regFinal, regValue, false, 8); // assuming 64-bit integer
+                builder.emit_bxor(regFinal, regFinal, size);
+                builder.emit_sub(regFinal, regValue, false, size);
                 builder.emit_push(regFinal);
                 outTypeIds->add(ltype);
             } else if (AST::IsDecimal(ltype)) {
@@ -3143,7 +3119,13 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 // )
                 TypeId rtype{};
                 SignalIO result = generateExpression(expression->right, &tmp_types, idScope);
-                if(tmp_types.size()) rtype = tmp_types.last();
+                if(tmp_types.size())
+                    rtype = tmp_types[0];
+
+                for(int i=tmp_types.size()-1; i >= 1;i--) {
+                    generatePop(BC_REG_INVALID, 0, tmp_types[i]);
+                }
+
                 if(result!=SIGNAL_SUCCESS)
                     return SIGNAL_FAILURE;
 
@@ -4366,6 +4348,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         // sprintf(msg,"%d return values",(int)typesFromExpr.size());
                         ERR_LINE2(statement->firstExpression->location, typesFromExpr.size() << " return values");
                     )
+                    Assert(false); // type checker should have handled this
                 }
                 continue;
             }
@@ -4534,7 +4517,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         varinfo->versions_typeId[info.currentPolyVersion],
                         info.currentScopeDepth,
                         varname.identifier->scopeId);
-                } else {
+                } else if(varname.declaration) {
                     if(!varinfo->isGlobal()) {
                         // address of global variables is managed in type checker
                         SignalIO result = framePush(varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
@@ -4546,13 +4529,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                             info.currentScopeDepth,
                             varname.identifier->scopeId);
                     }
+                    _GLOG(log::out << "declare " << (varinfo->isGlobal()?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
+                } else {
+                    _GLOG(log::out << "assign " << (varinfo->isGlobal()?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
                 }
-                _GLOG(log::out << "declare " << (varinfo->isGlobal()?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
-                    // NOTE: inconsistent
-                    // char buf[100];
-                    // int len = sprintf(buf," ^ was assigned %s",statement->name->c_str());
-                    // bytecode->addDebugText(buf,len);
-                // }
                 if(varinfo){
                     _GLOG(log::out << " " << varname.name << " : " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << "\n";)
                 }
@@ -4643,7 +4623,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     if(typesFromExpr[i] != rightTypes[i]) {
                         ERR_SECTION(
                             ERR_HEAD2(statement->firstExpression->location)
-                            ERR_MSG("Compiler bug sorry! Type checker and generator produced different types '"<<a0<<"' != '"<<a1<<"' (type checker != generator.")
+                            ERR_MSG("Compiler bug sorry! Type checker and generator produced different types '"<<a0<<"' != '"<<a1<<"' (type checker != generator).")
                             ERR_LINE2(statement->firstExpression->location, "here")
                         )
                         Assert(info.hasForeignErrors());
@@ -4655,6 +4635,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 for(int i = (int)typesFromExpr.size()-1;i>=0;i--){
                     TypeId typeFromExpr = typesFromExpr[i];
                     if((int)statement->varnames.size() <= i){
+                        // TODO: Sometimes we don't want to ignore values like this but sometimes it's convenient.
+                        //   We need an annotation somewhere that throws an error if this happens.
+                        //   Probably on the function definition. @handle_all_return_values
                         _GLOG(log::out << log::LIME<<"just pop "<<info.ast->typeToString(typeFromExpr)<<"\n";)
                         generatePop(BC_REG_INVALID, 0, typeFromExpr);
                         continue;
@@ -5063,24 +5046,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // NOTE: We add debug information last because varinfo does not have the frame offsets yet.
 
             if(statement->rangedForLoop){
-                // TypeId itemtype = varname.versions_assignType[info.currentPolyVersion];
-                // auto varinfo_index = info.ast->addVariable(scopeForVariables,"nr", nullptr);
-                // auto iden = info.ast->findIdentifier(scopeForVariables,"nr");
                 {
-                    // i32 size = info.ast->getTypeSize(varinfo_index->typeId);
-                    // i32 asize = info.ast->getTypeAlignedSize(varinfo_index->typeId);
-                    // // data type may be zero if it wasn't specified during initial assignment
-                    // // a = 9  <-  implicit / explicit  ->  a : i32 = 9
-                    // int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-                    // if (diff != asize) {
-                    //     info.currentFrameOffset -= diff; // align
-                    // }
-                    // info.currentFrameOffset -= size;
-
-                    // varinfo_index->frameOffset = 0;
-                    // TypeId typeId = statement->varnames[0].versions_assignType[info.currentPolyVersion];
                     TypeId typeId = AST_INT32; // you may want to use the type in varname, the reason i don't is because
-                    // i seem to have used EAX here so it's best to keep doing that until i decide to fix this for real.
                     framePush(typeId, &varinfo_index->versions_dataOffset[info.currentPolyVersion],false, false);
                     varinfo_item->versions_dataOffset[info.currentPolyVersion] = varinfo_index->versions_dataOffset[info.currentPolyVersion];
 
@@ -5103,21 +5070,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     }
                     builder.emit_push(BC_REG_A);
                     generatePop(BC_REG_LOCALS, varinfo_index->versions_dataOffset[info.currentPolyVersion], typeId);
-                    // generatePop(BC_REG_BP, varinfo_index->versions_dataOffset[info.currentPolyVersion], typeId);
                 }
-                // i32 itemsize = info.ast->getTypeSize(varinfo_item->typeId);
 
                 _GLOG(log::out << "push loop\n");
                 loopScope->stackMoment = currentFrameOffset;
-                // loopScope->stackMoment = builder.saveStackMoment();
                 loopScope->continueAddress = builder.get_pc();
 
-                // log::out << "frame: "<<varinfo_index->frameOffset<<"\n";
-                // TODO: don't generate ptr and length everytime.
-                // put them in a temporary variable or something.
                 TypeId dtype = {};
                 DynamicArray<TypeId> tmp_types;
-                // bytecode->addDebugText("Generate and push range\n");
                 SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
                 if(tmp_types.size()) dtype = tmp_types.last();
                 if (result != SIGNAL_SUCCESS) {
@@ -5136,7 +5096,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
         
                 builder.emit_mov_rm_disp(index_reg, BC_REG_LOCALS, int_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
-                // builder.emit_mov_rm_disp(index_reg, BC_REG_BP, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->isReverse()){
                     builder.emit_incr(index_reg, -1);
@@ -5145,13 +5104,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
                 
                 builder.emit_mov_mr_disp(BC_REG_LOCALS, index_reg, int_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
-                // builder.emit_mov_mr_disp(BC_REG_BP, index_reg, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->isReverse()){
-                    // bytecode->addDebugText("For condition (reversed)\n");
                     builder.emit_gte(index_reg,length_reg, false, int_size, true);
                 } else {
-                    // bytecode->addDebugText("For condition\n");
                     builder.emit_lt(index_reg,length_reg, false, int_size, true);
                 }
                 loopScope->resolveBreaks.add(builder.emit_jz(index_reg));
@@ -5167,17 +5123,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
             }else{
                 {
-                    // i32 size = info.ast->getTypeSize(varinfo_index->typeId);
-                    // i32 asize = info.ast->getTypeAlignedSize(varinfo_index->typeId);
-                    // data type may be zero if it wasn't specified during initial assignment
-                    // a = 9  <-  implicit / explicit  ->  a : i32 = 9
-                    // int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-                    // if (diff != asize) {
-                    //     info.currentFrameOffset -= diff; // align
-                    // }
-                    // info.currentFrameOffset -= size;
-                    // varinfo_index->frameOffset = info.currentFrameOffset;
-
                     SignalIO result = framePush(varinfo_index->versions_typeId[info.currentPolyVersion], &varinfo_index->versions_dataOffset[info.currentPolyVersion], false, false);
 
                     if(statement->isReverse()){
@@ -5188,37 +5133,24 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         if (result != SIGNAL_SUCCESS) {
                             continue;
                         }
+                        int size = ast->getTypeSize(dtype);
                         builder.emit_pop(BC_REG_D); // throw ptr
                         builder.emit_pop(BC_REG_T0); // keep len
-                        builder.emit_cast(BC_REG_A, BC_REG_T0, CAST_UINT_SINT, 4,4);
+                        builder.emit_cast(BC_REG_A, BC_REG_T0, CAST_UINT_SINT, size, size);
                     }else{
-                        builder.emit_li32(BC_REG_A,-1);
+                        // it is important that we load li64 to fill the CPU register so that we get a negative number and not a
+                        // large 32-bit number in 64-bit register
+                        builder.emit_li64(BC_REG_A,-1);
                     }
                     builder.emit_push(BC_REG_A);
 
                     Assert(varinfo_index->versions_typeId[info.currentPolyVersion] == AST_INT64);
 
                     generatePop(BC_REG_LOCALS,varinfo_index->versions_dataOffset[info.currentPolyVersion],varinfo_index->versions_typeId[info.currentPolyVersion]);
-                    // generatePop(BC_REG_BP,varinfo_index->versions_dataOffset[info.currentPolyVersion],varinfo_index->versions_typeId[info.currentPolyVersion]);
                 }
-                // Token& itemvar = varname.name;
-                // TypeId itemtype = varname.versions_assignType[info.currentPolyVersion];
-                // if(!itemtype.isValid()){
-                //     // error has probably been handled somewhere. no need to print again.
-                //     // if it wasn't and you just found out that things went wrong here
-                //     // then sorry.
-                //     continue;
-                // }
                 i32 itemsize = info.ast->getTypeSize(varnameIt.versions_assignType[info.currentPolyVersion]);
-                // auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
-                // auto varinfo_item = info.ast->getVariableByIdentifier(varname.identifier);
-                //  info.ast->addVariable(scopeForVariables,itemvar);
-                // varinfo_item->typeId = itemtype;
-                // if(statement->pointer){
-                //     varinfo_item->versions_typeId[info.currentPolyVersion].setPointerLevel(varinfo_item->typeId.getPointerLevel()+1);
-                // }
+
                 {
-                    // TODO: Automate this code. Pushing and popping variables from the frame is used often and should be functions.
                     i32 asize = info.ast->getTypeAlignedSize(varinfo_item->versions_typeId[info.currentPolyVersion]);
                     if(asize==0)
                         continue;
@@ -5228,14 +5160,12 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
                 _GLOG(log::out << "push loop\n");
                 loopScope->stackMoment = currentFrameOffset;
-                // loopScope->stackMoment = builder.saveStackMoment();
                 loopScope->continueAddress = builder.get_pc();
 
                 // TODO: don't generate ptr and length everytime.
                 // put them in a temporary variable or something.
                 TypeId dtype = {};
                 DynamicArray<TypeId> tmp_types{};
-                // bytecode->addDebugText("Generate and push slice\n");
                 SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
                 if(tmp_types.size()) dtype = tmp_types.last();
                 if (result != SIGNAL_SUCCESS) {
@@ -5252,76 +5182,58 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 BCRegister length_reg = BC_REG_B;
                 BCRegister index_reg = BC_REG_C;
 
-                // bytecode->addDebugText("extract ptr and length\n");
                 builder.emit_pop(ptr_reg);
                 builder.emit_pop(length_reg);
 
-                // bytecode->addDebugText("Index increment/decrement\n");
-                
                 u8 ptr_size = ast->getTypeSize(memdata_ptr.typeId);
-                u8 index_size = ast->getTypeSize(memdata_len.typeId);
-                Assert(ptr_size == 8);
+                // u8 index_size = ast->getTypeSize(memdata_len.typeId);
+                u8 operand_size = ptr_size;
 
-                builder.emit_mov_rm_disp(index_reg, BC_REG_LOCALS, index_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
-                // builder.emit_mov_rm_disp(index_reg, BC_REG_BP, index_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+                builder.emit_mov_rm_disp(index_reg, BC_REG_LOCALS, operand_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
                 if(statement->isReverse()){
                     builder.emit_incr(index_reg, -1);
                 }else{
                     builder.emit_incr(index_reg, 1);
                 }
-                builder.emit_mov_mr_disp(BC_REG_LOCALS, index_reg, index_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
-                // builder.emit_mov_mr_disp(BC_REG_BP, index_reg, index_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+                builder.emit_mov_mr_disp(BC_REG_LOCALS, index_reg, operand_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
-                // u8 cond_reg = BC_REG_EBX;
-                // u8 cond_reg = BC_REG_R9;
+                // NOTE: length_reg is modified here because it's not needed.
                 if(statement->isReverse()){
-                    // bytecode->addDebugText("For condition (reversed)\n");
-                    builder.emit_li32(length_reg, 0); // length reg is not used with reversed
-                    builder.emit_gte(index_reg,length_reg, false, index_size, true);
+                    builder.emit_li(length_reg, 0, operand_size); // length reg is not used with reversed
+                    builder.emit_lte(length_reg,index_reg, false, operand_size, true);
                 } else {
-                    // bytecode->addDebugText("For condition\n");
-                    builder.emit_lt(index_reg,length_reg, false, index_size, true);
+                    // index < length, we do length > index because index_reg is used later, length_reg is free to use though
+                    builder.emit_gt(length_reg,index_reg, false, operand_size, true);
                 }
-                // resolve end, not break, resolveBreaks is bad naming
-                // builder.emit_({BC_JZ, BC_REG_A});
                 loopScope->resolveBreaks.add(builder.emit_jz(length_reg));
 
                 // BE VERY CAREFUL SO YOU DON'T USE BUSY REGISTERS AND OVERWRITE
                 // VALUES. UNEXPECTED VALUES WILL HAPPEN AND IT WILL BE PAINFUL.
                 
-                // NOTE: index_reg is modified here since it isn't needed anymore
+                // NOTE: index_reg is needed here and should not be modified before.
                 if(statement->isPointer()){
                     if(itemsize>1){
-                        builder.emit_li32(BC_REG_A,itemsize);
-                        builder.emit_mul(BC_REG_A, index_reg, false, 4, true);
+                        builder.emit_li32(BC_REG_A, itemsize);
+                        builder.emit_mul(BC_REG_A, index_reg, false, operand_size, true);
                     } else {
                         builder.emit_mov_rr(BC_REG_A, index_reg);
                     }
-                    builder.emit_add(ptr_reg, BC_REG_A, false, 8);
+                    builder.emit_add(ptr_reg, BC_REG_A, false, operand_size);
 
-                    builder.emit_mov_mr_disp(BC_REG_LOCALS, ptr_reg, 8, varinfo_item->versions_dataOffset[info.currentPolyVersion]);
-                    // builder.emit_mov_mr_disp(BC_REG_BP, ptr_reg, 8, varinfo_item->versions_dataOffset[info.currentPolyVersion]);
+                    builder.emit_mov_mr_disp(BC_REG_LOCALS, ptr_reg, operand_size, varinfo_item->versions_dataOffset[info.currentPolyVersion]);
                 } else {
                     if(itemsize>1){
-                        builder.emit_li32(BC_REG_A,itemsize);
-                        builder.emit_mul(BC_REG_A, index_reg, false, 4, true);
+                        builder.emit_li(BC_REG_A,itemsize, operand_size);
+                        builder.emit_mul(BC_REG_A, index_reg, false, operand_size, true);
                     } else {
                         builder.emit_mov_rr(BC_REG_A, index_reg);
                     }
-                    builder.emit_add(ptr_reg, BC_REG_A, false, 8);
+                    builder.emit_add(ptr_reg, BC_REG_A, false, operand_size);
 
                     builder.emit_ptr_to_locals(BC_REG_E, varinfo_item->versions_dataOffset[info.currentPolyVersion]);
-                    // builder.emit_add(BC_REG_E, BC_REG_BP, false, 8);
                     
-                    // builder.emit_({BC_BXOR, BC_REG_A, BC_REG_A}); // BC_MEMCPY USES AL
-                    
-                    builder.emit_li32(BC_REG_B,itemsize);
-                    // builder.emit_mov_rr(BC_REG_A, BC_REG_B}); // BC_MEMCPY USES AL
+                    builder.emit_li(BC_REG_B,itemsize,operand_size);
                     builder.emit_memcpy(BC_REG_E, ptr_reg, BC_REG_B);
-                    
-
-                    // bytecode->add({BC_MOV_RR, ptr_reg, BC_REG_A});
-                    // bytecode->add({BC_SUBI, BC_REG_A, BC_REG_RDI, BC_REG_A});
                 }
 
                 result = generateBody(statement->firstBody);
@@ -5333,12 +5245,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 for (auto ind : loopScope->resolveBreaks) {
                     builder.fix_jump_imm32_here(ind);
                 }
-                
-                // delete nr, frameoffset needs to be changed to if so
-                // builder.emit_pop(BC_REG_A); 
-
-                // info.ast->removeIdentifier(scopeForVariables, "nr");
-                // info.ast->removeIdentifier(scopeForVariables, itemvar);
             }
             
             builder.emit_free_local(stackBeforeLoop - info.currentFrameOffset);
@@ -5354,8 +5260,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 varinfo_index->versions_typeId[info.currentPolyVersion],
                 info.currentScopeDepth + 1,
                 varnameNr.identifier->scopeId);
-
-            // builder.restoreStackMoment(stackBeforeLoop);
 
             // pop loop happens in defer
         } else if(statement->type == ASTStatement::BREAK) {
@@ -5516,7 +5420,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // aliasId->varIndex = origin->varIndex;
         } else if (statement->type == ASTStatement::DEFER) {
             _GLOG(SCOPE_LOG("DEFER"))
-            Assert(false); // defers should have been replaced in the parser no?
+            // defers are handled in the parser but we don't paste the body statement of the defers to end of scopes. We paste a new defer statement which
+            // content is shared. !statement->sharedContents tells us that this
+            // defer is the original from the end of the scope, not from continues/breaks/returns.
             SignalIO result = generateBody(statement->firstBody);
             // Is it okay to do nothing with result?
         } else if (statement->type == ASTStatement::BODY) {
@@ -6107,26 +6013,38 @@ void TestGenerate(BytecodeBuilder& b) {
     // Read / write ordering
     // #################
 
-    b.emit_li32(BC_REG_A, 2);
-    b.emit_li32(BC_REG_D, 5);
-    b.emit_push(BC_REG_D);
-    b.emit_push(BC_REG_A);
+    // b.emit_li32(BC_REG_A, 2);
+    // b.emit_li32(BC_REG_D, 5);
+    // b.emit_push(BC_REG_D);
+    // b.emit_push(BC_REG_A);
     
-    b.emit_pop(BC_REG_A); // throw range.now
-    b.emit_pop(BC_REG_D); // range.end we care about
+    // b.emit_pop(BC_REG_A); // throw range.now
+    // b.emit_pop(BC_REG_D); // range.end we care about
 
-    b.emit_mov_rm_disp(BC_REG_C, BC_REG_LOCALS, 4, -8);
-    // builder.emit_mov_rm_disp(index_reg, BC_REG_BP, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+    // b.emit_mov_rm_disp(BC_REG_C, BC_REG_LOCALS, 4, -8);
+    // // builder.emit_mov_rm_disp(index_reg, BC_REG_BP, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
-    b.emit_incr(BC_REG_C, 1);
+    // b.emit_incr(BC_REG_C, 1);
     
-    b.emit_mov_mr_disp(BC_REG_LOCALS, BC_REG_C, 4, -8);
-    // builder.emit_mov_mr_disp(BC_REG_BP, index_reg, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS, BC_REG_C, 4, -8);
+    // // builder.emit_mov_mr_disp(BC_REG_BP, index_reg, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
-    // bytecode->addDebugText("For condition\n");
-    b.emit_add(BC_REG_C, BC_REG_D, false, 4);
+    // // bytecode->addDebugText("For condition\n");
+    // b.emit_add(BC_REG_C, BC_REG_D, false, 4);
 
-    b.emit_jz(BC_REG_C);
+    // b.emit_jz(BC_REG_C);
 
-    b.emit_jmp(0);
+    // b.emit_jmp(0);
+
+
+    // ########################3
+    //  EDGE CASE
+    // ########################3
+
+    // b.emit_
+
+    // b.emit_li32(BC_REG_A, 9);
+    // b.emit_add(BC_REG_F, BC_REG_A, false, 4);
+
+    // b.emit_mov_mr(BC_REG_LOCALS, BC_REG_F, 4);
 }

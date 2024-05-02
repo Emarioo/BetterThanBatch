@@ -43,9 +43,9 @@
 			"end":"\n"
 		},
 		"commentblock": {
-			"name": "comment.block",
-			"begin": "/\\*",
-			"end": "\\*/"
+			"name":"comment.block",
+			"begin":"/\\*",
+			"end":"\\*/"
 		},
 		"keywords": {
 			"patterns": [{
@@ -78,7 +78,7 @@
 		"types":{
 			"patterns": [{
 				"name":"entity.name.type",
-				"match": "((?<=\\w+\\s*:\\s*)|(?<=-\\>\\s*))(?<base>(\\w+::)*(\\w+)(\\<(\\g'base')(,\\g'base')*\\>)?)"
+				"match": "((?<=\\w+\\s*:\\s*)|(?<=-\\>\\s*))(?<base>(\\w+::)*(\\w+)(\\<(\\g'base')(,\\g'base')*\\>)?(\\*)*)"
 			}]
 		},
 		"strings": {

@@ -5,6 +5,7 @@
 
 #include "BetBat/Compiler.h"
 
+
 struct TestCase {
     ~TestCase() {
         expectedErrors.cleanup();

@@ -19,6 +19,6 @@ bool PhaseContext::hasForeignErrors() {
         return compiler->options->compileStats.errors != 0;
     } else {
         Assert(compiler);
-        return compiler->options->compileStats.errorTypes.size() != 0;
+        return compiler->errorTypes.size() != 0;
     }
 }

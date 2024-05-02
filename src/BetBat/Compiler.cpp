@@ -1133,6 +1133,7 @@ void Compiler::run(CompileOptions* options) {
         options->compileStats.end_linker = StartMeasure();
         if(exitCode != 0) {
             log::out << log::RED << "linker failed\n";
+            options->compileStats.errors++;
         }    
     } else {
         // TODO: If bytecode is the target and the user specified
@@ -1149,21 +1150,9 @@ void Compiler::run(CompileOptions* options) {
 
                 // Some user friendly information about crashes
                     // from winnt.h
-                #define _STATUS_ACCESS_VIOLATION         0xC0000005
-                #define _STATUS_ILLEGAL_INSTRUCTION      0xC000001D
-                #define _STATUS_FLOAT_DIVIDE_BY_ZERO     0xC000008E
-                #define _STATUS_INTEGER_DIVIDE_BY_ZERO   0xC0000094
-                #define _STATUS_STACK_OVERFLOW           0xC00000FD
-                #define _STATUS_DLL_NOT_FOUND            0xC0000135
-                switch(exitCode) {
-                break; case _STATUS_ACCESS_VIOLATION:       log::out << log::RED << " Access violation\n";                  
-                break; case _STATUS_ILLEGAL_INSTRUCTION:    log::out << log::RED << " Illegal instruction\n";               
-                break; case _STATUS_FLOAT_DIVIDE_BY_ZERO:   log::out << log::RED << " Division by zero (float)\n";          
-                break; case _STATUS_INTEGER_DIVIDE_BY_ZERO: log::out << log::RED << " Division by zero (integer)\n";        
-                break; case _STATUS_STACK_OVERFLOW:         log::out << log::RED << " Stack overflow\n";        
-                break; case _STATUS_DLL_NOT_FOUND:          log::out << log::RED << " Missing DLL\n";                       
-                break; default: break;
-                }
+                std::string err = StringFromExitCode(exitCode);
+                if(err.size())
+                    log::out << log::RED << " " << err << "\n";
                 #else
                 log::out << log::RED << "You cannot run a Windows program on Linux. Consider changing target when compiling (--target unix-x64)\n";
                 #endif
@@ -1188,7 +1177,9 @@ void Compiler::run(CompileOptions* options) {
     }
 
     if(options->compileStats.errors==0) {
-        options->compileStats.printSuccess(options);
+        if(!options->silent) {
+            options->compileStats.printSuccess(options);
+        }
     }
 }
 u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origin_file) {
@@ -1386,3 +1377,16 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     return fullPath;
 }
 
+void Compiler::addError(const lexer::SourceLocation& location, CompileError errorType) {
+    auto src = lexer.getTokenSource_unsafe(location);
+    errorTypes.add({errorType, (u32)src->line});
+}
+void Compiler::addError(const lexer::Token& token, CompileError errorType) {
+    auto src = lexer.getTokenSource_unsafe({token});
+    errorTypes.add({errorType, (u32)src->line});
+}
+static const char* annotation_names[]{
+    "unknown",
+    "custom",
+
+};

@@ -232,12 +232,23 @@ SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed)
     
     int depth = 0;
     bool wasName = false;
+    bool only_pointers = false;
     outTypeId = {};
     StringView view{};
     while(true){
         auto token = info.getinfo(&view);
         if(token->type == lexer::TOKEN_EOF)
             break;
+
+        if(only_pointers) {
+            if(token->type == '*') {
+                info.advance();
+                strings.last().append("*");
+                continue;
+            } else {
+                break;
+            }
+        }
 
         if(token->type == lexer::TOKEN_IDENTIFIER || (wasName = false)) {
             if(wasName) {
@@ -271,10 +282,10 @@ SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed)
             strings[strings.size()-2].append(strings.last());
             strings.pop();
             strings.last().append(">");
-            // outTypeId.append(">");
             
             if(depth == 0){
-                break;
+                only_pointers = true;
+                continue;
             }
         } else if(token->type == '*') {
             info.advance();
@@ -468,163 +479,162 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
         bool wasFunction = false;
         std::string typeToken{};
         int typeEndToken = -1;
-        if(name_token->type == lexer::TOKEN_IDENTIFIER) {
-            if (view.equals("fn")) {
-                info.advance();
-                wasFunction = true;
-                // parse function?
-                ASTFunction* func = 0;
-                Assert(false); // nocheckin
-                // SignalIO signal = ParseFunction(info, func, astStruct);
-                // switch(signal) {
-                // case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
-                // case SIGNAL_SUCCESS: break;
-                // default: Assert(false);
-                // }
-                func->parentStruct = astStruct;
-                astStruct->add(func);
-                // ,func->polyArgs.size()==0?&func->baseImpl:nullptr);
-            } else if(view.equals("union")) {
-                info.advance();
-                Assert(false);
-                
-                // Assert(union_depth < 1); // nocheckin, support nested unions and structs
-                
-                // Token tok = info.gettok();
-                // if(IsName(tok)) {
-                //     ERR_SECTION(
-                //         ERR_HEAD2(tok)
-                //         ERR_MSG("Named unions not allowed inside structs.")
-                //         ERR_LINE2(tok,"bad")
-                //     )
-                //     info.advance(); // skip it, continue as normal
-                // }
-                
-                // tok = info.gettok();
-                
-                // if(tok.type == '{') {
-                //     info.advance();
-                //     union_depth++;
-                //     continue;
-                // } else {
-                //     ERR_SECTION(
-                //         ERR_HEAD2(tok)
-                //         ERR_MSG("Expected 'union {' but there was no curly brace.")
-                //         ERR_LINE2(tok,"should be a curly brace")
-                //     )
-                //     // what do we do?
-                // }
-            } else if(view.equals("struct")) {
-                Assert(("struct in struct not allowed",false)); // error instead
-                // ERR_SECTION(
-                //     ERR_HEAD2(name)
-                //     ERR_MSG("Structs not allowed inside structs.")
-                //     ERR_LINE2(name,"bad")
-                // )
-            } else {
-                for(auto& mem : astStruct->members) {
-                    if(mem.name == view) {
-                        ERR_SECTION(
-                            ERR_HEAD2(name_tok)
-                            ERR_MSG("The name '"<<info.lexer->tostring(name_tok)<<"' is already used in another member of the struct. You cannot have two members with the same name.")
-                            ERR_LINE2(mem.location, "last")
-                            ERR_LINE2(name_tok, "now")
-                        )
-                        break;
-                    }
-                }
-                info.advance();
-                auto token = info.getinfo();
-                if(token->type != ':'){
-                    auto bad = info.gettok();
-                    ERR_DEFAULT_LAZY(bad,"Expected : not '"<<info.lexer->tostring(bad)<<"'.")
-                    return SIGNAL_COMPLETE_FAILURE;
-                }
-                info.advance();
-                auto type_tok = info.gettok();
-                auto signal = ParseTypeId(info,typeToken,nullptr);
+        if(name_token->type == lexer::TOKEN_FUNCTION) {
+            info.advance();
+            wasFunction = true;
+            ASTFunction* func = 0;
 
-                SIGNAL_INVALID_DATATYPE(typeToken)
-                // switch(signal){
-                //     case SIGNAL_SUCCESS: break;
-                //     case SIGNAL_COMPLETE_FAILURE: {
-                //         if(typeToken.size() != 0) {
-                //             ERR_SECTION(
-                //                 ERR_HEAD2(type_tok)
-                //                 ERR_MSG("Failed parsing type '"<<typeToken<<"'.")
-                //                 ERR_LINE2(type_tok,"bad")
-                //             )
-                //         } else {
-                //             ERR_SECTION(
-                //                 ERR_HEAD2(type_tok)
-                //                 ERR_MSG("Failed parsing type '"<<info.lexer->tostring(type_tok)<<"'.")
-                //                 ERR_LINE2(type_tok,"bad")
-                //             )
-                //         }
-                //         return SIGNAL_COMPLETE_FAILURE;
-                //     }
-                //     default: Assert(false);
-                // }
+            SignalIO signal = ParseFunction(info, func, astStruct, false);
+            switch(signal) {
+            case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
+            case SIGNAL_SUCCESS: break;
+            default: Assert(false);
+            }
+            func->parentStruct = astStruct;
+            astStruct->add(func);
+            // ,func->polyArgs.size()==0?&func->baseImpl:nullptr);
+        } else if(name_token->type == lexer::TOKEN_UNION) {
+            info.advance();
 
-                // typeEndToken = info.at()+1;
-                int arrayLength = -1;
-                auto tok0 = info.gettok(0);
-                StringView num_data = {};
-                auto tok1 = info.gettok(&num_data, 1);
-                auto tok2 = info.gettok(2);
-                if(tok0.type == '[' && tok2.type == ']') {
-                    info.advance(3);
+            log::out << log::GOLD << "Union is an incomplete features\n";
+            Assert(false);
 
-                    if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
-                        // u64 num = 0;
-                        // memcpy(&num, num_data.ptr, num_data.len);
-                        arrayLength = lexer::ConvertInteger(num_data);
-                        if(arrayLength<0){
-                            ERR_SECTION(
-                                ERR_HEAD2(tok1)
-                                ERR_MSG("Array cannot have negative size.")
-                                ERR_LINE2(tok1,"< 0")
-                            )
-                            arrayLength = 0;
-                        }
-                    } else {
-                        ERR_SECTION(
-                            ERR_HEAD2(tok1)
-                            ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
-                            ERR_LINE2(tok1, "must be positive integer literal")
-                        )
-                    }
-                    typeToken = "Slice<" + typeToken +">";
-                }
-                Assert(arrayLength==-1); // arrays in structs not implemented yet
-                // std::string temps = typeToken;
-                
-                TypeId typeId = info.ast->getTypeString(typeToken);
-                
-                signal = SIGNAL_SUCCESS;
-                ASTExpression* defaultValue=0;
-                token = info.getinfo();
-                if(token->type == '='){
-                    info.advance();
-                    signal = ParseExpression(info,defaultValue);
-                }
-                switch(signal) {
-                case SIGNAL_SUCCESS: {
-                    astStruct->members.add({});
-                    auto& mem = astStruct->members.last();
-                    mem.name = name_view;
-                    mem.defaultValue = defaultValue;
-                    mem.stringType = typeId;
-                    mem.location = info.srcloc(name_tok);
-                    
-                    // auto l = info.lexer->getTokenSource_unsafe(mem.location);
-                    // log::out << l->line << " " << l->column<<"\n";
-                    
+            // Assert(union_depth < 1); // nocheckin, support nested unions and structs
+            
+            // Token tok = info.gettok();
+            // if(IsName(tok)) {
+            //     ERR_SECTION(
+            //         ERR_HEAD2(tok)
+            //         ERR_MSG("Named unions not allowed inside structs.")
+            //         ERR_LINE2(tok,"bad")
+            //     )
+            //     info.advance(); // skip it, continue as normal
+            // }
+            
+            // tok = info.gettok();
+            
+            // if(tok.type == '{') {
+            //     info.advance();
+            //     union_depth++;
+            //     continue;
+            // } else {
+            //     ERR_SECTION(
+            //         ERR_HEAD2(tok)
+            //         ERR_MSG("Expected 'union {' but there was no curly brace.")
+            //         ERR_LINE2(tok,"should be a curly brace")
+            //     )
+            //     // what do we do?
+            // }
+        } else if(name_token->type == lexer::TOKEN_STRUCT) {
+            Assert(("struct in struct not allowed",false)); // error instead
+            // ERR_SECTION(
+            //     ERR_HEAD2(name)
+            //     ERR_MSG("Structs not allowed inside structs.")
+            //     ERR_LINE2(name,"bad")
+            // )
+        } else if(name_token->type == lexer::TOKEN_IDENTIFIER){
+            for(auto& mem : astStruct->members) {
+                if(mem.name == view) {
+                    ERR_SECTION(
+                        ERR_HEAD2(name_tok)
+                        ERR_MSG("The name '"<<info.lexer->tostring(name_tok)<<"' is already used in another member of the struct. You cannot have two members with the same name.")
+                        ERR_LINE2(mem.location, "last")
+                        ERR_LINE2(name_tok, "now")
+                    )
                     break;
                 }
-                case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
-                default: Assert(false);
+            }
+            info.advance();
+            auto token = info.getinfo();
+            if(token->type != ':'){
+                auto bad = info.gettok();
+                ERR_DEFAULT_LAZY(bad,"Expected : not '"<<info.lexer->tostring(bad)<<"'.")
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+            info.advance();
+            auto type_tok = info.gettok();
+            auto signal = ParseTypeId(info,typeToken,nullptr);
+
+            SIGNAL_INVALID_DATATYPE(typeToken)
+            // switch(signal){
+            //     case SIGNAL_SUCCESS: break;
+            //     case SIGNAL_COMPLETE_FAILURE: {
+            //         if(typeToken.size() != 0) {
+            //             ERR_SECTION(
+            //                 ERR_HEAD2(type_tok)
+            //                 ERR_MSG("Failed parsing type '"<<typeToken<<"'.")
+            //                 ERR_LINE2(type_tok,"bad")
+            //             )
+            //         } else {
+            //             ERR_SECTION(
+            //                 ERR_HEAD2(type_tok)
+            //                 ERR_MSG("Failed parsing type '"<<info.lexer->tostring(type_tok)<<"'.")
+            //                 ERR_LINE2(type_tok,"bad")
+            //             )
+            //         }
+            //         return SIGNAL_COMPLETE_FAILURE;
+            //     }
+            //     default: Assert(false);
+            // }
+
+            // typeEndToken = info.at()+1;
+            int arrayLength = -1;
+            auto tok0 = info.gettok(0);
+            StringView num_data = {};
+            auto tok1 = info.gettok(&num_data, 1);
+            auto tok2 = info.gettok(2);
+            if(tok0.type == '[' && tok2.type == ']') {
+                info.advance(3);
+
+                if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
+                    // u64 num = 0;
+                    // memcpy(&num, num_data.ptr, num_data.len);
+                    arrayLength = lexer::ConvertInteger(num_data);
+                    if(arrayLength<0){
+                        ERR_SECTION(
+                            ERR_HEAD2(tok1)
+                            ERR_MSG("Array cannot have negative size.")
+                            ERR_LINE2(tok1,"< 0")
+                        )
+                        arrayLength = 0;
+                    }
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok1)
+                        ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
+                        ERR_LINE2(tok1, "must be positive integer literal")
+                    )
                 }
+                typeToken = "Slice<" + typeToken +">";
+            }
+            Assert(arrayLength==-1); // arrays in structs not implemented yet
+            // std::string temps = typeToken;
+            
+            TypeId typeId = info.ast->getTypeString(typeToken);
+            
+            signal = SIGNAL_SUCCESS;
+            ASTExpression* defaultValue=0;
+            token = info.getinfo();
+            if(token->type == '='){
+                info.advance();
+                signal = ParseExpression(info,defaultValue);
+            }
+            switch(signal) {
+            case SIGNAL_SUCCESS: {
+                astStruct->members.add({});
+                auto& mem = astStruct->members.last();
+                mem.name = name_view;
+                mem.defaultValue = defaultValue;
+                mem.stringType = typeId;
+                mem.location = info.srcloc(name_tok);
+                
+                // auto l = info.lexer->getTokenSource_unsafe(mem.location);
+                // log::out << l->line << " " << l->column<<"\n";
+                
+                break;
+            }
+            case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
+            default: Assert(false);
             }
         } else {
             info.advance();
@@ -642,7 +652,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
         }
         StringView tok_view{};
         auto token = info.getinfo(&tok_view);
-        if(tok_view == "fn" || tok_view == "struct" || tok_view == "union"){
+        if(token->type == lexer::TOKEN_FUNCTION || token->type == lexer::TOKEN_STRUCT || token->type == lexer::TOKEN_UNION){
             // semi-colon not required
             continue;
         }else if(token->type == ';'){
@@ -850,7 +860,7 @@ SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum){
             )
         }
         info.advance();
-        token = info.getinfo();
+        token = info.getinfo(&view_name);
         continue;
     }
 
@@ -945,30 +955,52 @@ SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum){
         StringView view{};
         auto token = info.getinfo(&view);
         if(token->type == '='){
+            // TODO: Handle expressions, not just literals.
+
             info.advance();
-            token = info.getinfo(&view);
-            // TODO: Handle expressions
-            // TODO: Handle negative values (automatically done if you fix expressions)
-            if(token->type == lexer::TOKEN_LITERAL_INTEGER){
+            auto tok = info.gettok(&view);
+            bool is_negative = false;
+            if(tok.type == '-') {
+                is_negative = true;
                 info.advance();
-                nextValue = lexer::ConvertInteger(view);
-                token = info.getinfo();
-            } else if(token->type == lexer::TOKEN_LITERAL_INTEGER){
+                tok = info.gettok(&view);
+            }
+            i64 value = 0;
+            if(info.lexer->isIntegerLiteral(tok, &value)) {
                 info.advance();
-                nextValue = lexer::ConvertHexadecimal(view);
-                token = info.getinfo();
-            } else if(token->type == lexer::TOKEN_LITERAL_STRING && (token->flags & lexer::TOKEN_FLAG_SINGLE_QUOTED) && view.len == 1) {
-                info.advance();
-                nextValue = *view.ptr;
-                token = info.getinfo();
+                if(is_negative)
+                    nextValue = -value;
+                else
+                    nextValue = value;
             } else {
-                auto tok = info.gettok();
                 ERR_SECTION(
                     ERR_HEAD2(tok)
                     ERR_MSG("Values for enum members can only be a integer literal. In the future, any constant expression will be allowed.")
                     ERR_LINE2(tok,"not an integer literal")
                 )
             }
+
+            // TODO: Delete old code
+            // if(token->type == lexer::TOKEN_LITERAL_INTEGER){
+            //     info.advance();
+            //     nextValue = lexer::ConvertInteger(view);
+            //     token = info.getinfo();
+            // } else if(token->type == lexer::TOKEN_LITERAL_INTEGER){
+            //     info.advance();
+            //     nextValue = lexer::ConvertHexadecimal(view);
+            //     token = info.getinfo();
+            // } else if(token->type == lexer::TOKEN_LITERAL_STRING && (token->flags & lexer::TOKEN_FLAG_SINGLE_QUOTED) && view.len == 1) {
+            //     info.advance();
+            //     nextValue = *view.ptr;
+            //     token = info.getinfo();
+            // } else {
+            //     auto tok = info.gettok();
+            //     ERR_SECTION(
+            //         ERR_HEAD2(tok)
+            //         ERR_MSG("Values for enum members can only be a integer literal. In the future, any constant expression will be allowed.")
+            //         ERR_LINE2(tok,"not an integer literal")
+            //     )
+            // }
         } else {
             if(!ignoreRules && (enumRules & ASTEnum::SPECIFIED)) {
                 auto tok = info.gettok(-1);
@@ -1997,7 +2029,8 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 }
 
                 // nocheckin, we must set the range of the asm block
-                Assert(("asm incomplete after rewrite V2.1",false));
+                log::out << log::YELLOW << "asm incomplete after rewwrite v0.2.1\n";
+                // Assert(("asm incomplete after rewrite V2.1",false));
 
                 // tmp->tokenRange.endIndex = info.at()+1;
                 values.add(tmp);
@@ -2775,30 +2808,14 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             statement = info.ast->createStatement(ASTStatement::DEFER);
             statement->firstBody = body;
 
-            // statement->tokenRange.firstToken = firstToken;
-            // statement->tokenRange.endIndex = info.at()+1;
             return SIGNAL_SUCCESS;  
         } else if(token->type == lexer::TOKEN_BREAK) {
             info.advance();
-
-            // TODO: We must be in loop scope!
-
             statement = info.ast->createStatement(ASTStatement::BREAK);
-
-            // statement->tokenRange.firstToken = firstToken;
-            // statement->tokenRange.endIndex = info.at()+1;
             return SIGNAL_SUCCESS;
         } else if(token->type == lexer::TOKEN_CONTINUE) {
             info.advance();
-
-            // TODO: We must be in loop scope!
-
             statement = info.ast->createStatement(ASTStatement::CONTINUE);
-
-            // statement->tokenRange.firstToken = firstToken;
-            
-            // statement->tokenRange.endIndex = info.at()+1;
-            
             return SIGNAL_SUCCESS;  
         }
     } else  if(token->type == lexer::TOKEN_USING){
@@ -3534,14 +3551,15 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
         auto tok = info.gettok();
         if(tok.type == ':'){
             info.advance(); // :
+            // statement->varnames.last().declaration = true;
 
             tok = info.gettok();
             if(tok.type == '=') {
-                // int index = statement->varnames.size()-1;
-                // while(index>=0 && !statement->varnames[index].declaration){
-                //     statement->varnames[index].declaration = true;
-                //     index--;
-                // }
+                int index = statement->varnames.size()-1;
+                while(index>=0 && !statement->varnames[index].declaration){
+                    statement->varnames[index].declaration = true;
+                    index--;
+                }
             } else {
                 std::string typeToken{};
                 auto signal = ParseTypeId(info,typeToken, nullptr);
@@ -3556,6 +3574,20 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
                 auto tok2 = info.gettok(2);
                 if(tok0.type == '[' && tok2.type == ']') {
                     info.advance(3);
+
+                    if(statement->varnames.size() > 1) {
+                        // TODO: We could allow this if the array is declared last. We don't
+                        //   since the type checker and generator doesn't handle it. Look into it?
+                        ERR_SECTION(
+                            ERR_HEAD2(tok0)
+                            ERR_MSG("Array declarations must be standalone. You can specify multiple variables in a declaration.")
+                            ERR_LINE2(tok1, "remove array declaration or remove variable declarations")
+                            ERR_EXAMPLE(1, "a, b: i32[4] // NOT OKAY")
+                            ERR_EXAMPLE(2, "a: i32, b: i32[4] // NOT OKAY")
+                            ERR_EXAMPLE(3, "b: i32[4] // Very good!")
+                        )
+                        return SIGNAL_COMPLETE_FAILURE;
+                    }
 
                     if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
                         lengthTokenOfLastVar = tok1;
@@ -3581,11 +3613,25 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
 
                 int index = statement->varnames.size()-1;
                 while(index>=0 && !statement->varnames[index].assignString.isString()){
-                // while(index>=0 && !statement->varnames[index].declaration){
-                    // statement->varnames[index].declaration = true;
+                    statement->varnames[index].declaration = true;
                     statement->varnames[index].assignString = strId;
                     statement->varnames[index].arrayLength = arrayLength;
                     index--;
+                }
+
+                if(arrayLength != -1) {
+                    tok = info.gettok();
+                    if(tok.type == ','){
+                        ERR_SECTION(
+                            ERR_HEAD2(tok)
+                            ERR_MSG("Multiple declarations is not allowed with an array declaration. The comma indicates more variable declarations (or assignments) which isn't supported.")
+                            ERR_LINE2(tok, "bad comma!")
+                            ERR_EXAMPLE(2, "b: i32[4], c: i32 // NOT OKAY")
+                            ERR_EXAMPLE(3, "b: i32[4] // Very good!")
+                        )
+                        return SIGNAL_COMPLETE_FAILURE;
+                    }
+                    break;
                 }
             }
         } else {
@@ -3605,15 +3651,6 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
         }
         break;
     }
-
-    // statement = info.ast->createStatement(ASTStatement::ASSIGN);
-    // // statement->varnames.stealFrom(varnames);
-    // statement->firstExpression = nullptr;
-    // statement->globalDeclaration = globalDeclaration;
-    
-    // We usually don't want the tokenRange to include the expression.
-    // statement->tokenRange.firstToken = info.get(startIndex);
-    // statement->tokenRange.endIndex = info.at()+1;
 
     auto tok = info.gettok();
     if(tok.type == '=') {
@@ -3940,6 +3977,8 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
                         // deferCopy->tokenRange = myDefer->tokenRange;
                         deferCopy->firstBody = myDefer->firstBody;
                         deferCopy->sharedContents = true;
+                        deferCopy->location = myDefer->location;
+                        // TODO: Share flags with deferCopy?
 
                         bodyLoc->add(info.ast, deferCopy);
                         info.nextContentOrder.last()++;
@@ -4001,7 +4040,7 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
             int len = snprintf(buf,sizeof(buf),"nodeid = %d",astNode->nodeId);
             Assert(len);
             log::out << log::YELLOW << "Annotation @nodeid: logging node id\n";
-            TokenStream* prevStream = nullptr;
+            // TokenStream* prevStream = nullptr;
             // PrintCode(astNode->tokenRange, buf, &prevStream);
             if(tempStatement == astNode && tempStatement->firstExpression) {
                 int len = snprintf(buf,sizeof(buf),"nodeid = %d",tempStatement->firstExpression->nodeId);

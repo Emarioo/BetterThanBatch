@@ -1,10 +1,12 @@
 # BetterThanBatch
 A compiler for a new programming language.
 
-It will be better than batch for your average scripting needs.
-It will be useful for making neat programs, exploring data structures
+- It will be better than batch for your average scripting needs.
+- It will be useful for making neat programs, exploring data structures
 and visualising data using a straight forward rendering
 library (abstraction of Vulkan or OpenGL).
+- Actually good somewhat complete standard library (graphics, audio, file formats, networking)
+- Fast compiler with a smooth user experience. You don't need to setup a project folder and a build system to compile a single file.
 
 Inspiration from:
 - Jai (by Jonathan Blow)
@@ -15,29 +17,29 @@ Inspiration from:
 Example of errors with named arguments
 ![](/docs/img/err-named-arg.png)
 
-## Where is the focus
-- Actually good somewhat complete standard library (graphics, audio, file formats, networking)
-- Fast compiler with a smooth user experience. You don't need to setup a project folder and a build system to compile a single file.
-- Code execution at compile time.
+## Status of features/things
+|Thing|Status|
+|-|-|
+|Windows build|Yes|
+|Linux (Ubuntu) build|Broken (will be fixed after rewrite)|
+|Documentation|Half complete guide to the language, more to come|
+|Preprocessor|Yes, #macro, #if, #line, #file|
+|Polymorphism|Yes, but some issues with matching overloaded functions|
+|Function overloading|Yes|
+|Operator overloading|Yes|
+|Namespaces|No, incomplete|
+|Linking with external functions|No, it needs reworking|
+|Type information|Yes, but needs reworking|
+|Compile time execution|Not started|
+|x64 generator|Work in progress (almost done)|
+|Debug information|Only DWARF, some issues with visibilty of local variables|
+|Inline assembly|Incomplete|
+|ARM64|Not started|
 
-## Features
-- #import to divide your code into multiple files
-- #include to tokenize a file and transfer the tokens into another file.
-- Polymorphism in structs, functions and methods (there are some bugs in advances scenarios)
-- Function and operator overloading
-- x64 code generator (object files)
-- Compiling with debug information (DWARF only)
-- Linking with C/C++ functions from libraries and object files (symbols and relocations)
-- #define, #multidefine, #undef, #unwrap (macros/defines are recursive)
-- #ifdef (exactly like C)
-- defer, using.
-- Type information in the code
-- Compiler bugs that waste your time.
 
-## On the way
-- Shell-like way of calling executables
-- Thorough documentation
-- Constant evaluation and compile time execution
+|Minor features|Status|
+|-|-|
+|#include|No, incomplete|
 
 ## Disclaimer
 The compiler has mysterious bugs and as such is very unstable and should not be used for serious projects. Recently, proper tests have been implemented and some major bugs have been resolved making the compiler a little more useful.
@@ -63,7 +65,6 @@ The official usage of the compiler has not been established yet. `btb --help` wi
 
 These commands will most likely work.
 `btb main.btb --run` (`--run` will also run the executable after it's been built)
-
 
 # Building
 On Linux/Unix you only to run `build.sh`.

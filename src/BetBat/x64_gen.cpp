@@ -3699,8 +3699,8 @@ X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
                 X64_REG_R8,
                 X64_REG_R9,
                 X64_REG_R10,
-                // X64_REG_R11,
-                // X64_REG_R12,
+                X64_REG_R11,
+                X64_REG_R12,
                 // X64_REG_R13,
                 // X64_REG_R14,
                 // X64_REG_R15,
@@ -3988,15 +3988,20 @@ void X64Builder::emit_movzx(X64Register reg, X64Register rm, InstructionControl 
     Assert(!IS_CONTROL_FLOAT(control));
     Assert(!IS_CONTROL_SIGNED(control)); // It's not good to zero extend signed value
 
-    if(GET_CONTROL_SIZE(control) == CONTROL_64B)
+    if(GET_CONTROL_SIZE(control) == CONTROL_64B && reg == rm)
         return; // do nothing
 
-    emit_prefix(PREFIX_REXW, reg, rm);
     if(GET_CONTROL_SIZE(control) == CONTROL_8B) {
+        emit_prefix(PREFIX_REXW, reg, rm);
         emit2(OPCODE_2_MOVZX_REG_RM8);
     } else if(GET_CONTROL_SIZE(control) == CONTROL_16B) {
+        emit_prefix(PREFIX_REXW, reg, rm);
         emit2(OPCODE_2_MOVZX_REG_RM16);
-    }  else if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
+    } else if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
+        emit_prefix(0, reg, rm);
+        emit1(OPCODE_MOV_REG_RM);
+    } else if(GET_CONTROL_SIZE(control) == CONTROL_64B) {
+        emit_prefix(PREFIX_REXW, reg, rm);
         emit1(OPCODE_MOV_REG_RM);
     }
     emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(rm));
@@ -4233,7 +4238,7 @@ void X64Builder::emit_mov_reg_mem(X64Register reg, X64Register rm, InstructionCo
         if(size == CONTROL_16B) {
             emit1(PREFIX_16BIT);
         }
-        if(size == CONTROL_64B) {
+        if(size == CONTROL_64B || size == CONTROL_8B) { // REX is needed with MOV_REG8_RM8, we want to access lower bits of DI, SI, not dh, bh
             emit_prefix(PREFIX_REXW, reg, rm);
         } else {
             emit_prefix(0, reg, rm);
@@ -4316,8 +4321,8 @@ void X64Builder::emit_mov_mem_reg(X64Register rm, X64Register reg, InstructionCo
 }
 void X64Builder::emit_mov_reg_reg(X64Register reg, X64Register rm, int size) {
     if(IS_REG_XMM(reg) && IS_REG_XMM(rm)) {
-        if(size == 4) emit3(OPCODE_3_MOVSS_RM_REG);
-        else if(size == 8) emit3(OPCODE_3_MOVSD_RM_REG);
+        if(size == 4) emit3(OPCODE_3_MOVSS_REG_RM);
+        else if(size == 8) emit3(OPCODE_3_MOVSD_REG_RM);
         else Assert(false);
         emit_modrm(MODE_REG, CLAMP_XMM(reg), CLAMP_XMM(rm));
     } else if(IS_REG_XMM(reg) && !IS_REG_XMM(rm)) {
@@ -4331,16 +4336,27 @@ void X64Builder::emit_mov_reg_reg(X64Register reg, X64Register rm, int size) {
         emit_modrm(MODE_DEREF_DISP8, CLAMP_XMM(reg), X64_REG_SP);
         emit1((u8)-8);
     } else if(!IS_REG_XMM(reg) && IS_REG_XMM(rm)) {
-        Assert(false); // did you mean do move xmm to general?
-        emit3(OPCODE_3_MOVSD_RM_REG);
+        // this code can be called with BC_TEST_VALUE where a register is xmm
+        if(size == 4) emit3(OPCODE_3_MOVSS_RM_REG);
+        else if(size == 8) emit3(OPCODE_3_MOVSD_RM_REG);
+        else Assert(false);
         emit_modrm(MODE_DEREF_DISP8, CLAMP_XMM(rm), X64_REG_SP);
         emit1((u8)-8);
 
+        // TODO: Don't always move 64-bit register
         emit_prefix(PREFIX_REXW, reg, X64_REG_SP);
         emit1(OPCODE_MOV_REG_RM);
         emit_modrm(MODE_DEREF_DISP8, CLAMP_EXT_REG(reg), X64_REG_SP);
         emit1((u8)-8);
+        
+        InstructionControl control = CONTROL_8B;
+        if(size == 1) control = CONTROL_8B;
+        else if(size == 2) control = CONTROL_16B;
+        else if(size == 4) control = CONTROL_32B;
+        else if(size == 8) control = CONTROL_64B;
+        emit_movzx(reg, reg, control);
     } else if(!IS_REG_XMM(reg) && !IS_REG_XMM(rm)) {
+
         emit_prefix(PREFIX_REXW,reg,rm);
         emit1(OPCODE_MOV_REG_RM);
         emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(rm));

@@ -49,6 +49,8 @@ namespace engone {
     //-- Platform specific
     
 #define TO_INTERNAL(X) ((u64)X+1)
+// with curly braces { TO_INTERNAL(X) }
+#define TO_INTERNAL2(X) {((u64)X+1)}
 #define TO_HANDLE(X) (HANDLE)((u64)X-1)
     
 	// Recursive directory iterator info
@@ -1500,17 +1502,28 @@ namespace engone {
 		pipes[pipeIndex] = info;
 		return {pipeIndex++};
 	}
-	void PipeDestroy(APIPipe pipe){
+	void PipeDestroy(APIPipe pipe, bool close_read, bool close_write){
 		auto& info = pipes[pipe.internal];
-		if(info.readH)
+		if(info.readH != INVALID_HANDLE_VALUE && close_read) {
 			CloseHandle(info.readH);
-		if(info.writeH)
+			info.readH = INVALID_HANDLE_VALUE;
+		}
+		if(info.writeH != INVALID_HANDLE_VALUE && close_write) {
 			CloseHandle(info.writeH);
-		pipes.erase(pipe.internal);
+			info.writeH = INVALID_HANDLE_VALUE;
+		}
+		if(info.readH == INVALID_HANDLE_VALUE && info.writeH == INVALID_HANDLE_VALUE)
+			pipes.erase(pipe.internal);
 	}
 	u64 PipeRead(APIPipe pipe,void* buffer, u64 size){
 		auto& info = pipes[pipe.internal];
 		DWORD read=0;
+
+		// TODO: delete this
+		// u64 bytes_left = FileGetSize(TO_INTERNAL2(info.readH));
+		// if(bytes_left == 0)
+		// 	return 0;
+
 		DWORD err = ReadFile(info.readH,buffer,size,&read,NULL);
 		if(!err){
 			err = GetLastError();

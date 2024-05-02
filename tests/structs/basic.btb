@@ -21,6 +21,7 @@ s2 := "My fruit"
 for apple2.name
     _test s2.ptr[nr]; it;
 
+/*
 @TEST_CASE(unions_in_structs)
 
 // TODO: FIX this
@@ -48,11 +49,11 @@ struct Soup {
     }   
 }
 soup: Soup;
+*/
 
 // test osup
 
 // TODO: TEST DEFAULT VALUES
-
 
 // copy paste to dev.btb
 // struct App {

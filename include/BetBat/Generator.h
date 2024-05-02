@@ -4,6 +4,7 @@
 #include "BetBat/Bytecode.h"
 #include "BetBat/PhaseContext.h"
 #include "BetBat/DebugInformation.h"
+#include "BetBat/Util/Profiler.h"
 
 #include "BetBat/Lang.h"
 struct CompilerImport;

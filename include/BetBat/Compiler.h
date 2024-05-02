@@ -2,25 +2,25 @@
 
 // Compiler v2
 // #include "BetBat/Tokenizer.h"
-#include "BetBat/old_Preprocessor.h"
-#include "BetBat/old_Parser.h"
-#include "BetBat/TypeChecker.h"
-#include "BetBat/Generator.h"
-#include "BetBat/VirtualMachine.h"
+// #include "BetBat/old_Preprocessor.h"
+// #include "BetBat/old_Parser.h"
 #include "BetBat/NativeRegistry.h"
 
 #include "BetBat/UserProfile.h"
 #include "BetBat/CompilerEnums.h"
 
-#include "BetBat/x64_gen.h"
 #include "BetBat/COFF.h"
 #include "BetBat/ELF.h"
 #include "BetBat/ObjectFile.h"
 
-// Compiler v2.1
+// Compiler v0.2.1 (these had many changes)
+#include "BetBat/TypeChecker.h"
+#include "BetBat/Generator.h"
+#include "BetBat/x64_gen.h"
 #include "BetBat/Lexer.h"
 #include "BetBat/Preprocessor.h"
 #include "BetBat/Parser.h"
+#include "BetBat/VirtualMachine.h"
 
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
@@ -77,15 +77,7 @@ struct CompileStats {
         generatedFiles.cleanup();
     }
     DynamicArray<std::string> generatedFiles;
-    struct Error {
-        CompileError errorType;
-        u32 line;
-        // TODO: union {CompileError error, u32 line; struct { u64 data; };}
-    };
-    DynamicArray<Error> errorTypes;
-    void addError(const TokenRange& range, CompileError errorType = ERROR_UNSPECIFIED) { errorTypes.add({errorType, (u32)range.firstToken.line}); }
-    void addError(const Token& token, CompileError errorType = ERROR_UNSPECIFIED) { errorTypes.add({errorType, (u32)token.line}); }
-
+    
     void printSuccess(CompileOptions* options);
     void printFailed();
     void printWarnings();
@@ -126,7 +118,6 @@ struct CompileOptions {
         importDirectories.cleanup();
         testLocations.cleanup();
         compileStats.generatedFiles.cleanup();
-        compileStats.errorTypes.cleanup();
     }
 
     std::string source_file;
@@ -275,6 +266,15 @@ struct Compiler {
     engone::Mutex lock_miscellaneous;
     // thread safe, duplicates will be ignored
     void addLinkDirective(const std::string& text);
+
+
+    struct Error {
+        CompileError errorType;
+        u32 line;
+    };
+    DynamicArray<Error> errorTypes;
+    void addError(const lexer::SourceLocation& location, CompileError errorType = ERROR_UNSPECIFIED);
+    void addError(const lexer::Token& token, CompileError errorType = ERROR_UNSPECIFIED);
 
 private:
     engone::Mutex lock_imports;

@@ -28,3 +28,11 @@ enum LinkerChoice : u32 {
 const char* ToString(LinkerChoice v);
 engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v);
 LinkerChoice ToLinker(const std::string& str);
+
+enum Annotation : u32 {
+    // DO NOT REARRANGE ANNOTATIONS!
+    ANOT_INVALID = 0,
+    ANOT_CUSTOM,
+    // TODO: Add more annotations
+};
+extern const char* annotation_names[];

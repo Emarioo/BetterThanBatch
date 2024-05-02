@@ -2,17 +2,21 @@
     This is a file/module which contains functions that allows
     you to interact with the operating system. Programs are 
     useless without these functions.
+
+    TODO: The implementation is defined in NativeLayer.cpp.
+      We will deprecate NativeLayer and just write the implementation in .btb files.
+      Either all versions in OS.btb or in separate Win32.btb, Unix.btb.
+
+
 */
 // fn @native prints(str: char[]) ;
 
-#ifdef LINK_BYTECODE
-#macro LINK_TYPE @native
+#if LINK_BYTECODE
+    #macro LINK_TYPE @native
+#elif OS_UNIX
+    #macro LINK_TYPE @import @unixcall
 #else
-#ifdef OS_UNIX
-#macro LINK_TYPE @import @unixcall
-#else
-#macro LINK_TYPE @import @stdcall
-#endif
+    #macro LINK_TYPE @import @stdcall
 #endif
 
 // #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))

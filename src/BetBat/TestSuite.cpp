@@ -47,6 +47,7 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
     bool inQuotes = false;
     bool inEnclosedComment = false;
     bool isSingleQuotes = false;
+    int nested_comment_depth = 0;
     int line = 1;
     int column = 1;
     int index = 0;
@@ -66,8 +67,15 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
             if(inEnclosedComment){
                 if(chr=='*'&&nextChr=='/'){
                     index++;
-                    inComment=false;
-                    inEnclosedComment=false;
+                    nested_comment_depth--;
+                    if(nested_comment_depth == 0) {
+                        inComment=false;
+                        inEnclosedComment=false;
+                    }
+                }
+                if(chr=='/'&&nextChr=='*'){
+                    index++;
+                    nested_comment_depth++;
                 }
             }else{
                 if(chr=='\n'||index==fileSize){
@@ -91,6 +99,7 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
             inComment=true;
             if(chr=='/' && nextChr=='*'){
                 inEnclosedComment=true;
+                nested_comment_depth = 1;
             }
             index++; // skip the next slash
             continue;
@@ -311,7 +320,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     // We run out of profilers contexts fast and a message about is printed
     // so we disable profiling to prevent that. When contexts can be reused
     // we can stop disabling the profiler here.
-    ProfilerEnable(false);
+    // ProfilerEnable(false);
 
     DynamicArray<TestCase> testCases{};
     DynamicArray<TestOrigin> testOrigins{};
@@ -369,7 +378,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         CompileOptions options{};
         options.silent = true;
         options.target = TARGET_BYTECODE;
-        options.executeOutput = true;
+        // options.executeOutput = false;
         options.threadCount = 1;
         options.instant_report = user_options->instant_report;
         options.linker = user_options->linker;
@@ -408,16 +417,6 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
 
         Compiler compiler{};
         compiler.run(&options);
-        // Bytecode* bytecode = nullptr;
-        // Assert(false);
-        // CompileSource(&options);
-
-        // defer {
-        //     if(bytecode) {
-        //         Bytecode::Destroy(bytecode);
-        //         bytecode = nullptr;
-        //     }
-        // };
 
         u64 failedTests = 0;
         u64 totalTests = 0;
@@ -427,8 +426,8 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             auto& expectedError = testcase.expectedErrors[k];
             
             bool found = false;
-            for(int j=0;j<options.compileStats.errorTypes.size();j++){
-                auto& actualError = options.compileStats.errorTypes[j];
+            for(int j=0;j<compiler.errorTypes.size();j++){
+                auto& actualError = compiler.errorTypes[j];
                 if(expectedError.errorType == actualError.errorType
                 && expectedError.line == actualError.line) {
                     found = true;
@@ -438,8 +437,8 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             if(!found)
                 failedTests++;
         }
-        for(int j=0;j<options.compileStats.errorTypes.size();j++){
-            auto& actualError = options.compileStats.errorTypes[j];
+        for(int j=0;j<compiler.errorTypes.size();j++){
+            auto& actualError = compiler.errorTypes[j];
             
             bool found = false;
             for(int k=0;k<testcase.expectedErrors.size();k++){
@@ -458,8 +457,8 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         
         if(options.compileStats.errors > 0) {
             // errors will be smaller than errorTypes since errors isn't incremented when doing TEST_ERROR(
-            if(options.compileStats.errorTypes.size() < options.compileStats.errors) {
-                log::out << log::YELLOW << "TestSuite: errorTypes: "<< options.compileStats.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
+            if(compiler.errorTypes.size() < options.compileStats.errors) {
+                log::out << log::YELLOW << "TestSuite: errorTypes: "<< compiler.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
             }
         } else {
             if(useInterp) {
@@ -478,44 +477,43 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                 
                 std::string hoho{};
                 hoho += options.output_file;
-                int errorCode = 0;
+                int exitCode = 0;
                 // auto file = engone::FileOpen("ya",nullptr, engone::FILE_CLEAR_AND_WRITE);
                 {
                     // MEASURE_WHO("Test: StartProgram")
-                    engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, PipeGetWrite(pipe));
+                    engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&exitCode, {}, {}, PipeGetWrite(pipe));
                     // TODO: Check whether program crashed but how do we do that on Windows and Unix?
                     //  the program may not output a 0 as exit code? Maybe we force a zero in there when parsing?
                     //  Another option is to check for error codes. Usually negative but the program may output negative numbers too.
                     //  Specific negative numbers may work.
                     //  By the way, if a program crashed, that should count as a failed test.
                     #ifdef OS_WINDOWS
-                    if(errorCode == 0xc000'0005) { // access violation
+                    std::string msg = StringFromExitCode(exitCode);
+                    if(msg.size()) {
+                        log::out << log::RED << msg<<"\n";
                     #else
-                    if(errorCode < 0) { // negative numbers represents an error or crash on Unix
+                    if(exitCode < 0) { // negative numbers represents an error or crash on Unix
+                        log::out << log::RED << "Exit code was negative, error?\n";
                     #endif
-                        log::out << "ACCESS VIOLATION\n";
                         failedTests++;
                         totalTests++;
                     }
                 }
-                // engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, file);
-                // engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, file);
-                // engone::FileClose(file);
-                // log::out << "Error level: "<<errorCode<<"\n";
             }
             {
                 // MEASURE_WHO("Test: Pipe reading")
                 result.failedLocations.resize(0);
                 while(true){
                     char tinyBuffer[4]{0};
-                    PipeWrite(pipe, tinyBuffer, 4); // we must write some data to the pipe to prevent PipeRead from freezing.
+                    PipeWrite(pipe, tinyBuffer, 4); // we must write some data to the pipe to prevent PipeRead from freezing if nothing was written to the pipe.
                     
                     u64 readBytes = PipeRead(pipe, buffer, bufferSize);
+                    readBytes -= sizeof(tinyBuffer);
 
                     Assert(readBytes%4==0);
 
-                    totalTests += (readBytes-sizeof(tinyBuffer))/4;
-                    int j = sizeof(tinyBuffer);
+                    totalTests += readBytes/4;
+                    int j = 0;
                     while(j<readBytes){
                         failedTests += buffer[j] != 'x';
                         if(buffer[j] != 'x'){
