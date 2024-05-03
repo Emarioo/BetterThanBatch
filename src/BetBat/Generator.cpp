@@ -829,14 +829,26 @@ void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
             batch = 4;
         else if(size % 2 == 0)
             batch = 2;
-        // size = size / batch; // don't do this, see how memzero is converted
         builder.emit_li32(size_reg, size);
         builder.emit_memzero(ptr_reg, size_reg, batch);
-        // builder.emit_li32(size_reg, size);
-        // builder.emit_({BC_MEMZERO, ptr_reg, size_reg, batch});
     }
-    // builder.emit_li32(size_reg, size);
-    // builder.emit_({BC_MEMZERO, ptr_reg, size_reg, 1});
+}
+void GenContext::genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size) {
+    if(size <= 8) {
+        Assert(size == 1 || size == 2 || size == 4 || size == 8);
+        builder.emit_mov_rm(BC_REG_T0, src_reg, size);
+        builder.emit_mov_mr(dst_reg, BC_REG_T0, size);
+    } else {
+        // u8 batch = 1;
+        // if(size % 8 == 0)
+        //     batch = 8;
+        // else if(size % 4 == 0)
+        //     batch = 4;
+        // else if(size % 2 == 0)
+        //     batch = 2;
+        builder.emit_li(BC_REG_T0, size, 8);
+        builder.emit_memcpy(dst_reg, src_reg, BC_REG_T0);
+    }
 }
 // baseReg as 0 will push default values to stack
 // non-zero as baseReg will mov default values to the pointer in baseReg
@@ -2233,7 +2245,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 if(!typeInfo){
                     ERR_SECTION(
                         ERR_HEAD2(expression->location)
-                        ERR_MSG(""<<compiler->lexer.tostring(expression->location)<<" cannot be converted to Slice<char> because Slice doesn't exist. Slice is defined in <preload> and this is probably a bug in the compiler.")
+                        ERR_MSG(""<<compiler->lexer.tostring(expression->location)<<" cannot be converted to Slice<char> because Slice doesn't exist. Slice is defined in <preload> and this is probably a bug in the compiler. Unless you disabled preload?")
                     )
                     return SIGNAL_FAILURE;
                 }
@@ -2278,9 +2290,17 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             TypeId result_typeId = expression->versions_outTypeTypeid[info.currentPolyVersion];
 
             const char* tname = "lang_TypeId";
-            TypeInfo* typeInfo = info.ast->convertToTypeInfo(tname, info.ast->globalScopeId, true);
+            // TypeInfo* typeInfo = info.ast->convertToTypeInfo(tname, info.ast->globalScopeId, true);
+            TypeInfo* typeInfo = info.ast->convertToTypeInfo(tname, info.currentScopeId, true);
             if(!typeInfo){
-                Assert(info.hasForeignErrors());
+                // ERR_SECTION(
+                //     ERR_HEAD2(expr->location)
+                //     ERR_MSG("'"<<tname << "' was not a valid type. Did you forget to #import \"Lang\".")
+                //     ERR_LINE2(expr->location, "bad")
+                // )
+
+                // type checker should have complained
+                Assert(hasForeignErrors());
                 return SIGNAL_FAILURE;
             }
             Assert(typeInfo->getSize() == 4);
@@ -4763,6 +4783,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         } else if (statement->type == ASTStatement::SWITCH) {
             _GLOG(SCOPE_LOG("SWITCH"))
 
+            // TODO: This is not a loop scope, continue is not allowed
             GenContext::LoopScope* loopScope = info.pushLoop();
             defer {
                 _GLOG(log::out << "pop loop\n");
@@ -4773,15 +4794,15 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             };
 
             _GLOG(log::out << "push loop\n");
-            // loopScope->stackMoment = builder.saveStackMoment();
             loopScope->stackMoment = currentFrameOffset;
 
             TypeId exprType{};
-            if(statement->versions_expressionTypes[info.currentPolyVersion].size()!=0)
+            if(statement->versions_expressionTypes[info.currentPolyVersion].size()!=0) {
                 exprType = statement->versions_expressionTypes[info.currentPolyVersion][0];
-            else
-                { Assert(false); }
+            } else {
+                Assert(false);
                 // continue; // error message printed already?
+            }
 
             i32 switchValueOffset = 0; // frame offset
             framePush(exprType, &switchValueOffset,false, false);
@@ -4800,9 +4821,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             if(AST::IsInteger(dtype) || typeInfo->astEnum) {
                 
             } else {
+                // TODO: Allow Slice<char> at some point
                 ERR_SECTION(
                     ERR_HEAD2(statement->location)
-                    ERR_MSG("You can only do switch on integers and enums.")
+                    ERR_MSG("You can only do switch on integers and enums. Strings are on the TODO list.")
                     ERR_LINE2(statement->location, "bad")
                 )
                 continue;
@@ -4812,14 +4834,11 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // TODO: Print error? or does generate expression do that since it gives us dtype?
                 continue;
             }
-            BCRegister switchValueReg = BC_REG_D;
-            
-            // TODO: Optimize instruction generation.
-            
             Assert(switchExprSize <= 8);
+            
+            BCRegister switchValueReg = BC_REG_D;
             builder.emit_pop(switchValueReg);
             builder.emit_mov_mr_disp(BC_REG_LOCALS, switchValueReg, switchExprSize, switchValueOffset);
-            // builder.emit_mov_mr_disp(BC_REG_BP, switchValueReg, switchExprSize, switchValueOffset);
             
             struct RelocData {
                 int caseJumpAddress = 0;
@@ -4827,6 +4846,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             };
             DynamicArray<RelocData> caseData{};
             caseData.resize(statement->switchCases.size());
+
+            // DynamicArray<int> members_not_covered{}; // covered members (missing members) is handled in type checker.
             
             for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
                 auto it = &statement->switchCases[nr];
@@ -4841,17 +4862,20 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     int index = -1;
                     bool yes = typeInfo->astEnum->getMember(it->caseExpr->name, &index);
                     if(yes) {
+                        // members_not_covered.add(index);
                         wasMember = true;
                         dtype = typeInfo->id;
                         
                         size = info.ast->getTypeSize(dtype);
-                        Assert(size == 4); // 64-bit enum not implemented (neither is 8, 16 ), you need to load 64-bit immediate instead of 32-bit
                         caseValueReg = BC_REG_A;
-                        
-                        builder.emit_li32(caseValueReg, typeInfo->astEnum->members[index].enumValue);
+
+                        // TODO: Test if enum of different sizes work as expected. Does the x64-generator handle the register sizes properly?                        
+                        builder.emit_li(caseValueReg, typeInfo->astEnum->members[index].enumValue, size);
                     }
                 }
+                bool touched_switch_reg = false;
                 if(!wasMember) {
+                    touched_switch_reg = true; // generateExpression might have modified the switch register
                     DynamicArray<TypeId> tmp_types{};
                     SignalIO result = generateExpression(it->caseExpr, &tmp_types);
                     if(tmp_types.size()) dtype = tmp_types.last();
@@ -4863,13 +4887,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     
                     builder.emit_pop(caseValueReg);
                 }
-                // TODO: Don't generate this instruction if switchValueReg is untouched.
-                builder.emit_mov_rm_disp(switchValueReg, BC_REG_LOCALS, (u8)size, switchValueOffset);
-                // builder.emit_mov_rm_disp(switchValueReg, BC_REG_BP, (u8)size, switchValueOffset);
+                if(touched_switch_reg)
+                    builder.emit_mov_rm_disp(switchValueReg, BC_REG_LOCALS, (u8)size, switchValueOffset);
                 
                 builder.emit_eq(caseValueReg, switchValueReg, false, size);
                 caseData[nr].caseJumpAddress = builder.emit_jnz(caseValueReg);
             }
+
+            // Generate default cause if we have one
             if(statement->firstBody) {
                 result = generateBody(statement->firstBody);
                 // if (result != SIGNAL_SUCCESS)
@@ -4898,11 +4923,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 auto it = &statement->switchCases[nr];
                 builder.fix_jump_imm32_here(caseData[nr].caseJumpAddress);
                
-                // if(address_prevFallJump != -1) {
-                //     bytecode->getIm(address_prevFallJump) = bytecode->length();
-                // }
-                
-                // TODO: break statements in body should jump to here
                 result = generateBody(it->caseBody);
                 if (result != SIGNAL_SUCCESS)
                     continue;
@@ -4912,14 +4932,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     caseData[nr].caseBreakAddress = builder.emit_jmp();
                 } else {
                     caseData[nr].caseBreakAddress = 0;
-                    // skip the jump so that we execute instructions on the next body
-                    // NOTE: The last case doesn't need to jump out of the switch because
-                    //  we just added the last instructions so we already are at the end.
-                    //  Perhaps we won't be in the future?
-                    
-                    // builder.emit_({BC_JMP});
-                    // address_prevFallJump = bytecode->length();
-                    // info.addImm(0);
                 }
             }
             builder.fix_jump_imm32_here(noCaseJumpAddress);
@@ -4928,10 +4940,16 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 if(caseData[nr].caseBreakAddress != 0)
                     builder.fix_jump_imm32_here(caseData[nr].caseBreakAddress);
             }
+
+            if(loopScope->stackMoment != currentFrameOffset) {
+                builder.emit_free_local(loopScope->stackMoment - currentFrameOffset);
+                currentFrameOffset = loopScope->stackMoment;
+            }
             
             for (auto ind : loopScope->resolveBreaks) {
                 builder.fix_jump_imm32_here(ind);
             }
+
             
         } else if (statement->type == ASTStatement::WHILE) {
             _GLOG(SCOPE_LOG("WHILE"))
@@ -5233,8 +5251,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
                     builder.emit_ptr_to_locals(BC_REG_E, varinfo_item->versions_dataOffset[info.currentPolyVersion]);
                     
-                    builder.emit_li(BC_REG_B,itemsize,operand_size);
-                    builder.emit_memcpy(BC_REG_E, ptr_reg, BC_REG_B);
+                    // builder.emit_li(BC_REG_B,itemsize,operand_size);
+                    // builder.emit_memcpy(BC_REG_E, ptr_reg, BC_REG_B);
+                    genMemcpy(BC_REG_E, ptr_reg, itemsize);
                 }
 
                 result = generateBody(statement->firstBody);
@@ -5496,21 +5515,21 @@ SignalIO GenContext::generatePreload() {
     BCRegister dst_reg = BC_REG_E;
     int polyVersion = 0;
 
-    if(!info.varInfos[VAR_INFOS])
+    if(!compiler->varInfos[VAR_INFOS])
         return SIGNAL_SUCCESS;
 
     // Take pointer of type information arrays
     // and move into the global slices.
-    builder.emit_dataptr(src_reg, info.dataOffset_types);
-    builder.emit_dataptr(dst_reg, info.varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
+    builder.emit_dataptr(src_reg, compiler->dataOffset_types);
+    builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
     builder.emit_mov_mr(dst_reg, src_reg, 8);
     
-    builder.emit_dataptr(src_reg, info.dataOffset_members);
-    builder.emit_dataptr(dst_reg, info.varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
+    builder.emit_dataptr(src_reg, compiler->dataOffset_members);
+    builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
     builder.emit_mov_mr(dst_reg, src_reg, 8);
 
-    builder.emit_dataptr(src_reg, info.dataOffset_strings);
-    builder.emit_dataptr(dst_reg, info.varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
+    builder.emit_dataptr(src_reg, compiler->dataOffset_strings);
+    builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
     builder.emit_mov_mr(dst_reg, src_reg, 8);
     return SIGNAL_SUCCESS;
 }
@@ -5539,138 +5558,156 @@ SignalIO GenContext::generateData() {
         constString.address = offset;
     }
 
-    Identifier* identifiers[VAR_COUNT]{
-        info.ast->findIdentifier(info.ast->globalScopeId, CONTENT_ORDER_MAX, "lang_typeInfos", true),
-        info.ast->findIdentifier(info.ast->globalScopeId, CONTENT_ORDER_MAX, "lang_members", true),
-        info.ast->findIdentifier(info.ast->globalScopeId, CONTENT_ORDER_MAX, "lang_strings", true),
-    };
 
-    if(identifiers[0] && identifiers[1] && identifiers[2]) {
-        FORAN(identifiers) {
-            Assert(identifiers[nr]->type == Identifier::VARIABLE);
-            info.varInfos[nr] = info.ast->getVariableByIdentifier(identifiers[nr]);
-            Assert(info.varInfos[nr] && info.varInfos[nr]->isGlobal());
-            Assert(info.varInfos[nr]->versions_dataOffset._array.size() == 1);
-        }
+    if(compiler->typeinfo_import_id == 0) {
+        // TODO: We don't have import to type information. Either that's a bug or we didn't import Lang.btb.
+        //   If it's a bug we want to message the user. How do we know that though?
+        //   We shouldn't spam the user about type information not being imported.
+    } else {
+        Identifier* identifiers[VAR_COUNT]{nullptr,nullptr,nullptr};
+        // compiler->lock_imports.lock();
+        auto imp = compiler->imports.get(compiler->typeinfo_import_id-1);
+        ScopeId typeinfo_scope = imp->scopeId;
+        // compiler->lock_imports.unlock();
 
-        // TODO: Optimize, don't append the types that aren't used in the code.
-        //  Implement a feature like FuncImpl.usages
-        // TODO: Optimize in general? Many cache misses. Probably need to change the 
-        //  Type and AST structure though.
+        identifiers[VAR_INFOS] = info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_typeInfos", true);
+        identifiers[VAR_MEMBERS] = info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_members", true);
+        identifiers[VAR_STRINGS] = info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_strings", true);
 
-        int count_types = info.ast->_typeInfos.size();
-        int count_members = 0;
-        int count_stringdata = 0;
-        for(int i=0;i<info.ast->_typeInfos.size();i++){
-            auto ti = info.ast->_typeInfos[i];
-            if(!ti)  continue;
-            count_stringdata += ti->name.length() + 1; // +1 for null termination
-            if(ti->structImpl) {
-                count_members += ti->astStruct->members.size();
-                for(int mi=0;mi<ti->astStruct->members.size();mi++){
-                    auto& mem = ti->astStruct->members[mi];
-                    count_stringdata += mem.name.length() + 1; // +1 for null termination
+        if(!(identifiers[0] && identifiers[1] && identifiers[2])) {
+            // This only happens if there is a bug in the compiler or if Lang.bt
+            // was modified to not contain the identifiers we are looking for.
+            // TODO: Improve error message
+            log::out << log::RED << "One source file imported type information but one of these identifiers could not be resolved:\n";
+            log::out << log::WHITE << " lang_typeInfos, lang_members, lang_strings\n\n";
+            info.errors++;
+        } else {
+            FORAN(identifiers) {
+                Assert(identifiers[nr]->type == Identifier::VARIABLE);
+                compiler->varInfos[nr] = info.ast->getVariableByIdentifier(identifiers[nr]);
+                Assert(compiler->varInfos[nr] && compiler->varInfos[nr]->isGlobal());
+                Assert(compiler->varInfos[nr]->versions_dataOffset._array.size() == 1);
+            }
+
+            // TODO: Optimize, don't append the types that aren't used in the code.
+            //  Implement a feature like FuncImpl.usages
+            // TODO: Optimize in general? Many cache misses. Probably need to change the 
+            //  Type and AST structure though.
+
+            int count_types = info.ast->_typeInfos.size();
+            int count_members = 0;
+            int count_stringdata = 0;
+            for(int i=0;i<info.ast->_typeInfos.size();i++){
+                auto ti = info.ast->_typeInfos[i];
+                if(!ti)  continue;
+                count_stringdata += ti->name.length() + 1; // +1 for null termination
+                if(ti->structImpl) {
+                    count_members += ti->astStruct->members.size();
+                    for(int mi=0;mi<ti->astStruct->members.size();mi++){
+                        auto& mem = ti->astStruct->members[mi];
+                        count_stringdata += mem.name.length() + 1; // +1 for null termination
+                    }
                 }
             }
-        }
-        bytecode->ensureAlignmentInData(8); // just to be safe
-        int off_typedata   = bytecode->appendData(nullptr, count_types * sizeof(lang::TypeInfo));
-        bytecode->ensureAlignmentInData(8); // just to be safe
-        int off_memberdata = bytecode->appendData(nullptr, count_members * sizeof(lang::TypeMember));
-        int off_stringdata = bytecode->appendData(nullptr, count_stringdata);
-        
-        lang::TypeInfo* typedata = (lang::TypeInfo*)(bytecode->dataSegment.data() + off_typedata);
-        lang::TypeMember* memberdata = (lang::TypeMember*)(bytecode->dataSegment.data() + off_memberdata);
-        char* stringdata = (char*)(bytecode->dataSegment.data() + off_stringdata);
-
-        // TODO: Zero initialize memory? Or use '_'?
-
-        // log::out << "TypeInfo size " <<sizeof(lang::TypeInfo);
-
-        u32 string_offset = 0;
-        int member_count = 0;
-        for(int i=0;i<info.ast->_typeInfos.size();i++){
-            auto ti = info.ast->_typeInfos[i];
-            if(!ti) { 
-                typedata[i] = {}; // zero initialize
-                // typedata[i].type = lang::Primitive::NONE;
-                continue;
-            }
-
-            typedata[i].size = ti->getSize();
-            if(ti->astEnum)                      typedata[i].type = lang::Primitive::ENUM;
-            else if(ti->astStruct)               typedata[i].type = lang::Primitive::STRUCT;
-            else if(AST::IsDecimal(ti->id))      typedata[i].type = lang::Primitive::DECIMAL;
-            else if(AST::IsInteger(ti->id)) {    
-                if(AST::IsSigned(ti->id))        typedata[i].type = lang::Primitive::SIGNED_INT;
-                else                             typedata[i].type = lang::Primitive::UNSIGNED_INT;
-            } else if(ti->id == AST_CHAR)        typedata[i].type = lang::Primitive::CHAR;
-            else if(ti->id == AST_BOOL)          typedata[i].type = lang::Primitive::BOOL;
-            else typedata[i].type = lang::Primitive::NONE; // compiler specific type like ast_typeid or ast_string, ast_fncall
+            bytecode->ensureAlignmentInData(8); // just to be safe
+            int off_typedata   = bytecode->appendData(nullptr, count_types * sizeof(lang::TypeInfo));
+            bytecode->ensureAlignmentInData(8); // just to be safe
+            int off_memberdata = bytecode->appendData(nullptr, count_members * sizeof(lang::TypeMember));
+            int off_stringdata = bytecode->appendData(nullptr, count_stringdata);
             
-            typedata[i].name.beg = string_offset;
-            // The order of beg, end matters. string_offset is at beginning now
-            strncpy(stringdata + string_offset, ti->name.c_str(), ti->name.length() + 1);
-            string_offset += ti->name.length() + 1;
-            // Now string_offset is at end. DON'T MOVE AROUND THE LINES!
-            typedata[i].name.end = string_offset - 1; // -1 won't include null termination
-            typedata[i].members.beg = 0; // set later
-            typedata[i].members.end = 0;
+            lang::TypeInfo* typedata = (lang::TypeInfo*)(bytecode->dataSegment.data() + off_typedata);
+            lang::TypeMember* memberdata = (lang::TypeMember*)(bytecode->dataSegment.data() + off_memberdata);
+            char* stringdata = (char*)(bytecode->dataSegment.data() + off_stringdata);
 
-            if(ti->structImpl) {
-                typedata[i].members.beg = member_count;
+            // TODO: Zero initialize memory? Or use '_'?
 
-                for(int mi=0;mi<ti->structImpl->members.size();mi++){
-                    auto& mem = ti->structImpl->members[mi];
-                    auto& ast_mem = ti->astStruct->members[mi];
+            // log::out << "TypeInfo size " <<sizeof(lang::TypeInfo);
 
-                    memberdata[member_count].name.beg = string_offset;
-
-                    memcpy(stringdata + string_offset, ast_mem.name.c_str(), ast_mem.name.length());
-                    stringdata[string_offset + ast_mem.name.length()] = '\0';
-                    string_offset += ast_mem.name.length() + 1;
-
-                    memberdata[member_count].name.end = string_offset - 1; // -1 won't include null termination
-
-                    // TODO: Enum member
-
-                    memberdata[member_count].type.index0 = mem.typeId._infoIndex0;
-                    memberdata[member_count].type.index1 = mem.typeId._infoIndex1;
-                    memberdata[member_count].type.ptr_level = mem.typeId.getPointerLevel();
-                    memberdata[member_count].offset = mem.offset;
-
-                    member_count++;
+            u32 string_offset = 0;
+            int member_count = 0;
+            for(int i=0;i<info.ast->_typeInfos.size();i++){
+                auto ti = info.ast->_typeInfos[i];
+                if(!ti) { 
+                    typedata[i] = {}; // zero initialize
+                    // typedata[i].type = lang::Primitive::NONE;
+                    continue;
                 }
-                typedata[i].members.end = member_count;
+
+                typedata[i].size = ti->getSize();
+                if(ti->astEnum)                      typedata[i].type = lang::Primitive::ENUM;
+                else if(ti->astStruct)               typedata[i].type = lang::Primitive::STRUCT;
+                else if(AST::IsDecimal(ti->id))      typedata[i].type = lang::Primitive::DECIMAL;
+                else if(AST::IsInteger(ti->id)) {    
+                    if(AST::IsSigned(ti->id))        typedata[i].type = lang::Primitive::SIGNED_INT;
+                    else                             typedata[i].type = lang::Primitive::UNSIGNED_INT;
+                } else if(ti->id == AST_CHAR)        typedata[i].type = lang::Primitive::CHAR;
+                else if(ti->id == AST_BOOL)          typedata[i].type = lang::Primitive::BOOL;
+                else typedata[i].type = lang::Primitive::NONE; // compiler specific type like ast_typeid or ast_string, ast_fncall
+                
+                typedata[i].name.beg = string_offset;
+                // The order of beg, end matters. string_offset is at beginning now
+                strncpy(stringdata + string_offset, ti->name.c_str(), ti->name.length() + 1);
+                string_offset += ti->name.length() + 1;
+                // Now string_offset is at end. DON'T MOVE AROUND THE LINES!
+                typedata[i].name.end = string_offset - 1; // -1 won't include null termination
+                typedata[i].members.beg = 0; // set later
+                typedata[i].members.end = 0;
+
+                if(ti->structImpl) {
+                    typedata[i].members.beg = member_count;
+
+                    for(int mi=0;mi<ti->structImpl->members.size();mi++){
+                        auto& mem = ti->structImpl->members[mi];
+                        auto& ast_mem = ti->astStruct->members[mi];
+
+                        memberdata[member_count].name.beg = string_offset;
+
+                        memcpy(stringdata + string_offset, ast_mem.name.c_str(), ast_mem.name.length());
+                        stringdata[string_offset + ast_mem.name.length()] = '\0';
+                        string_offset += ast_mem.name.length() + 1;
+
+                        memberdata[member_count].name.end = string_offset - 1; // -1 won't include null termination
+
+                        // TODO: Enum member
+
+                        memberdata[member_count].type.index0 = mem.typeId._infoIndex0;
+                        memberdata[member_count].type.index1 = mem.typeId._infoIndex1;
+                        memberdata[member_count].type.ptr_level = mem.typeId.getPointerLevel();
+                        memberdata[member_count].offset = mem.offset;
+
+                        member_count++;
+                    }
+                    typedata[i].members.end = member_count;
+                }
             }
+            Assert(string_offset == count_stringdata && count_members == member_count);
+
+            // TODO: Assert that the variables are of the right type
+
+            int polyVersion = 0;
+
+            lang::Slice* slice_types   = (lang::Slice*)(bytecode->dataSegment.data() + compiler->varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
+            lang::Slice* slice_members = (lang::Slice*)(bytecode->dataSegment.data() + compiler->varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
+            lang::Slice* slice_strings = (lang::Slice*)(bytecode->dataSegment.data() + compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
+            slice_types->len = count_types;
+            slice_members->len = count_members;
+            slice_strings->len = count_stringdata;
+            compiler->dataOffset_types = off_typedata;
+            compiler->dataOffset_members = off_memberdata;
+            compiler->dataOffset_strings = off_stringdata;
+            // log::out << "types "<<count_types<<", members "<<count_members << ", strings "<<count_stringdata <<"\n";
+
+            // This is scrap
+            // bytecode->ptrDataRelocations.add({
+            //     (u32)varInfos[VAR_INFOS]->versions_dataOffset[polyVersion],
+            //     (u32)off_typedata});
+            // bytecode->ptrDataRelocations.add({
+            //     (u32)varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion],
+            //     (u32)off_memberdata});
+            // bytecode->ptrDataRelocations.add({
+            //     (u32)varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion],
+            //     (u32)off_stringdata});
         }
-        Assert(string_offset == count_stringdata && count_members == member_count);
-
-        // TODO: Assert that the variables are of the right type
-
-        int polyVersion = 0;
-
-        lang::Slice* slice_types = (lang::Slice*)(bytecode->dataSegment.data() + info.varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
-        lang::Slice* slice_members = (lang::Slice*)(bytecode->dataSegment.data() + info.varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
-        lang::Slice* slice_strings = (lang::Slice*)(bytecode->dataSegment.data() + info.varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
-        slice_types->len = count_types;
-        slice_members->len = count_members;
-        slice_strings->len = count_stringdata;
-        info.dataOffset_types = off_typedata;
-        info.dataOffset_members = off_memberdata;
-        info.dataOffset_strings = off_stringdata;
-        // log::out << "types "<<count_types<<", members "<<count_members << ", strings "<<count_stringdata <<"\n";
-
-        // This is scrap
-        // bytecode->ptrDataRelocations.add({
-        //     (u32)varInfos[VAR_INFOS]->versions_dataOffset[polyVersion],
-        //     (u32)off_typedata});
-        // bytecode->ptrDataRelocations.add({
-        //     (u32)varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion],
-        //     (u32)off_memberdata});
-        // bytecode->ptrDataRelocations.add({
-        //     (u32)varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion],
-        //     (u32)off_stringdata});
     }
 
     return SIGNAL_SUCCESS;
@@ -5837,8 +5874,9 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
 
     context.generateFunctions(scope);
     
+    Identifier* iden = nullptr;
     if(is_initial_import) {
-        auto iden = compiler->ast->findIdentifier(compiler->ast->globalScopeId,0,"main");
+        iden = compiler->ast->findIdentifier(scope->scopeId,0,"main");
         if(!iden) {
             // If no main function exists then the code in global scope of
             // initial import will be the main function.
@@ -5871,7 +5909,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
             auto dfun = di->addFunction(nullptr, context.tinycode, imp->path, 1);
             context.debugFunction = dfun;
             context.bytecode->addExportedFunction("main", context.tinycode->index);
-            
+
             context.generatePreload();
 
             context.generateBody(scope);
@@ -5887,6 +5925,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
             }
         }
     }
+    
     
     // TODO: Relocations?
     

@@ -750,10 +750,12 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             return SIGNAL_NO_MATCH;
         if(overload){
             if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                TypeChecker::CheckImpl checkImpl{};
-                checkImpl.astFunc = overload->astFunc;
-                checkImpl.funcImpl = overload->funcImpl;
-                info.typeChecker->checkImpls.add(checkImpl);
+                info.compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
+
+                // TypeChecker::CheckImpl checkImpl{};
+                // checkImpl.astFunc = overload->astFunc;
+                // checkImpl.funcImpl = overload->funcImpl;
+                // info.typeChecker->checkImpls.add(checkImpl);
             }
             overload->funcImpl->usages++;
 
@@ -1253,8 +1255,6 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     }
     ScopeInfo* funcScope = info.ast->getScope(polyFunc->scopeId);
     FuncImpl* funcImpl = info.ast->createFuncImpl(polyFunc);
-    // FuncImpl* funcImpl = polyFunc->createImpl();
-    // funcImpl->name = expr->name;
     funcImpl->structImpl = parentStructImpl;
 
     funcImpl->polyArgs.resize(fnPolyArgs.size());
@@ -1269,11 +1269,14 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
 
     FnOverloads::Overload* newOverload = fnOverloads->addPolyImplOverload(polyFunc, funcImpl);
     
-    TypeChecker::CheckImpl checkImpl{};
-    checkImpl.astFunc = polyFunc;
-    checkImpl.funcImpl = funcImpl;
+    // TypeChecker::CheckImpl checkImpl{};
+    // checkImpl.astFunc = polyFunc;
+    // checkImpl.funcImpl = funcImpl;
+    // info.typeChecker->checkImpls.add(checkImpl);
+
+    info.compiler->addTask_type_body(polyFunc, funcImpl);
+
     funcImpl->usages++;
-    info.typeChecker->checkImpls.add(checkImpl);
 
     // Can overload be null since we generate a new func impl?
     overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, expr);
@@ -1361,10 +1364,11 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                             if(outTypes) outTypes->add(AST_VOID);
                         } else {
                             if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                                TypeChecker::CheckImpl checkImpl{};
-                                checkImpl.astFunc = overload->astFunc;
-                                checkImpl.funcImpl = overload->funcImpl;
-                                info.typeChecker->checkImpls.add(checkImpl);
+                                info.compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
+                                // TypeChecker::CheckImpl checkImpl{};
+                                // checkImpl.astFunc = overload->astFunc;
+                                // checkImpl.funcImpl = overload->funcImpl;
+                                // info.typeChecker->checkImpls.add(checkImpl);
                             }
                             overload->funcImpl->usages++;
                             if(outTypes) outTypes->add(AST_FUNC_REFERENCE);
@@ -1472,6 +1476,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     const char* tname = "lang_TypeId";
                     TypeId theType = CheckType(info, scopeId, tname, expr->location, nullptr);
                     if(!theType.isValid()) {
+                        // TODO: Don't hardcode "Lang" import. It may change in the future.
                         ERR_SECTION(
                             ERR_HEAD2(expr->location)
                             ERR_MSG("'"<<tname << "' was not a valid type. Did you forget to #import \"Lang\".")
@@ -2351,10 +2356,13 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
 
                 if(function->name == "main") {
                     funcImpl->usages = 1;
-                    TypeChecker::CheckImpl checkImpl{};
-                    checkImpl.astFunc = fnOverloads->overloads[overload_i].astFunc;
-                    checkImpl.funcImpl = fnOverloads->overloads[overload_i].funcImpl;
-                    info.typeChecker->checkImpls.add(checkImpl);
+
+                    // We add main automatically in Compiler::processImports
+                    // no need to addTask_type_body here
+                    // TypeChecker::CheckImpl checkImpl{};
+                    // checkImpl.astFunc = fnOverloads->overloads[overload_i].astFunc;
+                    // checkImpl.funcImpl = fnOverloads->overloads[overload_i].funcImpl;
+                    // info.typeChecker->checkImpls.add(checkImpl);
                 }
                 // implementation isn't checked/generated
                 // if(function->body){
@@ -2566,6 +2574,311 @@ SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcIm
 
 //     return SIGNAL_SUCCESS;
 // }
+SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder contentOrder, ASTScope* scope) {
+    using namespace engone;
+    // log::out << now->varnames[0].name << " checked\n";
+                
+    auto& poly_typeArray = now->versions_expressionTypes[info.currentPolyVersion];
+    poly_typeArray.resize(0);
+    // typeArray.resize(0);
+    if(now->firstExpression){
+        // may not exist, meaning just a declaration, no assignment
+        // if(Equal(now->firstExpression->name, "_reserve")) {
+            // __debugbreak();
+            // log::out << "okay\n";
+        // }
+        SignalIO result = CheckExpression(info, scope->scopeId,now->firstExpression, &poly_typeArray, false);
+        for(int i=0;i<poly_typeArray.size();i++){
+            if(poly_typeArray[i].isValid() && poly_typeArray[i] != AST_VOID)
+                continue;
+            ERR_SECTION(
+                ERR_HEAD2(now->firstExpression->location, ERROR_INVALID_TYPE)
+                ERR_MSG("Expression must produce valid types for the assignment.")
+                ERR_LINE2(now->location, "this assignment")
+                if(poly_typeArray[i].isValid()) {
+                ERR_LINE2(now->firstExpression->location, info.ast->typeToString(poly_typeArray[i]))
+                } else {
+                ERR_LINE2(now->firstExpression->location, "no type?")
+                }
+            )
+        }
+    }
+
+    bool hadError = false;
+    if(now->firstExpression && poly_typeArray.size() < now->varnames.size()){
+        if(info.errors==0) {
+            ERR_SECTION(
+                ERR_HEAD2(now->location, ERROR_TOO_MANY_VARIABLES)
+                ERR_MSG("Too many variables were declared.")
+                ERR_LINE2(now->location, now->varnames.size() + " variables")
+                ERR_LINE2(now->firstExpression->location, poly_typeArray.size() + " return values")
+            )
+            hadError = true;
+        }
+        // don't return here, we can still evaluate some things
+    }
+
+    _TCLOG(log::out << "assign ";)
+    for (int vi=0;vi<(int)now->varnames.size();vi++) {
+        auto& varname = now->varnames[vi];
+
+        const auto err_non_variable = [&]() {
+            // TODO: Print what type the identifier is. Don't just say non-variable
+            ERR_SECTION(
+                ERR_HEAD2(varname.location)
+                ERR_MSG("'"<<varname.name<<"' is defined as a non-variable and cannot be used.")
+                ERR_LINE2(varname.location, "bad")
+            )
+        };
+
+        VariableInfo* varinfo = nullptr;
+
+        if(!varname.declaration) {
+            // ASSIGN TO EXISTING VARIABLES (find them first)
+            if(varname.identifier) {
+                // a polymorphic version fixed identifier for us
+            } else {
+                // info.ast->getScope(scope->scopeId)->print(info.ast);
+                Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                if(!possible_identifier) {
+                    ERR_SECTION(
+                        ERR_HEAD2(varname.location)
+                        ERR_MSG("'"<<varname.name<<"' is not a defined identifier. You have to declare the variable first.")
+                        ERR_LINE2(varname.location, "undeclared")
+                        ERR_EXAMPLE(1,"var: i32 = 12;")
+                        ERR_EXAMPLE(1,"var := 23;  // inferred type")
+                        ERR_EXAMPLE(1,"var: i32, other = return_one_and_two();\n// declared var, other should be declared")
+                    )
+                    return SIGNAL_FAILURE;
+                    // continue;
+                } else if(possible_identifier->type != Identifier::VARIABLE) {
+                    err_non_variable();
+                    return SIGNAL_FAILURE;
+                    // continue;
+                } else {
+                    varname.identifier = possible_identifier;
+                }
+            }
+            varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+        } else {
+            // DECLARE NEW VARIABLE(S)
+
+            // The code below should have caused less errors but it causes more errors because of undeclared identifiers
+            // if(!varname.versions_assignType[info.currentPolyVersion].isValid() && info.hasErrors()) {
+            //     // Assert(info.hasErrors());
+            //     continue;
+            // }
+
+            // We begin by matching the varname in ASTStatement with an identifier and VariableInfo
+
+            // Infer type
+            if(!varname.assignString.isValid()) {
+                if(vi < poly_typeArray.size()){
+                    varname.versions_assignType[info.currentPolyVersion] = poly_typeArray[vi];
+                } else {
+                    Assert(hadError);
+                    // Do we need this err section? do we not always check the out of bounds above
+                    //  // out of bounds
+                    // if(!hadError){ // error may have been printed above
+                    //     ERR_SECTION(
+                    //         ERR_HEAD2(varname.name)
+                    //         ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
+                    //         ERR_LINE2(varname.name, "typeless");
+                    //     )
+                    // }
+                }
+            }
+            // Logic if identifier exists or not and whether the identifier is of a variable type or not AND which scope the identifier was found in.
+            // Based on all that, we may use the one we found or create a new variable identifier.
+            Identifier* possible_identifier = nullptr;
+            if(!varname.identifier) {
+                possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                if(!possible_identifier) {
+                    // identifier does not exist, we should create it.
+                    if(now->globalDeclaration) {
+                        varinfo = info.ast->addVariable(scope->scopeId, varname.name, CONTENT_ORDER_ZERO, &varname.identifier, nullptr);
+                    } else {
+                        varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
+                    }
+                    Assert(varinfo);
+                    varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+                } else if(possible_identifier->type == Identifier::VARIABLE) {
+                    // Identifier does exist but we can still declare it if is in a parent scope.
+
+                    // An identifier would have to allow multiple variables with different content orders.
+                    if(possible_identifier->scopeId == scope->scopeId) {
+                        // variable may already exist if we are in a polymorphic scope.
+                        // if we are in the same scope with the same content order then we have
+                        // already touched this statement. we can set the versionTypeID just fine.
+                        // The other scenario has to do with declaring a new variable but the 
+                        // name already exists. If you allow this then it's called shadowing.
+                        // This should be allowed but the current system can't support it so we
+                        // don't allow it for now.
+
+                        // NOTE: I had some issues with polymorphic structs and local variables in methods.
+                        //  As a quick fix I added this. Whether this does what I think it does or if we have
+                        //  to add something else for edge cases to be taken care of is another matter.
+                        //  - Emarioo, 2023-12-29 (By the way, merry christmas and happy new year!)
+                        if(possible_identifier->order != contentOrder) {
+                            ERR_SECTION(
+                                ERR_HEAD2(varname.location)
+                                ERR_MSG("Cannot redeclare variables. Shadowing identifiers may or may not be a feature in the future.")
+                                ERR_LINE2(varname.location,"");
+                                // TODO: Print the location of the previous varable
+                            )
+                            return SIGNAL_FAILURE;
+
+                            // continue;
+                        } else {
+                            varname.identifier = possible_identifier;
+                            // We should only be here if the scope is polymorphic.
+                            varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                            // The 'now' statement was checked to be global and thus made varinfo global. varinfo->type will always be the same as now->globalDeclaration
+                            // The assert will fire if we have a bug in the code.
+                            Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
+                        }
+                    } else {
+                        varname.identifier = possible_identifier;
+                        // variable does not exist in scope, we can therefore create it
+                        varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
+                        Assert(varinfo);
+                        // ACTUALLY! I thought global assignment in local scopes didn't work but I believe it does.
+                        //  The code here just handles where the variable is visible. That should be the local scope which is correct.
+                        //  The VariableInfo::GLOBAL type is what puts the data into the global data section. Silly me.
+                        //  - Emarioo, 2024-1-03
+                        // if(now->globalDeclaration && scope->scopeId != 0) {
+                        //     ERR_SECTION(
+                        //         ERR_HEAD2(now->location)
+                        //         ERR_MSG("Global assignment in local scope not implemented. Move global variable to global scope or remove the global keyword. In the future, ")
+                        //         ERR_LINE2(now->location, "can't be global")
+                        //     )
+                        //     // TODO: Global assignment needs extra code.
+                        //     //  We should not add variable into 'scope->scopeId' like we do above
+                        //     //  We also need to check the identifier against the global scope not 'scope->scopeId'
+                        //     //  Basically, global assignment could use it's own code path.
+                        // }
+                        varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+                    }
+                } else {
+                    err_non_variable();
+                    return SIGNAL_FAILURE;
+                    // continue;
+
+                }
+            } else {
+                // We should only be here if we are in a polymorphic scope/check.
+                Assert(varname.identifier->type == Identifier::VARIABLE);
+                varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                Assert(varinfo);
+                Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
+            }
+            Assert(varinfo);
+
+            // I don't think the Assert will ever fire. But just in case.
+            // HAHA, IT DID FIRE! Globals were checked twice! - Emarioo, 2024-01-06
+            // Yes, it happens no and then with new bugs. We now throw an error
+            //   instead of relying on an assert. - Emarioo, 2024-05-03
+            if(varinfo->versions_typeId[info.currentPolyVersion].isValid()) {
+                // I believe the final program will work fine, even if we check things twice.
+                // It's just that we might allocate some extra unecessary global data.
+                bool preverr = info.ignoreErrors;
+                info.ignoreErrors = true;
+                defer { info.ignoreErrors = preverr; };
+
+                ERR_SECTION(
+                    ERR_HEAD2(now->location)
+                    ERR_MSG("Compiler bug! Declaration already had a valid type which indicates that we checked it twice. The compiler should not check things twice. Program will still compile but please notify developers about this.")
+                    ERR_LINE2(now->location,"here")
+                )
+            }
+
+            // FINALLY we can set the declaration type
+            varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
+        }
+
+        // if(varname.declaration) {
+            _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
+        // } else {
+        //     _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
+        // }
+
+        // We continue by checking the expression with the variable/identifier info type
+
+        // Technically, we don't need vi < poly_typeArray.size
+        // We check for it above. HOWEVER, we don't stop and that's because we try to
+        // find more errors. That is why we need vi < ...
+        if(vi < (int)poly_typeArray.size()){
+            if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
+                auto badtype = info.ast->typeToString(varname.assignString);
+                ERR_SECTION(
+                    ERR_HEAD2(now->firstExpression->location, ERROR_TYPE_MISMATCH)
+                    ERR_MSG("Type mismatch " << info.ast->typeToString(poly_typeArray[vi]) << " - " << badtype << ".")
+                    // varinfo->versions_typeId[info.currentPolyVersion]
+                    ERR_LINE2(varname.location, badtype)
+                    ERR_LINE2(now->firstExpression->location, info.ast->typeToString(poly_typeArray[vi]))
+                )
+            }
+        }
+        if(varinfo->isGlobal()) {
+            u32 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
+            u32 offset = info.ast->aquireGlobalSpace(size);
+            varinfo->versions_dataOffset[info.currentPolyVersion] = offset;
+        }
+        // Array initializer list
+        if(now->arrayValues.size()!=0) {
+            Assert(vi == 0); // we are not handling array initializers with multiple varnames.
+            TypeInfo* arrTypeInfo = info.ast->getTypeInfo(now->varnames.last().versions_assignType[info.currentPolyVersion].baseType());
+            if(!arrTypeInfo->astStruct || arrTypeInfo->astStruct->name != "Slice") {
+                ERR_SECTION(
+                    ERR_HEAD2(now->varnames.last().location)
+                    ERR_MSG("Variables that use array initializers must use the 'Slice<T>' type")
+                    ERR_LINE2(now->varnames.last().location, "must use Slice<T> not "<<info.ast->typeToString(arrTypeInfo->id))
+                    // TODO: Print the location of the type instead of the variable name
+                )
+            } else {
+                TypeId elementType = arrTypeInfo->structImpl->polyArgs[0];
+                QuickArray<TypeId> typeArray{};
+                for(int j=0;j<now->arrayValues.size();j++){
+                    ASTExpression* value = now->arrayValues[j];
+                    typeArray.resize(0);
+                    SignalIO result = CheckExpression(info, scope->scopeId, value, &typeArray, false);
+                    if(result != SIGNAL_SUCCESS){
+                        // continue;
+                        return SIGNAL_FAILURE;
+                    }
+                    if(typeArray.size()!=1) {
+                        if(typeArray.size()==0) {
+                            ERR_SECTION(
+                                ERR_HEAD2(value->location)
+                                ERR_MSG("Expressions in array initializers cannot consist of of no values. Did you call a function that returns void?")
+                                ERR_LINE2(value->location, "bad")
+                            )
+                            return SIGNAL_FAILURE;
+                            // continue;
+                        } else {
+                            ERR_SECTION(
+                                ERR_HEAD2(value->location)
+                                ERR_MSG("Expressions in array initializers cannot consist of multiple values. Did you call a function that returns more than one value?")
+                                ERR_LINE2(value->location, "bad")
+                                // TODO: Print the types in rightTypes
+                            )
+                            return SIGNAL_FAILURE;
+                            // continue;
+                        }
+                    }
+                    if(!info.ast->castable(typeArray[0], elementType)) {
+                        ERR_SECTION(
+                            ERR_HEAD2(value->location)
+                            ERR_MSG("Cannot cast '"<<info.ast->typeToString(typeArray[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
+                            ERR_LINE2(value->location, "cannot cast")
+                        )
+                    }
+                }
+            }
+        }
+    }
+    return SIGNAL_SUCCESS;
+}
 SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
@@ -2588,6 +2901,8 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
     // Function bodies/impl to check are added to a list
     // in CheckFunction and CheckFnCall if polymorphic
  
+
+    // Some code was copied to TypeCheckFunctions.. Don't forget to modify TypeCheckFunctions and here when making changes.
     bool errorsWasIgnored = info.ignoreErrors;
     info.currentContentOrder.add(CONTENT_ORDER_ZERO);
     defer {
@@ -2602,6 +2917,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
     TINY_ARRAY(TypeId, typeArray, 4)
 
     bool perform_global_check = true;
+    perform_global_check = !info.do_not_check_global_globals;
 
     // TODO: Optimize by only doing one loop if the scope has no globals.
     //  The parser could set a flag if the scope has globals. Most scopes won't have globals so this will save us a lot of performance.
@@ -2685,286 +3001,12 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             }
         } else if(now->type == ASTStatement::DECLARATION){
             if(!perform_global_check && now->globalDeclaration)
-                continue;; // We already checked globals
+                continue; // We already checked globals
 
-            // log::out << now->varnames[0].name << " checked\n";
-                
-            auto& poly_typeArray = now->versions_expressionTypes[info.currentPolyVersion];
-            poly_typeArray.resize(0);
-            // typeArray.resize(0);
-            if(now->firstExpression){
-                // may not exist, meaning just a declaration, no assignment
-                // if(Equal(now->firstExpression->name, "_reserve")) {
-                    // __debugbreak();
-                    // log::out << "okay\n";
-                // }
-                SignalIO result = CheckExpression(info, scope->scopeId,now->firstExpression, &poly_typeArray, false);
-                for(int i=0;i<poly_typeArray.size();i++){
-                    if(poly_typeArray[i].isValid() && poly_typeArray[i] != AST_VOID)
-                        continue;
-                    ERR_SECTION(
-                        ERR_HEAD2(now->firstExpression->location, ERROR_INVALID_TYPE)
-                        ERR_MSG("Expression must produce valid types for the assignment.")
-                        ERR_LINE2(now->location, "this assignment")
-                        if(poly_typeArray[i].isValid()) {
-                        ERR_LINE2(now->firstExpression->location, info.ast->typeToString(poly_typeArray[i]))
-                        } else {
-                        ERR_LINE2(now->firstExpression->location, "no type?")
-                        }
-                    )
-                }
-            }
-
-            bool hadError = false;
-            if(now->firstExpression && poly_typeArray.size() < now->varnames.size()){
-                if(info.errors==0) {
-                    ERR_SECTION(
-                        ERR_HEAD2(now->location, ERROR_TOO_MANY_VARIABLES)
-                        ERR_MSG("Too many variables were declared.")
-                        ERR_LINE2(now->location, now->varnames.size() + " variables")
-                        ERR_LINE2(now->firstExpression->location, poly_typeArray.size() + " return values")
-                    )
-                    hadError = true;
-                }
-                // don't return here, we can still evaluate some things
-            }
-
-            _TCLOG(log::out << "assign ";)
-            for (int vi=0;vi<(int)now->varnames.size();vi++) {
-                auto& varname = now->varnames[vi];
-
-                const auto err_non_variable = [&]() {
-                    // TODO: Print what type the identifier is. Don't just say non-variable
-                    ERR_SECTION(
-                        ERR_HEAD2(varname.location)
-                        ERR_MSG("'"<<varname.name<<"' is defined as a non-variable and cannot be used.")
-                        ERR_LINE2(varname.location, "bad")
-                    )
-                };
-
-                VariableInfo* varinfo = nullptr;
-
-                if(!varname.declaration) {
-                    // ASSIGN TO EXISTING VARIABLES (find them first)
-                    if(varname.identifier) {
-                        // a polymorphic version fixed identifier for us
-                    } else {
-                        // info.ast->getScope(scope->scopeId)->print(info.ast);
-                        Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
-                        if(!possible_identifier) {
-                            ERR_SECTION(
-                                ERR_HEAD2(varname.location)
-                                ERR_MSG("'"<<varname.name<<"' is not a defined identifier. You have to declare the variable first.")
-                                ERR_LINE2(varname.location, "undeclared")
-                                ERR_EXAMPLE(1,"var: i32 = 12;")
-                                ERR_EXAMPLE(1,"var := 23;  // inferred type")
-                                ERR_EXAMPLE(1,"var: i32, other = return_one_and_two();\n// declared var, other should be declared")
-                            )
-                            continue;
-                        } else if(possible_identifier->type != Identifier::VARIABLE) {
-                            err_non_variable();
-                            continue;
-                        } else {
-                            varname.identifier = possible_identifier;
-                        }
-                    }
-                    varinfo = info.ast->getVariableByIdentifier(varname.identifier);
-                } else {
-                    // DECLARE NEW VARIABLE(S)
-
-                    // The code below should have caused less errors but it causes more errors because of undeclared identifiers
-                    // if(!varname.versions_assignType[info.currentPolyVersion].isValid() && info.hasErrors()) {
-                    //     // Assert(info.hasErrors());
-                    //     continue;
-                    // }
-
-                    // We begin by matching the varname in ASTStatement with an identifier and VariableInfo
-
-                    // Infer type
-                    if(!varname.assignString.isValid()) {
-                        if(vi < poly_typeArray.size()){
-                            varname.versions_assignType[info.currentPolyVersion] = poly_typeArray[vi];
-                        } else {
-                            Assert(hadError);
-                            // Do we need this err section? do we not always check the out of bounds above
-                            //  // out of bounds
-                            // if(!hadError){ // error may have been printed above
-                            //     ERR_SECTION(
-                            //         ERR_HEAD2(varname.name)
-                            //         ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
-                            //         ERR_LINE2(varname.name, "typeless");
-                            //     )
-                            // }
-                        }
-                    }
-                    // Logic if identifier exists or not and whether the identifier is of a variable type or not AND which scope the identifier was found in.
-                    // Based on all that, we may use the one we found or create a new variable identifier.
-                    Identifier* possible_identifier = nullptr;
-                    if(!varname.identifier) {
-                        possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
-                        if(!possible_identifier) {
-                            // identifier does not exist, we should create it.
-                            if(now->globalDeclaration) {
-                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, CONTENT_ORDER_ZERO, &varname.identifier, nullptr);
-                            } else {
-                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
-                            }
-                            Assert(varinfo);
-                            varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
-                        } else if(possible_identifier->type == Identifier::VARIABLE) {
-                            // Identifier does exist but we can still declare it if is in a parent scope.
-
-                            // An identifier would have to allow multiple variables with different content orders.
-                            if(possible_identifier->scopeId == scope->scopeId) {
-                                // variable may already exist if we are in a polymorphic scope.
-                                // if we are in the same scope with the same content order then we have
-                                // already touched this statement. we can set the versionTypeID just fine.
-                                // The other scenario has to do with declaring a new variable but the 
-                                // name already exists. If you allow this then it's called shadowing.
-                                // This should be allowed but the current system can't support it so we
-                                // don't allow it for now.
-
-                                // NOTE: I had some issues with polymorphic structs and local variables in methods.
-                                //  As a quick fix I added this. Whether this does what I think it does or if we have
-                                //  to add something else for edge cases to be taken care of is another matter.
-                                //  - Emarioo, 2023-12-29 (By the way, merry christmas and happy new year!)
-                                if(possible_identifier->order != contentOrder) {
-                                    ERR_SECTION(
-                                        ERR_HEAD2(varname.location)
-                                        ERR_MSG("Cannot redeclare variables. Shadowing identifiers may or may not be a feature in the future.")
-                                        ERR_LINE2(varname.location,"");
-                                        // TODO: Print the location of the previous varable
-                                    )
-                                    continue;
-                                } else {
-                                    varname.identifier = possible_identifier;
-                                    // We should only be here if the scope is polymorphic.
-                                    varinfo = info.ast->getVariableByIdentifier(varname.identifier);
-                                    // The 'now' statement was checked to be global and thus made varinfo global. varinfo->type will always be the same as now->globalDeclaration
-                                    // The assert will fire if we have a bug in the code.
-                                    Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
-                                }
-                            } else {
-                                varname.identifier = possible_identifier;
-                                // variable does not exist in scope, we can therefore create it
-                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
-                                Assert(varinfo);
-                                // ACTUALLY! I thought global assignment in local scopes didn't work but I believe it does.
-                                //  The code here just handles where the variable is visible. That should be the local scope which is correct.
-                                //  The VariableInfo::GLOBAL type is what puts the data into the global data section. Silly me.
-                                //  - Emarioo, 2024-1-03
-                                // if(now->globalDeclaration && scope->scopeId != 0) {
-                                //     ERR_SECTION(
-                                //         ERR_HEAD2(now->location)
-                                //         ERR_MSG("Global assignment in local scope not implemented. Move global variable to global scope or remove the global keyword. In the future, ")
-                                //         ERR_LINE2(now->location, "can't be global")
-                                //     )
-                                //     // TODO: Global assignment needs extra code.
-                                //     //  We should not add variable into 'scope->scopeId' like we do above
-                                //     //  We also need to check the identifier against the global scope not 'scope->scopeId'
-                                //     //  Basically, global assignment could use it's own code path.
-                                // }
-                                varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
-                            }
-                        } else {
-                            err_non_variable();
-                            continue;
-                        }
-                    } else {
-                        // We should only be here if we are in a polymorphic scope/check.
-                        Assert(varname.identifier->type == Identifier::VARIABLE);
-                        varinfo = info.ast->getVariableByIdentifier(varname.identifier);
-                        Assert(varinfo);
-                        Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
-                    }
-                    Assert(varinfo);
-
-                    // O don't think this will ever fire. But just in case.
-                    // HAHA, IT DID FIRE! Globals were checked twice! -Emarioo, 2024-01-06
-                    Assert(!varinfo->versions_typeId[info.currentPolyVersion].isValid());
-
-                    // FINALLY we can set the declaration type
-                    varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
-                    // }
-                }
-
-                // if(varname.declaration) {
-                    _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
-                // } else {
-                //     _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
-                // }
-
-                // We continue by checking the expression with the variable/identifier info type
-
-                // Technically, we don't need vi < poly_typeArray.size
-                // We check for it above. HOWEVER, we don't stop and that's because we try to
-                // find more errors. That is why we need vi < ...
-                if(vi < (int)poly_typeArray.size()){
-                    if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
-                        auto badtype = info.ast->typeToString(varname.assignString);
-                        ERR_SECTION(
-                            ERR_HEAD2(now->firstExpression->location, ERROR_TYPE_MISMATCH)
-                            ERR_MSG("Type mismatch " << info.ast->typeToString(poly_typeArray[vi]) << " - " << badtype << ".")
-                            // varinfo->versions_typeId[info.currentPolyVersion]
-                            ERR_LINE2(varname.location, badtype)
-                            ERR_LINE2(now->firstExpression->location, info.ast->typeToString(poly_typeArray[vi]))
-                        )
-                    }
-                }
-                if(varinfo->isGlobal()) {
-                    u32 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
-                    u32 offset = info.ast->aquireGlobalSpace(size);
-                    varinfo->versions_dataOffset[info.currentPolyVersion] = offset;
-                }
-                // Array initializer list
-                if(now->arrayValues.size()!=0) {
-                    Assert(vi == 0); // we are not handling array initializers with multiple varnames.
-                    TypeInfo* arrTypeInfo = info.ast->getTypeInfo(now->varnames.last().versions_assignType[info.currentPolyVersion].baseType());
-                    if(!arrTypeInfo->astStruct || arrTypeInfo->astStruct->name != "Slice") {
-                        ERR_SECTION(
-                            ERR_HEAD2(now->varnames.last().location)
-                            ERR_MSG("Variables that use array initializers must use the 'Slice<T>' type")
-                            ERR_LINE2(now->varnames.last().location, "must use Slice<T> not "<<info.ast->typeToString(arrTypeInfo->id))
-                            // TODO: Print the location of the type instead of the variable name
-                        )
-                    } else {
-                        TypeId elementType = arrTypeInfo->structImpl->polyArgs[0];
-                        for(int j=0;j<now->arrayValues.size();j++){
-                            ASTExpression* value = now->arrayValues[j];
-                            typeArray.resize(0);
-                            SignalIO result = CheckExpression(info, scope->scopeId, value, &typeArray, false);
-                            if(result != SIGNAL_SUCCESS){
-                                continue;
-                            }
-                            if(typeArray.size()!=1) {
-                                if(typeArray.size()==0) {
-                                    ERR_SECTION(
-                                        ERR_HEAD2(value->location)
-                                        ERR_MSG("Expressions in array initializers cannot consist of of no values. Did you call a function that returns void?")
-                                        ERR_LINE2(value->location, "bad")
-                                    )
-                                    continue;
-                                } else {
-                                    ERR_SECTION(
-                                        ERR_HEAD2(value->location)
-                                        ERR_MSG("Expressions in array initializers cannot consist of multiple values. Did you call a function that returns more than one value?")
-                                        ERR_LINE2(value->location, "bad")
-                                        // TODO: Print the types in rightTypes
-                                    )
-                                    continue;
-                                }
-                            }
-                            if(!info.ast->castable(typeArray[0], elementType)) {
-                                ERR_SECTION(
-                                    ERR_HEAD2(value->location)
-                                    ERR_MSG("Cannot cast '"<<info.ast->typeToString(typeArray[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
-                                    ERR_LINE2(value->location, "cannot cast")
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+            auto result = CheckDeclaration(info, now, contentOrder, scope);
+            if(result != SIGNAL_SUCCESS)
+                continue;
+            
             _TCLOG(log::out << "\n";)
         } else if(now->type == ASTStatement::WHILE){
             if(now->firstExpression) {
@@ -3160,7 +3202,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                 ScopeInfo* originInfo = info.ast->findScope(name,scope->scopeId,true);
                 if(originInfo){
                     ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);
-                    scopeInfo->sharedScopes.add(originInfo);
+                    scopeInfo->sharedScopes.add(originInfo); // 'using' keyword
                 }
 
                 // TODO: Inherit enum values.
@@ -3206,9 +3248,6 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             QuickArray<ASTExpression*> usedMembers{};
             if(astEnum) {
                 usedMembers.resize(astEnum->members.size());
-                FOR(usedMembers) {
-                    it = nullptr;   
-                }
             }
             
             // TODO: Enum switch statements should not be limited to just enum members.
@@ -3216,7 +3255,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             //  count towards having all the members present in the switch. Unless enum members
             //  aren't forced to exist in the switch.
             
-            bool allCasesUseEnumType = true;
+            bool allCasesUseEnumType = astEnum != nullptr;
             
             FOR(now->switchCases){
                 bool wasMember = false;
@@ -3255,18 +3294,28 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                 CheckRest(info, now->firstBody);
             } else {
                 // not default case
-                if(allCasesUseEnumType && usedMemberCount != (int)usedMembers.size()) {
-                    // NOTE: I find that errors about having missed members is annoying most of the time.
-                    //  BUT, there are certainly times were you forget to handle new enums you add which is when
-                    //  this error is nice. I have added this as a TODO because we need to add some annotations
-                    //  so that the user can decide how they want the error to work an on what members.
-
-                    // ERR_SECTION(
-                    //     ERR_HEAD2(now->location, ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
-                    //     ERR_MSG("You have forgotten these enum members in the switch statement:")
+                if(usedMemberCount != (int)usedMembers.size() && !astEnum->hasRule(ASTEnum::LENIENT_SWITCH)) {
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location, ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+                        ERR_MSG_LOG("The switch-statement is matching an enum value and requires all members to be present unless you specify a default case. You can add the annotation "<<log::GOLD<<"@lenient_switch"<<log::NO_COLOR<<" to the enum declaration to neglect this situation. These are the missing enum members: ")
+                        int n = 0;
+                        for (int i=0;i<astEnum->members.size();i++) {
+                            auto& mem = astEnum->members[i];
+                            if(!usedMembers[i]) {
+                                if(n!=0)
+                                    log::out << ", ";
+                                log::out << log::GREEN << mem.name << log::NO_COLOR;
+                                n++;
+                            }
+                        }
+                        log::out << ".\n";
+                        if(!allCasesUseEnumType) {
+                            log::out << "Note that some cases use a non-enum member\n";
+                        }
+                        log::out << "\n\n";
                         
-                    //     ERR_LINE2(now->location, "this switch")
-                    // )
+                        ERR_LINE2(now->location, "this switch")
+                    )
                 }
             }
         } else {
@@ -3281,105 +3330,6 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
     }
     return SIGNAL_SUCCESS;
 }
-#ifdef gone
-int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
-    using namespace engone;
-    // MEASURE;
-    ZoneScopedC(tracy::Color::Purple4);
-    CheckInfo info = {};
-    info.ast = ast;
-    info.compileInfo = compileInfo;
-
-    _VLOG(log::out << log::BLUE << "Type check:\n";)
-    Assert(false);
-    // Check enums first since they don't depend on anything.
-    SignalIO result = CheckEnums(info, scope); // nocheckin
-
-    /*
-        How to make global variables and using work with functions and structs
-        functions and structs are out of order while global and using isn't.
-
-        functions and structs therefore needs some kind of ordering which has been fixed with contentOrder.
-        With it, we know the order of functions, global, using and structs.
-
-    */
-    /*
-        Preprocessor cannot replace using (for some situations sure but not for all so you might as well go all in on using).
-        This: using Array<T> as A<T>
-        is not possible with macros because they don't allow special characters (for good reasons)
-    */
-    /* using needs to run alongside struct checks
-
-        using Node as N // DynamicArray hasn't been created yet
-        struct Node<T> {
-            sup: N*
-
-        }
-
-        a: Node
-    */
-
-    
-    // Jonathan Blow has a video about dependenies when
-    // checking types (https://www.youtube.com/watch?v=4q0cgjXhhTo)
-    // The video is 8 years old so perhaps the system has changed to
-    // something better. In any case, he uses an array of pointers to nodes
-    // that will be checked. If the node couldn't be checked, then you move on to the next
-    // node until all nodes have been checked. If you went a full round without changing anything
-    // then you have a circular dependency and should print an error.
-    // It might be a good idea to use a iterative approach with an array instead of
-    // going deep into each struct like it is now. An array is easier to manage and
-    // may improve cache hits. Before this is to be done, there must be a significant amount
-    // of types and structs to test this on. See the performance difference.
-    // This might not be a good idea, it might be fine as it is. I mean, it does work.
-    // If turns out to be slow when you are dealing with many structs then it's time to
-    // fix this.
-    info.completedStructs=false;
-    info.showErrors = false;
-    // An improvement here might be to create empty struct types first.
-    // Any usage of pointers to structs won't cause failures since we know the size of pointers.
-    // If a type isn't a pointer then we might fail if the struct hasn't been created yet.
-    // You could implement some dependency or priority queue.
-    while(!info.completedStructs){
-        info.completedStructs = true;
-        info.anotherTurn=false;
-        
-        result = CheckStructs(info, scope); // nocheckin
-        
-        if(!info.anotherTurn && !info.completedStructs){
-            if(!info.showErrors){
-                info.showErrors = true;
-                continue;
-            }
-            // log::out << log::RED << "Some types could not be evaluated\n";
-            break;
-        }
-    }
-    
-    // We check function "header" first and then later, we check the body.
-    // This is because bodies may reference other functions. If we check header and body at once,
-    // a referenced function may not exist yet (this is certain if the body of two functions reference each other).
-    // If so we would have to stop checking that body and continue later until that reference have been cleared up.
-    // So instead of that mess, we check headers first to ensure that all references will work.
-    result = CheckFunctions(info, scope); // nocheckin
-
-    // Check rest will go through scopes and create polymorphic implementations if necessary.
-    // This includes structs and functions.
-    result = CheckRest(info, scope); // nocheckin
-
-
-    while(info.checkImpls.size()!=0){
-        auto checkImpl = info.checkImpls[info.checkImpls.size()-1];
-        info.checkImpls.pop();
-        Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
-        
-        CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
-    }
-    
-    info.compileInfo->options->compileStats.errors += info.errors;
-    return info.errors;
-}
-#endif
 
 void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
     using namespace engone;
@@ -3429,7 +3379,7 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     }
     return SIGNAL_SUCCESS;
 }
-void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {
+void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_initial_import) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     CheckInfo info = {};
@@ -3445,11 +3395,93 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {
     // a referenced function may not exist yet (this is certain if the body of two functions reference each other).
     // If so we would have to stop checking that body and continue later until that reference have been cleared up.
     // So instead of that mess, we check headers first to ensure that all references will work.
-    SignalIO result = CheckFunctions(info, scope); // nocheckin
+    SignalIO result = CheckFunctions(info, scope);
+
+    // TODO: Delete code below, we don't need it anymore, i think.
+    // if(is_initial_import) {
+        // if we don't have main, then global functions will be checked
+        // it's when we do define a main that we have to check globals "manually"
+        // auto iden = compiler->ast->findIdentifier(scope->scopeId,0,"main");
+        // if(iden) {
+            // We check globals of the import because those are not checked otherwise.
+            // Most code is copied from CheckRest. Don't forget to modify CheckRest and here
+            // making changes.
+    info.currentContentOrder.add(CONTENT_ORDER_ZERO);
+    defer {
+        info.currentContentOrder.pop();
+    };
+
+    for(int contentOrder=0;contentOrder<scope->content.size();contentOrder++){
+        
+        if(scope->content[contentOrder].spotType!=ASTScope::STATEMENT)
+            continue;
+
+        info.currentContentOrder.last() = contentOrder;
+        auto now = scope->statements[scope->content[contentOrder].index];
+
+        if(now->type != ASTStatement::DECLARATION || !now->globalDeclaration)
+            continue;
+
+        for(auto& varname : now->varnames) {
+            if(varname.assignString.isString()){
+                bool printedError = false;
+                auto ti = CheckType(info, scope->scopeId, varname.assignString, now->location, &printedError);
+                // NOTE: We don't care whether it's a pointer just that the type exists.
+                if (!ti.isValid() && !printedError) {
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location)
+                        ERR_MSG("'"<<info.ast->getStringFromTypeString(varname.assignString)<<"' is not a type (statement).")
+                        ERR_LINE2(now->location,"bad")
+                    )
+                } else {
+                    // if(varname.arrayLength != 0){
+                    //     auto ti = CheckType(info, scope->scopeId, varname.assignString, now->location, &printedError);
+                    // } else {
+                        // If typeid is invalid we don't want to replace the invalid one with the type
+                        // with the string. The generator won't see the names of the invalid types.
+                        // now->typeId = ti;
+                        varname.versions_assignType[info.currentPolyVersion] = ti;
+                    // }
+                }
+            }
+        }
+
+        auto result = CheckDeclaration(info, now, contentOrder, scope);
+        if(result != SIGNAL_SUCCESS)
+            continue;
+    }
 
     info.compiler->options->compileStats.errors += info.errors;
 }
 
+void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope) {
+    using namespace engone;
+    ZoneScopedC(tracy::Color::Purple4);
+    CheckInfo info = {};
+    info.compiler = compiler;
+    info.ast = compiler->ast;
+    info.reporter = &compiler->reporter;
+    info.typeChecker = &compiler->typeChecker;
+    info.do_not_check_global_globals = true;
+    
+    _VLOG(log::out << log::BLUE << "Type check functions:\n";)
+
+    // Check rest will go through scopes and create polymorphic implementations if necessary.
+    // This includes structs and functions.
+    if(import_scope) {
+        auto result = CheckRest(info, import_scope);
+    }
+
+    if(ast_func && ast_func->body) {
+        // 1. ast_func may be nullptr if no main function was specified, the global scope is the main function if so.
+        // 2. Native, imported or intrinsic functions does not have bodies and we cannot and should not check them.
+        auto result = CheckFuncImplScope(info, ast_func, func_impl);
+    }
+
+    info.compiler->options->compileStats.errors += info.errors;
+    // return info.errors;
+}
+#ifdef gone
 void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
@@ -3464,16 +3496,37 @@ void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
     // This includes structs and functions.
     SignalIO result = CheckRest(info, scope); // nocheckin
 
-    // nocheckin TODO: NOT THREAD SAFE
-    while(info.typeChecker->checkImpls.size()!=0){
-        auto checkImpl = info.typeChecker->checkImpls[info.typeChecker->checkImpls.size()-1];
-        info.typeChecker->checkImpls.pop();
-        Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
-        
-        CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
+    // NOTE: We didn't used to check all functions. We only checked the ones
+    //   that were used in the code. The problem with that is that any task
+    //   could check functions from any import. That is not okay since
+    //   some global variables in imports of those functions weren't checked.
+    //   It is possible to have an array of func impl to check per import
+    //   but since any import may request any func impl at any time we
+    //   would need to type check bodies of imports multiple times which
+    //   is slow.
+    //  To summarize: we need to rethink a couple of things.
+
+    for(int i=0;i<scope->functions.size();i++) {
+        auto f = scope->functions[i];
+        for(int j=0;j<f->_impls.size();j++) {
+            auto impl = f->_impls[j];
+            if(!f->body)
+                continue; // native, imported or intrinsic functions does not have bodies, no need to check those
+            auto result = CheckFuncImplScope(info, f, impl);
+
+        }
     }
-    
+
+    // nocheckin TODO: NOT THREAD SAFE
+    // while(info.typeChecker->checkImpls.size()!=0){
+    //     auto checkImpl = info.typeChecker->checkImpls[info.typeChecker->checkImpls.size()-1];
+    //     info.typeChecker->checkImpls.pop();
+    //     Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
+        
+    //     CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
+    // }
     
     info.compiler->options->compileStats.errors += info.errors;
     // return info.errors;
 }
+#endif

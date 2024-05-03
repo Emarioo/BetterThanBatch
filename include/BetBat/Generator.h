@@ -96,14 +96,6 @@ struct GenContext : public PhaseContext {
     DynamicArray<ResolveCall> callsToResolve;
     void addCallToResolve(int bcIndex, FuncImpl* funcImpl);
 
-    #define VAR_INFOS 0
-    #define VAR_MEMBERS 1
-    #define VAR_STRINGS 2
-    #define VAR_COUNT 3
-    VariableInfo* varInfos[VAR_COUNT]{nullptr};
-    int dataOffset_types = -1;
-    int dataOffset_members = -1;
-    int dataOffset_strings = -1;
 
     // static const int FRAME_SIZE=16; // pc, fp
     // what the relative stack pointer should be right after a funtion call.
@@ -127,6 +119,7 @@ struct GenContext : public PhaseContext {
     // Generate a push from pointer (baseReg) where a list of pushed values are stored. generatePush reads memory from a struct layout while this function "copies" pushed values from a pointer.
     SignalIO generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr);
     void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size);
+    void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
     
     SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);
     SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr);

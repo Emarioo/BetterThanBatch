@@ -295,6 +295,148 @@ SignalIO PreprocContext::parseLoad(){
     return SIGNAL_SUCCESS;
 }
 
+SignalIO PreprocContext::parseInclude(){
+    using namespace engone;
+    ZoneScopedC(tracy::Color::Wheat);
+    #ifdef gone
+    Token hashtag = info.get(info.at()+1);
+    SignalAttempt result = ParseDirective(info, attempt, "include");
+    if(result==SignalAttempt::BAD_ATTEMPT)
+        return SignalAttempt::BAD_ATTEMPT;
+
+    int tokIndex = info.at()+1;
+    // needed for an error, saving it here in case the code changes
+    // and info.at changes it output
+    Token include_token = info.get(tokIndex);
+    if(!(include_token.flags&TOKEN_MASK_QUOTED)){
+        ERR_SECTION(
+            ERR_HEAD(include_token)
+            ERR_MSG("expected a string not "<<include_token<<".")
+        )
+        return SignalAttempt::FAILURE;
+    }
+    info.next();
+
+    std::string filepath = include_token;
+    Path fullpath = {};
+
+    Path dir = TrimLastFile(info.inTokens->streamName);
+    dir = dir.getDirectory();
+
+    // std::string dir = TrimLastFile(info.inTokens->streamName);
+    //-- Search directory of current source file
+    if(filepath.find("./")==0){
+        fullpath = dir.text + filepath.substr(2);
+    }
+    
+    //-- Search cwd or absolute pathP
+    else if(FileExist(filepath)){
+        fullpath = filepath;
+        if(!fullpath.isAbsolute())
+            fullpath = fullpath.getAbsolute();
+        // fullpath = engone::GetWorkingDirectory() + "/" + filepath;
+        // ReplaceChar((char*)fullpath.data(),fullpath.length(),'\\','/');
+    }
+     else if(fullpath = dir.text + filepath, FileExist(fullpath.text)){
+        // fullpath =  dir.text + filePath;
+    }
+    //-- Search additional import directories.
+    // TODO: DO THIS WITH #INCLUDE TOO!
+    else {
+        // this is thread safe because we importDirectories is read only
+        for(int i=0;i<(int)info.compileInfo->importDirectories.size();i++){
+            const Path& dir = info.compileInfo->importDirectories[i];
+            Assert(dir.isDir() && dir.isAbsolute());
+            Path path = dir.text + filepath;
+            bool yes = FileExist(path.text);
+            if(yes) {
+                fullpath = path;
+                break;
+            }
+        }
+    }
+    
+    // TODO: Search additional import directories
+    
+    if(fullpath.text.empty()){
+        ERR_SECTION(
+            ERR_HEAD(include_token)
+            ERR_MSG("Could not include '"<<filepath<<"' (not found). Format is not appended automatically (while import does append .btb).")
+            ERR_LINE(info.get(tokIndex),"not found")
+        )
+        return SignalAttempt::FAILURE;
+    }
+
+    Assert(info.compileInfo);
+
+    if(quoted) {
+        u64 fileSize=0;
+        auto file = engone::FileOpen(fullpath.text, engone::FILE_READ_ONLY, &fileSize);
+        defer { if(file) engone::FileClose(file); };
+        if(!file) {
+            ERR_SECTION(
+                ERR_HEAD(include_token)
+                ERR_MSG("Could not include '"<<filepath<<"' (not found). Format is not appended automatically (while import does append .btb).")
+                ERR_LINE(info.get(tokIndex),"not found")
+            )
+        } else {
+            char* data = (char*)Allocate(fileSize);
+            defer { if(data) Free(data, fileSize); };
+            Assert(data);
+            engone::FileRead(file, data, fileSize);
+            
+            // Quotes in data will not confuse the string. Quotes was evaluated to strings in the lexer.
+            // Strings are now defined by flags in tokens. It doesn't matter if the string contains quotes.
+            
+            Token tok{};
+            tok.str = data;
+            tok.length = fileSize;
+            tok.flags = TOKEN_DOUBLE_QUOTED | (include_token.flags & TOKEN_MASK_SUFFIX);
+            tok.column = hashtag.column; // TODO: Is this wanted?
+            tok.line = hashtag.length;
+            info.addToken(tok);
+        }
+        
+    } else {
+        info.compileInfo->otherLock.lock();
+        auto pair = info.compileInfo->includeStreams.find(fullpath.text);
+        TokenStream* includeStream = 0;
+        if(pair==info.compileInfo->includeStreams.end()){
+            info.compileInfo->otherLock.unlock();
+            includeStream = TokenStream::Tokenize(fullpath.text);
+            info.compileInfo->otherLock.lock();
+            _LOG(LOG_INCLUDES,
+                if(includeStream){
+                    log::out << log::GRAY <<"Tokenized include: "<< log::LIME<<filepath<<"\n";
+                }
+            )
+            info.compileInfo->includeStreams[fullpath.text] = includeStream;
+        }else{
+            includeStream = pair->second;
+        }
+        info.compileInfo->otherLock.unlock();
+        
+        if(!includeStream){
+            ERR_SECTION(
+                ERR_HEAD(include_token)
+                ERR_MSG("Error with token stream for "<<filepath<<" (bug in the compiler!).")
+            )
+            return SignalAttempt::FAILURE;
+        }
+        int tokenIndex=0;
+        while(tokenIndex<includeStream->length()){
+            Token tok = includeStream->get(tokenIndex++);
+            tok.column = hashtag.column; // TODO: Is this wanted?
+            tok.line = hashtag.length;
+            info.addToken(tok);
+        }
+        // TokenStream::Destroy(includeStream); destroyed by CompileInfo
+
+        _MLOG(log::out << "Included "<<tokenIndex<<" tokens from "<<filepath<<"\n";)
+    }
+    #endif
+    return SIGNAL_SUCCESS;
+}
 SignalIO PreprocContext::parseIf(){
     using namespace engone;
 

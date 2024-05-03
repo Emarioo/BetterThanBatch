@@ -720,13 +720,19 @@ struct ASTEnum : ASTNode {
 
     enum Rules : u32 {
         NONE = 0,
-        UNIQUE            = 0x1,
-        SPECIFIED         = 0x2,
-        BITFIELD          = 0x4,
-        ENCLOSED          = 0x8,
-        OPERATION_LESS    = 0x10,
+        UNIQUE         = 0x1,
+        SPECIFIED      = 0x2,
+        BITFIELD       = 0x4,
+        ENCLOSED       = 0x8,
+        OPERATION_LESS = 0x10,
+        LENIENT_SWITCH = 0x20,
     };
     Rules rules = NONE;
+
+    // abstraction over rules & rule in case something changes in the future
+    bool hasRule(Rules rule) {
+        return (rules & rule);
+    }
 
     TypeId colonType = AST_UINT32; // may be a type string before the type checker, may be a type string after if checker failed.
     TypeId actualType = {};
@@ -758,6 +764,12 @@ struct ASTFunction : ASTNode {
         // TokenRange valueToken{}; // for error messages
         TypeId stringType;
     };
+
+    // returns preprocessed id, do not use it for tasks without convertint
+    // to original import id.
+    u32 getImportId(lexer::Lexer* lexer) const {
+        return lexer->getImport_unsafe(location)->file_id;
+    }
 
     QuickArray<Identifier*> memberIdentifiers; // only relevant with parent structs
 
@@ -1008,10 +1020,6 @@ struct AST {
     // will return false for non number types
     static bool IsSigned(TypeId id);
     static bool IsDecimal(TypeId id);
-
-    // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
-    // void appendToMainBody(ASTScope* body);
-    void shareWithGlobalScope(ASTScope* body);
 
     int nextNodeId = 1; // start at 1, 0 indicates a non-set id for ASTNode, probably a bug if so
     int getNextNodeId() { return nextNodeId++; }

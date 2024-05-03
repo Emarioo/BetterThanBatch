@@ -2796,7 +2796,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     X64Register tmp = X64_REG_A;
 
                     emit_prefix(PREFIX_REXW, fin, dst);
-                    emit1(OPCODE_ADD_RM_REG);
+                    emit1(OPCODE_ADD_REG_RM);
                     emit_modrm(MODE_REG, CLAMP_EXT_REG(fin), CLAMP_EXT_REG(dst));
 
                     int offset_loop = code_size();

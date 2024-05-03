@@ -114,14 +114,21 @@ int Bytecode::appendData(const void* data, int size){
 }
 
 void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode, Compiler* compiler) {
-    // Assert(virtualStackPointer == 0);
-    // Assert(stackAlignment.size() == 0);
-    // virtualStackPointer = 0;
-    // stackAlignment.cleanup();
-    
     this->code = code;
     this->tinycode = tinycode;
     this->compiler = compiler;
+    
+    // TODO: If we add new variables then we can't forget to reset them here.
+    //   We will forget to do so though so should we do something like
+    //   this->cleanup(); new(this)BytecodeBuilder().;
+    //   We want to keep some allocations though, we don't want to needlessly free and allocate.
+    previous_instructions_head = 0;
+    previous_instructions_count = 0;
+    disable_code_gen = false;
+    pushed_offset = 0;
+    pushed_offset_max = 0;
+    ret_offset = 0;
+    has_return_values = false;
 }
 
 void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 test_location) {

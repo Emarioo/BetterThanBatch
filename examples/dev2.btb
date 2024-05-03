@@ -1,5 +1,7 @@
 
 
-fn a() {
-    okay();
-}
+// fn a() {
+//     okay();
+// }
+
+global hey: i32;

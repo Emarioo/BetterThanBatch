@@ -90,3 +90,13 @@ switch msge { @TEST_ERROR(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
     case Bitter: { }                                                        
     chicken             @TEST_ERROR(ERROR_BAD_TOKEN_IN_SWITCH)     
 }
+
+enum @lenient_switch Hmm {
+    A,
+    B,
+}
+
+switch A {
+    case A: { }
+    // case B: { } // not needed because of @lenient_switch
+}

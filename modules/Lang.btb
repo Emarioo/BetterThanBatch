@@ -16,7 +16,7 @@
      If you make changes in this file!
 */
 
-// #import "Logger"
+#import "Logger"
 
 enum @enclosed @specified lang_Primitive : u8 {
     NONE            = 0,
@@ -90,7 +90,7 @@ fn lang_typesize(id: lang_TypeId) -> u16 {
 }
 
 fn std_print(type: lang_TypeInfo*) {
-    std_print("{ size: ",type.size,
+    std_prints("{ size: ",type.size,
         ", type: ",type.type,
         ", name: ",type.name.beg,"-",type.name.end,
         ", members: ",type.members.beg,"-",type.members.end,

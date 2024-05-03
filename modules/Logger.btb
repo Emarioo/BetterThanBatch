@@ -219,5 +219,5 @@ fn @hide std_print(t: char[]){
     prints(t);
 }
 fn @hide std_print(ptr: char*, len: u64){
-    prints(Slice<char>(ptr, len));
+    prints(Slice<char>{ptr, len});
 }

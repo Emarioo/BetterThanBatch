@@ -532,8 +532,6 @@ struct BytecodeBuilder {
     int get_pc() { return tinycode->instructionSegment.size(); }
     void fix_jump_imm32_here(int imm_index);
     
-    // int opcode_count() { return tinycode->index_of_opcodes.size(); }
-    // InstructionOpcode get_opcode(int opcode_index) { return (InstructionOpcode)tinycode->instructionSegment[tinycode->index_of_opcodes[opcode_index]]; }
     InstructionOpcode get_last_opcode() {
         int i = get_index_of_previous_instruction();
         if(i==-1)

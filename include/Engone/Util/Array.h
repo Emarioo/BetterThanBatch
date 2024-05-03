@@ -549,6 +549,7 @@ struct QuickArray {
         return false;
     }
     // Will not shrink alloction to fit the new size
+    // New elements are zero initialized
     bool resize(u32 newSize){
         if(newSize>max){
             bool yes = _reserve(newSize);

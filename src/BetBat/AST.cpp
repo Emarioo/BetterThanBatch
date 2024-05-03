@@ -303,8 +303,6 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
         StringView ns;
         StringView real_name;
         DecomposeNamespace(name, &ns, &real_name);
-        // ScopeId nextScopeId = startScopeId;
-        // ContentOrder nextOrder = contentOrder;
         lock_variables.lock();
         defer { lock_variables.unlock(); };
         if(ns.len == 0) {
@@ -322,30 +320,6 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
                     return &pair->second;
                 }
             }
-
-            // WHILE_TRUE_N(1000) {
-            //     ScopeInfo* si = getScope(nextScopeId);
-            //     Assert(si);
-            //     auto pair = si->identifierMap.find(real_name);
-            //     if(pair != si->identifierMap.end() && pair->second.order <= nextOrder){
-            //     // if(pair != si->identifierMap.end() && pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
-            //         return &pair->second;
-            //     }
-            //     for(int i=0;i<(int)si->sharedScopes.size();i++){
-            //         ScopeInfo* usingScope = si->sharedScopes[i];
-            //         auto pair = usingScope->identifierMap.find(real_name);
-            //         // TODO: Check used scope recursively
-            //         if(pair != usingScope->identifierMap.end()){
-            //             return &pair->second;
-            //         }
-            //     }
-            //     if(nextScopeId == 0 && si->parent == 0){
-            //         // quit when we checked global
-            //         break;
-            //     }
-            //     nextScopeId = si->parent;
-            //     nextOrder = si->contentOrder;
-            // }
         } else {
             Assert(false); // namespace broken   
         }
@@ -395,6 +369,7 @@ ScopeInfo* AST::iterate(ScopeIterator& iterator){
         iterator.search_index++;
         
         for(auto s : info->sharedScopes) {
+            // MAX so that we can see everything in the shared scope
             add(s, CONTENT_ORDER_MAX);
         }
         
@@ -916,89 +891,6 @@ FnOverloads* ASTStruct::getMethod(const std::string& name, bool create){
     }
     return &pair->second;
 }
-
-void AST::shareWithGlobalScope(ASTScope* body) {
-    lock_globalScope.lock();
-    auto scope = getScope(globalScope->scopeId);
-    scope->sharedScopes.add(getScope(body->scopeId));
-    lock_globalScope.unlock();
-}
-// void AST::appendToMainBody(ASTScope *body) {
-//     Assert(body);
-    
-//     // if(globalScope->tokenRange.tokenStream() == nullptr) {
-//     //     // IMPORTANT TODO: This is so horribly bad and I will regret this later.
-//     //     //    The main body has multiple scopes appended to it. They all come from different token streams.
-//     //     //    Adding to the madness, we assume that the preloaded import doesn't have a tokenStream to skip it.
-//     //     //    We may not have a token stream if the import is empty.
-//     //     if (body->tokenRange.tokenStream() && body->tokenRange.tokenStream()->streamName != "<base>") {
-//     //         globalScope->tokenRange = body->tokenRange;
-//     //     }
-//     // }
-
-//     // engone::log::out << engone::log::RED << "Content order is ruined in appendToMainBody\n";
-
-//     // How do we maintain it.
-//     // Content order of existing children don't need to be recalculated.
-//     // Content order of all child scopes must recalculated.
-//     {
-//         // ZoneNamedN(zone0, "lock_main", true);
-//         lock_globalScope.lock();
-//     }
-//     for(auto it : body->content) {
-//         switch(it.spotType) {
-//         case ASTScope::STRUCT: {
-//             globalScope->add(this, body->structs[it.index]);
-//             break;
-//         }
-//         case ASTScope::ENUM: {
-//             globalScope->add(this, body->enums[it.index]);
-//             break; 
-//         }
-//         case ASTScope::FUNCTION: {
-//             globalScope->add(this, body->functions[it.index]);
-//             break; 
-//         }
-//         case ASTScope::STATEMENT: {
-//             globalScope->add(this, body->statements[it.index]);
-//             // if(body->statements[it.index]->globalDeclaration) {
-//             //     globalScope->add_at(this, body->statements[it.index], CONTENT_ORDER_ZERO);
-//             // } else {
-//             // }
-//             break; 
-//         }
-//         case ASTScope::NAMESPACE: {
-//             globalScope->add(this, body->namespaces[it.index]);
-//             break;
-//         }
-//         default: Assert(false);
-//         }
-//     }
-//     body->structs.cleanup();
-//     body->enums.cleanup();
-//     body->functions.cleanup();
-//     body->statements.cleanup();
-//     body->namespaces.cleanup();
-//     body->content.cleanup();
-//     // #define _ADD(X) for(auto it : body->X) { globalScope->add(this, it); } body->X.cleanup();
-//     // _ADD(enums)
-//     // _ADD(functions)
-//     // _ADD(structs)
-//     // _ADD(statements)
-//     // // for(auto it : body->statements) { 
-//     // //     // if(it->firstBody) {
-
-//     // //     // } else if() {
-
-//     // //     // }
-//     // //     globalScope->add(it);
-//     // // }
-//     // _ADD(namespaces)
-//     // // for(auto it : body->namespaces) { globalScope->add(it, this); } body->namespaces.cleanup();
-//     // #undef ADD
-//     destroy(body);
-//     lock_globalScope.unlock();
-// }
 
 ASTScope *AST::createBody() {
     ZoneScopedC(tracy::Color::Gold);

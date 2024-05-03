@@ -120,9 +120,8 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 #define LOG(CATEGORY,...)
 #endif
 enum LoggingSection : u64 {
-    CAT_ALL = 0xFFFF'FFFF'FFFF'0000,
-    CAT_PROCESSING          = 0x10000,
-    CAT_PROCESSING_DETAILED = 0x20000,
+    LOG_ALL = 0xFFFF'FFFF'FFFF'0000,
+    LOG_TASKS               = 0x10000,
     
     LOG_TOKENIZER       = 0x1,
     LOG_PREPROCESSOR    = 0x2,

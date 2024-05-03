@@ -169,7 +169,7 @@ enum TaskType : u32 {
     TASK_TYPE_ENUMS           = 0x10,
     TASK_TYPE_STRUCTS         = 0x20,
     TASK_TYPE_FUNCTIONS       = 0x40,
-    TASK_TYPE_BODIES          = 0x80,
+    TASK_TYPE_BODY            = 0x80,
     
     TASK_GEN_BYTECODE         = 0x100,
     TASK_GEN_MACHINE_CODE     = 0x200,
@@ -179,6 +179,10 @@ struct CompilerTask {
     u32 import_id;
     ScopeId scopeId;
     bool no_change = false;
+
+    // used with TASK_TYPE_BODY
+    ASTFunction* astFunc=nullptr;
+    FuncImpl* funcImpl=nullptr;
 };
 struct CompilerImport {
     TaskType state = TASK_NONE;
@@ -186,6 +190,7 @@ struct CompilerImport {
     
     u32 import_id=0;
     u32 preproc_import_id=0;
+    bool type_checked_import_scope = false;
 
     ScopeId scopeId = 0;
 
@@ -203,6 +208,7 @@ struct CompilerImport {
     DynamicArray<Lib> libraries;
 };
 extern const char* const PRELOAD_NAME;
+extern const char* const TYPEINFO_NAME;
 struct Compiler {
     void cleanup() {
         X64Program::Destroy(program);
@@ -221,7 +227,6 @@ struct Compiler {
         linkDirectives.cleanup();
     }
 
-
     lexer::Lexer lexer{};
     preproc::Preprocessor preprocessor{};
     TypeChecker typeChecker{};
@@ -236,6 +241,7 @@ struct Compiler {
 
     u32 initial_import_id = 0;
     u32 preload_import_id = 0;
+    u32 typeinfo_import_id = 0;
 
     bool have_generated_global_data = false; // move elsewhere?
     bool compiler_got_stuck = false;
@@ -243,8 +249,27 @@ struct Compiler {
     BucketArray<CompilerImport> imports{256};
     long volatile globalUniqueCounter = 0; // type must be long volatile because of _InterlockedIncrement
     engone::Mutex otherLock{};
+
+    QuickArray<int> import_id_to_base_id{}; // preproc id -> import id, import id -> import id
+    void map_id(u32 preproc_id, u32 import_id) {
+        Assert(preproc_id > import_id);
+        if(import_id_to_base_id.size() <= preproc_id) {
+            import_id_to_base_id.resize(preproc_id + 1);
+        }
+        // Assert if the slot was mapped already.
+        Assert(import_id_to_base_id[preproc_id] == 0);
+        Assert(import_id_to_base_id[import_id] == 0);
+        import_id_to_base_id[preproc_id] = import_id;
+        import_id_to_base_id[import_id] = import_id;
+    }
+    u32 get_map_id(u32 id) {
+        return import_id_to_base_id[id];
+    }
     
     DynamicArray<CompilerTask> tasks;
+
+    void addTask_type_body(ASTFunction* ast_func, FuncImpl* func_impl);
+    void addTask_type_body(u32 import_id);
     
     // DynamicArray<u32> queue_import_ids;
         
@@ -280,11 +305,24 @@ struct Compiler {
     void addError(const lexer::SourceLocation& location, CompileError errorType = ERROR_UNSPECIFIED);
     void addError(const lexer::Token& token, CompileError errorType = ERROR_UNSPECIFIED);
 
+    // #############################
+    //    Generator stuff
+    // #############################
+    #define VAR_INFOS 0
+    #define VAR_MEMBERS 1
+    #define VAR_STRINGS 2
+    #define VAR_COUNT 3
+    VariableInfo* varInfos[VAR_COUNT]{nullptr};
+    int dataOffset_types = -1;
+    int dataOffset_members = -1;
+    int dataOffset_strings = -1;
+
 private:
     engone::Mutex lock_imports;
     engone::Semaphore lock_wait_for_imports;
     bool signaled = true;
     volatile int waiting_threads = 0;
     volatile int total_threads = 0;
+    volatile int next_thread_id = 0;
     
 };

@@ -852,6 +852,8 @@ SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum){
             enumRules = (ASTEnum::Rules)(enumRules | ASTEnum::UNIQUE);
         } else if(view_name == "enclosed") {
             enumRules = (ASTEnum::Rules)(enumRules | ASTEnum::ENCLOSED);
+        } else if(view_name == "lenient_switch") {
+            enumRules = (ASTEnum::Rules)(enumRules | ASTEnum::LENIENT_SWITCH);
         } else {
             auto tok = info.gettok();
             ERR_SECTION(
@@ -2319,6 +2321,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
         
         while(values.size()>0){
             OperationType nowOp = (OperationType)0;
+            lexer::SourceLocation loc_op{};
             if(ops.size()>=2&&!ending){
                 OperationType op1 = ops[ops.size()-2];
                 if(!IsSingleOp(op1) && values.size()<2)
@@ -2329,15 +2332,26 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         nowOp = op1;
                         ops[ops.size()-2] = op2;
                         ops.pop();
+                        loc_op = saved_locations[saved_locations.size() - 2];
+                        saved_locations.pop();
                     } else {
                         break;
                     }
                 } else {
-                    if(IsSingleOp(op2) || OpPrecedence(op1) >= OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
+                    if(IsSingleOp(op2)) {
+                        nowOp = op2;
+                        ops.pop();
+                        
+                        loc_op = saved_locations.last();
+                        saved_locations.pop();
+                    } else if(OpPrecedence(op1) >= OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
                     // if(OpPrecedence(op1)>OpPrecedence(op2)){ // this code cause this: 3 = 3-1-1
                         nowOp = op1;
                         ops[ops.size()-2] = op2;
                         ops.pop();
+                        
+                        loc_op = saved_locations[saved_locations.size() - 2];
+                        saved_locations.pop();
                     }else{
                         // _PLOG(log::out << "break\n";)
                         break;
@@ -2350,6 +2364,9 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 }
                 nowOp = ops.last();
                 ops.pop();
+                
+                loc_op = saved_locations.last();
+                saved_locations.pop();
             }else{
                 break;
             }
@@ -2407,15 +2424,13 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 } else {
                     // val->tokenRange.startIndex--;
                 }
-                val->location = saved_locations.last();
-                saved_locations.pop();
+                val->location = loc_op;
                 val->left = er;
                 if(val->typeId != AST_REFER) {
                     // val->constantValue = er->constantValue;// nocheckin
                 }
             } else if(values.size()>0){
-                val->location = saved_locations.last();
-                saved_locations.pop();
+                val->location = loc_op;
 
                 auto el = values.last();
                 values.pop();
@@ -3890,31 +3905,36 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
             info.advance();
             signal = ParseStruct(info,tempStruct);
             astNode = (ASTNode*)tempStruct;
-            bodyLoc->add(info.ast, tempStruct);
+            if(tempStruct)
+                bodyLoc->add(info.ast, tempStruct);
             info.nextContentOrder.last()++;
         } else if(token->type == lexer::TOKEN_FUNCTION) {
             info.advance();
             signal = ParseFunction(info,tempFunction, nullptr, false);
             astNode = (ASTNode*)tempFunction;
-            bodyLoc->add(info.ast, tempFunction);
+            if(tempFunction)
+                bodyLoc->add(info.ast, tempFunction);
             info.nextContentOrder.last()++;
         } else if(token->type == lexer::TOKEN_OPERATOR) {
             info.advance();
             signal = ParseFunction(info,tempFunction, nullptr, true);
             astNode = (ASTNode*)tempFunction;
-            bodyLoc->add(info.ast, tempFunction);
+            if(tempFunction)
+                bodyLoc->add(info.ast, tempFunction);
             info.nextContentOrder.last()++;
         } else if(token->type == lexer::TOKEN_ENUM) {
             info.advance();
             signal = ParseEnum(info,tempEnum);
             astNode = (ASTNode*)tempEnum;
-            bodyLoc->add(info.ast, tempEnum);
+            if(tempEnum)
+                bodyLoc->add(info.ast, tempEnum);
             info.nextContentOrder.last()++;
         } else if(token->type == lexer::TOKEN_NAMESPACE) {
             info.advance();
             signal = ParseNamespace(info,tempNamespace);
             astNode = (ASTNode*)tempNamespace;
-            bodyLoc->add(info.ast, tempNamespace);
+            if(tempNamespace)
+                bodyLoc->add(info.ast, tempNamespace);
             info.nextContentOrder.last()++;
         }
         if(signal==SIGNAL_NO_MATCH)
@@ -4088,14 +4108,9 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
         bodyLoc->add(info.ast,nearDefers[i]);
         info.nextContentOrder.last()++;
     }
-    // nearDefers.cleanup(); // cleaned by destructor
 
-    // bodyLoc->tokenRange.endIndex = info.at()+1;
     return SIGNAL_SUCCESS;
 }
-/*
-    Public function
-*/
 ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
@@ -4105,7 +4120,6 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     info.compiler = compiler;
     info.lexer = &compiler->lexer;
     info.ast = compiler->ast;
-    // info.ast = AST::Create(); // nocheckin
     info.reporter = &compiler->reporter;
     info.import_id = import_id;
 
@@ -4132,10 +4146,7 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     info.currentScopeId = body->scopeId;
 
     info.functionScopes.add({});
-    // log::out << "Yoo\n";
     auto signal = ParseBody(info, body, info.ast->globalScopeId, PARSE_TRULY_GLOBAL);
-    // log::out << "Yoo2\n";
-    
     info.functionScopes.pop();
     
     info.compiler->options->compileStats.errors += info.errors;

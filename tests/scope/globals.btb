@@ -1,0 +1,11 @@
+
+@TEST_CASE(global_from_import)
+
+#import "./globals2.btb"
+
+global num: i32;
+fn main() -> i32{
+    I_AM_GLOBAL = 23;
+
+    return I_AM_GLOBAL + num;
+}

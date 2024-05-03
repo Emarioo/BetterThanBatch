@@ -3,61 +3,13 @@
 // #import "./demo/macros"
 
 // #import "Logger"
-// log(823.32)
-
-// fn first(n: i32) -> i32 {
-//     if(n == 1)
-//         return n;
-//     return n + second(n-1);
-// }
-// fn second(n: i32) -> i32 {
-//     if(n == 1)
-//         return n;
-//     return n + first(n-1);
-// }
 
 
-// return first(5);
-
-// #import "Lang"
-// #import "Logger"
 
 
-// #import "./dev2.btb"
-
-// fn okay() {
-//     // n();
-//     // fn n() -> i32 {
-//     //     return 2;
-//     // }
-// }
-// // okay()
-// a()
-
-// #import "tests/funcs/recursion.btb"
-// #import "./dev.btb"
-
-// a: char[];
-
-// a := "okay"
-
-// return second_0(5);
-
-// struct Soul {
-//     ko: i32;
-//     numsi: f32;
-// }
-// struct App {
-//     a: i32;
-//     soul: Soul;
-//     tr: bool;
-// }
-// app: App;
-// app.a = 932
-// app.tr = true
-// app.soul.numsi = 232.232
-// app.soul.ko = 2
-
+// std_print_any(app, true);
 // std_print_any("yoo!", true);
 
-// log(lang_members.len);
+// return cast_unsafe<i64>lang_typeInfos.ptr
+
+// log(cast<void*>lang_typeInfos.ptr)
