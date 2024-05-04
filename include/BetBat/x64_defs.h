@@ -48,8 +48,11 @@ About x64:
 #define OPCODE_SUB_RM_IMM_SLASH_5 (u8)0x81
 
 // This instruction has reg field in opcode.
+// Extension of general registers is done with REXB, not REXR
+// With ModR/M REXR is for reg field while REXB is for r/m.
+// But not in this case.
 // See x64 manual.
-#define OPCODE_MOV_REG_IMM_RD_IO (u8)0xB8
+#define OPCODE_MOV_REG_IMM_RD (u8)0xB8
 
 #define OPCODE_MOV_RM_IMM32_SLASH_0 (u8)0xC7
 #define OPCODE_MOV_RM_REG8 (u8)0x88

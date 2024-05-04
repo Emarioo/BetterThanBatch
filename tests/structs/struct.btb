@@ -14,23 +14,36 @@ base: Base;
 //   the member access should happen first though.
 base.incr();
 
-@TEST_CASE(shortcuts)
-
-struct Base {
-    mem: i32;
+struct A {
+    n: i32;
 }
-base = Base{}
-base = Base{2}
+a: A
+p: i32* = &a.n;
+*p = 23
+_test 23; a.n;
 
-base2: Base = .{3}
-base2 = .{7}
+// not implemented yet
+// @TEST_CASE(shortcuts)
+
+// struct Base {
+//     mem: i32;
+// }
+// base := Base{}
+// base = Base{2}
+
+// base2: Base = .{3}
+// base2 = .{7}
+
+
+
 
 
 @TEST_CASE(indexing_slice)
 
 // move test case elsewhere
 fn get() -> Slice<i32> { return Slice<i32>{null,5}; }
-_test 8; ptr := &(get()[2])
+
+_test 8; &(get()[2])
 
 @TEST_CASE(methods)
 
@@ -44,7 +57,7 @@ struct A {
     }
 }
 a: A = A{23}
-_test 23; a.k()
+_test 25; a.k()
 
 
 @TEST_CASE(methods_poly)

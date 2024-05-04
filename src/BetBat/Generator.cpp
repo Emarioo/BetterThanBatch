@@ -1023,6 +1023,7 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
 // outTypeId will represent the type (integer, struct...) but the value pushed on the stack will always
 // be a pointer. EVEN when the outType isn't a pointer. It is an implicit extra level of indirection commonly
 // used for assignment.
+// wasNonReference is used to allow pointers as well as actual references (pointer to variable)
 SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope, bool* wasNonReference){
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue2);
@@ -1308,9 +1309,9 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     endType.setPointerLevel(endType.getPointerLevel()-1);
                     u32 typesize = info.ast->getTypeSize(endType);
                     u32 rsize = info.ast->getTypeSize(tempTypes.last());
-                    BCRegister reg = BC_REG_D;
+                    BCRegister indexer_reg = BC_REG_D;
 
-                    builder.emit_pop(reg); // integer
+                    builder.emit_pop(indexer_reg); // integer
 
                     builder.emit_pop(BC_REG_B); // slice.ptr
                     builder.emit_pop(BC_REG_F); // slice.len
@@ -1318,11 +1319,11 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     // TODO: BOUNDS CHECK
                     if(typesize>1){
                         builder.emit_li32(BC_REG_A, typesize);
-                        builder.emit_mul(reg, BC_REG_A, false, 8, false);
+                        builder.emit_mul(indexer_reg, BC_REG_A, false, 8, false);
                     }
-                    builder.emit_add(BC_REG_C, reg, false, 8);
+                    builder.emit_add(BC_REG_B, indexer_reg, false, 8);
 
-                    builder.emit_push(BC_REG_C);
+                    builder.emit_push(BC_REG_B);
                     continue;
                 } else {
                     if(!endType.isPointer()) {
@@ -1555,7 +1556,6 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         default: Assert(false);
     }
 
-    // int virtualArgumentSpace = builder.getStackPointer();
     for(int i=0;i<(int)all_arguments.size();i++){
         auto arg = all_arguments[i];
         if(expression->hasImplicitThis() && i == 0) {
@@ -1588,7 +1588,16 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                         builder.emit_mov_rm(BC_REG_A, BC_REG_B, 8);
                         builder.emit_push(BC_REG_A);
                     }
+                } else {
+                    // TODO: Improve error message
+                    ERR_SECTION(
+                        ERR_HEAD2(arg->location)
+                        ERR_MSG("Methods are only allowed on expressions that evaluate to some kind of reference or pointer. The marked expression was not such a type.")
+                        ERR_LINE2(arg->location,ast->typeToString(argType))
+                    )
                 }
+            } else {
+                Assert(hasErrors());
             }
         } else {
             DynamicArray<TypeId> tempTypes{};
@@ -1752,7 +1761,8 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 if(allocated_stack_space != 0)
                     builder.emit_free_local(allocated_stack_space);
 
-                for (int i = 0;i<(int)funcImpl->returnTypes.size(); i++) {
+                // for (int i = (int)funcImpl->returnTypes.size()-1;i>=0; i--) {
+                for (int i = 0; i< (int)funcImpl->returnTypes.size(); i++) {
                     auto &ret = funcImpl->returnTypes[i];
                     TypeId typeId = ret.typeId;
 
@@ -2428,7 +2438,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
         } else if (expression->typeId == AST_NULL) {
             // TODO: Move into the type checker?
             // bytecode->addDebugText("  expr push null");
-            builder.emit_li32(BC_REG_A, 0);
+            builder.emit_li64(BC_REG_A, 0);
             builder.emit_push(BC_REG_A);
 
             TypeInfo *typeInfo = info.ast->convertToTypeInfo("void", info.ast->globalScopeId, true);
@@ -3000,8 +3010,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     return SIGNAL_FAILURE;
                 }
 
-                BCRegister reg = BC_REG_D;
-                builder.emit_pop(reg); // integer
+                BCRegister indexer_reg = BC_REG_D;
+                builder.emit_pop(indexer_reg); // integer
 
                 builder.emit_pop(BC_REG_B); // reference
                 builder.emit_pop(BC_REG_C); // len
@@ -3010,9 +3020,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
                 if(lsize>1){
                     builder.emit_li32(BC_REG_A, lsize);
-                    builder.emit_mul(reg, BC_REG_A, false, 8, false);
+                    builder.emit_mul(indexer_reg, BC_REG_A, false, 8, false);
                 }
-                builder.emit_add(BC_REG_B, reg, false, 8);
+                builder.emit_add(BC_REG_B, indexer_reg, false, 8);
 
                 SignalIO result = generatePush(BC_REG_B, 0, out_type);
 

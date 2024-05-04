@@ -56,7 +56,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
             // "args": ["--test"],
-            "args": ["--test","*typeinfo*"],
+            "args": ["--test","*test_maps*"],
             // "args": ["--test"],
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],
             // "args": ["-pm", "dev*"],

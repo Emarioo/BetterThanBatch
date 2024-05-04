@@ -736,6 +736,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
 
             if(canCast) {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(fncall->isMemberCall() && j == 0)
+                        continue;
                     if(!ast->castable(argTypes[j], overload.funcImpl->argumentTypes[j].typeId)) {
                         found = false;
                         break;
@@ -744,6 +746,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                 }
             } else {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(fncall->isMemberCall() && j == 0)
+                        continue;
                     if(argTypes[j] != overload.funcImpl->argumentTypes[j].typeId) {
                         // TODO: foundInt, see non-poly version of getOverload
                         found = false;
@@ -2006,6 +2010,15 @@ void AST::DecomposePolyTypes(StringView typeString, StringView* out_base, QuickA
 }
 std::string AST::nameOfFuncImpl(FuncImpl* impl) {
     std::string name = impl->astFunction->name;
+    if(impl->structImpl && impl->structImpl->polyArgs.size()) {
+        name+="<";
+        for(int i=0;i<impl->structImpl->polyArgs.size();i++) {
+            if(i!=0)
+                name+=",";
+            name+=typeToString(impl->structImpl->polyArgs[i]);
+        }
+        name+=">";
+    }
     if(impl->polyArgs.size()) {
         name+="<";
         for(int i=0;i<impl->polyArgs.size();i++) {
@@ -2076,9 +2089,10 @@ void ASTExpression::printArgTypes(AST* ast, QuickArray<TypeId>& argTypes){
     //     log::out << ast->typeToString(argTypes[i]);
     // }
 }
-StructImpl* AST::createStructImpl(){
+StructImpl* AST::createStructImpl(TypeId typeId){
     auto ptr = (StructImpl*)allocate(sizeof(StructImpl));
     new(ptr)StructImpl();
+    ptr->typeId = typeId;
     return ptr;
 }
 void FuncImpl::print(AST* ast, ASTFunction* astFunc){

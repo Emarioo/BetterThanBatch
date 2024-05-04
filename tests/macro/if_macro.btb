@@ -1,0 +1,12 @@
+@TEST_CASE(if_directive)
+
+// TODO:
+// #if OS
+
+// #else
+// ad
+// #else
+// ok
+// #elif OK
+// oks
+// #endif

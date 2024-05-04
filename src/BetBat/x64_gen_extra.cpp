@@ -100,6 +100,13 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         || t == BC_MOV_RR
         || t == BC_CAST
         || t == BC_STRLEN
+        || t == BC_GET_PARAM
+        || t == BC_GET_VAL
+        || t == BC_PTR_TO_LOCALS
+        || t == BC_PTR_TO_PARAMS
+        || t == BC_DATAPTR
+        || t == BC_CODEPTR
+        || t == BC_RDTSC
         ;
     };
     // auto IS_WALL=[&](InstructionOpcode t) {
@@ -403,6 +410,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         inst_list.removeAt(i);
     }
 
+    // @DEBUG
     // for(auto n : inst_list) {
     //     log::out << *n << "\n";
     // }
@@ -452,7 +460,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     };
     
     emit_push(X64_REG_BP);
-    // push_offset -= 8; // BP does not count
 
     emit1(PREFIX_REXW);
     emit1(OPCODE_MOV_REG_RM);
@@ -589,7 +596,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 FIX_PRE_OUT_OPERAND(0)
                 
                 if(IS_REG_XMM(reg0->reg)) {
-                    // Assert(!n->reg0.on_stack);
                     emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
                     emit_modrm_slash(MODE_DEREF_DISP8, 0, X64_REG_SP);
                     emit1((u8)-8);
@@ -601,10 +607,18 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 } else {
                     // We do not need a 64-bit move to load a 32-bit into a 64-bit register and ensure that the register is cleared.
                     // A 32-bit move will actually clear the upper bits.
-                    emit_prefix(0,X64_REG_INVALID, reg0->reg);
-                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                    emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
-                    emit4((u32)(i32)base->imm32);
+                    // emit_prefix(0,X64_REG_INVALID, reg0->reg);
+                    // emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    // emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
+                    // emit4((u32)(i32)base->imm32);
+                    
+                    u8 reg_field = CLAMP_EXT_REG(reg0->reg) - 1;
+                    Assert(reg_field >= 0 && reg_field <= 7);
+                    // reg0->reg should be in rm when using MOV_REG_IMM_RD
+                    // REXB is used instead of REXR, see intel manual "Register Operand Coded in Opcode Byte"
+                    emit_prefix(0, X64_REG_INVALID, reg0->reg);
+                    emit1((u8)(OPCODE_MOV_REG_IMM_RD | reg_field));
+                    emit4((u32)base->imm32);
                 }
                 
                 FIX_POST_OUT_OPERAND(0)
@@ -623,7 +637,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     Assert(reg_field >= 0 && reg_field <= 7);
 
                     emit1(PREFIX_REXW);
-                    emit1((u8)(OPCODE_MOV_REG_IMM_RD_IO | reg_field));
+                    emit1((u8)(OPCODE_MOV_REG_IMM_RD | reg_field));
                     emit8((u64)base->imm64);
 
                     emit1(PREFIX_REXW);
@@ -637,10 +651,15 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 } else {
                     u8 reg_field = CLAMP_EXT_REG(reg0->reg) - 1;
                     Assert(reg_field >= 0 && reg_field <= 7);
-
-                    emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
-                    emit1((u8)(OPCODE_MOV_REG_IMM_RD_IO | reg_field));
-                    emit8((u64)base->imm64);
+                    if(base->imm64 & 0xFFFF'FFFF'0000'0000) {
+                        emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
+                        emit1((u8)(OPCODE_MOV_REG_IMM_RD | reg_field));
+                        emit8((u64)base->imm64);
+                    } else {
+                        emit_prefix(0, X64_REG_INVALID, reg0->reg);
+                        emit1((u8)(OPCODE_MOV_REG_IMM_RD | reg_field));
+                        emit4((u32)base->imm64);
+                    }
                 }
                 
                 FIX_POST_OUT_OPERAND(0)
@@ -670,7 +689,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 } else {
                     emit_sub_imm32(X64_REG_SP, (i32)base->imm16);
                 }
-                push_offset = 0;
+                push_offset = 0; // needed for SET_ARG
             } break;
             case BC_FREE_LOCAL: {
                 auto base = (InstBase_imm16*)n->base;
@@ -714,7 +733,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         FIX_PRE_OUT_OPERAND(0)
 
                         X64Register reg_params = X64_REG_SP;
-                        int off = base->imm16 + push_offset - FRAME_SIZE + ret_offset;
+                        int off = base->imm16 - FRAME_SIZE + ret_offset;
                         emit_mov_reg_mem(reg0->reg, reg_params, base->control, off);
                         
                         FIX_POST_OUT_OPERAND(0)
@@ -1196,7 +1215,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             // bitwise operations
             case BC_BAND: 
             case BC_BOR: 
-            // case BC_BNOT: 
+            // case BC_BNOT:
             case BC_BXOR: 
             case BC_BLSHIFT: 
             case BC_BRSHIFT: {
@@ -1541,9 +1560,34 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                                 // BXOR is special if you use the same registers.
                                 // It's just an output
                                 reg0 = get_and_alloc_artifical_reg(n->reg0);
-                                reg1 = get_and_alloc_artifical_reg(n->reg1);
+                                reg1 = reg0;
+                                if(IS_REG_XMM(reg0->reg)) {
+                                    if(size == 4) {
+                                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                                        emit_modrm_slash(MODE_DEREF_DISP8, 0, X64_REG_SP);
+                                        emit1((u8)-8);
+                                        emit4((u32)(i32)0);
+
+                                        emit3(OPCODE_3_MOVSS_REG_RM);
+                                        emit_modrm(MODE_DEREF_DISP8, CLAMP_XMM(reg0->reg), X64_REG_SP);
+                                        emit1((u8)-8);
+                                    } else if(size == 8) {
+                                        emit_prefix(PREFIX_REXW, X64_REG_INVALID, X64_REG_INVALID);
+                                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                                        emit_modrm_slash(MODE_DEREF_DISP8, 0, X64_REG_SP);
+                                        emit1((u8)-8);
+                                        emit4((u32)(i32)0);
+
+                                        emit3(OPCODE_3_MOVSD_REG_RM);
+                                        emit_modrm(MODE_DEREF_DISP8, CLAMP_XMM(reg0->reg), X64_REG_SP);
+                                        emit1((u8)-8);
+                                    } else Assert(false);
+                                } else {
+                                    emit_operation(OPCODE_XOR_REG_RM, reg0->reg, reg1->reg, control);
+                                }
+                            } else {
+                                emit_operation(OPCODE_XOR_REG_RM, reg0->reg, reg1->reg, control);
                             }
-                            emit_operation(OPCODE_XOR_REG_RM, reg0->reg, reg1->reg, control);
                         } break;
                         case BC_BLSHIFT:
                         case BC_BRSHIFT: {

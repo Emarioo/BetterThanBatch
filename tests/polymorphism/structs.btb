@@ -12,10 +12,21 @@ struct Basket<T> {
 }
 
 a: Basket<i32>;
-b: Basket<char>;
+b: Basket<f32>;
 
 a.set(5)
-b.set('2')
+b.set(5.23) // float caused x64 to crash with tmp and content in set method at some point
+
+// crazy and bad methods
+// f: i32**;
+// f.hey();
+
+// f2: i32*;
+// f2.hey();
+
+// struct A { n: i32; fn set() -> i32 { return n } }
+// A{5}.set()
+
 
 @TEST_CASE(bug_poly_sizeof)
 

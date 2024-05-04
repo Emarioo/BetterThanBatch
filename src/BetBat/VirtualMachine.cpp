@@ -20,39 +20,39 @@
 
 void VirtualMachine::cleanup(){
     stack.resize(0);
-    cmdArgsBuffer.resize(0);
-    engone::Free(cmdArgs.ptr, sizeof(Language::Slice<char>)*cmdArgs.len);
-    cmdArgs.ptr = nullptr;
-    cmdArgs.len = 0;
     reset();
+    // cmdArgsBuffer.resize(0);
+    // engone::Free(cmdArgs.ptr, sizeof(Language::Slice<char>)*cmdArgs.len);
+    // cmdArgs.ptr = nullptr;
+    // cmdArgs.len = 0;
 }
 void VirtualMachine::reset(){
     memset((void*)registers, 0, sizeof(registers));
     memset(stack.data, 0, stack.max);
 }
-void VirtualMachine::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
-    using namespace engone;
-    Assert(false); // this needs a rewrite
-    // cmdArgs.resize(inCmdArgs.size());
-    // cmdArgs.ptr = TRACK_ARRAY_ALLOC(Language::Slice<char>);
-    cmdArgs.ptr = (Language::Slice<char>*)engone::Allocate(sizeof(Language::Slice<char>)*inCmdArgs.size());
-    cmdArgs.len = inCmdArgs.size();
-    u64 totalText = 0;
-    for(int i=0;i<inCmdArgs.size();i++){
-        totalText += inCmdArgs[i].length()+1;
-    }
-    cmdArgsBuffer.resize(totalText);
-    for(int i=0;i<inCmdArgs.size();i++){
-        char* ptr = cmdArgsBuffer.data + cmdArgsBuffer.used;
-        memcpy(ptr, inCmdArgs[i].data(),inCmdArgs[i].length());
-        *(ptr + inCmdArgs[i].length()) = 0;
-        cmdArgs.ptr[i].ptr = ptr;
-        cmdArgs.ptr[i].len = inCmdArgs[i].length();
-        // log::out << cmdArgs.ptr[i].ptr<<" "<<inCmdArgs[i].length()<<"\n";
-        // log::out << cmdArgs.ptr[i];
-        cmdArgsBuffer.used = inCmdArgs[i].length() + 1;
-    }
-}
+// void VirtualMachine::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
+//     using namespace engone;
+//     Assert(false); // this needs a rewrite
+//     // cmdArgs.resize(inCmdArgs.size());
+//     // cmdArgs.ptr = TRACK_ARRAY_ALLOC(Language::Slice<char>);
+//     cmdArgs.ptr = (Language::Slice<char>*)engone::Allocate(sizeof(Language::Slice<char>)*inCmdArgs.size());
+//     cmdArgs.len = inCmdArgs.size();
+//     u64 totalText = 0;
+//     for(int i=0;i<inCmdArgs.size();i++){
+//         totalText += inCmdArgs[i].length()+1;
+//     }
+//     cmdArgsBuffer.resize(totalText);
+//     for(int i=0;i<inCmdArgs.size();i++){
+//         char* ptr = cmdArgsBuffer.data + cmdArgsBuffer.used;
+//         memcpy(ptr, inCmdArgs[i].data(),inCmdArgs[i].length());
+//         *(ptr + inCmdArgs[i].length()) = 0;
+//         cmdArgs.ptr[i].ptr = ptr;
+//         cmdArgs.ptr[i].len = inCmdArgs[i].length();
+//         // log::out << cmdArgs.ptr[i].ptr<<" "<<inCmdArgs[i].length()<<"\n";
+//         // log::out << cmdArgs.ptr[i];
+//         cmdArgsBuffer.used = inCmdArgs[i].length() + 1;
+//     }
+// }
 void PrintPointer(volatile void* ptr){
     u64 v = (u64)ptr;
     engone::log::out << "0x";

@@ -25,6 +25,9 @@ Notes:
     I tried to think of a linear approach (instead of SSA) where you can perform optimizations (dead code elimination, efficient usage of registers)
     but I could not make it work. A bottom-up and then top-down approach with a tree is much easier.
 
+    If an assert fires then it could be a bug in the generator.
+    Perhaps a an artifical register was never set.
+
 */
 
 #include "BetBat/x64_gen.h"
@@ -3981,6 +3984,7 @@ void X64Builder::emit_operation(u8 opcode, X64Register reg, X64Register rm, Inst
         emit_prefix(PREFIX_REXW, reg, rm);
         emit1(opcode);
     } else Assert(false);
+    // Invalid registers, could indicate a bug in the code generator
     emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(rm));
 }
 void X64Builder::emit_movzx(X64Register reg, X64Register rm, InstructionControl control) {
@@ -4160,6 +4164,7 @@ void X64Builder::emit_push(X64Register reg, int size) {
         emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(reg));
     }
     push_offset += 8;
+    ret_offset += 8;
 }
 void X64Builder::emit_pop(X64Register reg, int size) {
     if(IS_REG_XMM(reg)) {
@@ -4174,6 +4179,7 @@ void X64Builder::emit_pop(X64Register reg, int size) {
         emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
     }
     push_offset -= 8;
+    ret_offset -= 8;
 }
 void X64Builder::emit_add_imm32(X64Register reg, i32 imm32) {
     emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg);

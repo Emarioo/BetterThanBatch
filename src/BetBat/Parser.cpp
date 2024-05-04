@@ -1415,7 +1415,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         "Was your intention a unary operation where the left expressions is it's own statement and unrelated to the expression on the new line? Please put a semi-colon to solve this ambiguity.")
                         ERR_LINE2(tok0, "semi-colon is recommended after statements");
                         ERR_LINE2(tok1, "currently a binary operation");
-                        ERR_EXAMPLE(1, "5\n*ptr = 9\n5 * ptr = 9");
+                        ERR_EXAMPLE(1, "n := 5\n*ptr = 9\nn := 5 * ptr = 9");
                     )
                 }
                 info.advance(extraOpNext + 1);
@@ -2035,6 +2035,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
 
                 // nocheckin, we must set the range of the asm block
                 log::out << log::YELLOW << "asm incomplete after rewwrite v0.2.1\n";
+                info.compiler->options->compileStats.errors++;
                 // Assert(("asm incomplete after rewrite V2.1",false));
 
                 // tmp->tokenRange.endIndex = info.at()+1;
@@ -2338,13 +2339,14 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         break;
                     }
                 } else {
-                    if(IsSingleOp(op2)) {
-                        nowOp = op2;
-                        ops.pop();
+                    // if(IsSingleOp(op2)) {
+                    //     nowOp = op2;
+                    //     ops.pop();
                         
-                        loc_op = saved_locations.last();
-                        saved_locations.pop();
-                    } else if(OpPrecedence(op1) >= OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
+                    //     loc_op = saved_locations.last();
+                    //     saved_locations.pop();
+                    // } else 
+                    if(OpPrecedence(op1) >= OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
                     // if(OpPrecedence(op1)>OpPrecedence(op2)){ // this code cause this: 3 = 3-1-1
                         nowOp = op1;
                         ops[ops.size()-2] = op2;

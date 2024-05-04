@@ -1,15 +1,40 @@
 
 
-// #import "./demo/macros"
-
+// #import "Map"
 // #import "Logger"
 
+// tableSize := 200
+
+// map: Map<i32,i32>;
+// map.init(tableSize);
+
+// map.set(8,3)
 
 
+// iter: MapIterator<i32,i32>;
+// while (map.iterate_unsafe(&iter)) {
+//     iter.key;
+//     iter.val;
+// }
 
-// std_print_any(app, true);
-// std_print_any("yoo!", true);
+// map
 
-// return cast_unsafe<i64>lang_typeInfos.ptr
 
-// log(cast<void*>lang_typeInfos.ptr)
+// if it.key == *iter.key {
+
+struct A {
+    n: i32;
+    p: i32*;
+}
+
+a: A
+pa := &a
+a.p = &pa.n;
+pa.n == *a.p
+
+// *p = 23
+
+// log(a.n)
+
+
+// p2 := (&a).n

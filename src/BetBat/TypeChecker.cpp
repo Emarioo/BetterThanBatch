@@ -22,7 +22,7 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
 
 SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope);
 SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope);
-SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes);
+SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl = nullptr);
 SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl);
 
 SignalIO CheckRest(CheckInfo& info, ASTScope* scope);
@@ -157,6 +157,7 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
             success = false;
             continue;
         }
+        
         implMem.typeId = tid;
         if(member.defaultValue){
             // TODO: Don't check default expression every time. Do check once and store type in AST.
@@ -411,7 +412,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer:
 
     TypeInfo* typeInfo = info.ast->createType(realTypeName, baseInfo->scopeId);
     typeInfo->astStruct = baseInfo->astStruct;
-    typeInfo->structImpl = info.ast->createStructImpl();
+    typeInfo->structImpl = info.ast->createStructImpl(typeInfo->id);
     // typeInfo->structImpl = baseInfo->astStruct->createImpl();
 
     typeInfo->structImpl->polyArgs.resize(polyArgs.size());
@@ -466,6 +467,7 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
                 _TCLOG(log::out << "Created struct type "<<info.ast->typeToString(structInfo->id)<<" in scope "<<scope->scopeId<<"\n";)
                 astStruct->state = ASTStruct::TYPE_CREATED;
                 structInfo->astStruct = astStruct;
+
                 for(int i=0;i<(int)astStruct->polyArgs.size();i++){
                     auto& arg = astStruct->polyArgs[i];
                     arg.virtualType = info.ast->createType(arg.name, astStruct->scopeId);
@@ -482,8 +484,7 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
             if(astStruct->polyArgs.size()==0){
                 // Assert(!structInfo->structImpl);
                 if(!structInfo->structImpl){
-                    structInfo->structImpl = info.ast->createStructImpl();
-                    // structInfo->structImpl = astStruct->createImpl();
+                    structInfo->structImpl = info.ast->createStructImpl(structInfo->id);
                     astStruct->nonPolyStruct = structInfo->structImpl;
                 }
                 yes = CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl) == SIGNAL_SUCCESS;
@@ -639,6 +640,11 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                     p.add(2) // here, the type is a pointer so everything is fine
                 */
                 if(tempTypes[0].getPointerLevel()>1){
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->args[i]->location)
+                        ERR_MSG("Methods only work on types of single pointer type. Double pointer is not okay. Non-pointers are okay with variables or expressions that are evaluated to \"references\" (basically pointers).")
+                        ERR_LINE2(expr->args[i]->location, "here")
+                    )
                     thisFailed=true; // We do not allow calling function from type 'List**'
                 } else {
                     tempTypes[0].setPointerLevel(1); // type is either 'List' or 'List*' both are fine
@@ -654,6 +660,8 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         }
     }
 
+    TypeId this_type{};
+
     //-- Get identifier, the namespace of overloads for the function/method.
     FnOverloads* fnOverloads = nullptr;
     StructImpl* parentStructImpl = nullptr;
@@ -664,16 +672,17 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         Assert(expr->args.size()>0);
         ASTExpression* thisArg = expr->args.get(0);
         TypeId structType = argTypes[0];
+        this_type = structType;
         // CheckExpression(info,scope, thisArg, &structType);
-        if(structType.getPointerLevel()>1){
-            ERR_SECTION(
-                ERR_HEAD2(thisArg->location) // nocheckin, badly marked token
-                ERR_MSG("'"<<info.ast->typeToString(structType)<<"' to much of a pointer.")
-                ERR_LINE2(thisArg->location,"must be a reference to a struct")
-            )
-            FNCALL_FAIL
-            return SIGNAL_FAILURE;
-        }
+        // if(structType.getPointerLevel()>1){
+        //     ERR_SECTION(
+        //         ERR_HEAD2(thisArg->location) // nocheckin, badly marked token
+        //         ERR_MSG("'"<<info.ast->typeToString(structType)<<"' to much of a pointer.")
+        //         ERR_LINE2(thisArg->location,"must be a reference to a struct")
+        //     )
+        //     FNCALL_FAIL
+        //     return SIGNAL_FAILURE;
+        // }
         TypeInfo* ti = info.ast->getTypeInfo(structType.baseType());
         
         if(!ti || !ti->astStruct){
@@ -945,7 +954,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         // Assert(!parentStructImpl);
 
         int lessArguments = 0;
-        if(expr->hasImplicitThis())
+        if(expr->hasImplicitThis() || expr->isMemberCall())
             lessArguments = 1;
         // if(parentAstStruct) {
         //     // ignoring methods for the time being
@@ -1174,28 +1183,16 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                 argTypes.size() > overload.astFunc->arguments.size() - lessArguments
                 )
                 continue;
-            // if(parentAstStruct){
-            //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-            //         parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
-            //     }
-            // }
-            // for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-            //     overload.astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
-            // }
+
             overload.astFunc->pushPolyState(&fnPolyArgs, parentStructImpl);
             defer {
                 overload.astFunc->popPolyState();
-                // for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-                //     overload.astFunc->polyArgs[j].virtualType->id = {};
-                // }
-                // if(parentAstStruct){
-                //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                //         parentAstStruct->polyArgs[j].virtualType->id = {};
-                //     }
-                // }
             };
             bool found = true;
             for (u32 j=0;j<expr->nonNamedArgs;j++){
+                if(expr->isMemberCall() && j == 0)
+                    continue; // skip first argument because they will be the same.
+
                 // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
                 lexer::SourceLocation loc = overload.astFunc->arguments[j+lessArguments].location;
                 if(loc.tok.type == lexer::TOKEN_NONE) {
@@ -1264,7 +1261,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         funcImpl->polyArgs[i] = id;
     }
     // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-    SignalIO result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, nullptr);
+    SignalIO result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
     // outTypes->used = 0; // FNCALL_SUCCESS will fix the types later, we don't want to add them twice
 
     FnOverloads::Overload* newOverload = fnOverloads->addPolyImplOverload(polyFunc, funcImpl);
@@ -1648,7 +1645,15 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             //     typeArray.add(AST_VOID);
             // outType holds the type of expr->left
             TypeInfo* ti = info.ast->getTypeInfo(leftType.baseType());
-            Assert(leftType.getPointerLevel()<2);
+            if(leftType.getPointerLevel() >= 2) {
+                ERR_SECTION(
+                    ERR_HEAD2(expr->left->location)
+                    ERR_MSG("To pointy")
+                    ERR_LINE2(expr->left->location,info.ast->typeToString(leftType))
+                )
+                // Assert(leftType.getPointerLevel()<2);
+                return SIGNAL_FAILURE;
+            }
             if(ti && ti->astStruct){
                 TypeInfo::MemberData memdata = ti->getMember(expr->name);
                 if(memdata.index!=-1){
@@ -1959,7 +1964,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
 
 // Evaluates types and offset for the given function implementation
 // It does not modify ast func
-SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes){
+SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -2013,12 +2018,18 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
 
     // Based on 8-bit alignment. The last argument must be aligned by it.
     for(int i=0;i<(int)func->arguments.size();i++){
+
         auto& arg = func->arguments[i];
         auto& argImpl = funcImpl->argumentTypes[i];
         if(arg.stringType.isString()){
             bool printedError = false;
             // Token token = info.ast->getStringFromTypeString(arg.typeId);
-            auto ti = CheckType(info, func->scopeId, arg.stringType, func->location, &printedError);
+            TypeId ti{};
+            if(parentStruct && i==0 && parentStructImpl && parentStructImpl->typeId.isValid()) {
+                ti = parentStructImpl->typeId;
+                ti.setPointerLevel(1);
+            } else
+                ti = CheckType(info, func->scopeId, arg.stringType, func->location, &printedError);
             
             if(ti == AST_VOID){
                 if(!info.hasErrors()) { 
@@ -2321,8 +2332,17 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
         //  as long as they have the exact same arguments. Polymorphic functions are
         //  difficult but ambiguity should be detected to some degree.
         if(ambiguousOverload){
-            if(ambiguousOverload->astFunc->linkConvention != NATIVE &&
-                    function->linkConvention != NATIVE) {
+            auto al = ambiguousOverload->astFunc->linkConvention;
+            auto bl = function->linkConvention;
+            auto ac = ambiguousOverload->astFunc->callConvention;
+            auto bc = function->callConvention;
+            
+            if ((ac == INTRINSIC && bc == INTRINSIC) || (al == NATIVE && bl == NATIVE)) {
+                // We should check signature just so that you don't do
+                //     strlen(n: i32) or strlen(b: f32)
+                // doesn't have to happen here though.
+                // native functions can be defined twice
+            } else {
                 //  TODO: better error message which shows what and where the already defined variable/function is.
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
@@ -2331,8 +2351,6 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
                     ERR_LINE2(function->location,"new ambiguous overload");
                 )
                 // print list of overloads?
-            } else {
-                // native functions can be defined twice
             }
         } else {
             if(iden && iden->funcOverloads.overloads.size()>0 && function->linkConvention == NATIVE) {

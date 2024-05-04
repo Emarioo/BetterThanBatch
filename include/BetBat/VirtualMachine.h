@@ -2,7 +2,7 @@
 
 #include "BetBat/Bytecode.h"
 #include "BetBat/NativeRegistry.h"
-#include "Native/NativeLayer.h"
+// #include "Native/NativeLayer.h"
 
 /*
     VirtualMachine may not be the accurate term for executing bytecode.
@@ -40,9 +40,9 @@ struct VirtualMachine {
     volatile void* getReg(u8 id);
     void* setReg(u8 id);
 
-    engone::Memory<char> cmdArgsBuffer{};
-    Language::Slice<Language::Slice<char>> cmdArgs{};
-    void setCmdArgs(const DynamicArray<std::string>& inCmdArgs);
+    // engone::Memory<char> cmdArgsBuffer{};
+    // Language::Slice<Language::Slice<char>> cmdArgs{};
+    // void setCmdArgs(const DynamicArray<std::string>& inCmdArgs);
 
     static const int CWD_LIMIT = 256;
     char cwdBuffer[CWD_LIMIT]{0};

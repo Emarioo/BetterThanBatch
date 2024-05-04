@@ -58,7 +58,7 @@ private:
     struct Import {
         bool processed_directives = false;
         bool evaluated_macros = false;
-        DynamicArray<u32> import_dependencies; //import_ids
+        // DynamicArray<u32> import_dependencies; //import_ids
         std::unordered_map<std::string, MacroRoot*> rootMacros;
     };
     

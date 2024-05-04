@@ -13,13 +13,15 @@
 
 // I was experimenting GLFW and OpenGL which is why STB_IMAGE is here. It should probably be removed in the future.
 // #include "BetBat/glfwtest.h"
+
+#ifdef USE_GRAPHICS
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image.h"
 #include "stb/stb_image_write.h"
 #undef STB_IMAGE_IMPLEMENTATION
 #undef STB_IMAGE_WRITE_IMPLEMENTATION
-
+#endif
 
 void garbage() {
     // int a[20];

@@ -304,6 +304,7 @@ struct FnOverloads {
 // ASTStruct can have multiple of these per
 // polymorphic instantiation.
 struct StructImpl {
+    TypeId typeId;
     int size=0;
     int alignedSize=0;
     struct Member {
@@ -486,12 +487,15 @@ struct ASTExpression : ASTNode {
     void setUnsafeCast(bool yes) { unsafeCast = yes; }
 
     bool implicitThisArg = false;
-    // true if this argument is implicit
+    // true if an implicit this argument should be passed.
+    // this happens when a method calls another method in the same struct.
     bool hasImplicitThis() const { return implicitThisArg; }
     void setImplicitThis(bool yes) { implicitThisArg = yes; }
 
     bool memberCall = false; // rename to method call?
-    // true if call is a method
+    // true if a call has the shape 'obj.func()'
+    // it is different from implicit this in that the parent struct doesn't determine
+    // the function we call, the 'obj' does.
     bool isMemberCall() const { return memberCall; }
     void setMemberCall(bool yes) { memberCall = yes; }
 
@@ -1024,7 +1028,7 @@ struct AST {
     int nextNodeId = 1; // start at 1, 0 indicates a non-set id for ASTNode, probably a bug if so
     int getNextNodeId() { return nextNodeId++; }
 
-    StructImpl* createStructImpl();
+    StructImpl* createStructImpl(TypeId typeId);
     FuncImpl* createFuncImpl(ASTFunction* astFunc);
 
     ASTScope* createBody();

@@ -466,6 +466,9 @@ SignalIO PreprocContext::parseIf(){
     }
     
     int depth = 0;
+    bool had_else = false;
+    bool printed_else_error = false;
+    bool printed_elif_error = false;
     
     _MLOG(log::out << log::GRAY<< "   #if "<<(not_modifier?"!":"")<<name<<"\n";)
     while(true){
@@ -515,7 +518,18 @@ SignalIO PreprocContext::parseIf(){
                 } else {
                     advance();
                     name = lexer->getStdStringFromToken(token);
-                    if(!active) {
+                    if(had_else && !printed_elif_error) {
+                        printed_elif_error = true;
+                        if(evaluateTokens) {
+                            ERR_SECTION(
+                                ERR_HEAD2(token)
+                                ERR_MSG("#elif is not allowed after #else.")
+                                ERR_LINE2(token, "here")
+                            )
+                        }
+                        complete_inactive = true;
+                    }
+                    if(!active && !complete_inactive) {
                         // if a previous if/elif matched we don't want to check this one
                         if(evaluateTokens){
                             active = preprocessor->matchMacro(import_id, name);
@@ -538,13 +552,25 @@ SignalIO PreprocContext::parseIf(){
                 // log::out << log::GRAY<< "   endif - new depth "<<depth<<"\n";
                 depth--;
                 continue;
-            } else if(token.type == lexer::TOKEN_ELSE){ // we allow multiple elses, they toggle active and inactive sections
-            // } else if(lexer->equals_identifier(token,"else")){ // we allow multiple elses, they toggle active and inactive sections
+            } else if(token.type == lexer::TOKEN_ELSE){ 
                 if(depth==0){
                     advance();
                     advance();
-                    if(!complete_inactive)
+                    if(!complete_inactive) {
                         active = !active;
+                        if(had_else && !printed_else_error) {
+                            printed_else_error = true;
+                            if(evaluateTokens) {
+                                ERR_SECTION(
+                                    ERR_HEAD2(token)
+                                    ERR_MSG("Multiple #else is not allowed in an #if directive.")
+                                    ERR_LINE2(token, "here")
+                                )
+                            }
+                            complete_inactive = true;
+                        }
+                        had_else = true;
+                    }
                     _MLOG(log::out << log::GRAY<< "   else - "<<name<<"\n";)
                     continue;
                 }
@@ -633,7 +659,7 @@ SignalIO PreprocContext::parseImport() {
                 )
             } else {
                 // log::out << "depend " << dep_id << " " << path <<" from "<<old_lexer_import->path<< "\n";
-                imp->import_dependencies.add(dep_id);
+                // imp->import_dependencies.add(dep_id);
                 if(has_as)
                     compiler->addDependency(import_id, dep_id, view_as);
                 else
@@ -1650,10 +1676,15 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name) {
         lock_imports.lock();
         Import* imp = imports.get(id-1);
         lock_imports.unlock();
+        
+        // lock_imports.lock(); // nocheckin, TODO: lock
+        CompilerImport* cimp = compiler->imports.get(id-1);
+        // lock_imports.unlock();
         // may happen if import wasn't preprocessed and added to 'imports'
         // it was added to Compiler.imports but didn't process it before being
         // here.
         Assert(imp);
+        Assert(cimp);
         
         auto pair = imp->rootMacros.find(name);
         if(pair != imp->rootMacros.end()){
@@ -1663,16 +1694,16 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name) {
         checked_ids.add(id);
         
         // TODO: Optimize
-        FOR(imp->import_dependencies) {
+        FOR(cimp->dependencies) {
             bool already_checked = false;
             for(int i=0;i<checked_ids.size();i++) {
-                if(checked_ids[i] == it) {
+                if(checked_ids[i] == it.id) {
                     already_checked=true;
                     break;   
                 }
             }
             if(!already_checked) {
-                ids_to_check.add(it);
+                ids_to_check.add(it.id);
             }
         }
     }

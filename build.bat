@@ -30,6 +30,8 @@ if !arg!==run (
 @REM SET USE_GCC=1
 SET USE_DEBUG=1
 SET USE_MSVC=1
+@REM SET USE_TRACY=1
+@REM SET USE_OPENGL=1
 @REM SET USE_OPTIMIZATIONS=1
 
 @REM Advapi is used for winreg which accesses the windows registry
@@ -47,10 +49,15 @@ if !USE_OPTIMIZATIONS!==1 (
     SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
 )
 
-SET MSVC_LINK_OPTIONS=/nologo /ignore:4099 Advapi32.lib gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.8/lib/glfw3_mt.lib libs/glew-2.1.0/lib/glew32s.lib 
+SET MSVC_LINK_OPTIONS=/nologo /ignore:4099 Advapi32.lib gdi32.lib user32.lib 
 SET MSVC_INCLUDE_DIRS=/Iinclude /Ilibs/stb/include /Ilibs/glfw-3.3.8/include /Ilibs/glew-2.1.0/include /Ilibs/tracy-0.10/public
-SET MSVC_DEFINITIONS=/DOS_WINDOWS /DTRACY_ENABLE
+SET MSVC_DEFINITIONS=/DOS_WINDOWS
 SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /std:c++14 /nologo /TP /EHsc /wd4129
+
+if !USE_OPENGL!==1 (
+    SET MSVC_DEFINITIONS=/DUSE_GRAPHICS
+    SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! OpenGL32.lib libs/glfw-3.3.8/lib/glfw3_mt.lib libs/glew-2.1.0/lib/glew32s.lib
+)
 
 if !USE_DEBUG!==1 (
     SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /Zi
@@ -72,16 +79,22 @@ type nul > !srcfile!
 for /r %%i in (*.cpp) do (
     SET file=%%i
     if "x!file:__=!"=="x!file!" if "x!file:bin=!"=="x!file!" (
-        if not "x!file:BetBat=!"=="x!file!" (
-            echo #include ^"!file:\=/!^">> !srcfile!
-            @REM set srcfiles=!srcfiles! !file!
-        ) else if not "x!file:Engone=!"=="x!file!" (
-            @REM set srcfiles=!srcfiles! !file!
-            echo #include ^"!file:\=/!^">> !srcfile!
+        if !USE_OPENGL!==1 (
+            goto jump0
+        )
+        if "x!file:UIModule=!"=="x!file!" (
+            :jump0
+            if not "x!file:BetBat=!"=="x!file!" (
+                echo #include ^"!file:\=/!^">> !srcfile!
+                @REM set srcfiles=!srcfiles! !file!
+            ) else if not "x!file:Engone=!"=="x!file!" (
+                @REM set srcfiles=!srcfiles! !file!
+                echo #include ^"!file:\=/!^">> !srcfile!
+            )
         )
     )
 )
-echo #include ^"../src/Native/NativeLayer.cpp^" >> !srcfile!
+@REM echo #include ^"../src/Native/NativeLayer.cpp^" >> !srcfile!
 
 @REM #####################
 @REM      Compiling
@@ -99,13 +112,21 @@ if !USE_MSVC!==1 (
     @REM SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! bin\resources.res
 
     @REM COMPILE TRACY
-    cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! libs\tracy-0.10\public\TracyClient.cpp /Fobin/tracy.obj
+    if !USE_TRACY!==1 (
+        SET MSVC_DEFINITIONS=!MSVC_DEFINITIONS! /DTRACY_ENABLE
+        SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! bin\tracy.obj
+        if not exist bin/tracy.obj (
+            cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! libs\tracy-0.10\public\TracyClient.cpp /Fobin/tracy.obj
+        )
+    )
     SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /FI pch.h
 
     @REM Used in Virtual Machine to programmatically pass arguments to a function pointer
-    ml64 /nologo /Fobin/hacky_stdcall.o /c src/BetBat/hacky_stdcall.asm > nul
+    if not exist bin/hacky_stdcall.o (
+        ml64 /nologo /Fobin/hacky_stdcall.o /c src/BetBat/hacky_stdcall.asm > nul
+    )
 
-    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! bin\tracy.obj bin/hacky_stdcall.o shell32.lib /OUT:!output!
+    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! bin/hacky_stdcall.o shell32.lib /OUT:!output!
     SET compileSuccess=!errorlevel!
     @REM cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! /Ycpch.h src/pch.cpp
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Yupch.h /Fobin/all.obj /link !MSVC_LINK_OPTIONS! pch.obj shell32.lib /OUT:bin/program.exe
@@ -137,8 +158,11 @@ SET GCC_WARN=-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-n
 SET GCC_WARN=!GCC_WARN! -Wno-sign-compare 
 
 @REM glfw, glew, opengl is not linked with here, it should be
-g++ -c -g !GCC_INCLUDE_DIRS! !GCC_WARN! -DOS_WINDOWS -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o
-ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o 
+
+if not exist bin/NativeLayer_gcc.o (
+    g++ -c -g !GCC_INCLUDE_DIRS! !GCC_WARN! -DOS_WINDOWS -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o
+    ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o
+)
 
 @REM lib /nologo bin/NativeLayer.obj Advapi32.lib /OUT:bin/NativeLayer.lib
 @REM dumpbin /ALL bin/NativeLayer.obj > nat.out

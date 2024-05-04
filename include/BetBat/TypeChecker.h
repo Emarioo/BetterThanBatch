@@ -32,7 +32,9 @@ struct CheckInfo : public PhaseContext {
     
     int funcDepth=0; // FUNC_ENTER
     bool ignoreErrors = false; // not thread safe, you need one of these per thread
-    
+    bool ignore_polymorphism_with_struct = false;
+
+
     FuncImpl* currentFuncImpl = nullptr;
     ASTFunction* currentAstFunc = nullptr;
     

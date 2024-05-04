@@ -855,8 +855,9 @@ void Compiler::processImports() {
                 }
                 
                 if(!new_errors) {
+                    // @DEBUG
                     // for(auto t : imp->tinycodes) {
-                    //     log::out << log::GOLD << t->name << "\n";
+                    //     // log::out << log::GOLD << t->name << "\n";
                     //     t->print(0,-1,bytecode,nullptr,true);
                     // }
                     
@@ -1347,8 +1348,14 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     // preload is shared with global scope.
     // every import has therefore access to the preload
     // we do not need to add dependency here.
-    // Assert(preload_import_id != 0);
-    // addDependency(yes->import_id, preload_import_id);
+    // Haha, slow down there boy. The preprocessor does not have shared scopes.
+    // It only has dependencies to work with and if we want imports to access
+    // macros from the Preload then we do need to add dependency here.
+    // We could do something like shared dependencies perhaps?
+    if(preload_import_id != 0) {
+        // id is zero if we are adding preload right now.
+        addDependency(yes->import_id, preload_import_id);
+    }
     
     return imp.import_id;
 }
