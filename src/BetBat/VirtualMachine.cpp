@@ -227,6 +227,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     int prev_line = -1;
     bool running = true;
 
+    DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
+
     // bool logging = false;
     bool logging = true;
     bool interactive = false;
@@ -337,12 +339,21 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         case BC_NOP: {
         } break;
-        case BC_ALLOC_LOCAL: {
+        case BC_ALLOC_LOCAL:
+        case BC_ALLOC_ARGS: {
             // Assert(push_offset == 0); // Ensure that no push instructions executed before nocheckin
             op0 = (BCRegister)instructions[pc++];
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
             registers[BC_REG_LOCALS] = base_pointer;
+
+            if(opcode == BC_ALLOC_ARGS) {
+                i64 misalignment = (stack_pointer + imm) & 0xF;
+                misalignments.add(misalignment);
+                if(misalignment != 0) {
+                    imm += 16 - misalignment;
+                }
+            }
             stack_pointer -= imm;
             
             if(op0 != BC_REG_INVALID)
@@ -351,10 +362,18 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             has_return_values_on_stack = false; // alloc_local overwrites return values
             ret_offset = 0;
         } break;
-        case BC_FREE_LOCAL: {
+        case BC_FREE_LOCAL:
+        case BC_FREE_ARGS: {
             // Assert(push_offset == 0); // Ensure that no push instructions executed before nocheckin
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
+            if(opcode == BC_FREE_ARGS) {
+                i64 misalignment = misalignments.last();
+                misalignments.pop();
+                if(misalignment != 0) {
+                    imm += 16 - misalignment;
+                }
+            }
             stack_pointer += imm;
 
             if(has_return_values_on_stack) {

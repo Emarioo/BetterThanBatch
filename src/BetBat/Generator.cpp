@@ -1496,18 +1496,17 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
     //   It should have been done when we did alloc_local
     int allocated_stack_space = 0;
 
-    // I don't think there is anything to fix in there because conventions
-    // are really about assembly instructions which type checker has nothing to do with.
-    // log::out << log::YELLOW << "Fix call conventions in type checker\n";
-    // int startSP = builder.saveStackMoment();
+    // NOTE: Ensuring 16-byte aligned stack pointer on function calls is done here in the generator
+    //   because both x64_gen and the VirtualMachine requires it when calling external functions.
+    //   BCryptGenRandom will crash if stack isn't aligned so yes, alignment is necessary.
+
     switch(astFunc->callConvention){
         case BETCALL: {
             int stackSpace = funcImpl->argSize;
-            if(stackSpace)
-                builder.emit_alloc_local(BC_REG_INVALID, stackSpace);
             allocated_stack_space = stackSpace;
         } break;
-        case STDCALL: {
+        case STDCALL:
+        case UNIXCALL: {
             for(int i=0;i<astFunc->arguments.size();i++){
                 int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
                 if(size>8){
@@ -1521,31 +1520,18 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 }
             }
 
-            int stackSpace = astFunc->arguments.size() * 8;
-            if(stackSpace<32)
-                stackSpace = 32;
-            if(stackSpace % 16 != 0) // 16-byte alignment
-                stackSpace += 16 - (stackSpace%16);
-            builder.emit_alloc_local(BC_REG_INVALID, stackSpace);
-            allocated_stack_space = stackSpace;
-        } break;
-        case UNIXCALL: {
-            for(int i=0;i<astFunc->arguments.size();i++){
-                int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
-                if(size>8){
-                    // TODO: This should be moved to the type checker.
-                    ERR_SECTION(
-                        ERR_HEAD2(expression->location)
-                        ERR_MSG("Argument types cannot be larger than 8 bytes when using unixcall.")
-                        ERR_LINE2(expression->location, "argument type is to large")
-                    )
-                    return SIGNAL_FAILURE;
-                }
+            if(astFunc->callConvention == STDCALL) {
+                int stackSpace = astFunc->arguments.size() * 8;
+                if(stackSpace<32)
+                    stackSpace = 32;
+                
+                allocated_stack_space = stackSpace;
+            } else {
+                // How does unixcall deal with stack?
+                Assert(astFunc->arguments.size() <= 4); // INCOMPLETE, we need to allocate proper stack space
+                int stackSpace = 0;
+                allocated_stack_space = stackSpace;
             }
-            Assert(astFunc->arguments.size() <= 4); // INCOMPLETE, we need to allocate proper stack space
-            int stackSpace = 0;
-            builder.emit_alloc_local(BC_REG_INVALID, stackSpace);
-            allocated_stack_space = stackSpace;
         } break;
         case CDECL_CONVENTION: {
             Assert(false); // INCOMPLETE
@@ -1555,7 +1541,19 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         } break;
         default: Assert(false);
     }
+    
+    if(astFunc->callConvention != INTRINSIC) {
+        // The x64 generator and VirtualMachine handles 16-byte alignment
+        // int alignment = (allocated_stack_space + builder.get_virtual_sp()) % 16;
+        // if(alignment != 0) {
+        //     allocated_stack_space = allocated_stack_space + (16 - alignment);
+        // }
 
+        // we should always emit alloc_args to ensure 16-byte alignment
+        builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
+    }
+
+    // Evaluate arguments and push the values to stack
     for(int i=0;i<(int)all_arguments.size();i++){
         auto arg = all_arguments[i];
         if(expression->hasImplicitThis() && i == 0) {
@@ -1620,355 +1618,162 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             }
         }
     }
-    auto callConvention = astFunc->callConvention;
-    // if(info.compileInfo->options->target == TARGET_BYTECODE &&
-    //     (IS_IMPORT(astFunc->linkConvention))) {
-    //     callConvention = BETCALL;
-    // }
 
     // operator overloads should always use BETCALL
-    Assert(!isOperator || callConvention == BETCALL);
+    Assert(!isOperator || astFunc->callConvention == BETCALL);
 
-    // TODO: Refactor stdcall, betbat, and unixcall because the calling convention is abstracted in the bytecode.
-    switch (callConvention) {
-        case INTRINSIC: {
-            // TODO: You could do some special optimisations when using intrinsics.
-            //  If the arguments are strictly variables or constants then you can use a mov instruction 
-            //  instead messing with push and pop.
-            auto& name = funcImpl->astFunction->name;
-            if(name == "memcpy"){
-                builder.emit_pop(BC_REG_C);
-                builder.emit_pop(BC_REG_B);
-                builder.emit_pop(BC_REG_A);
-                builder.emit_memcpy(BC_REG_A, BC_REG_B, BC_REG_C);
-            } else if(name == "strlen"){
-                builder.emit_pop(BC_REG_B);
-                builder.emit_strlen(BC_REG_A, BC_REG_B);
-                builder.emit_push(BC_REG_A); // len
-                outTypeIds->add(AST_UINT32);
-            } else if(name == "memzero"){
-                builder.emit_pop(BC_REG_B); // ptr
-                builder.emit_pop(BC_REG_A);
-                builder.emit_memzero(BC_REG_A, BC_REG_B, 0);
-            } else if(name == "rdtsc"){
-                builder.emit_rdtsc(BC_REG_A);
-                builder.emit_push(BC_REG_A); // timestamp counter
-                outTypeIds->add(AST_UINT64);
-            // } else if(funcImpl->name == "rdtscp"){
-            //     builder.emit_({BC_RDTSC, BC_REG_A, BC_REG_ECX, BC_REG_RDX});
-            //     builder.emit_push(BC_REG_A); // timestamp counter
-            //     builder.emit_push(BC_REG_ECX); // processor thing?
-                
-            //     outTypeIds->add(AST_UINT64);
-            //     outTypeIds->add(AST_UINT32);
-            } else if(name == "atomic_compare_swap"){
-                builder.emit_pop(BC_REG_C); // new
-                builder.emit_pop(BC_REG_B); // old
-                builder.emit_pop(BC_REG_A); // ptr
-                builder.emit_atomic_cmp_swap(BC_REG_A, BC_REG_B, BC_REG_C);
-                builder.emit_push(BC_REG_A);
-                outTypeIds->add(AST_INT32);
-            } else if(name == "atomic_add"){
-                builder.emit_pop(BC_REG_B);
-                builder.emit_pop(BC_REG_A);
-                builder.emit_atomic_add(BC_REG_A, BC_REG_B, CONTROL_32B);
-                builder.emit_push(BC_REG_A);
-                outTypeIds->add(AST_INT32);
-            } else if(name == "sqrt"){
-                builder.emit_pop(BC_REG_A);
-                builder.emit_sqrt(BC_REG_A);
-                builder.emit_push(BC_REG_A);
-                outTypeIds->add(AST_FLOAT32);
-            } else if(name == "round"){
-                builder.emit_pop(BC_REG_A);
-                builder.emit_round(BC_REG_A);
-                builder.emit_push(BC_REG_A);
-                outTypeIds->add(AST_FLOAT32);
-            } 
-            // else if(funcImpl->name == "sin"){
-            //     builder.emit_pop(BC_REG_A);
-            //     builder.emit_({BC_SIN, BC_REG_A});
-            //     builder.emit_push(BC_REG_A);
-            //     outTypeIds->add(AST_FLOAT32);
-            // } else if(funcImpl->name == "cos"){
-            //     builder.emit_pop(BC_REG_A);
-            //     builder.emit_({BC_COS, BC_REG_A});
-            //     builder.emit_push(BC_REG_A);
-            //     outTypeIds->add(AST_FLOAT32);
-            // } else if(funcImpl->name == "tan"){
-            //     builder.emit_pop(BC_REG_A);
-            //     builder.emit_({BC_TAN, BC_REG_A});
-            //     builder.emit_push(BC_REG_A);
-            //     outTypeIds->add(AST_FLOAT32);
-            // }
-            else {
-                ERR_SECTION(
-                    ERR_HEAD2(expression->location)
-                    ERR_MSG("'"<<name<<"' is not an intrinsic function.")
-                    ERR_LINE2(expression->location,"not an intrinsic")
-                )
-            }
-            return SIGNAL_SUCCESS;
-        } break; 
-        case BETCALL: {
-            // I have not implemented linkConvention because it's rare
-            // that you need it for BETCALL.
-            // if(info.compileInfo->options->target != TARGET_BYTECODE) {
-            //     Assert(astFunc->linkConvention == LinkConventions::NONE || astFunc->linkConvention == NATIVE);
-            // }
-            // TODO: It would be more efficient to do GeneratePop right after the argument expressions are generated instead
-            //  of pushing them to the stack and then popping them here. You would save some pushing and popping
-            //  The only difficulty is handling all the calling conventions. stdcall requires some more thought
-            //  it's arguments should be put in registers and those are probably used when generating expressions. 
-            if(all_arguments.size() != 0){
-                // int baseOffset = virtualArgumentSpace - builder.getStackPointer();
-                // builder.emit_li32(BC_REG_B, virtualSP - info.virtualStackPointer);
-                // builder.emit_mov_rr(BC_REG_B, BC_REG_SP);
-                // builder.emit_mov_rr(BC_REG_SP, BC_REG_B});
-                for(int i=all_arguments.size()-1;i>=0;i--){
-                    auto arg = all_arguments[i];
-                    
-                    // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-                    generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-                    // generatePop(BC_REG_ARGS, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-                    
-                    // TODO: Use this instead?
-                    // int baseOffset = virtualArgumentSpace - info.virtualStackPointer;
-                    // GeneratePop(info,BC_REG_SP, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-                }
-            }
+    if (astFunc->callConvention == INTRINSIC) {
+        // TODO: You could do some special optimisations when using intrinsics.
+        //  If the arguments are strictly variables or constants then you can use a mov instruction 
+        //  instead messing with push and pop.
+        auto& name = funcImpl->astFunction->name;
+        if(name == "memcpy"){
+            builder.emit_pop(BC_REG_C);
+            builder.emit_pop(BC_REG_B);
+            builder.emit_pop(BC_REG_A);
+            builder.emit_memcpy(BC_REG_A, BC_REG_B, BC_REG_C);
+        } else if(name == "strlen"){
+            builder.emit_pop(BC_REG_B);
+            builder.emit_strlen(BC_REG_A, BC_REG_B);
+            builder.emit_push(BC_REG_A); // len
+            outTypeIds->add(AST_UINT32);
+        } else if(name == "memzero"){
+            builder.emit_pop(BC_REG_B); // ptr
+            builder.emit_pop(BC_REG_A);
+            builder.emit_memzero(BC_REG_A, BC_REG_B, 0);
+        } else if(name == "rdtsc"){
+            builder.emit_rdtsc(BC_REG_A);
+            builder.emit_push(BC_REG_A); // timestamp counter
+            outTypeIds->add(AST_UINT64);
+        // } else if(funcImpl->name == "rdtscp"){
+        //     builder.emit_({BC_RDTSC, BC_REG_A, BC_REG_ECX, BC_REG_RDX});
+        //     builder.emit_push(BC_REG_A); // timestamp counter
+        //     builder.emit_push(BC_REG_ECX); // processor thing?
             
-            i32 reloc = 0;
-            if(compiler->options->target == TARGET_BYTECODE &&
-                (astFunc->linkConvention == IMPORT || astFunc->linkConvention == DLLIMPORT)) {
-                // info.addCall(NATIVE, astFunc->callConvention);
-                builder.emit_call(NATIVE, astFunc->callConvention, &reloc);
-            } else {
-                // info.addCall(astFunc->linkConvention, astFunc->callConvention);
-                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
+        //     outTypeIds->add(AST_UINT64);
+        //     outTypeIds->add(AST_UINT32);
+        } else if(name == "atomic_compare_swap"){
+            builder.emit_pop(BC_REG_C); // new
+            builder.emit_pop(BC_REG_B); // old
+            builder.emit_pop(BC_REG_A); // ptr
+            builder.emit_atomic_cmp_swap(BC_REG_A, BC_REG_B, BC_REG_C);
+            builder.emit_push(BC_REG_A);
+            outTypeIds->add(AST_INT32);
+        } else if(name == "atomic_add"){
+            builder.emit_pop(BC_REG_B);
+            builder.emit_pop(BC_REG_A);
+            builder.emit_atomic_add(BC_REG_A, BC_REG_B, CONTROL_32B);
+            builder.emit_push(BC_REG_A);
+            outTypeIds->add(AST_INT32);
+        } else if(name == "sqrt"){
+            builder.emit_pop(BC_REG_A);
+            builder.emit_sqrt(BC_REG_A);
+            builder.emit_push(BC_REG_A);
+            outTypeIds->add(AST_FLOAT32);
+        } else if(name == "round"){
+            builder.emit_pop(BC_REG_A);
+            builder.emit_round(BC_REG_A);
+            builder.emit_push(BC_REG_A);
+            outTypeIds->add(AST_FLOAT32);
+        } 
+        // else if(funcImpl->name == "sin"){
+        //     builder.emit_pop(BC_REG_A);
+        //     builder.emit_({BC_SIN, BC_REG_A});
+        //     builder.emit_push(BC_REG_A);
+        //     outTypeIds->add(AST_FLOAT32);
+        // } else if(funcImpl->name == "cos"){
+        //     builder.emit_pop(BC_REG_A);
+        //     builder.emit_({BC_COS, BC_REG_A});
+        //     builder.emit_push(BC_REG_A);
+        //     outTypeIds->add(AST_FLOAT32);
+        // } else if(funcImpl->name == "tan"){
+        //     builder.emit_pop(BC_REG_A);
+        //     builder.emit_({BC_TAN, BC_REG_A});
+        //     builder.emit_push(BC_REG_A);
+        //     outTypeIds->add(AST_FLOAT32);
+        // }
+        else {
+            ERR_SECTION(
+                ERR_HEAD2(expression->location)
+                ERR_MSG("'"<<name<<"' is not an intrinsic function.")
+                ERR_LINE2(expression->location,"not an intrinsic")
+            )
+        }
+        return SIGNAL_SUCCESS;
+    }
+    // TODO: It would be more efficient to do GeneratePop right after the argument expressions are generated instead
+    //  of pushing them to the stack and then popping them here. You would save some pushing and popping
+    //  The only difficulty is handling all the calling conventions. stdcall requires some more thought
+    //  it's arguments should be put in registers and those are probably used when generating expressions. 
+    for(int i=all_arguments.size()-1;i>=0;i--){
+        auto arg = all_arguments[i];
+        generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+    }
+
+    i32 reloc = 0;
+    if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
+        || astFunc->linkConvention == LinkConventions::VARIMPORT){
+        builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
+        std::string alias = astFunc->linked_alias.size() == 0 ? astFunc->name : astFunc->linked_alias;
+        std::string lib_path = "";
+        auto func_imp = info.compiler->getImport(astFunc->getImportId(&info.compiler->lexer));
+        Assert(func_imp);
+
+        for(auto& lib : func_imp->libraries) {
+            if(astFunc->linked_library == lib.named_as) {
+                lib_path = lib.path;
+                break;
             }
-            info.addCallToResolve(reloc,funcImpl);
+        }
+        if(lib_path.size() == 0) {
+            // TOOD: Improve error message by showing how to specify import.
+            //   Also link to the guide.md.
+            // NOTE: The error message points to the function definition,
+            //   not the function call because you need to fix the definition
+            //   and not the call.
+            ERR_SECTION(
+                ERR_HEAD2(astFunc->location)
+                ERR_MSG("You are trying to call a function that is imported but the function is not linked to any library. At the function definition, please specify which library the function should be imported from. The compiler does not know which library to link with unless you specify it).")
+                ERR_LINE2(astFunc->location, "this definition")
+                ERR_LINE2(expression->location, "this call")
+            )
+        }
+        if(astFunc->linkConvention == IMPORT) {
+            addExternalRelocation(alias, lib_path, reloc);
+        } else if(astFunc->linkConvention == DLLIMPORT){
+            addExternalRelocation("__imp_"+alias, lib_path, reloc);
+        } else if(astFunc->linkConvention == VARIMPORT){
+            Assert(false);
+            // TODO: VARIMPORT refers to a global variable that is a function pointer.
+            // Not sure how to handle this.
+            // An additional way is to allow ´global @import MyFunction: fn (i32) -> i32;
+            // Importing a global variable.
+            addExternalRelocation(alias, lib_path, reloc);
+        } else Assert(false);
+    } else {
+        builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
+        info.addCallToResolve(reloc, funcImpl);
+    }
+    
+    builder.emit_free_args(allocated_stack_space);
 
-            if (funcImpl->returnTypes.size()==0) {
-                _GLOG(log::out << "pop arguments\n");
-                if(allocated_stack_space != 0)
-                    builder.emit_free_local(allocated_stack_space);
-                outTypeIds->add(AST_VOID);
-            } else {
-                _GLOG(log::out << "extract return values\n";)
-                // NOTE: info.currentScopeId MAY NOT WORK FOR THE TYPES IF YOU PASS FUNCTION POINTERS!
-                
-                if(allocated_stack_space != 0)
-                    builder.emit_free_local(allocated_stack_space);
+    if (funcImpl->returnTypes.size()==0) {
+        outTypeIds->add(AST_VOID);
+        return SIGNAL_SUCCESS;
+    }
 
-                // for (int i = (int)funcImpl->returnTypes.size()-1;i>=0; i--) {
-                for (int i = 0; i< (int)funcImpl->returnTypes.size(); i++) {
-                    auto &ret = funcImpl->returnTypes[i];
-                    TypeId typeId = ret.typeId;
+    if(astFunc->callConvention != BETCALL) {
+        // return type must fit in RAX for stdcall and unixcall
+        Assert(funcImpl->returnTypes.size() < 2);
+        Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
+    }
 
-                    generatePush_get_val(ret.offset - funcImpl->returnSize, typeId);
-                    // generatePush(BC_REG_B, -GenContext::FRAME_SIZE + ret.offset - funcImpl->returnSize, typeId);
-                    outTypeIds->add(ret.typeId);
-                }
-            }
-        } break; 
-        case STDCALL: {
-            for(int i=all_arguments.size()-1;i>=0;i--){
-                auto arg = all_arguments[i];
+    for (int i = 0; i< (int)funcImpl->returnTypes.size(); i++) {
+        auto &ret = funcImpl->returnTypes[i];
+        TypeId typeId = ret.typeId;
 
-                generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-                
-                // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-                // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
-                // u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
-                // generatePop(BC_REG_B, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
-            }
-
-            // native function can be handled normally
-            int reloc = 0;
-            if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
-                || astFunc->linkConvention == LinkConventions::VARIMPORT){
-                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-                std::string alias = astFunc->linked_alias.size() == 0 ? astFunc->name : astFunc->linked_alias;
-                std::string lib_path = "";
-                for(auto& lib : info.imp->libraries) {
-                    if(astFunc->linked_library == lib.named_as) {
-                        lib_path = lib.path;
-                        break;
-                    }
-                }
-                if(astFunc->linkConvention == DLLIMPORT){
-                    addExternalRelocation("__imp_"+alias, lib_path, reloc);
-                } else if(astFunc->linkConvention == VARIMPORT){
-                    Assert(false); // importing variables as function calls makes no since?
-                    addExternalRelocation(alias, lib_path, reloc);
-                } else {
-                    addExternalRelocation(alias, lib_path, reloc);
-                }
-            } else {
-                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
-                // linkin == native, none or export should be fine
-                info.addCallToResolve(reloc, funcImpl);
-            }
-
-            Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
-
-            if (funcImpl->returnTypes.size()==0) {
-                
-                if(allocated_stack_space != 0)
-                    builder.emit_free_local(allocated_stack_space);
-                // builder.restoreStackMoment(startSP);
-                outTypeIds->add(AST_VOID);
-            } else {
-                // return type must fit in RAX
-                Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
-                
-                if(allocated_stack_space != 0)
-                    builder.emit_free_local(allocated_stack_space);
-                // builder.restoreStackMoment(startSP);
-                
-                // TODO: Return value is passed in a special register if it's a float. We need to pass a bool is_float. Or perhaps a special instruction for floats.
-                auto &ret = funcImpl->returnTypes[0];
-                generatePush_get_val(0 - 8, ret.typeId);
-
-                // int size = info.ast->getTypeSize(ret.typeId);
-                // if(AST::IsDecimal(ret.typeId)) {
-                //     builder.emit_push(BC_REG_XMM0); // nocheckin, 32-bit or 64-bit float?
-                // } else {
-                //     BCRegister reg = BC_REG_A;
-                //     builder.emit_push(reg);
-                // }
-                outTypeIds->add(ret.typeId);
-            }
-        } break;
-        case UNIXCALL: {
-            // if(fullArgs.size() > 4) {
-            //     Assert(virtualArgumentSpace - info.virtualStackPointer == fullArgs.size()*8);
-            //     int argOffset = fullArgs.size()*8;
-            //     builder.emit_mov_rr(BC_REG_SP, BC_REG_B});
-            //     for(int i=fullArgs.size()-1;i>=4;i--){
-            //         auto arg = fullArgs[i];
-                    
-            //         // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-            //         // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
-            //         u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
-            //         GeneratePop(info,BC_REG_B, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
-            //     }
-            // }
-            for(int i=all_arguments.size()-1;i>=0;i--){
-                auto arg = all_arguments[i];
-
-                generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-            }
-            // TODO IMPORTANT: Do we need to do something about the "red zone" (128 bytes below stack pointer).
-            //   What does the red zone imply? No pushing, popping?
-            // auto& argTypes = funcImpl->argumentTypes;
-            // const BCRegister normal_regs[6]{
-            //     BC_REG_RDI,
-            //     BC_REG_RSI,
-            //     BC_REG_RDX,
-            //     BC_REG_RCX,
-            //     BC_REG_R8,
-            //     BC_REG_R9,
-            // };
-            // const BCRegister float_regs[8] {
-            //     BC_REG_XMM0, // nocheckin, 32 or 64 bit floats?
-            //     BC_REG_XMM1,
-            //     BC_REG_XMM2,
-            //     BC_REG_XMM3,
-            //     // BC_REG_XMM4,
-            //     // BC_REG_XMM5,
-            //     // BC_REG_XMM6,
-            //     // BC_REG_XMM7,
-            // };
-            // int used_normals = 0;
-            // int used_floats = 0;
-            // // Because we need to pop arguments in reverse, we must first know how many
-            // // integer/pointer and float type arguments we have.
-            // for(int i=fullArgs.size()-1;i>=0;i--) {
-            //     if(AST::IsDecimal(argTypes[i].typeId)) {
-            //         used_floats++;
-            //     } else {
-            //         used_normals++;
-            //     }
-            // }
-            // // Then, from the back, we can pop and place arguments in the right register.
-            // for(int i=fullArgs.size()-1;i>=0;i--) {
-            //     if(AST::IsDecimal(argTypes[i].typeId)) {
-            //         Assert(false); // nocheckin, 32 or 64 bit floats?
-            //         // builder.emit_pop(float_regs[--used_floats]);
-            //     } else {
-            //         builder.emit_pop(normal_regs[--used_normals]);
-            //     }
-            // }
-            
-            int reloc = 0;
-            if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
-                || astFunc->linkConvention == LinkConventions::VARIMPORT){
-                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-                std::string alias = astFunc->linked_alias.size() == 0 ? astFunc->name : astFunc->linked_alias;
-                std::string lib_path = "";
-                for(auto& lib : info.imp->libraries) {
-                    if(astFunc->linked_library == lib.named_as) {
-                        lib_path = lib.path;
-                        break;
-                    }
-                }
-                if(astFunc->linkConvention == DLLIMPORT){
-                    // addExternalRelocation("__imp_"+alias, lib_path, reloc);
-                    addExternalRelocation(alias, lib_path, reloc);
-                } else if(astFunc->linkConvention == VARIMPORT){
-                    Assert(false); // importing variables as function calls makes no since?
-                    addExternalRelocation(alias, lib_path, reloc);
-                } else {
-                    addExternalRelocation(alias, lib_path, reloc);
-                }
-
-                // if(astFunc->linkConvention == DLLIMPORT){
-                //     info.addExternalRelocation(funcImpl->astFunction->name, reloc);
-                //     // info.addExternalRelocation("__imp_"+funcImpl->name, bytecode->length());
-                // } else if(astFunc->linkConvention == VARIMPORT){
-                //     info.addExternalRelocation(funcImpl->astFunction->name, reloc);
-                // } else {
-                //     info.addExternalRelocation(funcImpl->astFunction->name, reloc);
-                // }
-            } else {
-                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
-                // linkin == native, none or export should be fine
-                info.addCallToResolve(reloc, funcImpl);
-            }
-
-            Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
-
-            if (funcImpl->returnTypes.size()==0) {
-                if(allocated_stack_space != 0)
-                    builder.emit_free_local(allocated_stack_space);
-                // builder.restoreStackMoment(startSP);
-                outTypeIds->add(AST_VOID);
-            } else {
-                // return type must fit in RAX
-                Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
-                
-                // builder.restoreStackMoment(startSP);
-                if(allocated_stack_space != 0)
-                    builder.emit_free_local(allocated_stack_space);
-                
-                // TODO: Return value is passed in a special register if it's a float. We need to pass a bool is_float. Or perhaps a special instruction for floats.
-                auto &ret = funcImpl->returnTypes[0];
-                generatePush_get_val(0 - 8, ret.typeId);
-                
-                // auto &ret = funcImpl->returnTypes[0];
-                // int size = info.ast->getTypeSize(ret.typeId);
-                // if(AST::IsDecimal(ret.typeId)) {
-                //     builder.emit_push(BC_REG_XMM0); // nocheckin, 32 or 64 bit floats?
-                // } else {
-                //     BCRegister reg = BC_REG_A;
-                //     builder.emit_push(reg);
-                // }
-                outTypeIds->add(ret.typeId);
-            }
-        } break;
-        default: Assert(false);
+        generatePush_get_val(ret.offset - funcImpl->returnSize, typeId);
+        outTypeIds->add(ret.typeId);
     }
     return SIGNAL_SUCCESS;
 }
@@ -3215,7 +3020,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 TypeInfo* right_info = info.ast->getTypeInfo(rtype.baseType());
                 Assert(left_info && right_info);
                 
-                if(ltype.getId()>=AST_TRUE_PRIMITIVES || rtype.getId()>=AST_TRUE_PRIMITIVES){
+                if((ltype.getId() < AST_TRUE_PRIMITIVES || ltype.getPointerLevel() > 0) && (rtype.getId() < AST_TRUE_PRIMITIVES || rtype.getPointerLevel())){
+                    // okay
+                } else {
                     Assert(left_info->astStruct || right_info->astStruct); // can we assume that this is a struct?
                     std::string lmsg = info.ast->typeToString(ltype);
                     std::string rmsg = info.ast->typeToString(rtype);

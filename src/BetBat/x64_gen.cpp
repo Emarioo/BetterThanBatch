@@ -81,8 +81,31 @@ void GenerateX64_finalize(Compiler* compiler) {
         // tmp.textOffset = addressTranslation[sym.location];
         // prog->exportedSymbols.add(tmp);
     }
-    
-    Assert(compiler->bytecode->externalRelocations.size() == 0);
+
+    prog->compute_libraries();
+}
+void X64Program::compute_libraries() {
+    libraries.resize(0);
+
+    for(auto& rel : namedUndefinedRelocations) {
+        bool found = false;
+        if(rel.library_path == "") {
+            // intrinsic functions or 'prints' creates a relocation
+            // to GetStdHandle and WriteFile without referring to
+            // a library. Perhaps this shouldn't be allowed but
+            // i believe linkers automatically links with the 
+            // basic libraries which GetStdHandle and WriteFiel comes from.
+            continue;
+        }
+        for(auto& s : libraries) {
+            if(s == rel.library_path) {
+                found = true;
+                break;
+            }
+        }
+        if(!found)
+            libraries.add(rel.library_path);
+    }
 }
 
 void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
@@ -3926,6 +3949,14 @@ void X64Builder::emit_modrm(u8 mod, X64Register _reg, X64Register _rm){
 }
 void X64Builder::emit_modrm_rip32(X64Register _reg, u32 disp32){
     u8 reg = _reg - 1;
+    u8 mod = 0b00;
+    u8 rm = 0b101;
+    Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);
+    emit1((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
+    emit4(disp32);
+}
+void X64Builder::emit_modrm_rip32_slash(u8 _reg, u32 disp32){
+    u8 reg = _reg;
     u8 mod = 0b00;
     u8 rm = 0b101;
     Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);

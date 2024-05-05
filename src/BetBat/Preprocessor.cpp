@@ -209,7 +209,11 @@ SignalIO PreprocContext::parseMacroDefinition() {
     int count = endToken-startToken;
     int argc = localMacro.parameters.size();
 
-    if(!evaluateTokens) {
+    // if(!evaluateTokens) {
+        // TODO: We define and create macros not inside #if twice.
+        //    First with evaluteTokens, then without.
+        //    We don't want to do that. Also, what if you got a global macro
+        //   evaluated at !evlauateTokens and then
         MacroRoot* rootMacro = preprocessor->create_or_get_macro(import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1);
         
         localMacro.location = { name_token };
@@ -228,7 +232,7 @@ SignalIO PreprocContext::parseMacroDefinition() {
         // Yes - Emarioo, 2024-01-17
         if(count==1) log::out << " token\n";
         else log::out << " tokens\n";)
-    }
+    // }
     return SIGNAL_SUCCESS;
 }
 
@@ -498,50 +502,52 @@ SignalIO PreprocContext::parseIf(){
                     // evaluate later properly
                 }
             } else if(lexer->equals_identifier(token, "elif")) {
-                advance();// hashtag
-                advance();// elif
-                
-                token = gettok();
-                not_modifier = false;   
-                if(token.type == '!') {
-                    not_modifier = true;
-                    advance();
+                if(depth == 0) {
+                    advance();// hashtag
+                    advance();// elif
+                    
                     token = gettok();
-                }
-                if(token.type != lexer::TOKEN_IDENTIFIER) {
-                    ERR_SECTION(
-                        ERR_HEAD2(token)
-                        ERR_MSG("#elif expects a valid macro name after it same as #if.")
-                        ERR_LINE2(token,"not a valid macro name")
-                    )
-                    return SIGNAL_COMPLETE_FAILURE;
-                } else {
-                    advance();
-                    name = lexer->getStdStringFromToken(token);
-                    if(had_else && !printed_elif_error) {
-                        printed_elif_error = true;
-                        if(evaluateTokens) {
-                            ERR_SECTION(
-                                ERR_HEAD2(token)
-                                ERR_MSG("#elif is not allowed after #else.")
-                                ERR_LINE2(token, "here")
-                            )
-                        }
-                        complete_inactive = true;
+                    not_modifier = false;   
+                    if(token.type == '!') {
+                        not_modifier = true;
+                        advance();
+                        token = gettok();
                     }
-                    if(!active && !complete_inactive) {
-                        // if a previous if/elif matched we don't want to check this one
-                        if(evaluateTokens){
-                            active = preprocessor->matchMacro(import_id, name);
-                            if(not_modifier)
-                                active = !active;
-                        }
+                    if(token.type != lexer::TOKEN_IDENTIFIER) {
+                        ERR_SECTION(
+                            ERR_HEAD2(token)
+                            ERR_MSG("#elif expects a valid macro name after it same as #if.")
+                            ERR_LINE2(token,"not a valid macro name")
+                        )
+                        return SIGNAL_COMPLETE_FAILURE;
                     } else {
-                        complete_inactive = true;
-                        active = false;
+                        advance();
+                        name = lexer->getStdStringFromToken(token);
+                        if(had_else && !printed_elif_error) {
+                            printed_elif_error = true;
+                            if(evaluateTokens) {
+                                ERR_SECTION(
+                                    ERR_HEAD2(token)
+                                    ERR_MSG("#elif is not allowed after #else.")
+                                    ERR_LINE2(token, "here")
+                                )
+                            }
+                            complete_inactive = true;
+                        }
+                        if(!active && !complete_inactive) {
+                            // if a previous if/elif matched we don't want to check this one
+                            if(evaluateTokens){
+                                active = preprocessor->matchMacro(import_id, name);
+                                if(not_modifier)
+                                    active = !active;
+                            }
+                        } else {
+                            complete_inactive = true;
+                            active = false;
+                        }
                     }
+                    continue;
                 }
-                not_modifier = false; // reset for later
             } else if(lexer->equals_identifier(token,"endif")){
                 if(depth==0){
                     advance();

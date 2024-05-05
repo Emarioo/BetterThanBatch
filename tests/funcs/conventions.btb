@@ -1,0 +1,13 @@
+@TEST_CASE(16_byte_alignment)
+
+fn check(n: i32 = 0) {
+    _test 0; cast<u64>&n & cast<u64>0x0F
+}
+
+check()
+n: i32
+check()
+
+#import "Math"
+
+random64(); // BCryptGenRandom crashes without 16-byte alignment

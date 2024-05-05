@@ -11,13 +11,22 @@
 */
 // fn @native prints(str: char[]) ;
 
+#if LINKER_MSVC
+    #load "bin/NativeLayer.lib" as native_layer
+#else
+    #load "bin/NativeLayer_gcc.lib" as native_layer
+#endif
+
 #if LINK_BYTECODE
     #macro LINK_TYPE @native
+#elif OS_WINDOWS
+    #macro LINK_TYPE @import(native_layer) @stdcall
 #elif OS_UNIX
-    #macro LINK_TYPE @import @unixcall
+    #macro LINK_TYPE @import(native_layer) @unixcall
 #else
-    #macro LINK_TYPE @import @stdcall
+    No_implementation
 #endif
+
 
 // #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 #macro Assert(expression) #endmacro
@@ -85,9 +94,9 @@ fn @import CmdLineArgs() -> Slice<Slice<char>>*; // const?
 // fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
 // fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
-fn @import GetClockSpeed() -> u64;
+fn LINK_TYPE GetClockSpeed() -> u64;
 
-fn @import ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
+fn LINK_TYPE ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
 
 struct DirectoryIteratorData {
     name: char[]; // Allocated by interpreter; can't be String because of that. The ptr should be const (char* const NOT const char*)

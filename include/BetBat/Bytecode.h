@@ -71,6 +71,9 @@ enum InstructionOpcode : u8 {
     BC_ALLOC_LOCAL,      // opcode, op, size16         - allocate local memory (max 64KB)
     BC_FREE_LOCAL,       // opcode,  size16         - allocate args memory (max 64KB)
 
+    BC_ALLOC_ARGS,
+    BC_FREE_ARGS,
+
     // BC_REG_LOCALS, // local pointer (similar to base/frame pointer)
 
     BC_SET_ARG,   // opcode, op, disp
@@ -453,9 +456,13 @@ struct BytecodeBuilder {
     
     void emit_incr(BCRegister reg, i32 imm);
 
+    // allocates space on the stack for local variables
     // reg may be invalid
     void emit_alloc_local(BCRegister reg, u16 size);
     void emit_free_local(u16 size);
+    // allocates space on stack for arguments but ensures 16-byte alignment DURING EXECUTION or final x64 gen
+    void emit_alloc_args(BCRegister reg, u16 size);
+    void emit_free_args(u16 size);
 
     void emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float);
     void emit_get_param(BCRegister reg, i16 imm, int size, bool is_float);
@@ -529,6 +536,13 @@ struct BytecodeBuilder {
     
     void emit_test(BCRegister to, BCRegister from, u8 size, i32 test_location);
     
+    int get_virtual_sp() { return virtual_stack_pointer; }
+    // 16-byte alignment
+    int get_required_alignment() {
+        // return (16 - (virtual_stack_pointer % 16)) % 16;
+        return (0x10 - virtual_stack_pointer) & 0xF;
+    }
+
     int get_pc() { return tinycode->instructionSegment.size(); }
     void fix_jump_imm32_here(int imm_index);
     
@@ -582,6 +596,7 @@ private:
         int ind = index_of_previous_instructions[(previous_instructions_head - 1 + PREVIOUS_INSTRUCTIONS_MAX) % PREVIOUS_INSTRUCTIONS_MAX];
         if(tinycode->instructionSegment[ind] == BC_PUSH) {
             pushed_offset += 8;
+            virtual_stack_pointer += 8;
         } else Assert(false); // TODO: Handle remove logic for other instructions
         previous_instructions_count--;
         previous_instructions_head = (previous_instructions_head - 1 + PREVIOUS_INSTRUCTIONS_MAX) % PREVIOUS_INSTRUCTIONS_MAX;
@@ -592,6 +607,8 @@ private:
     int pushed_offset_max = 0; // grows down
     int ret_offset = 0; // grows down
     bool has_return_values = false;
+
+    int virtual_stack_pointer = 0; // needed to ensure 16-byte alignment on function calls
 };
 
 // BC FILE FORMAT

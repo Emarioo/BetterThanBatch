@@ -1,0 +1,19 @@
+@TEST_CASE(test_dllimport)
+
+
+#if OS_WINDOWS
+
+#load "Bcrypt.lib" as bcrypt
+
+fn @import(bcrypt,alias="BCryptGenRandom") BCryptGenRandom_lib(_: void*, buf: void*, len: u32, flags: u32) -> i32;
+fn @dllimport(bcrypt,alias="BCryptGenRandom") BCryptGenRandom_dll(_: void*, buf: void*, len: u32, flags: u32) -> i32;
+
+data, data2: i32;
+status  := BCryptGenRandom_lib(null, &data , sizeof data , 2);
+status2 := BCryptGenRandom_dll(null, &data2, sizeof data2, 2);
+
+#else
+
+What_about_Linux
+
+#endif

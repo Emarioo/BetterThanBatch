@@ -118,7 +118,8 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     // TODO: Option to turn on/off optimizations?
     //   We turn them off for speed or to check if the normal generator works fine while the optimization code has a bug in it.
 
-    #define ENABLE_X64_OPTIMIZATIONS
+    // WE CAN'T OPTIMIZE AWAY PUSH AND POP BECAUSE IT'LL MESS UP 16-byte alignment when calling functinos.
+    // #define ENABLE_X64_OPTIMIZATIONS
 
     // TODO: If we have this bytecode:
     //     li a, 5
@@ -406,7 +407,12 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     for(auto i : insts_to_delete) {
         auto n = inst_list[i];
         // log::out <<log::RED<<"del "<<n->bc_index<<": "<< *n <<"\n";
-        // don't accidently comment out the remove
+
+        // if(n->base->opcode == BC_PUSH || n->base->opcode == BC_POP) {
+        //     // Any thing that messes with stack can't be removed because it breaks 16-byte alignemnt for function calls.
+            
+        // } else {
+        // }
         inst_list.removeAt(i);
     }
 
@@ -497,6 +503,31 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         // BC_REG_XMM7,
     };
 
+    DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
+    int virtual_stack_pointer = 0; // TODO: abstract into X64Builder?
+
+    // use these when calling intrinsics with call instructions that need 16-byte alignment
+    auto push_alignment = [&]() {
+        int misalignment = virtual_stack_pointer & 0xf;
+        misalignments.add(misalignment);
+        int imm = 16 - misalignment;
+
+        if(imm != 0) {
+            emit_sub_imm32(X64_REG_SP, (i32)imm);
+        }
+        virtual_stack_pointer -= imm;
+    };
+    auto pop_alignment = [&]() {
+        int misalignment = misalignments.last();
+        misalignments.pop();
+        int imm = 16 - misalignment;
+
+        if(imm != 0) {
+            emit_add_imm32(X64_REG_SP, (i32)imm);
+        }
+        virtual_stack_pointer += imm;
+    };
+
     // TODO: If the function (tinycode) has parameters and is stdcall or unixcall
     //   then we need the args will be passed through registers and we must
     //   move them to the stack space.
@@ -579,6 +610,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 // if(!n->reg0.on_stack) {
                     // don't push if already on stack
                     emit_push(reg0->reg, reg0->size);
+                    virtual_stack_pointer -= 8;
                 // }
                 FIX_POST_IN_OPERAND(0)
             } break;
@@ -587,6 +619,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 // if(!n->reg0.on_stack) {
                     // don't pop if it's supposed to be on stack
                     emit_pop(reg0->reg, reg0->size);
+                    virtual_stack_pointer += 8;
                 // }
                 FIX_POST_OUT_OPERAND(0)
             } break;
@@ -674,28 +707,52 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
                 FIX_POST_IN_OPERAND(0)
             } break;
-            case BC_ALLOC_LOCAL: {
+            case BC_ALLOC_LOCAL:
+            case BC_ALLOC_ARGS: {
                 auto base = (InstBase_op1_imm16*)n->base;
-
-                if(base->op0 != BC_REG_INVALID) {
-                    FIX_PRE_OUT_OPERAND(0)
-
-                    emit_sub_imm32(X64_REG_SP, (i32)base->imm16);
-                    emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_SP);
-                    emit1(OPCODE_MOV_REG_RM);
-                    emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), X64_REG_SP);
-
-                    FIX_POST_OUT_OPERAND(0)                
-                } else {
-                    emit_sub_imm32(X64_REG_SP, (i32)base->imm16);
+                int imm = (i32)base->imm16; // IMPORTANT: immediate is modified, do not used base->imm16 directly!
+                if(opcode == BC_ALLOC_ARGS) {
+                    int misalignment = (virtual_stack_pointer + imm) & 0xf;
+                    misalignments.add(misalignment);
+                    if(misalignment != 0) {
+                        imm += 16 - misalignment;
+                    }
                 }
+                if(imm != 0) {
+                    if(base->op0 != BC_REG_INVALID) {
+                        FIX_PRE_OUT_OPERAND(0)
+
+                        emit_sub_imm32(X64_REG_SP, imm);
+                        emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_SP);
+                        emit1(OPCODE_MOV_REG_RM);
+                        emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), X64_REG_SP);
+
+                        FIX_POST_OUT_OPERAND(0)                
+                    } else {
+                        emit_sub_imm32(X64_REG_SP, imm);
+                    }
+                } else Assert(base->op0 == BC_REG_INVALID); // we can't get pointer if we didn't allocate anything
+
+                virtual_stack_pointer -= imm;
                 push_offset = 0; // needed for SET_ARG
             } break;
-            case BC_FREE_LOCAL: {
+            case BC_FREE_LOCAL:
+            case BC_FREE_ARGS: {
                 auto base = (InstBase_imm16*)n->base;
-                // Assert(push_offset == 0); nocheckin
-                emit_add_imm32(X64_REG_SP, (i32)base->imm16);
-                ret_offset -= base->imm16;
+                int imm = (i32)base->imm16;
+                
+                if(opcode == BC_FREE_ARGS) {
+                    int misalignment = misalignments.last();
+                    misalignments.pop();
+                    if(misalignment != 0) {
+                        imm += 16 - misalignment;
+                    }
+                }
+                if(imm != 0) {
+                    emit_add_imm32(X64_REG_SP, (i32)imm);
+                }
+                ret_offset -= imm;
+                virtual_stack_pointer += imm;
             } break;
            case BC_SET_ARG: {
                 auto base = (InstBase_op1_ctrl_imm16*)n->base;
@@ -870,24 +927,25 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
                 recent_set_args.resize(0);
                 ret_offset = 0;
-                if(base->link == LinkConventions::DLLIMPORT || base->link == LinkConventions::VARIMPORT) {
-                    Assert(false);
-                    // Assert(bytecode->externalRelocations[imm].location == bcIndex);
-                    // prog->add(OPCODE_CALL_RM_SLASH_2);
-                    // prog->addModRM_rip(2,(u32)0);
-                    // X64Program::NamedUndefinedRelocation namedReloc{};
-                    // namedReloc.name = bytecode->externalRelocations[imm].name;
-                    // namedReloc.textOffset = prog->size() - 4;
-                    // prog->namedUndefinedRelocations.add(namedReloc);
+                if(base->link == LinkConventions::VARIMPORT || base->link == LinkConventions::DLLIMPORT) {
+                    // log::out << log::RED << "@varimport is incomplete. It was specified in a function named '"<<tinycode->name<<"'\n";
+                    // Assert(("incomplete @varimport",false));
+                    emit1(OPCODE_CALL_RM_SLASH_2);
+
+                    emit_modrm_rip32_slash((u8)2, 0);
+                    int offset = code_size() - 4;
+
+                    map_strict_translation(n->bc_index + 3, offset);
+
                 } else if(base->link == LinkConventions::IMPORT) {
-                    Assert(false);
-                    // Assert(bytecode->externalRelocations[imm].location == bcIndex);
-                    // prog->add(OPCODE_CALL_IMM);
-                    // X64Program::NamedUndefinedRelocation namedReloc{};
-                    // namedReloc.name = bytecode->externalRelocations[imm].name;
-                    // namedReloc.textOffset = prog->size();
-                    // prog->namedUndefinedRelocations.add(namedReloc);
-                    // prog->add4((u32)0);
+                    emit1(OPCODE_CALL_IMM);
+                    int offset = code_size();
+                    emit4((u32)0);
+                    
+                    // necessary when adding internal func relocations
+                    // +3 = 1 (opcode) + 1 (link) + 1 (convention)
+                    map_strict_translation(n->bc_index + 3, offset);
+
                 } else if (base->link == LinkConventions::NONE){ // or export
                     // Assert(false);
                     emit1(OPCODE_CALL_IMM);
@@ -932,7 +990,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                         // TODO: You may want to save registers. This is not needed right
                         //   now since we basically handle everything through push and pop.
-
+                        // TODO: 16-byte alignment on native functions
                         /*
                         sub    rsp,0x38
                         mov    ecx,0xfffffff5
@@ -952,6 +1010,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                         // C creates these symbol names in it's object file
                         prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
+                        // prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
                         prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_tinyprog_index);
                         // prog->namedUndefinedRelocations.add(reloc0);
                         // prog->namedUndefinedRelocations.add(reloc1);
@@ -1539,15 +1598,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                             fix_jump_here_imm8(offset_jmp2_imm);
                         } break;
-                        case BC_LNOT: {
-                            emit_prefix(PREFIX_REXW, reg1->reg, reg1->reg);
-                            emit1(OPCODE_TEST_RM_REG);
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg1->reg), CLAMP_EXT_REG(reg1->reg));
-
-                            emit1(PREFIX_REX);
-                            emit2(OPCODE_2_SETE_RM8); // SETZ/SETE
-                            emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
-                        } break;
                         case BC_BAND: {
                             emit_operation(OPCODE_AND_REG_RM, reg0->reg, reg1->reg, control);
                         } break;
@@ -2087,6 +2137,8 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit_prefix(PREFIX_REX, reg0->reg, X64_REG_INVALID);
                 emit2(OPCODE_2_SETE_RM8);
                 emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
+
+                emit_movzx(reg0->reg, reg0->reg, CONTROL_8B);
 
                 FIX_POST_OUT_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
@@ -3098,6 +3150,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit_mov_reg_reg(RESERVED_REG1, reg1->reg, reg1->size);
                 emit_movzx(RESERVED_REG1, RESERVED_REG1, base->control);
 
+                push_alignment();
 
                 #ifdef OS_WINDOWS
                 /*
@@ -3193,6 +3246,8 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 #endif
 
+                pop_alignment();
+
                 if(pushed_di) {
                     emit_pop(X64_REG_DI);
                 }
@@ -3257,6 +3312,21 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";
         prog->addInternalFuncRelocation(current_tinyprog_index, get_map_translation(r.pc), ind);
     }
+
+    
+    // TODO: Optimize, store external relocations per tinycode instead
+    // bool found = bytecode->externalRelocations.size() == 0;
+    for(int i=0;i<bytecode->externalRelocations.size();i++) {
+        auto& rel = bytecode->externalRelocations[i];
+        if(tinycode->index == rel.tinycode_index) {
+            int off = get_map_translation(rel.pc);
+            prog->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path);
+            // found = true;
+            // break;
+        }
+    }
+    // Assert(found);
+
     // TODO: Don't iterate like this
     auto di = bytecode->debugInformation;
     DebugFunction* fun = nullptr;

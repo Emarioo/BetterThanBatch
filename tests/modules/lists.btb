@@ -1,0 +1,11 @@
+@TEST_CASE(dynamic_array)
+
+#import "Array"
+
+arr: DynamicArray<i32>
+
+arr.add(24)
+arr.add(92)
+
+_test 24; arr.get(0)
+_test 92; arr.get(1)

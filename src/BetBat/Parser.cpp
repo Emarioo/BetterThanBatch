@@ -152,6 +152,7 @@ int OpPrecedence(int op){
         // It wouldn't make sense for !~0 to be rearranged to ~!0
         case AST_BNOT:
         case AST_NOT:
+        case AST_UNARY_SUB:
             // return 15;
         case AST_CAST:
         case AST_REFER:
@@ -173,7 +174,7 @@ int OpPrecedence(int op){
     // if(op==AST_BNOT || op==AST_NOT || op==AST_CAST) return 15;
     // if(op==AST_REFER || op==AST_DEREF) return 16;
     // if(op==AST_MEMBER || op == AST_FROM_NAMESPACE) return 20;
-    log::out << log::RED<<__FILE__<<":"<<__LINE__<<", missing "<<op<<"\n";
+    log::out << log::RED<<__FILE__<<":"<<__LINE__<<", missing "<<(OperationType)op<<"\n";
     return 0;
 }
 
@@ -2948,8 +2949,9 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             //   Calling convention is very important. If extern and call convention is combined then they won't forget.
             if(view_fn_name == "hide"){
                 function->setHidden(true);
-            } else if (view_fn_name == "dllimport"){
-                // TODO: dllimport should probably be limited to Windows only.
+            } else if (view_fn_name == "dllimport" || view_fn_name == "varimport" || view_fn_name == "import"){
+                // Implicitly specify convention
+                specifiedConvention = true;
                 if(info.compiler->options->target == TARGET_WINDOWS_x64) {
                     function->callConvention = CallConventions::STDCALL;
                 } else if(info.compiler->options->target == TARGET_UNIX_x64) {
@@ -2961,40 +2963,17 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                     function->callConvention = CallConventions::UNIXCALL;
                     #endif
                 }
-                specifiedConvention = true;
-                function->linkConvention = LinkConventions::DLLIMPORT;
-                needsExplicitCallConvention = true;
-                // linkToken = name;
-            } else if (view_fn_name == "varimport"){
-                if(info.compiler->options->target == TARGET_WINDOWS_x64) {
-                    function->callConvention = CallConventions::STDCALL;
-                } else if(info.compiler->options->target == TARGET_UNIX_x64) {
-                    function->callConvention = CallConventions::UNIXCALL;
-                } else {
-                    #ifdef OS_WINDOWS
-                    function->callConvention = CallConventions::STDCALL;
-                    #else
-                    function->callConvention = CallConventions::UNIXCALL;
-                    #endif
+                
+                if (view_fn_name == "dllimport") {
+                    // TODO: dllimport should probably be limited to Windows only.
+                    function->linkConvention = LinkConventions::DLLIMPORT;
+                    needsExplicitCallConvention = true;
+                } else if (view_fn_name == "varimport"){
+                    function->linkConvention = LinkConventions::VARIMPORT;
+                    needsExplicitCallConvention = true;
+                } else if (view_fn_name == "import"){
+                    function->linkConvention = LinkConventions::IMPORT;
                 }
-                specifiedConvention = true;
-                function->linkConvention = LinkConventions::VARIMPORT;
-                needsExplicitCallConvention = true;
-                // linkToken = name;
-            } else if (view_fn_name == "import"){
-                if(info.compiler->options->target == TARGET_WINDOWS_x64) {
-                    function->callConvention = CallConventions::STDCALL;
-                } else if(info.compiler->options->target == TARGET_UNIX_x64) {
-                    function->callConvention = CallConventions::UNIXCALL;
-                } else {
-                    #ifdef OS_WINDOWS
-                    function->callConvention = CallConventions::STDCALL;
-                    #else
-                    function->callConvention = CallConventions::UNIXCALL;
-                    #endif
-                }
-                specifiedConvention = true;
-                function->linkConvention = LinkConventions::IMPORT;
 
                 info.advance();
                 
@@ -3004,9 +2983,14 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                     info.advance();
                     while(true) {
                         token = info.getinfo(&token_str);
+                        auto tok = info.gettok();
                         if(token->type == lexer::TOKEN_EOF) {
-                            Assert("missing paranthesis with @import"); // bug
-                            break;
+                            ERR_SECTION(
+                                ERR_HEAD2(tok)
+                                ERR_MSG("Sudden end of file.")
+                                ERR_LINE2(tok,"here")
+                            )
+                            return SIGNAL_COMPLETE_FAILURE;
                         }
                         if(token->type == ')') {
                             info.advance();
@@ -3022,16 +3006,32 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                                     info.advance();
                                     function->linked_alias = token_str;
                                 } else {
-                                    // nocheckin, error
+                                    ERR_SECTION(
+                                        ERR_HEAD2(tok)
+                                        ERR_MSG("Expected a string.")
+                                        ERR_LINE2(tok,"here")
+                                    )
+                                    return SIGNAL_COMPLETE_FAILURE;
                                 }
                             } else {
-                                // nocheckin, error
+                                ERR_SECTION(
+                                    ERR_HEAD2(tok)
+                                    ERR_MSG("Annotation for import can be supplied with a named library and optionally an alias. '"<<token_str<<"' is not an attribute that can be set.")
+                                    ERR_LINE2(tok,"here")
+                                    ERR_EXAMPLE(1,"@import(yourlib, alias = \"_verbose_func\")")
+                                )
+                                return SIGNAL_COMPLETE_FAILURE;
                             }
                         } else if(token->type == lexer::TOKEN_IDENTIFIER) {
                             info.advance();
                             function->linked_library = token_str;
                         } else {
-                            // nocheckin error
+                            ERR_SECTION(
+                                ERR_HEAD2(tok)
+                                ERR_MSG("Unexpected token in annotation for @import. Identifiers and 'lib = \"string\"' is okay.")
+                                ERR_LINE2(tok,"here")
+                            )
+                            return SIGNAL_COMPLETE_FAILURE;
                         }
 
                         token = info.getinfo();
@@ -3042,7 +3042,11 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                             info.advance();
                             break;
                         } else{
-                            // nocheckin, error
+                            ERR_SECTION(
+                                ERR_HEAD2(tok)
+                                ERR_MSG("Unexpected token.")
+                                ERR_LINE2(tok,"here")
+                            )
                             info.advance();
                             continue;
                         }
@@ -3052,7 +3056,6 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 info.advance(-1);
                 
                 needsExplicitCallConvention = true;
-                // linkToken = name;
             } else if (view_fn_name == "stdcall"){
                 function->callConvention = CallConventions::STDCALL;
                 specifiedConvention = true;

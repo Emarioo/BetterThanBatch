@@ -30,7 +30,7 @@ enum LinkConventions : u8 {
     IMPORT=0x80, // external from the source code, linkConvention with static library or object files
     DLLIMPORT=0x81, // linkConvention with dll, function are renamed to __impl_
     VARIMPORT=0x82, // linkConvention with extern global variables (extern FUNCPTRTYPE someFunction;)
-    NATIVE=0x10, // for interpreter or other implementation in x64 converter
+    NATIVE=0x10, // for interpreter or other implementation in x64 converter, TO BE DEPRACATED
 };
 
 #define IS_IMPORT(X) (X&(u8)0x80)

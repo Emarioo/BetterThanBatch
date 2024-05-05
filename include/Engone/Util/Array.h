@@ -422,7 +422,18 @@ struct QuickArray {
     // }
 
     QuickArray<T>& operator=(const QuickArray<T>& arr) {
-        Assert(arr.size() == 0);
+        if(arr.used>0){
+        // engone::log::out << "copy "<<arr.used<<"\n";
+        }
+        bool yes = _reserve(arr.max);
+        Assert(yes);
+        yes = resize(arr.used);
+        Assert(yes);
+        for(int i=0;i<used;i++){
+            // don't use quick array with items that need constructing and destructing
+            _ptr[i] = arr._ptr[i];
+        }
+        // Assert(arr.size() == 0);
         return *this;
     }
 

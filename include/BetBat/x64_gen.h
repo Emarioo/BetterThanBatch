@@ -73,6 +73,7 @@ struct X64TinyProgram {
     // };
     // DynamicArray<TinyProgramRelocation> relocations;
 };
+
 struct X64Program {
     ~X64Program(){
         TRACK_ARRAY_FREE(globalData, u8, globalSize);
@@ -121,6 +122,7 @@ struct X64Program {
         std::string name; // name of symbol
         u32 textOffset; // where to modify
         i32 tinyprog_index;
+        std::string library_path;
     };
     // exported functions
     struct ExportedSymbol {
@@ -143,8 +145,8 @@ struct X64Program {
     void addDataRelocation(u32 dataOffset, u32 textOffset, i32 tinyprog_index) {
         dataRelocations.add({dataOffset, textOffset, tinyprog_index});
     }
-    void addNamedUndefinedRelocation(const std::string& name, u32 textOffset, i32 tinyprog_index) {
-        namedUndefinedRelocations.add({name, textOffset, tinyprog_index});
+    void addNamedUndefinedRelocation(const std::string& name, u32 textOffset, i32 tinyprog_index, const std::string& library_path = "") {
+        namedUndefinedRelocations.add({name, textOffset, tinyprog_index, library_path});
     }
     void addExportedSymbol(const std::string& name, i32 tinyprog_index) {
         exportedSymbols.add({name, tinyprog_index});
@@ -152,6 +154,12 @@ struct X64Program {
     void addInternalFuncRelocation(i32 from_func, u32 text_offset, i32 to_func) {
         internalFuncRelocations.add({from_func, text_offset, to_func});
     }
+
+    DynamicArray<std::string> libraries; // path to libraries, unique entries
+    
+    // gather up libraries from named undefined relocations
+    // done after all x64 generation is done
+    void compute_libraries();
 
 
     DebugInformation* debugInformation = nullptr;
@@ -307,6 +315,7 @@ struct X64Builder {
     void emit_modrm_slash(u8 mod, u8 reg, X64Register rm);
     // RIP-relative addressing
     void emit_modrm_rip32(X64Register reg, u32 disp32);
+    void emit_modrm_rip32_slash(u8 reg, u32 disp32);
     void emit_modrm_sib(u8 mod, X64Register reg, u8 scale, u8 index, X64Register base_reg);
     void emit_modrm_sib_slash(u8 mod, u8 reg, u8 scale, u8 index, X64Register base_reg);
 
@@ -320,6 +329,7 @@ struct X64Builder {
     void emit4(i64 _);
     void emit8(i8 _);
     void emit_modrm_rip32(X64Register, i64);
+    void emit_modrm_rip32_slash(u64 reg, i64);
     void emit_modrm_slash(u8 mod, X64Register reg, X64Register rm);
     void emit_modrm_sib_slash(u8 mod, X64Register reg, u8 scale, u8 index, X64Register base_reg);
     

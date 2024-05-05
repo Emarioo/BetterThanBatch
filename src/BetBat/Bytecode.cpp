@@ -129,6 +129,7 @@ void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode, Compiler* com
     pushed_offset_max = 0;
     ret_offset = 0;
     has_return_values = false;
+    virtual_stack_pointer = 0;
 }
 
 void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 test_location) {
@@ -152,6 +153,7 @@ void BytecodeBuilder::emit_push(BCRegister reg) {
     pushed_offset -= 8;
     if(pushed_offset < pushed_offset_max)
         pushed_offset_max = pushed_offset;
+    virtual_stack_pointer -= 8;
 }
 void BytecodeBuilder::emit_fake_push() {
     if(disable_code_gen) return;
@@ -162,6 +164,7 @@ void BytecodeBuilder::emit_fake_push() {
     pushed_offset -= 8;
     if(pushed_offset < pushed_offset_max)
         pushed_offset_max = pushed_offset;
+    virtual_stack_pointer -= 8;
 }
 void BytecodeBuilder::emit_pop(BCRegister reg) {
     if(disable_code_gen) return;
@@ -186,6 +189,7 @@ void BytecodeBuilder::emit_pop(BCRegister reg) {
     emit_opcode(BC_POP);
     emit_operand(reg);
     pushed_offset += 8;
+    virtual_stack_pointer += 8;
 }
 void BytecodeBuilder::emit_li32(BCRegister reg, i32 imm){
     emit_opcode(BC_LI32);
@@ -228,6 +232,7 @@ void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
 
     has_return_values = false;
     // pushed_offset = 0;
+    virtual_stack_pointer -= size;
 }
 void BytecodeBuilder::emit_free_local(u16 size) {
     if(disable_code_gen) return;
@@ -243,6 +248,35 @@ void BytecodeBuilder::emit_free_local(u16 size) {
 
     if(has_return_values)
         ret_offset -= size;
+    virtual_stack_pointer += size;
+}
+void BytecodeBuilder::emit_alloc_args(BCRegister reg, u16 size) {
+    if(disable_code_gen) return;
+    if(compiler->options->compileStats.errors == 0) {
+
+    }
+    // Assert(size > 0); zero size = zero arguments can happen and we can't skip instruction because
+    // we want alignment
+    emit_opcode(BC_ALLOC_ARGS);
+    emit_operand(reg);
+    emit_imm16(size);
+
+    has_return_values = false;
+    // pushed_offset = 0;
+    virtual_stack_pointer -= size;
+}
+void BytecodeBuilder::emit_free_args(u16 size) {
+    if(disable_code_gen) return;
+
+    if(compiler->options->compileStats.errors == 0) {
+        // Assert(pushed_offset == 0); // We have some pushed values in the way and can't free local variables
+    }
+    emit_opcode(BC_FREE_ARGS);
+    emit_imm16(size);
+
+    if(has_return_values)
+        ret_offset -= size;
+    virtual_stack_pointer += size;
 }
 
 void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float) {
@@ -859,6 +893,8 @@ extern const char* instruction_names[] {
     "incr", // BC_INCR
     "alloc_local", // BC_ALLOC_LOCAL
     "free_local", // BC_FREE_LOCAL
+    "alloc_args", // BC_ALLOC_ARGS
+    "free_args", // BC_FREE_ARGS
     "set_arg", // 
     "get_param", // 
     "get_val", // 
@@ -926,6 +962,9 @@ extern InstBaseType instruction_contents[256] {
     BASE_op1 | BASE_imm32,      // BC_INCR,
     BASE_op1 | BASE_imm16,      // BC_ALLOC_LOCAL,
     BASE_imm16,                   // BC_FREE_LOCAL,
+    
+    BASE_op1 | BASE_imm16,        // BC_ALLOC_ARGS,
+    BASE_imm16,                   // BC_FREE_ARGS,
 
     BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_SET_ARG,
     BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_GET_PARAM,
@@ -1196,7 +1235,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             pc+=4;
             log::out << " " << register_names[op0] << ", " << log::GREEN << imm;
         } break;
-        case BC_ALLOC_LOCAL: {
+        case BC_ALLOC_LOCAL:
+        case BC_ALLOC_ARGS: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(u16*)&instructions[pc];
             pc+=2;
@@ -1205,7 +1245,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             else
                 log::out << " " << register_names[op0]<<", "<<log::GREEN << imm;
         } break;
-        case BC_FREE_LOCAL: {
+        case BC_FREE_LOCAL:
+        case BC_FREE_ARGS: {
             imm = *(u16*)&instructions[pc];
             pc+=2;
             log::out << " " << log::GREEN << imm;

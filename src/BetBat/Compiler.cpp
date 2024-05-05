@@ -1181,8 +1181,10 @@ void Compiler::run(CompileOptions* options) {
             
             // TEMPORARY
             if(options->useDebugInformation) {
-                log::out << log::RED << "You must use another linker than MSVC when compiling with debug information. Add the flag "<<log::LIME<<"--linker gcc"<<log::RED<<" (make sure to have gcc installed). The compiler does not support PDB debug information, it only supports DWARF. DWARF uses sections with long names but MSVC linker truncates those names. That's why you cannot use MVSC linker.\n";
-                return;
+                log::out << log::GOLD << "Debug information (DWARF) cannot be linked using the MSVC linker. Plrease choose a different linker like GNU/g++ using the flag "<<log::LIME<<"--linker gcc"<<log::GOLD<<" (make sure to have gcc installed).\n";
+                // The compiler does not support PDB debug information, it only supports DWARF. DWARF
+                // uses sections with long names but MSVC linker truncates those names.
+                // That's why you cannot use MVSC linker.
             }
 
             cmd = "link /nologo /INCREMENTAL:NO ";
@@ -1191,10 +1193,8 @@ void Compiler::run(CompileOptions* options) {
             // else cmd += "/DEBUG "; // force debug info for now
             cmd += obj_file + " ";
             #ifndef MINIMAL_DEBUG
-            cmd += "bin/NativeLayer.lib ";
-            cmd += "uuid.lib ";
-            cmd += "shell32.lib ";
-            // cmd += "Bcrypt.lib "; // random64 uses BCryptGenRandom, #link is used instead
+            // cmd += "uuid.lib ";
+            // cmd += "shell32.lib ";
             #endif
             // I don't know which of these we should use when. Sometimes the linker complains about 
             // a certain default lib.
@@ -1205,6 +1205,9 @@ void Compiler::run(CompileOptions* options) {
             for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
                 auto& dir = bytecode->linkDirectives[i];
                 cmd += dir + " ";
+            }
+            for(auto& path : program->libraries) {
+                cmd += path + " ";
             }
             #define LINK_TEMP_EXE "temp_382.exe"
             #define LINK_TEMP_PDB "temp_382.pdb"
@@ -1229,7 +1232,6 @@ void Compiler::run(CompileOptions* options) {
 
             cmd += obj_file + " ";
             #ifndef MINIMAL_DEBUG
-            cmd += "bin/NativeLayer_gcc.lib "; // NOTE: Do we need one for clang too?
             // cmd += "uuid.lib ";
             // cmd += "shell32.lib ";
             #endif
@@ -1240,6 +1242,32 @@ void Compiler::run(CompileOptions* options) {
                 auto& dir = bytecode->linkDirectives[i];
                 cmd += dir + " ";
             }
+
+            std::unordered_map<std::string, bool> dirs;
+            for(auto& path : program->libraries) {
+                std::string dir = TrimLastFile(path);
+                auto pair = dirs.find(dir);
+                if(pair == dirs.end())
+                    dirs[dir] = true;
+            }
+            for(auto& pair : dirs) {
+                if(pair.first == "/") {
+                    // TODO: This will always happen when linking with
+                    //   Bcrypt or Kernel32 because they don't have a
+                    //   directory. I guess that's fine?
+                    cmd += "-L. ";
+                } else 
+                    cmd += "-L"+pair.first+" ";
+            }
+            for(auto& path : program->libraries) {
+                std::string file = TrimDir(path);
+                int pos = file.find_last_of(".");
+                if(pos != file.npos)
+                    file = file.substr(0,file.find_last_of("."));
+                if(file != "")
+                    cmd += "-l" + file + " ";
+            }
+
             // if(outputOtherDirectory) {
             cmd += "-o " + exe_file;
             // } else {
@@ -1507,13 +1535,33 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     return fullPath;
 }
 
-void Compiler::addError(const lexer::SourceLocation& location, CompileError errorType) {
-    auto src = lexer.getTokenSource_unsafe(location);
+void Compiler::addError(const lexer::SourceLocation& loc, CompileError errorType) {
+    u32 cindex,tindex;
+    lexer.decode_origin(loc.tok.origin, &cindex, &tindex);
+
+    auto chunk = lexer.getChunk_unsafe(cindex);
+    lexer::TokenInfo* info=nullptr;
+    lexer::TokenSource* src=nullptr;
+    if(loc.tok.type == lexer::TOKEN_EOF) {
+        info = &chunk->tokens[tindex-1];
+        src = &chunk->sources[tindex-1];
+    } else {
+        info = &chunk->tokens[tindex];
+        src = &chunk->sources[tindex];
+    }
+
+    // auto src = lexer.getTokenSource_unsafe(location); // returns null if EOF
     errorTypes.add({errorType, (u32)src->line});
 }
 void Compiler::addError(const lexer::Token& token, CompileError errorType) {
-    auto src = lexer.getTokenSource_unsafe({token});
-    errorTypes.add({errorType, (u32)src->line});
+    addError(lexer::SourceLocation{token}, errorType);
+}
+CompilerImport* Compiler::getImport(u32 import_id){
+    u32 id = get_map_id(import_id);
+    lock_imports.lock();
+    auto imp = imports.get(id-1);
+    lock_imports.unlock();
+    return imp;
 }
 static const char* annotation_names[]{
     "unknown",

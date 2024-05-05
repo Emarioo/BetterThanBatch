@@ -246,6 +246,7 @@ struct Compiler {
     bool have_generated_global_data = false; // move elsewhere?
     bool compiler_got_stuck = false;
     
+    CompilerImport* getImport(u32 import_id);
     BucketArray<CompilerImport> imports{256};
     long volatile globalUniqueCounter = 0; // type must be long volatile because of _InterlockedIncrement
     engone::Mutex otherLock{};
