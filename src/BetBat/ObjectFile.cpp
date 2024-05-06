@@ -76,15 +76,15 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         // suc = stream->write(program->text + from, to - from);
         // CHECK
     }
-    if(program->debugInformation) {
-        for(int i=0;i<program->debugInformation->functions.size();i++)  {
-            auto f = program->debugInformation->functions[i];
-            for(int i=0;i<f->lines.size();i++)  {
-                auto& l = f->lines[i];
-                l.asm_address += tinyprogram_offsets[f->tinycode->index];
-            }
-        }
-    }
+    // if(program->debugInformation) {
+    //     for(int i=0;i<program->debugInformation->functions.size();i++)  {
+    //         auto f = program->debugInformation->functions[i];
+    //         for(int i=0;i<f->lines.size();i++)  {
+    //             auto& l = f->lines[i];
+    //             l.asm_address += tinyprogram_offsets[f->tinycode->index];
+    //         }
+    //     }
+    // }
     
     for(int i=0;i<program->dataRelocations.size();i++){
         auto& rel = program->dataRelocations[i];

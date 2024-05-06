@@ -1,6 +1,6 @@
 // import allocation functions
 #import "OS"
-#import "Logger"
+// #import "Logger"
 
 #macro ARRAY_CLEANUP(ARR) for @ptr ARR.sliced() it.cleanup(); ARR.cleanup();
 

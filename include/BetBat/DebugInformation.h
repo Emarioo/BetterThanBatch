@@ -11,8 +11,8 @@
 struct TinyBytecode;
 struct DebugLine {
     u32 lineNumber;
-    u32 bc_address; // absolute offset, probably should be relative
-    u32 asm_address; // absolute offset, probably should be relative
+    u32 bc_address; // relative to function start
+    u32 asm_address; // relative to function start
     lexer::TokenOrigin origin;
 };
 struct DebugLocalVar {
@@ -23,45 +23,45 @@ struct DebugLocalVar {
     ScopeId scopeId;
 };
 struct DebugFunction {
-        DebugFunction(FuncImpl* impl, TinyBytecode* tinycode, u32 fileIndex) : 
-            funcAst(impl ? impl->astFunction : nullptr), funcImpl(impl), tinycode(tinycode), fileIndex(fileIndex) { }
-        
-        u32 asm_start; // set later
-        u32 asm_end;
+    DebugFunction(FuncImpl* impl, TinyBytecode* tinycode, u32 fileIndex) : 
+        funcAst(impl ? impl->astFunction : nullptr), funcImpl(impl), tinycode(tinycode), fileIndex(fileIndex) { }
+    
+    u32 asm_start; // set later
+    u32 asm_end;
 
-        std::string name;
-        // ScopeId scopeId; // can be derived from funcAst so we could skip this member
+    std::string name;
+    // ScopeId scopeId; // can be derived from funcAst so we could skip this member
 
-        u32 declared_at_line = 0;
-        u32 fileIndex;
-        ASTFunction* funcAst = nullptr; // needed for name of arguments
-        FuncImpl* funcImpl = nullptr; // needed for type information (arguments, return values)
-        TinyBytecode* tinycode = nullptr;
+    u32 declared_at_line = 0;
+    u32 fileIndex;
+    ASTFunction* funcAst = nullptr; // needed for name of arguments
+    FuncImpl* funcImpl = nullptr; // needed for type information (arguments, return values)
+    TinyBytecode* tinycode = nullptr;
 
-        void addVar(const std::string& name, int frameOffset, TypeId typeId, int scopeLevel, ScopeId scopeId) {
-            localVariables.add({});
-            localVariables.last().name=name;
-            localVariables.last().frameOffset=frameOffset;
-            localVariables.last().typeId=typeId;
-            localVariables.last().scopeLevel=scopeLevel;
-            localVariables.last().scopeId=scopeId;
-        }
-        
-        void addLine(u32 line, u32 bc_address, lexer::TokenOrigin origin) {
-            lines.add({});
-            lines.last().lineNumber = line;
-            lines.last().bc_address = bc_address;
-            lines.last().origin = origin;
-        }
+    void addVar(const std::string& name, int frameOffset, TypeId typeId, int scopeLevel, ScopeId scopeId) {
+        localVariables.add({});
+        localVariables.last().name=name;
+        localVariables.last().frameOffset=frameOffset;
+        localVariables.last().typeId=typeId;
+        localVariables.last().scopeLevel=scopeLevel;
+        localVariables.last().scopeId=scopeId;
+    }
+    
+    void addLine(u32 line, u32 bc_address, lexer::TokenOrigin origin) {
+        lines.add({});
+        lines.last().lineNumber = line;
+        lines.last().bc_address = bc_address;
+        lines.last().origin = origin;
+    }
 
-        DynamicArray<DebugLocalVar> localVariables;
-        // DynamicArray<LexicalScope> scopes;
+    DynamicArray<DebugLocalVar> localVariables;
+    // DynamicArray<LexicalScope> scopes;
 
 
-        DynamicArray<DebugLine> lines;
+    DynamicArray<DebugLine> lines;
 
-        // may need some flags for type of function, calling convention?
-    };
+    // may need some flags for type of function, calling convention?
+};
 struct DebugInformation {
     DebugInformation(AST* ast) : ast(ast) {}
     static DebugInformation* Create(AST* ast) {
@@ -86,19 +86,19 @@ struct DebugInformation {
         // ast = nullptr;
     }
 
-    struct Line {
-        u32 lineNumber;
-        u32 bc_address; // absolute offset, probably should be relative
-        u32 asm_address; // absolute offset, probably should be relative
-        lexer::TokenOrigin origin;
-    };
-    struct LocalVar {
-        std::string name;
-        int frameOffset = 0;
-        TypeId typeId;
-        int scopeLevel = 0;
-        ScopeId scopeId;
-    };
+    // struct Line {
+    //     u32 lineNumber;
+    //     u32 bc_address; // absolute offset, probably should be relative
+    //     u32 asm_address; // absolute offset, probably should be relative
+    //     lexer::TokenOrigin origin;
+    // };
+    // struct LocalVar {
+    //     std::string name;
+    //     int frameOffset = 0;
+    //     TypeId typeId;
+    //     int scopeLevel = 0;
+    //     ScopeId scopeId;
+    // };
     // struct LexicalScope {
     //     ScopeId scopeId;
     // };

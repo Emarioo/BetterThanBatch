@@ -1,6 +1,6 @@
 
 #import "Array"
-#import "Logger"
+// #import "Logger"
 #import "String"
 
 #macro Map_i32 Map<i32,i32>
@@ -151,8 +151,9 @@ struct Map<Key,Val> {
         return null;
     }
     fn set(key: Key, val: Val) -> bool {
-        if table.size() == 0
-            log("Dude, you got to map.init before map.set-ing it") // TODO: Use assert instead
+        // if table.size() == 0 {
+        //     log("Dude, you got to map.init before map.set-ing it") // TODO: Use assert instead
+        // }
         slot := hash(key);
         if slot >= table.len
             return false;
@@ -286,28 +287,29 @@ struct Map<Key,Val> {
         chains.len = 0;
         memzero(table.ptr, table.max * sizeof(*table.ptr));
     }
-    fn print() {
-        if table.size() == 0
-            log("Map is empty")
-        for table.sliced_unsafe() {
-            if it == 0  continue;
+    // fn print() {
+    //     if table.size() == 0 {
+    //         log("Map is empty")
+    //     }
+    //     for table.sliced_unsafe() {
+    //         if it == 0  continue;
             
-            std_print("[",nr,"] ")
+    //         std_print("[",nr,"] ")
             
-            index := it;
-            while {
-                chain := chains.get_unsafe(index-1);
-                if !chain
-                    break;
-                if !chain.unused {
-                    std_print("<",chain.key,": ", chain.val,">, ")
-                }
-                index = chain.next;
+    //         index := it;
+    //         while {
+    //             chain := chains.get_unsafe(index-1);
+    //             if !chain
+    //                 break;
+    //             if !chain.unused {
+    //                 std_print("<",chain.key,": ", chain.val,">, ")
+    //             }
+    //             index = chain.next;
                 
-                if chain.next == MAP_CHAIN_INDEX_NULL
-                    break;
-            }
-            std_print("\n");
-        }
-    }
+    //             if chain.next == MAP_CHAIN_INDEX_NULL
+    //                 break;
+    //         }
+    //         std_print("\n");
+    //     }
+    // }
 }

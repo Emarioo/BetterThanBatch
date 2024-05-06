@@ -12,10 +12,10 @@ u32 DebugInformation::addOrGetFile(const std::string& file) {
 }
 DebugFunction* DebugInformation::addFunction(FuncImpl* impl, TinyBytecode* tinycode, const std::string& from_file, int declared_at_line){
     std::string name = "";
-    if(impl)
-        name = ast->nameOfFuncImpl(impl); // main does not have FuncImpl
-    else
-        name = tinycode->name; // so we take name from tinycode instead
+    // if(impl)
+    //     name = ast->nameOfFuncImpl(impl); // main does not have FuncImpl
+    // else
+    name = tinycode->name; // so we take name from tinycode instead
 
     for(int i=0;i<(int)functions.size();i++){
         if(functions[i]->name == name) {

@@ -3520,349 +3520,87 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
 
         int allocated_stack_space = 0;
 
+        if(function->callConvention != BETCALL) {
+            Assert(!function->parentStruct);
+
+            if (funcImpl->returnTypes.size() > 1) {
+                ERR_SECTION(
+                    ERR_HEAD2(function->location)
+                    ERR_MSG(ToString(function->callConvention) << " only allows one return value. BETCALL (the default calling convention in this language) supports multiple return values.")
+                    ERR_LINE2(function->location, "bad")
+                )
+            }
+        };
+
         // Why to we calculate var offsets here? Can't we do it in 
-        switch(function->callConvention) {
-        case BETCALL: {
-            if (function->arguments.size() != 0) {
-                _GLOG(log::out << "set " << function->arguments.size() << " args\n");
-                // int offset = 0;
-                for (int i = 0; i < (int)function->arguments.size(); i++) {
-                    // for(int i = function->arguments.size()-1;i>=0;i--){
-                    auto &arg = function->arguments[i];
-                    auto &argImpl = funcImpl->argumentTypes[i];
-                    // auto var = info.ast->addVariable(info.currentScopeId, arg.name);
-                    auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
-                    if (!varinfo) {
-                        ERR_SECTION(
-                            ERR_HEAD2(arg.location)
-                            ERR_MSG(arg.name << " is already defined.")
-                            ERR_LINE2(arg.location,"cannot use again")
-                        )
-                    }
-                    // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
-                    // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
-                    // var->globalData = false;
-                    varinfo->versions_dataOffset[info.currentPolyVersion] = argImpl.offset;
-                    // _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
-                    // DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
+        if (function->arguments.size() != 0) {
+            _GLOG(log::out << "set " << function->arguments.size() << " args\n");
+            for (int i = 0; i < (int)function->arguments.size(); i++) {
+                // for(int i = function->arguments.size()-1;i>=0;i--){
+                auto &arg = function->arguments[i];
+                auto &argImpl = funcImpl->argumentTypes[i];
+                auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
+                if (!varinfo) {
+                    ERR_SECTION(
+                        ERR_HEAD2(arg.location)
+                        ERR_MSG(arg.name << " is already defined.")
+                        ERR_LINE2(arg.location,"cannot use again")
+                    )
                 }
-                _GLOG(log::out << "\n";)
+                varinfo->versions_dataOffset[info.currentPolyVersion] = argImpl.offset;
             }
-            if(function->parentStruct){
-                // This doesn't need to be done here. Data offset is known in type checker since it 
-                // depends on the struct type. The argument data offset is predictable. But
-                // since the data offset for normal arguments are done here we might as well
-                // to members here to for consistency.
-                // TypeInfo* ti = info.ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
-                // ti->ast
-                Assert(function->memberIdentifiers.size() == funcImpl->structImpl->members.size());
-                for(int i=0;i<(int)function->memberIdentifiers.size();i++){
-                    auto identifier  = function->memberIdentifiers[i];
-                    if(!identifier) continue; // see type checker as to why this may happen
-                    auto& memImpl = funcImpl->structImpl->members[i];
-
-                    auto varinfo = info.ast->getVariableByIdentifier(identifier);
-                    varinfo->versions_dataOffset[info.currentPolyVersion] = memImpl.offset;
-                }
-            }
-            
-            // HELLO READ THIS!
-            // Before changing this code to make the caller make space for return values instead of
-            // the calle, you have to realise that the return values must have the same offset everytime
-            // you call the function. Meaning, return values must be aligned to 8 bytes even if they are
-            // 4 byte integers. If not then the function will put the return values in the wrong place.
-
-            // x64's call instruction does ignores the base pointer (frame pointer).
-            // The interpreter does can do either.
-            // builder.emit_push(BC_REG_BP);
-            // builder.emit_mov_rr(BC_REG_BP, BC_REG_SP);
-            if (funcImpl->returnTypes.size() != 0) {
-                // _GLOG(log::out << "space for " << funcImpl->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
-                // info.bytecode->addDebugText("ZERO init return values\n");
-                
-                // We don't need to zero initialize return value.
-                // You cannot return without specifying what to return.
-                // If we have a feature where return values can be set like
-                // local variables then we may need to rethink things.
-            // #ifndef DISABLE_ZERO_INITIALIZATION
-                // builder.emit_alloc_local(BC_REG_B, funcImpl->returnSize);
-                // genMemzero(BC_REG_B, BC_REG_C, funcImpl->returnSize);
-            // #else
-                builder.emit_alloc_local(BC_REG_INVALID, funcImpl->returnSize);
-            // #endif
-
-                allocated_stack_space += funcImpl->returnSize;
-                info.currentFrameOffset -= funcImpl->returnSize; // TODO: size can be uneven like 13. FIX IN EVALUATETYPES
-
-                _GLOG(log::out << "Return values:\n";)
-                for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
-                    auto& ret = funcImpl->returnTypes[i];
-                    _GLOG(log::out << " " <<"["<<ret.offset<<"] " << ": " << info.ast->typeToString(ret.typeId) << "\n";)
-                }
-            }
-            if(astStruct){
-                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-                    auto& arg = astStruct->polyArgs[i];
-                    arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
-                }
-            }
-            for(int i=0;i<(int)function->polyArgs.size();i++){
-                auto& arg = function->polyArgs[i];
-                arg.virtualType->id = funcImpl->polyArgs[i];
-            }
-
-            // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
-            // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
-            // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
-            //
-            // TODO: GenerateBody may be called multiple times for the same body with
-            //  polymorphic functions. This is a problem since GenerateBody generates functions.
-            //  Generating them multiple times for each function is bad.
-            // NOTE: virtualTypes from this function may be accessed from a function within it's body.
-            //  This could be bad.
-        } break;
-        case STDCALL: {
-            if (function->arguments.size() != 0) {
-                _GLOG(log::out << "set " << function->arguments.size() << " args\n");
-                // int offset = 0;
-                for (int i = 0; i < (int)function->arguments.size(); i++) {
-                    // for(int i = function->arguments.size()-1;i>=0;i--){
-                    auto &arg = function->arguments[i];
-                    auto &argImpl = funcImpl->argumentTypes[i];
-                    Assert(arg.identifier); // bug in compiler?
-                    auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
-                    // auto varinfo = info.ast->addVariable(info.currentScopeId, arg.name);
-                    if (!varinfo) {
-                        ERR_SECTION(
-                            ERR_HEAD2(arg.location)
-                            ERR_MSG(arg.name << " is already defined.")
-                            ERR_LINE2(arg.location,"cannot use again")
-                        )
-                    }
-                    // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
-                    u8 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
-                    if(size>8) {
-                        ERR_SECTION(
-                            ERR_HEAD2(arg.location)
-                            ERR_MSG(ToString(function->callConvention) << " does not allow arguments larger than 8 bytes. Pass by pointer if arguments are larger.")
-                            ERR_LINE2(arg.location, "bad")
-                        )
-                    }
-                    // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
-                    // stdcall should put first 4 args in registers but the function will put
-                    // the arguments onto the stack automatically so in the end 8*i will work fine.
-                    varinfo->versions_dataOffset[info.currentPolyVersion] = 8 * i;
-                    // varinfo->versions_dataOffset[info.currentPolyVersion] = GenContext::FRAME_SIZE + 8 * i;
-                    _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
-                    // DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
-                }
-                _GLOG(log::out << "\n";)
-            }
-            // TODO: Member variables for stdcall.
-            Assert(!function->parentStruct);
-            
-            // HELLO READ THIS!
-            // Before changing this code to make the caller make space for return values instead of
-            // the calle, you have to realise that the return values must have the same offset everytime
-            // you call the function. Meaning, return values must be aligned to 8 bytes even if they are
-            // 4 byte integers. If not then the function will put the return values in the wrong place.
-            // 4-6 days later...
-            // Since stack management (push and pop) always work on 8 bytes, this won't be a problem anymore
-            // Caller can make space for return values. The return values should be made poppable.
-
-            // x64's call instruction does ignores the base pointer (frame pointer).
-            // The interpreter does can do either.
-            // builder.emit_push(BC_REG_BP);
-            // builder.emit_mov_rr(BC_REG_BP, BC_REG_SP);
-
-            if (funcImpl->returnTypes.size() > 1) {
-                ERR_SECTION(
-                    ERR_HEAD2(function->location)
-                    ERR_MSG(ToString(function->callConvention) << " only allows one return value. BETCALL (the default calling convention in this language) supports multiple return values.")
-                    ERR_LINE2(function->location, "bad")
-                )
-            }
-            if(astStruct){
-                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-                    auto& arg = astStruct->polyArgs[i];
-                    arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
-                }
-            }
-            for(int i=0;i<(int)function->polyArgs.size();i++){
-                auto& arg = function->polyArgs[i];
-                arg.virtualType->id = funcImpl->polyArgs[i];
-            }
-
-            // TODO: WE NEED AN INSTRUCTION TO MOVE RCX,RDX... TO THE ARGUMENT STACK AREA
-            // const BCRegister normal_regs[4]{
-            //     BC_REG_RCX,
-            //     BC_REG_RDX,
-            //     BC_REG_R8,
-            //     BC_REG_R9,
-            // };
-            // const BCRegister float_regs[4] {
-            //     BC_REG_XMM0,
-            //     BC_REG_XMM1,
-            //     BC_REG_XMM2,
-            //     BC_REG_XMM3,
-            // };
-            // auto& argTypes = funcImpl->argumentTypes;
-            // for(int i=argTypes.size()-1;i>=0;i--) {
-            //     auto argType = argTypes[i].typeId;
-
-            //     u8 size = info.ast->getTypeSize(argType);
-            //     if(AST::IsDecimal(argType)) {
-            //         Assert(false);
-            //         builder.emit_mov_mr_disp(BC_REG_BP, float_regs[i], size, GenContext::FRAME_SIZE + i * 8);
-            //     } else {
-            //         builder.emit_mov_mr_disp(BC_REG_BP, normal_regs[i], size, GenContext::FRAME_SIZE + i * 8);
-            //     }
-            // }
-
-            // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES
-            // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
-            // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
-            //
-            // TODO: GenerateBody may be called multiple times for the same body with
-            //  polymorphic functions. This is a problem since GenerateBody generates functions.
-            //  Generating them multiple times for each function is bad.
-            // NOTE: virtualTypes from this function may be accessed from a function within it's body.
-            //  This could be bad.
-        } break;
-        case UNIXCALL: {
-            Assert(false);
-            #ifdef gone
-            if (function->arguments.size() != 0) {
-                _GLOG(log::out << "set " << function->arguments.size() << " args\n");
-                // int offset = 0;
-                for (int i = 0; i < (int)function->arguments.size(); i++) {
-                    // for(int i = function->arguments.size()-1;i>=0;i--){
-                    auto &arg = function->arguments[i];
-                    auto &argImpl = funcImpl->argumentTypes[i];
-                    Assert(arg.identifier); // bug in compiler?
-                    auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
-                    // auto varinfo = info.ast->addVariable(info.currentScopeId, arg.name);
-                    if (!varinfo) {
-                        ERR_SECTION(
-                            ERR_HEAD2(arg.location)
-                            ERR_MSG(arg.name << " is already defined.")
-                            ERR_LINE2(arg.location,"cannot use again")
-                        )
-                    }
-                    // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
-                    u8 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
-                    if(size>8) {
-                        ERR_SECTION(
-                            ERR_HEAD2(arg.location)
-                            ERR_MSG(ToString(function->callConvention) << " does not allow arguments larger than 8 bytes. Pass by pointer if arguments are larger.")
-                            ERR_LINE2(arg.location, "bad")
-                        )
-                    }
-                    // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
-                    // stdcall should put first 4 args in registers but the function will put
-                    // the arguments onto the stack automatically so in the end 8*i will work fine.
-                    varinfo->versions_dataOffset[info.currentPolyVersion] = 8 * i;
-                    _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
-                    // DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
-                }
-                _GLOG(log::out << "\n";)
-            }
-            // Fix member variables for stdcall.
-            Assert(!function->parentStruct);
-            
-            // HELLO READ THIS!
-            // Before changing this code to make the caller make space for return values instead of
-            // the calle, you have to realise that the return values must have the same offset everytime
-            // you call the function. Meaning, return values must be aligned to 8 bytes even if they are
-            // 4 byte integers. If not then the function will put the return values in the wrong place.
-            // 4-6 days later...
-            // Since stack management (push and pop) always work on 8 bytes, this won't be a problem anymore
-            // Caller can make space for return values. The return values should be made poppable.
-
-            // x64's call instruction does ignores the base pointer (frame pointer).
-            // The interpreter does can do either.
-            // builder.emit_push(BC_REG_BP);
-            // builder.emit_mov_rr(BC_REG_BP, BC_REG_SP);
-
-            if (funcImpl->returnTypes.size() > 1) {
-                ERR_SECTION(
-                    ERR_HEAD2(function->location)
-                    ERR_MSG(ToString(function->callConvention) << " only allows one return value. BETCALL (the default calling convention in this language) supports multiple return values.")
-                    ERR_LINE2(function->location, "bad")
-                )
-            }
-            if(astStruct){
-                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-                    auto& arg = astStruct->polyArgs[i];
-                    arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
-                }
-            }
-            for(int i=0;i<(int)function->polyArgs.size();i++){
-                auto& arg = function->polyArgs[i];
-                arg.virtualType->id = funcImpl->polyArgs[i];
-            }
-
-            auto& argTypes = funcImpl->argumentTypes;
-            const BCRegister normal_regs[6]{
-                BC_REG_RDI,
-                BC_REG_RSI,
-                BC_REG_RDX,
-                BC_REG_RCX,
-                BC_REG_R8,
-                BC_REG_R9,
-            };
-            const BCRegister float_regs[8] {
-                BC_REG_XMM0,
-                BC_REG_XMM1,
-                BC_REG_XMM2,
-                BC_REG_XMM3,
-                // BC_REG_XMM4,
-                // BC_REG_XMM5,
-                // BC_REG_XMM6,
-                // BC_REG_XMM7,
-            };
-            int used_normals = 0;
-            int used_floats = 0;
-            // Because we need to pop arguments in reverse, we must first know how many
-            // integer/pointer and float type arguments we have.
-            for(int i=argTypes.size()-1;i>=0;i--) {
-                if(AST::IsDecimal(argTypes[i].typeId)) {
-                    used_floats++;
-                } else {
-                    used_normals++;
-                }
-            }
-            // NOTE: We don't need to reverse, the order we put the args on the stack doesn't matter.
-            //   They will be placed in the right location no matter what.
-            //   Code was copied from GenerateFncall which is why the loop is reversed.
-            for(int i=argTypes.size()-1;i>=0;i--) {
-                u8 size = info.ast->getTypeSize(argTypes[i].typeId);
-                if(AST::IsDecimal(argTypes[i].typeId)) {
-                    Assert(false); // what size should the floats be?
-                    // I am not sure if doubles work so we should test and not assume.
-                    // This assert will prevent incorrect assumptions from causing trouble.
-                    builder.emit_mov_mr_disp(BC_REG_BP,float_regs[--used_floats], size, GenContext::FRAME_SIZE + i * 8);
-                } else {
-                    builder.emit_mov_mr_disp(BC_REG_BP,normal_regs[--used_normals], size, GenContext::FRAME_SIZE + i * 8);
-                }
-            }
-
-            // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES
-            // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
-            // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
-            //
-            // TODO: GenerateBody may be called multiple times for the same body with
-            //  polymorphic functions. This is a problem since GenerateBody generates functions.
-            //  Generating them multiple times for each function is bad.
-            // NOTE: virtualTypes from this function may be accessed from a function within it's body.
-            //  This could be bad.
-            #endif
-        } break;
-        default: {
-            Assert(false);
+            _GLOG(log::out << "\n";)
         }
+        if(function->parentStruct){
+            // This doesn't need to be done here. Data offset is known in type checker since it 
+            // depends on the struct type. The argument data offset is predictable. But
+            // since the data offset for normal arguments are done here we might as well
+            // to members here to for consistency.
+            // TypeInfo* ti = info.ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
+            // ti->ast
+            Assert(function->memberIdentifiers.size() == funcImpl->structImpl->members.size());
+            for(int i=0;i<(int)function->memberIdentifiers.size();i++){
+                auto identifier  = function->memberIdentifiers[i];
+                if(!identifier) continue; // see type checker as to why this may happen
+                auto& memImpl = funcImpl->structImpl->members[i];
+
+                auto varinfo = info.ast->getVariableByIdentifier(identifier);
+                varinfo->versions_dataOffset[info.currentPolyVersion] = memImpl.offset;
+            }
         }
         
+        if (funcImpl->returnTypes.size() != 0) {
+            // We don't need to zero initialize return value.
+            // You cannot return without specifying what to return.
+            // If we have a feature where return values can be set like
+            // local variables then we may need to rethink things.
+        // #ifndef DISABLE_ZERO_INITIALIZATION
+            // builder.emit_alloc_local(BC_REG_B, funcImpl->returnSize);
+            // genMemzero(BC_REG_B, BC_REG_C, funcImpl->returnSize);
+        // #else
+            builder.emit_alloc_local(BC_REG_INVALID, funcImpl->returnSize);
+        // #endif
+
+            allocated_stack_space += funcImpl->returnSize;
+            info.currentFrameOffset -= funcImpl->returnSize;
+
+            _GLOG(log::out << "Return values:\n";)
+            for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
+                auto& ret = funcImpl->returnTypes[i];
+                _GLOG(log::out << " " <<"["<<ret.offset<<"] " << ": " << info.ast->typeToString(ret.typeId) << "\n";)
+            }
+        }
+        if(astStruct){
+            for(int i=0;i<(int)astStruct->polyArgs.size();i++){
+                auto& arg = astStruct->polyArgs[i];
+                arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
+            }
+        }
+        for(int i=0;i<(int)function->polyArgs.size();i++){
+            auto& arg = function->polyArgs[i];
+            arg.virtualType->id = funcImpl->polyArgs[i];
+        }
+
         // dfun->codeStart = info.bytecode->length();
 
         if(funcImpl->astFunction->name == "main") {
@@ -3873,166 +3611,48 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
 
         // dfun->codeEnd = info.bytecode->length();
 
-        switch(function->callConvention) {
-        case BETCALL: {
-            for(int i=0;i<(int)function->polyArgs.size();i++){
-                auto& arg = function->polyArgs[i];
-                arg.virtualType->id = {}; // disable types
-            }
-            if(astStruct){
-                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-                    auto& arg = astStruct->polyArgs[i];
-                    arg.virtualType->id = {}; // disable types
-                }
-            }
-
-            // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
-            if (funcImpl->returnTypes.size() != 0) {
-                // check last statement for a return and "exit" early
-                bool foundReturn = function->body->statements.size()>0 && 
-                    function->body->statements.get(function->body->statements.size()-1) ->type == ASTStatement::RETURN;
-                // TODO: A return statement might be okay in an inner scope and not necessarily the
-                //  top scope.
-                if(!foundReturn){
-                    for(auto it : function->body->statements){
-                        if (it->type == ASTStatement::RETURN) {
-                            foundReturn = true;
-                            break;
-                        }
-                    }
-                    if (!foundReturn) {
-                        ERR_SECTION(
-                            ERR_HEAD2(function->location)
-                            ERR_MSG("Missing return statement in '" << function->name << "'.")
-                            ERR_LINE2(function->location,"put a return in the body")
-                        )
-                    }
-                }
-            }
-            if(builder.get_last_opcode() != BC_RET) {
-                // add return with no return values if it doesn't exist
-                // this is only fine if the function doesn't return values
-                // builder.emit_pop(BC_REG_BP);
-                if(allocated_stack_space != 0)
-                    builder.emit_free_local(allocated_stack_space);
-                // builder.restoreStackMoment(functionStackMoment);
-                builder.emit_ret();
-            } else {
-                // nocheckin, usually we would restore virtual stack pointer but maybe we don't need to with the rewrite
-                // builder.restoreStackMoment(VIRTUAL_STACK_START, false, true);
-                // Assert(builder.getStackPointer() == functionStackMoment);
-            }
-        } break;
-        case STDCALL: {
-            for(int i=0;i<(int)function->polyArgs.size();i++){
-                auto& arg = function->polyArgs[i];
-                arg.virtualType->id = {}; // disable types
-            }
-            if(astStruct){
-                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-                    auto& arg = astStruct->polyArgs[i];
-                    arg.virtualType->id = {}; // disable types
-                }
-            }
-            Assert(funcImpl->returnTypes.size() <= 1);
-            // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
-            if (funcImpl->returnTypes.size() != 0) {
-                // check last statement for a return and "exit" early
-                bool foundReturn = function->body->statements.size()>0
-                    && function->body->statements.get(function->body->statements.size()-1)
-                    ->type == ASTStatement::RETURN;
-                // TODO: A return statement might be okay in an inner scope and not necessarily the
-                //  top scope. If else for example.
-                if(!foundReturn){
-                    for(auto it : function->body->statements){
-                        if (it->type == ASTStatement::RETURN) {
-                            foundReturn = true;
-                            break;
-                        }
-                    }
-                    if (!foundReturn) {
-                        ERR_SECTION(
-                            ERR_HEAD2(function->location)
-                            ERR_MSG("Missing return statement in '" << function->name << "'.")
-                            ERR_LINE2(function->location,"put a return in the body")
-                        )
-                    }
-                }
-            }
-            if(builder.get_last_opcode() != BC_RET) {
-                // add return with no return values if it doesn't exist
-                // this is only fine if the function doesn't return values
-                // builder.emit_bxor(BC_REG_A, BC_REG_A);
-                // builder.emit_pop(BC_REG_BP);
-                builder.emit_ret();
-            } else {
-                // builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
-            }
-        } break;
-        case UNIXCALL: {
-            Assert(false);
-            #ifdef gone
-            for(int i=0;i<(int)function->polyArgs.size();i++){
-                auto& arg = function->polyArgs[i];
-                arg.virtualType->id = {}; // disable types
-            }
-            if(astStruct){
-                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-                    auto& arg = astStruct->polyArgs[i];
-                    arg.virtualType->id = {}; // disable types
-                }
-            }
-
-            // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
-            Assert(funcImpl->returnTypes.size() < 2);
-            if (funcImpl->returnTypes.size() != 0) {
-                // check last statement for a return and "exit" early
-                bool foundReturn = function->body->statements.size()>0
-                    && function->body->statements.get(function->body->statements.size()-1)
-                    ->type == ASTStatement::RETURN;
-                // TODO: A return statement might be okay in an inner scope and not necessarily the
-                //  top scope. If else for example.
-                if(!foundReturn){
-                    for(auto it : function->body->statements){
-                        if (it->type == ASTStatement::RETURN) {
-                            foundReturn = true;
-                            break;
-                        }
-                    }
-                    if (!foundReturn) {
-                        ERR_SECTION(
-                            ERR_HEAD2(function->location)
-                            ERR_MSG("Missing return statement in '" << function->name << "'.")
-                            ERR_LINE2(function->location,"put a return in the body")
-                        )
-                    }
-                }
-            }
-            if(builder.get_last_opcode() != BC_RET) {
-                // add return with no return values if it doesn't exist
-                // this is only fine if the function doesn't return values
-                // builder.emit_bxor(BC_REG_A, BC_REG_A);
-                // builder.emit_pop(BC_REG_BP);
-                builder.emit_ret();
-            } else {
-                builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
-            }
-            Assert(builder.getStackPointer() == 0);
-            #endif
-        } break;
-        default: {
-            Assert(false);
+        for(int i=0;i<(int)function->polyArgs.size();i++){
+            auto& arg = function->polyArgs[i];
+            arg.virtualType->id = {}; // disable types
         }
+        if(astStruct){
+            for(int i=0;i<(int)astStruct->polyArgs.size();i++){
+                auto& arg = astStruct->polyArgs[i];
+                arg.virtualType->id = {}; // disable types
+            }
+        }
+
+        if (funcImpl->returnTypes.size() != 0) {
+            // check last statement for a return and "exit" early
+            bool foundReturn = function->body->statements.size()>0 && 
+                function->body->statements.get(function->body->statements.size()-1) ->type == ASTStatement::RETURN;
+            // TODO: A return statement might be okay in an inner scope and not necessarily the
+            //  top scope.
+            if(!foundReturn){
+                for(auto it : function->body->statements){
+                    if (it->type == ASTStatement::RETURN) {
+                        foundReturn = true;
+                        break;
+                    }
+                }
+                if (!foundReturn) {
+                    ERR_SECTION(
+                        ERR_HEAD2(function->location)
+                        ERR_MSG("Missing return statement in '" << function->name << "'.")
+                        ERR_LINE2(function->location,"put a return in the body")
+                    )
+                }
+            }
+        }
+        if(builder.get_last_opcode() != BC_RET) {
+            // add return with no return values if it doesn't exist
+            // this is only fine if the function doesn't return values
+            if(allocated_stack_space != 0)
+                builder.emit_free_local(allocated_stack_space);
+            builder.emit_ret();
         }
         
         // TODO: Assert that we haven't allocated more stack space than we freed!
-        // Assert(builder.getStackPointer() == 0);
-        // Assert(info.currentFrameOffset == 0);
-
-        // dfun->funcEnd = info.bytecode->length();
-        // dfun->bc_end = info.bytecode->length();
-        // needs to be done after frame pop
-        // builder.restoreStackMoment(functionStackMoment, false, true);
     }
     return SIGNAL_SUCCESS;
 }

@@ -119,7 +119,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     //   We turn them off for speed or to check if the normal generator works fine while the optimization code has a bug in it.
 
     // WE CAN'T OPTIMIZE AWAY PUSH AND POP BECAUSE IT'LL MESS UP 16-byte alignment when calling functinos.
-    // #define ENABLE_X64_OPTIMIZATIONS
+    #define ENABLE_X64_OPTIMIZATIONS
 
     // TODO: If we have this bytecode:
     //     li a, 5
@@ -2134,7 +2134,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit1(OPCODE_TEST_RM_REG);
                 emit_modrm(MODE_REG, CLAMP_EXT_REG(reg1->reg), CLAMP_EXT_REG(reg1->reg));
                 
-                emit_prefix(PREFIX_REX, reg0->reg, X64_REG_INVALID);
+                emit_prefix(PREFIX_REX, X64_REG_INVALID, reg0->reg);
                 emit2(OPCODE_2_SETE_RM8);
                 emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
 

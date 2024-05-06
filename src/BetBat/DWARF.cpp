@@ -605,8 +605,6 @@ namespace dwarf {
                     for (int i=0;i<n;i++) log::out <<" ";
                 };
                 
-                
-                
                 log::out.enableConsole(false);
                 bool left_scope_once = false;
                 
@@ -891,6 +889,8 @@ namespace dwarf {
                 int lowest_index = -1;
                 for(int j=0;j<debug->functions.size();j++) {
                     auto fun = debug->functions[j];
+                    if(fun->asm_start == fun->asm_end)
+                        continue;
                     if(used_functions[j])
                         continue;
                     if(fun->asm_start < lowest_address || lowest_address == -1) {
@@ -905,9 +905,6 @@ namespace dwarf {
             }
 
             // The code won't generate any line number information if there are no functions.
-            // The language allows code in the global scope without specifying a function.
-            // This is a bit of problem because it's not really seen as a function.
-            // That needs to be ironed out if we want things to work properly here.
             Assert(("bug in debug information, specify a main function as a fix",functions_in_order.size() > 0));
             header->header_length = (stream->getWriteHead() - offset_section) - (sizeof(LineNumberProgramHeader::header_length) + (u64)&header->header_length - (u64)header);
 
@@ -938,12 +935,12 @@ namespace dwarf {
                 reg_address = 0;
 
 
-            if(functions_in_order.size()>0) {
-                auto fun = debug->functions[functions_in_order[0]];
-                reg_file = fun->fileIndex + 1;
-                WRITE_LEB(DW_LNS_set_file)
-                WRITE_LEB(reg_file)
-            }
+            // if(functions_in_order.size()>0) {
+            //     auto fun = debug->functions[functions_in_order[0]];
+            //     reg_file = fun->fileIndex + 1;
+            //     WRITE_LEB(DW_LNS_set_file)
+            //     WRITE_LEB(reg_file)
+            // }
 
             // increment address and line
             auto add_row = [&](int code, int line){
@@ -1011,8 +1008,11 @@ namespace dwarf {
                     lastOffset = line.asm_address;
                     lastLine = line.lineNumber;
 
-                    add_row(line.asm_address, line.lineNumber);
+                    add_row(line.asm_address + fun->asm_start, line.lineNumber);
                 }
+
+                // add_row(fun->asm_end, reg_line); // reuse the line?
+
                 // the debugger won't stop at the last instruction because the line
                 // number is the same. I was hoping it would stop at the return statement
                 // so that you could see the final result of all variables but we need
@@ -1136,6 +1136,8 @@ namespace dwarf {
             int symindex_text = objectFile->getSectionSymbol(section_text);
             for (int fi=0;fi<debug->functions.size();fi++) {
                 auto& fun = debug->functions[fi];
+                Assert(fun->asm_end != 0);
+
                 Assert(stream->getWriteHead() % 8 == 0);
                 int offset_fde_start = stream->getWriteHead();
 
@@ -1148,6 +1150,7 @@ namespace dwarf {
                 
                 relocs.add({symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location - (u64)header, 
                     fun->asm_start });
+                log::out << log::GOLD << fun->name<<log::NO_COLOR<<" : " << fun->asm_start << " - " << fun->asm_end<<"\n";
                 header->initial_location = fun->asm_start;
                 header->address_range = fun->asm_end - fun->asm_start;
 
