@@ -27,7 +27,33 @@ struct NotAParadox {
 }
 ```
 
-## Unions (not implemented)
+# Incomplete features
+
+## Arrays in structs
+Structs can have arrays which are declared similarily to arrays on the stack. The size of the struct is exactly that which you specified. With arrays on the stack, both a slice (16 bytes) and the elements are put on the stack. The slice being additional memory. This is not the case in the struct.
+
+```c++
+#import "Logger"
+
+struct Name {
+    str: char[20]
+}
+
+name: Name // zero initialized
+
+s := "okay"
+memcpy(name.str, s.ptr, s.len + 1)
+
+log(name.str)
+
+for 0..name.str.len-1 {
+    name.str[nr] = 'a' + nr
+}
+
+log(name.str)
+```
+
+## Unions
 
 TO EXPLAIN:
 - First member of union can have a default value. The rest cannot not even if they are bigger (will be zero initialized though). Initializer affects the first member.

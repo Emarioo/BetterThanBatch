@@ -132,6 +132,7 @@ struct CompileOptions {
     bool verbose=false;
     bool executeOutput = false;
 
+    bool quit = false;
     bool instant_report = true;
     bool devmode = false;
     bool only_preprocess = false;
@@ -199,6 +200,7 @@ struct CompilerImport {
     struct Dep {
         u32 id;
         std::string as_name;
+        bool circular_dependency_to_myself = false;
     };
     DynamicArray<Dep> dependencies;
     struct Lib {
@@ -211,11 +213,14 @@ extern const char* const PRELOAD_NAME;
 extern const char* const TYPEINFO_NAME;
 struct Compiler {
     void cleanup() {
-        X64Program::Destroy(program);
+        if(program)
+            X64Program::Destroy(program);
         program = nullptr;
-        AST::Destroy(ast);
+        if(ast)
+            AST::Destroy(ast);
         ast = nullptr;
-        Bytecode::Destroy(bytecode);
+        if(bytecode)
+            Bytecode::Destroy(bytecode);
         bytecode = nullptr;
         lexer.cleanup();
         preprocessor.cleanup();

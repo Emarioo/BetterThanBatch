@@ -218,7 +218,6 @@ namespace engone {
 		if(info==s_rdiInfos.end()){
 			return;
 		}
-		
 		if(info->second.handle!=INVALID_HANDLE_VALUE){
 			BOOL success = FindClose(info->second.handle);
 			if(!success){

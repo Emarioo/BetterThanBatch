@@ -1,7 +1,81 @@
 
+// #import "./regex"
 
-// fn a() {
-//     okay();
+#import "File"
+#import "Memory"
+#import "Logger"
+// #import "Basic"
+
+
+DirectoryIteratorCreate("")
+
+p := cast<i32*>Allocate(64)
+
+
+file_size: i64
+file := FileOpen("a.txt", FILE_READ_ONLY, &file_size)
+defer { FileClose(file) }
+mem := Slice<char>{Allocate(file_size), file_size}
+read := FileRead(file, mem.ptr, mem.len)
+
+std_print(mem)
+
+std_print("\n")
+
+// fn std_print_hex(n: i32) {
+//     prints("0x")
+//     zeros: bool = true;
+//     for @rev 0..16 {
+//         hex := (cast<u64>n >> cast<u64>(4*nr)) & cast<u64>0xF;
+//         if hex != 0  zeros = false
+//         if !zeros {
+//             if hex < 10u
+//                 printc('0'+hex)
+//             else
+//                 printc('a' + hex - 10)
+//         }
+//     }
+//     if zeros
+//         printc('0'); // we want at least one zero
 // }
 
-global hey: i32;
+// std_print_hex(-1073740940)
+// return 0
+// file_size: i64
+// file := FileOpen("a.txt", FILE_READ_ONLY, &file_size)
+
+
+// file .FileRead(file, )
+// log("")
+
+
+
+
+// startTime: u64 = 9;
+
+// iter: DirectoryIterator*;
+// // root = ".";
+// root := "src";
+// // root = "docs";
+// iter := DirectoryIteratorCreate(&root);
+// defer { DirectoryIteratorDestroy(iter); }
+
+// result: DirectoryIteratorData*;
+// loop := 0;
+
+// while result = iter.next() {
+//     log(result.name);
+//     if result.isDirectory && !equal(result.name,root) {
+//         iter.skip();
+//         continue
+//     }
+//     eh := matchEnd(result.name,".cpp")
+//     if !eh
+//         continue;
+//     // log("):")
+//     // prints(result.name); prints("\n");
+//     // prints(": ");
+//     // printi(result.fileSize);
+//     // prints(" bytes, ");
+//     // printd(result.lastWriteSeconds);
+// }

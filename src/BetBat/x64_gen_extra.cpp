@@ -780,6 +780,12 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 int off = base->imm16 + FRAME_SIZE;
                 emit_mov_reg_mem(reg0->reg, reg_params, base->control, off);
                 
+                if(IS_CONTROL_SIGNED(base->control)) {
+                    emit_movsx(reg0->reg, reg0->reg, base->control);
+                } else if(!IS_CONTROL_FLOAT(base->control)) {
+                    emit_movzx(reg0->reg, reg0->reg, base->control);
+                }
+                
                 FIX_POST_OUT_OPERAND(0)
             } break;
             case BC_GET_VAL: {
@@ -792,6 +798,12 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         X64Register reg_params = X64_REG_SP;
                         int off = base->imm16 - FRAME_SIZE + ret_offset;
                         emit_mov_reg_mem(reg0->reg, reg_params, base->control, off);
+                    
+                        if(IS_CONTROL_SIGNED(base->control)) {
+                            emit_movsx(reg0->reg, reg0->reg, base->control);
+                        } else if(!IS_CONTROL_FLOAT(base->control)) {
+                            emit_movzx(reg0->reg, reg0->reg, base->control);
+                        }
                         
                         FIX_POST_OUT_OPERAND(0)
                     } break;
@@ -812,6 +824,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             reg0->reg = alloc_register(X64_REG_A, false);
                             Assert(reg0->reg != X64_REG_INVALID);
                         }
+                        // TODO: movzx, movsx on returned value?
                     } break;
                 }
             } break;
@@ -2226,7 +2239,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         Assert(IS_REG_XMM(to_reg));
                         
                         // TODO: Sign extend
-                        u8 prefix = construct_prefix(tsize == 8 ? PREFIX_REXW : 0, X64_REG_INVALID, from_reg);
+                        u8 prefix = construct_prefix(fsize == 8 ? PREFIX_REXW : 0, X64_REG_INVALID, from_reg);
                         if(tsize == 4) {
                             if(prefix)
                                 emit4((OPCODE_4_REXW_CVTSI2SS_REG_RM & ~0xFF00) | (prefix << 8));
@@ -2243,7 +2256,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     case CAST_UINT_FLOAT: {
                         Assert(IS_REG_XMM(to_reg));
                         
-                        u8 prefix = construct_prefix(tsize == 8 ? PREFIX_REXW | 0 : 0, X64_REG_INVALID, from_reg);
+                        u8 prefix = construct_prefix(fsize == 8 ? PREFIX_REXW | 0 : 0, X64_REG_INVALID, from_reg);
                         // TODO: Zero extend?
                         if(tsize == 4) {
                             if(prefix)

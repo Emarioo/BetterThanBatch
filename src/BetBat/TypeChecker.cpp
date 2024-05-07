@@ -113,24 +113,10 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
     int alignedSize=0; // offset will be aligned to match this at the end
 
     Assert(astStruct->polyArgs.size() == structImpl->polyArgs.size());
-    // DynamicArray<TypeId> prevVirtuals{};
     
-    // info.prevVirtuals.resize(astStruct->polyArgs.size());
-    // for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-    //     TypeId id = structImpl->polyArgs[i];
-    //     if(info.errors == 0){
-    //         // Assert(id.isValid()); // poly arg type could have failed, an error would have been logged
-    //     }
-    //     // Assert(astStruct->polyArgs[i].virtualType->isVirtual());
-    //     info.prevVirtuals[i] = astStruct->polyArgs[i].virtualType->id;
-    //     astStruct->polyArgs[i].virtualType->id = id;
-    // }
     astStruct->pushPolyState(structImpl);
     defer{
         astStruct->popPolyState();
-        // for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-        //     astStruct->polyArgs[i].virtualType->id = info.prevVirtuals[i];
-        // }
     };
    
     structImpl->members.resize(astStruct->members.size());
@@ -240,7 +226,10 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
         // }
         
         implMem.offset = offset;
-        offset+=size;
+        if(member.array_length)
+            offset += size * member.array_length;
+        else
+            offset += size;
 
         /*
         Current push and pop works by aligning and then pushing.
@@ -1901,6 +1890,8 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                         outTypes->add(leftType);
                     else
                         outTypes->add(rightType);
+                } else if(leftType == rightType) {
+                    outTypes->add(leftType);
                 } else {
                     outTypes->add(leftType);
                 }

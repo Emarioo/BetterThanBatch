@@ -74,7 +74,7 @@ fn std_print(t: f32){
     
     sign := (bits >> 31u) & 1u;
     exp := (bits >> 23u) & 0xFFu;
-    mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
+    mantissa: u64 = 0x80_0000u | (bits & 0x7FFFFFu)
 
     // 0x8000_0000_0000_0000
 
@@ -220,4 +220,22 @@ fn @hide std_print(t: char[]){
 }
 fn @hide std_print(ptr: char*, len: u64){
     prints(Slice<char>{ptr, len});
+}
+
+
+fn std_print_hex(n: i32) {
+    prints("0x")
+    zeros: bool = true;
+    for @rev 0..16 {
+        hex := (cast<u64>n >> cast<u64>(4*nr)) & cast<u64>0xF;
+        if hex != 0  zeros = false
+        if !zeros {
+            if hex < 10u
+                printc('0'+hex)
+            else
+                printc('a' + hex - 10)
+        }
+    }
+    if zeros
+        printc('0'); // we want at least one zero
 }

@@ -1,0 +1,6 @@
+
+#if OS_WINDOWS
+
+#macro HELLO_THERE 123
+
+#endif

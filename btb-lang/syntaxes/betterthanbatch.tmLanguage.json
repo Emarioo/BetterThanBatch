@@ -40,19 +40,33 @@
 		"commentline": {
 			"name":"comment.line",
 			"begin":"//",
-			"end":"\n"
+			"end":"\n",
+            "patterns": [
+                {
+                "name": "keyword.other",
+                "match": "TODO:|NOTE:"
+            }]
 		},
 		"commentblock": {
 			"name":"comment.block",
 			"begin":"/\\*",
-			"end":"\\*/"
+			"end":"\\*/",
+            "patterns": [
+                {
+                    "name": "keyword.other",
+                    "match": "TODO:|NOTE:"
+                }
+            ]
 		},
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control",
 				"match": "\\b(if|else|while|switch|case|default|for|break|namespace|continue|global|fn|enum|union|struct|return|asm|defer|each|operator|cast|_test|using|as)\\b"
-			}
-			
+			},
+            {
+                "name": "keyword.other",
+                "match": "TODO:|NOTE:"
+            }
 			]
 		},
 		"preproc":{
@@ -114,7 +128,7 @@
 			"patterns": [
 				{
 					"name": "constant.numeric",
-					"match": "\\b\\d+(\\.\\d+)?d?u?s?\\b|\\b0x[0-9A-F_]+\\b|(false)|(true)|(null)"
+					"match": "\\b\\d+(\\.\\d+)?d?u?s?\\b|\\b0x[0-9A-F_]+\\b|\\b(false|true|null)\\b"
 				}
 			]
 		}

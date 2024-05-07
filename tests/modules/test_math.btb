@@ -1,0 +1,10 @@
+@TEST_CASE(random)
+
+for 0..20 {
+    f: f32 = random_f32()
+    if f >= 0.0 && f <= 1.0 {
+        _test 1; 1;
+    } else {
+        _test 0; 1
+    }
+}

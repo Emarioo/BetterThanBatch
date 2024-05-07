@@ -9,7 +9,7 @@ void print_version(){
     CompilerVersion version = CompilerVersion::Current();
     version.serialize(buffer, sizeof(buffer),CompilerVersion::INCLUDE_AVAILABLE);
     log::out << "BTB Compiler, version: " << log::LIME<< buffer <<"\n";
-    log::out << log::GRAY << " (major.minor.patch.revision/name-year.month.day)\n";
+    log::out << log::GRAY << "(major.minor.patch.revision/name-year.month.day)\n";
     // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)";
 }
 void print_help(){
@@ -69,7 +69,7 @@ void print_help(){
     log::out << "'|' separates rules. Each rule is a string with characters and wildcards '*'\n";
     log::out << log::GRAY << " Match file extensions: " << GREEN("*.h") << ", "<< GREEN("*.h|*.cpp") << "\n";
     log::out << log::GRAY << " Match directories: "<<GREEN("*/src/*")<<"\n";
-    log::out << log::GRAY << " Exclude directories: "<<GREEN("*/libs/*")<<", "<<GREEN("*/bin/*|*/res/*")<<" (.vs, .git, .vscode are excluded by default)\n";
+    log::out << log::GRAY << " Exclude directories: "<<GREEN("!*/libs/*")<<", "<<GREEN("!*/bin/*|!*/res/*")<<" (.vs, .git, .vscode are excluded by default)\n";
     END
 
     USAGE("-ua,--user-args")

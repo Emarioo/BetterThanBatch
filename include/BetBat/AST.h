@@ -432,7 +432,7 @@ struct ScopeInfo {
     // TODO: Move these elsewhere?
     u32 bc_start; // we need tinycode id too
     u32 bc_end;
-    u32 asm_start;
+    u32 asm_start; // relative to function start
     u32 asm_end;
 
     void print(AST* ast);
@@ -650,30 +650,23 @@ struct ASTStruct : ASTNode {
         TYPE_CREATED,
         TYPE_ERROR, 
     };
-    // Token name{};
-    // StringView base_name;
     lexer::SourceLocation location;
     std::string name;
     struct Member {
         std::string name;
-        // StringView name;
         lexer::SourceLocation location;
-        // Token name;
-        ASTExpression* defaultValue=0;
+        ASTExpression* defaultValue = nullptr;
         TypeId stringType{};
+        int array_length = 0;
     };
     DynamicArray<Member> members{};
     struct PolyArg {
         lexer::SourceLocation location;
         std::string name;
-        // StringView name;
-        // Token name{};
         TypeInfo* virtualType = nullptr;
     };
     DynamicArray<PolyArg> polyArgs;
 
-    // StructImpl* createImpl();
-    
     State state=TYPE_EMPTY;
 
     StructImpl* nonPolyStruct = nullptr;

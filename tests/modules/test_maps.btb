@@ -99,6 +99,8 @@ fn TestMap(tableSize: u32, count: i32) -> u32 {
 
     failures += CheckIterator(&map, &entries)
     
+    map.print()
+    
     // log("Failures:",failures);
     return failures;
 }

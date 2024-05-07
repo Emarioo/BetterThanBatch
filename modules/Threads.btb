@@ -1,12 +1,20 @@
 /*
     Standard API for threads
     
-    IMPORTANT: THREADS ARE NOT SUPPORTED IN THE INTERPRETER! yet?
+    IMPORTANT: THREADS ARE NOT SUPPORTED IN THE VirtualMachine! yet?
 */
 
-/*
-    PUBLIC INTERFACE
+/* Logic of compare and swap
+if *ptr == old
+    *ptr = new
+    return old
+else
+    return *ptr
 */
+fn @intrinsic atomic_compare_swap(ptr: i32*, old: i32, new: i32) -> i32;
+fn @intrinsic atomic_add(ptr: i32*, value: i32) -> i32;
+// TODO: atomic_add64?
+
 struct Thread {
     os_handle: u64 = 0;
     id: u64 = 0;

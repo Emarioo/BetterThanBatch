@@ -1,0 +1,133 @@
+
+
+#if OS_WINDOWS
+
+#load "Kernel32.lib" as Kernel
+
+#macro HANDLE void*
+#macro INVALID_HANDLE_VALUE (cast<HANDLE>cast<i64>-1)
+
+// https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
+fn @import(Kernel) CloseHandle(
+  hObject: HANDLE
+) -> bool;
+
+/*########################
+    MEMORY, ALLOCATIONS
+#########################*/
+
+#macro STATUS_NO_MEMORY cast<void*>cast<i64>0xC0000017
+#macro STATUS_ACCESS_VIOLATION cast<void*>cast<i64>0xC0000005
+
+// https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-getprocessheap
+fn @import(Kernel) GetProcessHeap() -> HANDLE;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc
+fn @import(Kernel) HeapAlloc(
+    hHeap: HANDLE,
+    dwFlags: i32,
+    dwBytes: i64
+) -> void*;
+// https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heaprealloc
+fn @import(Kernel) HeapReAlloc(
+    hHeap: HANDLE,
+    dwFlags: i32,
+    lpMem: void*,
+    dwBytes: i64
+) -> void*;
+// https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapfree
+fn @import(Kernel) HeapFree(
+    hHeap: HANDLE,
+    dwFlags: i32,
+    lpMem: void*
+) -> bool;
+
+/*########################
+    FILE SYSTEM
+#########################*/
+
+#macro CREATE_NEW             1
+#macro CREATE_ALWAYS          2
+#macro OPEN_EXISTING          3
+#macro OPEN_ALWAYS            4
+#macro TRUNCATE_EXISTING      5
+#macro GENERIC_READ           0x80000000
+#macro GENERIC_WRITE          0x40000000
+#macro GENERIC_EXECUTE        0x20000000
+#macro GENERIC_ALL            0x10000000
+#macro FILE_SHARE_READ        0x00000001  
+#macro FILE_SHARE_WRITE       0x00000002  
+#macro FILE_SHARE_DELETE      0x00000004  
+#macro FILE_ATTRIBUTE_NORMAL  0x00000080  
+
+#macro MAX_PATH          260
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
+fn @import(Kernel) CreateFileA(
+  lpFileName: char*,
+  dwDesiredAccess: i32,
+  dwShareMode: i32,
+  lpSecurityAttributes: void*, // optional, TODO: Type should be LPSECURITY_ATTRIBUTES instead of void*
+  dwCreationDisposition: i32,
+  dwFlagsAndAttributes: i32,
+  hTemplateFile: HANDLE // optional
+) -> HANDLE;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesizeex
+fn @import(Kernel) GetFileSizeEx(
+  hFile: HANDLE,
+  lpFileSizeHigh: i64*
+) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
+fn @import(Kernel) ReadFile(
+  hFile: HANDLE,
+  lpBuffer: void*,
+  nNumberOfBytesToRead: i32,
+  lpNumberOfBytesRead: i32*,
+  lpOverlapped: void* // optional, TODO: Don't do void?
+) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile
+fn @import(Kernel) WriteFile(
+  hFile: HANDLE,
+  lpBuffer: void*,
+  nNumberOfBytesToWrite: i32,
+  lpNumberOfBytesWritten: i32*,
+  lpOverlapped: void* // optional, TODO: Don't be void?
+) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirstfilea
+fn @import(Kernel) FindFirstFileA(
+  lpFileName: char*,
+  lpFindFileData: WIN32_FIND_DATAA*
+) -> HANDLE;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findnextfilea
+fn @import(Kernel) FindNextFileA(
+  hFindFile: HANDLE,
+  lpFindFileData: WIN32_FIND_DATAA*
+) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findclose
+fn @import(Kernel) FindClose(
+  hFindFile: HANDLE
+) -> bool;
+
+struct WIN32_FIND_DATAA {
+  dwFileAttributes: i32;
+  ftCreationTime: i64;
+  ftLastAccessTime: i64;
+  ftLastWriteTime: i64;
+  nFileSizeHigh: i32;
+  nFileSizeLow: i32;
+  dwReserved0: i32;
+  dwReserved1: i32;
+  cFileName: char[MAX_PATH];
+  cAlternateFileName: char[14];
+  dwFileType: i32; // Obsolete. Do not use.
+  dwCreatorType: i32; // Obsolete. Do not use
+  wFinderFlags: i16; // Obsolete. Do not use
+}
+
+#endif // OS_WINDOWS

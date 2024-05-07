@@ -1,0 +1,48 @@
+/*
+## Module for memory ##
+    - Allocators
+    - Memory copies, moves
+
+*/
+
+// TODO: import the right OS bindings
+#import "Win32"
+
+fn @intrinsic memcpy(dst: void*, src: void*, len: i64);
+fn @intrinsic memzero(dst: void*, len: i64);
+
+fn Allocate(size: i64) -> void* {
+    return AllocateHeap(size)
+}
+fn Reallocate(size: i64, ptr: void*, old_size: i64 = 0) -> void* {
+    return AllocateHeap(0, ptr, old_size)
+}
+fn Free(ptr: void*, old_size: i64 = 0) {
+    AllocateHeap(0, ptr, old_size)
+}
+//   alloc - AllocateHeap(64)
+//    free - AllocateHeap(0, ptr, old_size = 64)
+// realloc - AllocateHeap(128, ptr, old_size = 64)
+fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
+    #if OS_WINDOWS
+    heap := GetProcessHeap()
+    if !size {
+        if ptr
+            HeapFree(heap, 0, ptr)
+        return null
+    }
+    new_ptr: void*
+    if !ptr {
+        new_ptr = HeapAlloc(heap, 0, size)
+    } else {
+        new_ptr = HeapReAlloc(heap, 0, ptr, size)
+    }
+    if !new_ptr || new_ptr == STATUS_NO_MEMORY || new_ptr == STATUS_ACCESS_VIOLATION {
+        return null
+    }
+    return new_ptr
+    #else
+    TODO:
+    #endif
+}
+

@@ -1,28 +1,16 @@
 
-// Debug information is broken with this.
-// There is no disassembly.
+// This code cannot be debugged properly if the code range of lexical scopes
+// is miscalculated.
 // - Emarioo, 2024-05-06
 
-struct DynamicArray<T> {
-    // zero initialized by default
-    ptr: T*;
-    max: u32; // allocated bytes
-    len: u32; // elements in allocation
-
-    fn add(newElement: T) -> T* {
-        {
-            res: bool = reserve(7u + max * 2u);
-        }
-        n: i32;
-        return null;
-    }
-    fn reserve(newMax: u32) -> bool {
-        return false;
-    }
-}
-
 fn main() {
-    arr: DynamicArray<i32>;
-    arr.add(5)
-    arr.add(9)
+    add()
+    add()
+}
+fn add() {
+    {
+        res: bool = true; // = reserve(7u + max * 2u);
+        res = true;
+    }
+    n: i32 = 4;
 }

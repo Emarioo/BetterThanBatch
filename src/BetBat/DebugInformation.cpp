@@ -19,7 +19,10 @@ DebugFunction* DebugInformation::addFunction(FuncImpl* impl, TinyBytecode* tinyc
 
     for(int i=0;i<(int)functions.size();i++){
         if(functions[i]->name == name) {
-            Assert(false);
+            // Assert(false);
+            // TODO: Uniquely name functions better
+            name = tinycode->name + "_" + std::to_string(functions.size());
+            break;
         }
     }
     u32 fi = addOrGetFile(from_file);

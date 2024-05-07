@@ -1,18 +1,13 @@
 
 
 
-struct Bad {
-    n: i32;
-    fn add(newElement: i32) -> i32* {
-        {
-            res: bool; // = reserve(7u + max * 2u);
-        }
-        n: i32;
-        return null;
-    }
+struct Name {
+    str: char[20]
 }
 
-fn main() {
-    arr: Bad;
-    arr.add(9)
-}
+// The name struct should be 20 in size
+// we should not add hidden members
+// the user specifies the size they want and that's that they get
+
+
+str.len

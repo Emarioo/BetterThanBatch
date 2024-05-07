@@ -1,0 +1,282 @@
+/*
+## Module for the file system ##
+- Opening, reading, writing files
+- Creating, iterating directories
+- TODO: File monitoring
+*/
+
+// TODO: import the right OS bindings
+#import "Win32"
+#import "Memory"
+
+enum @enclosed FileHandle : i64 { INVALID }
+
+// TODO: These should be scoped to this file
+fn HandleToInternal(n: FileHandle) -> void* {
+    return cast<void*> ( cast<i64>n - 1 )
+}
+fn InternalToHandle(n: void*) -> FileHandle {
+    return cast_unsafe<FileHandle> ( cast<i64>n + 1 )
+}
+
+enum @specified FileOpenFlags {
+    FILE_READ_ONLY          = 0x1, // From Engone/Win32.cpp, DO NOT MODIFY
+    FILE_CLEAR_AND_WRITE    = 0x2,
+    FILE_READ_AND_WRITE     = 0x4,
+}
+// returns file handle and file size
+fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -> FileHandle {
+    c_path: char* = path.ptr;
+    destroy_c_path := false
+    defer {
+        if destroy_c_path
+            Free(c_path)
+    }
+    if path.ptr[path.len] != '\0' {
+        destroy_c_path = true
+        c_path = Allocate(path.len + 1)
+        memcpy(c_path, path.ptr, path.len)
+        c_path[path.len] = '\0'
+    }
+    
+    access: i32 = GENERIC_READ|GENERIC_WRITE
+    sharing: i32 = FILE_SHARE_READ|FILE_SHARE_WRITE
+    
+    if flags & FILE_READ_ONLY
+        access = GENERIC_READ
+    
+    creation: i32 = OPEN_EXISTING;
+    if flags & FILE_CLEAR_AND_WRITE
+        creation = CREATE_ALWAYS;
+    
+    // if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){
+    //     std::string temp;
+    //     uint i=0;
+    //     int at = path.find_first_of(':');
+    //     if(at!=-1){
+    //         i = at+1;
+    //         temp+=path.substr(0,i);
+    //     }
+    //     for(;i<path.length();i++){
+    //         char chr = path[i];
+    //         if(chr=='/'||chr=='\\'){
+    //             // printf("exist %s\n",temp.c_str());
+    //             if(!DirectoryExist(temp)){
+    //                 // printf(" create\n");
+    //                 bool success = DirectoryCreate(temp);
+    //                 if(!success)
+    //                     break;
+    //             }
+    //         }
+    //         temp+=chr;
+    //     }
+    // }
+    security_attributes := null // TODO: Can we ignore securit attributes?
+    // SECURITY_ATTRIBUTES sa;
+    // ZeroMemory(&sa, sizeof(SECURITY_ATTRIBUTES));
+    // sa.nLength = sizeof(sa);
+    // sa.bInheritHandle = true;
+    
+    handle := CreateFileA(c_path,access,sharing,security_attributes,creation,FILE_ATTRIBUTE_NORMAL, null);
+    
+    if(handle == INVALID_HANDLE_VALUE){
+        // TODO: provide a better error
+        return FileHandle.INVALID
+        // DWORD err = GetLastError();
+        // if(err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND){
+        //     // this can happen, it's not really an error, no need to print.
+        //     // denied access to some more fundamental error is important however.
+        //     // PL_PRINTF("[WinError %lu] Cannot find '%s'\n",err,path.c_str());
+        // }else if(err == ERROR_ACCESS_DENIED){
+        //     PL_PRINTF("[WinError %lu] Denied access to '%s'\n",err,path.c_str()); // tried to open a directory?
+        // }else {
+        //     PL_PRINTF("[WinError %lu] Error opening '%s'\n",err,path.c_str());
+        // }
+        // return {};
+    } else if (outFileSize) {
+        *outFileSize = 0;
+        
+        success := GetFileSizeEx(handle, outFileSize);
+        if (!success) {
+            success := CloseHandle(handle)
+            if !success {
+                // TODO: I don't think this should fail since CreateFileA succeded.   
+            }
+            return FileHandle.INVALID
+        }
+    }
+    return InternalToHandle(handle)
+}
+// returns read bytes
+fn FileRead(file: FileHandle, buffer: void*, size: i32) -> i32 {
+    read: i32
+    yes := ReadFile(HandleToInternal(file), buffer, size, &read, null)
+    if !yes
+        return 0 // TODO: Handle error
+    return read
+}
+// returns written bytes
+fn FileWrite(file: FileHandle, buffer: void*, size: i32) -> i32 {
+    written: i32
+    yes := WriteFile(HandleToInternal(file), buffer, size, &written, null)
+    if !yes
+        return 0 // TODO: Handle error
+    return written
+}
+fn FileClose(file: FileHandle) {
+    CloseHandle(HandleToInternal(file))
+}
+
+// // The returned string is heap allocated in the interpreter.
+// // This allocation is freed when the interpreter finishes.
+// // TODO: You may want to change this so that you give the function a
+// //   StringBuffer or StringBuilder and it puts the CWD in there while
+// //   still returning a slice. Perhaps the StringBuilder defaults to null
+// //   and if not provided it is heap allocated, otherwise allocated in StringBuilder.
+// fn CurrentWorkingDirectory() -> char[]; // should it be const?
+
+// struct DirectoryIteratorData {
+//     name: char[]; // Allocated by interpreter; can't be String because of that. The ptr should be const (char* const NOT const char*)
+//     fileSize: u64;
+//     lastWriteSeconds: f32;
+//     isDirectory: bool;
+// }
+// struct DirectoryIterator {
+//     _handle: u64;
+//     rootPath: char[]; // allocated by interpreter, should be char* const
+//     result: DirectoryIteratorData;
+
+//     fn next() -> DirectoryIteratorData* {
+//         return DirectoryIteratorNext(this);
+//     }
+//     fn skip() {
+//         DirectoryIteratorSkip(this);
+//     }
+// }
+
+struct DirIteratorItem {
+    name: char[];
+    file_size: u64;
+    modified_time: u64;
+    isDirectory: bool;
+}
+
+// A handle to hide implementation details
+enum @enclosed DirIterator : i64 { INVALID }
+
+// TODO: We depend on DynamicArray right now for ease of implementing it but we shouldn't in the future.
+#import "Array"
+
+struct DirIterator_impl {
+    root: char[];
+    current_dir: char[];
+    current_file: char[];
+    handle: HANDLE;
+    remaining_directories: DynamicArray<char[]>;
+    
+    fn valid() -> bool { return root.ptr }
+}
+
+global _directory_iterators: DynamicArray<DirIterator_impl>
+
+fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
+    if root_path.len == 0 
+        return DirIterator.INVALID // empty path not okay
+    
+    index: i32 = -1
+    for 0.._directory_iterators.size() {
+        iter := &_directory_iterators[nr]
+        if iter.valid()
+            continue
+            
+        index = nr
+        break
+    }
+    if index == -1 {
+        _directory_iterators.add(DirIterator_impl{})
+        index = _directory_iterators.size()-1
+    }
+    
+    iter := &_directory_iterators[index]
+    
+    iter.root.ptr = Allocate(root_path.len + 1)
+    iter.root.len = root_path.len
+    iter.root.ptr[iter.root.len] = '\0'
+    iter.handle = INVALID_HANDLE_VALUE
+    
+    return InternalToHandle(index)
+}
+fn DirectoryIteratorDestroy(iterator: DirIterator) {
+    
+}
+fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> bool {
+    if iterator == DirIterator.INVALID  return false
+    index := HandleToInternal(iterator)
+    iter := &_directory_iterators[index]
+    
+    WIN32_FIND_DATAA data;
+    while {
+        if(iter.handle==INVALID_HANDLE_VALUE){
+            if(iter.remaining_directories.size()==0){
+                return false;
+            }
+            iter.current_dir.clear(); // TODO:
+            
+            if(iter.remaining_directories.get(0).size()!=0){
+                iter.current_dir += iter.remaining_directories.get(0);
+            }
+            
+            std::string temp = info->second.dir;
+            if(!temp.empty())
+                temp += "\\";
+            
+            temp+="*";
+            // printf("FindFirstFile %s\n",temp.c_str());
+            // TODO: This does a memcpy on the whole array (almost).
+            //  That's gonna be slow!
+            info->second.directories.removeAt(0);
+            // fprintf(stderr, "%s %p\n", temp.c_str(), &data);
+            
+            // DWORD err = GetLastError();
+            // PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(u64)iterator);
+            HANDLE handle=INVALID_HANDLE_VALUE;
+            handle = FindFirstFileA(temp.c_str(),&data);
+            // handle = FindFirstFileA("src\\*",&data);
+            // fprintf(stderr, "WHY%s %p\n", temp.c_str(), &data);
+            
+            if(handle==INVALID_HANDLE_VALUE){
+                DWORD err = GetLastError();
+                PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
+                continue;
+            }
+            info->second.handle = handle;
+        }else{
+            BOOL success = FindNextFileA(info->second.handle,&data);
+            if(!success){
+                DWORD err = GetLastError();
+                if(err == ERROR_NO_MORE_FILES){
+                    // PL_PRINTF("[WinError %u] No files '%lu'\n",err,(u64)iterator);
+                }else {
+                    PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
+                }
+                bool success = FindClose(info->second.handle);
+                info->second.handle = INVALID_HANDLE_VALUE;
+                if(!success){
+                    err = GetLastError();
+                    PL_PRINTF("[WinError %lu] FindClose '%llu'\n",err,(u64)iterator);
+                }
+                continue;
+            }
+        }
+        // fprintf(stderr, "%p %p\n", iterator, result);
+        if(strcmp(data.cFileName,".")==0||strcmp(data.cFileName,"..")==0){
+            continue;
+        }
+        break;
+    }
+    
+    return true
+}
+fn DirectoryIteratorSkip(iterator: DirIterator) {
+    
+}

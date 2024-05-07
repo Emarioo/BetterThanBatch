@@ -3022,16 +3022,37 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 
                 if((ltype.getId() < AST_TRUE_PRIMITIVES || ltype.getPointerLevel() > 0) && (rtype.getId() < AST_TRUE_PRIMITIVES || rtype.getPointerLevel())){
                     // okay
+                } else if(left_info->astEnum && ltype == rtype) {
+                    // okay
                 } else {
-                    Assert(left_info->astStruct || right_info->astStruct); // can we assume that this is a struct?
-                    std::string lmsg = info.ast->typeToString(ltype);
-                    std::string rmsg = info.ast->typeToString(rtype);
-                    ERR_SECTION(
-                        ERR_HEAD2(expression->location)
-                        ERR_MSG("Cannot do operation on struct.")
-                        ERR_LINE2(expression->left->location,lmsg.c_str());
-                        ERR_LINE2(expression->right->location,rmsg.c_str());
-                    )
+                    if(left_info->astStruct || right_info->astStruct) {
+                        std::string lmsg = info.ast->typeToString(ltype);
+                        std::string rmsg = info.ast->typeToString(rtype);
+                        ERR_SECTION(
+                            ERR_HEAD2(expression->location)
+                            ERR_MSG("Cannot do operation on struct.")
+                            ERR_LINE2(expression->left->location,lmsg.c_str());
+                            ERR_LINE2(expression->right->location,rmsg.c_str());
+                        )
+                    } else if(left_info->astEnum || right_info->astEnum) {
+                        std::string lmsg = info.ast->typeToString(ltype);
+                        std::string rmsg = info.ast->typeToString(rtype);
+                        ERR_SECTION(
+                            ERR_HEAD2(expression->location)
+                            ERR_MSG("Cannot do operation on enums.")
+                            ERR_LINE2(expression->left->location,lmsg.c_str());
+                            ERR_LINE2(expression->right->location,rmsg.c_str());
+                        )
+                    } else {
+                        std::string lmsg = info.ast->typeToString(ltype);
+                        std::string rmsg = info.ast->typeToString(rtype);
+                        ERR_SECTION(
+                            ERR_HEAD2(expression->location)
+                            ERR_MSG("Cannot perform operation on the types.")
+                            ERR_LINE2(expression->left->location,lmsg.c_str());
+                            ERR_LINE2(expression->right->location,rmsg.c_str());
+                        )
+                    }
                     return SIGNAL_FAILURE;
                 }
                 

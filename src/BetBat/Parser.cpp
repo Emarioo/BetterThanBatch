@@ -588,15 +588,38 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
             if(tok0.type == '[' && tok2.type == ']') {
                 info.advance(3);
 
+                // info.advance();
+                // auto tok = info.gettok(&view);
+                // bool is_negative = false;
+                // if(tok.type == '-') {
+                //     is_negative = true;
+                //     info.advance();
+                //     tok = info.gettok(&view);
+                // }
+                // i64 value = 0;
+                // if(info.lexer->isIntegerLiteral(tok, &value)) {
+                //     info.advance();
+                //     if(is_negative)
+                //         nextValue = -value;
+                //     else
+                //         nextValue = value;
+                // } else {
+                //     ERR_SECTION(
+                //         ERR_HEAD2(tok)
+                //         ERR_MSG("Values for enum members can only be a integer literal. In the future, any constant expression will be allowed.")
+                //         ERR_LINE2(tok,"not an integer literal")
+                //     )
+                // }
+                // TODO: Handle hexidecimal use code above
                 if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
                     // u64 num = 0;
                     // memcpy(&num, num_data.ptr, num_data.len);
                     arrayLength = lexer::ConvertInteger(num_data);
-                    if(arrayLength<0){
+                    if(arrayLength<=0){
                         ERR_SECTION(
                             ERR_HEAD2(tok1)
-                            ERR_MSG("Array cannot have negative size.")
-                            ERR_LINE2(tok1,"< 0")
+                            ERR_MSG("Array cannot have negative or zero size.")
+                            ERR_LINE2(tok1,"<= 0")
                         )
                         arrayLength = 0;
                     }
@@ -607,9 +630,10 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
                         ERR_LINE2(tok1, "must be positive integer literal")
                     )
                 }
-                typeToken = "Slice<" + typeToken +">";
+                // the member is not a slice, it's an actual array
+                // typeToken = "Slice<" + typeToken +">";
             }
-            Assert(arrayLength==-1); // arrays in structs not implemented yet
+            // Assert(arrayLength==-1); // arrays in structs not implemented yet
             // std::string temps = typeToken;
             
             TypeId typeId = info.ast->getTypeString(typeToken);
@@ -629,6 +653,8 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
                 mem.defaultValue = defaultValue;
                 mem.stringType = typeId;
                 mem.location = info.srcloc(name_tok);
+                if(arrayLength!=-1)
+                    mem.array_length = arrayLength;
                 
                 // auto l = info.lexer->getTokenSource_unsafe(mem.location);
                 // log::out << l->line << " " << l->column<<"\n";
@@ -1784,6 +1810,13 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
             } else if(token->type == lexer::TOKEN_LITERAL_HEXIDECIMAL){
                 auto token_tiny = info.gettok();
                 info.advance();
+                
+                bool negativeNumber = false;
+                if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
+                    ops.pop();
+                    saved_locations.pop();
+                    negativeNumber = true;
+                }
                 // if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                 //     ops.pop();
                 //     ERR_SECTION(
@@ -1799,20 +1832,40 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 int hex_prefix = 0;
                 if(view.len>=2 && *(u16*)view.ptr == 'x0') // 'x0' and not '0x' because of little endian or something like that
                     hex_prefix = 2;
+                    
                 int significant_digits = 0;
+                bool unsignedSuffix = false;
+                bool signedSuffix = false;
                 for(int i=hex_prefix;i<view.len;i++) {
                     char c = view.ptr[i];
-                    if(c == '_') {
+                    if(c == 'u') {
+                        unsignedSuffix = true;
+                        continue;
+                    } else if(c == 's') {
+                        signedSuffix = true;
+                        continue;
+                    } else if(c == '_') {
                         continue;
                     }
-                    significant_digits ++;
+                    significant_digits++;
                 }
+                // NOTE: We use signed integers, not unsigned integers. We don't have to cast to signed which we
+                //   often want. Later we will infer the type for literals but that's future stuff.
                 if(significant_digits<=8) {
-                    tmp = info.ast->createExpression(TypeId(AST_UINT32));
+                    if(unsignedSuffix)
+                        tmp = info.ast->createExpression(TypeId(AST_UINT32));
+                    else
+                        tmp = info.ast->createExpression(TypeId(AST_INT32));
                 } else if(significant_digits<=16) {
-                    tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                    if(unsignedSuffix)
+                        tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                    else
+                        tmp = info.ast->createExpression(TypeId(AST_INT64));
                 } else {
-                    tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                    if(unsignedSuffix)
+                        tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                    else
+                        tmp = info.ast->createExpression(TypeId(AST_INT64));
                     ERR_SECTION(
                         ERR_HEAD2(token_tiny)
                         ERR_MSG("Hexidecimal overflow! '"<<info.lexer->tostring(token_tiny)<<"' is to large for 64-bit integers!")
@@ -1820,14 +1873,11 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     )
                 }
                 tmp->location = info.srcloc(token_tiny);
-                tmp->i64Value =  lexer::ConvertHexadecimal(view);
+                tmp->i64Value = lexer::ConvertHexadecimal(view);
+                if(negativeNumber)
+                    tmp->i64Value = -tmp->i64Value;
                 values.add(tmp);
                 // tmp->constantValue = true;// nocheckin
-                // tmp->tokenRange.firstToken = token;
-                // tmp->tokenRange.startIndex = info.at();
-                // tmp->tokenRange.endIndex = info.at()+1;
-                
-                // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_LITERAL_STRING) {
                 auto loc = info.getloc();
                 info.advance();
@@ -3611,7 +3661,7 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
                         )
                         return SIGNAL_COMPLETE_FAILURE;
                     }
-
+                    // TODO: Handle hexidecimal
                     if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
                         lengthTokenOfLastVar = tok1;
                         arrayLength = lexer::ConvertInteger(view_int);

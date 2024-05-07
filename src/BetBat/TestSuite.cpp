@@ -459,6 +459,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             // errors will be smaller than errorTypes since errors isn't incremented when doing TEST_ERROR(
             if(compiler.errorTypes.size() < options.compileStats.errors) {
                 log::out << log::YELLOW << "TestSuite: errorTypes: "<< compiler.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
+                failedTests += options.compileStats.errors - compiler.errorTypes.size();
             }
         } else {
             if(useInterp) {
@@ -510,7 +511,12 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                     u64 readBytes = PipeRead(pipe, buffer, bufferSize);
                     readBytes -= sizeof(tinyBuffer);
 
-                    Assert(readBytes%4==0);
+                    if(readBytes%4==0) {
+                        // good
+                    } else {
+                        Assert(failedTests);
+                        break;
+                    }
 
                     totalTests += readBytes/4;
                     int j = 0;
@@ -573,8 +579,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             log::out << log::GRAY;
         }
         if(result.totalTests == 0)
-            // log::out << "100.0% (0/0): ";
-            log::out << "(0/0): ";
+            log::out << "(0/0)";
         else {
             if(result.failedTests != 0)
                 log::out << (100.0f*(float)(result.totalTests-result.failedTests)/(float)result.totalTests)<<"% ";

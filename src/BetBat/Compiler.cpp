@@ -434,60 +434,140 @@ void Compiler::processImports() {
         bool finished = true;
         bool found = false;
         CompilerTask picked_task{};
-        int task_index=0;
+        int task_index=tasks.size()-1;
         while(task_index < tasks.size()) {
-            CompilerTask& task = tasks[task_index];
-            task_index++;
-            // if(im->busy) {
-            //     finished=false;
-            //     LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" busy: "<<im->import_id<<" ("<<TrimCWD(im->path)<<")\n")
-            //     continue;
-            // }
-            // if(im->finished) {
-            //     LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" finished: "<<im->import_id<<" ("<<TrimCWD(im->path)<<")\n")
-            //     continue;
-            // }
+            // NOTE: We process tasks backwards so that most macro dependencies are evaluated first
+            int cur_task_index = task_index;
+            task_index--;
+            
+            CompilerTask& task = tasks[cur_task_index];
+            
             // TODO: Optimize dependency checking
             // TODO: Some checks don't respect nested dependencies.
             bool missing_dependency = false;
             if(task.type == TASK_PREPROCESS_AND_PARSE) {
                 // Before preprocessing we must make sure all imports that are linked in any way
                 // are lexed before preprocessing.
+                
+                // Macros can be defined in #if and can be created at TASK_LEX or at TASK_PREPROCESS_AND_PARSE
+                // Unless imports depend on each other we should preprocess and parse the dependencies first so
+                // that macros exist when we expect them to. The code below calculates those dependencies.
+                // In the case of a circular dependencies, macros may not be defined.
+
+                // Step 1. Which dependency depends on myself.
+                CompilerImport* im = imports.get(task.import_id-1);
+                for(auto& dep : im->dependencies) {
+                    DynamicArray<u32> checked_ids{};
+                    DynamicArray<u32> ids_to_check{};
+                    ids_to_check.add(dep.id);
+                    
+                    // TODO: We detect circular dependencies multiple times per task. Is it possible
+                    //   to cache the results for next time so we don't have to check this again?
+                    //   It might not be because of #import inside #if. Who knows when a new import pops up.
+                    
+                    if(dep.circular_dependency_to_myself) continue;
+                    
+                    while(ids_to_check.size()) {
+                        u32 id = ids_to_check.last();
+                        CompilerImport* imp_dep = imports.get(id-1);
+                        ids_to_check.pop();
+                        checked_ids.add(id);
+                        
+                        for(auto& it : imp_dep->dependencies) {
+                            bool checked = false;
+                            for(auto& it2 : checked_ids) {
+                                if(it.id == it2) {
+                                    checked = true;
+                                    break;
+                                }
+                            }
+                            if(checked) continue;
+                            ids_to_check.add(it.id);
+                            if(it.id == im->import_id) {
+                                dep.circular_dependency_to_myself = true;
+                                break;
+                            }
+                        }
+                        if(dep.circular_dependency_to_myself)
+                            break;
+                    }
+                }
+                // Step 2. Wait for the dependencies that don't depend on me to parse first.
                 DynamicArray<u32> checked_ids{};
                 DynamicArray<u32> ids_to_check{};
-                ids_to_check.add(task.import_id);
-                CompilerImport* im = imports.get(task.import_id-1);
+                for(auto& dep : im->dependencies) {
+                    if(dep.circular_dependency_to_myself)
+                        continue;
+                    ids_to_check.add(dep.id);
+                }
                 while(ids_to_check.size()) {
-                    // CompilerImport* dep = imports.get(im->dependencies[j].id-1);
                     u32 id = ids_to_check.last();
-                    CompilerImport* dep = imports.get(id-1);
+                    CompilerImport* imp_dep = imports.get(id-1);
                     ids_to_check.pop();
                     checked_ids.add(id);
 
-                    Assert(dep);
-                    
-                    if(!dep || !(dep->state & TASK_LEX)) {
+                    if(!(imp_dep->state & TASK_PREPROCESS_AND_PARSE)) {
                         if(ids_to_check.size() == 0)  {
                             // direct dependency
-                            LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                            LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(imp_dep?TrimCWD(imp_dep->path):"?")<<")\n")
                         } else {
                             // inherited dependency
-                            LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"-->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                            LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"-->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(imp_dep?TrimCWD(imp_dep->path):"?")<<")\n")
                         }
                         missing_dependency = true;
                         break;
                     }
 
-                    for(auto& it : dep->dependencies) {
+                    for(auto& it : imp_dep->dependencies) {
                         bool checked = false;
                         for(auto& it2 : checked_ids) {
                             if(it.id == it2) {
-                                    checked = true;
-                                    break;
+                                checked = true;
+                                break;
                             }
                         }
                         if(checked) continue;
                         ids_to_check.add(it.id);
+                    }
+                }
+                // Step 3. Process the circular dependencies.
+                if(!missing_dependency) {
+                    checked_ids.resize(0);
+                    ids_to_check.resize(0);
+                    for(auto& dep : im->dependencies) {
+                        if(!dep.circular_dependency_to_myself)
+                            continue;
+                        ids_to_check.add(dep.id);
+                    }
+                    while(ids_to_check.size()) {
+                        u32 id = ids_to_check.last();
+                        CompilerImport* imp_dep = imports.get(id-1);
+                        ids_to_check.pop();
+                        checked_ids.add(id);
+
+                        if(!(imp_dep->state & TASK_LEX)) {
+                            if(ids_to_check.size() == 0)  {
+                                // direct dependency
+                                LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(imp_dep?TrimCWD(imp_dep->path):"?")<<")\n")
+                            } else {
+                                // inherited dependency
+                                LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"-->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(imp_dep?TrimCWD(imp_dep->path):"?")<<")\n")
+                            }
+                            missing_dependency = true;
+                            break;
+                        }
+
+                        for(auto& it : imp_dep->dependencies) {
+                            bool checked = false;
+                            for(auto& it2 : checked_ids) {
+                                if(it.id == it2) {
+                                    checked = true;
+                                    break;
+                                }
+                            }
+                            if(checked) continue;
+                            ids_to_check.add(it.id);
+                        }
                     }
                 }
             } else if (task.type == TASK_TYPE_ENUMS) { // when we are about to check functions
@@ -562,7 +642,7 @@ void Compiler::processImports() {
                 continue;
             }
             picked_task = task;
-            tasks.removeAt(task_index - 1);
+            tasks.removeAt(cur_task_index);
             finished=false;
             found = true;
             break;
@@ -932,6 +1012,10 @@ void Compiler::run(CompileOptions* options) {
     if(options->useDebugInformation) {
         log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
         // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
+    }
+    if(options->source_file.size() == 0 && !options->source_buffer.buffer) {
+        log::out << log::RED << "No source file was specified.\n";
+        return;
     }
 
     std::string obj_file = "bin/main.o";

@@ -3,6 +3,9 @@
 
 #macro LN printc('L'); printc('N'); std_print(cast<i64>#line); std_print('\n')
 
+
+fn @intrinsic strlen(ptr: char*) -> u32;
+
 // heap allocated for now
 struct StringBuilder {
     // I was gonna say, the order ptr, len, max

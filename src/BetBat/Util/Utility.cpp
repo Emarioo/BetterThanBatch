@@ -393,6 +393,7 @@ std::string StringFromExitCode(u32 exit_code) {
     #define _STATUS_INTEGER_DIVIDE_BY_ZERO   0xC0000094
     #define _STATUS_STACK_OVERFLOW           0xC00000FD
     #define _STATUS_DLL_NOT_FOUND            0xC0000135
+    #define _STATUS_HEAP_CORRUPTION          0xc0000374
     switch(exit_code) {
         case _STATUS_ACCESS_VIOLATION:          return "Access violation";
         case _STATUS_ILLEGAL_INSTRUCTION:       return "Illegal instruction";
@@ -400,6 +401,7 @@ std::string StringFromExitCode(u32 exit_code) {
         case _STATUS_INTEGER_DIVIDE_BY_ZERO:    return "Division by zero (integer)";
         case _STATUS_STACK_OVERFLOW:            return "Stack overflow";
         case _STATUS_DLL_NOT_FOUND:             return "Missing DLL";
+        case _STATUS_HEAP_CORRUPTION:           return "Heap corruption";
         default: return "";
     }
 }

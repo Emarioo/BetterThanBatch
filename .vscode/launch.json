@@ -44,6 +44,7 @@
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],
             // "args": ["-pm", "dev*"],
             "args": ["-dev"],
+            // "args": [""],
             // "args": ["oi.btb"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

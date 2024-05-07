@@ -1,5 +1,11 @@
 @TEST_CASE(if_directive)
 
+#import "./temp"
+
+// HELLO_THERE is behind an #if directive
+// That should be okay though, no circular dependencies
+HELLO_THERE
+
 // TODO:
 // #if OS
 

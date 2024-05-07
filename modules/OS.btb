@@ -9,7 +9,6 @@
 
 
 */
-// fn @native prints(str: char[]) ;
 
 #if LINKER_MSVC
     #load "bin/NativeLayer.lib" as native_layer
@@ -31,57 +30,11 @@
 // #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 #macro Assert(expression) #endmacro
 
-// TODO: Move intrinsics elsewhere
-// len is in bytes
-fn @intrinsic memcpy(dst: void*, src: void*, len: u64);
-fn @intrinsic memzero(dst: void*, len: u64);
-fn @intrinsic strlen(ptr: char*) -> u32;
 // returns time stamp counter and IA32_TSC_AUX 
 fn @intrinsic rdtsc() -> u64;
 // fn @intrinsic rdtscp() -> u64, u32;
-/*
-if *ptr == old
-    *ptr = new
-    return old
-else
-    return *ptr
-*/
-fn @intrinsic atomic_compare_swap(ptr: i32*, old: i32, new: i32) -> i32;
-fn @intrinsic atomic_add(ptr: i32*, value: i32) -> i32;
-// TODO: atomic_add64?
 
-// fn @native printi(num: i64) ;
-// fn @native printd(num: f32) ;
-// fn @native printc(chr: char) ;
 
-fn LINK_TYPE Allocate(size: u64) -> void*;
-fn LINK_TYPE Reallocate(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
-fn LINK_TYPE Free(ptr: void*, size: u64) ;
-
-#macro FileHandle u64
-// struct FileHandle { // not named File because someone might want that name for other things
-//     handle: u64;
-// }
-enum @specified FileOpenFlags {
-    FILE_READ_ONLY          = 0x1, // From Engone/Win32.cpp, DO NOT MODIFY
-    FILE_CLEAR_AND_WRITE    = 0x2,
-    FILE_READ_AND_WRITE     = 0x4,
-}
-// returns file handle and file size
-fn LINK_TYPE FileOpen(path: Slice<char>*, flags: FileOpenFlags, outFileSize: u64* = null) -> FileHandle;
-// returns read bytes
-fn LINK_TYPE FileRead(file: FileHandle, buffer: void*, readBytes: u64) -> u64;
-// returns written bytes
-fn LINK_TYPE FileWrite(file: FileHandle, buffer: void*, writeBytes: u64) -> u64;
-fn LINK_TYPE FileClose(file: FileHandle);
-
-// // The returned string is heap allocated in the interpreter.
-// // This allocation is freed when the interpreter finishes.
-// // TODO: You may want to change this so that you give the function a
-// //   StringBuffer or StringBuilder and it puts the CWD in there while
-// //   still returning a slice. Perhaps the StringBuilder defaults to null
-// //   and if not provided it is heap allocated, otherwise allocated in StringBuilder.
-fn @native CurrentWorkingDirectory() -> char[]; // should it be const?
 fn LINK_TYPE StartMeasure() -> u64;
 fn LINK_TYPE StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 fn LINK_TYPE DiffMeasure(endSubStart: u64) -> f32; // TODO: Use f64 (double) when implemented
@@ -89,30 +42,6 @@ fn LINK_TYPE NativeSleep(seconds: f32);
 
 fn @import CmdLineArgs() -> Slice<Slice<char>>*; // const?
 
-// fn LINK_TYPE DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterator*;
-// fn LINK_TYPE DirectoryIteratorDestroy(iterator: DirectoryIterator*);
-// fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
-// fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);
-
 fn LINK_TYPE GetClockSpeed() -> u64;
 
 fn LINK_TYPE ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
-
-struct DirectoryIteratorData {
-    name: char[]; // Allocated by interpreter; can't be String because of that. The ptr should be const (char* const NOT const char*)
-    fileSize: u64;
-    lastWriteSeconds: f32;
-    isDirectory: bool;
-}
-struct DirectoryIterator {
-    _handle: u64;
-    rootPath: char[]; // allocated by interpreter, should be char* const
-    result: DirectoryIteratorData;
-
-    fn next() -> DirectoryIteratorData* {
-        return DirectoryIteratorNext(this);
-    }
-    fn skip() {
-        DirectoryIteratorSkip(this);
-    }
-}

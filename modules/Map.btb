@@ -1,7 +1,7 @@
 
 #import "Array"
-// #import "Logger"
 #import "String"
+#import "Logger"
 
 #macro Map_i32 Map<i32,i32>
 
@@ -103,7 +103,7 @@ struct Map<Key,Val> {
             return 0;
         // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
         fnv_prime: u32 = 0x01000193; // TODO: Make these constants?
-        fn_offset_basis: u32 = 0x811c9dc5;
+        fn_offset_basis: u32 = 0x811c9dc5u;
         
         final_hash: u32 = fn_offset_basis;
         for str {
@@ -118,11 +118,11 @@ struct Map<Key,Val> {
         // https://www.shadertoy.com/view/WttXWX
         x: u32 = num;
         x ^= x >> 17;
-        x *= 0xed5ad4bb;
+        x *= 0xed5ad4bbu;
         x ^= x >> 11;
-        x *= 0xac4c1b51;
+        x *= 0xac4c1b51u;
         x ^= x >> 15;
-        x *= 0x31848bab;
+        x *= 0x31848babu;
         x ^= x >> 14;
         return x % table.size();
     }
@@ -287,29 +287,29 @@ struct Map<Key,Val> {
         chains.len = 0;
         memzero(table.ptr, table.max * sizeof(*table.ptr));
     }
-    // fn print() {
-    //     if table.size() == 0 {
-    //         log("Map is empty")
-    //     }
-    //     for table.sliced_unsafe() {
-    //         if it == 0  continue;
+    fn print() {
+        if table.size() == 0 {
+            log("Map is empty")
+        }
+        for table.sliced_unsafe() {
+            if it == 0  continue;
             
-    //         std_print("[",nr,"] ")
+            std_prints("[",nr,"] ")
             
-    //         index := it;
-    //         while {
-    //             chain := chains.get_unsafe(index-1);
-    //             if !chain
-    //                 break;
-    //             if !chain.unused {
-    //                 std_print("<",chain.key,": ", chain.val,">, ")
-    //             }
-    //             index = chain.next;
+            index := it;
+            while {
+                chain := chains.get_unsafe(index-1);
+                if !chain
+                    break;
+                if !chain.unused {
+                    std_prints("<",chain.key,": ", chain.val,">, ")
+                }
+                index = chain.next;
                 
-    //             if chain.next == MAP_CHAIN_INDEX_NULL
-    //                 break;
-    //         }
-    //         std_print("\n");
-    //     }
-    // }
+                if chain.next == MAP_CHAIN_INDEX_NULL
+                    break;
+            }
+            std_prints("\n");
+        }
+    }
 }

@@ -56,6 +56,9 @@ int main(int argc, const char** argv){
     if(!valid)
         return EXIT_CODE_FAILURE;
 
+    if(options.quit)
+        return EXIT_CODE_SUCCESS;
+
     if(options.devmode) {
         // This code is only used during development
         log::out << log::BLACK<<"[DEVMODE]\n";
@@ -233,7 +236,9 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
     using namespace engone;
     if (commands.size() == 0) {
         print_version();
-        print_help();
+        log::out << log::GOLD << "The compiler suggests 'btb.exe -help'.\n";
+        // print_help();
+        options->quit = false;
         return true;
     }
 
@@ -264,6 +269,7 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
         const std::string& arg = commands[i];
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
         if(arg == "--help" || arg == "-help" || arg == "-?") {
+            options->quit = true;
             print_help();
             return true;
         } else if (arg == "--run" || arg == "-r") {

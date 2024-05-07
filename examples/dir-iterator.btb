@@ -8,13 +8,13 @@ startTime: u64 = 9;
 
 iter: DirectoryIterator*;
 // root = ".";
-root = "src";
+root := "src";
 // root = "docs";
-iter = DirectoryIteratorCreate(&root);
+iter := DirectoryIteratorCreate(&root);
 defer { DirectoryIteratorDestroy(iter); }
 
 result: DirectoryIteratorData*;
-loop = 0;
+loop := 0;
 // // printData(iter);
 // // result = 
 // // DirectoryIteratorNext(iter);
@@ -33,7 +33,7 @@ while result = iter.next() {
     // printData(result);
     //     // continue
     // }
-    eh = matchEnd(result.name,".cpp")
+    eh := matchEnd(result.name,".cpp")
     if !eh
         continue;
     // log("):")

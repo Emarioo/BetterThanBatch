@@ -197,6 +197,7 @@ if !compileSuccess! == 0 (
 
     @REM btb -twe *switch.btb
     bin\btb -dev
+    @REM bin\btb
     @REM bin\btb --test
     @REM btb -dev
     @REM btb -pm *typeinfo.btb -o dev.exe -g -r
