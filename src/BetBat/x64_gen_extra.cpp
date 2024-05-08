@@ -549,6 +549,12 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         Assert(false);
     }
     
+    struct SPMoment {
+        int virtual_sp;
+        int pop_at_bc_index;
+    };
+    DynamicArray<SPMoment> sp_moments{};
+    
     // NOTE: If the generator runs out of registers then define the macro below
     //   and run this command: btb -dev > out
     //   Start from the end of the file and see which instruction forgets to 
@@ -562,6 +568,15 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         auto opcode = n->base->opcode;
         map_translation(n->bc_index, code_size());
         last_pc = code_size();
+        
+        for(int i=0;i<sp_moments.size();i++) {
+            if(n->bc_index == sp_moments[i].pop_at_bc_index) {
+                virtual_stack_pointer = sp_moments[i].virtual_sp;
+                i--;
+                sp_moments.pop();
+                break;
+            }
+        }
         
         #ifdef DEBUG_REGISTER_USAGE
         int log_start = log::out.get_written_bytes();
@@ -1195,23 +1210,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             case BC_RET: {
                 emit_pop(X64_REG_BP);
                 emit1(OPCODE_RET);
-
-                Assert(("Bug"));
-                // virtual stack pointer should be reset to the earlier code path.
-                // tracking code paths and virtual stack pointers using jumps will be though.
-                
-                // nocheckin, TODO: FIXME
-                // switch(tinycode->call_convention) {
-                //     case BETCALL: break;
-                //     case STDCALL:
-                //     case UNIXCALL:
-                //         if(!is_register_free(X64_REG_A))
-                //             free_register(X64_REG_A);
-                //         if(!is_register_free(X64_REG_XMM0))
-                //             free_register(X64_REG_XMM0);
-                //     break;
-                //     default: Assert(false);
-                // }
             } break;
             case BC_JNZ: {
                 auto base = (InstBase_op1_imm32*)n->base;
@@ -1228,7 +1226,11 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit4((u32)0);
 
                 const u8 BYTE_OF_BC_JNZ = 1 + 1 + 4; // TODO: DON'T HARDCODE VALUES!
-                addRelocation32(imm_offset - 2, imm_offset, n->bc_index + BYTE_OF_BC_JNZ + base->imm32);
+                int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JNZ + base->imm32;
+                addRelocation32(imm_offset - 2, imm_offset, jmp_bc_addr);
+                
+                sp_moments.add({virtual_stack_pointer, jmp_bc_addr});
+                
                 FIX_POST_IN_OPERAND(0)
             } break;
              case BC_JZ: {
@@ -1244,8 +1246,12 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit2(OPCODE_2_JE_IMM32);
                 int imm_offset = code_size();
                 emit4((u32)0);
+                
                 const u8 BYTE_OF_BC_JZ = 1 + 1 + 4; // nocheckin TODO: DON'T HARDCODE VALUES!
-                addRelocation32(imm_offset - 2, imm_offset, n->bc_index + BYTE_OF_BC_JZ + base->imm32);
+                int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JZ + base->imm32;
+                addRelocation32(imm_offset - 2, imm_offset, jmp_bc_addr);
+                
+                sp_moments.add({virtual_stack_pointer, jmp_bc_addr});
                 
                 /*
                   Immediates in bytecode jump instructions are relative to

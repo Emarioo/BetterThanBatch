@@ -8,5 +8,19 @@
 // defer { FileClose(file) }
 // mem := Slice<char>{Allocate(file_size), file_size}
 // read := FileRead(file, mem.ptr, mem.len)
+// std_print(mem)
 
-std_print(mem)
+
+
+#import "File"
+#import "Logger"
+
+iter := DirectoryIteratorCreate("src")
+
+// how do we test that this works?
+item: DirIteratorItem*
+while DirectoryIteratorNext(iter, &item) {
+    log(item.name.sliced())
+}
+
+DirectoryIteratorDestroy(iter)

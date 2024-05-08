@@ -263,18 +263,8 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
                 temp.append("\\");
             
             temp.append("*");
-            // printf("FindFirstFile %s\n",temp.c_str());
-            // TODO: This does a memcpy on the whole array (almost).
-            //  That's gonna be slow!
-            // fprintf(stderr, "%s %p\n", temp.c_str(), &data);
-            
-            // DWORD err = GetLastError();
-            // PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(u64)iterator);
-            log("Try",temp.sliced())
             handle: HANDLE = INVALID_HANDLE_VALUE;
             handle = FindFirstFileA(temp.data(),&data);
-            // handle = FindFirstFileA("src\\*",&data);
-            // fprintf(stderr, "WHY%s %p\n", temp.c_str(), &data);
             
             if(handle==INVALID_HANDLE_VALUE){
                 log("find first file failed")
@@ -323,11 +313,11 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
     } else {
         iter.item.name.append(data.cFileName.ptr, cFileNameLen)
     }
-    #macro MAXDWORD 0xFFFF_FFFF
-    iter.item.file_size = cast<i64>data.nFileSizeLow+cast<i64>data.nFileSizeHigh*(cast<i64>MAXDWORD+1);
+    #macro MAXDWORD 0xFFFF_FFFFu
+    iter.item.file_size = cast<u64>data.nFileSizeLow+cast<u64>data.nFileSizeHigh*(MAXDWORD+1u);
+    iter.item.last_write_time = cast<u64>data.ftLastWriteTime.dwLowDateTime+cast<u64>data.ftLastWriteTime.dwHighDateTime*(MAXDWORD+1u);
     
-    iter.item.last_write_time = data.ftLastWriteTime;
-    iter.item.is_directory = data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY;
+    iter.item.is_directory = data.dwFileAttributes&cast<i32>FILE_ATTRIBUTE_DIRECTORY;
     if(iter.item.is_directory){
         iter.remaining_directories.add(iter.item.name.copy());
     }

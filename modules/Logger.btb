@@ -114,7 +114,7 @@ fn std_print(t: f32){
         std_print('.');
         std_print('0');
     } else {
-        if exp > 126u
+        if exp >= 127u
             intPart = (mantissa) >> decimalBits;
         std_print(cast<i64>intPart);
         std_print('.');

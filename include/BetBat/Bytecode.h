@@ -476,11 +476,11 @@ struct BytecodeBuilder {
     void emit_ret();
     
     void emit_jmp(int pc);
-    int emit_jmp();
+    void emit_jmp(int* out_imm_offset);
     void emit_jz(BCRegister reg, int pc);
-    int emit_jz(BCRegister reg);
+    void emit_jz(BCRegister reg, int* out_imm_offset);
     void emit_jnz(BCRegister reg, int pc);
-    int emit_jnz(BCRegister reg);
+    void emit_jnz(BCRegister reg, int* out_imm_offset);
     
     void emit_mov_rr(BCRegister to, BCRegister from);
     void emit_mov_rm(BCRegister to, BCRegister from, int size);

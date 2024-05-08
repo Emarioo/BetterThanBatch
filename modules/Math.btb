@@ -127,3 +127,151 @@ fn create_random_generator(seed: u64 = StartMeasure()) -> RandomGenerator {
 
 //     }
 // }
+
+struct f16 {
+    bits: u16;
+    fn sign() -> i32 { return cast<u32>(bits >> 15) & 0x1u }
+    fn exp() -> i32 { return cast<u32>(bits >> 10) & 0x1Fu }
+    fn mantissa() -> i32 { return cast<u32>(bits >> 0) & 0x3FFu }
+}
+fn make_f16(f: f32) -> f16 {
+    tmp: i32 = cast_unsafe<i32>f
+    sign := tmp >> 31
+    exp := tmp >> 23
+    if exp & 0x80
+        exp = ((exp -127) & 0xf) + 15
+    else
+        exp = exp & 0xF
+    mantissa := (tmp >> 13) & 0x3FF
+    return make_f16(sign, exp, mantissa)
+}
+fn make_f16(sign: i32, exp: i32, mantissa: i32) -> f16 {
+    return f16{((sign&1)<<15) | ((exp & 0x1F) << 10) | (mantissa & 0x3FF) }
+}
+
+fn add(a: f16, b: f16) -> f16 {
+    sign := (a.bits >> 15)  ^ (b.bits >> 15)
+    
+    a_exp := a.exp()
+    b_exp := b.exp()
+    
+    exp: i32
+    mant: i32
+    diff := a_exp - b_exp
+    if diff > 0 {
+        mant = (a.mantissa() | 0x400) << diff + (b.mantissa() | 0x400)
+        if mant & (0x400 << diff) { // overflow of mantissa
+            exp = a_exp + 1
+            mant = mant >> (diff + 1)
+        } else {
+            exp = a_exp
+            mant = mant >> (diff)
+        }
+    } else if diff < 0 {
+        mant = (a.mantissa() | 0x400) + (b.mantissa() | 0x400) << -diff
+        if mant & (0x400 << -diff) { // overflow of mantissa
+            exp = b_exp + 1
+            mant = mant >> (-diff + 1)
+        } else {
+            exp = b_exp
+            mant = mant >> (-diff)
+        }
+    } else {
+        mant = a.mantissa() + b.mantissa()
+        exp = a_exp + 1
+        mant = mant >> 1
+    }
+    return make_f16(sign, exp, mant)
+}
+fn sub(a: f16, b: f16) -> f16 {
+    return add(a, cast_unsafe<f16>(cast<u16>0x8000^b.bits))
+}
+operator +(a: f16, b: f16) -> f16 { return add(a, b) }
+operator -(a: f16, b: f16) -> f16 { return sub(a, b) }
+
+fn std_print(f: f16) {
+    bits: u32 = cast_unsafe<u16>f;
+    
+    sign := (bits >> 15u) & 1u;
+    exp := (bits >> 10u) & 0x1Fu;
+    mantissa: u64 = 0x400u | (bits & 0x3FFu)
+
+    if sign
+        std_print('-');
+        
+    intPart: u64 = 0;
+    decimalBits: i32 = 10 - (exp-15);
+
+    if decimalBits < 1 {
+        intPart = (mantissa) << (0-decimalBits);
+        if intPart == 0 {
+            printc('0')
+        } else {
+            str: char[23];
+            used := 22;
+            while intPart > 0u && used > 0 {
+                digit: u8 = intPart % 10u;
+                // log("i",intPart);
+                // log("d",digit);
+                str.ptr[used] = digit + '0';
+                used--;
+                intPart = intPart / 10u;
+            }
+            str.ptr += used + 1;
+            str.len -= used + 1;
+            prints(str);
+        }
+        // std_print(intPart);
+        std_print('.');
+        std_print('0');
+    } else {
+        if exp >= 15u
+            intPart = (mantissa) >> decimalBits;
+        std_print(cast<i64>intPart);
+        std_print('.');
+
+        decimals: char[24];
+
+        acc: u64 = 0;
+        mul: u64 = 1;
+        // std_print(decimalBits); std_print('\n')
+        precision := 19; // digits u64 can contain (18446744073709551615)
+        minBits :i32= decimalBits - precision;
+        if minBits < 0 {
+            minBits = 0;
+        }
+        // log(minBits, decimalBits)
+        for @rev minBits..decimalBits {
+            mul *= 5u;
+            acc = acc*10u
+            // log("nr", nr)
+            if nr < 24 {
+                bit := cast<u64>1 & (mantissa >> nr)
+                if bit {
+                    acc += mul;
+                }
+                // std_print(acc); std_print('\n')
+            }
+        }
+        // std_print(acc);
+        if acc == 0
+            std_print('0');
+        blank := true;
+        lastZero := 0
+        limit := precision;
+        if decimalBits < precision;
+            limit = decimalBits;
+        for @rev 0..limit {
+            digit := acc % 10u;
+            acc = acc / 10u;
+            if !blank || digit != 0 {
+                decimals.ptr[nr] = digit + '0';
+                if blank
+                    lastZero = nr+1
+                blank = false;
+            }
+        }
+        decimals.len = lastZero;
+        std_print(decimals)
+    }
+}

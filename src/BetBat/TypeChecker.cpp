@@ -1954,20 +1954,22 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
         case AST_BOR:
         case AST_BXOR: {
             // TODO: Signed unsigned doesn't matter, the size and integer does
-            if(leftType != rightType) {
+            int lsize = info.ast->getTypeSize(leftType);
+            int rsize = info.ast->getTypeSize(rightType);
+            if((AST::IsInteger(leftType) || leftType == AST_CHAR) && (AST::IsInteger(rightType) || rightType == AST_CHAR) && lsize == rsize) {
+                if(outTypes) {
+                    outTypes->add(leftType);
+                }
+            } else {
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
-                    ERR_MSG("Left and right type must be the same for binary AND, OR, XOR operations. The types were not the same.")
+                    ERR_MSG("Left and right type must be an integer of the same size for the binary operations AND, OR, and XOR. This was not the case.")
                     ERR_LINE2(expr->left->location, info.ast->typeToString(leftType))
                     ERR_LINE2(expr->right->location, info.ast->typeToString(rightType))
                 )
                 if(outTypes) {
                     // TODO: output poison type
                     // outTypes->add(leftType);
-                }
-            } else {
-                if(outTypes) {
-                    outTypes->add(leftType);
                 }
             }
         } break;

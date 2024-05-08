@@ -43,7 +43,6 @@ fn LINK_TYPE StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when 
 fn LINK_TYPE DiffMeasure(endSubStart: u64) -> f32; // TODO: Use f64 (double) when implemented
 fn LINK_TYPE NativeSleep(seconds: f32);
 
-fn @import CmdLineArgs() -> Slice<Slice<char>>*; // const?
 
 fn LINK_TYPE GetClockSpeed() -> u64;
 

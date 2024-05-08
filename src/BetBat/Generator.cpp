@@ -4004,7 +4004,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             BCRegister reg = BC_REG_A;
 
             builder.emit_pop(reg);
-            int skipIfBodyIndex = builder.emit_jz(reg);
+            int skipIfBodyIndex;
+            builder.emit_jz(reg, &skipIfBodyIndex);
 
             result = generateBody(statement->firstBody);
             if (result != SIGNAL_SUCCESS)
@@ -4012,7 +4013,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             int skipElseBodyIndex = 0;
             if (statement->secondBody) {
-                skipElseBodyIndex = builder.emit_jmp();
+                builder.emit_jmp(&skipElseBodyIndex);
             }
 
             // fix address for jump instruction
@@ -4136,7 +4137,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     builder.emit_mov_rm_disp(switchValueReg, BC_REG_LOCALS, (int)size, switchValueOffset);
                 
                 builder.emit_eq(caseValueReg, switchValueReg, false, size);
-                caseData[nr].caseJumpAddress = builder.emit_jnz(caseValueReg);
+                builder.emit_jnz(caseValueReg, &caseData[nr].caseJumpAddress);
             }
 
             // Generate default cause if we have one
@@ -4145,7 +4146,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // if (result != SIGNAL_SUCCESS)
                 //     continue;
             }
-            int noCaseJumpAddress = builder.emit_jmp();
+            int noCaseJumpAddress;
+            builder.emit_jmp(&noCaseJumpAddress);
             
             /* TODO: Cases without a body does not fall but perhaps they should.
             I can think of a scenario where implicit fall would be confusing.
@@ -4174,7 +4176,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 
                 if(!it->fall) {
                     // implicit break
-                    caseData[nr].caseBreakAddress = builder.emit_jmp();
+                    builder.emit_jmp(&caseData[nr].caseBreakAddress);
                 } else {
                     caseData[nr].caseBreakAddress = 0;
                 }
@@ -4235,8 +4237,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 BCRegister reg = BC_REG_A;
 
                 builder.emit_pop(reg);
-                int imm_offset = builder.emit_jz(reg);
-                loopScope->resolveBreaks.add(imm_offset);
+                loopScope->resolveBreaks.add(0);
+                builder.emit_jz(reg, &loopScope->resolveBreaks.last());
             } else {
                 // infinite loop
             }
@@ -4374,7 +4376,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 } else {
                     builder.emit_lt(index_reg,length_reg, false, int_size, true);
                 }
-                loopScope->resolveBreaks.add(builder.emit_jz(index_reg));
+                loopScope->resolveBreaks.add(0);
+                builder.emit_jz(index_reg, &loopScope->resolveBreaks.last());
 
                 result = generateBody(statement->firstBody);
                 if (result != SIGNAL_SUCCESS)
@@ -4469,7 +4472,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // index < length, we do length > index because index_reg is used later, length_reg is free to use though
                     builder.emit_gt(length_reg,index_reg, false, operand_size, true);
                 }
-                loopScope->resolveBreaks.add(builder.emit_jz(length_reg));
+                loopScope->resolveBreaks.add(0);
+                builder.emit_jz(length_reg, &loopScope->resolveBreaks.last());
 
                 // BE VERY CAREFUL SO YOU DON'T USE BUSY REGISTERS AND OVERWRITE
                 // VALUES. UNEXPECTED VALUES WILL HAPPEN AND IT WILL BE PAINFUL.
@@ -4541,7 +4545,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             if(loop->stackMoment != currentFrameOffset)
                 builder.emit_free_local(loop->stackMoment - currentFrameOffset); // freeing local variables without modifying currentFrameOffset
             
-            loop->resolveBreaks.add(builder.emit_jmp());
+            loop->resolveBreaks.add(0);
+            builder.emit_jmp(&loop->resolveBreaks.last());
         } else if(statement->type == ASTStatement::CONTINUE) {
             GenContext::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
@@ -5202,7 +5207,7 @@ void TestGenerate(BytecodeBuilder& b) {
     // b.emit_pop(BC_REG_D);
     // // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_D,4,-8);
     
-    // b.emit_jz(BC_REG_A);
+    // b.emit_jz(BC_REG_A, 0);
 
     // b.emit_free_local(8);
 
@@ -5319,7 +5324,7 @@ void TestGenerate(BytecodeBuilder& b) {
     // // bytecode->addDebugText("For condition\n");
     // b.emit_add(BC_REG_C, BC_REG_D, false, 4);
 
-    // b.emit_jz(BC_REG_C);
+    // b.emit_jz(BC_REG_C, 0);
 
     // b.emit_jmp(0);
 

@@ -1270,7 +1270,6 @@ ScopeInfo* AST::findScope(StringView name, ScopeId scopeId, bool search_parent_s
 //     return TypeId::CreateString(_typeTokens.size()-1);
 // }
 TypeId AST::getTypeString(const std::string& name){
-    // return TypeId::Create(AST_INT32); // nocheckin
     // ZoneScoped;
 
     // converts char[] into Slice<char> (or any type, not just char)

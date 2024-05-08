@@ -393,35 +393,35 @@ void BytecodeBuilder::emit_jmp(int pc) {
     emit_opcode(BC_JMP);
     emit_imm32(pc - (get_pc() + 4)); // +4 because of immediate
 }
-int BytecodeBuilder::emit_jmp() {
+void BytecodeBuilder::emit_jmp(int* out_imm_offset) {
     emit_opcode(BC_JMP);
-    int imm_offset  = get_pc();
+    if(out_imm_offset)
+        *out_imm_offset = get_pc();
     emit_imm32(0);
-    return imm_offset;
 }
 void BytecodeBuilder::emit_jz(BCRegister reg, int pc) {
     emit_opcode(BC_JZ);
     emit_operand(reg);
     emit_imm32(pc - (get_pc() + 4));  // +4 because of immediate
 }
-int BytecodeBuilder::emit_jz(BCRegister reg) {
+void BytecodeBuilder::emit_jz(BCRegister reg, int* out_imm_offset) {
     emit_opcode(BC_JZ);
     emit_operand(reg);
-    int imm_offset = get_pc();
+    if(out_imm_offset)
+        *out_imm_offset = get_pc();
     emit_imm32(0);
-    return imm_offset;
 }
 void BytecodeBuilder::emit_jnz(BCRegister reg, int pc) {
     emit_opcode(BC_JNZ);
     emit_operand(reg);
     emit_imm32(pc - (get_pc() + 4)); // +4 because of immediate
 }
-int BytecodeBuilder::emit_jnz(BCRegister reg) {
+void BytecodeBuilder::emit_jnz(BCRegister reg, int* out_imm_offset) {
     emit_opcode(BC_JNZ);
     emit_operand(reg);
-    int tmp = get_pc();
+    if(out_imm_offset)
+        *out_imm_offset = get_pc();
     emit_imm32(0);
-    return tmp;
 }
 void BytecodeBuilder::fix_jump_imm32_here(int imm_index) {
     if(disable_code_gen) return;

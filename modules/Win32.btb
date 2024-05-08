@@ -115,23 +115,29 @@ fn @import(Kernel) FindClose(
   hFindFile: HANDLE
 ) -> bool;
 
-// NOTE: FILETME structure was used for ftCreationTime and such where
-//   FILETIME consists of 2 32-bit integers, low and high.
-//   We can replace them with i64 if we assume little endian.
+// A user may want to use the name 'Sleep' so we rename the function
+fn @import(Kernel,alias="Sleep") win32_Sleep(
+  dwMilliseconds: u32
+);
+
+struct FILETIME {
+    dwLowDateTime:  u32;
+    dwHighDateTime: u32;
+}
 struct WIN32_FIND_DATAA {
-  dwFileAttributes: i32;
-  ftCreationTime: i64;
-  ftLastAccessTime: i64;
-  ftLastWriteTime: i64;
-  nFileSizeHigh: i32;
-  nFileSizeLow: i32;
-  dwReserved0: i32;
-  dwReserved1: i32;
-  cFileName: char[MAX_PATH];
-  cAlternateFileName: char[14];
-  dwFileType: i32; // Obsolete. Do not use.
-  dwCreatorType: i32; // Obsolete. Do not use
-  wFinderFlags: i16; // Obsolete. Do not use
+    dwFileAttributes: u32;
+    ftCreationTime:   FILETIME; // NOTE: FILETIME could be replaced with i64 but you would need to disable padding in the struct
+    ftLastAccessTime: FILETIME;
+    ftLastWriteTime:  FILETIME;
+    nFileSizeHigh:    u32;
+    nFileSizeLow:     u32;
+    dwReserved0:      u32;
+    dwReserved1:      u32;
+    cFileName: char[MAX_PATH];
+    cAlternateFileName: char[14];
+//   dwFileType: i32; // Obsolete. Do not use.
+//   dwCreatorType: i32; // Obsolete. Do not use
+//   wFinderFlags: i16; // Obsolete. Do not use
 }
 
 #endif // OS_WINDOWS

@@ -68,6 +68,7 @@ namespace engone {
 	DirectoryIterator DirectoryIteratorCreate(const char* name, int pathlen){
 		DirectoryIterator iterator = (DirectoryIterator)(++s_uniqueRDI);
 		auto& info = s_rdiInfos[iterator] = {};
+        if(pathlen == 0) pathlen = strlen(name);
 		info.root.resize(pathlen);
 		memcpy((char*)info.root.data(), name, pathlen);
 		info.handle=INVALID_HANDLE_VALUE;
