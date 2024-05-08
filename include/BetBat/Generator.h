@@ -122,7 +122,7 @@ struct GenContext : public PhaseContext {
     void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
     
     SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);
-    SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr);
+    SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr, int* array_length = nullptr);
     SignalIO generateFnCall(ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator);
     SignalIO generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope = -1);
     SignalIO generateExpression(ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope = -1);

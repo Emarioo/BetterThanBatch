@@ -22,8 +22,8 @@ x64 operands
 enum X64Register : u8 {
     X64_REG_INVALID = 0,
     
-    X64_REG_BEGIN,
-    X64_REG_A = X64_REG_BEGIN, // DO NOT CHANGE THE ORDER OF THE REGISTERS! intel manual specifies this specific order!
+    X64_REG_A, // DO NOT CHANGE THE ORDER OF THE REGISTERS! intel manual specifies this specific order!
+    X64_REG_BEGIN = X64_REG_A,
     X64_REG_C,
     X64_REG_D,
     X64_REG_B,
@@ -363,7 +363,7 @@ struct X64Builder {
     void emit_operation(u8 opcode, X64Register reg, X64Register rm, InstructionControl control);
 
     static const int FRAME_SIZE = 16;
-    int push_offset = 0; // used when set arguments while values are pushed and popped
+    DynamicArray<int> push_offsets{}; // used when set arguments while values are pushed and popped
     int ret_offset = 0;
 
     OPNode* last_call = nullptr;

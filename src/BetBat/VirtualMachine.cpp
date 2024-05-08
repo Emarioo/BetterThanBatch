@@ -229,6 +229,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
     DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
 
+    // TODO: x64 had a bug with push_offsets, ALLOC_ARGS and SET_ARG
+    //   I applied the same here but didn't test it.
+
     // bool logging = false;
     bool logging = true;
     bool interactive = false;
@@ -348,6 +351,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             registers[BC_REG_LOCALS] = base_pointer;
 
             if(opcode == BC_ALLOC_ARGS) {
+                push_offsets.add(0);
                 i64 misalignment = (stack_pointer + imm) & 0xF;
                 misalignments.add(misalignment);
                 if(misalignment != 0) {
@@ -358,7 +362,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             
             if(op0 != BC_REG_INVALID)
                 registers[op0] = stack_pointer;
-
+            
             has_return_values_on_stack = false; // alloc_local overwrites return values
             ret_offset = 0;
         } break;
@@ -368,6 +372,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
             if(opcode == BC_FREE_ARGS) {
+                push_offsets.pop();
                 i64 misalignment = misalignments.last();
                 misalignments.pop();
                 if(misalignment != 0) {
@@ -480,7 +485,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             Assert(imm < 0);
             int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
             // NOTE: push_offset makes sure push and pop instructions doesn't mess with vals/args registers/references
-            void* ptr = (void*)(stack_pointer + ret_offset + push_offsets.last() + imm - FRAME_SIZE);
+            void* ptr = (void*)(stack_pointer + ret_offset + imm - FRAME_SIZE);
 
             if(size == CONTROL_8B)       registers[op0] = *(i8*) ptr;
             else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
@@ -511,6 +516,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             CHECK_STACK();
             *(i64*)stack_pointer = registers[op0];
             push_offsets.last() += 8;
+            ret_offset += 8;
 
             // TODO: We have to be careful not to overwrite returned values and then accessing them
             //   with get_val. This can happen if we return 8 1-byte -integers and push those values 8 times.
@@ -525,6 +531,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             registers[op0] = *(i64*)stack_pointer;
             stack_pointer += 8;
             CHECK_STACK();
+            ret_offset -= 8;
             push_offsets.last() -= 8;
         } break;
         case BC_LI32: {
@@ -614,10 +621,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 pc = 0;
                 tiny_index = new_tiny_index;
                 tinycode = bytecode->tinyBytecodes[tiny_index];
-
-                push_offsets.add(0);
             }
-
         } break;
         case BC_RET: {
             i64 diff = stack_pointer - (i64)stack.data;
@@ -642,8 +646,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             pc = encoded_pc & 0xFFFF'FFFF;
             tiny_index = encoded_pc >> 32;
             tinycode = bytecode->tinyBytecodes[tiny_index];
-
-            push_offsets.pop();
         } break;
         case BC_DATAPTR: {
             // Assert(false);

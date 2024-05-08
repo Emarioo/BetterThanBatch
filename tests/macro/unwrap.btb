@@ -13,3 +13,28 @@ OK(#unwrap CONST, 2)
 #macro SO(X) X
 #macro A #line
 SO(A)
+
+
+
+#import "Logger"
+
+#macro equals(X,Y,...) X == Y || equals(X,...)
+#macro equals(X, Y) X == Y
+
+
+fn main() {
+    #macro values 5, 9, 23, 25, 39
+    var := 89
+    
+    if equals(var, #unwrap values)
+        log("Yes!")
+    else
+        log("No!")
+        
+    #macro values2 8923, 89, 23, 999
+
+    if equals(var, #unwrap values2)
+        log("Yes!")
+    else
+        log("No!")
+}

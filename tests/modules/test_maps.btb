@@ -39,7 +39,7 @@ fn RemoveValues(map: Map<i32,i32>*, entries: DynamicArray<Entry>*, count: u32) {
             break;
             
         random: u64 = random64();
-        index := random % entries.len;
+        index := random % cast<u64>entries.len;
         key: i32 = entries.ptr[index].key;
         
         entries.remove(index);
@@ -99,7 +99,7 @@ fn TestMap(tableSize: u32, count: i32) -> u32 {
 
     failures += CheckIterator(&map, &entries)
     
-    map.print()
+    // map.print()
     
     // log("Failures:",failures);
     return failures;

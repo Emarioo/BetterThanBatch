@@ -1,10 +1,10 @@
-#import "OS"
+#import "Memory"
 #import "Logger"
 
 #macro LN printc('L'); printc('N'); std_print(cast<i64>#line); std_print('\n')
 
 
-fn @intrinsic strlen(ptr: char*) -> u32;
+fn @intrinsic strlen(ptr: char*) -> i32;
 
 // heap allocated for now
 struct StringBuilder {
@@ -12,32 +12,60 @@ struct StringBuilder {
     // allows you to cast String to char[] but that's wrong
     // because len in slice is 8 bytes while being 4 bytes here.
     ptr: char*; // null terminated
-    len: u32;
-    max: u32; // does not include \0
+    len: i32;
+    max: i32; // does not include \0
 
     fn cleanup() {
-        _reserve(0)
+        reserve(0)
     }
 
     fn sliced() -> Slice<char> {
         return Slice<char>{ptr, len};
     }
+    fn size() -> i32 { return len }
+    fn data() -> char* { return ptr }
+    fn get(index: i32) -> char { 
+        // TODO: Bounds check
+        return ptr[index]
+    }
     fn clear() { len = 0; }
     fn append(value: i64) {
         if len + 20 > max {
-            _reserve(len + 20);
+            reserve(len + 20);
         }
         len += swrite_unsafe(ptr + len, value);
     }
     fn append(value: f32) {
         if len + 25 > max {
-            _reserve(len + 25);
+            reserve(len + 25);
         }
         len += swrite_unsafe(ptr + len, value);
     }
     fn append(str: char[]) {
+        if str.len == 0
+            return
         if len + str.len > max {
-            if !_reserve(str.len + max * 2u) {
+            if !reserve(str.len + 10 + max * 2) {
+                return;
+            }
+        }
+        memcpy(ptr + len, str.ptr, str.len);
+        len += str.len;
+        ptr[len] = '\0';
+    }
+    fn append(str: char*, size: i32) {
+        if len + size > max {
+            if !reserve(size + max * 2) {
+                return;
+            }
+        }
+        memcpy(ptr + len, str, size);
+        len += size;
+        ptr[len] = '\0';
+    }
+    fn append(str: StringBuilder) {
+        if len + str.len > max {
+            if !reserve(str.len + max * 2) {
                 return;
             }
         }
@@ -47,7 +75,7 @@ struct StringBuilder {
     }
     
     // TODO: Some useful functions
-    fn _reserve(newMax: u32) -> bool {
+    fn reserve(newMax: i32) -> bool {
         // log("newMax",newMax)
         if(newMax==0){
             // log("oh")
@@ -73,7 +101,7 @@ struct StringBuilder {
             max = newMax;
             return true;
         } else {
-            newPtr: char* = Reallocate(ptr, max + 1, newMax + 1);
+            newPtr: char* = Reallocate(newMax + 1, ptr, max + 1);
             // Assert(newPtr);
             if(!newPtr)
                 return false;
@@ -86,6 +114,19 @@ struct StringBuilder {
         }
         return false;
     }
+    fn copy() -> StringBuilder {
+        s: StringBuilder
+        // sli := sliced()
+        // s.append("okay")
+        // s.append(ptr, len)
+        // s.append(sli)
+        s.append(sliced())
+        return s
+    }
+}
+operator [](b: StringBuilder, index: i32) -> char {
+    // TODO: bounds check
+    return b.ptr[index]
 }
 
 // #import "String"
@@ -105,7 +146,16 @@ struct StringBuilder {
 
 // #import "OS"
 
-fn @intrinsic strlen(str: char*) -> u32;
+fn equal(a: char*, b: char[]) -> bool {
+    a_len := strlen(a)
+    if a_len != b.len
+        return false
+    for 0..a_len {
+        if a[nr] != b[nr]
+            return false
+    }
+    return true
+}
 
 operator ==(a: Slice<char>, b: Slice<char>) -> bool {
     if a.len != b.len  return false;
@@ -121,7 +171,7 @@ operator !=(a: Slice<char>, b: Slice<char>) -> bool {
 
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, slice: char[]) -> u32 {
+fn @hide swrite_unsafe(buffer: char*, slice: char[]) -> i32 {
     // LN;
     memcpy(buffer, slice.ptr, slice.len);
     buffer[slice.len] = '\0';
@@ -129,7 +179,7 @@ fn @hide swrite_unsafe(buffer: char*, slice: char[]) -> u32 {
 }
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> u32 {
+fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> i32 {
     // LN;
     len = strlen(cstr);
     memcpy(buffer, cstr, len);
@@ -138,7 +188,7 @@ fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> u32 {
 }
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
+fn @hide swrite_unsafe(buffer: char*, value: i64) -> i32 {
     // LN
     start := buffer;
     if value == 0 {
@@ -172,7 +222,7 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
 }
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
+fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
     // LN;
     start = buffer;
     bits: u32 = *cast<u32*>cast<void*>&t;
@@ -284,7 +334,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
         // LN
     }
     *buffer = '\0'; // not include in written bytes
-    return cast<u64>(buffer - start);
+    return cast<i64>(buffer - start);
 }
 
 

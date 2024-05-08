@@ -1,0 +1,8 @@
+
+@TEST_CASE(double_func_call)
+
+#import "String"
+// TODO: Reproduce the issue without String module
+s: StringBuilder
+// crashed at one point
+s.append(s.sliced())

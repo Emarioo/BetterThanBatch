@@ -253,32 +253,26 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
     #undef FINALIZE_TEST
 }
 
-u32 TestSuite(CompileOptions* options, TestSelection testSelection){
+u32 TestSuite(CompileOptions* options){
     using namespace engone;
     DynamicArray<std::string> tests;
 
-    if(testSelection&TEST_ARITHMETIC) {
-        tests.add("tests/simple/operations.btb");
-        tests.add("tests/simple/assignment.btb");
-    }
-    if(testSelection&TEST_FLOW) {
-        tests.add("tests/flow/loops.btb");
-        tests.add("tests/flow/switch.btb");
-        tests.add("tests/flow/defer.btb");
-    }
-    if(testSelection&TEST_FUNCTION) {
-        tests.add("tests/funcs/overloading.btb");
-    }
-    if(testSelection&TEST_ASSEMBLY) {
-        tests.add("tests/inline-asm/simple.btb");
-    }
-    if(testSelection&TEST_POLYMORPHIC) {
-        tests.add("tests/polymorphism/structs.btb");
-    }
+    tests.add("tests/simple/operations.btb");
+    tests.add("tests/simple/assignment.btb");
+        
+    tests.add("tests/flow/loops.btb");
+    tests.add("tests/flow/switch.btb");
+    tests.add("tests/flow/defer.btb");
+    tests.add("tests/funcs/overloading.btb");
+    tests.add("tests/inline-asm/simple.btb");
+    tests.add("tests/polymorphism/structs.btb");
+        
     tests.add("tests/structs/basic.btb");
+    tests.add("tests/structs/struct.btb");
     tests.add("tests/lang/typeinfo.btb");
     tests.add("tests/modules/test_maps.btb");
-
+    tests.add("tests/modules/test_maps.btb");
+    
     return VerifyTests(options, tests);
 }
 

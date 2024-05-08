@@ -1,5 +1,5 @@
 // import allocation functions
-#import "OS"
+#import "Memory"
 // #import "Logger"
 
 #macro ARRAY_CLEANUP(ARR) for @ptr ARR.sliced() it.cleanup(); ARR.cleanup();
@@ -9,16 +9,16 @@
 struct DynamicArray<T> {
     // zero initialized by default
     ptr: T*;
-    max: u32; // allocated bytes
-    len: u32; // elements in allocation
+    max: i32; // allocated bytes
+    len: i32; // elements in allocation
 
     fn cleanup() { reserve(0); }
 
     // returns index where element was inserted
-    // fn add(newElement: T) -> u32 {
+    // fn add(newElement: T) -> i32 {
     fn add(newElement: T) -> T* {
-        if len + 1u > max {
-            res: bool = reserve(7u + max * 2u);
+        if len + 1 > max {
+            res: bool = reserve(7 + max * 2);
             // res: bool = reserve(1 + max); // nocheckin, small growth when debugging
             if !res {
                 return null;
@@ -31,15 +31,16 @@ struct DynamicArray<T> {
         return ptr_elem;
         // return ind;
     }
-    fn size() -> u32 { return len; }
+    fn data() -> T* { return ptr }
+    fn size() -> i32 { return len; }
     fn sliced_unsafe() -> Slice<T> {
         return Slice<T>{ptr, len};
     }
     fn pop() {
-        if len > 0u
+        if len > 0
             len--
     }
-    fn remove(index: u32) {
+    fn remove(index: i32) {
         if index >= len
             return;
         for index..len-1 {
@@ -49,17 +50,17 @@ struct DynamicArray<T> {
         ptr[len-1] = T{};
         len--;
     }
-    fn get(index: u32) -> T {
+    fn get(index: i32) -> T {
         if(index >= len)
             return T{}; // TODO: Assert instead
         return ptr[index];
     }
-    fn get_unsafe(index: u32) -> T* {
+    fn get_unsafe(index: i32) -> T* {
         if(index >= len)
             return null;
         return ptr + index * sizeof T;
     }
-    fn resize(newLen: u32) -> bool {
+    fn resize(newLen: i32) -> bool {
         if newLen > max {
             if !reserve(newLen)
                 return false;
@@ -67,7 +68,7 @@ struct DynamicArray<T> {
         len = newLen;
         return true;
     }
-    fn reserve(newMax: u32) -> bool {
+    fn reserve(newMax: i32) -> bool {
         // log("newMax",newMax)
         // log("size",sizeof T)
         if newMax==0 {
@@ -100,7 +101,7 @@ struct DynamicArray<T> {
         } else {
             ns := newMax * sizeof T;
             os := max * sizeof T;
-            newPtr: T* = Reallocate(ptr, os, ns);
+            newPtr: T* = Reallocate(ns, ptr, os);
             // Assert(newPtr);
             if !newPtr
                 return false;

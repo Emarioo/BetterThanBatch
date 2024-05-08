@@ -1103,15 +1103,15 @@ namespace dwarf {
 
                 FrameDescriptionEntry* header = nullptr;
                 stream->write_late((void**)&header, sizeof(FrameDescriptionEntry));
-                // header->length = don't know yet;
-                // nocheckin, do we need to SET CIE_pointer?
-                // relocs.add({symindex_debug_frame, offset_fde_start - offset_section  + (u64)&header->CIE_pointer - (u64)header });
-                header->CIE_pointer = 0; // common information entry can be found at offset 0 in the section, may not be true in the future
+                header->length = 0; // don't know yet
                 
-                relocs.add({symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location - (u64)header, 
-                    fun->asm_start });
-                // log::out << log::GOLD << fun->name<<log::NO_COLOR<<" : " << fun->asm_start << " - " << fun->asm_end<<"\n";
-                // header->initial_location = fun->asm_start;
+                header->CIE_pointer = 0; // relocated later
+                relocs.add({symindex_debug_frame, offset_fde_start - offset_section  + (u64)&header->CIE_pointer - (u64)header });
+                
+                header->initial_location = fun->asm_start; // relocated later
+                
+                relocs.add({symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location - (u64)header, fun->asm_start });
+                    
                 header->address_range = fun->asm_end - fun->asm_start;
 
                 // instructions, based on what g++ generates and a little from DWARF specification

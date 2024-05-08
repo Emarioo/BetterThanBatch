@@ -69,7 +69,7 @@ struct ByteStream {
             max = newMax;
             return true;
         } else {
-            newPtr: u8* = Reallocate(data, max, newMax);
+            newPtr: u8* = Reallocate(newMax, data, max);
             // Assert(newPtr);
             if(!newPtr)
                 return false;

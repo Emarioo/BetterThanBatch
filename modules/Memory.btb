@@ -15,7 +15,7 @@ fn Allocate(size: i64) -> void* {
     return AllocateHeap(size)
 }
 fn Reallocate(size: i64, ptr: void*, old_size: i64 = 0) -> void* {
-    return AllocateHeap(0, ptr, old_size)
+    return AllocateHeap(size, ptr, old_size)
 }
 fn Free(ptr: void*, old_size: i64 = 0) {
     AllocateHeap(0, ptr, old_size)

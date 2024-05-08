@@ -862,7 +862,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         layer->concat_next_token = false;
         return false;
     };
-
+    int appended_tokens = 0;
     while(layers.size() != 0) {
         if(layers.size() >= PREPROC_REC_LIMIT) {
             // TODO: Better error message, maybe provide macro call stack with arguments?
@@ -1069,7 +1069,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                     layer->adjacent_callee->input_arguments.last().add(list[j]);
                                 }
                             } else {
-                                auto t = lexer->appendToken(new_lexer_import, list[j], true);
+                                auto t = lexer->appendToken(new_lexer_import, list[j], appended_tokens != 0, nullptr, 0, macro_source->line, macro_source->column);
+                                appended_tokens++;
 
                                 // TODO: Concat logic has not been tested!
                                 //   What do we expect/want this to do?
@@ -1096,6 +1097,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                 layer->adjacent_callee->input_arguments.last().add(com);
                             } else {
                                 lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
+                                appended_tokens++;
                                 // TODO: Concat logic?
                                 layer->concat_next_token = false;
                             }
@@ -1206,9 +1208,11 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                             if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
                                 if(!apply_concat(layer, some_tok, &tmp, compute_source)) {
                                     lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
+                                    appended_tokens++;
                                 }
                             } else {
                                 lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
+                                appended_tokens++;
                             }
                             layer->concat_next_token = false;
                         }
@@ -1229,13 +1233,18 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     layer->adjacent_callee->input_arguments.last().add(token);
                 }
             } else {
-
                 if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
                     if(!apply_concat(layer, token)) {
-                        lexer->appendToken(new_lexer_import, token, true);
+                        lexer->appendToken(new_lexer_import, token, appended_tokens != 0, nullptr, 0, macro_source->line, macro_source->column);
+                        appended_tokens++;
                     }
                 } else {
-                    lexer->appendToken(new_lexer_import, token, true);
+                    // NOTE: We use appended_tokens to disable compute_source for the first token that we add.
+                    //   That way, we use the first macro call's line and column. Otherwise the content off
+                    //   the macro would end up on a different line than where macro actually exist.
+                    //   Debugging would be especially scuffed without this when it comes to macros.
+                    lexer->appendToken(new_lexer_import, token, appended_tokens != 0, nullptr, 0, macro_source->line, macro_source->column);
+                    appended_tokens++;
                 }
                 layer->concat_next_token = false;
             }

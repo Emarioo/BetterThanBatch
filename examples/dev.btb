@@ -1,13 +1,52 @@
 
 
+// #import "Win32"
+#import "File"
+#import "Logger"
 
-struct Name {
-    str: char[20]
+iter := DirectoryIteratorCreate("src")
+
+item: DirIteratorItem*
+while DirectoryIteratorNext(iter, &item) {
+    log(item.name.sliced())
 }
 
-// The name struct should be 20 in size
-// we should not add hidden members
-// the user specifies the size they want and that's that they get
+DirectoryIteratorDestroy(iter)
 
+// s := "okeae"
+// l := strlen(s.ptr)
 
-str.len
+// log(l)
+
+// struct DirIteratorItem {
+//     // name: StringBuilder;
+//     file_size: u64;
+//     // last_write_time: u64;
+//     // is_directory: bool;
+// }
+
+// struct DirIterator_impl {
+//     item: DirIteratorItem;
+// }
+ 
+// data: WIN32_FIND_DATAA;
+
+// iter_: DirIterator_impl
+// iter := &iter_
+// // cFileNameLen := strlen(data.cFileName.ptr);
+// // newLength := cFileNameLen;
+// // if(iter.current_dir.size())
+// //     newLength += iter.current_dir.size()+1;
+
+// // iter.item.name.clear()
+
+// // if iter.current_dir.size() {
+// //     iter.item.name.append(iter.current_dir.sliced())
+// //     iter.item.name.append("/")
+// //     iter.item.name.append(data.cFileName.ptr, cFileNameLen)
+// // } else {
+// //     iter.item.name.append(data.cFileName.ptr, cFileNameLen)
+// // }
+// #macro MAXDWORD 0xFFFF_FFFF
+// iter.item.file_size = cast<i64>data.nFileSizeLow+cast<i64>data.nFileSizeHigh*(cast<i64>MAXDWORD+1);
+    

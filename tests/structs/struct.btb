@@ -35,8 +35,22 @@ _test 23; a.n;
 // base2 = .{7}
 
 
+@TEST_CASE(array_in_struct)
 
+struct Box {
+    items: i32[20]
+}
+box: Box
 
+// should cause error, box.items evaluates to a slice
+// *(box.items + 9 * sizeof i32)
+
+box.items[9] = 3
+_test 3; box.items[9]
+_test 3; *(box.items.ptr + 9 * sizeof i32)
+
+_test 16; sizeof box.items
+_test 80; sizeof box
 
 @TEST_CASE(indexing_slice)
 

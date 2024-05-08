@@ -26,7 +26,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
 SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl);
 
 SignalIO CheckRest(CheckInfo& info, ASTScope* scope);
-SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt);
+SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length = nullptr);
 SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs = nullptr);
 
 SignalIO CheckEnums(CheckInfo& info, ASTScope* scope){
@@ -175,29 +175,25 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
         i32 size = info.ast->getTypeSize(implMem.typeId);
         i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
         // log::out << " "<<typeInfo->name << " "<<typeInfo->size()<<"\n";
+        if(implMem.typeId == structInfo->id){
+            if(info.showErrors) {
+                // NOTE: pointers to the same struct are okay.
+                ERR_SECTION(
+                    ERR_HEAD2(member.location)
+                    ERR_MSG("Member "<<member.name << "'s type uses the parent struct. (recursive struct does not work).")
+                )
+            }
+            // TODO: phrase the error message in a better way
+            // TOOD: print some column and line info.
+            // TODO: message is printed twice
+            // log::out << log::RED <<"Member "<< member.name <<" in struct "<<*astStruct->name<<" cannot be it's own type\n";
+        }
         if(size==0 || asize == 0){
-            // Assert(size != 0 && asize != 0);
-            // astStruct->state = ASTStruct::TYPE_ERROR;
-            if(implMem.typeId == structInfo->id){
-                if(info.showErrors) {
-                    // NOTE: pointers to the same struct are okay.
-                    ERR_SECTION(
-                        ERR_HEAD2(member.location)
-                        ERR_MSG("Member "<<member.name << "'s type uses the parent struct. (recursive struct does not work).")
-                    )
-                }
-                // TODO: phrase the error message in a better way
-                // TOOD: print some column and line info.
-                // TODO: message is printed twice
-                // log::out << log::RED <<"Member "<< member.name <<" in struct "<<*astStruct->name<<" cannot be it's own type\n";
-            } else {
-                // astStruct->state = ASTStruct::TYPE_ERROR;
-                if(info.showErrors) {
-                    ERR_SECTION(
-                        ERR_HEAD2(member.location)
-                        ERR_MSG("Type '"<< info.ast->typeToString(implMem.typeId) << "' in '"<< astStruct->name<<"."<<member.name << "' is not a type or an incomplete one. Do structs depend on each other recursively?")
-                    )
-                }
+            if(info.showErrors) {
+                ERR_SECTION(
+                    ERR_HEAD2(member.location)
+                    ERR_MSG("Type '"<< info.ast->typeToString(implMem.typeId) << "' in '"<< astStruct->name<<"."<<member.name << "' is not a type, an incomplete one, or is zero in size. If it's an incomplete one then structs may recursively depend on each other.")
+                )
             }
             success = false;
             continue;
@@ -1298,7 +1294,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     FNCALL_SUCCESS
     return SIGNAL_SUCCESS;
 }
-SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt){
+SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple);
     Assert(expr);
@@ -1444,7 +1440,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             if(finalType.isValid()) {
                 if(expr->typeId == AST_SIZEOF) {
                     expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
-                    if(outTypes)  outTypes->add(AST_UINT32);
+                    if(outTypes)  outTypes->add(AST_INT32);
                 } else if(expr->typeId == AST_NAMEOF) {
                     std::string name = info.ast->typeToString(finalType);
                     u32 index=0;
@@ -1621,11 +1617,12 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             }
             // DynamicArray<TypeId> typeArray{};
             // TINY_ARRAY(TypeId, typeArray, 1);
+            int expr_array_length = 0;
             if(expr->left) {
                 // Operator overload checking does not run on AST_MEMBER since it can't be overloaded
                 // leftType has therefore note been set and expression not checked.
                 // We must check it here.
-                CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+                CheckExpression(info,scopeId, expr->left, &typeArray, attempt, &expr_array_length);
                 if(typeArray.size()>0)
                     leftType = typeArray.last();
             }
@@ -1637,17 +1634,59 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             if(leftType.getPointerLevel() >= 2) {
                 ERR_SECTION(
                     ERR_HEAD2(expr->left->location)
-                    ERR_MSG("To pointy")
+                    ERR_MSG("Cannot access member of a double pointer type. Single pointers will be implicitly dereferenced.")
                     ERR_LINE2(expr->left->location,info.ast->typeToString(leftType))
                 )
                 // Assert(leftType.getPointerLevel()<2);
                 return SIGNAL_FAILURE;
             }
-            if(ti && ti->astStruct){
+            if(expr_array_length) {
+                if(expr->name == "len") {
+                    if(outTypes)
+                        outTypes->add(AST_INT32);
+                } else if(expr->name == "ptr") {
+                    if(outTypes)
+                        outTypes->add(leftType);
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("'"<<info.ast->typeToString(leftType)<<"' is an array within a struct and does not have members. If the elements of the array are structs then index into the array first.")
+                        ERR_LINE2(expr->left->location, info.ast->typeToString(leftType).c_str())
+                    )
+                    return SIGNAL_FAILURE;
+                }
+            } else if(ti && ti->astStruct){
                 TypeInfo::MemberData memdata = ti->getMember(expr->name);
                 if(memdata.index!=-1){
-                    if(outTypes)
-                        outTypes->add(memdata.typeId);
+                    auto& mem = ti->astStruct->members[memdata.index];
+                    if(mem.array_length > 0) {
+                        // TODO: Possible bug here
+                        if(array_length) {
+                            TypeId id = memdata.typeId;
+                            id.setPointerLevel(id.getPointerLevel()+1);
+                            if(outTypes)
+                                outTypes->add(id);
+                            *array_length = mem.array_length;
+                        } else {
+                            std::string slice_name = "Slice<" + info.ast->typeToString(memdata.typeId) + ">";
+                            TypeId id = CheckType(info, scopeId, slice_name, expr->location, nullptr);
+                            // if(!slice_info) {
+                            //     ERR_SECTION(
+                            //         ERR_HEAD2(expr->location)
+                            //         ERR_MSG("Member '"<<expr->name<<"' was an array within a struct which evaluates to the type '"<<slice_name<<"' BUT it was not a valid type.")
+                            //         ERR_LINE2(expr->location,"bad type?");
+                            //     )
+                            //     if(outTypes)
+                            //         outTypes->add(AST_VOID);
+                            //     return SIGNAL_FAILURE;
+                            // }
+                            if(outTypes)
+                                outTypes->add(id);
+                        }
+                    } else {
+                        if(outTypes)
+                            outTypes->add(memdata.typeId);
+                    }
                 } else {
                     std::string msgtype = "not member of "+info.ast->typeToString(leftType);
                     ERR_SECTION(
@@ -3376,7 +3415,8 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     info.showErrors = !ignore_errors;
     CheckStructs(info, scope);
     
-    if(!info.showErrors)
+    // if(!info.showErrors)
+    if(info.showErrors)
         info.compiler->options->compileStats.errors += info.errors;
 
     if(info.completedStruct) {

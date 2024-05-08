@@ -83,6 +83,8 @@ namespace engone {
 		void setIndent(int indent);
         
         void setInput(ByteStream* stream) { m_streamInput = stream; }
+        
+        int get_written_bytes() const { return written_bytes; }
 
 		// extra report which is individual for each thread
 		void useThreadReports(bool yes);
@@ -164,6 +166,7 @@ namespace engone {
 		bool skipIndent=false;
 		char lastPrintedChar=0;
 		bool onEmptyLine=false;
+        int written_bytes = 0;
         
         ByteStream* m_streamInput = nullptr;
 

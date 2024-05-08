@@ -3,11 +3,9 @@
 #import "String"
 #import "Logger"
 
-#macro Map_i32 Map<i32,i32>
-
 struct MapChain<Key,Val> {
     key: Key;
-    next: u32; // -1 can't be seen as unused because the chain may link to other chains which we would sever. We could use a bitmask but that's annoying
+    next: i32; // -1 can't be seen as unused because the chain may link to other chains which we would sever. We could use a bitmask but that's annoying
     unused: bool;
     val: Val;
 }
@@ -16,32 +14,32 @@ struct MapIterator<Key,Val> {
     val: Val*;
     
     // internal members
-    _chain_index: u32;
+    _chain_index: i32;
 }
 // Works best for integers or similar data types
 // Strings or types with allocations are not handled.
 // Slice<char> can be used but you are responsible for the memory of the slice's pointer.
 struct Map<Key,Val> {
     chains: DynamicArray<MapChain<Key,Val>>; // bucket array? save us some reallocations
-    table: DynamicArray<u32>;
-    count: u32;
+    table: DynamicArray<i32>;
+    count: i32;
     
     #macro MAP_CHAIN_INDEX_NULL 0
     // #macro MAP_CHAIN_INDEX_BEGIN 1
     
-    fn init(tableSize: u32, reserved_chains: u32 = 0) {
+    fn init(tableSize: i32, reserved_chains: i32 = 0) {
         // TODO: Assert(chains.len == 0)
         //   We could call remap but that has overhead and init is supposed to be called
         //   on a fresh map.
         table.resize(tableSize);
-        if reserved_chains > 0u
+        if reserved_chains > 0
             chains.reserve(reserved_chains);
     }
     fn cleanup() {
         chains.cleanup();
         table.cleanup();   
     }
-    fn remap(newTableSize: u32) {
+    fn remap(newTableSize: i32) {
         table.resize(newTableSize);
         memzero(table.ptr,table.len * sizeof(*table.ptr));
         
@@ -50,7 +48,7 @@ struct Map<Key,Val> {
         // We could store unused ones in an array and reuse them but that creates more complexity
         // in the set function and another list to keep track of so taking care of it here
         // is not a bad thing.
-        i := 0u;
+        i := 0;
         while i < chains.len {
             chain := &chains.ptr[i];
             if chain.unused {
@@ -98,21 +96,21 @@ struct Map<Key,Val> {
         // }
     }
     
-    fn hash(str: Slice<char>) -> u32 {
+    fn hash(str: Slice<char>) -> i32 {
         if table.size() == 0
             return 0;
         // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
-        fnv_prime: u32 = 0x01000193; // TODO: Make these constants?
-        fn_offset_basis: u32 = 0x811c9dc5u;
+        fnv_prime: i32 = 0x01000193; // TODO: Make these constants?
+        fn_offset_basis: i32 = 0x811c9dc5u;
         
-        final_hash: u32 = fn_offset_basis;
+        final_hash: i32 = fn_offset_basis;
         for str {
             final_hash *= fnv_prime;
             final_hash ^= it;
         }
         return final_hash % table.size();
     }
-    fn hash(num: i32) -> u32 {
+    fn hash(num: i32) -> i32 {
         if table.size() == 0
             return 0;
         // https://www.shadertoy.com/view/WttXWX
@@ -124,9 +122,9 @@ struct Map<Key,Val> {
         x ^= x >> 15;
         x *= 0x31848babu;
         x ^= x >> 14;
-        return x % table.size();
+        return x % cast<u32>table.size();
     }
-    fn size() {
+    fn size() -> i32 {
         return count;
     }
     fn find_chain_unsafe(key: Key) -> MapChain<Key,Val>* {

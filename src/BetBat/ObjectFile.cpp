@@ -35,6 +35,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         {
             // main function should be first in the text section
             int i = program->index_of_main;
+            if(i < 0)
+                return false;
             auto tinyprog = program->tinyPrograms[i];
             auto tinycode = compiler->bytecode->tinyBytecodes[i];
 

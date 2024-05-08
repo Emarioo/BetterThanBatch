@@ -417,8 +417,9 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     }
 
     // @DEBUG
+    // log::out << tinycode->name<<"\n";
     // for(auto n : inst_list) {
-    //     log::out << *n << "\n";
+    //     log::out << n->bc_index<< " "<< *n << "\n";
     // }
     
     // TODO: Assert that we don't allocate in operands
@@ -547,11 +548,37 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     } else if(tinycode->call_convention == UNIXCALL) {
         Assert(false);
     }
-
+    
+    // NOTE: If the generator runs out of registers then define the macro below
+    //   and run this command: btb -dev > out
+    //   Start from the end of the file and see which instruction forgets to 
+    //   free their registers.
+    // #define DEBUG_REGISTER_USAGE
+    
+    #ifdef DEBUG_REGISTER_USAGE
+    log::out << log::CYAN << tinycode->name<<"\n";
+    #endif
     for(auto n : inst_list) {
         auto opcode = n->base->opcode;
         map_translation(n->bc_index, code_size());
         last_pc = code_size();
+        
+        #ifdef DEBUG_REGISTER_USAGE
+        int log_start = log::out.get_written_bytes();
+        log::out <<" "<< n->bc_index<< ": "<< *n;
+        int written = log::out.get_written_bytes() - log_start;
+
+        for(int i=written; i < 40; i++) {
+            log::out << " ";
+        }
+        
+        log::out << " - ";
+        for(auto& pair : registers) {
+            if(pair.second.used)
+                log::out << pair.first << " ";
+        }
+        log::out << "\n";
+        #endif
         
         switch(n->base->opcode) {
             case BC_HALT: {
@@ -734,7 +761,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 } else Assert(base->op0 == BC_REG_INVALID); // we can't get pointer if we didn't allocate anything
 
                 virtual_stack_pointer -= imm;
-                push_offset = 0; // needed for SET_ARG
+                push_offsets.add(0); // needed for SET_ARG
             } break;
             case BC_FREE_LOCAL:
             case BC_FREE_ARGS: {
@@ -753,6 +780,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
                 ret_offset -= imm;
                 virtual_stack_pointer += imm;
+                push_offsets.pop();
             } break;
            case BC_SET_ARG: {
                 auto base = (InstBase_op1_ctrl_imm16*)n->base;
@@ -766,7 +794,9 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
                 recent_set_args[arg_index].control = base->control;
 
-                int off = base->imm16 + push_offset;
+                Assert(push_offsets.size()); // bytecode is missing ALLOC_ARGS if this fires
+                
+                int off = base->imm16 + push_offsets.last();
                 X64Register reg_args = X64_REG_SP;
                 emit_mov_mem_reg(reg_args, reg0->reg, base->control, off);
 
@@ -1166,6 +1196,10 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit_pop(X64_REG_BP);
                 emit1(OPCODE_RET);
 
+                Assert(("Bug"));
+                // virtual stack pointer should be reset to the earlier code path.
+                // tracking code paths and virtual stack pointers using jumps will be though.
+                
                 // nocheckin, TODO: FIXME
                 // switch(tinycode->call_convention) {
                 //     case BETCALL: break;
@@ -2849,7 +2883,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         emit1((u8)0);
                         break;
                     case 2:
-                        emit4((u32)0);
+                        emit2((u16)0); // note the 16-bit integer here, NOT 32-bit
                         break;
                     case 4:
                         emit4((u32)0);
@@ -2869,7 +2903,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit1((u8)(offset_loop - (code_size()+1)));
 
                     fix_jump_here_imm8(offset_jmp_imm);
-                    break;
                 }
                 FIX_POST_IN_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
@@ -2947,7 +2980,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit1((u8)(offset_loop - (code_size()+1)));
 
                     fix_jump_here_imm8(offset_jmp_imm);
-                    break;
                 }
                 FIX_POST_IN_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
@@ -2974,15 +3006,20 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 */
             
                 X64Register counter = reg0->reg;
-                X64Register src =     reg1->reg;
+                X64Register src     = reg1->reg;
+                X64Register tmp     = X64_REG_A;
 
                 emit_prefix(PREFIX_REXW, counter, counter);
                 emit1(OPCODE_XOR_REG_RM);
                 emit_modrm(MODE_REG, CLAMP_EXT_REG(counter), CLAMP_EXT_REG(counter));
 
+                emit_prefix(PREFIX_REXW, tmp, tmp);
+                emit1(OPCODE_XOR_REG_RM);
+                emit_modrm(MODE_REG, CLAMP_EXT_REG(tmp), CLAMP_EXT_REG(tmp));
+
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, src);
                 emit1(OPCODE_CMP_RM_IMM8_SLASH_7);
-                emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(src));
+                emit_modrm_slash(MODE_REG, 7, CLAMP_EXT_REG(src));
                 emit1((u8)0);
 
                 emit1(OPCODE_JE_IMM8);
@@ -2991,12 +3028,11 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 int offset_loop = code_size();
                 
-                X64Register tmp = X64_REG_A;
                 emit_mov_reg_mem(tmp, src, CONTROL_8B, 0);
 
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, tmp);
                 emit1(OPCODE_CMP_RM_IMM8_SLASH_7);
-                emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(tmp));
+                emit_modrm_slash(MODE_REG, 7, CLAMP_EXT_REG(tmp));
                 emit1((u8)0);
 
                 emit1(OPCODE_JE_IMM8);
@@ -3005,11 +3041,11 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, counter);
                 emit1(OPCODE_INC_RM_SLASH_0);
-                emit_modrm_slash(MODE_REG, 0, counter);
+                emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(counter));
                 
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, src);
                 emit1(OPCODE_INC_RM_SLASH_0);
-                emit_modrm_slash(MODE_REG, 0, src);
+                emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(src));
 
                 emit1(OPCODE_JMP_IMM8);
                 emit_jmp_imm8(offset_loop);

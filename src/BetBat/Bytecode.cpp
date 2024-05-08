@@ -75,6 +75,8 @@ void Bytecode::Destroy(Bytecode* code){
     TRACK_FREE(code, Bytecode);
     // engone::Free(code, sizeof(Bytecode));
 }
+#define DEFAULT_DATA_BYTE '\0'
+// #define DEFAULT_DATA_BYTE '_'
 void Bytecode::ensureAlignmentInData(int alignment){
     Assert(alignment > 0);
     // TODO: Check that alignment is a power of 2
@@ -88,10 +90,10 @@ void Bytecode::ensureAlignmentInData(int alignment){
         int oldMax = dataSegment.max;
         bool yes = dataSegment.resize(dataSegment.max*2 + 100);
         Assert(yes);
-        memset(dataSegment.data() + oldMax, '_', dataSegment.max - oldMax);
+        memset(dataSegment.data() + oldMax, DEFAULT_DATA_BYTE, dataSegment.max - oldMax);
     }
     int index = dataSegment.used;
-    memset((char*)dataSegment.data() + index,'_',misalign);
+    memset((char*)dataSegment.data() + index,DEFAULT_DATA_BYTE,misalign);
     dataSegment.used+=misalign;
 }
 int Bytecode::appendData(const void* data, int size){
@@ -101,13 +103,13 @@ int Bytecode::appendData(const void* data, int size){
     if(dataSegment.max < dataSegment.used + size){
         int oldMax = dataSegment.max;
         dataSegment._reserve(dataSegment.max*2 + 2*size);
-        memset(dataSegment.data() + oldMax, '_', dataSegment.max - oldMax);
+        memset(dataSegment.data() + oldMax, DEFAULT_DATA_BYTE, dataSegment.max - oldMax);
     }
     int index = dataSegment.used;
     if(data) {
         memcpy((char*)dataSegment.data() + index,data,size);
     } else {
-        memset((char*)dataSegment.data() + index,'_',size);
+        memset((char*)dataSegment.data() + index,DEFAULT_DATA_BYTE,size);
     }
     dataSegment.used+=size;
     return index;

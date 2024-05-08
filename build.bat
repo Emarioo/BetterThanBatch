@@ -196,10 +196,10 @@ if !compileSuccess! == 0 (
     @REM link bin/obj_test.obj bin/NativeLayer.obj
 
     @REM btb -twe *switch.btb
-    bin\btb -dev
+    @REM bin\btb -dev
     @REM bin\btb
     @REM bin\btb --test
-    @REM btb -dev
+    btb -dev
     @REM btb -pm *typeinfo.btb -o dev.exe -g -r
 
     @REM btb dev.btb -p

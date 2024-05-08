@@ -180,7 +180,7 @@ enum BCRegister : u8 {
 };
 enum InstBaseType : u16 {
     BASE_NONE,
-    BASE_op1     = 0x1,
+    BASE_op1     = 0x1, // op starts at op1, not op0 in enums
     BASE_op2     = 0x2,
     BASE_op3     = 0x4,
     BASE_imm8    = 0x8,

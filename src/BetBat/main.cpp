@@ -185,7 +185,7 @@ int main(int argc, const char** argv){
         } else {
             // DynamicArray<std::string> tests;
             // tests.add("tests/simple/operations.btb");
-            int failures = TestSuite(&options, TEST_ALL);
+            int failures = TestSuite(&options);
             // int failures = VerifyTests(tests);
             return failures != 0;
         }

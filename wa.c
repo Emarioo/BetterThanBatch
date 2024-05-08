@@ -1,11 +1,8 @@
-void add();
-int main() {
-    add();
-    add();
+
+void add(int a, int b) {
+    int k = a + b;
+    int c = 23 + a;
 }
-void add() {
-    {
-        char res = 0;
-    }
-    int n = 0;
+int main() {
+    add(2,6);
 }

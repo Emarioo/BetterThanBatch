@@ -363,7 +363,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
         auto bad = info.gettok();
         ERR_SECTION(
             ERR_HEAD2(bad)
-            ERR_MSG("Expected a name, "<<name_view<<" isn't.")
+            ERR_MSG("Expected a name, "<<info.lexer->tostring(bad)<<" isn't.")
             ERR_LINE2(bad,"bad")
         )
         return SIGNAL_COMPLETE_FAILURE;
@@ -1299,7 +1299,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
     TINY_ARRAY(OperationType, ops, 5);
     TINY_ARRAY(OperationType, assignOps, 5);
     TINY_ARRAY(TypeId, castTypes, 5);
-    TINY_ARRAY(std::string, namespaceNames, 5);
+    DynamicArray<std::string> namespaceNames{};
 
     DynamicArray<lexer::SourceLocation> saved_locations;
 
@@ -2096,6 +2096,8 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 info.advance();
                 // int startToken=info.gethead();
                 
+                // log::out << view << "\n";
+                
                 std::string pure_name = view;
                 // could be a slice if tok[]{}
                 // if something is within [] then it's a array access
@@ -2126,7 +2128,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 //   The code was scuffed anyway so even if it broke things you should rewrite it.
                 //   (some time later)
                 //   Yes, function parsing is now broken. - Emarioo, 2024-04-05
-                
+                // BREAK(pure_name == "name")
                 if(tok.type == '('){
                     // function call
                     info.advance();
@@ -2170,6 +2172,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     // tmp->tokenRange.endIndex = info.at()+1;
                     // tmp->tokenRange.tokenStream = info.tokens;
                 } else if(tok.type=='{' && 0 == (token->flags & lexer::TOKEN_FLAG_ANY_SUFFIX)){
+                // } else if(tok.type=='{' && 0 == (token->flags & lexer::TOKEN_FLAG_NEWLINE)){
                     // initializer
                     ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
                     initExpr->location = info.getloc();
@@ -3724,7 +3727,8 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
         }
         break;
     }
-
+    
+    auto prev_tok = info.gettok(-1);
     auto tok = info.gettok();
     if(tok.type == '=') {
         info.advance(); // =
@@ -3732,7 +3736,8 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
         auto signal = ParseExpression(info,statement->firstExpression);
         SIGNAL_SWITCH_LAZY()
 
-    } else if(tok.type == '{') {
+    // } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)) {
+    } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_NEWLINE)) {
         // array initializer
         info.advance(); // {
 

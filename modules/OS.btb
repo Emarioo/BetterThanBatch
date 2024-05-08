@@ -10,6 +10,9 @@
 
 */
 
+#import "Memory"
+#import "File"
+
 #if LINKER_MSVC
     #load "bin/NativeLayer.lib" as native_layer
 #else

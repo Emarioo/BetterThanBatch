@@ -986,13 +986,14 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
         source.line = line;
         source.column = column;
     } else {
-        if(string) {
+        // if(string) {
             // can't set source, token was created by preprocessor
             if(backup_line != 0) {
                 source.line = backup_line;
                 source.column = backup_column;
             }
-        } else {
+        // }
+         else {
             u32 cindex, tindex;
             decode_origin(token.origin, &cindex, &tindex);
             Chunk* fc = getChunk_unsafe(cindex);
@@ -1656,7 +1657,13 @@ std::string Lexer::getStdStringFromToken(Token tok) {
 u32 Lexer::getDataFromToken(Token tok, const void** ptr){
     // ZoneScoped;
     auto info = getTokenInfo_unsafe(tok);
-    Assert(info->flags & TOKEN_FLAG_HAS_DATA);
+    if(0 == (info->flags & TOKEN_FLAG_HAS_DATA)) {
+        static const char* empty = "";
+        if(ptr)
+            *ptr = empty;
+        return 0;
+    }
+    // Assert(info->flags & TOKEN_FLAG_HAS_DATA);
     u32 cindex,tindex;
     decode_origin(tok.origin,&cindex,&tindex);
     lock_chunks.lock();

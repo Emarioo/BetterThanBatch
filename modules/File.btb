@@ -155,26 +155,42 @@ fn FileClose(file: FileHandle) {
 // }
 
 struct DirIteratorItem {
-    name: char[];
+    name: StringBuilder;
     file_size: u64;
-    modified_time: u64;
-    isDirectory: bool;
+    last_write_time: u64;
+    is_directory: bool;
 }
 
 // A handle to hide implementation details
 enum @enclosed DirIterator : i64 { INVALID }
+fn InternalToIterator(n: i32) -> DirIterator { return cast_unsafe<DirIterator>cast<i64>(n+1) }
+fn IteratorToInternal(n: DirIterator) -> i32 { return cast<i32>cast<i64>n-1 }
 
-// TODO: We depend on DynamicArray right now for ease of implementing it but we shouldn't in the future.
+// TODO: We depend on DynamicArray and StringBuilder for quick implementation of dir iterators
+//   but it would be nice to not depend on them.
 #import "Array"
+#import "String"
+
+// TODO: Temporarily importing logger for debugging
+#import "Logger"
 
 struct DirIterator_impl {
-    root: char[];
-    current_dir: char[];
-    current_file: char[];
+    root: StringBuilder;
+    current_dir: StringBuilder;
     handle: HANDLE;
-    remaining_directories: DynamicArray<char[]>;
+    remaining_directories: DynamicArray<StringBuilder>;
+    
+    item: DirIteratorItem;
     
     fn valid() -> bool { return root.ptr }
+    
+    fn cleanup() {
+        root.cleanup()
+        current_dir.cleanup()
+        for remaining_directories.sliced_unsafe()
+            it.cleanup()   
+        item.name.cleanup()
+    }
 }
 
 global _directory_iterators: DynamicArray<DirIterator_impl>
@@ -185,7 +201,7 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     
     index: i32 = -1
     for 0.._directory_iterators.size() {
-        iter := &_directory_iterators[nr]
+        iter := _directory_iterators.get_unsafe(nr)
         if iter.valid()
             continue
             
@@ -197,86 +213,140 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
         index = _directory_iterators.size()-1
     }
     
-    iter := &_directory_iterators[index]
+    iter := _directory_iterators.get_unsafe(index)
     
-    iter.root.ptr = Allocate(root_path.len + 1)
-    iter.root.len = root_path.len
-    iter.root.ptr[iter.root.len] = '\0'
+    iter.root.append(root_path)
     iter.handle = INVALID_HANDLE_VALUE
+    iter.remaining_directories.add(iter.root.copy())
     
-    return InternalToHandle(index)
+    return InternalToIterator(cast<i64>index)
 }
 fn DirectoryIteratorDestroy(iterator: DirIterator) {
+    if iterator == DirIterator.INVALID
+        return
+    index := IteratorToInternal(iterator)
+    iter := _directory_iterators.get_unsafe(index)
     
+    if iter.handle != INVALID_HANDLE_VALUE {
+        yes := FindClose(iter.handle)
+        if !yes {
+            // TODO: Handle error   
+        }
+    }
+    
+    iter.cleanup()
 }
 fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> bool {
-    if iterator == DirIterator.INVALID  return false
-    index := HandleToInternal(iterator)
-    iter := &_directory_iterators[index]
+    if iterator == DirIterator.INVALID
+        return false
+    index := IteratorToInternal(iterator)
+    iter := _directory_iterators.get_unsafe(index)
     
-    WIN32_FIND_DATAA data;
+    data: WIN32_FIND_DATAA
+    cFileNameLen: i32
     while {
         if(iter.handle==INVALID_HANDLE_VALUE){
             if(iter.remaining_directories.size()==0){
                 return false;
             }
-            iter.current_dir.clear(); // TODO:
+            iter.current_dir.clear();
             
-            if(iter.remaining_directories.get(0).size()!=0){
-                iter.current_dir += iter.remaining_directories.get(0);
+            dir := iter.remaining_directories.get(0);
+            iter.remaining_directories.remove(0);
+            
+            if(dir.size()!=0){
+                iter.current_dir.append(dir.sliced());
             }
             
-            std::string temp = info->second.dir;
-            if(!temp.empty())
-                temp += "\\";
+            temp: StringBuilder = iter.current_dir.copy();
+            if(temp.size())
+                temp.append("\\");
             
-            temp+="*";
+            temp.append("*");
             // printf("FindFirstFile %s\n",temp.c_str());
             // TODO: This does a memcpy on the whole array (almost).
             //  That's gonna be slow!
-            info->second.directories.removeAt(0);
             // fprintf(stderr, "%s %p\n", temp.c_str(), &data);
             
             // DWORD err = GetLastError();
             // PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(u64)iterator);
-            HANDLE handle=INVALID_HANDLE_VALUE;
-            handle = FindFirstFileA(temp.c_str(),&data);
+            log("Try",temp.sliced())
+            handle: HANDLE = INVALID_HANDLE_VALUE;
+            handle = FindFirstFileA(temp.data(),&data);
             // handle = FindFirstFileA("src\\*",&data);
             // fprintf(stderr, "WHY%s %p\n", temp.c_str(), &data);
             
             if(handle==INVALID_HANDLE_VALUE){
-                DWORD err = GetLastError();
-                PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
+                log("find first file failed")
+                // DWORD err = GetLastError();
+                // PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
                 continue;
             }
-            info->second.handle = handle;
+            iter.handle = handle;
         }else{
-            BOOL success = FindNextFileA(info->second.handle,&data);
+            success := FindNextFileA(iter.handle,&data);
             if(!success){
-                DWORD err = GetLastError();
-                if(err == ERROR_NO_MORE_FILES){
-                    // PL_PRINTF("[WinError %u] No files '%lu'\n",err,(u64)iterator);
-                }else {
-                    PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
-                }
-                bool success = FindClose(info->second.handle);
-                info->second.handle = INVALID_HANDLE_VALUE;
+                // TODO: Check GetLastError
+                // DWORD err = GetLastError();
+                // if(err == ERROR_NO_MORE_FILES){
+                //     // PL_PRINTF("[WinError %u] No files '%lu'\n",err,(u64)iterator);
+                // }else {
+                //     PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
+                // }
+                success := FindClose(iter.handle);
+                iter.handle = INVALID_HANDLE_VALUE;
                 if(!success){
-                    err = GetLastError();
-                    PL_PRINTF("[WinError %lu] FindClose '%llu'\n",err,(u64)iterator);
+                    log("find close failed")
+                    // TODO: Check GetLastError
+                    // err = GetLastError();
+                    // PL_PRINTF("[WinError %lu] FindClose '%llu'\n",err,(u64)iterator);
                 }
                 continue;
             }
         }
         // fprintf(stderr, "%p %p\n", iterator, result);
-        if(strcmp(data.cFileName,".")==0||strcmp(data.cFileName,"..")==0){
+        if(equal(data.cFileName.ptr,".") || equal(data.cFileName.ptr,"..")){
             continue;
         }
+        cFileNameLen = strlen(data.cFileName.ptr)
+        if cFileNameLen == 0
+            continue
         break;
     }
     
-    return true
+    iter.item.name.clear()
+    
+    if iter.current_dir.size() {
+        iter.item.name.append(iter.current_dir.sliced())
+        iter.item.name.append("/")
+        iter.item.name.append(data.cFileName.ptr, cFileNameLen)
+    } else {
+        iter.item.name.append(data.cFileName.ptr, cFileNameLen)
+    }
+    #macro MAXDWORD 0xFFFF_FFFF
+    iter.item.file_size = cast<i64>data.nFileSizeLow+cast<i64>data.nFileSizeHigh*(cast<i64>MAXDWORD+1);
+    
+    iter.item.last_write_time = data.ftLastWriteTime;
+    iter.item.is_directory = data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY;
+    if(iter.item.is_directory){
+        iter.remaining_directories.add(iter.item.name.copy());
+    }
+
+    for 0..iter.item.name.size() {
+        if iter.item.name[nr] == '\\'
+            iter.item.name.data()[nr] = '/';
+    }
+
+    if out_item ;
+        *out_item = &iter.item
+    return true;
 }
 fn DirectoryIteratorSkip(iterator: DirIterator) {
+    if iterator == DirIterator.INVALID
+        return
+    index := IteratorToInternal(iterator)
+    iter := _directory_iterators.get_unsafe(index)
     
+    if iter.remaining_directories.size()
+        iter.remaining_directories.pop()
 }

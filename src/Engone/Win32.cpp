@@ -120,7 +120,6 @@ namespace engone {
 				handle = FindFirstFileA(temp.c_str(),&data);
 				// handle = FindFirstFileA("src\\*",&data);
 				// fprintf(stderr, "WHY%s %p\n", temp.c_str(), &data);
-				
 				if(handle==INVALID_HANDLE_VALUE){
 					DWORD err = GetLastError();
 					PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
@@ -202,7 +201,6 @@ namespace engone {
 			if(result->name[i]=='\\')
 				result->name[i] = '/';
 		}
-
 		return true;
 	}
 	void DirectoryIteratorSkip(DirectoryIterator iterator){

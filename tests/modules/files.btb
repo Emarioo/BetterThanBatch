@@ -1,0 +1,12 @@
+
+#import "File"
+#import "Memory"
+#import "Logger"
+
+// file_size: i64
+// file := FileOpen("a.txt", FILE_READ_ONLY, &file_size)
+// defer { FileClose(file) }
+// mem := Slice<char>{Allocate(file_size), file_size}
+// read := FileRead(file, mem.ptr, mem.len)
+
+std_print(mem)

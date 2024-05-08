@@ -57,353 +57,6 @@ void GenContext::addCallToResolve(i32 bcIndex, FuncImpl* funcImpl){
 
     tinycode->addRelocation(bcIndex, funcImpl);
 }
-// void GenContext::addCall(LinkConventions linkConvention, CallConventions callConvention){
-//     addInstruction({BC_CALL, (u8)linkConvention, (u8)callConvention},true);
-// }
-// void GenContext::popInstructions(u32 count){
-//     Assert(code->length() >= count);
-
-//     for(int i=0;i<count;i++) {
-//         u32 index = indexOfNonImmediates.last();
-//         Assert(index == code->instructionSegment.used-1); // We can't pop instructions with immediates. We need more complexity here to do that.
-//         Instruction inst = code->instructionSegment.data[index];
-        
-//         // IMPORTANT: THERE IS A HIGH CHANCE OF A BUG HERE WITH VIRTUAL STACK POINTER.
-//         switch(inst.opcode) {
-//             case BCInstruction::BC_PUSH: {
-//                 int size = 8; // fixed size
-//                 WHILE_TRUE {
-//                     if(!hasErrors()){
-//                         Assert(("bug in compiler!", stackAlignment.size()!=0));
-//                     }
-//                     if(stackAlignment.size()!=0){
-//                         auto align = stackAlignment.last();
-//                         if(!hasErrors()){
-//                             // size of 0 could mean extra alignment for between structs
-//                             Assert(("bug in compiler!", align.size == size));
-//                         }
-//                         // You pushed some size and tried to pop a different size.
-//                         // Did you copy paste some code involving addPop/addPush recently?
-//                         virtualStackPointer += size;
-//                         stackAlignment.pop();
-//                         if (align.diff) {
-//                             virtualStackPointer += align.diff;
-//                             // code->addDebugText("align sp\n");
-//                             i16 offset = align.diff;
-//                             code->instructionSegment.used-=1;
-//                             // addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-//                         }
-//                         if(align.size == 0)
-//                             continue;
-//                     }
-//                     break;
-//                 }
-//                 break;   
-//             }
-//             // case BCInstruction::BC_POP: {
-                
-//             //     break;
-//             // }
-//             default: {
-//                 // We can't pop instructions that modify stack or base pointer because we need to revert virtualStackPointer and such.
-//                 // That can get quite complex.
-//                 Assert(false);
-//                 break;   
-//             }
-//         }
-        
-//         code->instructionSegment.used-=count;
-//         indexOfNonImmediates.used-=count;
-//     }
-
-//     code->instructionSegment.used-=count;
-//     indexOfNonImmediates.used-=count;
-//     if(code->instructionSegment.used>0 && count != 0){
-//         for(int i = code->instructionSegment.used-1;i>=0;i--){
-//             u32 locIndex = -1;
-//             auto loc = code->getLocation(i, &locIndex);
-//             if(loc){
-//                 lastLine = loc->line;
-//                 lastStream = (TokenStream*)loc->stream;
-//                 lastLocationIndex = locIndex;
-//                 break;
-//             }
-//         }
-//     }
-// }
-// bool GenContext::addInstruction(Instruction inst, bool bypassAsserts){
-//     using namespace engone;
-
-//     // Assert(inst.op0 == CAST_SINT_SINT);
-
-//     // This is here to prevent mistakes.
-//     // the stack is kept track of behind the scenes with builder.emit_push, builder.emit_pop.
-//     // using builder.emit_ would bypass that which would cause bugs.
-//     if(!bypassAsserts){
-//         Assert((inst.opcode!=BC_POP && inst.opcode!=BC_PUSH && inst.opcode != BC_CALL && inst.opcode != BC_LI));
-//     }
-
-//     if(inst.opcode == BC_MOV_MR || inst.opcode == BC_MOV_RM || inst.opcode == BC_MOV_MR_DISP32 || inst.opcode == BC_MOV_RM_DISP32) {
-//         Assert(inst.op2 != 0);
-//     }
-
-//     if(code->length() == 693) {
-//         int k = 923;
-//     }
-    
-//     if(disableCodeGeneration) return true;
-
-//     #ifdef OPTIMIZED
-//     /*
-//         Some of this code is kind of neat. It has a cascading effect where
-//             li eax, push eax, pop ecx   becomes
-//             li eax, mov eax, ecx        but then again
-//             li ecx
-//     */
-//     // IMPORTANT: THE CODE DOESN'T EXPECT IMMEDIATES.
-//     //  There should be a variable which can tell us the previous bytes are an immediate and if so
-//     //  where the real instruction is.
-//     //  I have disabled some optimizations to prevent this bug from happening untill I fix it..
-//     if(indexOfNonImmediates.size()>0){
-//         int index = indexOfNonImmediates.last();
-//         Instruction instLast = code->get(index);
-//         if(inst.opcode == BC_POP && instLast.opcode == BC_PUSH
-//         && inst.op0 == instLast.op0) {
-//             popInstructions(1);
-//             _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
-//             return false;
-//         }
-//         // if(inst.opcode == BC_POP && instLast.opcode == BC_PUSH
-//         // && DECODE_REG_SIZE(inst.op0) == DECODE_REG_SIZE(instLast.op0)) {
-//         //     u8 op = instLast.op0;
-//         //     popInstructions(1);
-//         //     _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
-//         //     bool yes = addInstruction({BC_MOV_RR, op, inst.op0});
-//         //     if(yes) {
-//         //         _GLOG(log::out << log::GRAY << "(replaced with register move)\n";)
-//         //     }
-//         //     return false;
-//         // }
-//         // if(inst.opcode == BC_MOV_RR && inst.op0 == instLast.op0) {
-//         //     u8 opcode = instLast.opcode;
-//         //     u8* outOp = nullptr;
-//         //     switch(opcode) {
-//         //         // add, mul and other instructions don't work
-//         //         // because output registers are also input registers
-//         //         case BC_DATAPTR:
-//         //         case BC_CODEPTR:
-//         //         case BC_LI: {
-//         //             outOp = &instLast.op0;
-//         //             break;
-//         //         }
-//         //         case BC_MOV_MR:
-//         //         case BC_MOV_MR_DISP32: {
-//         //             outOp = &instLast.op1;
-//         //             break;
-//         //         }
-//         //     }
-//         //     if(outOp) {
-//         //         *outOp = inst.op1;
-//         //         _GLOG(log::out << log::GRAY << "(modified instruction)\n";)
-//         //         _GLOG(code->printInstruction(index,true);)
-//         //         return false;
-//         //     }
-//         // }
-//     }
-//     #endif
-
-//     if(!hasErrors()) {
-//         // FP (base pointer in x64) is callee-saved
-//         Assert(inst.opcode != BC_RET || (code->length()>0 &&
-//             code->get(code->length()-1).opcode == BC_POP &&
-//             code->get(code->length()-1).op0 == BC_REG_BP));
-//     }
-//     indexOfNonImmediates.add(code->length());
-//     code->add_notabug(inst);
-//     // Assert(nodeStack.size()!=0); // can't assert because some instructions are added which doesn't link to any AST node.
-//     if(nodeStack.size()==0)
-//         return true;
-//     if(nodeStack.last()->tokenRange.firstToken.line == lastLine &&
-//         nodeStack.last()->tokenRange.firstToken.tokenStream == lastStream){
-//         // log::out << "loc "<<lastLocationIndex<<"\n";
-//         auto location = code->setLocationInfo(lastLocationIndex,code->length()-1);
-//     } else {
-//         lastLine = nodeStack.last()->tokenRange.firstToken.line;
-//         lastStream = nodeStack.last()->tokenRange.firstToken.tokenStream;
-//         auto location = code->setLocationInfo(nodeStack.last()->tokenRange.firstToken,code->length()-1, &lastLocationIndex);
-//         // log::out << "new loc "<<lastLocationIndex<<"\n";
-//         if(nodeStack.last()->tokenRange.tokenStream())
-//             location->desc = nodeStack.last()->tokenRange.firstToken.getLine();
-//     }
-//     return true;
-// }
-// void GenContext::addLoadIm(u8 reg, i32 value){
-//     addInstruction({BC_LI, reg}, true);
-//     if(disableCodeGeneration) return;
-//     code->addIm_notabug(value);
-// }
-// void GenContext::addLoadIm2(u8 reg, i64 value){
-//     addInstruction({BC_LI, reg, 2}, true);
-//     if(disableCodeGeneration) return;
-//     code->addIm_notabug(value&0xFFFFFFFF);
-//     code->addIm_notabug(value>>32);
-// }
-// void GenContext::addImm(i32 value){
-//     if(disableCodeGeneration) return;
-//     code->addIm_notabug(value);
-// }
-// void GenContext::addPop(int reg) {
-//     using namespace engone;
-//     int size = DECODE_REG_SIZE(reg);
-//     if (size == 0 ) { // we don't print if we had errors since they probably caused size of 0
-//         if(!hasErrors()){
-//             Assert(("register had 0 zero",false));
-//             log::out << log::RED << "GenContext::addPop : Cannot pop register with 0 size\n";
-//         }
-//         return;
-//     }
-//     size = 8; // NOTE: function popInstructions assume 8 in size
-//     reg = RegBySize(DECODE_REG_TYPE(reg), size); // force 8 bytes
-
-//     addInstruction({BC_POP, (u8)reg}, true);
-//     // if errors != 0 then don't assert and just return since the stack
-//     // is probably messed up because of the errors. OR you try
-//     // to manage the stack even with errors. Unnecessary work though so don't!? 
-//     WHILE_TRUE {
-//         if(!hasErrors()){
-//             Assert(("bug in compiler!", stackAlignment.size()!=0));
-//         }
-//         if(stackAlignment.size()!=0){
-//             auto align = stackAlignment.last();
-//             if(!hasErrors() && align.size!=0){
-//                 // size of 0 could mean extra alignment for between structs
-//                 Assert(("bug in compiler!", align.size == size));
-//             }
-//             // You pushed some size and tried to pop a different size.
-//             // Did you copy paste some code involving addPop/addPush recently?
-//             stackAlignment.pop();
-//             if (align.diff != 0) {
-//                 virtualStackPointer += align.diff;
-//                 // code->addDebugText("align sp\n");
-//                 i16 offset = align.diff;
-//                 addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-//             }
-//             if(align.size == 0)
-//                 continue;
-//         }
-//         virtualStackPointer += size;
-//         break;
-//     }
-//     _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
-// }
-// void GenContext::addPush(int reg, bool withoutInstruction) {
-//     using namespace engone;
-//     // Assert(!withoutInstruction);
-//     // NOTE: When optimizing, we mess with the virtual stack pointer because we remove unnecessary pop/push instructions.
-//     // I Don't know if withoutInstruction would cause bugs. - Emarioo, 2023-12-19
-    
-//     int size = DECODE_REG_SIZE(reg);
-//     if (size == 0 ) { // we don't print if we had errors since they probably caused size of 0
-//         if(errors == 0){
-//             log::out << log::RED << "GenContext::addPush : Cannot push register with 0 size\n";
-//         }
-//         return;
-//     }
-//     size = 8;
-//     reg = RegBySize(DECODE_REG_TYPE(reg), 8); // force 8 bytes
-
-//     int diff = (size - (-virtualStackPointer) % size) % size; // how much to increment sp by to align it
-//     // TODO: Instructions are generated from top-down and the stackAlignment
-//     //   sees pop and push in this way but how about jumps. It doesn't consider this. Is it an issue?
-//     if (diff) {
-//         Assert(false); // shouldn't happen anymore
-//         virtualStackPointer -= diff;
-//         // code->addDebugText("align sp\n");
-//         i16 offset = -diff;
-//         addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-//     }
-//     if(!withoutInstruction) {
-//         addInstruction({BC_PUSH, (u8)reg}, true);
-//     }
-//     // BREAK(size == 16);
-//     stackAlignment.add({diff, size});
-//     virtualStackPointer -= size;
-//     _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
-// }
-// void GenContext::addIncrSp(i16 offset) {
-//     using namespace engone;
-//     if (offset == 0)
-//         return;
-//     // Assert(offset>0); // TOOD: doesn't handle decrement of sp
-//     if (offset > 0) {
-//         int at = offset;
-//         while (at > 0 && stackAlignment.size() > 0) {
-//             auto align = stackAlignment.last();
-//             // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
-//             stackAlignment.pop();
-//             at -= align.size;
-//             // Assert(at >= 0);
-//             // Assert doesn't work because diff isn't accounted for in offset.
-//             // Asserting before at -= diff might not work either.
-
-//             at -= align.diff;
-//         }
-//     }
-//     else if (offset < 0) {
-//         stackAlignment.add({0, -offset});
-//     }
-//     virtualStackPointer += offset;
-//     addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-//     _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
-// }
-// void GenContext::addAlign(int alignment){
-//     int diff = (alignment - (-virtualStackPointer) % alignment) % alignment; // how much to increment sp by to align it
-//     // TODO: Instructions are generated from top-down and the stackAlignment
-//     //   sees pop and push in this way but how about jumps. It doesn't consider this. Is it an issue?
-//     if (diff) {
-//         addIncrSp(-diff);
-//         // virtualStackPointer -= diff;
-//         // code->addDebugText("align sp\n");
-//         // i16 offset = -diff;
-//         // code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-//     }
-// }
-// int GenContext::saveStackMoment() {
-//     return virtualStackPointer;
-// }
-
-// void GenContext::restoreStackMoment(int moment, bool withoutModification, bool withoutInstruction) {
-//     using namespace engone;
-//     int offset = moment - virtualStackPointer;
-//     if (offset == 0)
-//         return;
-//     if(!withoutModification || withoutInstruction) {
-//         int at = moment - virtualStackPointer;
-//         while (at > 0 && stackAlignment.size() > 0) {
-//             auto align = stackAlignment.last();
-//             // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
-//             stackAlignment.pop();
-//             at -= align.size;
-//             at -= align.diff;
-//             if(!hasErrors()) {
-//                 Assert(at >= 0);
-//             }
-//         }
-//         virtualStackPointer = moment;
-//     } 
-//     // else {
-//     //     _GLOG(log::out << "relsp "<<moment<<"\n";)
-//     // }
-//     if(!withoutInstruction){
-//         addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-//     }
-//     if(withoutModification) {
-//         _GLOG(log::out << "relsp (temp) "<<moment<<"\n";)
-//     } else {
-//         _GLOG(log::out << "relsp "<<moment<<"\n";)
-//     }
-// }
-/* #endregion */
 // Will perform cast on float and integers with pop, cast, push
 // uses register A
 // TODO: handle struct cast?
@@ -514,34 +167,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
     }
     return false;
 }
-// pointers are safe to convert
-// you need to pop the values with correct registers
-// popping small register and pushing bigger register can be dangerous
-// since a part of the register contains unexpected data you will use that
-// when pushing bigger registers. You would need to XOR 64 bit register first.
-// bool IsSafeCast(TypeId from, TypeId to) {
-//     // if(AST::IsInteger(from)&&AST::IsInteger(to))
-//     // return true;
-//     if (from.isPointer() && to.isPointer())
-//         return true;
 
-//     return from == to;
-
-//     // bool fromSigned = AST::IsSigned(from);
-//     // bool toSigned = AST::IsSigned(to);
-
-//     // if(fromSigned&&!toSigned)
-//     //     return false;
-
-//     // if(fromSigned==toSigned){
-//     //     return to>=from;
-//     // }
-//     // if(!fromSigned&&toSigned){
-//     //     return from-AST_UINT8 < to-AST_INT8;
-//     // }
-//     // Assert(("IsSafeCast not handled case",0));
-//     // return false;
-// }
 InstructionOpcode ASTOpToBytecode(TypeId astOp, bool floatVersion){
     
 // #define CASE(X, Y) case X: return Y;
@@ -671,7 +297,7 @@ SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
     TypeInfo *typeInfo = 0;
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
-    u8 size = ast->getTypeSize(typeId);
+    int size = ast->getTypeSize(typeId);
     if(size == 0) {
         Assert(hasForeignErrors());
         return SIGNAL_FAILURE;
@@ -739,7 +365,7 @@ SignalIO GenContext::generatePop_set_arg    (int offset, TypeId typeId) {
     TypeInfo *typeInfo = 0;
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
-    u8 size = ast->getTypeSize(typeId);
+    int size = ast->getTypeSize(typeId);
     if(size == 0) {
         Assert(hasForeignErrors());
         return SIGNAL_FAILURE;
@@ -795,7 +421,7 @@ SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
     TypeInfo *typeInfo = 0;
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
-    u8 size = ast->getTypeSize(typeId);
+    int size = ast->getTypeSize(typeId);
     if(size == 0) {
         Assert(hasForeignErrors());
         return SIGNAL_FAILURE;
@@ -815,6 +441,7 @@ SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
     }    
     return SIGNAL_SUCCESS;
 }
+// static memzero with a fixed size
 void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
     // TODO: Move this logic into BytecodeBuilder? (emit_memzero)
     if(size <= 8) {
@@ -822,7 +449,7 @@ void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
         builder.emit_bxor(size_reg, size_reg, size);
         builder.emit_mov_mr(ptr_reg, size_reg, size);
     } else {
-        u8 batch = 1;
+        int batch = 1;
         if(size % 8 == 0)
             batch = 8;
         else if(size % 4 == 0)
@@ -839,7 +466,7 @@ void GenContext::genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size) {
         builder.emit_mov_rm(BC_REG_T0, src_reg, size);
         builder.emit_mov_mr(dst_reg, BC_REG_T0, size);
     } else {
-        // u8 batch = 1;
+        // int batch = 1;
         // if(size % 8 == 0)
         //     batch = 8;
         // else if(size % 4 == 0)
@@ -863,7 +490,7 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
     TypeInfo* typeInfo = 0;
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
-    u8 size = ast->getTypeSize(typeId);
+    int size = ast->getTypeSize(typeId);
     if(baseReg != 0 && zeroInitialize) {
         #ifndef DISABLE_ZERO_INITIALIZATION
         
@@ -888,8 +515,13 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
             //     // log::out << "Try align "<<alignSize<<"\n";
             //     // info.addAlign(alignSize);
             // }
-
-            if (member.defaultValue) {
+            
+            if(member.array_length) {
+                builder.emit_li32(BC_REG_T1, offset + memdata.offset);
+                builder.emit_add(BC_REG_T1, baseReg, false, 8);
+                int size = ast->getTypeSize(memdata.typeId);
+                genMemzero(BC_REG_T1, BC_REG_T0, size * member.array_length);
+            } else if (member.defaultValue) {
                 // TypeId tempTypeId = {};
                 DynamicArray<TypeId> tempTypes{};
                 SignalIO result = generateExpression(member.defaultValue, &tempTypes);
@@ -1024,7 +656,7 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
 // be a pointer. EVEN when the outType isn't a pointer. It is an implicit extra level of indirection commonly
 // used for assignment.
 // wasNonReference is used to allow pointers as well as actual references (pointer to variable)
-SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope, bool* wasNonReference){
+SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope, bool* wasNonReference, int* array_length){
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue2);
     _GLOG(FUNC_ENTER)
@@ -1033,6 +665,9 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
     if(idScope==(ScopeId)-1)
         idScope = info.currentScopeId;
     *outTypeId = AST_VOID;
+    
+    if(array_length)
+        *array_length = 0;
 
     DynamicArray<ASTExpression*> exprs;
     DynamicArray<TypeId> tempTypes;
@@ -1142,7 +777,8 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
 
     for(int i=exprs.size()-1;i>=0;i--){
         ASTExpression* now = exprs[i];
-        
+        if(array_length)
+            *array_length = 0;
         if(now->typeId == AST_MEMBER){
             if(pointerType){
                 pointerType=false;
@@ -1181,49 +817,74 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             auto memberData = typeInfo->getMember(now->name);
             if(memberData.index==-1){
                 Assert(info.hasForeignErrors());
-                // error should have been caught by type checker.
-                // if it was then we just return error here.
-                // don't want message printed twice.
-                // ERR_SECTION(
-                // ERR_HEAD2(now->location, "'"<<now->name << "' is not a member of struct '" << info.ast->typeToString(endType) << "'. "
-                //         "These are the members: ";
-                //     for(int i=0;i<(int)typeInfo->astStruct->members.size();i++){
-                //         if(i!=0)
-                //             log::out << ", ";
-                //         log::out << log::LIME << typeInfo->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(typeInfo->getMember(i).typeId);
-                //     }
-                //     log::out <<"\n";
-                //     log::out <<"\n";
-                //     ERR_LINE2(now->location, "not a member");
-                // )
                 return SIGNAL_FAILURE;
             }
-            // TODO: You can do more optimisations here as long as you don't
-            //  need to dereference or use MOV_MR. You can have the RBX popped
-            //  and just use ADDI on it to get the correct members offset and keep
-            //  doing this for all member accesses. Then you can push when done.
-            
-            bool popped = false;
-            BCRegister reg = BC_REG_B;
-            if(endType.getPointerLevel()>0){
-                if(!popped)
-                    builder.emit_pop(reg);
-                popped = true;
-                builder.emit_mov_rm(BC_REG_C, reg, 8);
-                reg = BC_REG_C;
-            }
-            if(memberData.offset!=0){
-                if(!popped)
-                    builder.emit_pop(reg);
-                popped = true;
+            auto& mem = typeInfo->astStruct->members[memberData.index];
+            if(mem.array_length > 0) {
+                pointerType = true;
+                if(array_length)
+                    *array_length = mem.array_length;
                 
-                builder.emit_li32(BC_REG_A, memberData.offset);
-                builder.emit_add(reg, BC_REG_A, false, 8);
-            }
-            if(popped)
-                builder.emit_push(reg);
+                bool popped = false;
+                BCRegister reg = BC_REG_B;
+                if(endType.getPointerLevel()>0){
+                    if(!popped)
+                        builder.emit_pop(reg);
+                    popped = true;
+                    builder.emit_mov_rm(BC_REG_C, reg, 8);
+                    reg = BC_REG_C;
+                }
+                if(memberData.offset!=0){
+                    if(!popped)
+                        builder.emit_pop(reg);
+                    popped = true;
+                    
+                    builder.emit_li32(BC_REG_A, memberData.offset);
+                    builder.emit_add(reg, BC_REG_A, false, 8);
+                }
+                if(popped)
+                    builder.emit_push(reg);
 
-            endType = memberData.typeId;
+                endType = memberData.typeId;
+                endType.setPointerLevel(endType.getPointerLevel()+1);
+                // // TODO: Improve error message, the message is bad partly because I don't know
+                // //   what should happen or how referencing should work so figure that out.
+                // ERR_SECTION(
+                //     ERR_HEAD2(now->location)
+                //     ERR_MSG("You cannot take a reference to an array inside a struct. Consider taking a poiner.")
+                //     ERR_LINE2(now->location, "")
+                //     ERR_LINE2(mem.location, "this is an array")
+                // )
+                // return SIGNAL_FAILURE;
+                
+            } else {
+                // TODO: You can do more optimisations here as long as you don't
+                //  need to dereference or use MOV_MR. You can have the RBX popped
+                //  and just use ADDI on it to get the correct members offset and keep
+                //  doing this for all member accesses. Then you can push when done.
+                
+                bool popped = false;
+                BCRegister reg = BC_REG_B;
+                if(endType.getPointerLevel()>0){
+                    if(!popped)
+                        builder.emit_pop(reg);
+                    popped = true;
+                    builder.emit_mov_rm(BC_REG_C, reg, 8);
+                    reg = BC_REG_C;
+                }
+                if(memberData.offset!=0){
+                    if(!popped)
+                        builder.emit_pop(reg);
+                    popped = true;
+                    
+                    builder.emit_li32(BC_REG_A, memberData.offset);
+                    builder.emit_add(reg, BC_REG_A, false, 8);
+                }
+                if(popped)
+                    builder.emit_push(reg);
+
+                endType = memberData.typeId;
+            }
         } else if(now->typeId == AST_DEREF) {
             if(pointerType){
                 // PROTECTIVE BARRIER took a hit
@@ -1636,7 +1297,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             builder.emit_pop(BC_REG_B);
             builder.emit_strlen(BC_REG_A, BC_REG_B);
             builder.emit_push(BC_REG_A); // len
-            outTypeIds->add(AST_UINT32);
+            outTypeIds->add(AST_INT32);
         } else if(name == "memzero"){
             builder.emit_pop(BC_REG_B); // ptr
             builder.emit_pop(BC_REG_A);
@@ -1644,7 +1305,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         } else if(name == "rdtsc"){
             builder.emit_rdtsc(BC_REG_A);
             builder.emit_push(BC_REG_A); // timestamp counter
-            outTypeIds->add(AST_UINT64);
+            outTypeIds->add(AST_INT64);
         // } else if(funcImpl->name == "rdtscp"){
         //     builder.emit_({BC_RDTSC, BC_REG_A, BC_REG_ECX, BC_REG_RDX});
         //     builder.emit_push(BC_REG_A); // timestamp counter
@@ -1935,7 +1596,6 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             // }
 
             if(expression->enum_ast) {
-                // SAMECODE as AST_MEMBER further down
                 auto& mem = expression->enum_ast->members[expression->enum_member];
                 int size = info.ast->getTypeSize(expression->enum_ast->actualType);
                 Assert(size <= 8);
@@ -2095,7 +1755,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             builder.emit_li32(BC_REG_A, size);
             builder.emit_push(BC_REG_A);
 
-            outTypeIds->add(AST_UINT32);
+            outTypeIds->add(AST_INT32);
             return SIGNAL_SUCCESS;
         } else if(expression->typeId == AST_TYPEID){
 
@@ -2335,7 +1995,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             builder.emit_pop(BC_REG_B);
 
             if(outId.isPointer()){
-                u8 size = info.ast->getTypeSize(outId);
+                int size = info.ast->getTypeSize(outId);
 
                 BCRegister reg = BC_REG_A;
 
@@ -2476,18 +2136,145 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     return SIGNAL_SUCCESS;
                 }
             }
-            // TODO: We don't allow Apple{"Green",9}.name because initializer is not
-            //  a reference. We should allow it though.
-
-            SignalIO result = generateReference(expression,&exprId);
+            
+            SignalIO result = SIGNAL_NO_MATCH;
+            
+            bool nonReference = false;
+            int array_length = 0;
+            result = generateReference(expression->left, &exprId, idScope, &nonReference, &array_length);
             if(result != SIGNAL_SUCCESS) {
                 return SIGNAL_FAILURE;
             }
-
-            builder.emit_pop(BC_REG_B);
-            result = generatePush(BC_REG_B,0, exprId);
             
-            outTypeIds->add(exprId);
+            if(array_length > 0) {
+                Assert(nonReference); // we expect a pure pointer out
+                if(expression->name == "len") {
+                    builder.emit_pop(BC_REG_T0); // pop pointer
+                    builder.emit_li64(BC_REG_T0, array_length);
+                    builder.emit_push(BC_REG_T0);
+                    if(outTypeIds)
+                        outTypeIds->add(AST_INT32);
+                } else if(expression->name == "ptr") {
+                    if(outTypeIds)
+                        outTypeIds->add(exprId);
+                } else {
+                    // Assert(hasForeignErrors());
+                    // type checker handles this
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG("'"<<info.ast->typeToString(exprId)<<"' is an array within a struct and does not have members. If the elements of the array are structs then index into the array first.")
+                        ERR_LINE2(expression->left->location, info.ast->typeToString(exprId).c_str())
+                    )
+                    return SIGNAL_FAILURE;
+                }
+            } else {
+                if(exprId.getPointerLevel() > 1){ // one level of pointer is okay.
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG("'"<<info.ast->typeToString(exprId)<<"' is not a struct, cannot access members. A pointer level of one will be implicitly dereferenced. However, the pointer level was "<<exprId.pointer_level<<"had a level.")
+                        ERR_LINE2(expression->left->location, info.ast->typeToString(exprId).c_str())
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                auto typeInfo = info.ast->getTypeInfo(exprId.baseType());
+                if(!typeInfo || !typeInfo->astStruct){ // one level of pointer is okay.
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG("'"<<info.ast->typeToString(exprId)<<"' is not a struct. Cannot access member.")
+                        ERR_LINE2(expression->left->location, info.ast->typeToString(exprId).c_str())
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                auto memberData = typeInfo->getMember(expression->name);
+                if(memberData.index==-1){
+                    Assert(info.hasForeignErrors());
+                    return SIGNAL_FAILURE;
+                }
+                auto& mem = typeInfo->astStruct->members[memberData.index];
+                if(mem.array_length > 0) {
+                    std::string slice_name = "Slice<" + ast->typeToString(memberData.typeId) + ">";
+                    auto slice_info = info.ast->convertToTypeInfo(slice_name, info.ast->globalScopeId, true);
+                    if(!slice_info) {
+                        Assert(info.hasForeignErrors());
+                        return SIGNAL_FAILURE;
+                    }
+                    
+                    bool popped = false;
+                    BCRegister reg = BC_REG_B;
+                    if(exprId.getPointerLevel()>0){
+                        if(!popped)
+                            builder.emit_pop(reg);
+                        popped = true;
+                        builder.emit_mov_rm(BC_REG_C, reg, 8);
+                        reg = BC_REG_C;
+                    }
+                    if(memberData.offset!=0){
+                        if(!popped)
+                            builder.emit_pop(reg);
+                        popped = true;
+                        
+                        builder.emit_li32(BC_REG_A, memberData.offset);
+                        builder.emit_add(reg, BC_REG_A, false, 8);
+                    }
+                    if(!popped)
+                        builder.emit_pop(reg);
+                        
+                    
+                    builder.emit_li64(BC_REG_T0, mem.array_length);
+                    builder.emit_push(BC_REG_T0);
+                    
+                    builder.emit_push(reg);
+                    
+                    exprId = slice_info->id;
+                    
+                    outTypeIds->add(exprId);
+                } else {
+                    auto memberData = typeInfo->getMember(expression->name);
+                    if(memberData.index==-1){
+                        Assert(info.hasForeignErrors());
+                        return SIGNAL_FAILURE;
+                    }
+                    auto& mem = typeInfo->astStruct->members[memberData.index];
+                    bool popped = false;
+                    BCRegister reg = BC_REG_B;
+                    if(exprId.getPointerLevel()>0){
+                        if(!popped)
+                            builder.emit_pop(reg);
+                        popped = true;
+                        builder.emit_mov_rm(BC_REG_C, reg, 8);
+                        reg = BC_REG_C;
+                    }
+                    if(memberData.offset!=0){
+                        if(!popped)
+                            builder.emit_pop(reg);
+                        popped = true;
+                        
+                        builder.emit_li32(BC_REG_A, memberData.offset);
+                        builder.emit_add(reg, BC_REG_A, false, 8);
+                    }
+                    if(popped)
+                        builder.emit_push(reg);
+
+                    exprId = memberData.typeId;
+                    
+                    builder.emit_pop(BC_REG_B);
+                    result = generatePush(BC_REG_B,0, exprId);
+                    
+                    outTypeIds->add(exprId);
+                }
+            }
+            
+            // OLD code
+            // result = generateReference(expression,&exprId);
+            // if(result != SIGNAL_SUCCESS) {
+            //     return SIGNAL_FAILURE;
+            // }
+            // // TODO: We don't allow Apple{"Green",9}.name because initializer is not
+            // //  a reference. We should allow it though.
+            // builder.emit_pop(BC_REG_B);
+            // result = generatePush(BC_REG_B,0, exprId);
+            
+            // outTypeIds->add(exprId);
         }
         else if (expression->typeId == AST_INITIALIZER) {
             TypeId castType = expression->versions_castType[info.currentPolyVersion];
@@ -2877,7 +2664,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 return SIGNAL_FAILURE;
             }
 
-            u8 size = info.ast->getTypeSize(ltype);
+            int size = info.ast->getTypeSize(ltype);
             BCRegister reg = BC_REG_A;
 
             builder.emit_pop(BC_REG_B); // reference
@@ -2905,7 +2692,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             }
             
             if(AST::IsInteger(ltype)) {
-                u8 size = info.ast->getTypeSize(ltype);
+                int size = info.ast->getTypeSize(ltype);
                 BCRegister regFinal = BC_REG_A;
                 BCRegister regValue = BC_REG_D;
 
@@ -2915,7 +2702,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 builder.emit_push(regFinal);
                 outTypeIds->add(ltype);
             } else if (AST::IsDecimal(ltype)) {
-                u8 size = info.ast->getTypeSize(ltype);
+                int size = info.ast->getTypeSize(ltype);
                 BCRegister regMask = BC_REG_A;
                 BCRegister regValue = BC_REG_D;
                 if(size == 8)
@@ -3073,8 +2860,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 builder.emit_pop(right_reg);
                 builder.emit_pop(left_reg);
                 
-                u8 outSize = 0;
-                u8 operand_size = 0;
+                int outSize = 0;
+                int operand_size = 0;
                 
                 /*###########################
                  Validation operations on types
@@ -3116,8 +2903,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     }
                 } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR || left_info->astEnum) && (AST::IsInteger(rtype) || rtype == AST_CHAR || right_info->astEnum)){
                     // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
-                    u8 lsize = info.ast->getTypeSize(ltype);
-                    u8 rsize = info.ast->getTypeSize(rtype);
+                    int lsize = info.ast->getTypeSize(ltype);
+                    int rsize = info.ast->getTypeSize(rtype);
                     if(operationType == AST_DIV) {
                         if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
                             ERR_SECTION(
@@ -3159,7 +2946,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             return SIGNAL_FAILURE;
                         }
                     }
-                    u8 outSize = lsize > rsize ? lsize : rsize;
+                    int outSize = lsize > rsize ? lsize : rsize;
                     if(is_comparison || is_equality) {
                         operand_size = outSize;
                     }
@@ -3217,9 +3004,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     */
 
                     InstructionOpcode bytecodeOp = ASTOpToBytecode(operationType,true);
-                    u8 lsize = info.ast->getTypeSize(ltype);
-                    u8 rsize = info.ast->getTypeSize(rtype);
-                    u8 finalSize = 0;
+                    int lsize = info.ast->getTypeSize(ltype);
+                    int rsize = info.ast->getTypeSize(rtype);
+                    int finalSize = 0;
                     if(AST::IsDecimal(ltype)) {
                         finalSize = lsize;
                         outType = ltype;
@@ -4346,7 +4133,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     builder.emit_pop(caseValueReg);
                 }
                 if(touched_switch_reg)
-                    builder.emit_mov_rm_disp(switchValueReg, BC_REG_LOCALS, (u8)size, switchValueOffset);
+                    builder.emit_mov_rm_disp(switchValueReg, BC_REG_LOCALS, (int)size, switchValueOffset);
                 
                 builder.emit_eq(caseValueReg, switchValueReg, false, size);
                 caseData[nr].caseJumpAddress = builder.emit_jnz(caseValueReg);
@@ -4662,9 +4449,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 builder.emit_pop(ptr_reg);
                 builder.emit_pop(length_reg);
 
-                u8 ptr_size = ast->getTypeSize(memdata_ptr.typeId);
-                // u8 index_size = ast->getTypeSize(memdata_len.typeId);
-                u8 operand_size = ptr_size;
+                int ptr_size = ast->getTypeSize(memdata_ptr.typeId);
+                // int index_size = ast->getTypeSize(memdata_len.typeId);
+                int operand_size = ptr_size;
 
                 builder.emit_mov_rm_disp(index_reg, BC_REG_LOCALS, operand_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
                 if(statement->isReverse()){
@@ -5003,10 +4790,10 @@ SignalIO GenContext::generateData() {
     // IMPORTANT: TODO: Some data like 64-bit integers needs alignment.
     //   Strings don's so it's fine for now but don't forget about fixing this.
     for(auto& pair : info.ast->_constStringMap) {
-        Assert(pair.first.size()!=0);
+        // Assert(pair.first.size()!=0);
         int offset = 0;
         if(pair.first.back()=='\0')
-            offset = bytecode->appendData(pair.first.data(), pair.first.length());
+            offset = bytecode->appendData(pair.first.data(), pair.first.length() + 1);
         else
             offset = bytecode->appendData(pair.first.data(), pair.first.length() + 1); // +1 to include null termination, this is to prevent mistakes when using C++ functions which expect it.
         if(offset == -1){

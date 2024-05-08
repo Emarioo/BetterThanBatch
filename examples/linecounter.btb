@@ -244,9 +244,9 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
             if buffer {
                 // bufferSize = DEFAULT_BUFFER_SIZE;
                 if bufferSize*2u < fileSize {
-                    buffer = Reallocate(buffer, bufferSize, fileSize);
+                    buffer = Reallocate(fileSize, buffer, bufferSize);
                 } else {
-                    buffer = Reallocate(buffer, bufferSize, bufferSize*2u);
+                    buffer = Reallocate(bufferSize*2u, buffer, bufferSize);
                     bufferSize = bufferSize * 2u;
                 }
             } else {

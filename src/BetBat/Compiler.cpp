@@ -936,10 +936,12 @@ void Compiler::processImports() {
                 
                 if(!new_errors) {
                     // @DEBUG
-                    // for(auto t : imp->tinycodes) {
-                    //     // log::out << log::GOLD << t->name << "\n";
-                    //     t->print(0,-1,bytecode,nullptr,true);
-                    // }
+                    LOG_CODE(LOG_BYTECODE,
+                        for(auto t : imp->tinycodes) {
+                            // log::out << log::GOLD << t->name << "\n";
+                            t->print(0,-1,bytecode,nullptr,true);
+                        }
+                    )
                     
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     picked_task.type = TASK_GEN_MACHINE_CODE;
@@ -1237,7 +1239,8 @@ void Compiler::run(CompileOptions* options) {
     if(compiler_got_stuck) {
         return;
     }
-
+    
+    bool obj_write_success = false;
     switch(options->target){
         case TARGET_BYTECODE: {
             // if(generate_obj_file) {
@@ -1248,14 +1251,15 @@ void Compiler::run(CompileOptions* options) {
             // }
         } break;
         case TARGET_WINDOWS_x64: {
-            ObjectFile::WriteFile(OBJ_COFF, obj_file, program, this);
+            obj_write_success = ObjectFile::WriteFile(OBJ_COFF, obj_file, program, this);
         } break;
         case TARGET_UNIX_x64: {
-            ObjectFile::WriteFile(OBJ_ELF, obj_file, program, this);
+            obj_write_success = ObjectFile::WriteFile(OBJ_ELF, obj_file, program, this);
         } break;
     }
-
-    if(generate_exe_file && options->target != TARGET_BYTECODE) {
+    if(!obj_write_success) {
+        log::out << log::RED << "Could not write object file '"<<obj_file<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
+    } else if(generate_exe_file && options->target != TARGET_BYTECODE) {
         std::string cmd = "";
         bool outputOtherDirectory = false;
         switch(options->linker) {

@@ -308,6 +308,7 @@ namespace engone {
 		//  we don't need to ensure megabytes of data.
 		char* buf = info.ensure(len);
 		if (buf) {
+            written_bytes += len;
 			memcpy(buf, str, len);
 			info.use(len);
 			onEmptyLine=false;
@@ -344,20 +345,7 @@ namespace engone {
 
 		if (len == 0) return *this;
 
-		// auto& info = getThreadInfo();
-
 		print((char*)value, len);
-		// char* buf = info.ensure(len);
-		// if (buf) {
-		// 	memcpy(buf, value, len);
-		// 	info.use(len);
-		// 	onEmptyLine=false;
-		// } else {
-		// 	printf("[Logger] : Failed ensuring %u bytes\n", len);
-		// }
-		// if (value[len - 1] == '\n') {
-		// 	flush();
-		// }
 		return *this;
 	}
 	Logger& Logger::operator<<(char* value) {
@@ -379,6 +367,7 @@ namespace engone {
 		char* buf = info.ensure(ensureBytes);\
 		if (buf) {\
 			int used = sprintf(buf,FORMAT,(TYPE)value);\
+            written_bytes += used;\
 			info.use(used);\
 			onEmptyLine=false;\
 		} else {\
@@ -405,6 +394,7 @@ namespace engone {
 		char* buf = info.ensure(ensureBytes);\
 		if (buf) {\
 			int used = sprintf PRINT;\
+            written_bytes += used;\
 			info.use(used);\
 			onEmptyLine=false;\
 		} else {\

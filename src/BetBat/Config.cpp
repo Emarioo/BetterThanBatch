@@ -8,6 +8,7 @@
 LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_ALL
 // | LOG_TASKS
+// | LOG_BYTECODE
 
 // | LOG_TOKENIZER    
 // | LOG_PREPROCESSOR 

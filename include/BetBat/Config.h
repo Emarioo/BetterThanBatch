@@ -116,8 +116,10 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 
 #ifdef DEBUG
 #define LOG(CATEGORY, ...) if(global_loggingSection&(CATEGORY)) { engone::log::out << __VA_ARGS__; }
+#define LOG_CODE(CATEGORY, X) if(global_loggingSection&(CATEGORY)) { X }
 #else
 #define LOG(CATEGORY,...)
+#define LOG_CODE(CATEGORY, X)
 #endif
 enum LoggingSection : u64 {
     LOG_ALL = 0xFFFF'FFFF'FFFF'0000,
@@ -133,6 +135,8 @@ enum LoggingSection : u64 {
     LOG_INTERPRETER     = 0x80,
     LOG_OVERVIEW        = 0x100,
     LOG_MACRO_MATCH     = 0x200,
+    
+    LOG_BYTECODE        = 0x400,
 
    //  LOG_ALLOCATIONS     = 0x400,
     LOG_AST             = 0x800,

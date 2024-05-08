@@ -4194,7 +4194,8 @@ void X64Builder::emit_push(X64Register reg, int size) {
         emit1(OPCODE_PUSH_RM_SLASH_6);
         emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(reg));
     }
-    push_offset += 8;
+    if(push_offsets.size())
+        push_offsets.last() += 8;
     ret_offset += 8;
 }
 void X64Builder::emit_pop(X64Register reg, int size) {
@@ -4209,7 +4210,8 @@ void X64Builder::emit_pop(X64Register reg, int size) {
         emit1(OPCODE_POP_RM_SLASH_0);
         emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
     }
-    push_offset -= 8;
+    if(push_offsets.size())
+        push_offsets.last() -= 8;
     ret_offset -= 8;
 }
 void X64Builder::emit_add_imm32(X64Register reg, i32 imm32) {
