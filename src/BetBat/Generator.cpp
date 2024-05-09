@@ -1802,63 +1802,36 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             outTypeIds->add(typeInfo->id);
             return SIGNAL_SUCCESS;
         }  else if(expression->typeId == AST_ASM){
-            // TODO: How does polymorphism complicated this?
-            //   You don't want duplicate inline assembly.
-            if(!info.disableCodeGeneration) {
-                u32 start = bytecode->rawInlineAssembly.used;
-
-                // Assert(false); // nocheckin, rewrite removed token range
-                // +2 and -1 to avoid adding "asm { }"
-                #ifdef gone
-                TokenRange range{};
-                range.firstToken = expression->tokenRange.tokenStream()->get(expression->tokenRange.startIndex()+2);
-                range.endIndex = expression->tokenRange.endIndex-1;
-                
-                int size = range.queryFeedSize();
-                bytecode->rawInlineAssembly._reserve(bytecode->rawInlineAssembly.used + size);
-                int feed_size = range.feed(bytecode->rawInlineAssembly.data() + bytecode->rawInlineAssembly.size(), size);
-                // Assert(feed_size == size);
-                bytecode->rawInlineAssembly.used+=size;
-                
-                // This doesn't output the tokens correctly. feed is built to accurately output the tokens
-                // to their original form (except contiguous spacing)
-                // u32 startT = expression->tokenRange.startIndex()+2;
-                // u32 endT = expression->tokenRange.endIndex-1;
-                // TokenStream* stream = expression->tokenRange.tokenStream();
-                // /// We can assume that all tokens come from the same stream for now.
-                // for (int i=startT; i < (int)endT; i++) {
-                //     Token& tok = stream->get(i);
-                //     // OPTIMIZE: TODO: You can compute the character length of the inline assembly in the parser and
-                //     //  resize in advance instead of resizing per token.
-                //     bytecode->rawInlineAssembly._reserve(bytecode->rawInlineAssembly.used + tok.length + 2); // +2 for space or line feed
-                //     memcpy(bytecode->rawInlineAssembly._ptr + bytecode->rawInlineAssembly.used,
-                //         tok.str, tok.length);
-                //     bytecode->rawInlineAssembly.used += tok.length;
-                //     if(tok.flags&TOKEN_SUFFIX_LINE_FEED) {
-                //         bytecode->rawInlineAssembly._ptr[bytecode->rawInlineAssembly.used] = '\n';
-                //         bytecode->rawInlineAssembly.used += 1;
-                //     } else if(tok.flags&TOKEN_SUFFIX_SPACE) {
-                //         bytecode->rawInlineAssembly._ptr[bytecode->rawInlineAssembly.used] = ' ';
-                //         bytecode->rawInlineAssembly.used += 1;
-                //     }
-                //     Assert(0==(tok.flags&TOKEN_MASK_QUOTED));
-                // }
-
-                u32 end = bytecode->rawInlineAssembly.used;
-
-                int asmInstanceIndex = bytecode->asmInstances.size();
-                bytecode->asmInstances.add({start, end});
-                auto& inst = bytecode->asmInstances.last();
-                inst.lineStart = range.firstToken.line;
-                inst.lineEnd = range.tokenStream()->get(range.endIndex-1).line;
-                inst.file = range.tokenStream()->streamName;
-
-                // NOTE: ASM_ENCODE_INDEX result in 3 expression separated by comma
-                builder.emit_({BC_ASM, ASM_ENCODE_INDEX(asmInstanceIndex)}); // ASM_ENCODE_INDEX results in bytes separated by commas
-                // builder.emit_({BC_ASM, (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)});
-                #endif
+            auto type = expression->versions_asmType[info.currentPolyVersion];
+            if(info.disableCodeGeneration) {
+                if(type.isValid()) {
+                    SignalIO result = generateArtificialPush(expression->versions_asmType[info.currentPolyVersion]);
+                }
+                outTypeIds->add(type);
+                return SIGNAL_SUCCESS;   
             }
-            outTypeIds->add(AST_VOID);
+            
+            if(info.currentPolyVersion != 0) {
+                // TODO: Don't add the same assembly to bytecode unless they are different.
+                // log::out << log::GOLD << "Inline assembly in polymorphic functions will be stored twice which is unnecessary.\n";
+            }
+
+            auto imp = compiler->lexer.getImport_unsafe(expression->asm_range.importId);
+            auto iterator = compiler->lexer.createFeedIterator(imp, expression->asm_range.token_index_start, expression->asm_range.token_index_end);
+            bool yes = compiler->lexer.feed(iterator);
+            if(!yes) {
+                // TODO: When does this happen and is it an error?
+            }
+            
+            lexer::TokenSource* src_start, *src_end;
+            compiler->lexer.getTokenInfoFromImport(imp->file_id, expression->asm_range.token_index_start, &src_start);
+            compiler->lexer.getTokenInfoFromImport(imp->file_id, expression->asm_range.token_index_end-1, &src_end);
+            iterator.append('\n'); // if the last token didn't have a newline then we must add one here
+            int asm_index = bytecode->add_assembly(iterator.data(), iterator.len(), imp->path, src_start->line, src_end->line);
+            
+            builder.emit_asm(asm_index, 0, 0);
+
+            outTypeIds->add(type);
             return SIGNAL_SUCCESS;
         } 
         else if(expression->typeId == AST_NAMEOF){
@@ -3175,14 +3148,9 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             )
             return SIGNAL_FAILURE;
         }
-        // if(!info.hasForeignErrors()){
-        //     Assert(function->_impls.size()==1);
-        // }
         if(function->linkConvention == NATIVE ||
             info.compiler->options->target == TARGET_BYTECODE
         ){
-            // #ifdef gone
-            // Assert(info.compileInfo->nativeRegistry);
             auto nativeRegistry = NativeRegistry::GetGlobal();
             auto nativeFunction = nativeRegistry->findFunction(function->name);
             // auto nativeFunction = info.compileInfo->nativeRegistry->findFunction(function->name);
@@ -3234,7 +3202,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 }
                 return SIGNAL_FAILURE;
             }
-            // #endif
             _GLOG(log::out << "Native function "<<function->name<<"\n";)
         } else {
             // exports not handled

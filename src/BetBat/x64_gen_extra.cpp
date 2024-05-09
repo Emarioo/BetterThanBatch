@@ -9,11 +9,27 @@
 #include "BetBat/CompilerEnums.h"
 #include "BetBat/Compiler.h"
 
-void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode) {
+bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode) {
     using namespace engone;
 
     this->bytecode = bytecode;
     this->tinycode = tinycode;
+    
+    bool failed = false;
+    for(auto ind : tinycode->required_asm_instances) {
+        auto& inst = code->asmInstances[ind];
+        if(!inst.generated) {
+            bool yes = prepare_assembly(inst);
+            if(yes) {
+               inst.generated = true; 
+            } else {
+                failed = true;
+                // error should have been printed
+            }
+        }
+    }
+    if(failed)
+        return false;
     
     // NOTE: The generator makes assumptions about the bytecode.
     //  - alloc_local isn't called iteratively unless it's scoped
@@ -83,6 +99,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         || t == BC_ATOMIC_CMP_SWAP
         || t == BC_MEMCPY
         || t == BC_MEMZERO
+        || t == BC_ASM
         || t == BC_TEST_VALUE
         ;
     };
@@ -471,6 +488,47 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     emit1(PREFIX_REXW);
     emit1(OPCODE_MOV_REG_RM);
     emit_modrm(MODE_REG, X64_REG_BP, X64_REG_SP);
+    
+    // Microsoft x64 calling convention
+    //    Callee saved: RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15, and XMM6-XMM15 
+    // System V ABI convention
+    //    Callee saved: RBX, RBP,           RSP, R12, R13, R14, R15
+    
+    // TODO: Don't save these unless we use them.
+    //   System V ABI doesn't need DI and SI.
+    const X64Register callee_saved_regs[]{
+        X64_REG_B,
+        X64_REG_DI,
+        X64_REG_SI,
+        X64_REG_R12,
+    };
+    int callee_saved_regs_len = sizeof(callee_saved_regs)/sizeof(*callee_saved_regs);
+    
+    
+    // We need to save registers if the caller expects that
+    //   if we use stdcall, unixcall i guess?
+    
+    bool enable_callee_saved_registers = false;
+    // tinycode->is_used_as_function_pointer;
+    // if(tinycode->call_convention == STDCALL || tinycode->call_convention == UNIXCALL) {
+    //     enable_callee_saved_registers = true;
+    // }
+    
+    callee_saved_space = 0;
+    if(enable_callee_saved_registers) {
+        for(int i=0;i<callee_saved_regs_len;i++) {
+            emit_push(callee_saved_regs[i]);
+            callee_saved_space += 8;
+        }
+    }
+    
+    auto pop_callee_saved_regs=[&]() {
+        if(enable_callee_saved_registers) {
+            for(int i=callee_saved_regs_len-1;i>=0;i--) {
+                emit_pop(callee_saved_regs[i]);
+            }
+        }
+    };
     
     const X64Register stdcall_normal_regs[4]{
         X64_REG_C,
@@ -880,7 +938,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         FIX_PRE_IN_OPERAND(0)
                         
                         X64Register reg_rets = X64_REG_BP;
-                        int off = base->imm16;
+                        int off = base->imm16 - callee_saved_space;
 
                         emit_mov_mem_reg(reg_rets, reg0->reg, base->control, off);
                         
@@ -910,11 +968,11 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 FIX_PRE_OUT_OPERAND(0);
 
                 X64Register reg_local = X64_REG_BP;
-
+                int off = base->imm16 + callee_saved_space;
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
                 emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
                 emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
-                emit4((u32)base->imm16); // TODO: Need to offset if we pushed non-volatile registers
+                emit4((u32)off);
 
 
                 emit_prefix(PREFIX_REXW, reg0->reg, reg_local);
@@ -1208,6 +1266,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 break;
             } break;
             case BC_RET: {
+                pop_callee_saved_regs();
                 emit_pop(X64_REG_BP);
                 emit1(OPCODE_RET);
             } break;
@@ -1596,7 +1655,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             emit1((u8)0);
 
                             emit_prefix(0,X64_REG_INVALID, reg0->reg);
-                            emit1(OPCODE_MOV_RM_IMM8_SLASH_0);
+                            emit1(OPCODE_MOV_RM8_IMM8_SLASH_0);
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                             emit1((u8)1);
 
@@ -1608,11 +1667,13 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             fix_jump_here_imm8(offset_jmp1_imm);
 
                             emit_prefix(0,X64_REG_INVALID, reg0->reg);
-                            emit1(OPCODE_MOV_RM_IMM8_SLASH_0);
+                            emit1(OPCODE_MOV_RM8_IMM8_SLASH_0);
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                             emit1((u8)0);
 
                             fix_jump_here_imm8(offset_jmp2_imm);
+                            
+                            emit_movzx(reg0->reg, reg0->reg, CONTROL_8B);
                         } break;
                         case BC_LOR: {
                             // OR = (r0==0 || r1==0)
@@ -1633,7 +1694,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             emit1((u8)0);
 
                             emit_prefix(0,X64_REG_INVALID, reg0->reg);
-                            emit1(OPCODE_MOV_RM_IMM8_SLASH_0);
+                            emit1(OPCODE_MOV_RM8_IMM8_SLASH_0);
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                             emit1((u8)0);
 
@@ -1645,9 +1706,11 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             fix_jump_here_imm8(offset_jmp1_imm);
 
                             emit_prefix(0,X64_REG_INVALID, reg0->reg);
-                            emit1(OPCODE_MOV_RM_IMM8_SLASH_0);
+                            emit1(OPCODE_MOV_RM8_IMM8_SLASH_0);
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                             emit1((u8)1);
+                            
+                            emit_movzx(reg0->reg, reg0->reg, CONTROL_8B);
 
                             fix_jump_here_imm8(offset_jmp2_imm);
                         } break;
@@ -2863,7 +2926,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     case 0:
                     case 1:
                         emit_prefix(0, X64_REG_INVALID, reg_cur);
-                        emit1(OPCODE_MOV_RM_IMM8_SLASH_0);
+                        emit1(OPCODE_MOV_RM8_IMM8_SLASH_0);
                         break;
                     case 2:
                         emit1(PREFIX_16BIT);
@@ -3166,6 +3229,26 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 FIX_POST_IN_OPERAND(0)
             } break;
+            case BC_ASM: {
+                InstBase_imm32_imm8_2* base = (InstBase_imm32_imm8_2*)n->base;
+                
+                if(push_offsets.size())
+                    push_offsets.last() += 8 * (base->imm8_0 - base->imm8_1);
+                
+                virtual_stack_pointer += (base->imm8_0 - base->imm8_1) * 8; // inputs - outputs
+                
+                Bytecode::ASM asmInstance = bytecode->asmInstances.get(base->imm32);
+                Assert(asmInstance.generated);
+                u32 len = asmInstance.iEnd - asmInstance.iStart;
+                if(len != 0) {
+                    u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
+                    emit_bytes(ptr, len);
+                } else {
+                    // TODO: Better error, or handle error somewhere else?
+                    log::out << log::RED << "BC_ASM at "<<n->bc_index<<" was incomplete\n";
+                }
+                
+            } break;
             case BC_TEST_VALUE: {
                 #ifdef DISABLE_BC_TEST_VALUE
                 FIX_POST_IN_OPERAND(0)
@@ -3410,6 +3493,12 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         now->asm_start = get_map_translation(now->bc_start);
         now->asm_end = get_map_translation(now->bc_end);
     }
+    
+    for(auto i : inst_list) {
+        delete i;
+    }
+    inst_list.cleanup();
+    return true;
 }
 
 engone::Logger& operator<<(engone::Logger& l, X64Inst& i) {
@@ -3442,4 +3531,157 @@ engone::Logger& operator<<(engone::Logger& l, X64Inst& i) {
     }
 
     return l;
+}
+
+bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
+    using namespace engone;
+    // TODO: Make this thread safe
+    std::string asm_file = "bin/inline_asm"+std::to_string(tinycode->index)+".asm";
+    std::string obj_file = "bin/inline_asm"+std::to_string(tinycode->index)+".o";
+    auto file = engone::FileOpen(asm_file,FILE_CLEAR_AND_WRITE);
+    defer { if(file) engone::FileClose(file); };
+    if(!file) {
+        log::out << log::RED << "Could not create " << asm_file << "!\n";
+        return false;
+    }
+    #ifdef OS_WINDOWS
+    const char* pretext = ".code\n";
+    int asm_line_offset = 1;
+    #else
+    const char* pretext = ".intel_syntax noprefix\n.text\n";
+    int asm_line_offset = 2;
+    #endif
+    bool yes = engone::FileWrite(file, pretext, strlen(pretext));
+    Assert(yes);
+    char* asmText = bytecode->rawInlineAssembly._ptr + asmInst.start;
+    u32 asmLen = asmInst.end - asmInst.start;
+    yes = engone::FileWrite(file, asmText, asmLen);
+    Assert(yes);
+    #ifdef OS_WINDOWS
+    const char* posttext = "END\n";
+    yes = engone::FileWrite(file, posttext, strlen(posttext));
+    Assert(yes);
+    #else
+    const char* posttext = "\n"; // assembler complains about not having a newline so we add one here
+    yes = engone::FileWrite(file, posttext, strlen(posttext));
+    Assert(yes);
+    #endif
+
+    engone::FileClose(file);
+    file = {};
+
+    auto asmLog = engone::FileOpen("bin/asm.log",FILE_CLEAR_AND_WRITE);
+    defer { if(asmLog) engone::FileClose(asmLog); };
+
+    // TODO: Turn off logging from ml64? or at least pipe into somewhere other than stdout.
+    //  If ml64 failed then we do want the error messages.
+    // TODO: ml64 can compile multiple assembly files into multiple object files.
+    //  This is probably faster than doing one by one. Altough, be wary of command line character limit.
+    #ifdef OS_WINDOWS
+    std::string cmd = "ml64 /nologo /Fo " + obj_file + " /c ";
+    #else
+    std::string cmd = "as -o " obj_file " ";
+    #endif
+    cmd += asm_file;
+    int exitCode = 0;
+    yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, {}, asmLog, asmLog);
+    Assert(yes);
+    if(exitCode != 0) {
+        u64 fileSize = engone::FileGetSize(asmLog);
+        engone::FileSetHead(asmLog, 0);
+        
+        QuickArray<char> errorMessages{};
+        errorMessages.resize(fileSize);
+        
+        yes = engone::FileRead(asmLog, errorMessages.data(), errorMessages.size());
+        Assert(yes);
+        
+        log::out << std::string(errorMessages.data(), errorMessages.size());
+        // TODO: Reformat errors, print them out nicely.
+        // log::out << log::RED << "Error generating assembly\n";
+        // ReformatAssemblerError(asmInst, errorMessages, -asm_line_offset);
+        
+        // failure = true;
+        // continue;
+        return false;
+    }
+    engone::FileClose(asmLog);
+    asmLog = {};
+
+    // TODO: DeconstructFile isn't optimized and we deconstruct symbols and segments we don't care about.
+    //  Write a specific function for just the text segment.
+    #ifdef OS_WINDOWS
+    auto objfile = FileCOFF::DeconstructFile(obj_file);
+    defer { FileCOFF::Destroy(objfile); };
+    if(!objfile) {
+        log::out << log::RED << "Could not find " << obj_file << "!\n";
+        return false;
+    }
+    int sectionIndex = -1;
+    for(int j=0;j<objfile->sections.size();j++){
+        std::string name = objfile->getSectionName(j);
+        if(name == ".text" || (name.length()>=6 && !strncmp(name.c_str(), ".text$",6))) {
+            // auto section = objfile->sections[j];
+            // Assert(section->NumberOfRelocations == 0); // not handled at the moment
+            sectionIndex = j;
+            // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
+            // u32 len = section->SizeOfRawData;
+        }
+    }
+    if(sectionIndex == -1){
+        log::out << log::RED << "Text section in object file could not be found for the compiled inline assembly. Compiler bug?\n";
+        return false;
+    }
+    auto section = objfile->sections[sectionIndex];
+    if(section->NumberOfRelocations!=0){
+        // TODO: Tell the user where the relocation was? Which instruction?
+        //  user may type 'pop rac' instead of 'pop rax'. pop rac is a valid instruction if rac is a symbol.
+        //  This mistake is difficult to detect.
+        log::out << log::RED << "Relocations are not supported when using inline assembly.\n";
+        return false;
+    }
+    
+    u8* ptr = objfile->_rawFileData + section->PointerToRawData;
+    u32 len = section->SizeOfRawData;
+    // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
+    asmInst.iStart = bytecode->rawInstructions.used;
+    bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + len);
+    memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, ptr, len);
+    bytecode->rawInstructions.used += len;
+    asmInst.iEnd = bytecode->rawInstructions.used;
+    #else
+    Assert(false);
+    auto objfile = FileELF::DeconstructFile(TEMP_ASM_OBJ_FILE);
+    defer { FileELF::Destroy(objfile); };
+    if(!objfile) {
+        log::out << log::RED << "Could not find " TEMP_ASM_OBJ_FILE "!\n";
+        continue;
+    }
+    int textSection_index = objfile->sectionIndexByName(".text");
+    if(textSection_index == 0) {
+        log::out << log::RED << "Text section could not be found for the compiled inline assembly. Compiler bug?\n";
+        continue;
+    }
+    
+    int relocations_count=0;
+    auto relocations = objfile->relaOfSection(textSection_index, &relocations_count);
+    if(relocations_count!=0){
+        log::out << log::RED << "Relocations are not supported in inline assembly.\n";
+        continue;
+    }
+    
+    int textSize = 0;
+    const u8* textData = objfile->dataOfSection(textSection_index, &textSize);
+    Assert(textData);
+    
+    // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
+    // u32 len = section->SizeOfRawData;
+    // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
+    asmInst.iStart = bytecode->rawInstructions.used;
+    bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + textSize);
+    memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
+    bytecode->rawInstructions.used += textSize;
+    asmInst.iEnd = bytecode->rawInstructions.used;
+    #endif
+    return true;
 }

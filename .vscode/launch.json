@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(gdb) Launch",
+            "name": "GDB btb.exe",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb",
@@ -35,7 +35,7 @@
             ]
         },
         {
-            "name": "(Windows) Launch",
+            "name": "VS btb.exe",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
@@ -52,7 +52,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "(Windows) Launch test",
+            "name": "VS Test btb.exe",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
@@ -69,42 +69,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "(Windows) Test",
-            "type": "cppdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/a.exe",
-            "args": [
-                
-            ],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "console": "integratedTerminal",
-            "MIMode": "gdb",
-            "miDebuggerPath": "gdb",
-            "setupCommands": [
-                {
-                    "description": "Set Disassembly Flavor to Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
-                    "ignoreFailures": true
-                }
-            ]
-        },
-        {
-            "name": "(Windows) Test VS",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/wa.exe",
-            "args": [
-                
-            ],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "console": "integratedTerminal",
-        },
-        {
-            "name": "(btb) Launch",
+            "name": "BTB debug",
             "type": "cppdbg",
             "request": "launch",
             // "program": "${workspaceFolder}/bin/temp.exe",

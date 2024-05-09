@@ -2454,7 +2454,7 @@ void ASTExpression::print(AST *ast, int depth) {
         else if(typeId == AST_TYPEID)
             log::out << name;
         else if(typeId == AST_ASM)
-            log::out << "?";
+            log::out << "<asm>";
         else
             log::out << "missing print impl.";
         if (typeId == AST_FNCALL) {

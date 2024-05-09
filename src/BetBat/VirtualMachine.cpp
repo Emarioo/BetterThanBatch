@@ -738,6 +738,16 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op2 = (BCRegister)instructions[pc++];
             memcpy((void*)registers[op0],(void*)registers[op1], registers[op2]);
         } break;
+        case BC_ASM: {
+            u8 inputs = (u8)instructions[pc++];
+            u8 outputs = (u8)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+            log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
+            // TODO: Print what assembly we tried to execute.
+            //   Show call stack too?
+            running = false;
+        } break;
         case BC_ADD:
         case BC_SUB:
         case BC_MUL:

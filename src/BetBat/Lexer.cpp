@@ -1,5 +1,5 @@
-#include "BetBat/Lexer.h"
 
+#include "BetBat/Lexer.h"
 #include "BetBat/Util/Perf.h"
 
 namespace lexer {

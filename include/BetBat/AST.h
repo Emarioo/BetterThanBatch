@@ -517,6 +517,8 @@ struct ASTExpression : ASTNode {
     // union {
     //     struct {
             TypeId castType;
+            TypeId asmTypeString;
+            lexer::TokenRange asm_range{};
             OperationType assignOpType;
             ASTExpression* left;
             ASTExpression* right;
@@ -553,6 +555,7 @@ struct ASTExpression : ASTNode {
         PolyVersions<TypeId> versions_outTypeTypeid;
     };
     PolyVersions<TypeId> versions_castType{};
+    PolyVersions<TypeId> versions_asmType{};
 
     void printArgTypes(AST* ast, QuickArray<TypeId>& argTypes);
 
@@ -967,7 +970,7 @@ struct AST {
 
     void initLinear(){
         Assert(!linearAllocation);
-        linearAllocationMax = 0x100000; // tweak this
+        linearAllocationMax = 0x1000'000; // tweak this
         linearAllocationUsed = 0;
         linearAllocation = TRACK_ARRAY_ALLOC(char, linearAllocationMax);
          // (char*)engone::Allocate(linearAllocationMax);

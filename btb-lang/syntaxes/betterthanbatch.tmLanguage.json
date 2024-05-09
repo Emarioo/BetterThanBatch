@@ -34,7 +34,10 @@
 		},
 		{
 			"include": "#types"
-		}
+		},
+        {
+            "include": "#assembly"
+        }
 	],
 	"repository": {
 		"commentline": {
@@ -58,10 +61,29 @@
                 }
             ]
 		},
+        "assembly": {
+            "name": "support.function",
+            "begin": "(?<=asm\\s*(<.*>)?(\\(.*\\))?\\s*\\{)",
+            "end": "\\}",
+            "patterns": [
+                {
+                    "name": "keyword.control",
+                    "match": "^\\s*\\w+"
+                },
+                {
+                    "name": "comment.line",
+                    "match": "//.*$"
+                },
+                {
+                    "name": "comment.block",
+                    "match": "/\\*(.|\\n)*\\*//"
+                }
+            ]
+        },
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control",
-				"match": "\\b(if|else|while|switch|case|default|for|break|namespace|continue|global|fn|enum|union|struct|return|asm|defer|each|operator|cast|_test|using|as)\\b"
+				"match": "\\b(if|else|while|switch|case|default|for|break|namespace|continue|global|fn|enum|union|struct|return|defer|each|operator|cast|_test|using|as)\\b"
 			},
             {
                 "name": "keyword.other",

@@ -1,4 +1,5 @@
 @TEST_CASE(random)
+#import "Math"
 
 for 0..20 {
     f: f32 = random_f32()
@@ -8,3 +9,17 @@ for 0..20 {
         _test 0; 1
     }
 }
+
+
+// @TEST_CASE(float_16bit)
+
+#import "Math"
+
+
+// a := make_f16(213.0625)
+// a := make_f16(13.12)
+// b := make_f16(0, 17, 0x300)
+
+// log(a + b)
+// log(b)
+

@@ -42,18 +42,18 @@ _test 1; cast<i32>sqrt(2);
 _test 2; cast<i32>sqrt(3.9999999);
 
 _test 0; 0 && 0
-_test 0; 1 && 0
-_test 0; 0 && 1
-_test 1; 2 && 1
+_test 0; 25521 && 0
+_test 0; 0 && 12525
+_test 1; 25252 && 12525
 
 _test 0; 0 || 0
-_test 1; 1 || 0
-_test 1; 0 || 1
-_test 1; 2 || 1
+_test 1; 14721 || 0
+_test 1; 0 || 1632
+_test 1; 22362 || 1125
 
 _test 1; !0
-_test 0; !2
-_test 0; !1
+_test 0; !26132
+_test 0; !16221
 
 @TEST_CASE(many_math_ops)
 // The test below is a little scuffed because of issues with precision.

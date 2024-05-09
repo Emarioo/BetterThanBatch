@@ -1,17 +1,38 @@
+// 
+#import "Logger"
+
+
+// asm {
+//     mov esi, 1
+//     8
+// }
+
+#macro TWO asm<i32>{push 1}
+
+
+right(TWO)
+
+fn right(n: i32) {
+    log(n)
+}
+
+
 
 // #import "Logger"
-// #import "Math"
 
-// a := make_f16(213.0625)
-// a := make_f16(13.12)
-// b := make_f16(0, 17, 0x300)
+// struct Cake {
+//     name: char;
+//     size: i32
+// }
+// struct Plate {
+//     cake: Cake;
+//     color: char
+// }
 
-// log(a + b)
-// log(b)
+// plate := asm<Plate> {
+//     push 'C' // color
+//     push 2   // cake.size
+//     push 'n' // cake.name
+// }
 
-
-// TODO: POW
-
-fn okay() {
-    
-}
+// log("cake.name: ",plate.cake.name," cake.size: ", plate.cake.size, " color: ", plate.color)

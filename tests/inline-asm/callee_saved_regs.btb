@@ -1,0 +1,17 @@
+@TEST_CASE(callee_saved_regs)
+asm {
+    mov esi, 1
+}
+check();
+n := asm<i32>{ push rsi }
+_test 1; n
+// if n {
+//     log("RSI was saved")
+// } else {
+//     log("RSI was not saved. NOT GOOD!")
+// }
+fn @stdcall check() { // stdcall will be generated to saved rbx, rsi, rdi, r12
+    asm {
+        mov esi, 0
+    }
+}

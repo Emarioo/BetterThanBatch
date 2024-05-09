@@ -114,6 +114,31 @@ int Bytecode::appendData(const void* data, int size){
     dataSegment.used+=size;
     return index;
 }
+int Bytecode::add_assembly(char* text, int len, const std::string& file, int line_start, int line_end) {
+    lock_global_data.lock();
+    defer { lock_global_data.unlock(); };
+    
+    asmInstances.add({});
+    int asm_index = asmInstances.size() - 1;
+    auto& inst = asmInstances.last();
+    inst.file = file;
+    inst.lineStart = line_start;
+    inst.lineEnd = line_end;
+    
+    if(rawInlineAssembly.max < rawInlineAssembly.used + len){
+        int oldMax = rawInlineAssembly.max;
+        rawInlineAssembly._reserve(rawInlineAssembly.max*2 + 2*len);
+        memset(rawInlineAssembly.data() + oldMax, ' ', rawInlineAssembly.max - oldMax);
+    }
+    inst.start = rawInlineAssembly.size();
+    
+    memcpy((char*)rawInlineAssembly.data() + inst.start, text, len);
+    rawInlineAssembly.used += len;
+    
+    inst.end = rawInlineAssembly.size();
+    
+    return asm_index;
+}
 
 void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode, Compiler* compiler) {
     this->code = code;
@@ -220,6 +245,14 @@ void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm) {
     emit_opcode(BC_INCR);
     emit_operand(reg);
     emit_imm32(imm);
+}
+void BytecodeBuilder::emit_asm(int asm_instance, int inputs, int outputs) {
+    emit_opcode(BC_ASM);
+    emit_imm8(inputs);
+    emit_imm8(outputs);
+    emit_imm32(asm_instance);
+    
+    tinycode->required_asm_instances.add(asm_instance);
 }
 void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
     if(disable_code_gen) return;
@@ -1020,7 +1053,7 @@ extern InstBaseType instruction_contents[256] {
     BASE_op1, // BC_SQRT,
     BASE_op1, // BC_ROUND,
 
-    BASE_NONE, // BC_ASM,
+    BASE_imm32 | BASE_imm16, // BC_ASM,
 
     BASE_op2 | BASE_ctrl | BASE_imm32, // BC_TEST_VALUE,
 
@@ -1381,6 +1414,14 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_ROUND: {
             op0 = (BCRegister)instructions[pc++];
             log::out << " " << register_names[op0];
+        } break;
+        case BC_ASM: {
+            u8 inputs = (u8)instructions[pc++];
+            u8 outputs = (u8)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+            auto& inst = code->asmInstances[imm];
+            log::out << " "<< inputs << " "<<outputs<<" " << imm << log::GRAY << " (" << BriefString(inst.file)<<":"<<inst.lineStart<<")" << log::NO_COLOR;
         } break;
         case BC_ATOMIC_CMP_SWAP: {
             op0 = (BCRegister)instructions[pc++];

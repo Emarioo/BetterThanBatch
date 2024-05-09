@@ -60,7 +60,7 @@ About x64:
 #define OPCODE_MOV_RM_REG (u8)0x89
 #define OPCODE_MOV_REG_RM (u8)0x8B
 
-#define OPCODE_MOV_RM_IMM8_SLASH_0 (u8)0xC6
+#define OPCODE_MOV_RM8_IMM8_SLASH_0 (u8)0xC6
 
 #define OPCODE_LEA_REG_M (u8)0x8D
 

@@ -1471,11 +1471,30 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                 if(outTypes) outTypes->add(AST_VOID);
             }
         } else if(expr->typeId == AST_ASM){
-            // Polymorphism may cause duplicated inline assembly.
-            Assert(info.currentPolyVersion==0);
-            // TODO: Check variables?
-            if(outTypes)
-                outTypes->add(AST_VOID);
+            if(!expr->asmTypeString.isString()) {
+                // asm has not type
+                expr->versions_asmType[info.currentPolyVersion] = AST_VOID;
+                if(outTypes)
+                    outTypes->add(AST_VOID);   
+            } else {
+                bool printedError = false;
+                auto ti = CheckType(info, scopeId, expr->asmTypeString, expr->location, &printedError);
+                if (ti.isValid()) {
+                    if(outTypes)
+                        outTypes->add(ti);
+                    expr->versions_asmType[info.currentPolyVersion] = ti;
+                } else {
+                    if(!printedError){
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("Type "<<info.ast->getStringFromTypeString(expr->castType) << " does not exist.")
+                            ERR_LINE2(expr->location,"bad")
+                        )
+                    }
+                    if(outTypes)
+                        outTypes->add(AST_VOID);
+                }
+            }
         } else if(expr->typeId == AST_NULL){
             // u32 index=0;
             // auto constString = info.ast->getConstString(expr->name,&index);
@@ -1849,39 +1868,19 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             expr->versions_castType[info.currentPolyVersion] = ti;
             
             if(expr->isUnsafeCast()) {
-                if(expr->left->typeId == AST_ASM) {
-                    // We don't know what type ASM generates so we always allow it.
-
-                    // TODO: Deprecate this and use asm<i32> {} instead of cast_unsafe<i32> asm {}. asm -> i32 {} is an alternative syntax
-                    //  asm<i32> makes more since because the casting is a little special since
-                    //  we don't know what type the inline assembly produces. Maybe it does 2 pushes
-                    //  or none. With unsafe cast we assume a type which isn't ideal.
-                    //  Unfortunately, it's difficult to know what type is pushed in the inline assembly.
-                    //  It might ruin the stack and frame pointers.
-                    
-                    // The unsafe cast implies that the asm block did this. hopefully it did.
-                } else {
-                    int ls = info.ast->getTypeSize(ti);
-                    int rs = info.ast->getTypeSize(typeArray.last());
-                    if(ls != rs) {
-                        std::string strleft = info.ast->typeToString(typeArray.last()) + " ("+std::to_string(ls)+")";
-                        std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
-                            ERR_MSG("cast_unsafe requires that both types have the same size. "<<ls << " != "<<rs<<"'.")
-                            ERR_LINE2(expr->left->location,strleft)
-                            ERR_LINE2(expr->location,strcast)
-                            ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
-                        )
-                    }
+                int ls = info.ast->getTypeSize(ti);
+                int rs = info.ast->getTypeSize(typeArray.last());
+                if(ls != rs) {
+                    std::string strleft = info.ast->typeToString(typeArray.last()) + " ("+std::to_string(ls)+")";
+                    std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
+                        ERR_MSG("cast_unsafe requires that both types have the same size. "<<ls << " != "<<rs<<"'.")
+                        ERR_LINE2(expr->left->location,strleft)
+                        ERR_LINE2(expr->location,strcast)
+                        ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
+                    )
                 }
-            } else if (expr->left->typeId == AST_ASM) {
-                ERR_SECTION(
-                    ERR_HEAD2(expr->location, )
-                    ERR_MSG("You must use cast_unsafe to cast an inline assembly block. BE VERY careful as you are likely to make mistakes.")
-                    ERR_LINE2(expr->location,"use cast_unsafe instead?")
-                    ERR_EXAMPLE_TINY("cast_unsafe<i32> asm { mov eax, 23 }")
-                )
             } else if(!info.ast->castable(typeArray.last(),ti)){
                 std::string strleft = info.ast->typeToString(typeArray.last());
                 std::string strcast = info.ast->typeToString(ti);

@@ -18,6 +18,7 @@ using a macro or some other function when converting bytecode operands to
 x64 operands
 
 */
+struct Compiler;
 
 enum X64Register : u8 {
     X64_REG_INVALID = 0,
@@ -177,47 +178,12 @@ private:
     
 };
 
-struct X64Env;
-// This structure is WAY to large, how to minimize it?
-struct OPNode {
-    OPNode(u32 bc_index, InstructionOpcode type) : bc_index(bc_index), opcode(type) {}
-    u32 bc_index = 0;
-    InstructionOpcode opcode = BC_HALT;
-    i64 imm = 0;
-    BCRegister op0 = BC_REG_INVALID;
-    BCRegister op1 = BC_REG_INVALID;
-    BCRegister op2 = BC_REG_INVALID;
-    
-    // TODO: Union on these?
-    InstructionControl control = CONTROL_NONE;
-    
-    LinkConventions link = LinkConventions::NONE;
-    CallConventions call = CallConventions::BETCALL;
-    
-    OPNode* in0 = nullptr;
-    OPNode* in1 = nullptr;
-    OPNode* in2 = nullptr;
-
-    X64Env* computed_env = nullptr;
-};
-
 struct X64Operand {
     X64Register reg{};
     bool on_stack = false;
 
     // meaning no register/value is set
     bool invalid() const { return reg == X64_REG_INVALID && !on_stack; }
-};
-struct X64Env {
-    OPNode* node=nullptr;
-
-    X64Env* env_in0=nullptr;
-    X64Env* env_in1=nullptr;
-    X64Env* env_in2=nullptr;
-
-    X64Operand reg0{};
-    X64Operand reg1{};
-    X64Operand reg2{};
 };
 typedef int ArtificalRegister;
 struct X64Inst {
@@ -237,57 +203,17 @@ struct X64Inst {
 engone::Logger& operator<<(engone::Logger& l, X64Inst& i);
 
 struct X64Builder {
+    Compiler* compiler = nullptr;
     X64Program* prog = nullptr;
     X64TinyProgram* tinyprog = nullptr;
     i32 current_tinyprog_index = 0;
     Bytecode* bytecode = nullptr;
     TinyBytecode* tinycode = nullptr;
     
-    QuickArray<OPNode*> nodes;
-    
-    // QuickArray<u32> instruction_indices;
-    
-    DynamicArray<OPNode*> all_nodes; // TODO: Bucket array
-    OPNode* createNode(u32 bc_index, InstructionOpcode opcode) {
-        auto ptr = TRACK_ALLOC(OPNode);
-        new(ptr)OPNode(bc_index, opcode);
-        all_nodes.add(ptr);
-        return ptr;
-    }
-    void destroyNode(OPNode* node) {
-        node->~OPNode();
-        TRACK_FREE(node, OPNode);
-    }
-    
-    // struct ValueLocation {
-    //     enum Kind {
-    //         NONE,
-    //         IN_REGISTER,
-    //         IN_STACK,
-    //     };
-    //     Kind kind = NONE;
-    //     int reg; // which register
-    //     int stack_offset; // where in stack
-    // };
-    // std::unordered_map<BCRegister, ValueLocation*> valueLocations;
-    
     struct RegisterInfo {
         bool used = false;
-        
-        // OPNode* node = nullptr;
     };
     std::unordered_map<X64Register, RegisterInfo> registers;
-    
-    std::unordered_map<BCRegister, OPNode*> reg_values;
-    
-    // void set_reg_value(BCRegister reg, OPNode* n) {
-
-    // }
-    // void get_reg_value() {
-
-    // }
-    
-    QuickArray<OPNode*> stack_values;
     
     X64Register alloc_register(X64Register reg = X64_REG_INVALID, bool is_float = false);
     bool is_register_free(X64Register reg);
@@ -365,40 +291,20 @@ struct X64Builder {
     static const int FRAME_SIZE = 16;
     DynamicArray<int> push_offsets{}; // used when set arguments while values are pushed and popped
     int ret_offset = 0;
-
-    OPNode* last_call = nullptr;
+    int callee_saved_space = 0;
 
     struct Arg {
         InstructionControl control = CONTROL_NONE;
     };
     DynamicArray<Arg> recent_set_args;
 
-    // void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
-    void generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode);
+    bool generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode);
 
-    // void generateInstructions_slow();
-
-    int get_node_depth(OPNode* n) {
-        if(!n) return 0;
-        
-        int a = get_node_depth(n->in0);
-        int b = get_node_depth(n->in1);
-
-        if (a > b)
-            return a + 1;
-        return b + 1;
-    }
-    
     static const X64Register RESERVED_REG0 = X64_REG_DI; // You cannot change these because code in x64_gen assume that other registers are available and that DI and SI are reserved
     static const X64Register RESERVED_REG1 = X64_REG_SI;
     static const X64Register RESERVED_REG2 = X64_REG_R11;
     
-private:
-    // recursively
-    // void generateInstructions(int depth = 0, BCRegister find_reg = BC_REG_INVALID, int inst_index = 0, X64Register* out_reg = nullptr);
-    
-public:
-    // experimental
+    bool prepare_assembly(Bytecode::ASM& asmInst);
 
     DynamicArray<X64Inst*> inst_list;
     X64Inst* last_inst_call = nullptr;
@@ -489,6 +395,8 @@ public:
         bc_register_map[base->ops[nr]].reg_nr = 0;
     }
 
+    
+
     X64Inst* createInst(InstructionOpcode opcode) {
         auto ptr = new X64Inst();
         // ptr->id = inst_id++;
@@ -498,14 +406,12 @@ public:
     void insert_inst(X64Inst* inst) {
         inst_list.add(inst);
     }
+    
+    
 
 };
 
-// X64Program* ConvertTox64(Bytecode* bytecode);
-// The function will print the reformatted content if outBuffer is null
-void ReformatDumpbinAsm(LinkerChoice linker, QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes);
 
-struct Compiler;
 void GenerateX64(Compiler* compiler, TinyBytecode* tinycode);
 
 // Process some final things such as exports, symbols from bytecode program to the x64 program

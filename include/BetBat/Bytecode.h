@@ -205,6 +205,12 @@ struct InstBase_imm32 {
     InstructionOpcode opcode;
     i32 imm32;
 };
+struct InstBase_imm32_imm8_2 {
+    InstructionOpcode opcode;
+    i8 imm8_0;
+    i8 imm8_1;
+    i32 imm32;
+};
 struct InstBase_op1 {
     InstructionOpcode opcode;
     BCRegister op0;
@@ -308,11 +314,13 @@ struct TinyBytecode {
     QuickArray<u32> index_of_lines{};
     struct Line {
         int line_number;
-        std::string text;  
+        std::string text;
     };
     DynamicArray<Line> lines{};
     DebugFunction* debugFunction = nullptr;
-    // QuickArray<u32> index_of_opcodes{};
+    DynamicArray<int> required_asm_instances; // x64 gen needs to know what inline assembly to generate
+
+    // bool is_used_as_function_pointer = false; // used in x64 gen for enabling/disabling callee saved registers
 
     struct Relocation {
         i32 pc=0; // index of the 32-bit integer to relocate
@@ -391,13 +399,14 @@ struct Bytecode {
         u32 end = 0; // exclusive
         u32 iStart = 0; // points to raw instructions
         u32 iEnd = 0; // exclusive
+        bool generated = false;
         
         u32 lineStart = 0;
         u32 lineEnd = 0;
         std::string file;
     };
     DynamicArray<ASM> asmInstances;
-    // NativeRegistry* nativeRegistry = nullptr;
+    int add_assembly(char* text, int len, const std::string& file, int line_start, int line_end);
 
     // usually a function like main
     struct ExportedFunction {
@@ -518,7 +527,7 @@ struct BytecodeBuilder {
     
     void emit_cast(BCRegister to, BCRegister from, InstructionControl control, u8 from_size, u8 to_size);
     
-    // void emit_asm();
+    void emit_asm(int asm_instance, int inputs, int outputs);
     void emit_fake_push(); // useful with inline assembly
 
     void emit_memzero(BCRegister dst, BCRegister size_reg, u8 batch);

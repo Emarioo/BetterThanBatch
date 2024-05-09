@@ -2033,21 +2033,48 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // tmp->tokenRange.firstToken = token;
 
                 // TODO: asm<i32>{...} casting
+                
+                auto tok = info.gettok();
+                if(tok.type == '<') {
+                    info.advance();
+                    
+                    std::string type{};
+                    int n=0;
+                    auto signal = ParseTypeId(info, type, &n);
+                    SIGNAL_INVALID_DATATYPE(type)
+                    
+                    auto tok = info.gettok();
+                    if(tok.type != '>') {
+                        ERR_SECTION(
+                            ERR_HEAD2(tok)
+                            ERR_MSG("ASM keyword (inline assembly) syntax is incorrect. There is a missing '>' or perhaps the syntax of the type is incorrect.")
+                            ERR_LINE2(tok,"should be >")
+                            ERR_EXAMPLE(1,"asm<i32*> {...}")
+                            ERR_EXAMPLE(1,"asm {...} // no type can be done with this")
+                        )
+                        return SIGNAL_COMPLETE_FAILURE;
+                    }
+                    info.advance();
+                    
+                    tmp->asmTypeString = info.ast->getTypeString(type);
+                }
 
                 auto curly = info.gettok();
                 if(curly.type != '{') {
                     ERR_SECTION(
                         ERR_HEAD2(curly)
-                        ERR_MSG("'asm' keyword (inline assembly) requires a body with curly braces")
+                        ERR_MSG("ASM keyword (inline assembly) requires a body with curly braces after it.")
                         ERR_LINE2(curly,"should be }")
+                        ERR_EXAMPLE(1,"asm {...}")
+                        ERR_EXAMPLE(1,"asm<i32> {...} // or if you want a type")
                     )
                     continue;
                 }
                 info.advance();
+                tmp->asm_range.importId = info.import_id;
+                tmp->asm_range.token_index_start = info.gethead();
+                
                 int depth = 1;
-                //  token{};
-                // auto firstToken = info.gettok();
-                // TokenStream* stream = firstToken.tokenStream;
                 while(true){
                     auto token = info.getinfo();
                     if(token->type == lexer::TOKEN_EOF){
@@ -2062,34 +2089,19 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     if(token->type == '}') {
                         depth--;
                         if(depth==0) {
+                            tmp->asm_range.token_index_end = info.gethead(); // exclusive
                             info.advance();
                             break;
                         }
                     }
-                    // if(token->tokenStream != stream) {
-                    //     ERR_SECTION(
-                    //         ERR_HEAD2(token)
-                    //         ERR_MSG("Tokens in inlined assembly must come frome the same source file due to implementation restrictions. (spam the developer to fix this. Oh wait, that's me)")
-                    //         ERR_LINE2(firstToken,"first file")
-                    //         ERR_LINE2(token,"second file")
-                    //     )
-                    // }
-                    // Inline assembly is parsed here. The content of the assembly can be known
-                    // with tokenRange in ASTNode. We know the range of tokens for the inline assembly.
-                    // If you used a macro from another stream then we have problems.
                     // TODO: We want to search for instructions where variables are used like this
                     //   mov eax, [var] and change the instruction to one that gets the variable.
-                    //   Can't do that here though since we need to know the variables first.
-                    //   It must be done in type checker.
+                    //   For this we need to:
+                    //     - (parser) Parse the variables (done in parser)
+                    //     - (bytecode generator) Find out where they are and how to access them (generator)
+                    //     - (x64 generator) replace the variable names with [rbp - 16] or whatever you use to access them.
                     info.advance();
                 }
-
-                // nocheckin, we must set the range of the asm block
-                log::out << log::YELLOW << "asm incomplete after rewwrite v0.2.1\n";
-                info.compiler->options->compileStats.errors++;
-                // Assert(("asm incomplete after rewrite V2.1",false));
-
-                // tmp->tokenRange.endIndex = info.at()+1;
                 values.add(tmp);
             } else if(token->type == lexer::TOKEN_IDENTIFIER){
                 auto loc = info.getloc();
