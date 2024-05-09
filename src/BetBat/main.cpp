@@ -33,38 +33,12 @@ int main(int argc, const char** argv){
     using namespace engone;
     #define EXIT_CODE_SUCCESS 0
     #define EXIT_CODE_FAILURE 1
-    // 000 00001 01001
-
-    // int n = 4736;
-
-    // for (int i=0;i<16;i++) {
-    //     log::out << n <<"/2 - \n";
-    //     if(n % 2 == 0) {
-    //         log::out << "0\n";
-    //     } else {
-    //         log::out << "1\n";
-    //     }
-    //     n = n / 2;
-    // }
-    // log::out << "\n";
-    // return 1;
-
-    // int a=5,b=8;
-    // int c = a && b;
-
-    // garbage(); // experimentation
-    
-    // auto dir = DirectoryIteratorCreate("src",3);
-    
-    // DirectoryIteratorData data;
-    // while(DirectoryIteratorNext(dir, &data)) {
-        
-    //     log::out << data.name << "\n";
-    // }
 
     log::out.enableReport(false);
     // MeasureInit();
     ProfilerInitialize();
+    
+    Tracker::SetTracking(true);
 
     DynamicArray<std::string> arguments{};
     for(int i=1;i<argc;i++) // is the first argument always the executable?

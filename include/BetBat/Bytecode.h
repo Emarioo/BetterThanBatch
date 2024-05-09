@@ -353,7 +353,9 @@ struct BytecodeRange {
 };
 struct Bytecode {
     static const i32 BEGIN_DLL_FUNC_INDEX = 0x800'0000;
-
+    ~Bytecode() {
+        cleanup();   
+    }
     static Bytecode* Create();
     static void Destroy(Bytecode*);
     void cleanup();

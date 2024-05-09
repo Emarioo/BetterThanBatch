@@ -38,6 +38,10 @@ void Bytecode::addExternalRelocation(const std::string& name, const std::string&
 void Bytecode::cleanup(){
     // instructionSegment.resize(0);
     dataSegment.resize(0);
+    for(auto c : tinyBytecodes) {
+        c->~TinyBytecode();
+        TRACK_FREE(c, TinyBytecode);
+    }
     // debugSegment.resize(0);
     // debugLocations.cleanup();
     // if(debugInformation) {
@@ -70,7 +74,6 @@ Bytecode* Bytecode::Create(){
 void Bytecode::Destroy(Bytecode* code){
     if(!code)
         return;
-    code->cleanup();
     code->~Bytecode();
     TRACK_FREE(code, Bytecode);
     // engone::Free(code, sizeof(Bytecode));

@@ -1887,7 +1887,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     case PARSE_NAME: {
                         if(chr == ']') {
                             if(bracket_depth == 0){
-                                if(name_end) {
+                                if(name_end == 0) {
                                     name_end = head-1;
                                 }
                                 const char* reg_names[] {

@@ -213,6 +213,8 @@ extern const char* const PRELOAD_NAME;
 extern const char* const TYPEINFO_NAME;
 struct Compiler {
     void cleanup() {
+        if(bytecode && bytecode->debugInformation)
+            DebugInformation::Destroy(bytecode->debugInformation);
         if(program)
             X64Program::Destroy(program);
         program = nullptr;

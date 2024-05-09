@@ -963,10 +963,15 @@ namespace engone {
 		return s_numberAllocations;
 	}
 	void PrintRemainingTrackTypes(){
+        log::out << log::GOLD << "Dangling memory:\n";
 		for(auto& pair : allocTracking){
 			if(pair.second.count!=0)
 				printf(" %s (%llu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
 		}
+        // for(auto& pair : ptr_map){
+		// 	if(pair.second!=0)
+		// 		printf(" %p - %d bytes\n",pair.first, (int)pair.second);	
+		// }
 		// for(auto& slot : allocationsSlots){
 		// 	if(slot.ptr){
 		// 		printf(" %p: %llu bytes\n",slot.ptr, slot.size);

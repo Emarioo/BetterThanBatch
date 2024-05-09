@@ -150,6 +150,7 @@ namespace lexer {
         ~Chunk() {
             if(aux_data) {
                 engone::Allocator* allocator = engone::GlobalHeapAllocator();
+                TRACK_DELS(u8, aux_max);
                 allocator->allocate(0, aux_data, aux_max);
                 aux_data = nullptr;
                 aux_max = 0;
@@ -168,6 +169,7 @@ namespace lexer {
             if(aux_used + n > aux_max) {
                 engone::Allocator* allocator = engone::GlobalHeapAllocator();
                 u32 new_max = 0x1000 + aux_max*1.5 + n;
+                TRACK_ADDS(u8, new_max - aux_max);
                 u8* new_ptr = (u8*)allocator->allocate(new_max, aux_data, aux_max);
                 Assert(new_ptr);
                 aux_data = new_ptr;
@@ -185,6 +187,8 @@ namespace lexer {
         Token geteof();
 
         int getTokenCount() {
+            if(chunks.size() == 0)
+                return -1;
             return (chunks.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + chunks.last()->tokens.size();
         }
         
@@ -214,7 +218,6 @@ namespace lexer {
                 TRACK_FREE(f,VirtualFile);
             }
             virtual_files.cleanup();
-
         }
 
         // returns file id, 0 means failure
@@ -258,6 +261,7 @@ namespace lexer {
         u32 getDataFromToken(Token tok, const void** ptr);
 
         void popTokenFromImport(Import* imp);
+        void popMultipleTokensFromImport(Import* imp, int index_of_last_token_to_pop);
         std::string getStdStringFromToken(Token tok);
 
         std::string getline(SourceLocation location);

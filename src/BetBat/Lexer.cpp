@@ -1347,6 +1347,39 @@ void Lexer::popTokenFromImport(Import* imp) {
         break;
     }
 }
+void Lexer::popMultipleTokensFromImport(Import* imp, int index_of_last_token_to_pop) {
+    while(imp->chunks.size() > 0) {
+        if(imp->chunks.last()->tokens.size() == 0) {
+            u32 cindex = imp->chunk_indices.last();
+            Chunk* chunk = _chunks.get(cindex);
+            chunk->~Chunk();
+            _chunks.removeAt(cindex);
+
+            imp->chunks.pop();
+            imp->chunk_indices.pop();
+            continue;
+        }
+        int index = imp->chunks.last()->tokens.size()-1 + (imp->chunks.size()-1) * TOKEN_ORIGIN_TOKEN_MAX;
+        if(index < index_of_last_token_to_pop) {
+            break;
+        }
+        
+        auto chunk = imp->chunks.last();
+        auto& info = chunk->tokens.last();
+        // info.data_offset
+        u8 len = (u8)chunk->aux_data[info.data_offset];
+        len += 1 + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
+        int size = info.data_offset + len;
+        if(chunk->aux_used == size) {
+            chunk->aux_used -= len;
+        } else {
+            Assert(false); // the math is wrong
+        }
+
+        imp->chunks.last()->tokens.pop();
+        imp->chunks.last()->sources.pop();
+    }
+}
 TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import, TokenSource** src) {
     static TokenInfo eof{TOKEN_EOF};
     // NOTE: We assume that the content inside the imports won't be modified.

@@ -1,32 +1,21 @@
 // 
 // #import "Logger"
 
+ 
+// #macro say Oaky say
 
-num := 65
 
-new_num := asm<i32> {
-    mov eax, [rsp + 2]
-    add eax, 123
-    push rax
-}
+// say
 
 
 
-// #import "Logger"
 
-// struct Cake {
-//     name: char;
-//     size: i32
-// }
-// struct Plate {
-//     cake: Cake;
-//     color: char
+// // TODO: Inline assembly, reading/writing to local variables
+// //   What about structs? Artifical instruction perhaps?
+// num := 65
+// new_num := asm<i32> {
+//     mov eax, [num]
+//     add eax, 123
+//     push rax
 // }
 
-// plate := asm<Plate> {
-//     push 'C' // color
-//     push 2   // cake.size
-//     push 'n' // cake.name
-// }
-
-// log("cake.name: ",plate.cake.name," cake.size: ", plate.cake.size, " color: ", plate.color)

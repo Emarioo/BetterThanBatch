@@ -25,13 +25,11 @@ NativeRegistry* NativeRegistry::GetGlobal(){
     // return &s_globalRegistry;
 }
 void NativeRegistry::DestroyGlobal(){
-    if(!s_globalRegistry) return;;
+    if(!s_globalRegistry)
+        return;
     s_globalRegistry->nativeFunctions.cleanup();
-    // s_globalRegistry.nativeFunctions.cleanup();
-    // s_globalRegistry.nativeFunctions.clear();
-    // s_globalRegistry.nativeFunctions.shrink_to_fit();
-    // if(s_globalRegistry)
-        // NativeRegistry::Destroy(s_globalRegistry);
+    TRACK_FREE(s_globalRegistry,NativeRegistry);
+    s_globalRegistry = nullptr;
 }
 
 NativeRegistry::NativeFunction* NativeRegistry::findFunction(const std::string& name){

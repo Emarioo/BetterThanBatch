@@ -1,55 +1,5 @@
+ 
+#macro say Oaky say
 
 
-// a := 2
-
-// #macro OR(X,Y,...) X == Y || OR(X, ...)
-// #macro OR(X,Y)  X == Y
-// OR(type, 1, 5, 9 , 2)
-
-// enum type = 5
-// if (type == 1 || type == 5 || type == 9) 
-
-// #macro OK(X,...) X + OK(...)
-
-// #macro ARGS 1,2,3
-
-// #macro concat(A) A ## #column
-//     concat(ea)
-
-// #macro concat2(A) concat(A ## #line ## _)
-
-// #macro STUFF #endmacro
-// #macro content this_ ## STUFF ok
-
-// concat(okay###line)
-// okay15
-
-// okay ## #line
-
-// #macro OK(...) #line ...
-// #macro A #line
-
-
-// OK(A)
-
-// switch(X) {
-//     #define CASE(X,Y) case X: { print(Y) }
-//     case : {
-           
-//     }   
-//     case : {
-        
-//     }
-// }
-
-// #macro HAS_BITS(BITS, MASK, ...) (BITS & MASK) && HAS_BITS(BITS, ...)
-// #macro HAS_BITS(BITS, MASK) (BITS & MASK)
-// 
-// #macro HAS_BITS(BITS, ...) !(~BITS & (HAS_BITS_INNER(...)))
-// #macro HAS_BITS_INNER(M,...) M | HAS_BITS_INNER(...)
-// #macro HAS_BITS_INNER(M) M
-// 
-// #macro HAS_ALL_BITS(BITS, MASK) !(~BITS & (MASK))
-// #macro HAS_NO_BITS(BITS, MASK) !(BITS & (MASK))
-// 
-// HAS_ALL_BITS(bits, BASE_OP | BASE_IMM | BASE_CONTROL)
+say

@@ -63,6 +63,11 @@ engone::Logger& operator <<(engone::Logger&, X64Register);
 #define CLAMP_EXT_REG(R) (Assert(IS_REG_EXTENDED(R)||IS_REG_NORM(R)), (X64Register)(((R-1) & 7) + 1))
 
 struct X64TinyProgram {
+    ~X64TinyProgram() {
+        if(_allocationSize!=0){
+            TRACK_ARRAY_FREE(text, u8, _allocationSize);
+        }
+    }
     u8* text=nullptr;
     u64 _allocationSize=0;
     u64 head=0;
@@ -81,6 +86,11 @@ struct X64Program {
         // engone::Free(globalData, globalSize);
         dataRelocations.cleanup();
         namedUndefinedRelocations.cleanup();
+        
+        for(auto p : tinyPrograms) {
+            p->~X64TinyProgram();    
+            TRACK_FREE(p, X64TinyProgram);
+        }
 
         // compiler->program borrows debugInformation from compiler->code
         // and it is unclear who should destroy it so we don't.

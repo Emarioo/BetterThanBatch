@@ -27,6 +27,12 @@ struct MacroSpecific {
     int matchArg(lexer::Token token, lexer::Lexer* lexer);
 };
 struct MacroRoot {
+    ~MacroRoot() {
+        for(auto& pair : specificMacros) {
+            pair.second->~MacroSpecific();
+            TRACK_FREE(pair.second, MacroSpecific);
+        }
+    }
     // lexer::Token origin; // soure location
     std::string name;
     
@@ -38,7 +44,6 @@ struct MacroRoot {
 struct Preprocessor {
     void cleanup() {
         imports.cleanup();
-
     }
 
     void init(lexer::Lexer* lexer, Compiler* compiler) { this->lexer = lexer; this->compiler = compiler; }
@@ -56,6 +61,13 @@ private:
     Compiler* compiler=nullptr;
     
     struct Import {
+        ~Import() {
+            for(auto& pair : rootMacros) {
+                pair.second->~MacroRoot();
+                TRACK_FREE(pair.second, MacroRoot);
+            }
+            // engone::log::out << "yes\n";160
+        }
         bool processed_directives = false;
         bool evaluated_macros = false;
         // DynamicArray<u32> import_dependencies; //import_ids

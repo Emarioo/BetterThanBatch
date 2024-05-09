@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.cpp": "cpp",
+        "utility": "cpp",
+        "xhash": "cpp"
+    }
+}

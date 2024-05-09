@@ -187,7 +187,7 @@ SignalIO PreprocContext::parseMacroDefinition() {
         if(token.type == lexer::TOKEN_EOF&&multiline){
             if(!evaluateTokens) { // don't print message twice
                 ERR_SECTION(
-                    ERR_HEAD2(gettok(-1))
+                    ERR_HEAD2(name_token)
                     ERR_MSG("Missing '#endmacro' for macro '"<<lexer->tostring(name_token)<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments). Note that you must specify the end for empty macros. They are otherwise assumed to be multi-line macros.")
                     ERR_LINE2(name_token, "this needs #endmacro somewhere")
                     ERR_LINE2(gettok(-1),"macro content ends here!")
@@ -862,6 +862,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         layer->concat_next_token = false;
         return false;
     };
+    int index_of_prev_token = new_lexer_import->getTokenCount();
+    // lexer->appendToken(new_lexer_import, list[j], appended_tokens != 0, nullptr, 0, macro_source->line, macro_source->column);
     int appended_tokens = 0;
     while(layers.size() != 0) {
         if(layers.size() >= PREPROC_REC_LIMIT) {
@@ -871,11 +873,13 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 ERR_MSG("Recursion limit for macros reached! "<<PREPROC_REC_LIMIT<<" is the maximum.")
                 ERR_LINE2(macro_token,"recursion began here")
             )
+            // macro was incorrectly evaluated so we remove any tokens that was added
+            lexer->popMultipleTokensFromImport(new_lexer_import, index_of_prev_token);
             return SIGNAL_COMPLETE_FAILURE;
         }
         
         Layer* layer = layers.last();
-        if(!layer->eval_content) { // evaluate arguments
+        if(!layer->eval_content) { // evaluate argumentsname_token
             Assert(layer->adjacent_callee);
             if(layer->top_caller)
                 // the top caller makes it's content visible to arge evaulator
@@ -1403,9 +1407,10 @@ SignalIO PreprocContext::parseOne() {
         if(evaluateTokens) {
             if(tok.type == lexer::TOKEN_IDENTIFIER) {
                 auto signal = parseMacroEvaluation();
-                if(signal == SIGNAL_SUCCESS) {
+                if(signal == SIGNAL_SUCCESS)
                     return SIGNAL_SUCCESS;
-                }
+                if(signal != SIGNAL_NO_MATCH)
+                    return signal;
             }
             lexer->appendToken(new_lexer_import, tok, &string);
         }
@@ -1579,7 +1584,7 @@ MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, b
         macroRoot = pair->second;
     } else {
         macroRoot = TRACK_ALLOC(MacroRoot);
-        // engone::log::out << "yes\n";
+        // engone::log::out << "yes\n";160
         new(macroRoot)MacroRoot();
         macroRoot->name = str_name;
         imp->rootMacros[str_name] = macroRoot;
