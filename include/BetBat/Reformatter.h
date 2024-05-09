@@ -14,7 +14,7 @@ bin/inline_asm.asm: Assembler messages:
 bin/inline_asm.asm:3: Error: no such instruction: `eae'
 bin/inline_asm.asm:5: Error: no such instruction: `hoiho eax,9'
 */
-void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuffer, int line_offset);
+void ReformatAssemblerError(LinkerChoice linker, Bytecode::ASM& asmInstance, QuickArray<char>& inBuffer, int line_offset);
 
 // returns amount of errors
 int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, X64Program* program);

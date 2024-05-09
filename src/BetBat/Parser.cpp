@@ -2058,7 +2058,43 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     
                     tmp->asmTypeString = info.ast->getTypeString(type);
                 }
-
+                
+                tok = info.gettok();
+                if(tok.type == '(') {
+                    info.advance();
+                    
+                    while(true) {
+                        auto tok = info.gettok();
+                        if(tok.type == ')') {
+                            info.advance();
+                            break;
+                        }
+                        ASTExpression* arg = nullptr;
+                        auto signal = ParseExpression(info, arg);
+                        switch(signal) {
+                            case SIGNAL_SUCCESS: break;
+                            default: return SIGNAL_COMPLETE_FAILURE;
+                        }
+                        
+                        tmp->args.add(arg);
+                        
+                        tok = info.gettok();
+                        if(tok.type == ',') {
+                            info.advance();
+                            continue;
+                        } else if(tok.type == ')') {
+                            continue;   
+                        } else {
+                            ERR_SECTION(
+                                ERR_HEAD2(tok)
+                                ERR_MSG("Expression list for inline assembly did not end with comma or parenthesis. Perhaps the expression was mistyped?")
+                                ERR_LINE2(tok,"expected , or )")
+                            )
+                            return SIGNAL_COMPLETE_FAILURE;
+                        }
+                    }
+                }
+                
                 auto curly = info.gettok();
                 if(curly.type != '{') {
                     ERR_SECTION(
@@ -2097,9 +2133,9 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     // TODO: We want to search for instructions where variables are used like this
                     //   mov eax, [var] and change the instruction to one that gets the variable.
                     //   For this we need to:
-                    //     - (parser) Parse the variables (done in parser)
-                    //     - (bytecode generator) Find out where they are and how to access them (generator)
-                    //     - (x64 generator) replace the variable names with [rbp - 16] or whatever you use to access them.
+                    //     - Parse the referenced variables
+                    //     - Find out where they are and how to access them (rbp-24). (has to happen in bytecode generator)
+                    //     - Replace the variable names with [rbp - 16] or whatever you use to access them. (has to happen in x64 gen)
                     info.advance();
                 }
                 values.add(tmp);

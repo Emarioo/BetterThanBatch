@@ -207,8 +207,8 @@ struct InstBase_imm32 {
 };
 struct InstBase_imm32_imm8_2 {
     InstructionOpcode opcode;
-    i8 imm8_0;
-    i8 imm8_1;
+    u8 imm8_0;
+    u8 imm8_1;
     i32 imm32;
 };
 struct InstBase_op1 {
@@ -404,9 +404,15 @@ struct Bytecode {
         u32 lineStart = 0;
         u32 lineEnd = 0;
         std::string file;
+        
+        struct ExternalNamedReloc {
+            std::string name; // name of function/symbol
+            u32 textOffset; // where to modify
+        };
+        DynamicArray<ExternalNamedReloc> relocations{}; // comes from prepare_assembly
     };
     DynamicArray<ASM> asmInstances;
-    int add_assembly(char* text, int len, const std::string& file, int line_start, int line_end);
+    int add_assembly(const char* text, int len, const std::string& file, int line_start, int line_end);
 
     // usually a function like main
     struct ExportedFunction {
@@ -529,6 +535,7 @@ struct BytecodeBuilder {
     
     void emit_asm(int asm_instance, int inputs, int outputs);
     void emit_fake_push(); // useful with inline assembly
+    void emit_fake_pop(); // useful with inline assembly
 
     void emit_memzero(BCRegister dst, BCRegister size_reg, u8 batch);
     void emit_memcpy(BCRegister dst, BCRegister src, BCRegister size_reg);

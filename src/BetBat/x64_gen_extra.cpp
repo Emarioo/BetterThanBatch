@@ -9,6 +9,8 @@
 #include "BetBat/CompilerEnums.h"
 #include "BetBat/Compiler.h"
 
+#include "BetBat/Reformatter.h"
+
 bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode) {
     using namespace engone;
 
@@ -170,8 +172,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 bc_push_list.last().used_by = n;
                 bc_push_list.last().reg_nr = 0;
                 #ifdef ENABLE_X64_OPTIMIZATIONS
-                // I feel like this is such a tiny optimization that it should always be on
-                // AND be expected to work.
+                // turn this off if you suspect bugs
                 last_was_pop = true;
                 #endif
                 index_of_last_pop = i;
@@ -214,6 +215,20 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             last_was_pop = false;
             bc_push_list.pop();
             continue;
+        }
+        if(n->base->opcode == BC_ASM) {
+            auto base = (InstBase_imm32_imm8_2*)n->base;
+            
+            // base->imm8_0 // inputs
+            for(int i=0;i<base->imm8_0;i++) {
+                bc_push_list.add({});
+                bc_push_list.last().used_by = n;
+                bc_push_list.last().reg_nr = -1;
+            }
+            // base->imm8_1 // outputs
+            for(int i=0;i<base->imm8_1;i++) {
+                bc_push_list.pop();
+            }
         }
         last_was_pop = false;
         if(n->base->opcode == BC_CALL) {
@@ -3233,16 +3248,21 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 InstBase_imm32_imm8_2* base = (InstBase_imm32_imm8_2*)n->base;
                 
                 if(push_offsets.size())
-                    push_offsets.last() += 8 * (base->imm8_0 - base->imm8_1);
+                    push_offsets.last() += 8 * (-base->imm8_0 + base->imm8_1);
                 
                 virtual_stack_pointer += (base->imm8_0 - base->imm8_1) * 8; // inputs - outputs
                 
-                Bytecode::ASM asmInstance = bytecode->asmInstances.get(base->imm32);
+                Bytecode::ASM& asmInstance = bytecode->asmInstances.get(base->imm32);
                 Assert(asmInstance.generated);
                 u32 len = asmInstance.iEnd - asmInstance.iStart;
                 if(len != 0) {
                     u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
+                    int pc_start = code_size();
                     emit_bytes(ptr, len);
+                    for (int i = 0; i < asmInstance.relocations.size();i++) {
+                      auto& it = asmInstance.relocations[i];
+                      prog->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+                    }
                 } else {
                     // TODO: Better error, or handle error somewhere else?
                     log::out << log::RED << "BC_ASM at "<<n->bc_index<<" was incomplete\n";
@@ -3535,54 +3555,59 @@ engone::Logger& operator<<(engone::Logger& l, X64Inst& i) {
 
 bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
     using namespace engone;
+    
+    #define SEND_ERROR() compiler->options->compileStats.errors++;
+    
     // TODO: Make this thread safe
     std::string asm_file = "bin/inline_asm"+std::to_string(tinycode->index)+".asm";
     std::string obj_file = "bin/inline_asm"+std::to_string(tinycode->index)+".o";
     auto file = engone::FileOpen(asm_file,FILE_CLEAR_AND_WRITE);
     defer { if(file) engone::FileClose(file); };
     if(!file) {
+        SEND_ERROR();
         log::out << log::RED << "Could not create " << asm_file << "!\n";
         return false;
     }
-    #ifdef OS_WINDOWS
-    const char* pretext = ".code\n";
-    int asm_line_offset = 1;
-    #else
-    const char* pretext = ".intel_syntax noprefix\n.text\n";
-    int asm_line_offset = 2;
-    #endif
+    const char* pretext = nullptr;
+    const char* posttext = nullptr;
+    int asm_line_offset = 0;
+    std::string cmd = "";
+    
+    if(compiler->options->linker == LINKER_MSVC) {
+        pretext = ".code\n";
+        posttext = "END\n";
+        asm_line_offset = 1;
+        cmd = "ml64 /nologo /Fo " + obj_file + " /c ";
+    } else {
+        pretext = ".intel_syntax noprefix\n.text\n";
+        posttext = "\n"; // assembler complains about not having a newline so we add one here
+        asm_line_offset = 2;
+        cmd = "as -o " + obj_file + " ";
+    }
+    cmd += asm_file;
+    
     bool yes = engone::FileWrite(file, pretext, strlen(pretext));
     Assert(yes);
     char* asmText = bytecode->rawInlineAssembly._ptr + asmInst.start;
     u32 asmLen = asmInst.end - asmInst.start;
     yes = engone::FileWrite(file, asmText, asmLen);
     Assert(yes);
-    #ifdef OS_WINDOWS
-    const char* posttext = "END\n";
     yes = engone::FileWrite(file, posttext, strlen(posttext));
     Assert(yes);
-    #else
-    const char* posttext = "\n"; // assembler complains about not having a newline so we add one here
-    yes = engone::FileWrite(file, posttext, strlen(posttext));
-    Assert(yes);
-    #endif
 
     engone::FileClose(file);
     file = {};
 
-    auto asmLog = engone::FileOpen("bin/asm.log",FILE_CLEAR_AND_WRITE);
-    defer { if(asmLog) engone::FileClose(asmLog); };
 
     // TODO: Turn off logging from ml64? or at least pipe into somewhere other than stdout.
     //  If ml64 failed then we do want the error messages.
-    // TODO: ml64 can compile multiple assembly files into multiple object files.
-    //  This is probably faster than doing one by one. Altough, be wary of command line character limit.
-    #ifdef OS_WINDOWS
-    std::string cmd = "ml64 /nologo /Fo " + obj_file + " /c ";
-    #else
-    std::string cmd = "as -o " obj_file " ";
-    #endif
-    cmd += asm_file;
+    // TODO: ml64 can compile multiple assembly files into multiple object files. Not sure how we
+    //    separate them out later. This is probably faster than doing one by one. Altough, be wary 
+    //    of command line character limit.
+    //  
+    auto asmLog = engone::FileOpen("bin/asm.log",FILE_CLEAR_AND_WRITE);
+    defer { if(asmLog) engone::FileClose(asmLog); };
+    
     int exitCode = 0;
     yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, {}, asmLog, asmLog);
     Assert(yes);
@@ -3596,13 +3621,9 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
         yes = engone::FileRead(asmLog, errorMessages.data(), errorMessages.size());
         Assert(yes);
         
-        log::out << std::string(errorMessages.data(), errorMessages.size());
-        // TODO: Reformat errors, print them out nicely.
-        // log::out << log::RED << "Error generating assembly\n";
-        // ReformatAssemblerError(asmInst, errorMessages, -asm_line_offset);
-        
-        // failure = true;
-        // continue;
+        // log::out << std::string(errorMessages.data(), errorMessages.size());
+        ReformatAssemblerError(compiler->options->linker, asmInst, errorMessages, -asm_line_offset);
+        SEND_ERROR();
         return false;
     }
     engone::FileClose(asmLog);
@@ -3610,78 +3631,121 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
 
     // TODO: DeconstructFile isn't optimized and we deconstruct symbols and segments we don't care about.
     //  Write a specific function for just the text segment.
-    #ifdef OS_WINDOWS
-    auto objfile = FileCOFF::DeconstructFile(obj_file);
-    defer { FileCOFF::Destroy(objfile); };
-    if(!objfile) {
-        log::out << log::RED << "Could not find " << obj_file << "!\n";
-        return false;
-    }
-    int sectionIndex = -1;
-    for(int j=0;j<objfile->sections.size();j++){
-        std::string name = objfile->getSectionName(j);
-        if(name == ".text" || (name.length()>=6 && !strncmp(name.c_str(), ".text$",6))) {
-            // auto section = objfile->sections[j];
-            // Assert(section->NumberOfRelocations == 0); // not handled at the moment
-            sectionIndex = j;
-            // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
-            // u32 len = section->SizeOfRawData;
+    if(compiler->options->target == TARGET_WINDOWS_x64) {
+        auto objfile = FileCOFF::DeconstructFile(obj_file);
+        defer { FileCOFF::Destroy(objfile); };
+        if(!objfile) {
+            log::out << log::RED << "Could not find " << obj_file << "!\n";
+            SEND_ERROR();
+            return false;
         }
+        int sectionIndex = -1;
+        for(int j=0;j<objfile->sections.size();j++){
+            std::string name = objfile->getSectionName(j);
+            if(name == ".text" || (name.length()>=6 && !strncmp(name.c_str(), ".text$",6))) {
+                // auto section = objfile->sections[j];
+                // Assert(section->NumberOfRelocations == 0); // not handled at the moment
+                sectionIndex = j;
+                // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
+                // u32 len = section->SizeOfRawData;
+            }
+        }
+        if(sectionIndex == -1){
+            log::out << log::RED << "Text section in object file could not be found for the compiled inline assembly. Compiler bug?\n";
+            SEND_ERROR();
+            return false;
+        }
+        auto section = objfile->sections[sectionIndex];
+        // coff::Symbol_Record* text_symbol=nullptr;
+        // for(int j=0;j<objfile->symbols.size();j++){
+        //     std::string name = objfile->getSymbolName(j);
+        //     if(name == ".text" || (name.length()>=6 && !strncmp(name.c_str(), ".text$",6))) {
+        //         // auto section = objfile->sections[j];
+        //         // Assert(section->NumberOfRelocations == 0); // not handled at the moment
+        //         sectionIndex = j;
+        //         // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
+        //         // u32 len = section->SizeOfRawData;
+        //     }
+        // }
+        // objfile->findSymbolName("")
+        // if(section->NumberOfRelocations!=0){
+        //     // TODO: Tell the user where the relocation was? Which instruction?
+        //     //  user may type 'pop rac' instead of 'pop rax'. pop rac is a valid instruction if rac is a symbol.
+        //     //  This mistake is difficult to detect.
+        //     log::out << log::RED << "Relocations are not supported when using inline assembly.\n";
+        //     SEND_ERROR();
+        //     return false;
+        // }
+        if (section->NumberOfRelocations != 0) {
+            Assert(objfile->text_relocations.size() == section->NumberOfRelocations);
+
+            for (int i = 0; i < objfile->text_relocations.size();i++) {
+                auto it = objfile->text_relocations[i];
+                switch(it->Type) {
+                    case coff::IMAGE_REL_AMD64_REL32: {
+                        // ok
+                    } break;
+                    default: {
+                        // TODO: Handle other relocations. What kinds though?
+                        log::out << "Inline assembly used this kind of relocation: " << it->Type << " which isn't handled\n";
+                        SEND_ERROR();
+                        return false;
+                    }
+                }
+
+                auto symbol = objfile->symbols[it->SymbolTableIndex];
+                std::string fn_name = objfile->getSymbolName(it->SymbolTableIndex);
+
+                Bytecode::ASM::ExternalNamedReloc rel{};
+                rel.name = fn_name;
+                rel.textOffset = it->VirtualAddress;
+                asmInst.relocations.add(rel);
+            }   
+        }
+
+        u8* textData = objfile->_rawFileData + section->PointerToRawData;
+        i32 textSize = section->SizeOfRawData;
+        // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
+        asmInst.iStart = bytecode->rawInstructions.used;
+        bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + textSize);
+        memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
+        bytecode->rawInstructions.used += textSize;
+        asmInst.iEnd = bytecode->rawInstructions.used;
+    } else {
+        auto objfile = FileELF::DeconstructFile(obj_file);
+        defer { FileELF::Destroy(objfile); };
+        if(!objfile) {
+            log::out << log::RED << "Could not find " << obj_file  << "!\n";
+            SEND_ERROR();
+            return false;
+        }
+        int textSection_index = objfile->sectionIndexByName(".text");
+        if(textSection_index == 0) {
+            log::out << log::RED << "Text section could not be found for the compiled inline assembly. Compiler bug?\n";
+            SEND_ERROR();
+            return false;
+        }
+        
+        int relocations_count=0;
+        auto relocations = objfile->relaOfSection(textSection_index, &relocations_count);
+        if(relocations_count!=0){
+            log::out << log::RED << "Relocations are not supported in inline assembly.\n";
+            SEND_ERROR();
+            return false;
+        }
+        
+        int textSize = 0;
+        const u8* textData = objfile->dataOfSection(textSection_index, &textSize);
+        Assert(textData);
+        
+        // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
+        // u32 len = section->SizeOfRawData;
+        // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
+        asmInst.iStart = bytecode->rawInstructions.used;
+        bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + textSize);
+        memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
+        bytecode->rawInstructions.used += textSize;
+        asmInst.iEnd = bytecode->rawInstructions.used;
     }
-    if(sectionIndex == -1){
-        log::out << log::RED << "Text section in object file could not be found for the compiled inline assembly. Compiler bug?\n";
-        return false;
-    }
-    auto section = objfile->sections[sectionIndex];
-    if(section->NumberOfRelocations!=0){
-        // TODO: Tell the user where the relocation was? Which instruction?
-        //  user may type 'pop rac' instead of 'pop rax'. pop rac is a valid instruction if rac is a symbol.
-        //  This mistake is difficult to detect.
-        log::out << log::RED << "Relocations are not supported when using inline assembly.\n";
-        return false;
-    }
-    
-    u8* ptr = objfile->_rawFileData + section->PointerToRawData;
-    u32 len = section->SizeOfRawData;
-    // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
-    asmInst.iStart = bytecode->rawInstructions.used;
-    bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + len);
-    memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, ptr, len);
-    bytecode->rawInstructions.used += len;
-    asmInst.iEnd = bytecode->rawInstructions.used;
-    #else
-    Assert(false);
-    auto objfile = FileELF::DeconstructFile(TEMP_ASM_OBJ_FILE);
-    defer { FileELF::Destroy(objfile); };
-    if(!objfile) {
-        log::out << log::RED << "Could not find " TEMP_ASM_OBJ_FILE "!\n";
-        continue;
-    }
-    int textSection_index = objfile->sectionIndexByName(".text");
-    if(textSection_index == 0) {
-        log::out << log::RED << "Text section could not be found for the compiled inline assembly. Compiler bug?\n";
-        continue;
-    }
-    
-    int relocations_count=0;
-    auto relocations = objfile->relaOfSection(textSection_index, &relocations_count);
-    if(relocations_count!=0){
-        log::out << log::RED << "Relocations are not supported in inline assembly.\n";
-        continue;
-    }
-    
-    int textSize = 0;
-    const u8* textData = objfile->dataOfSection(textSection_index, &textSize);
-    Assert(textData);
-    
-    // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
-    // u32 len = section->SizeOfRawData;
-    // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
-    asmInst.iStart = bytecode->rawInstructions.used;
-    bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + textSize);
-    memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
-    bytecode->rawInstructions.used += textSize;
-    asmInst.iEnd = bytecode->rawInstructions.used;
-    #endif
     return true;
 }

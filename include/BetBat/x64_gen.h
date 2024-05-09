@@ -412,7 +412,7 @@ struct X64Builder {
 };
 
 
-void GenerateX64(Compiler* compiler, TinyBytecode* tinycode);
+bool GenerateX64(Compiler* compiler, TinyBytecode* tinycode);
 
 // Process some final things such as exports, symbols from bytecode program to the x64 program
-void GenerateX64_finalize(Compiler* compiler);
+bool GenerateX64_finalize(Compiler* compiler);

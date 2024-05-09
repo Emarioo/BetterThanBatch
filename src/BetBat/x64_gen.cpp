@@ -51,7 +51,7 @@ bool IsNativeRegister(X64Register reg) {
     return reg == X64_REG_BP || reg == X64_REG_SP;
 }
 
-void GenerateX64_finalize(Compiler* compiler) {
+bool GenerateX64_finalize(Compiler* compiler) {
     Assert(compiler->program); // don't call this function if there is no program
     Assert(compiler->program->debugInformation); // we expect debug information?
 
@@ -83,6 +83,7 @@ void GenerateX64_finalize(Compiler* compiler) {
     }
 
     prog->compute_libraries();
+    return true;
 }
 void X64Program::compute_libraries() {
     libraries.resize(0);
@@ -93,8 +94,11 @@ void X64Program::compute_libraries() {
             // intrinsic functions or 'prints' creates a relocation
             // to GetStdHandle and WriteFile without referring to
             // a library. Perhaps this shouldn't be allowed but
-            // i believe linkers automatically links with the 
+            // i believe linkers automatically link with the 
             // basic libraries which GetStdHandle and WriteFiel comes from.
+            
+            // Inline assembly may also create relocations without library names.
+            // We just have to trust that the user linked with the library manually.
             continue;
         }
         for(auto& s : libraries) {
@@ -108,7 +112,7 @@ void X64Program::compute_libraries() {
     }
 }
 
-void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
+bool GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
     using namespace engone;
     ZoneScopedC(tracy::Color::SkyBlue1);
     
@@ -118,7 +122,7 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
     bool yes = tinycode->applyRelocations(compiler->bytecode);
     if(!yes) {
         log::out << "Incomplete call relocation\n";
-        return;
+        return false;
     }
 
     X64Builder builder{};
@@ -129,8 +133,8 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
     builder.tinyprog = compiler->program->createProgram(tinycode->index);
     builder.current_tinyprog_index = tinycode->index;
 
-    builder.generateFromTinycode_v2(builder.bytecode, builder.tinycode);
-
+    yes = builder.generateFromTinycode_v2(builder.bytecode, builder.tinycode);
+    return yes;
 }
 
 void X64Builder::free_all_registers() {

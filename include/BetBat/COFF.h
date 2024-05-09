@@ -230,9 +230,12 @@ struct FileCOFF {
     coff::COFF_File_Header* header = nullptr;
 
     std::string getSectionName(int sectionIndex);
+    std::string getSymbolName(int symbolIndex);
     QuickArray<coff::Section_Header*> sections{};
 
     QuickArray<coff::Symbol_Record*> symbols{};
+    
+    QuickArray<coff::COFF_Relocation*> text_relocations{};
 
     u32 stringTableSize = 0;
     char* stringTableData = nullptr;

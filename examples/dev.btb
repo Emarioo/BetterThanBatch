@@ -1,19 +1,13 @@
 // 
-#import "Logger"
+// #import "Logger"
 
 
-// asm {
-//     mov esi, 1
-//     8
-// }
+num := 65
 
-#macro TWO asm<i32>{push 1}
-
-
-right(TWO)
-
-fn right(n: i32) {
-    log(n)
+new_num := asm<i32> {
+    mov eax, [rsp + 2]
+    add eax, 123
+    push rax
 }
 
 

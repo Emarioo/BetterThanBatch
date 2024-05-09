@@ -3,6 +3,8 @@ but it can be useful if you need extra performance or want to experiment. Do not
 
 The compiler utilizes third-party assemblers such as `ml64` (Macro Assembler, Windows) `as` (GNU Assembler, Linux). You are required to have access to one of these assemblers in your PATH.
 
+**NOTE:** Note that only x64 is supported. (well, the whole compiler only supports x64 at the moment).
+
 # Inline assembly
 The `asm` keyword allows you to write assembly within the following curly braces. Assembly blocks are treated as expressions and can be used wherever expressions are allowed. The unique thing about inline assembly is that it's typeless. The compiler cannot know what type your assembly code outputs, if any. You can specify the type yourself with this syntax: `asm<type>`. Below are some examples.
 ```c++
@@ -77,6 +79,20 @@ These are some things that affect where variables are placed on the stack:
 
 **DISCLAIMER**: The calculation for offsets to variables may have changed, the text may not be up to date.
 
+This is how you can call external functions in inline assembly. Do make sure that you link with the correct library. The inline assembly will not automatically link the right libraries.
+```c++
+#import "Logger"
+
+#load "Kernel32.lib" as Kernel  // GetStdHandle comes from here
+
+n := asm<i32> {
+    extern GetStdHandle : proto
+    mov ecx, -11
+    call GetStdHandle
+    push rax
+}
+log(n)
+```
 
 ## Random implementation details
 - asm is parsed after preprocessor and lexer, meaning macros can work.
@@ -94,8 +110,8 @@ Safer and less error prone way of reading/writing variables.
 num := 65
 new_num := asm<i32> {
     mov eax, [num]
-    eax, 123
-    push eax
+    add eax, 123
+    push rax
 }
 ```
 

@@ -33,3 +33,24 @@ loop_start:
 loop_end:
     push rax  // return value
 }
+
+@TEST_CASE(inline_assembly_stack)
+
+// make sure the generator tracks push and pop from inline assembly
+we_good(asm<i32>{push 1})
+
+fn we_good(n: i32) {
+    _test 1; n
+}
+
+
+more_params(asm<i32>(9, 2){
+    pop rax
+    pop rdx
+    add eax, edx
+    push rax
+})
+
+fn more_params(n: i32) {
+    _test 11; n
+}

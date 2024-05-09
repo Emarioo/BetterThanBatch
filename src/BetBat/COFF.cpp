@@ -156,7 +156,7 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
             u32 signature = *(u32*)(filedata + signature_offset);
             if(signature == 0x00004550) {
                 if(!silent)
-                    log::out << "WARNING: "<<path<<" is an executable which the deconstruct functions doesn't quite support\n";
+                    log::out << log::YELLOW << "WARNING: "<<path<<" is an executable which the deconstruct function can't fully handle.\n";
                 // "PE\0\0"
                 fileOffset += signature_offset + 4;
             }
@@ -256,8 +256,17 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
             u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
             // DeconstructDebugTypes(data, sectionHeader->SizeOfRawData);
         }
+        bool is_text = false;
+        if (objectFile->getSectionName(i).compare(0, 5, ".text") == 0) {
+          is_text = true;
+        //   u8 *data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
+        }
         for(int i=0;i<sectionHeader->NumberOfRelocations;i++){
             COFF_Relocation* relocation = (COFF_Relocation*)(objectFile->_rawFileData + sectionHeader->PointerToRelocations + i*COFF_Relocation::SIZE);
+            
+            if(is_text) {
+                objectFile->text_relocations.add(relocation);
+            }
             if(!silent) {
                 auto baselog = relocation;
                 log::out << log::LIME << " relocation "<<i<<"\n";
@@ -355,6 +364,22 @@ std::string FileCOFF::getSectionName(int sectionIndex){
             if(0==section->Name[i])
                 break; 
             name += section->Name[i];
+        }
+    }
+    return name;
+}
+std::string FileCOFF::getSymbolName(int symbolIndex) {
+    Assert(symbols.size() > symbolIndex);
+    auto symbol = symbols[symbolIndex];
+    std::string name = "";
+    if (symbol->Name.zero == 0) {
+        u32 offset = symbol->Name.offset;
+        name = ((char *)stringTableData + offset);
+    } else {
+        for (int i = 0; i < 8; i++) {
+        if (0 == symbol->Name.ShortName[i])
+            break;
+        name += symbol->Name.ShortName[i];
         }
     }
     return name;

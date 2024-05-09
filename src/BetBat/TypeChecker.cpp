@@ -1471,6 +1471,11 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                 if(outTypes) outTypes->add(AST_VOID);
             }
         } else if(expr->typeId == AST_ASM){
+            for(auto a : expr->args) {
+                QuickArray<TypeId> types{};
+                auto signal = CheckExpression(info, scopeId, a, &types, false, nullptr);
+            }
+            
             if(!expr->asmTypeString.isString()) {
                 // asm has not type
                 expr->versions_asmType[info.currentPolyVersion] = AST_VOID;

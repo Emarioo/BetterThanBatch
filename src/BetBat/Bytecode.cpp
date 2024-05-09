@@ -114,7 +114,7 @@ int Bytecode::appendData(const void* data, int size){
     dataSegment.used+=size;
     return index;
 }
-int Bytecode::add_assembly(char* text, int len, const std::string& file, int line_start, int line_end) {
+int Bytecode::add_assembly(const char* text, int len, const std::string& file, int line_start, int line_end) {
     lock_global_data.lock();
     defer { lock_global_data.unlock(); };
     
@@ -192,6 +192,15 @@ void BytecodeBuilder::emit_fake_push() {
     if(pushed_offset < pushed_offset_max)
         pushed_offset_max = pushed_offset;
     virtual_stack_pointer -= 8;
+}
+void BytecodeBuilder::emit_fake_pop() {
+    if(disable_code_gen) return;
+
+    // emit_opcode(BC_PUSH);
+    // emit_operand(reg);
+    // we dont emit any instructions, we just change the state of the builder
+    pushed_offset += 8;
+    virtual_stack_pointer += 8;
 }
 void BytecodeBuilder::emit_pop(BCRegister reg) {
     if(disable_code_gen) return;

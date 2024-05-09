@@ -1803,7 +1803,20 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             return SIGNAL_SUCCESS;
         }  else if(expression->typeId == AST_ASM){
             auto type = expression->versions_asmType[info.currentPolyVersion];
+            
+            int off = builder.get_virtual_sp();
+            for(auto a : expression->args) {
+                DynamicArray<TypeId> types{};
+                auto signal = generateExpression(a, &types);
+                if(signal != SIGNAL_SUCCESS)
+                    return SIGNAL_FAILURE;
+            }
+            int input_count = -(builder.get_virtual_sp() - off) / 8;
+            
             if(info.disableCodeGeneration) {
+                for(int i=0;i<input_count;i++) {
+                    builder.emit_fake_pop();
+                }
                 if(type.isValid()) {
                     SignalIO result = generateArtificialPush(expression->versions_asmType[info.currentPolyVersion]);
                 }
@@ -1822,14 +1835,221 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             if(!yes) {
                 // TODO: When does this happen and is it an error?
             }
+            // TODO: Optimize
+            // ############################
+            //   Find referenced variables
+            // ############################
+            std::string assembly = std::string(iterator.data(), iterator.len());
+            std::string new_assembly = "";
+            std::string temp = "";
+            int ln = 1;
+            int head = 0;
+            int bracket_depth = 0;
+            int name_start = 0;
+            int name_end = 0;
+            enum State {
+                PARSE_NONE,
+                PARSE_NAME,
+                PARSE_REST,
+            };
+            State state = PARSE_NONE;
             
+            // #define IS_WHITESPACE(C) (C == ' ' || C == '\n' || C == '\r' || C == '\t')
+            #define IS_WHITESPACE(C) (C == ' ' || C == '\t')
+            
+            
+            // I think I overcomplicated this parsing. We need to find "[some_name]" and if any characters doesn't match
+            // that then we find the next opening bracket.
+            while(head < assembly.size()) {
+                char chr = assembly[head];
+                head++;
+                
+                if(chr == '\n') {
+                    ln++;
+                }
+                
+                if(chr == '[') {
+                    bracket_depth++;
+                } else if(chr == ']') {
+                    bracket_depth--;
+                }
+                
+                switch(state) {
+                    case PARSE_NONE: {
+                        if(chr == '[') {
+                            state = PARSE_NAME;
+                            name_start = 0;
+                            name_end = 0;
+                            temp.clear();
+                        }
+                        new_assembly += chr;
+                    } break;
+                    case PARSE_NAME: {
+                        if(chr == ']') {
+                            if(bracket_depth == 0){
+                                if(name_end) {
+                                    name_end = head-1;
+                                }
+                                const char* reg_names[] {
+                                    "rsp",
+                                    "rbp",
+                                    "rax",
+                                    "rbx",
+                                    "rcx",
+                                    "rdx",
+                                    "rdi",
+                                    "rsi",
+                                    "r8",
+                                    "r9",
+                                    "r10",
+                                    "r11",
+                                    "r12",
+                                    "r13",
+                                    "r14",
+                                    "r15",
+                                };
+                                bool is_reg = false;
+                                for(int i=0;i<sizeof(reg_names)/sizeof(*reg_names);i++) {
+                                    if(temp == reg_names[i]) {
+                                        is_reg = true;
+                                        break;   
+                                    }
+                                }
+                                if(!is_reg) {
+                                    // ############################
+                                    //   We found a variable name
+                                    // ############################
+                                    std::string name = std::string(assembly.data() + name_start, name_end-name_start);
+                                    log::out << "Var " << name<<"\n";
+                                    
+                                    ContentOrder order = CONTENT_ORDER_MAX; // TODO: Fix content order
+                                    auto iden = ast->findIdentifier(idScope, order, name);
+                                    if(iden){
+                                        if(iden->type == Identifier::VARIABLE){
+                                            auto varinfo = info.ast->getVariableByIdentifier(iden);
+                                            Assert(varinfo);
+                                            
+                                            switch(varinfo->type) {
+                                                case VariableInfo::MEMBER: {
+                                                     ERR_SECTION(
+                                                        ERR_HEAD2(expression->location)
+                                                        ERR_MSG("Inline assembly cannot access members of methods (not implemented yet).")
+                                                        ERR_LINE2(expression->location, "somewhere in here")
+                                                    )
+                                                    // The problem is that we need a double dereference
+                                                    new_assembly += "rbp+16]\n"; // access argument 'this'
+                                                    // then something like this to access the member
+                                                    new_assembly += "mov eax, [rax+" + std::to_string(varinfo->versions_dataOffset[currentPolyVersion]);
+                                                    // We have to parse the register that was just before the [var] part.
+                                                    // This assumes that [var] was just with mov.
+                                                    // Also, a user is writing assembly because they want control,
+                                                    // and now were adding extra instructions.
+                                                    // Referencing variables like this is optional so I guess it's fine.
+                                                } break;
+                                                case VariableInfo::ARGUMENT: {
+                                                    // TODO: User may write [num + 8] which we want to allow.
+                                                    new_assembly += "rbp+"+std::to_string(varinfo->versions_dataOffset[currentPolyVersion]);
+                                                } break;
+                                                case VariableInfo::GLOBAL: {
+                                                    ERR_SECTION(
+                                                        ERR_HEAD2(expression->location)
+                                                        ERR_MSG("Inline assembly cannot access global variables (not implemented yet).")
+                                                        ERR_LINE2(expression->location, "somewhere in here")
+                                                    )
+                                                } break; 
+                                                case VariableInfo::LOCAL: {
+                                                     ERR_SECTION(
+                                                        ERR_HEAD2(expression->location)
+                                                        ERR_MSG("Inline assembly cannot access local variables (not implemented yet).")
+                                                        ERR_LINE2(expression->location, "somewhere in here")
+                                                    )
+                                                    // new_assembly += "______";
+                                                } break;
+                                                default: Assert(false);
+                                            }
+                                        } else {
+                                            ERR_SECTION(
+                                                ERR_HEAD2(expression->location)
+                                                ERR_MSG("Inline assembly cannot only refer to variables: mov eax [var_name] not functions: mov rax, [func_name].")
+                                                ERR_LINE2(expression->location, "somewhere in here")
+                                            )
+                                        }
+                                    } else {
+                                        ERR_SECTION(
+                                            ERR_HEAD2(expression->location)
+                                            ERR_MSG("Undefined variable '"<<name<<"' in inline assembly.")
+                                            ERR_LINE2(expression->location, "somewhere in here")
+                                        )
+                                    }
+                                } else {
+                                    new_assembly += temp;
+                                }
+                                new_assembly += chr;
+                                state = PARSE_NONE;
+                            }
+                        } else if(chr == '[') {
+                            temp += chr;
+                            state = PARSE_REST;
+                        } else {
+                            if(name_start == name_end) {
+                                if(((chr|32) >= 'a' && (chr|32) <= 'z') || chr == '_') {
+                                    name_start = head - 1;
+                                    name_end = 0;
+                                    temp += chr;
+                                } else if(IS_WHITESPACE(chr)) {
+                                    temp += chr;
+                                } else {
+                                    state = PARSE_REST;
+                                    temp += chr;
+                                }
+                            } else {
+                                if(IS_WHITESPACE(chr)) {
+                                    if(name_end == 0) {
+                                        name_end = head-1;
+                                    }
+                                    temp += chr;
+                                } else if(name_end == 0) {
+                                    if(((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' && chr <= '9') || chr == '_') {
+                                        temp += chr;
+                                    } else {
+                                        state = PARSE_REST;
+                                        temp += chr;
+                                    }
+                                } else {
+                                    state = PARSE_REST;
+                                    temp += chr;
+                                }
+                            }
+                        }
+                    } break;
+                    case PARSE_REST: {
+                        temp += chr;
+                        if(chr == ']') {
+                            if(bracket_depth == 0){
+                                new_assembly += temp;
+                                state = PARSE_NONE;
+                            }
+                        }
+                    } break;
+                    default: Assert(false);
+                }
+            }
+
             lexer::TokenSource* src_start, *src_end;
             compiler->lexer.getTokenInfoFromImport(imp->file_id, expression->asm_range.token_index_start, &src_start);
             compiler->lexer.getTokenInfoFromImport(imp->file_id, expression->asm_range.token_index_end-1, &src_end);
             iterator.append('\n'); // if the last token didn't have a newline then we must add one here
-            int asm_index = bytecode->add_assembly(iterator.data(), iterator.len(), imp->path, src_start->line, src_end->line);
+            int asm_index = bytecode->add_assembly(new_assembly.data(), new_assembly.size(), imp->path, src_start->line, src_end->line);
             
-            builder.emit_asm(asm_index, 0, 0);
+            for(int i=0;i<input_count;i++) {
+                builder.emit_fake_pop();
+            }
+            
+            builder.emit_asm(asm_index, input_count, type.isValid());
+            
+            if(type.isValid()) {
+                SignalIO result = generateArtificialPush(expression->versions_asmType[info.currentPolyVersion]);
+            }
 
             outTypeIds->add(type);
             return SIGNAL_SUCCESS;
@@ -2030,20 +2250,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             BCRegister lreg = BC_REG_A;
             BCRegister creg = BC_REG_A;
             if(expression->isUnsafeCast()) {
-                if(expression->left->typeId == AST_ASM) {
-                    // TODO: Deprecate this and use asm<i32> {} instead of cast_unsafe<i32> asm {}. asm -> i32 {} is an alternative syntax
-                    //  asm<i32> makes more since because the casting is a little special since
-                    //  we don't know what type the inline assembly produces. Maybe it does 2 pushes
-                    //  or none. With unsafe cast we assume a type which isn't ideal.
-                    //  Unfortunately, it's difficult to know what type is pushed in the inline assembly.
-                    //  It might ruin the stack and frame pointers.
-                    
-                    // The unsafe cast implies that the asm block did this. hopefully it did.
-                    SignalIO result = generateArtificialPush(castType);
-                } else {
-                    builder.emit_pop(lreg);
-                    builder.emit_push(creg);
-                }
+                builder.emit_pop(lreg);
+                builder.emit_push(creg);
                 outTypeIds->add(castType);
             } else {
                 // if ((castType.isPointer() && ltype.isPointer()) || (castType.isPointer() && (ltype == (TypeId)AST_INT64 ||

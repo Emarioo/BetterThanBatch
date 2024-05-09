@@ -81,7 +81,7 @@ bin/inline_asm.asm:3: Error: no such instruction: `eae'
 bin/inline_asm.asm:5: Error: no such instruction: `hoiho eax,9'
 
 */
-void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuffer, int line_offset) {
+void ReformatAssemblerError(LinkerChoice linker, Bytecode::ASM& asmInstance, QuickArray<char>& inBuffer, int line_offset) {
     using namespace engone;
     // Assert(!outBuffer); // not implemented
     
@@ -94,7 +94,7 @@ void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuff
     };
     DynamicArray<ASMError> errors{};
     
-    #ifdef OS_WINDOWS
+if(linker == LINKER_MSVC) {
      // Skip heading
     int index = 0;
     int lineCount = 0;
@@ -155,7 +155,7 @@ void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuff
             asmError.message += chr;
         }
     }
-    #else
+} else {
      // Skip heading
     int index = 0;
     int lineCount = 0;
@@ -216,10 +216,15 @@ void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuff
             asmError.message += chr;
         }
     }
-    #endif
+}
     
     FOR(errors) {
-        log::out << log::RED << TrimCWD(asmInstance.file) << ":" << (asmInstance.lineStart-1 + it.line + line_offset);
+        int line = asmInstance.lineStart + it.line + line_offset;
+        if(linker == LINKER_MSVC)
+            line-=1;
+        log::out << log::RED << TrimCWD(asmInstance.file) << ":" << (line) << " (assembler error):";
+        // if(linker == LINKER_MSVC)
+        //     log::out << " ";
         log::out << log::NO_COLOR << it.message << "\n";
     }
 }
@@ -498,7 +503,7 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, X64Prog
             //     }
             // }
             if(found) {
-                log::out << log::RED << TrimCWD(d->files[fileIndex])<<":" << lineNumber<<": ";
+                log::out << log::RED << TrimCWD(d->files[fileIndex])<<":" << lineNumber<<" (linker error): ";
                 log::out << log::NO_COLOR << it.message << "\n";
             }
         }
