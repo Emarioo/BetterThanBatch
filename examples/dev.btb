@@ -2,10 +2,10 @@
 // #import "Logger"
 
  
-// #macro say Oaky say
+#macro say Oaky say
 
 
-// say
+say
 
 
 

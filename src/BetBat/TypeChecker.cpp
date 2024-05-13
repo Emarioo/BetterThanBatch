@@ -3191,13 +3191,13 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             //  if not type then check namespace
             //  otherwise it's variables
             Assert(("Broken code",false));
-
-            if(now->varnames.size()==1 && now->alias){
+            #ifdef gone
+            if(now->varnames.size()==1 && now->alias.size()){
                 auto& name = now->varnames[0].name;
                 TypeId originType = CheckType(info, scope->scopeId, name, now->location, nullptr);
-                TypeId aliasType = info.ast->convertToTypeId(*now->alias, scope->scopeId, true);
+                TypeId aliasType = info.ast->convertToTypeId(now->alias, scope->scopeId, true);
                 if(originType.isValid() && !aliasType.isValid()){
-                    TypeInfo* aliasInfo = info.ast->createType(*now->alias, scope->scopeId);
+                    TypeInfo* aliasInfo = info.ast->createType(now->alias, scope->scopeId);
                     aliasInfo->id = originType;
 
                     // using statement isn't necessary anymore
@@ -3215,12 +3215,12 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                     continue;
                 }
                 ScopeInfo* originScope = info.ast->findScope(name,scope->scopeId, true);
-                ScopeInfo* aliasScope = info.ast->findScope(*now->alias,scope->scopeId, true);
+                ScopeInfo* aliasScope = info.ast->findScope(now->alias,scope->scopeId, true);
                 if(originScope && !aliasScope) {
                     ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);
                     // TODO: Alias can't contain multiple namespaces. How to implement
                     //  that?
-                    scopeInfo->nameScopeMap[*now->alias] = originScope->id;
+                    scopeInfo->nameScopeMap[now->alias] = originScope->id;
 
                     Assert(("Broken using keyword code",false));
                     // CANNOT MODIFY TREE. SEE @NO-MODIFY-AST
@@ -3275,6 +3275,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                 // }
                 continue;
             }
+            #endif
         } else if(now->type == ASTStatement::TEST) {
             CheckExpression(info, scope->scopeId, now->testValue, &typeArray, false);
             typeArray.resize(0);

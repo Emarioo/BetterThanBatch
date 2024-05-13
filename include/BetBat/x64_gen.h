@@ -409,6 +409,7 @@ struct X64Builder {
 
     X64Inst* createInst(InstructionOpcode opcode) {
         auto ptr = new X64Inst();
+        
         // ptr->id = inst_id++;
         // ptr->opcode = opcode;
         return ptr;

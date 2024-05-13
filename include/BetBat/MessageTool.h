@@ -128,7 +128,8 @@ struct temp_compile_error {
     CompileError err = ERROR_NONE;
 };
 CompileError ToCompileError(const char* str);
-const char* ToCompileErrorString(temp_compile_error stuff);
+std::string ToCompileErrorString(temp_compile_error stuff);
+// const char* ToCompileErrorString(temp_compile_error stuff);
 
 // void PrintCode(const TokenRange& tokenRange, const char* message = nullptr);
 // void PrintCode(int index, TokenStream* stream, const char* message = nullptr);

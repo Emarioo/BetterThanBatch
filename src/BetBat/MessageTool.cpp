@@ -572,7 +572,8 @@ CompileError ToCompileError(const char* str){
     
     return ERROR_UNKNOWN;
 }
-const char* ToCompileErrorString(temp_compile_error stuff) {
+// const char* ToCompileErrorString(temp_compile_error stuff) {
+std::string ToCompileErrorString(temp_compile_error stuff) {
     // if(stuff.err == ERROR_NONE)
     //     return "";
     if(!stuff.shortVersion) {
@@ -601,15 +602,20 @@ const char* ToCompileErrorString(temp_compile_error stuff) {
         #undef CASE
     }
     
-    static std::unordered_map<CompileError,std::string*> errorStrings;
-    auto pair = errorStrings.find(stuff.err);
-    if(pair != errorStrings.end())
-        return pair->second->c_str();
+    std::string str = "";
+    str += "E";
+    str += std::to_string((int)stuff.err);
+    return str;
+
+    // static std::unordered_map<CompileError,std::string*> errorStrings;
+    // auto pair = errorStrings.find(stuff.err);
+    // if(pair != errorStrings.end())
+    //     return pair->second->c_str();
         
-    auto str = TRACK_ALLOC(std::string);
-    new(str)std::string();
-    errorStrings[stuff.err] = str;
-    str->append("E");
-    str->append(std::to_string((u32)stuff.err));
-    return str->c_str();
+    // auto str = TRACK_ALLOC(std::string);
+    // new(str)std::string();
+    // errorStrings[stuff.err] = str;
+    // str->append("E");
+    // str->append(std::to_string((u32)stuff.err));
+    // return str->c_str();
 }

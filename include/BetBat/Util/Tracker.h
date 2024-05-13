@@ -1,4 +1,4 @@
-#pragma once
+    #pragma once
 /*
     The purpose of these functions is to track allocations.
     This makes it easy to catch memory leaks.
@@ -54,6 +54,7 @@ struct TrackLocation {
     const char* fname=nullptr;
     u32 line = 0;
     u32 count = 0;
+    int alloc_id = 0;
 };
 #define TRACK_LOCATION TrackLocation{__FILE__, __LINE__}
 // #define TRACK_ADD(TYPE) Tracker::AddTracking(typeid(TYPE), sizeof(TYPE), TRACK_LOCATION);

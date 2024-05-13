@@ -1,5 +1,6 @@
 #include "BetBat/Util/Tracker.h"
 
+#include "BetBat/Util/Utility.h"
 #include "Engone/Util/Array.h"
 #include "Engone/PlatformLayer.h"
 
@@ -7,7 +8,8 @@ struct TrackerType {
     std::string name{};
     u32 size = 0;
     u32 count = 0;
-    DynamicArray<TrackLocation> locations{};
+    DynamicArray<TrackLocation> locations{}; // add tracking
+    DynamicArray<TrackLocation> freed_locations{}; // del tracking (not sure how reallocations are dealt with)
 };
 
 struct Tracker_impl {
@@ -20,8 +22,11 @@ struct Tracker_impl {
 
     std::unordered_map<size_t, TrackerType> m_trackedTypes{};
     engone::Mutex m_trackLock{};
-    bool m_enableTracking = false;
+    bool m_enableTracking = true;
+    // bool m_enableTracking = false;
     DynamicArray<TrackLocation> m_uniqueTrackLocations{};
+
+    volatile i32 allocation_id = 1;
 
     static Tracker_impl* Create();
     static void Destroy(Tracker_impl* tracker);
@@ -81,6 +86,17 @@ void Tracker_impl::addTracking(const std::type_info& typeInfo, u32 size, const T
 
     auto id = typeInfo.hash_code();
 
+    int alloc_id = engone::atomic_add(&allocation_id, 1) - 1;
+
+    // @DEBUG
+    int alloc_ids[]{
+        0,
+        // 1, 103, 104, 106, 107
+    };
+    for(int i=0;i<sizeof(alloc_ids)/sizeof(*alloc_ids);i++) {
+        BREAK(alloc_id == alloc_ids[i]);
+    }
+
     m_trackLock.lock();
 
     bool prev = m_enableTracking;
@@ -103,6 +119,7 @@ void Tracker_impl::addTracking(const std::type_info& typeInfo, u32 size, const T
     if(loc.fname){
         ptr->locations.add(loc);
         ptr->locations.last().count = count;
+        ptr->locations.last().alloc_id = alloc_id;
     }
     m_enableTracking = prev;
     m_trackLock.unlock();
@@ -114,6 +131,8 @@ void Tracker_impl::delTracking(const std::type_info& typeInfo, u32 size, const T
     auto id = typeInfo.hash_code();
 
     m_trackLock.lock();
+
+    int alloc_id = engone::atomic_add(&allocation_id, 1) - 1;
 
     bool prev = m_enableTracking;
     m_enableTracking = false;
@@ -133,19 +152,23 @@ void Tracker_impl::delTracking(const std::type_info& typeInfo, u32 size, const T
     engone::log::out << engone::log::CYAN << "Unrack "<<count<<": "<<typeInfo.name() <<" (left: "<<ptr->count<<")\n";
     #endif
     if(loc.fname) {
-        bool removed = false;
-        for(int i=0;i<ptr->locations.size();i++){
-            TrackLocation& it = ptr->locations[i];
-            if(it.count == count) {
-                if(i<ptr->locations.size()-1) {
-                    ptr->locations[i] = ptr->locations.last();
-                }
-                ptr->locations.pop();
-                removed = true;
-                break;
-            }
-        }
-        // Assert(removed);
+        ptr->freed_locations.add(loc);
+        ptr->freed_locations.last().count = count;
+        ptr->freed_locations.last().alloc_id = alloc_id;
+
+    //     bool removed = false;
+    //     for(int i=0;i<ptr->locations.size();i++){
+    //         TrackLocation& it = ptr->locations[i];
+    //         if(it.count == count) {
+    //             if(i<ptr->locations.size()-1) {
+    //                 ptr->locations[i] = ptr->locations.last();
+    //             }
+    //             ptr->locations.pop();
+    //             removed = true;
+    //             break;
+    //         }
+    //     }
+    //     // Assert(removed);
     }
     m_enableTracking = prev;
     m_trackLock.unlock();
@@ -175,7 +198,7 @@ void Tracker_impl::printTrackedTypes(){
             bool found = false;
             for(int k=0;k<m_uniqueTrackLocations.size();k++){
                 auto& loc2 = trackType->locations[k];
-                if(loc.fname == loc2.fname && loc.line == loc2.line) {
+                if(loc.fname == loc2.fname && loc.line == loc2.line && loc.alloc_id == loc2.alloc_id) {
                     found = true;
                     break;
                 }
@@ -189,18 +212,23 @@ void Tracker_impl::printTrackedTypes(){
             int len = strlen(loc2.fname);
             int cutoff = len-1;
             int slashCount = 2;
-            while(cutoff>0){
-                if(loc2.fname[cutoff] == '/' || loc2.fname[cutoff] == '\\'){
-                    slashCount--;
-                    if(!slashCount) {
-                        cutoff++;
-                        break;
-                    }
-                }
-                cutoff--;
-            }
+            std::string path = loc2.fname;
+            
+            ReplaceChar((char*)path.data(), path.length(),'\\','/');
+            path = BriefString(path, 50);
+            log::out << "  "<<(path) << ":"<<loc2.line<< ", id: "<<loc2.alloc_id<<"\n";
+            // while(cutoff>0){
+            //     if(loc2.fname[cutoff] == '/' || loc2.fname[cutoff] == '\\'){
+            //         slashCount--;
+            //         if(!slashCount) {
+            //             cutoff++;
+            //             break;
+            //         }
+            //     }
+            //     cutoff--;
+            // }
             // if(len > 25)
-            log::out << "  "<<(loc2.fname+(cutoff)) << ":"<<loc2.line<<"\n";
+                // log::out << "  "<<(loc2.fname+(cutoff)) << ":"<<loc2.line<<"\n";
             // else
             //     log::out << "  "<<loc2.fname << ":"<<loc2.line<<"\n";
         }

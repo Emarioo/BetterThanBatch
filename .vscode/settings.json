@@ -2,6 +2,12 @@
     "files.associations": {
         "*.cpp": "cpp",
         "utility": "cpp",
-        "xhash": "cpp"
+        "xhash": "cpp",
+        "xstring": "cpp",
+        "array": "cpp",
+        "ranges": "cpp",
+        "span": "cpp",
+        "vector": "cpp",
+        "xutility": "cpp"
     }
 }

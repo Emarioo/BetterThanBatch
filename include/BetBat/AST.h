@@ -607,7 +607,7 @@ struct ASTStatement : ASTNode {
     };
     lexer::SourceLocation location{};
     DynamicArray<VarName> varnames;
-    std::string* alias = nullptr;
+    std::string alias = nullptr;
 
     ASTExpression* testValue = nullptr;
    
@@ -821,7 +821,7 @@ struct ASTFunction : ASTNode {
     void print(AST* ast, int depth);
 };
 struct ASTScope : ASTNode {
-    std::string* name = 0; // namespace
+    std::string name = ""; // namespace
     ScopeId scopeId=0;
     bool isNamespace = false;
 
@@ -1067,7 +1067,12 @@ private:
     u32 linearAllocationMax = 0;
     volatile u32 linearAllocationUsed = 0;
 
-
+    DynamicArray<ASTExpression*> expressions;
+    DynamicArray<ASTStruct*> structures;
+    DynamicArray<ASTEnum*> enums;
+    DynamicArray<ASTStatement*> statements;
+    DynamicArray<ASTFunction*> functions;
+    DynamicArray<ASTScope*> bodies;
 
     u32 globalDataOffset = 0;
 

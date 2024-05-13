@@ -52,6 +52,8 @@ int main(int argc, const char** argv){
     if(options.quit)
         return EXIT_CODE_SUCCESS;
 
+    arguments.cleanup();
+
     if(options.devmode) {
         // This code is only used during development
         log::out << log::BLACK<<"[DEVMODE]\n";
@@ -184,18 +186,20 @@ int main(int argc, const char** argv){
         }
     }
 
-    Compiler compiler{};
-    compiler.run(&options);
+    {
+        Compiler compiler{};
+        compiler.run(&options);
 
-    if(options.executeOutput) {
-        switch(options.target) {
-            case TARGET_BYTECODE: {
-                VirtualMachine vm{};
-                vm.execute(compiler.bytecode,"main");
-            } break;
+        if(options.executeOutput) {
+            switch(options.target) {
+                case TARGET_BYTECODE: {
+                    VirtualMachine vm{};
+                    vm.execute(compiler.bytecode,"main");
+                } break;
+            }
         }
+        compiler.cleanup();
     }
-    compiler.cleanup();
 
     // ###### CLEANUP STUFF ######
 

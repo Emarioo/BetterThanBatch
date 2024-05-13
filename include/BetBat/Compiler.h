@@ -218,6 +218,7 @@ struct Compiler {
         if(program)
             X64Program::Destroy(program);
         program = nullptr;
+
         if(ast)
             AST::Destroy(ast);
         ast = nullptr;
@@ -232,6 +233,8 @@ struct Compiler {
         tasks.cleanup();
         importDirectories.cleanup();
         linkDirectives.cleanup();
+        import_id_to_base_id.cleanup();
+        errorTypes.cleanup();
     }
 
     lexer::Lexer lexer{};

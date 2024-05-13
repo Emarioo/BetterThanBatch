@@ -902,6 +902,7 @@ ASTScope *AST::createBody() {
     new(ptr) ASTScope();
     ptr->nodeId = getNextNodeId();
     ptr->isNamespace = false;
+    bodies.add(ptr);
     return ptr;
 }
 ASTStatement *AST::createStatement(ASTStatement::Type type) {
@@ -910,6 +911,7 @@ ASTStatement *AST::createStatement(ASTStatement::Type type) {
     new(ptr) ASTStatement();
     ptr->nodeId = getNextNodeId();
     ptr->type = type;
+    statements.add(ptr);
     return ptr;
 }
 ASTStruct *AST::createStruct(const StringView& name) {
@@ -917,6 +919,7 @@ ASTStruct *AST::createStruct(const StringView& name) {
     new(ptr) ASTStruct();
     ptr->nodeId = getNextNodeId();
     ptr->name = name;
+    structures.add(ptr);
     return ptr;
 }
 ASTEnum *AST::createEnum(const StringView &name) {
@@ -924,12 +927,14 @@ ASTEnum *AST::createEnum(const StringView &name) {
     new(ptr) ASTEnum();
     ptr->nodeId = getNextNodeId();
     ptr->name = name;
+    enums.add(ptr);
     return ptr;
 }
 ASTFunction *AST::createFunction() {
     auto ptr = (ASTFunction *)allocate(sizeof(ASTFunction));
     new(ptr) ASTFunction();
     ptr->nodeId = getNextNodeId();
+    functions.add(ptr);
     return ptr;
 }
 ASTExpression *AST::createExpression(TypeId type) {
@@ -939,6 +944,7 @@ ASTExpression *AST::createExpression(TypeId type) {
     ptr->nodeId = getNextNodeId();
     ptr->isValue = (u32)type.getId() < AST_PRIMITIVE_COUNT;
     ptr->typeId = type;
+    expressions.add(ptr);
     return ptr;
 }
 ASTScope *AST::createNamespace(const StringView& name) {
@@ -946,8 +952,11 @@ ASTScope *AST::createNamespace(const StringView& name) {
     new(ptr) ASTScope();
     ptr->nodeId = getNextNodeId();
     ptr->isNamespace = true;
-    ptr->name = (std::string*)allocate(sizeof(std::string));
-    new(ptr->name)std::string(name);
+    ptr->name = name; 
+    bodies.add(ptr);
+    
+    // (std::string*)allocate(sizeof(std::string));
+    // new(ptr->name)std::string(name);
     return ptr;
 }
 // #define TAIL_ADD(M, S)     
@@ -1019,7 +1028,8 @@ void ASTScope::add(AST* ast, ASTScope* astNamespace){
     for(auto ns : namespaces){
         // ASTScope* ns = namespaces.get(i);
 
-        if(*ns->name == *astNamespace->name){
+        // if(*ns->name == *astNamespace->name){
+        if(ns->name == astNamespace->name){
             for(auto it : astNamespace->content) {
                 switch(it.spotType) {
                 case ASTScope::STRUCT: {
@@ -1133,6 +1143,19 @@ void AST::cleanup() {
 
     destroy(globalScope);
     globalScope = nullptr;
+    
+    for(auto n : expressions)
+        destroy(n);
+    for(auto n : structures)
+        destroy(n);
+    for(auto n : functions)
+        destroy(n);
+    for(auto n : statements)
+        destroy(n);
+    for(auto n : bodies)
+        destroy(n);
+    for(auto n : enums)
+        destroy(n);
 
     // make sure allocated nodes and other objects in linear allocator
     // have been destroyed before freeing it.
@@ -1621,46 +1644,46 @@ TypeId AST::ensureNonVirtualId(TypeId id){
 void AST::destroy(ASTScope *scope) {
     // if (scope->next)
     //     destroy(scope->next);
-    if (scope->name) {
-        scope->name->~basic_string<char>();
-        // engone::Free(scope->name, sizeof(std::string));
-        scope->name = nullptr;
-    }
-    #define DEST(X) for(auto it : scope->X) destroy(it);
-    DEST(structs)
-    DEST(enums)
-    DEST(functions)
-    DEST(statements)
-    DEST(namespaces)
-    #undef DEST
+    // if (scope->name) {
+    //     scope->name->~basic_string<char>();
+    //     // engone::Free(scope->name, sizeof(std::string));
+    //     scope->name = nullptr;
+    // }
+    // #define DEST(X) for(auto it : scope->X) destroy(it);
+    // DEST(structs)
+    // DEST(enums)
+    // DEST(functions)
+    // DEST(statements)
+    // DEST(namespaces)
+    // #undef DEST
     scope->~ASTScope();
     // not done with linear allocator
     // engone::Free(scope, sizeof(ASTScope));
 }
 void AST::destroy(ASTStruct *astStruct) {
-    for (auto &mem : astStruct->members) {
-        if (mem.defaultValue)
-            destroy(mem.defaultValue);
-        mem.defaultValue = nullptr;
-    }
+    // for (auto &mem : astStruct->members) {
+    //     if (mem.defaultValue)
+    //         destroy(mem.defaultValue);
+    //     mem.defaultValue = nullptr;
+    // }
 
     // if(astStruct->nonPolyStruct) // destroyed with typeInfo
     //     engone::Free(astStruct->nonPolyStruct, sizeof(StructImpl));
-    for(auto f : astStruct->functions){
-        destroy(f);
-    }
+    // for(auto f : astStruct->functions){
+    //     destroy(f);
+    // }
     astStruct->~ASTStruct();
     // engone::Free(astStruct, sizeof(ASTStruct));
 }
 void AST::destroy(ASTFunction *function) {
     // if (function->next)
     //     destroy(function->next);
-    if (function->body)
-        destroy(function->body);
-    for (auto &arg : function->arguments) {
-        if (arg.defaultValue)
-            destroy(arg.defaultValue);
-    }
+    // if (function->body)
+    //     destroy(function->body);
+    // for (auto &arg : function->arguments) {
+    //     if (arg.defaultValue)
+    //         destroy(arg.defaultValue);
+    // }
     for(auto ptr : function->_impls){
         ptr->~FuncImpl();
         // engone::Free(ptr,sizeof(FuncImpl));
@@ -1678,31 +1701,31 @@ void AST::destroy(ASTStatement *statement) {
     // if (statement->next)
     //     destroy(statement->next);
     if(!statement->sharedContents){
-        if (statement->alias){
-            statement->alias->~basic_string<char>();
-            TRACK_FREE(statement->alias,std::string);
-            statement->alias = nullptr;
-        }
+        // if (statement->alias){
+        //     statement->alias->~basic_string<char>();
+        //     TRACK_FREE(statement->alias,std::string);
+        //     statement->alias = nullptr;
+        // }
         // NOTE: hasNodes isn't used properly anywhere.
         // if(statement->hasNodes()){
-        if (statement->firstExpression)
-            destroy(statement->firstExpression);
-        if (statement->firstBody)
-            destroy(statement->firstBody);
-        if (statement->secondBody)
-            destroy(statement->secondBody);
-        if (statement->testValue)
-            destroy(statement->testValue);
+        // if (statement->firstExpression)
+        //     destroy(statement->firstExpression);
+        // if (statement->firstBody)
+        //     destroy(statement->firstBody);
+        // if (statement->secondBody)
+        //     destroy(statement->secondBody);
+        // if (statement->testValue)
+        //     destroy(statement->testValue);
         // } else {
         // assign may use arrayValues (union, returnValues)
         // we must destroy does values
-        for(ASTExpression* expr : statement->arrayValues){
-            destroy(expr);
-        }
-        for(auto& it : statement->switchCases){
-            destroy(it.caseExpr);
-            destroy(it.caseBody);
-        }
+        // for(ASTExpression* expr : statement->arrayValues){
+        //     destroy(expr);
+        // }
+        // for(auto& it : statement->switchCases){
+        //     destroy(it.caseExpr);
+        //     destroy(it.caseBody);
+        // }
         // }
     }
     statement->~ASTStatement();
@@ -1711,9 +1734,9 @@ void AST::destroy(ASTStatement *statement) {
 void AST::destroy(ASTExpression *expression) {
     // if (expression->next)
     //     destroy(expression->next);
-    for(ASTExpression* expr : expression->args){
-        destroy(expr);
-    }
+    // for(ASTExpression* expr : expression->args){
+    //     destroy(expr);
+    // }
     // if(expression->args){
     //     for(ASTExpression* expr : *expression->args){
     //         destroy(expr);
@@ -1731,10 +1754,10 @@ void AST::destroy(ASTExpression *expression) {
     //     engone::Free(expression->namedValue, sizeof(std::string));
     //     expression->namedValue = nullptr;
     // }
-    if (expression->left)
-        destroy(expression->left);
-    if (expression->right)
-        destroy(expression->right);
+    // if (expression->left)
+    //     destroy(expression->left);
+    // if (expression->right)
+    //     destroy(expression->right);
     expression->~ASTExpression();
     // engone::Free(expression, sizeof(ASTExpression));
 }
@@ -2219,8 +2242,9 @@ void ASTScope::print(AST *ast, int depth) {
         log::out << "Body ";
     else {
         log::out << "Namespace ";
-        if(name)
-            log::out << " "<<*name;
+        // if(name)
+        //     log::out << " "<<*name;
+            log::out << " "<<name;
     }
     log::out << "(scope: "<<scopeId<<", order: "<<ast->getScope(scopeId)->contentOrder<<")";
     log::out<<"\n";
@@ -2377,8 +2401,8 @@ void ASTStatement::print(AST *ast, int depth) {
         if(vn.assignString.isValid())
             log:: out << ": "<< ast->typeToString(vn.assignString);
     }
-    if(alias)
-        log::out << " as " << *alias;
+    if(!alias.empty())
+        log::out << " as " << alias;
     // if(opType!=0)
     //     log::out << " "<<OP_NAME((OperationType)opType)<<"=";
     log::out << "\n";
