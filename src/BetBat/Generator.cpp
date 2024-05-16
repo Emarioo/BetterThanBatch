@@ -4164,7 +4164,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // }
             Assert(dtype.isValid()); // We expect a good type, otherwise result should have been a failure
             u32 size = info.ast->getTypeSize(dtype);
-            Assert(size != 0);
+            // Assert(size != 0);
+            if(size==0) {
+                Assert(info.hasForeignErrors());
+            }
 
             if(size > 8) {
                 ERR_SECTION(
@@ -4970,6 +4973,7 @@ SignalIO GenContext::generateData() {
     // IMPORTANT: TODO: Some data like 64-bit integers needs alignment.
     //   Strings don's so it's fine for now but don't forget about fixing this.
     for(auto& pair : info.ast->_constStringMap) {
+        // Assert(pair.first.size()!=0);
         // Assert(pair.first.size()!=0);
         int offset = 0;
         if(pair.first.back()=='\0')

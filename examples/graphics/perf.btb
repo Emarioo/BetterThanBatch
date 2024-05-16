@@ -42,6 +42,9 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
     ptr: ProfiledData* = Allocate(sizeof ProfiledData);
     memzero(ptr, sizeof ProfiledData);
 
+    if !path.len
+        return ptr
+
     fileSize: u64;
     file := FileOpen(&path, FILE_READ_ONLY, &fileSize);
     if(!file)
@@ -108,12 +111,13 @@ main();
 // global offsetY: i32 = 0;
 fn main(){
     // log(tempBuilder.len, tempBuilder.max);
-    profiledData := ReadPerfData("profiled.dat");
+    // profiledData := ReadPerfData("profiled.dat");
+    profiledData := ReadPerfData("");
     if !profiledData {
         log("Cannot find data");
         return;
     }
-    // return;
+    
     winw := 800;
     winh := 600;
     window := InitGLFWAndCreateWindow(winw, winh);
@@ -234,17 +238,16 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
             // box.color = UIColor{0.5,0.5,0.5,1};
             box.color = UIColor{1,1,1,1};
 
-            timeText = module.makeText();
+            timeText := module.makeText();
             timeText.color = UIColor{0.1,0,0.08,1};
             timeText.x = box.x;
             timeText.h = box.h*0.8;
             timeText.y = box.y + box.h/2 - timeText.h/2;
 
             time := 1000.0 * cast<f32>(zone.end - zone.start) / GetClockSpeed();
-            len: u32;
             timeText.string = tempStringData + strOffset;
             // log("data:",(cast<i64>tempStringData)," off:",cast<i64>strOffset," time:",time);
-            len := swrite_unsafe(tempStringData + strOffset, time);
+            len: u32 = swrite_unsafe(tempStringData + strOffset, time);
             // if len > 8
             //     len = 8;
             strOffset += len;

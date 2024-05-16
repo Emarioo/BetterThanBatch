@@ -84,7 +84,7 @@ enum Mouthful {
 }
 
 msge := Mouthful.Butter
-switch msge { @TEST_ERROR(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+switch msge { // we are planning some annotations to enable/disable this error, it's currently always disabled: @TEST_ERROR(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
     case Batter: { }                                                        
     case Batter: { }  @TEST_ERROR(ERROR_DUPLICATE_CASE)
     case Bitter: { }                                                        

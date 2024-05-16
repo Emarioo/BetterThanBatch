@@ -47,13 +47,13 @@ SignalIO CheckEnums(CheckInfo& info, ASTScope* scope){
             bool printedError = false;
             TypeId colonType = CheckType(info, scope->scopeId, typeString, aenum->location, &printedError);
             if(!colonType.isValid()) {
-                if(!printedError) {
+                // if(!printedError) {
                     ERR_SECTION(
                         ERR_HEAD2(aenum->location)
                         ERR_MSG("The type for the enum after : was not valid.")
                         ERR_LINE2(aenum->location, typeString<< " was invalid")
                     )
-                }
+                // }
             } else {
                 aenum->colonType = colonType;
             }
@@ -756,6 +756,8 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
                 auto& argImpl = overload->funcImpl->argumentTypes[i];
                 auto& arg = overload->astFunc->arguments[i];;
+                if(!arg.defaultValue)
+                    continue;
                 if(!arg.defaultValue)
                     continue;
                 tempTypes.resize(0);
@@ -2305,6 +2307,7 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
             TypeId typeId = CheckType(info, function->scopeId, function->arguments[i].stringType, function->location, nullptr);
             // Assert(typeId.isValid());
             if(!typeId.isValid()){
+                // TODO: Don't print this? CheckType already did?
                 std::string msg = info.ast->typeToString(function->arguments[i].stringType);
                 ERR_SECTION(
                     ERR_HEAD2(function->arguments[i].location)

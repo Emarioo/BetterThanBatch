@@ -1,0 +1,29 @@
+
+
+
+/*
+    OpenGL related code using GLFW and GLEW
+*/
+// #link "gdi32.lib user32.lib OpenGL32.lib"
+// #link "libs/glfw-3.3.8/lib/glfw3_mt.lib"
+// #link "/NODEFAULTLIB:MSVCRT"
+// #link "/DEFAULTLIB:LIBCMT"
+// #link "/NODEFAULTLIB:LIBCMT"
+
+/*
+    Imports
+*/
+
+#macro GLFW_CONTEXT_VERSION_MAJOR  0x00022002
+#macro GLFW_CONTEXT_VERSION_MINOR  0x00022003
+#macro GLFW_OPENGL_PROFILE         0x00022008
+#macro GLFW_OPENGL_CORE_PROFILE    0x00032001
+fn @import glfwInit() -> i32;
+fn @import glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
+fn @import glfwTerminate();
+fn @import glfwMakeContextCurrent(window: void*);
+fn @import glfwWindowShouldClose(window: void*) -> i32;
+fn @import glfwSwapBuffers(window: void*);
+fn @import glfwPollEvents();
+fn @import glfwWindowHint(target: i32, hint: i32);
+fn @import glfwGetWindowSize(window: void*, width: i32*, height: i32*);

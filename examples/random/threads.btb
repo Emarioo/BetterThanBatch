@@ -9,7 +9,7 @@
 
 final: u32 = 0
 
-thread = ThreadCreate(compute, &final)
+thread := ThreadCreate(compute, &final)
 // compute(&final)
 
 ThreadJoin(thread)
@@ -18,11 +18,10 @@ ThreadDestroy(thread)
 log(final)
 // threads require stdcall with the passed function
 fn @stdcall compute(num: u32*) -> u32 {
-    retries = 0
+    retries := 0
     for 0..100_000 {
         #ifdef THREAD_SAFE
-        lastNum = *num;
-        // if !atomic_compare_swap(cast<void*>num, *num, *num + 1) {
+        lastNum := *num;
         if !atomic_compare_swap(cast<void*>num, lastNum, lastNum + 1) {
             it--
             retries++

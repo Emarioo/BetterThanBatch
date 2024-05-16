@@ -1,8 +1,9 @@
-#import "OS"
-#import "Basic"
-#import "Logger"
-#import "String"
 #import "Array"
+#import "String"
+// #import "OS"
+#import "Threads"
+#import "Basic"
+// #import "Logger"
 
 // directory iterator
 // threads
@@ -20,7 +21,8 @@
 //     log("Arg",nr,":", it);
 // }
 
-#macro LN log(#line)
+// #macro LN log(#line)
+#macro LN #endmacro
 
 struct Options {
     fn cleanup() {
@@ -67,7 +69,7 @@ fn CalculateFiles(options: Options*) {
     // TODO: Warn that there are no whitelisted formats so no files will be checked.
     // TODO: Notify that no whitelisted directories will allow all directories in root path that aren't blacklisted
 
-    iterator = DirectoryIteratorCreate(&options.rootPath);
+    iterator := DirectoryIteratorCreate(&options.rootPath);
     defer { DirectoryIteratorDestroy(iterator); }
     if !iterator {
         // error message
@@ -83,23 +85,23 @@ fn CalculateFiles(options: Options*) {
         LN
         if result.isDirectory {
             LN
-            blacklisted = false;
-            for @ptr options.blacklistedDirectories.sliced() {
+            blacklisted := false;
+            for @ptr options.blacklistedDirectories.sliced_unsafe() {
                 // LN
-                log(it.sliced())
+                // log(it.sliced())
                 if findString(result.name,it.sliced()) {
                     blacklisted = true;
                     break;
                 }
-                log("haaha",it.sliced())
+                // log("haaha",it.sliced())
             }
             LN
             if blacklisted {
                 iterator.skip();
                 continue;   
             }
-            whitelisted = options.whitelistedDirectories.len == 0;
-            for @ptr options.whitelistedDirectories.sliced() {
+            whitelisted := options.whitelistedDirectories.len == 0;
+            for @ptr options.whitelistedDirectories.sliced_unsafe() {
                 // log("check",result.name,it.sliced())
                 if findString(result.name,it.sliced()) {
                     // log(" yes");
@@ -112,8 +114,9 @@ fn CalculateFiles(options: Options*) {
             continue;
         }
         LN
-        whitelisted = false
-        for @ptr options.whitelistedFormats.sliced() {
+        whitelisted := false
+        // log(result.name)
+        for @ptr options.whitelistedFormats.sliced_unsafe() {
             if matchEnd(result.name,it.sliced()) {
                 whitelisted = true;
                 break;
@@ -141,25 +144,25 @@ fn CalculateFiles(options: Options*) {
     masterInfo.threadInfos.resize(options.threadAmount);
     memzero(masterInfo.threadInfos.ptr, masterInfo.threadInfos.max * sizeof ThreadInfo);
     
-    tp = StartMeasure();
+    tp := StartMeasure();
 
     // TODO: Write a non-threaded versions with #ifdef when using the interpreter.
 
     // IMPORTANT: DO NOT REALLOCATE THREAD INFOS! THE POINTERS TO THE INFOS IS PASSED
     //  TO THE THREADS SO REALLOCATING WOULD INVALIDATE THE POINTER.
-    for @ptr masterInfo.threadInfos.sliced() {
+    for @ptr masterInfo.threadInfos.sliced_unsafe() {
         it.masterInfo = &masterInfo;
         it.thread = ThreadCreate(CalculateLines, it);
     }
 
-    for @ptr masterInfo.threadInfos.sliced() {
-        if !it.thread.handle // may happen if the thread couldn't be created for some reason
+    for @ptr masterInfo.threadInfos.sliced_unsafe() {
+        if !it.thread.os_handle // may happen if the thread couldn't be created for some reason
             continue;
         ThreadJoin(it.thread);
         ThreadDestroy(it.thread);
     }
 
-    time = StopMeasure(tp);
+    time := StopMeasure(tp);
 
     log("Lines:",(masterInfo.data.lines-masterInfo.data.blankLines), "(including blanks:",masterInfo.data.lines,")");
     log("Bytes:",masterInfo.data.readCharacters);
@@ -197,8 +200,8 @@ struct MasterInfo {
         if usedFiles == files.len
             return Slice<char>{null,0};
         while true {
-            oldVal = usedFiles;
-            if !atomic_compare_swap(cast<void*>&usedFiles, oldVal, oldVal + 1) {
+            oldVal := usedFiles;
+            if !compare_swap(cast<void*>&usedFiles, oldVal, oldVal + 1) {
                 // log("Retry")
                 continue;
             }
@@ -218,7 +221,7 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
     info: ThreadInfo* = _info;
     Assert(info.masterInfo)
     
-    bufferSize = 0u;
+    bufferSize := 0u;
     buffer: char* = null;
     defer Free(buffer, bufferSize);
 
@@ -230,7 +233,7 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
             break;
 
         fileSize: u64 = 0;
-        file = FileOpen(&info.path, FILE_READ_ONLY, outFileSize = &fileSize);
+        file := FileOpen(&info.path, FILE_READ_ONLY, outFileSize = &fileSize);
         defer FileClose(file);
 
         if !file
@@ -255,19 +258,19 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
             }
         }
 
-        readBytes = FileRead(file, buffer, fileSize);
+        readBytes := FileRead(file, buffer, fileSize);
 
         // blanks, line feeds with only whitespace characters between.
         // \r, space, tab
         // comments
 
         // TODO: assert if readBytes
-        blanks = 0u;
-        lines = 1u; // files always have one line
-        index = 0u
-        solelyWhitespace = true;
+        blanks := 0u;
+        lines := 1u; // files always have one line
+        index := 0u
+        solelyWhitespace := true;
         while index < readBytes {
-            chr = buffer[index];
+            chr := buffer[index];
             if chr == '\n' {
                 lines++;
                 if solelyWhitespace

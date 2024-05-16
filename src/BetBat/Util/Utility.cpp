@@ -94,13 +94,13 @@ u64 ConvertHexadecimal_content(char* str, int length){
 // }
 void OutputAsHex(const char* path, char* data, int size) {
     using namespace engone;
-    auto file = FileOpen(path,FILE_CLEAR_AND_WRITE);
+    auto file = engone::FileOpen(path,FILE_CLEAR_AND_WRITE);
     Assert(file);
 
     const int stride = 16;
     // Intentionally not tracking this allocation. It's allocated and freed here so there's no need.
     int bufferSize = size*2 + size / stride;
-    char* buffer = (char*)Allocate(bufferSize);
+    char* buffer = (char*)engone::Allocate(bufferSize);
     int offset = 0;
     for(int i = 0;i<size;i++){
         u8 a = data[i]>>4;
@@ -117,10 +117,10 @@ void OutputAsHex(const char* path, char* data, int size) {
         #undef HEXIFY
     }
 
-    FileWrite(file, buffer, bufferSize);
+    engone::FileWrite(file, buffer, bufferSize);
 
-    Free(buffer,bufferSize);
-    FileClose(file);
+    engone::Free(buffer,bufferSize);
+    engone::FileClose(file);
 }
 // bool WriteFile(const char* path, engone::Memory buffer){
 //     auto file = engone::FileOpen(path,0,engone::FILE_CLEAR_AND_WRITE);
@@ -328,7 +328,7 @@ int PatternMatchFiles(const std::string& pattern, DynamicArray<std::string>* mat
         }
     }
 
-    engone:DirectoryIteratorDestroy(iter, &data);
+    engone::DirectoryIteratorDestroy(iter, &data);
 
     return num_matched_files;
 }

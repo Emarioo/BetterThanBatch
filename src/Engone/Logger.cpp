@@ -392,6 +392,7 @@ namespace engone {
 	GEN_LOG_NUM(int16, 6, "%hd")
 	GEN_LOG_NUM(uint16, 5, "%hu")
 	GEN_LOG_NUM(uint8, 3, "%hu")
+	GEN_LOG_NUM(volatile long, 11, "%d")
 	GEN_LOG_NUM(double, 27, "%.2lf")
 	GEN_LOG_NUM(float, 20, "%.2f")
 

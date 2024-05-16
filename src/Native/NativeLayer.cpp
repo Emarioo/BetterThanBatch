@@ -2,7 +2,7 @@
 
 #ifdef OS_WINDOWS
 // nocheckin, skip uimodule because there is some strange bug
-#define NO_UIMODULE
+// #define NO_UIMODULE
 #else
 // skip ui module on linux for now
 #define NO_UIMODULE
@@ -14,7 +14,11 @@
 #else
 #include "../src/Engone/Unix.cpp"
 #endif
+#ifndef NO_UIMODULE
+#include "../libs/glad/src/glad.c"
+#undef APIENTRY // collision with minwindef
 #include "../src/Engone/UIModule.cpp"
+#endif
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image.h"

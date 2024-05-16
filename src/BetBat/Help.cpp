@@ -31,7 +31,7 @@ void print_help(){
     DESC(
         "Without flags, the compiler will take one file as input and generate an executable "
         "based on the operating system and linker you have. The compiler generates it's own object files "
-        "but you must install one of these linkers or C/C++ compilers: gcc, clang, link (MSVC). "
+        "but you must install one of these linkers or C/C++ compilers: g++, clang, link (MSVC). "
         "On Windows, you can install Visual Studio and setup the environment variables so that 'link' is available.\n"
     )
     END

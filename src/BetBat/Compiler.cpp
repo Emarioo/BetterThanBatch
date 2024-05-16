@@ -300,7 +300,7 @@ engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
 const char* ToString(LinkerChoice v) {
     #define CASE(X,N) case X: return N;
     switch(v){
-        CASE(LINKER_GNU,"gcc")
+        CASE(LINKER_GNU,"gnu")
         CASE(LINKER_MSVC,"msvc")
         CASE(LINKER_CLANG,"clang")
         CASE(LINKER_UNKNOWN,"unknown-linker")
@@ -311,7 +311,7 @@ const char* ToString(LinkerChoice v) {
 }
 LinkerChoice ToLinker(const std::string& str) {
     #define CASE(N,X) if (str==X) return N;
-    CASE(LINKER_GNU,"gcc")
+    CASE(LINKER_GNU,"gnu")
     CASE(LINKER_MSVC,"msvc")
     CASE(LINKER_CLANG,"clang")
     CASE(LINKER_UNKNOWN,"unknown-linker")

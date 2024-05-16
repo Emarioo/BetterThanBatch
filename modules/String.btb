@@ -224,11 +224,11 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> i32 {
 // Will put a null termination at the end of the written bytes
 fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
     // LN;
-    start = buffer;
+    start := buffer;
     bits: u32 = *cast<u32*>cast<void*>&t;
 
-    sign = (bits >> 31) & 1;
-    exp = (bits >> 23) & 0xFF
+    sign := (bits >> 31) & cast<u32>1;
+    exp := (bits >> 23) & 0xFF
     mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
 
     if sign {
@@ -251,7 +251,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
             // we don't use swrite_unsafe because it uses
             // i64 but we need u64 for the extra large integers.
             str: char[23];
-            used = 22;
+            used := 22;
             while intPart > 0u && used > 0 {
                 digit: u8 = intPart % 10u;
                 // log("i",intPart);
@@ -292,15 +292,15 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
 
         acc: u64 = 0;
         mul: u64 = 1;
-        precision = 19; // digits u64 can contain (18446744073709551615)
-        minBits = decimalBits - precision;
+        precision := 19; // digits u64 can contain (18446744073709551615)
+        minBits := decimalBits - precision;
         if minBits < 0
             minBits = 0;
         for @rev minBits..decimalBits {
             mul *= 5u;
             acc = acc*10u
             if nr < 24 {
-                bit = 1 & (mantissa >> nr)
+                bit := cast<u64>1 & (mantissa >> nr)
                 if bit {
                     acc += mul;
                 }
@@ -311,14 +311,14 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
             *buffer = '0';
             buffer++;
         }
-        blank = true;
-        lastZero = 0;
-        limit = precision;
+        blank := true;
+        lastZero := 0;
+        limit := precision;
         if decimalBits < precision;
             limit = decimalBits;
             // LN
         for @rev 0..limit {
-            digit = acc % 10u;
+            digit := acc % 10u;
             acc = acc / 10u;
             if !blank || digit != 0 {
                 decimals.ptr[nr] = digit + '0';

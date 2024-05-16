@@ -5,7 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/include/**",
                 "${workspaceFolder}/libs/glew-2.1.0/include/**",
-                "${workspaceFolder}/libs/glfw-3.3.8/include/**",
+                "${workspaceFolder}/libs/glfw-3.3.9/include/**",
                 "${workspaceFolder}/libs/stb/include/**",
                 "${workspaceFolder}/libs/tracy-0.10/public/**"
             ],
@@ -14,7 +14,8 @@
                 "UNICODE",
                 "_UNICODE",
                 "OS_WINDOWS",
-                "TRACY_ENABLE"
+                "TRACY_ENABLE",
+                "COMPILER_MSVC"
             ],
             "windowsSdkVersion": "10.0.20348.0",
             "compilerPath": "cl.exe",

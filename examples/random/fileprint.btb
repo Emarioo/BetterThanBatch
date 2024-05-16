@@ -1,13 +1,13 @@
 #import "OS"
 
-file, size = FileOpen("test.bat", FILE_READ_ONLY);
+file, size := FileOpen("test.bat", FILE_READ_ONLY);
 defer FileClose(file);
 
-buffer = cast<char*>malloc(size)
+buffer := cast<char*>malloc(size)
 FileRead(file, buffer, size)
 defer free(buffer,size);
 
-i = 0
+i := 0
 while i < size; {
     printc(buffer[i]);
     i+=1;

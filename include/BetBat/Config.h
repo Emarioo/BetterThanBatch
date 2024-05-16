@@ -100,8 +100,6 @@ Try to edit Config.cpp instead of this file because you will have to compile all
     // #define DISABLE_ASSERTS
 #endif
 
-#include "Engone/Asserts.h"
-
 #ifdef DEBUG
     #define LEXER_DEBUG_DETAILS
     // #define ILOG_REGS
