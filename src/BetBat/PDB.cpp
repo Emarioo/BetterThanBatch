@@ -486,9 +486,12 @@ bool PDBFile::reserveTotalBlocks(u32 newBlockCount) {
         return true;
     } else {
         Assert(newSize > _baseSize); // no point in resizing down
-        TRACK_DELS(u8, _baseSize);
-        u8* newData = (u8*)engone::Reallocate(_baseData, _baseSize, newSize);
-        TRACK_ADDS(u8, newSize);
+        
+        u8* newData = TRACK_ARRAY_REALLOC(_baseData, u8, _baseSize, newSize);
+        // TRACK_DELS(u8, _baseSize);
+        // u8* newData = (u8*)engone::Reallocate(_baseData, _baseSize, newSize);
+        // TRACK_ADDS(u8, newSize);
+        
         Assert(newData);
         if(!newData)
             return false;

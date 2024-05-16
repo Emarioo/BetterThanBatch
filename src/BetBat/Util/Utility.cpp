@@ -57,41 +57,41 @@ u64 ConvertHexadecimal_content(char* str, int length){
     return hex;
 }
 
-engone::Memory<char> ReadFile(const char* path){
-    engone::Memory<char> buffer{};
-    u64 fileSize;
+// engone::Memory<char> ReadFile(const char* path){
+//     engone::Memory<char> buffer{};
+//     u64 fileSize;
     
-    if(!engone::FileExist(path)) {
-        // buffer.data = (void*)1;
-        return {};
-    }
+//     if(!engone::FileExist(path)) {
+//         // buffer.data = (void*)1;
+//         return {};
+//     }
     
-    auto file = engone::FileOpen(path,engone::FILE_READ_ONLY, &fileSize);
-    if(!file)
-        goto ReadFileFailed;
+//     auto file = engone::FileOpen(path,engone::FILE_READ_ONLY, &fileSize);
+//     if(!file)
+//         goto ReadFileFailed;
     
-    if(fileSize == 0) {
-        buffer.data = (char*)1;
-    } else {
-        if(!buffer.resize(fileSize))
-            goto ReadFileFailed;
+//     if(fileSize == 0) {
+//         buffer.data = (char*)1;
+//     } else {
+//         if(!buffer.resize(fileSize))
+//             goto ReadFileFailed;
         
-        if(engone::FileRead(file,buffer.data,buffer.max) == (u64)-1)
-            goto ReadFileFailed;
-        // printf("Read " FORMAT_64 "u\n",buffer.max);
-    }
+//         if(engone::FileRead(file,buffer.data,buffer.max) == (u64)-1)
+//             goto ReadFileFailed;
+//         // printf("Read " FORMAT_64 "u\n",buffer.max);
+//     }
     
-    engone::FileClose(file);
+//     engone::FileClose(file);
     
-    return buffer;
+//     return buffer;
     
-ReadFileFailed:
-    buffer.resize(0);
-    if(file)
-        engone::FileClose(file);
-    printf("ReadFile : Error %s\n",path);
-    return {};
-}
+// ReadFileFailed:
+//     buffer.resize(0);
+//     if(file)
+//         engone::FileClose(file);
+//     printf("ReadFile : Error %s\n",path);
+//     return {};
+// }
 void OutputAsHex(const char* path, char* data, int size) {
     using namespace engone;
     auto file = FileOpen(path,FILE_CLEAR_AND_WRITE);

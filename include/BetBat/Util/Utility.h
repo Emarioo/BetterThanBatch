@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Engone/Alloc.h"
 #include "Engone/Logger.h"
 #include "Engone/PlatformLayer.h"
 #include "Engone/Util/Array.h"
@@ -17,7 +16,7 @@
 // File not found or innaccesible: Returns memory with NO data.
 // File with zero in size: Returns memory with valid pointer (memory.data = (void*)1) but zero in size.
 // If data could be read: Returns memory with data.
-engone::Memory<char> ReadFile(const char* path);
+// engone::Memory<char> ReadFile(const char* path);
 // bool WriteFile(const char* path, engone::Memory buffer);
 // bool WriteFile(const char* path, std::string& buffer);
 void ReplaceChar(char* str, int length,char from, char to);
@@ -66,7 +65,6 @@ void OutputAsHex(const char* path, char* data, int size);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
 
-#define BREAK(COND) if(COND) __debugbreak();
 #define FUNC_ENTER ScopeDebug scopeDebug{__FUNCTION__,info.funcDepth};
 #define FUNC_ENTER_IF(COND) ScopeDebug scopeDebug{(COND)?__FUNCTION__:nullptr,info.funcDepth};
 #define SCOPE_LOG(X) ScopeDebug scopeDebug{X,info.funcDepth};

@@ -56,19 +56,14 @@ struct CompileOptions;
 struct CompileStats {
     volatile long errors=0;
     volatile long warnings=0;
-    volatile long lines=0;
-    volatile long blankLines=0;
-    volatile long readBytes=0; // from the files, DOES NOT COUNT includeStreams! yet?
+    volatile int lines=0;
+    volatile int readBytes=0; // from the files, DOES NOT COUNT includeStreams! yet?
     volatile long commentCount=0;
 
     // time measurements
-    u64 start_bytecode = 0;
-    u64 end_bytecode = 0;
-    u64 start_convertx64 = 0;
-    u64 end_convertx64 = 0;
-    u64 start_objectfile = 0;
-    u64 end_objectfile = 0;
-    u64 start_linker = 0;
+    u64 start_compile = 0; // whole compiler
+    u64 end_compile = 0;
+    u64 start_linker = 0; // just linker
     u64 end_linker = 0;
 
     u32 bytecodeSize = 0;
@@ -131,6 +126,8 @@ struct CompileOptions {
     bool silent=false;
     bool verbose=false;
     bool executeOutput = false;
+
+    // bool 
 
     bool quit = false;
     bool instant_report = true;
@@ -212,6 +209,9 @@ struct CompilerImport {
 extern const char* const PRELOAD_NAME;
 extern const char* const TYPEINFO_NAME;
 struct Compiler {
+    ~Compiler() {
+        cleanup();   
+    }
     void cleanup() {
         if(bytecode && bytecode->debugInformation)
             DebugInformation::Destroy(bytecode->debugInformation);

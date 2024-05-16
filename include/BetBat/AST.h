@@ -607,7 +607,7 @@ struct ASTStatement : ASTNode {
     };
     lexer::SourceLocation location{};
     DynamicArray<VarName> varnames;
-    std::string alias = nullptr;
+    std::string alias;
 
     ASTExpression* testValue = nullptr;
    

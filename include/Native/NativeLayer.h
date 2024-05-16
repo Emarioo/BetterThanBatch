@@ -4,6 +4,8 @@
 
 /*
     A platform layer for the programs created by the compiler
+    
+    TODO: Deprecate NativeLayer (written in .btb instead)
 */
 
 namespace Language {

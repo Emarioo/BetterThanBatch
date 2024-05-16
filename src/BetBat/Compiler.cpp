@@ -300,7 +300,7 @@ engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
 const char* ToString(LinkerChoice v) {
     #define CASE(X,N) case X: return N;
     switch(v){
-        CASE(LINKER_GCC,"gcc")
+        CASE(LINKER_GNU,"gcc")
         CASE(LINKER_MSVC,"msvc")
         CASE(LINKER_CLANG,"clang")
         CASE(LINKER_UNKNOWN,"unknown-linker")
@@ -311,7 +311,7 @@ const char* ToString(LinkerChoice v) {
 }
 LinkerChoice ToLinker(const std::string& str) {
     #define CASE(N,X) if (str==X) return N;
-    CASE(LINKER_GCC,"gcc")
+    CASE(LINKER_GNU,"gcc")
     CASE(LINKER_MSVC,"msvc")
     CASE(LINKER_CLANG,"clang")
     CASE(LINKER_UNKNOWN,"unknown-linker")
@@ -337,70 +337,37 @@ CompileOptions::TestLocation* CompileOptions::getTestLocation(int index) {
 }
 void CompileStats::printSuccess(CompileOptions* opts){
     using namespace engone;
-    log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " non-blank lines ("<<log::AQUA<<FormatUnit((u64)lines + (u64)blankLines)<<log::NO_COLOR<<" total, "<<log::AQUA<<FormatBytes(readBytes)<<log::NO_COLOR<<")\n";
-    if(opts) {
-        /* Would it be nicer with this:
-            details: win-x64, gcc
-            files: examples/dev.btb, bin/dev.obj, dev.exe
-        */
-        if(opts->source_buffer.buffer) {
-            log::out << " text buffer: "<<opts->source_buffer.origin<<"\n";
-        } else {
-            // log::out << " initial file: "<< opts->initialSourceFile.getFileName().text<<"\n";
-            log::out << " initial file: "<< BriefString(opts->source_file,30)<<"\n";
-        }
-        log::out << " target: "<<log::AQUA<<opts->target<<log::NO_COLOR<<", linker: " << log::AQUA<< opts->linker<<log::NO_COLOR << ", output: ";
-        if(opts->compileStats.generatedFiles.size() == 0) {
-            log::out << "nothing";
-        }
-        for(int i=0;i<(int)opts->compileStats.generatedFiles.size();i++){
-            if(i!=0)
-                log::out << ", ";
-            log::out << opts->compileStats.generatedFiles[i];
-        }
+    double time_compile = DiffMeasure(end_compile - start_compile);
+    double time_linker = DiffMeasure(end_linker - start_linker);
+    
+    log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " lines, "<<log::AQUA<<FormatBytes(readBytes)<<log::NO_COLOR<<"\n";
+    
+    log::out << " time: "<<log::AQUA<< FormatTime(time_compile)<<log::NO_COLOR;
+    if(time_linker != 0) {
+        log::out << ", link: "<<log::AQUA<<FormatTime(time_linker)<<"\n";
+    } else {
         log::out << "\n";
     }
-    bool onlyBytecode = end_objectfile == 0;
-    bool withoutLinker = end_linker == 0;
-    if(onlyBytecode) {
-        double time_bytecode = DiffMeasure(end_bytecode - start_bytecode);
-        log::out << " source->bytecode (total): " <<log::LIME<< FormatTime(time_bytecode)<<log::NO_COLOR << " (" << FormatUnit(lines / time_bytecode) << " lines/s)\n";
-    } else if(withoutLinker) {
-        double time_compiler = DiffMeasure(end_objectfile - start_bytecode);
-        double time_bytecode = DiffMeasure(end_bytecode - start_bytecode);
-        double time_converter = DiffMeasure(end_convertx64 - start_convertx64);
-        double time_objwriter = DiffMeasure(end_objectfile - start_objectfile);
-        double time_total = DiffMeasure(end_objectfile - start_bytecode);
-        log::out << " compiler: " <<log::LIME<< FormatTime(time_compiler)<<log::NO_COLOR << " (" << FormatUnit(lines / time_compiler) << " lines/s)\n";
-        log::out << "  (bc: "<<log::LIME<< FormatTime(time_bytecode)<<log::NO_COLOR <<", x64: " <<log::LIME<< FormatTime(time_converter)<<log::NO_COLOR << ", obj: " <<log::LIME<< FormatTime(time_objwriter)<<log::NO_COLOR << ")\n";
-        log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::NO_COLOR<<" (" << FormatUnit(lines / time_total) << " lines/s)\n"; 
-    } else {
-        double time_compiler = DiffMeasure(end_objectfile - start_bytecode);
-        double time_bytecode = DiffMeasure(end_bytecode - start_bytecode);
-        double time_converter = DiffMeasure(end_convertx64 - start_convertx64);
-        double time_objwriter = DiffMeasure(end_objectfile - start_objectfile);
-        double time_linker = DiffMeasure(end_linker - start_linker);
-        double time_total = DiffMeasure(end_linker - start_bytecode);
-        log::out << " compiler: " <<log::LIME<< FormatTime(time_compiler)<<log::NO_COLOR << " (" << FormatUnit(lines / time_compiler) << " lines/s)\n";
-        log::out << "  (bc: "<<log::LIME<< FormatTime(time_bytecode)<<log::NO_COLOR <<", x64: " <<log::LIME<< FormatTime(time_converter)<<log::NO_COLOR << ", obj: " <<log::LIME<< FormatTime(time_objwriter)<<log::NO_COLOR << ")\n";
-        log::out << " linker: " <<log::LIME<< FormatTime(time_linker)<<log::NO_COLOR << "\n";
-        log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::NO_COLOR<<" (" << FormatUnit(lines / time_total) << " lines/s)\n"; 
-        // log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::NO_COLOR<<" (" <<log::LIME<< FormatUnit(lines / time_total) << " lines/s"<<log::NO_COLOR<<")\n"; 
+    
+    if(opts) {
+        log::out << " options: "<<log::AQUA<<opts->target<<log::NO_COLOR<<", " << log::AQUA<< opts->linker<<log::NO_COLOR << "\n";
+        if(opts->compileStats.generatedFiles.size() != 0) {
+            log::out << " output: ";
+            for(int i=0;i<(int)opts->compileStats.generatedFiles.size();i++){
+                if(i!=0)
+                    log::out << ", ";
+                log::out << log::AQUA << opts->compileStats.generatedFiles[i] << log::NO_COLOR;
+            }
+            log::out << "\n";
+        }
     }
+    
+    
 }
 void CompileStats::printFailed(){
     using namespace engone;
-
-    double total = 0.0;
-    bool withoutLinker = end_objectfile == 0;
-    if(withoutLinker) {
-        total = DiffMeasure(end_bytecode - start_bytecode);
-    } else {
-        total = DiffMeasure(end_linker - start_bytecode);
-    }
     
-    // log::out << log::RED<<"Compiler failed with "<<errors<<" error(s) ("<<FormatTime(total)<<", "<<FormatUnit((u64)lines)<<" line(s), " << FormatUnit(lines / total) << " lines/s)\n";
-    log::out << log::RED<<"Compiler failed with "<<errors<<" error(s) ("<<FormatTime(total)<<")\n";
+    log::out << log::RED<<"Compiler failed with "<<errors<<" error(s)\n";
 }
 void CompileStats::printWarnings(){
     using namespace engone;
@@ -496,47 +463,50 @@ void Compiler::processImports() {
                 // Step 2. Wait for the dependencies that don't depend on me to parse first.
                 DynamicArray<u32> checked_ids{};
                 DynamicArray<u32> ids_to_check{};
-                for(auto& dep : im->dependencies) {
-                    if(dep.circular_dependency_to_myself)
-                        continue;
-                    ids_to_check.add(dep.id);
-                }
-                while(ids_to_check.size()) {
-                    u32 id = ids_to_check.last();
-                    CompilerImport* imp_dep = imports.get(id-1);
-                    ids_to_check.pop();
-                    checked_ids.add(id);
-
-                    if(!(imp_dep->state & TASK_PREPROCESS_AND_PARSE)) {
-                        if(ids_to_check.size() == 0)  {
-                            // direct dependency
-                            LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(imp_dep?TrimCWD(imp_dep->path):"?")<<")\n")
-                        } else {
-                            // inherited dependency
-                            LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"-->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(imp_dep?TrimCWD(imp_dep->path):"?")<<")\n")
-                        }
-                        missing_dependency = true;
-                        break;
+                if(!options->only_preprocess) { // only_preprocess skips parsing so we have to assume that everything has circular dependencies
+                    for(auto& dep : im->dependencies) {
+                        if(dep.circular_dependency_to_myself)
+                            continue;
+                        ids_to_check.add(dep.id);
                     }
+                    while(ids_to_check.size()) {
+                        u32 id = ids_to_check.last();
+                        CompilerImport* imp_dep = imports.get(id-1);
+                        ids_to_check.pop();
+                        checked_ids.add(id);
 
-                    for(auto& it : imp_dep->dependencies) {
-                        bool checked = false;
-                        for(auto& it2 : checked_ids) {
-                            if(it.id == it2) {
-                                checked = true;
-                                break;
+                        if(!(imp_dep->state & TASK_PREPROCESS_AND_PARSE)) {
+                            if(ids_to_check.size() == 0)  {
+                                // direct dependency
+                                LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(imp_dep?TrimCWD(imp_dep->path):"?")<<")\n")
+                            } else {
+                                // inherited dependency
+                                LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"-->"<<id<<" ("<<TrimCWD(im->path)<<"->"<<(imp_dep?TrimCWD(imp_dep->path):"?")<<")\n")
                             }
+                            missing_dependency = true;
+                            break;
                         }
-                        if(checked) continue;
-                        ids_to_check.add(it.id);
+
+                        for(auto& it : imp_dep->dependencies) {
+                            bool checked = false;
+                            for(auto& it2 : checked_ids) {
+                                if(it.id == it2) {
+                                    checked = true;
+                                    break;
+                                }
+                            }
+                            if(checked) continue;
+                            ids_to_check.add(it.id);
+                        }
                     }
                 }
                 // Step 3. Process the circular dependencies.
                 if(!missing_dependency) {
                     checked_ids.resize(0);
                     ids_to_check.resize(0);
+                    
                     for(auto& dep : im->dependencies) {
-                        if(!dep.circular_dependency_to_myself)
+                        if(!dep.circular_dependency_to_myself && !options->only_preprocess)
                             continue;
                         ids_to_check.add(dep.id);
                     }
@@ -660,7 +630,9 @@ void Compiler::processImports() {
                 lock_imports.unlock();
                 break;
             } else {
-                log::out << log::RED << "ERROR: Some tasks have dependencies that cannot be computed. Bug in compiler?\n";
+                if(!options->only_preprocess) {
+                    log::out << log::RED << "ERROR: Some tasks have dependencies that cannot be computed. Bug in compiler?\n";
+                }
                 compiler_got_stuck = true;
                 lock_imports.unlock();
                 break;
@@ -697,6 +669,9 @@ void Compiler::processImports() {
                     // lexer.print(old_id);
                     
                     auto intern_imp = lexer.getImport_unsafe(imp->import_id);
+                    
+                    engone::atomic_add(&options->compileStats.lines, intern_imp->lines);
+                    engone::atomic_add(&options->compileStats.readBytes, intern_imp->fileSize);
                     
                     u32 tokens = 0;
                     if(intern_imp->chunk_indices.size() > 0) {
@@ -1003,7 +978,9 @@ u32 Thread_process(void* self) {
 void Compiler::run(CompileOptions* options) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Gray19);
-    auto tp = engone::StartMeasure();
+    // auto tp = engone::StartMeasure();
+
+    options->compileStats.start_compile = engone::StartMeasure();
 
     Assert(!this->options);
     this->options = options;
@@ -1140,8 +1117,8 @@ void Compiler::run(CompileOptions* options) {
         }
         if(options->linker == LINKER_MSVC) {
             preload += "#macro LINKER_MSVC #endmacro\n";
-        } else if(options->linker == LINKER_GCC) {
-            preload += "#macro LINKER_GCC #endmacro\n";
+        } else if(options->linker == LINKER_GNU) {
+            preload += "#macro LINKER_GNU #endmacro\n";
         }
         
         auto virtual_path = PRELOAD_NAME;
@@ -1186,7 +1163,7 @@ void Compiler::run(CompileOptions* options) {
     for(int i=0;i<thread_count-1;i++) {
         threads[i].join();
     }
-
+    
     switch(options->target) {
         case TARGET_BYTECODE: {
             // do nothing
@@ -1220,6 +1197,7 @@ void Compiler::run(CompileOptions* options) {
                 if(TrimDir(iter.ptr->path) == "macros.btb") { // TODO: Temporary if
                     log::out << log::GOLD << iter.ptr->path<<"\n";
                     lexer.print(iter.ptr->file_id);
+                    log::out << "\n";
                 }
                 printed_imps[iter.ptr->path] = true;
             } else {
@@ -1253,11 +1231,14 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case TARGET_WINDOWS_x64: {
             obj_write_success = ObjectFile::WriteFile(OBJ_COFF, obj_file, program, this);
+            options->compileStats.generatedFiles.add(obj_file);
         } break;
         case TARGET_UNIX_x64: {
             obj_write_success = ObjectFile::WriteFile(OBJ_ELF, obj_file, program, this);
+            options->compileStats.generatedFiles.add(obj_file);
         } break;
     }
+    
     if(!obj_write_success) {
         log::out << log::RED << "Could not write object file '"<<obj_file<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
     } else if(generate_exe_file && options->target != TARGET_BYTECODE) {
@@ -1268,8 +1249,8 @@ void Compiler::run(CompileOptions* options) {
             Assert(options->target == TARGET_WINDOWS_x64);
             outputOtherDirectory = exe_file.find("/") != std::string::npos;
             
-            // TEMPORARY
             if(options->useDebugInformation) {
+                // TODO: TEMPORARY text
                 log::out << log::GOLD << "Debug information (DWARF) cannot be linked using the MSVC linker. Plrease choose a different linker like GNU/g++ using the flag "<<log::LIME<<"--linker gcc"<<log::GOLD<<" (make sure to have gcc installed).\n";
                 // The compiler does not support PDB debug information, it only supports DWARF. DWARF
                 // uses sections with long names but MSVC linker truncates those names.
@@ -1279,17 +1260,16 @@ void Compiler::run(CompileOptions* options) {
             cmd = "link /nologo /INCREMENTAL:NO ";
             if(options->useDebugInformation)
                 cmd += "/DEBUG ";
-            // else cmd += "/DEBUG "; // force debug info for now
+                
             cmd += obj_file + " ";
-            #ifndef MINIMAL_DEBUG
-            // cmd += "uuid.lib ";
-            // cmd += "shell32.lib ";
-            #endif
-            // I don't know which of these we should use when. Sometimes the linker complains about 
-            // a certain default lib.
-            // cmd += "/NODEFAULTLIB:library";
+            // TODO: Don't link with default libraries. Try to get the executable as small as possible.
+            
+            cmd += "/ENTRY:main ";
+            cmd += "/NODEFAULTLIB "; // entry point must be set manually with NODEFAULTLIB
+            // cmd += "/NODEFAULTLIB[:library] ";
             // cmd += "/DEFAULTLIB:MSVCRT ";
-            cmd += "/DEFAULTLIB:LIBCMT ";
+            // cmd += "/DEFAULTLIB:LIBCMT ";
+            cmd += "Kernel32.lib "; // _test and prints uses WriteFile so we must link with kernel32
             
             for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
                 auto& dir = bytecode->linkDirectives[i];
@@ -1306,12 +1286,11 @@ void Compiler::run(CompileOptions* options) {
             } else {
                 cmd += "/OUT:" + exe_file+" ";
             }
-            break;
-        }
+        } break;
         case LINKER_CLANG:
-        case LINKER_GCC: {
+        case LINKER_GNU: {
             switch(options->linker) {
-                case LINKER_GCC: cmd += "g++ "; break;
+                case LINKER_GNU: cmd += "gcc "; break;
                 case LINKER_CLANG: cmd += "clang++ "; break;
                 default: break;
             }
@@ -1320,12 +1299,14 @@ void Compiler::run(CompileOptions* options) {
                 cmd += "-g ";
 
             cmd += obj_file + " ";
-            #ifndef MINIMAL_DEBUG
-            // cmd += "uuid.lib ";
-            // cmd += "shell32.lib ";
-            #endif
-            // cmd += "/DEFAULTLIB:MSVCRT ";
-            // cmd += "/DEFAULTLIB:LIBCMT ";
+            // TODO: Don't link with default libraries. Try to get the executable as small as possible.
+            cmd += "-nostdlib ";
+            // cmd += "-ffreestanding "; // these do not make a difference (with mingw on windows at least)
+            // cmd += "-Os ";
+            // cmd += "-nostartfiles ";
+            // cmd += "-nodefaultlibs ";
+            // cmd += "-s ";
+            cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
             
             for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
                 auto& dir = bytecode->linkDirectives[i];
@@ -1357,13 +1338,8 @@ void Compiler::run(CompileOptions* options) {
                     cmd += "-l" + file + " ";
             }
 
-            // if(outputOtherDirectory) {
             cmd += "-o " + exe_file;
-            // } else {
-                // cmd += "/OUT:" + outPath.text+" ";
-            // }
-            break;
-        }
+        } break;
         default: {
             Assert(false);
             break;
@@ -1377,7 +1353,11 @@ void Compiler::run(CompileOptions* options) {
             if(!options->silent)
                 log::out << log::LIME<<"Linker command: "<<cmd<<"\n";
             // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
+            
+            options->compileStats.start_linker = engone::StartMeasure();
             engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+            options->compileStats.end_linker = engone::StartMeasure();
+            options->compileStats.generatedFiles.add(exe_file);
         }
         options->compileStats.end_linker = StartMeasure();
         if(exitCode != 0) {
@@ -1387,6 +1367,14 @@ void Compiler::run(CompileOptions* options) {
     } else {
         // TODO: If bytecode is the target and the user specified
         //   app.bc as outputfile should we write out a bytecode file format?
+    }
+    
+    options->compileStats.end_compile = engone::StartMeasure();
+    
+    if(options->compileStats.errors==0) {
+        if(!options->silent) {
+            options->compileStats.printSuccess(options);
+        }
     }
     
     if(options->executeOutput) {
@@ -1423,13 +1411,7 @@ void Compiler::run(CompileOptions* options) {
         }
     } else {
         if(!options->silent)
-            log::out << log::BLACK << "not executing program\n";
-    }
-
-    if(options->compileStats.errors==0) {
-        if(!options->silent) {
-            options->compileStats.printSuccess(options);
-        }
+            log::out << log::GRAY << "not executing program\n";
     }
 }
 u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error) {

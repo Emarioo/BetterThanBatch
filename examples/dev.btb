@@ -1,13 +1,12 @@
 // 
 // #import "Logger"
+#import "demo/macros"
 
  
-#macro say Oaky say
+// #macro say Oaky 
+// say := 4
 
-
-say
-
-
+// return cast<u64>cast<f32>cast<u64>0x8100_0000_0000_0011 > 0.0;
 
 
 // // TODO: Inline assembly, reading/writing to local variables
@@ -18,4 +17,3 @@ say
 //     add eax, 123
 //     push rax
 // }
-

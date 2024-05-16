@@ -150,8 +150,8 @@ namespace lexer {
         ~Chunk() {
             if(aux_data) {
                 engone::Allocator* allocator = engone::GlobalHeapAllocator();
-                TRACK_DELS(u8, aux_max);
-                allocator->allocate(0, aux_data, aux_max);
+                // TRACK_DELS(u8, aux_max);
+                allocator->allocate(0, aux_data, aux_max, HERE_T(u8));
                 aux_data = nullptr;
                 aux_max = 0;
                 aux_used = 0;
@@ -169,8 +169,8 @@ namespace lexer {
             if(aux_used + n > aux_max) {
                 engone::Allocator* allocator = engone::GlobalHeapAllocator();
                 u32 new_max = 0x1000 + aux_max*1.5 + n;
-                TRACK_ADDS(u8, new_max - aux_max);
-                u8* new_ptr = (u8*)allocator->allocate(new_max, aux_data, aux_max);
+                // TRACK_ADDS(u8, new_max - aux_max);
+                u8* new_ptr = (u8*)allocator->allocate(new_max, aux_data, aux_max, HERE_T(u8));
                 Assert(new_ptr);
                 aux_data = new_ptr;
                 aux_max = new_max;
@@ -196,7 +196,7 @@ namespace lexer {
 
         // interesting but not stricly necessary information
         int fileSize;
-        int lines; // non blank/comment lines
+        int lines;
         int comment_lines;
         int blank_lines;
     };

@@ -1,16 +1,11 @@
 #pragma once
 
-#include "Engone/Alloc.h"
 #include "Engone/Logger.h"
 #include "Engone/Typedefs.h"
-#include "BetBat/Util/Tracker.h"
+#include "Engone/Util/Allocator.h"
 
 #include <string>
 
-// struct TinyString {
-//     char* ptr=0;
-//     u32 length;
-// };
 
 struct Token;
 struct TokenRange;
@@ -275,9 +270,10 @@ struct StringBuilder {
             max = newMax;
             return true;
         } else {
-            TRACK_DELS(char, max + 1);
-            char* newPtr = (char*)engone::Reallocate(_ptr, max+1, newMax+1);
-            TRACK_ADDS(char, newMax+1);
+            char* newPtr = TRACK_ARRAY_REALLOC(_ptr, char, max+1, newMax+1);
+            // TRACK_DELS(char, max + 1);
+            // char* newPtr = (char*)engone::Reallocate(_ptr, max+1, newMax+1);
+            // TRACK_ADDS(char, newMax+1);
             Assert(newPtr);
             if(!newPtr)
                 return false;

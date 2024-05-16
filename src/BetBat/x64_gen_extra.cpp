@@ -2331,27 +2331,113 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         emit_modrm(MODE_REG, CLAMP_EXT_REG(to_reg), CLAMP_XMM(from_reg));
                     } break;
                     case CAST_FLOAT_UINT: {
-                        // TODO: float to uint64 requires special handling because
-                        //   the float convertion instruction assumes signed integers.
-                        //   Perhaps we just don't allow conversions from float to unsigned integers.
-                        //   Floats can represent negative numbers and what does it mean to turn
-                        //   that into an unsigned number? It doesn't make much sense.
+                        
 
-                        u8 prefix = construct_prefix(tsize == 8 ? PREFIX_REXW | 0 : 0, to_reg, X64_REG_INVALID);
-                        if(fsize == 4) {
-                            if(prefix) {
+                        if(tsize <= 4) {
+                            u8 prefix = construct_prefix(PREFIX_REXW, to_reg, X64_REG_INVALID);
+                            if(fsize == 4) {
+                                if(prefix) {
+                                    emit4((OPCODE_4_REXW_CVTTSS2SI_REG_RM & ~0xFF00) | (prefix << 8));
+                                } else {
+                                    emit3(OPCODE_3_CVTTSS2SI_REG_RM);
+                                }
+                            } else {
+                                if(prefix) {
+                                    emit4((OPCODE_4_REXW_CVTTSD2SI_REG_RM & ~0xFF00) | (prefix << 8));
+                                } else {
+                                    emit3(OPCODE_3_CVTTSD2SI_REG_RM);
+                                }
+                            }
+                            emit_modrm(MODE_REG, CLAMP_EXT_REG(to_reg), CLAMP_XMM(from_reg));
+                        } else {
+                            /*
+                            movsd  xmm0,QWORD PTR [rbp-0x10]
+                            comisd xmm0,QWORD PTR [rip+0x8]        # 37 <main+0x37>
+                            jae    3d <main+0x3d>
+                            movsd  xmm0,QWORD PTR [rbp-0x10]
+                            cvttsd2si rax,xmm0
+                            jmp    60 <main+0x60>
+                            movsd  xmm0,QWORD PTR [rbp-0x10]
+                            movsd  xmm1,QWORD PTR [rip+0x8]        # 52 <main+0x52>
+                            subsd  xmm0,xmm1
+                            cvttsd2si rax,xmm0
+                            movabs rdx,0x8000000000000000
+                            xor    rax,rdx
+                            */
+                            u64 imm = 0x43e0'0000'0000'0000;
+                            
+                            X64Register tmp_reg = RESERVED_REG0;
+                            
+                            u8 reg_field = tmp_reg - 1;
+                            Assert(reg_field >= 0 && reg_field <= 7);
+                            
+                            emit1(PREFIX_REXW);
+                            emit1((u8)(OPCODE_MOV_REG_IMM_RD | reg_field));
+                            emit8((u64)imm);
+                            
+                            int off = -16; // can't put float immediate at -8 because we push something so we do -16 instead
+                            
+                            emit_mov_mem_reg(X64_REG_SP, tmp_reg, CONTROL_8B, off);
+                            
+                            if(fsize == 4)
+                                emit2(OPCODE_2_COMISS_REG_RM);
+                            else
+                                emit3(OPCODE_3_COMISD_REG_RM);
+                            emit_modrm(MODE_DEREF_DISP8, CLAMP_XMM(from_reg), X64_REG_SP);
+                            emit1((u8)off);
+                            
+                            emit1(OPCODE_JAE_REL8);
+                            int jae_offset = code_size();
+                            emit1((u8)0);
+                            
+                            u8 prefix = construct_prefix(PREFIX_REXW, to_reg, X64_REG_INVALID);
+                            if(fsize == 4) {
                                 emit4((OPCODE_4_REXW_CVTTSS2SI_REG_RM & ~0xFF00) | (prefix << 8));
                             } else {
-                                emit3(OPCODE_3_CVTTSS2SI_REG_RM);
-                            }
-                        } else if(fsize == 8) {
-                            if(prefix) {
                                 emit4((OPCODE_4_REXW_CVTTSD2SI_REG_RM & ~0xFF00) | (prefix << 8));
-                            } else {
-                                emit3(OPCODE_3_CVTTSD2SI_REG_RM);
                             }
+                            emit_modrm(MODE_REG, CLAMP_EXT_REG(to_reg), CLAMP_XMM(from_reg));
+                            
+                            emit1(OPCODE_JMP_IMM8);
+                            int jmp_offset = code_size();
+                            emit1((u8)0);
+                            
+                            fix_jump_here_imm8(jae_offset);
+                            
+                            emit_push(from_reg);
+                            
+                            if(fsize == 4) {
+                                emit4(OPCODE_3_SUBSS_REG_RM);
+                            } else {
+                                emit4(OPCODE_3_SUBSD_REG_RM);
+                            }
+                            emit_modrm(MODE_DEREF_DISP8, from_reg, X64_REG_SP);
+                            emit1((u8)off);
+                            
+                            prefix = construct_prefix(PREFIX_REXW, to_reg, X64_REG_INVALID);
+                            if(fsize == 4) {
+                                emit4((OPCODE_4_REXW_CVTTSS2SI_REG_RM & ~0xFF00) | (prefix << 8));
+                            } else {
+                                emit4((OPCODE_4_REXW_CVTTSD2SI_REG_RM & ~0xFF00) | (prefix << 8));
+                            }
+                            emit_modrm(MODE_REG, CLAMP_EXT_REG(to_reg), CLAMP_XMM(from_reg));
+                            
+                            reg_field = tmp_reg - 1;
+                            Assert(reg_field >= 0 && reg_field <= 7);
+                            
+                            emit1(PREFIX_REXW);
+                            emit1((u8)(OPCODE_MOV_REG_IMM_RD | reg_field));
+                            emit8((u64)0x8000'0000'0000'0000);
+                            
+                            emit_prefix(PREFIX_REXW, to_reg, tmp_reg); 
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_EXT_REG(to_reg), CLAMP_EXT_REG(tmp_reg));
+                            
+                            emit_pop(from_reg);
+                            
+                            fix_jump_here_imm8(jmp_offset);
+                            
                         }
-                        emit_modrm(MODE_REG, CLAMP_EXT_REG(to_reg), CLAMP_XMM(from_reg));
                     } break;
                     case CAST_SINT_FLOAT: {
                         Assert(IS_REG_XMM(to_reg));
@@ -2374,437 +2460,98 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     case CAST_UINT_FLOAT: {
                         Assert(IS_REG_XMM(to_reg));
                         
-                        u8 prefix = construct_prefix(fsize == 8 ? PREFIX_REXW | 0 : 0, X64_REG_INVALID, from_reg);
-                        // TODO: Zero extend?
-                        if(tsize == 4) {
-                            if(prefix)
-                                emit4((OPCODE_4_REXW_CVTSI2SS_REG_RM & ~0xFF00) | (prefix << 8));
-                            else
-                                emit3(OPCODE_3_CVTSI2SS_REG_RM);
-                        } else {
-                            if(prefix)
-                                emit4((OPCODE_4_REXW_CVTSI2SD_REG_RM & ~0xFF00) | (prefix << 8));
-                            else
-                                emit3(OPCODE_3_CVTSI2SD_REG_RM);
-                        }
-                        emit_modrm(MODE_REG, CLAMP_XMM(to_reg), CLAMP_EXT_REG(from_reg));
-
-                        #ifdef gone
-
-                            // // We have freg but the code may change so to ensure no future bugs we get
-                            // // the register again with BCToReg and ensure that it isn't extended (with R8-R11) and that
-                            // // it is a 64-bit register.
-                            // u8 from_reg = BCToProgramReg(op1, 8);
-
-                            // u8 xmm_reg = REG_XMM7; // nocheckin, use xmm7 if treg is rax,rbx.. otherwise we can actually just use xmm register
-
-                            // if(toXmm) {
-                            //     xmm_reg = treg;
-                            // }
-
-                            // if(tsize == 4) {
-                            //     /*
-                            //     test   rax,rax
-                            //     js     unsigned
-                            //     pxor   xmm0,xmm0
-                            //     cvtsi2ss xmm0,rax
-                            //     jmp    end
-                            // unsigned:
-                            //     mov    rdx,rax
-                            //     shr    rdx,1
-                            //     and    eax,0x1
-                            //     or     rdx,rax
-                            //     pxor   xmm0,xmm0
-                            //     cvtsi2ss xmm0,rdx
-                            //     addss  xmm0,xmm0
-                            // end:
-                            //     */
-
-                            //     u8 temp_reg = REG_DI;
-                            //     emit_push(temp_reg);
-
-                            //     // Check signed bit
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_TEST_RM_REG);
-                            //     emit_modrm(MODE_REG, from_reg, from_reg);
-
-                            //     emit1(OPCODE_JS_REL8);
-                            //     int jmp_offset_unsigned = prog->size();
-                            //     emit1((u8)0); // set later
-
-                            //     // Normal conversion since the signed bit is off
-                            //     prog->add3(OPCODE_3_PXOR_RM_REG);
-                            //     emit_modrm(MODE_REG, xmm_reg, xmm_reg);
-
-                            //     prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
-                            //     emit_modrm(MODE_REG, xmm_reg, from_reg);
-
-                            //     emit1(OPCODE_JMP_IMM8);
-                            //     int jmp_offset_end = prog->size();
-                            //     emit1((u8)0);
-
-                            //     prog->set(jmp_offset_unsigned, prog->size() - (jmp_offset_unsigned +1)); // +1 gives the offset after the jump instruction (immediate is one byte)
-                                
-                            //     // Special conversion because the signed bit is on but since our conversion is unsigned
-                            //     // we need some special stuff so that our float isn't negative and half the number we except
-
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_MOV_REG_RM);
-                            //     emit_modrm(MODE_REG, temp_reg, from_reg);
-
-                            //     emit1(PREFIX_REXW);    
-                            //     emit1(OPCODE_SHR_RM_ONCE_SLASH_5);
-                            //     emit_modrm(MODE_REG, 5, temp_reg);
-
-                            //     emit1(OPCODE_AND_RM_IMM8_SLASH_4);
-                            //     emit_modrm(MODE_REG, 4, from_reg);
-                            //     emit1((u8)1);
-
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_OR_RM_REG);
-                            //     emit_modrm(MODE_REG, from_reg, temp_reg);
-
-                            //     prog->add3(OPCODE_3_PXOR_RM_REG);
-                            //     emit_modrm(MODE_REG, xmm_reg, xmm_reg);
-
-                            //     prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
-                            //     emit_modrm(MODE_REG, xmm_reg, temp_reg);
-
-                            //     prog->add3(OPCODE_3_ADDSS_REG_RM);
-                            //     emit_modrm(MODE_REG, xmm_reg, xmm_reg);
-
-                            //     prog->set(jmp_offset_end, prog->size() - (jmp_offset_end +1));
-
-                            //     emit_pop(temp_reg);
-
-                            //     if(!toXmm) {
-                            //         prog->add3(OPCODE_3_MOVSS_RM_REG);
-                            //         emit_modrm(MODE_DEREF_DISP8, xmm_reg, X64_REG_SP);
-                            //         emit1((u8)-8);
-
-                            //         emit1(OPCODE_MOV_REG_RM);
-                            //         emit_modrm(MODE_DEREF_DISP8, treg, X64_REG_SP);
-                            //         emit1((u8)-8);
-                            //     }
-                            // } else if(tsize == 8) {
-                            //     /*
-                            //     test   rax,rax
-                            //     js     unsigned
-                            //     pxor   xmm0,xmm0
-                            //     cvtsi2sd xmm0,rax
-                            //     jmp    end
-                            // unsigned:
-                            //     mov    rdx,rax
-                            //     shr    rdx,1
-                            //     and    eax,0x1
-                            //     or     rdx,rax
-                            //     pxor   xmm0,xmm0
-                            //     cvtsi2sd xmm0,rdx
-                            //     addsd  xmm0,xmm0
-                            // end:
-                            //     */
-                            //     u8 temp_reg = REG_DI;
-                            //     emit_push(temp_reg);
-
-                            //     // Check signed bit
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_TEST_RM_REG);
-                            //     emit_modrm(MODE_REG, from_reg, from_reg);
-
-                            //     emit1(OPCODE_JS_REL8);
-                            //     int jmp_offset_unsigned = prog->size();
-                            //     emit1((u8)0); // set later
-
-                            //     // Normal conversion since the signed bit is off
-                            //     prog->add3(OPCODE_3_PXOR_RM_REG);
-                            //     emit_modrm(MODE_REG, xmm_reg, xmm_reg);
-
-                            //     prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
-                            //     emit_modrm(MODE_REG, xmm_reg, from_reg);
-
-                            //     emit1(OPCODE_JMP_IMM8);
-                            //     int jmp_offset_end = prog->size();
-                            //     emit1((u8)0);
-
-                            //     prog->set(jmp_offset_unsigned, prog->size() - (jmp_offset_unsigned +1)); // +1 gives the offset after the jump instruction (immediate is one byte)
-                                
-                            //     // Special conversion because the signed bit is on but since our conversion is unsigned
-                            //     // we need some special stuff so that our float isn't negative and half the number we except
-
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_MOV_REG_RM);
-                            //     emit_modrm(MODE_REG, temp_reg, from_reg);
-
-                            //     emit1(PREFIX_REXW);    
-                            //     emit1(OPCODE_SHR_RM_ONCE_SLASH_5);
-                            //     emit_modrm(MODE_REG, 5, temp_reg);
-
-                            //     emit1(OPCODE_AND_RM_IMM8_SLASH_4);
-                            //     emit_modrm(MODE_REG, 4, from_reg);
-                            //     emit1((u8)1);
-
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_OR_RM_REG);
-                            //     emit_modrm(MODE_REG, from_reg, temp_reg);
-
-                            //     prog->add3(OPCODE_3_PXOR_RM_REG);
-                            //     emit_modrm(MODE_REG, xmm_reg, xmm_reg);
-
-                            //     prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
-                            //     emit_modrm(MODE_REG, xmm_reg, temp_reg);
-
-                            //     prog->add3(OPCODE_3_ADDSD_REG_RM);
-                            //     emit_modrm(MODE_REG, xmm_reg, xmm_reg);
-
-                            //     prog->set(jmp_offset_end, prog->size() - (jmp_offset_end +1));
-
-                            //     emit_pop(temp_reg);
-
-                            //     if(!toXmm) {
-                            //         prog->add3(OPCODE_3_MOVSD_RM_REG);
-                            //         emit_modrm(MODE_DEREF_DISP8, xmm_reg, X64_REG_SP);
-                            //         emit1((u8)-8);
-
-                            //         emit1(PREFIX_REXW);
-                            //         emit1(OPCODE_MOV_REG_RM);
-                            //         emit_modrm(MODE_DEREF_DISP8, treg, X64_REG_SP);
-                            //         emit1((u8)-8);
-                            //     }
-                            // }
-
-
-                            // TODO: THIS IS FLAWED! The convert int to float instruction assumes signed integers but
-                            //  we are dealing with unsigned ones. That means that large unsigned 64-bit numbers would
-                            //  be converted to negative slighly smaller numbers.
-                            if(tsize==4)
-                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
-                            else
-                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
-
-                            if(toXmm) {
-                                emit_modrm(MODE_REG, treg, freg);
-                            } else {
-                                emit_modrm(MODE_REG, REG_XMM7, freg);
-
-                                if(tsize==4)
-                                    prog->add3(OPCODE_3_MOVSS_RM_REG);
+                        if(fsize <= 4) {
+                            // TODO: We assume zero extend? I believe that's fine.
+                            u8 prefix = construct_prefix(PREFIX_REXW, X64_REG_INVALID, from_reg);
+                            if(tsize == 4) {
+                                if(prefix)
+                                    emit4((OPCODE_4_REXW_CVTSI2SS_REG_RM & ~0xFF00) | (prefix << 8));
                                 else
-                                    prog->add3(OPCODE_3_MOVSD_RM_REG);
-                                emit_modrm(MODE_DEREF_DISP8, REG_XMM7, X64_REG_SP);
-                                emit1((u8)-8);
-
-                                if(tsize==8)
-                                    emit1(PREFIX_REXW);
-                                emit1(OPCODE_MOV_REG_RM);
-                                emit_modrm(MODE_DEREF_DISP8, treg, X64_REG_SP);
-                                emit1((u8)-8);
+                                    emit3(OPCODE_3_CVTSI2SS_REG_RM);
+                            } else {
+                                if(prefix)
+                                    emit4((OPCODE_4_REXW_CVTSI2SD_REG_RM & ~0xFF00) | (prefix << 8));
+                                else
+                                    emit3(OPCODE_3_CVTSI2SD_REG_RM);
                             }
-
-                            // Assert(false);
-                            // This code is bugged, doesn't work.
+                            emit_modrm(MODE_REG, CLAMP_XMM(to_reg), CLAMP_EXT_REG(from_reg));
+                        } else {
                             /*
-                            t = cast<f32>cast<u64>23
-                            println(t)
+                            test   rax,rax
+                            js     29 <main+0x29>
+                            pxor   xmm0,xmm0
+                            cvtsi2ss xmm0,rax
+                            jmp    42 <main+0x42>
+                            mov    rdx,rax
+                            shr    rdx,1
+                            and    eax,0x1
+                            or     rdx,rax
+                            pxor   xmm0,xmm0
+                            cvtsi2ss xmm0,rdx
+                            addss  xmm0,xmm0
                             */
                             
+                            X64Register tmp_reg0 = RESERVED_REG0;
+                            X64Register tmp_reg1 = RESERVED_REG1;
 
-                            /*
-                            test rax, rax
-                            jl signed
-                            cvtsi2ss xmm0, r13
-                            jmp end
-                            signed:
-                            mov r13d, eax
-                            and r13d, 1
-                            shr rax, 1
-                            or r13, rax
-                            cvtsi2ss xmm0, r13
-                            mulss xmm0, 2
-                            end:
-                            */
-
-                        // TODO: This is way to many instructions to convert an unsigned integer to a float.
-                        //   Users who don't realize this will unknowningly have slow code because of casts
-                        //   they didn't pay attention to. Can we minimize the amount of instructions?
-                        //   Can we be less correct and generate fewer instructions?
-
-                            // Assert(false);
-                            // We have to do some extra work since we use unsigned 64-bit integer but
-                            // the x64 instruction expects a signed 64-bit integer.
-
-                            // TODO: C/C++ compilers use a jump instruction to differentiate between
-                            //  the negative and non-negative case. We don't at the moment but probably should.
-
-                            // IMPORTANT: USING A TEMPORARY REG LIKE THIS IS BAD IF OTHER INSTRUCTIONS USES IT.
-                            //  You won't expect this register to be modified when you look at the bytecode instructions.
-                            // IMPORTANT: The code below modifies the input register!
-                            u8 tempReg = REG_R15;
-                            u8 xmm = REG_XMM6;
-                            if(toXmm) {
-                                xmm = treg;
-                                Assert(treg != REG_XMM7);
-                                // IMPORTANT: XMM7 is in use. More importantly, we assume registers
-                                // above xmm3 are unused by the bytecode. We will have many bugs
-                                // if the assumption is wrong.
-                            }
-
-                            emit1(PREFIX_REXW);
+                            emit_prefix(PREFIX_REXW, from_reg, from_reg);
                             emit1(OPCODE_TEST_RM_REG);
-                            emit_modrm(MODE_REG, freg, freg);
+                            emit_modrm(MODE_REG, CLAMP_EXT_REG(from_reg), CLAMP_EXT_REG(from_reg));
 
-                            emit1(OPCODE_JL_REL8);
-                            u32 jumpSign = prog->size();
+                            emit1(OPCODE_JS_REL8);
+                            u32 js_offset = code_size();
                             emit1((u8)0);
 
-                            // emit1((u8)0xF3);
-                            // emit1((u8)(PREFIX_REXW));
-                            // prog->add2((u16)0x2A0F);
+                            emit3(OPCODE_3_SSE_PXOR_RM_REG); // Not sure if it's necessary to zero the xmm register but C compiler do that so we will too just in case.
+                            emit_modrm(MODE_REG, CLAMP_XMM(to_reg), CLAMP_XMM(to_reg));
+
+                            u8 prefix = construct_prefix(PREFIX_REXW, X64_REG_INVALID, from_reg);
                             if(tsize == 4) {
-                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                                emit4((OPCODE_4_REXW_CVTSI2SS_REG_RM & ~0xFF00) | (prefix << 8));
                             } else {
-                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                                emit4((OPCODE_4_REXW_CVTSI2SD_REG_RM & ~0xFF00) | (prefix << 8));
                             }
-                            emit_modrm(MODE_REG, xmm, freg);
+                            emit_modrm(MODE_REG, CLAMP_XMM(to_reg), CLAMP_EXT_REG(from_reg));
 
                             emit1(OPCODE_JMP_IMM8);
-                            u32 jumpEnd = prog->size();
+                            u32 jmp_offset = code_size();
                             emit1((u8)0);
+                            
+                            fix_jump_here_imm8(js_offset);
+                            
+                            emit_mov_reg_reg(tmp_reg0,from_reg,8);
+                            emit_mov_reg_reg(tmp_reg1,from_reg,8);
 
-                            prog->set(jumpSign, prog->size() - (jumpSign+1)); // +1 because jumpSign points to the byte to change in the jump instruction, we want the end of the instruction.
-
-                            // emit1((u8)(PREFIX_REXW|PREFIX_REXR));
-                            emit1((u8)(PREFIX_REXR)); // 64-bit operands not needed, we just want 1 bit from freg
-                            emit1(OPCODE_MOV_REG_RM);
-                            emit_modrm(MODE_REG, tempReg, freg);
-
-                            emit1((u8)(PREFIX_REXW|PREFIX_REXB));
-                            emit1(OPCODE_AND_RM_IMM8_SLASH_4);
-                            emit_modrm(MODE_REG, 4, tempReg);
-                            emit1((u8)1);
-
-
-                            emit1((u8)(PREFIX_REXW));
+                            emit1(PREFIX_REXW);
                             emit1(OPCODE_SHR_RM_IMM8_SLASH_5);
-                            emit_modrm(MODE_REG, 5, freg);
+                            emit_modrm_slash(MODE_REG, 5, tmp_reg0);
+                            emit1((u8)1);
+                            
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_AND_RM_IMM8_SLASH_4);
+                            emit_modrm_slash(MODE_REG, 4, tmp_reg1);
                             emit1((u8)1);
 
-                            emit1((u8)(PREFIX_REXW|PREFIX_REXB));
-                            emit1(OPCODE_OR_RM_REG);
-                            emit_modrm(MODE_REG, freg, tempReg);
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_OR_REG_RM);
+                            emit_modrm(MODE_REG, tmp_reg0, tmp_reg1);
                             
-                            // F3 REX.W 0F 2A  <- the CVTSI2SS_REG_RM requires the rex byte smashed inside it
+                            prefix = construct_prefix(PREFIX_REXW, X64_REG_INVALID, tmp_reg0);
                             if(tsize == 4) {
-                                emit1((u8)0xF3);
-                                emit1((u8)(PREFIX_REXW|PREFIX_REXB));
-                                prog->add2((u16)0x2A0F);
+                                emit4((OPCODE_4_REXW_CVTSI2SS_REG_RM & ~0xFF00) | (prefix << 8));
                             } else {
-                                emit1((u8)0xF2);
-                                emit1((u8)(PREFIX_REXW|PREFIX_REXB));
-                                prog->add2((u16)0x2A0F);
+                                emit4((OPCODE_4_REXW_CVTSI2SD_REG_RM & ~0xFF00) | (prefix << 8));
                             }
-                            emit_modrm(MODE_REG, xmm, tempReg);
-                            
-                            emit1((u8)(PREFIX_REXW|PREFIX_REXB|PREFIX_REXR));
-                            emit1(OPCODE_XOR_REG_RM);
-                            emit_modrm(MODE_REG, tempReg, tempReg);
-
-                            // TODO: REXW may be needed here
-                            emit1(PREFIX_REXB);
-                            emit1(OPCODE_MOV_RM_IMM8_SLASH_0);
-                            emit_modrm(MODE_REG, 0, tempReg);
-                            emit1((u8)2);
+                            emit_modrm(MODE_REG, CLAMP_XMM(to_reg), CLAMP_EXT_REG(tmp_reg0));
 
                             if(tsize == 4)
-                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                                emit3(OPCODE_3_ADDSS_REG_RM);
                             else
-                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
-                            emit_modrm(MODE_REG, REG_XMM7, tempReg);
-                            if(tsize == 4) 
-                                prog->add3(OPCODE_3_MULSS_REG_RM);
-                            else
-                                prog->add3(OPCODE_3_MULSD_REG_RM);
-                            emit_modrm(MODE_REG, xmm, REG_XMM7);
+                                emit3(OPCODE_3_ADDSD_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(to_reg), CLAMP_XMM(to_reg));
 
-                            // END
-                            prog->set(jumpEnd, prog->size() - (jumpEnd+1)); // +1 because jumpEnd points to the byte to change in the jump instruction, we want the end of the instruction.
-
-                            if (!toXmm) {
-                                if(tsize==4)
-                                    prog->add3(OPCODE_3_MOVSS_RM_REG);
-                                else
-                                    prog->add3(OPCODE_3_MOVSD_RM_REG);
-                                emit_modrm(MODE_DEREF_DISP8, xmm, X64_REG_SP);
-                                emit1((u8)-8);
-
-
-                                emit1(OPCODE_MOV_REG_RM);
-                                emit_modrm(MODE_DEREF_DISP8, treg, X64_REG_SP);
-                                emit1((u8)-8);
-                            } else {
-                                // xmm register is already loaded with correct value
-                            }
-                        // } else {
-                            // // nocheckin, rexw when converting u32 to f32/f64 otherwise the last bit will
-                            // // be treated as a signed bit by CVTSI2SS
-                            // if(fsize == 1){
-                            //     // emit1(PREFIX_REXW);
-                            //     // emit1(OPCODE_AND_RM_IMM_SLASH_4);
-                            //     // emit_modrm(MODE_REG, 4, freg);
-                            //     // prog->add4((u32)0xFF);
-                            //     if(tsize==4)
-                            //         prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
-                            //     else
-                            //         prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
-                            // } else if(fsize == 2){
-                            //     // emit1(PREFIX_REXW);
-                            //     // emit1(OPCODE_AND_RM_IMM_SLASH_4);
-                            //     // emit_modrm(MODE_REG, 4, freg);
-                            //     // prog->add4((u32)0xFFFF);
-                            //     if(tsize==4)
-                            //         prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
-                            //     else
-                            //         prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
-                            // } else if(fsize == 4) {
-                            //     // It is probably safe to use rexw so that rax is used
-                            //     // when eax was specified. Most instructions zero the upper bits.
-                            //     // There may be an edge case though.
-                            //     // We must use rexw with this operation since it assumes signed values
-                            //     // but we have an unsigned so we must use 64-bit values.
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_MOV_REG_RM);
-                            //     emit_modrm(MODE_REG, freg, freg); // clear upper 32 bits
-                            //     if(tsize==4)
-                            //         prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
-                            //     else
-                            //         prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
-                            //     // if(tsize==4)
-                            //     //     prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
-                            //     // else
-                            //     //     prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
-                            // }
-
-                            // if(toXmm) {
-                            //     emit_modrm(MODE_REG, treg, freg);
-                            // } else {
-                            //     emit_modrm(MODE_REG, REG_XMM7, freg);
-
-                            //     if(tsize==4)
-                            //         prog->add3(OPCODE_3_MOVSS_RM_REG);
-                            //     else
-                            //         prog->add3(OPCODE_3_MOVSD_RM_REG);
-                            //     emit_modrm(MODE_DEREF_DISP8, REG_XMM7, X64_REG_SP);
-                            //     emit1((u8)-8);
-
-                            //     if(tsize==8)
-                            //         emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_MOV_REG_RM);
-                            //     emit_modrm(MODE_DEREF_DISP8, treg, X64_REG_SP);
-                            //     emit1((u8)-8);
-
-                            //     // emit1(OPCODE_NOP);
-                            // }
-                        // }
-                        #endif
+                            fix_jump_here_imm8(jmp_offset);
+                        }
                     } break;
                     case CAST_UINT_SINT:
                     case CAST_SINT_UINT: {

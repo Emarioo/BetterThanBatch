@@ -23,11 +23,11 @@ out
 # temporary files at the root of the project. The stuff below
 # filters that out.
 
-*.s
-!*/*.s
-
-*.asm
-!*/*.asm
-
 *.cpp
+*.c
+*.s
+*.asm
 !*/*.cpp
+!*/*.c
+!*/*.s
+!*/*.asm

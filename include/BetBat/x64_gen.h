@@ -280,7 +280,7 @@ struct X64Builder {
     // float registers require size, general registers will always use REXW
     void emit_mov_reg_reg(X64Register reg, X64Register rm, int size = 0);
     void emit_mov_reg_mem(X64Register reg, X64Register rm, InstructionControl control, int disp32);
-    void emit_mov_mem_reg(X64Register reg, X64Register rm, InstructionControl control, int disp32);
+    void emit_mov_mem_reg(X64Register rm, X64Register reg, InstructionControl control, int disp32);
     // always sign extends TO 64-bit but may extend FROM 8/16/32/64 bit based on control
     void emit_movsx(X64Register reg, X64Register rm, InstructionControl control);
     void emit_movzx(X64Register reg, X64Register rm, InstructionControl control);

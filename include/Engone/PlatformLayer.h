@@ -67,10 +67,6 @@ namespace engone {
 	};
 	typedef u64 TimePoint;
 	
-	// For debugging memory leaks
-	void TrackType(u64 bytes, const std::string& name);
-	void SetTracker(bool on);
-
 	// allocates, reallocates and frees
 	void* AllocHeap(u64 new_bytes, void* ptr, u64 old_bytes);
 
@@ -89,7 +85,7 @@ namespace engone {
 	// Current allocations
 	u64 GetNumberAllocations();
 	
-	void PrintRemainingTrackTypes();
+	// void PrintRemainingTrackTypes();
 	
 	TimePoint StartMeasure();
 	// returns time in seconds

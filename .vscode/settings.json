@@ -8,6 +8,15 @@
         "ranges": "cpp",
         "span": "cpp",
         "vector": "cpp",
-        "xutility": "cpp"
+        "xutility": "cpp",
+        "mutex": "cpp",
+        "shared_mutex": "cpp",
+        "charconv": "cpp",
+        "xmemory": "cpp",
+        "algorithm": "cpp",
+        "chrono": "cpp",
+        "limits": "cpp",
+        "random": "cpp",
+        "iterator": "cpp"
     }
 }

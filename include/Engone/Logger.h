@@ -6,9 +6,8 @@
 #include "Engone/Utilities/rp3d.h"
 #endif
 
-#include "Engone/Alloc.h"
 #include "Engone/Typedefs.h"
-
+// #include "Engone/Util/Array.h"
 // #include "Engone/Util/Stream.h"
 
 #include <unordered_map>
@@ -147,7 +146,10 @@ namespace engone {
 
 			std::string logReport;
 
-			Memory<char> lineBuffer{};
+			// QuickArray<char> lineBuffer{};
+            char* line_buffer_data = nullptr;
+            int line_buffer_max = 0;
+            int line_buffer_used = 0;
 
 			// ensure free space
 			char* ensure(uint32 bytes);
@@ -160,7 +162,7 @@ namespace engone {
 		std::string m_masterReportPath="master.txt";
 		bool m_useThreadReports = false;
 		bool m_enabledConsole = true;
-		bool m_enabledReports = true;
+		bool m_enabledReports = false;
 		int m_indent = 0;
 		int m_nextIndent = 0;
 		bool skipIndent=false;

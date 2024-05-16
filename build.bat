@@ -200,7 +200,8 @@ if !compileSuccess! == 0 (
     @REM bin\btb
     @REM bin\btb --test
     @REM btb -dev
-    btb examples/dev.btb
+    btb --preproc examples/demo/macros
+    @REM btb examples/dev.btb
     @REM btb -pm *typeinfo.btb -o dev.exe -g -r
 
     @REM btb dev.btb -p

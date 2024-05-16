@@ -28,7 +28,7 @@ void VirtualMachine::cleanup(){
 }
 void VirtualMachine::reset(){
     memset((void*)registers, 0, sizeof(registers));
-    memset(stack.data, 0, stack.max);
+    memset(stack.data(), 0, stack.max);
 }
 // void VirtualMachine::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
 //     using namespace engone;
@@ -185,7 +185,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     }
 
     stack.resize(0x10'0000);
-    memset(stack.data, 0, stack.max);
+    memset(stack.data(), 0, stack.max);
     memset((void*)registers, 0, sizeof(registers));
 
     // TODO: Setup argc, argv on the stack with betcall convention
@@ -193,11 +193,11 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     push_offsets.add(0);
 
     i64 pc = 0;
-    stack_pointer = (i64)(stack.data + stack.max);
+    stack_pointer = (i64)(stack.data() + stack.max);
     base_pointer = stack_pointer;
     
     auto CHECK_STACK = [&]() {
-        if(stack_pointer < (i64)stack.data || stack_pointer > (i64)(stack.data+stack.max)) {
+        if(stack_pointer < (i64)stack.data() || stack_pointer > (i64)(stack.data()+stack.max)) {
             log::out << log::RED << "VirtualMachine: Stack overflow\n";
         }
     };
@@ -624,7 +624,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             }
         } break;
         case BC_RET: {
-            i64 diff = stack_pointer - (i64)stack.data;
+            i64 diff = stack_pointer - (i64)stack.data();
             if(diff == (i64)(stack.max)) {
                 running = false;
                 break;

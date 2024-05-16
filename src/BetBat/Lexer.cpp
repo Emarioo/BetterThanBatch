@@ -267,8 +267,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     if(!foundNonSpaceOnLine) {
                         lexer_import->blank_lines++;
                         foundNonSpaceOnLine = false;
-                    } else
-                        lexer_import->lines++;
+                    }
+                    lexer_import->lines++;
                     update_flags(TOKEN_FLAG_NEWLINE);
                 }
 
@@ -291,10 +291,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 if(chr=='\n'||index==length){
                     if(!foundNonSpaceOnLine)
                         lexer_import->blank_lines++;
-                        // outStream->blankLines++;
-                    else
-                        lexer_import->lines++;
-                        // outStream->lines++;
+                    lexer_import->lines++;
                     foundNonSpaceOnLine=false;
                     // if(outStream->length()!=0)
                     //     outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
@@ -418,13 +415,11 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             foundNonSpaceOnLine = true;
         }
         if(chr == '\n' || index == length) {
+            lexer_import->lines++;
             if(foundNonSpaceOnLine){
-                lexer_import->lines++;
-                // outStream->lines++;
                 foundNonSpaceOnLine = false;
             } else
                 lexer_import->blank_lines++;
-                // outStream->blankLines++;
         }
         bool isSpecial = false;
         if(!isQuotes&&!isComment&&!isDelim){ // early check for non-special

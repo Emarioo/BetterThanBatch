@@ -53,8 +53,11 @@ namespace engone {
 		flush();
 		
 		for (auto& pair : m_threadInfos) {
-			
-			pair.second.lineBuffer.resize(0);
+			// pair.second.lineBuffer.resize(0);
+            Free(pair.second.line_buffer_data, pair.second.line_buffer_max);
+            pair.second.line_buffer_data = nullptr;
+            pair.second.line_buffer_max = 0;
+            pair.second.line_buffer_used = 0;
 		}
 		m_threadInfos.clear();
 		for(auto& pair : m_logFiles){
@@ -63,18 +66,23 @@ namespace engone {
 		m_logFiles.clear();
 	}
 	char* Logger::ThreadInfo::ensure(uint32 bytes) {
-		if (lineBuffer.max < lineBuffer.used + bytes + 1) { // +1 for \0
-			// TODO: increase by max*2x instead of used+bytes?
-			bool yes = lineBuffer.resize(lineBuffer.max*2 + 2*bytes + 1);
-			if (!yes)
-				return nullptr;
+		if (line_buffer_max < line_buffer_used + bytes + 1) { // +1 for \0
+            int max = line_buffer_max*2 + 2*bytes + 1;
+            auto new_data = (char*)Reallocate(line_buffer_data, line_buffer_max, max);
+            if(!new_data)
+                return nullptr;
+            line_buffer_max = max;
+            line_buffer_data = new_data;
+			// bool yes = lineBuffer.resize(max);
+			// if (!yes)
+			// 	return nullptr;
 		}
-		return ((char*)lineBuffer.data + lineBuffer.used);
+		return ((char*)line_buffer_data + line_buffer_used);
 	}
 	void Logger::ThreadInfo::use(uint32 bytes) {
-		lineBuffer.used += bytes;
-		*((char*)lineBuffer.data + lineBuffer.used) = 0;
-		//printf("%s",lineBuffer.data+lineBuffer.used);
+		line_buffer_used += bytes;
+		*((char*)line_buffer_data + line_buffer_used) = 0;
+		//printf("%s",lineBuffer.data+line_buffer_used);
 	}
 	void Logger::enableReport(bool yes){
 		m_enabledReports = yes;
@@ -117,13 +125,13 @@ namespace engone {
 	}
 	void Logger::flush(){
 		auto& info = getThreadInfo();
-		if(info.lineBuffer.used==0)
+		if(info.line_buffer_used==0)
 			return;
-		*((char*)info.lineBuffer.data+info.lineBuffer.used) = 0;
+		*((char*)info.line_buffer_data+info.line_buffer_used) = 0;
 		
-		char* str = (char*)info.lineBuffer.data;
-		int len = info.lineBuffer.used;
-		// print((char*)info.lineBuffer.data, info.lineBuffer.used);
+		char* str = (char*)info.line_buffer_data;
+		int len = info.line_buffer_used;
+		// print((char*)info.lineBuffer.data, info.line_buffer_used);
 
 		// For debugging
 		// for(int i=0;i<len;i++){
@@ -278,12 +286,12 @@ namespace engone {
 		#endif
 		// TODO: write to report
 
-		info.lineBuffer.used = 0; // flush buffer
+		info.line_buffer_used = 0; // flush buffer
 	}
 	u64 Logger::getMemoryUsage(){
 		u64 sum=0;
 		for(auto& pair : m_threadInfos){
-			sum+=pair.second.lineBuffer.max;
+			sum+=pair.second.line_buffer_max;
 		}
 		return sum;
 	}
@@ -329,7 +337,7 @@ namespace engone {
 	Logger& Logger::operator<<(log::Color value) {
 		auto& inf = getThreadInfo();
 		if(inf.color!=value){
-			if(inf.lineBuffer.used){
+			if(inf.line_buffer_used){
 				flush();
 			}
 			inf.color = value;

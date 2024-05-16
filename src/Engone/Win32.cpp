@@ -658,40 +658,40 @@ namespace engone {
         
 		ClearErrors();
 	}
-    struct AllocInfo {
-		std::string name;
-		int count;
-	};
-	static std::unordered_map<u64, AllocInfo> allocTracking;
+    // struct AllocInfo {
+	// 	std::string name;
+	// 	int count;
+	// };
+	// static std::unordered_map<u64, AllocInfo> allocTracking;
 	
-	void TrackType(u64 bytes, const std::string& name){
-		auto pair = allocTracking.find(bytes);
-		if(pair==allocTracking.end()){
-			allocTracking[bytes] = {name,0};	
-		} else {
-			pair->second.name += "|";
-			pair->second.name += name; 
-		}
-	}
-	#define ENGONE_TRACK_ALLOC 0
-	#define ENGONE_TRACK_FREE 1
-	#define ENGONE_TRACK_REALLOC 2
-	static bool s_trackerEnabled=true;
-	void PrintTracking(u64 bytes, int type){
-		if(!s_trackerEnabled)
-			return;
-		auto pair = allocTracking.find(bytes);
+	// void TrackType(u64 bytes, const std::string& name){
+	// 	auto pair = allocTracking.find(bytes);
+	// 	if(pair==allocTracking.end()){
+	// 		allocTracking[bytes] = {name,0};	
+	// 	} else {
+	// 		pair->second.name += "|";
+	// 		pair->second.name += name; 
+	// 	}
+	// }
+	// #define ENGONE_TRACK_ALLOC 0
+	// #define ENGONE_TRACK_FREE 1
+	// #define ENGONE_TRACK_REALLOC 2
+	// static bool s_trackerEnabled=true;
+	// void PrintTracking(u64 bytes, int type){
+	// 	if(!s_trackerEnabled)
+	// 		return;
+	// 	auto pair = allocTracking.find(bytes);
 			
-		if(pair!=allocTracking.end()){
-			if(type==ENGONE_TRACK_ALLOC)
-				pair->second.count++;
-			else if(type==ENGONE_TRACK_FREE)
-				pair->second.count--;
-			// else if(type==ENGONE_TRACK_REALLOC)
-			// 	pair->second.count--;
-			printf("%s %s (%d left)\n",type==ENGONE_TRACK_ALLOC?"alloc":(type==ENGONE_TRACK_FREE?"free" : "realloc"), pair->second.name.c_str(),pair->second.count);
-		}
-	}
+	// 	if(pair!=allocTracking.end()){
+	// 		if(type==ENGONE_TRACK_ALLOC)
+	// 			pair->second.count++;
+	// 		else if(type==ENGONE_TRACK_FREE)
+	// 			pair->second.count--;
+	// 		// else if(type==ENGONE_TRACK_REALLOC)
+	// 		// 	pair->second.count--;
+	// 		printf("%s %s (%d left)\n",type==ENGONE_TRACK_ALLOC?"alloc":(type==ENGONE_TRACK_FREE?"free" : "realloc"), pair->second.name.c_str(),pair->second.count);
+	// 	}
+	// }
 	
 	
     // static std::mutex s_allocStatsMutex;
@@ -704,10 +704,6 @@ namespace engone {
 	// using with in engone::Free. A pointer is fine
 	std::unordered_map<void*,int>* my_ptr_map = new std::unordered_map<void*,int>();
 	#define ptr_map (*my_ptr_map)
-
-	void SetTracker(bool on){
-		s_trackerEnabled = on;
-	}
 
 	// #define ENABLE_MEMORY_CORRUPTION_DETECTION
 
@@ -962,12 +958,12 @@ namespace engone {
 	u64 GetNumberAllocations(){
 		return s_numberAllocations;
 	}
-	void PrintRemainingTrackTypes(){
-        log::out << log::GOLD << "Dangling memory:\n";
-		for(auto& pair : allocTracking){
-			if(pair.second.count!=0)
-				printf(" %s (%llu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
-		}
+	// void PrintRemainingTrackTypes(){
+    //     log::out << log::GOLD << "Dangling memory:\n";
+		// for(auto& pair : allocTracking){
+		// 	if(pair.second.count!=0)
+		// 		printf(" %s (%llu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
+		// }
         // for(auto& pair : ptr_map){
 		// 	if(pair.second!=0)
 		// 		printf(" %p - %d bytes\n",pair.first, (int)pair.second);	
@@ -977,7 +973,7 @@ namespace engone {
 		// 		printf(" %p: %llu bytes\n",slot.ptr, slot.size);
 		// 	}
 		// }
-	}
+	// }
 	static HANDLE m_consoleHandle = NULL; // possibly a bad idea
     void SetConsoleColor(uint16 color){
 		if (m_consoleHandle == NULL) {

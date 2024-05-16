@@ -16,3 +16,5 @@
 #define WHILE_TRUE u64 COMBINE(limit,__LINE__)=100; while(Assert(COMBINE(limit,__LINE__)--))
 #define WHILE_TRUE_N(LIMIT) u64 COMBINE(limit,__LINE__)=LIMIT; while(Assert(COMBINE(limit,__LINE__)--))
 // #endif
+
+#define BREAK(COND) if(COND) __debugbreak();

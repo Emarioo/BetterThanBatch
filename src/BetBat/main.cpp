@@ -34,12 +34,8 @@ int main(int argc, const char** argv){
     #define EXIT_CODE_SUCCESS 0
     #define EXIT_CODE_FAILURE 1
 
-    log::out.enableReport(false);
-    // MeasureInit();
     ProfilerInitialize();
     
-    Tracker::SetTracking(true);
-
     DynamicArray<std::string> arguments{};
     for(int i=1;i<argc;i++) // is the first argument always the executable?
         arguments.add(argv[i]);
@@ -68,7 +64,7 @@ int main(int argc, const char** argv){
         options.target = TARGET_BYTECODE;
         options.target = TARGET_WINDOWS_x64;
         options.linker = LINKER_MSVC;
-        // options.linker = LINKER_GCC;
+        // options.linker = LINKER_GNU;
         options.executeOutput = true;
         // options.only_preprocess = true;
         options.useDebugInformation = true;
@@ -127,46 +123,47 @@ int main(int argc, const char** argv){
         return EXIT_CODE_SUCCESS;
     }
 
-    if(options.only_preprocess) {
-        Assert(options.source_file.size() != 0);
-        Assert(("Solely running preprocessor is incomplete",false));
-        #ifdef gone
-        auto stream = TokenStream::Tokenize(options.sourceFile.text);
+    // if(options.only_preprocess) {
+    //     Assert(options.source_file.size() != 0);
+    //     Assert(("Solely running preprocessor is incomplete",false));
+    //     #ifdef gone
+    //     auto stream = TokenStream::Tokenize(options.sourceFile.text);
         
-        if(!stream) {
-            log::out << log::RED << "Cannot read file '"<< options.sourceFile.text<<"'\n";
-        } else {
-            // TODO: Don't skip imports.
-            if(stream->importList.size() > 0) {
-                log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
-                log::out << log::GRAY << "Imports: ";
-                for(int i=0;i<stream->importList.size();i++) {
-                    if(i!=0) log::out << ", ";
-                    log::out << stream->importList[i].name;
-                }
-                log::out<<"\n";
-            }
-            Assert(false);
-            // CompileInfo compileInfo{};
-            // compileInfo.options = &options;
-            // auto stream2 = Preprocess(&compileInfo, stream);
-            // Assert(stream2);
-            // if(options.outputFile.text.size() == 0) {
-            //     log::out << log::AQUA << "## "<<options.sourceFile.text<<" ##\n";
-            //     stream2->print();
-            //     // TODO: Output to a default file like preproc.btb
-            //     // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
-            //     compilerExitCode = options.compileStats.errors;
-            // } else{
-            //     log::out << "Preprocessor output written to '"<<options.outputFile.text<<"'\n";
-            //     stream2->writeToFile(options.outputFile.text);
-            //     compilerExitCode = options.compileStats.errors;
-            // }
-            // TokenStream::Destroy(stream);
-            // TokenStream::Destroy(stream2);
-        }
-        #endif
-    } else if(options.performTests) {
+    //     if(!stream) {
+    //         log::out << log::RED << "Cannot read file '"<< options.sourceFile.text<<"'\n";
+    //     } else {
+    //         // TODO: Don't skip imports.
+    //         if(stream->importList.size() > 0) {
+    //             log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
+    //             log::out << log::GRAY << "Imports: ";
+    //             for(int i=0;i<stream->importList.size();i++) {
+    //                 if(i!=0) log::out << ", ";
+    //                 log::out << stream->importList[i].name;
+    //             }
+    //             log::out<<"\n";
+    //         }
+    //         Assert(false);
+    //         // CompileInfo compileInfo{};
+    //         // compileInfo.options = &options;
+    //         // auto stream2 = Preprocess(&compileInfo, stream);
+    //         // Assert(stream2);
+    //         // if(options.outputFile.text.size() == 0) {
+    //         //     log::out << log::AQUA << "## "<<options.sourceFile.text<<" ##\n";
+    //         //     stream2->print();
+    //         //     // TODO: Output to a default file like preproc.btb
+    //         //     // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
+    //         //     compilerExitCode = options.compileStats.errors;
+    //         // } else{
+    //         //     log::out << "Preprocessor output written to '"<<options.outputFile.text<<"'\n";
+    //         //     stream2->writeToFile(options.outputFile.text);
+    //         //     compilerExitCode = options.compileStats.errors;
+    //         // }
+    //         // TokenStream::Destroy(stream);
+    //         // TokenStream::Destroy(stream2);
+    //     }
+    //     #endif
+    // } else 
+    if(options.performTests) {
         if(options.pattern_for_files.length() != 0) {
             DynamicArray<std::string> tests;
             int matches = PatternMatchFiles(options.pattern_for_files, &tests);
@@ -190,15 +187,14 @@ int main(int argc, const char** argv){
         Compiler compiler{};
         compiler.run(&options);
 
-        if(options.executeOutput) {
-            switch(options.target) {
-                case TARGET_BYTECODE: {
-                    VirtualMachine vm{};
-                    vm.execute(compiler.bytecode,"main");
-                } break;
-            }
-        }
-        compiler.cleanup();
+        // if(options.executeOutput) {
+        //     switch(options.target) {
+        //         case TARGET_BYTECODE: {
+        //             VirtualMachine vm{};
+        //             vm.execute(compiler.bytecode,"main");
+        //         } break;
+        //     }
+        // }
     }
 
     // ###### CLEANUP STUFF ######
@@ -207,25 +203,19 @@ int main(int argc, const char** argv){
     ProfilerCleanup();
 
     NativeRegistry::DestroyGlobal();
-    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage();
+    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
     // int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
     if(finalMemory!=0){
         log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";
-        PrintRemainingTrackTypes();
-        Tracker::PrintTrackedTypes();
+        // PrintRemainingTrackTypes();
+        GlobalHeapAllocator()->tracker.printAllocations();
     }
-    // log::out << "Total allocated bytes: "<<GetTotalAllocatedBytes() << "\n";
-    log::out.cleanup();
-    // bad stuff happens when global data of tracker is deallocated before
-    // other global structures like arrays still track their allocations afterward.
-    Tracker::SetTracking(false); 
-    Tracker::DestroyGlobal();
 
     {
         ZoneNamedN(zone0,"sleep",true);
         engone::Sleep(0.5); // give time for program to connect and send data to tracy profiler
     }
-    log::out << "Finished\n";
+    // log::out << "Finished\n";
 
     return EXIT_CODE_SUCCESS;
 }
@@ -410,7 +400,7 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
         }
     }
 
-    if(options->only_preprocess && !options->source_file.size() == 0) {
+    if(options->only_preprocess && options->source_file.size() == 0) {
         // this should never run because we detect missing source file earlier
         log::out << log::RED << "You must specify a file when using --preproc\n";
     }

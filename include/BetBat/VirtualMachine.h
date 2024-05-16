@@ -15,7 +15,8 @@ struct VirtualMachine {
     }
     
     volatile i64 registers[BC_REG_MAX];
-    engone::Memory<u8> stack{};
+    // engone::Memory<u8> stack{};
+    QuickArray<u8> stack{};
 
     bool has_return_values_on_stack = false;
     int ret_offset = 0;

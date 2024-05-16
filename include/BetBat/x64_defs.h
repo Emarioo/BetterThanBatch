@@ -52,6 +52,7 @@ About x64:
 // With ModR/M REXR is for reg field while REXB is for r/m.
 // But not in this case.
 // See x64 manual.
+// also known as movabs
 #define OPCODE_MOV_REG_IMM_RD (u8)0xB8
 
 #define OPCODE_MOV_RM_IMM32_SLASH_0 (u8)0xC7
@@ -107,6 +108,7 @@ About x64:
 #define OPCODE_JL_REL8 (u8)0x7C
 #define OPCODE_JGE_REL8 (u8)0x7D
 #define OPCODE_JS_REL8 (u8)0x78
+#define OPCODE_JAE_REL8 (u8)0x73
 
 #define OPCODE_NOT_RM_SLASH_2 (u8)0xF7
 
@@ -220,7 +222,7 @@ About x64:
 
 #define OPCODE_4_ROUNDSS_REG_RM_IMM8 (u32)0x0A3A0F66
 #define OPCODE_4_ROUNDSD_REG_RM_IMM8 (u32)0x0B3A0F66
-#define OPCODE_3_PXOR_RM_REG (u32)0xEF0F66
+#define OPCODE_3_SSE_PXOR_RM_REG (u32)0xEF0F66
 
 #define OPCODE_3_SQRTSS_REG_RM (u32)0x510FF3
 

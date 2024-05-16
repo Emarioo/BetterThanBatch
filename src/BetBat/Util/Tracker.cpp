@@ -1,92 +1,49 @@
+#ifdef gone
 #include "BetBat/Util/Tracker.h"
 
 #include "BetBat/Util/Utility.h"
 #include "Engone/Util/Array.h"
 #include "Engone/PlatformLayer.h"
 
+struct TrackLocation {
+    const char* file;
+    int line, column;
+    int alloc_id;
+};
 struct TrackerType {
     std::string name{};
     u32 size = 0;
     u32 count = 0;
-    DynamicArray<TrackLocation> locations{}; // add tracking
-    DynamicArray<TrackLocation> freed_locations{}; // del tracking (not sure how reallocations are dealt with)
+    std::unordered_map<void*, TrackLocation> locations;
+    // DynamicArray<DebugLocation> locations{}; // add tracking
+    // DynamicArray<DebugLocation> freed_locations{}; // del tracking (not sure how reallocations are dealt with)
 };
-
 struct Tracker_impl {
-    void setTracking(bool enabled);
-    void addTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
-    void delTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
-    void printTrackedTypes();
-    // how much memory the tracker uses
-    u32 getMemoryUsage();
-
-    std::unordered_map<size_t, TrackerType> m_trackedTypes{};
+    std::unordered_map<size_t, TrackerType> m_trackedTypes{}; // maps typeinfo hashcodes to tracker types
     engone::Mutex m_trackLock{};
     bool m_enableTracking = true;
     // bool m_enableTracking = false;
-    DynamicArray<TrackLocation> m_uniqueTrackLocations{};
 
-    volatile i32 allocation_id = 1;
-
-    static Tracker_impl* Create();
-    static void Destroy(Tracker_impl* tracker);
+    volatile int allocation_id = 1;
 };
-
-
 static Tracker_impl* global_tracker = nullptr;
 
-#define ENSURE_GLOBAL_TRACKER if(!global_tracker) { global_tracker = Tracker_impl::Create(); Assert(global_tracker); }
+#define ENSURE_GLOBAL_TRACKER if(!global_tracker) { global_tracker = new Tracker_impl(); Assert(global_tracker); }
 
-Tracker_impl* Tracker_impl::Create() {
-    Tracker_impl* ptr = (Tracker_impl*)engone::Allocate(sizeof(Tracker_impl));
-    if(!ptr) return nullptr;
-    new(ptr)Tracker_impl();
-    return ptr;
-}
-void Tracker_impl::Destroy(Tracker_impl* tracker) {
-    tracker->~Tracker_impl();
-    engone::Free(tracker, sizeof(Tracker_impl));
-}
-void Tracker::DestroyGlobal() {
-    if(global_tracker) {
-        Tracker_impl::Destroy(global_tracker);
-        global_tracker = nullptr;
-    }
-}
-void Tracker::SetTracking(bool enabled) {
+void EnableTracking(bool enabled) {
     ENSURE_GLOBAL_TRACKER
-    global_tracker->setTracking(enabled);
+    global_tracker->m_trackLock.lock();
+    global_tracker->m_enableTracking = enabled;
+    global_tracker->m_trackLock.unlock();
 }
-void Tracker::AddTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
+void AddTracking(void* ptr, const std::type_info& typeInfo, u32 size, const DebugLocation& loc, u32 count) {
     ENSURE_GLOBAL_TRACKER
-    global_tracker->addTracking(typeInfo, size,loc,count);
-}
-void Tracker::DelTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
-    ENSURE_GLOBAL_TRACKER
-    global_tracker->delTracking(typeInfo, size,loc,count);
-}
-void Tracker::PrintTrackedTypes(){
-    ENSURE_GLOBAL_TRACKER
-    global_tracker->printTrackedTypes();
-}
-u32 Tracker::GetMemoryUsage(){
-    // ENSURE_GLOBAL_TRACKER <- don't create memory when we ask for memory usage. We may have queried overall memory usage which would miss this new memory
-    if(!global_tracker)
-        return 0;
-    return global_tracker->getMemoryUsage() + sizeof(Tracker_impl); // the size of the tracker itself must be included here
-}
-void Tracker_impl::setTracking(bool enabled) {
-    m_trackLock.lock();
-    m_enableTracking = enabled;
-    m_trackLock.unlock();
-}
-void Tracker_impl::addTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
-    if(!m_enableTracking)
+    if(!global_tracker->m_enableTracking)
         return;
 
     auto id = typeInfo.hash_code();
 
-    int alloc_id = engone::atomic_add(&allocation_id, 1) - 1;
+    int alloc_id = engone::atomic_add(&global_tracker->allocation_id, 1) - 1;
 
     // @DEBUG
     int alloc_ids[]{
@@ -97,15 +54,15 @@ void Tracker_impl::addTracking(const std::type_info& typeInfo, u32 size, const T
         BREAK(alloc_id == alloc_ids[i]);
     }
 
-    m_trackLock.lock();
+    global_tracker->m_trackLock.lock();
 
-    bool prev = m_enableTracking;
-    m_enableTracking = false;
+    bool prev = global_tracker->m_enableTracking;
+    global_tracker->m_enableTracking = false;
     
-    auto pair = m_trackedTypes.find(id);
+    auto pair = global_tracker->m_trackedTypes.find(id);
     TrackerType* ptr = nullptr;
-    if(pair == m_trackedTypes.end()) {
-        ptr = &(m_trackedTypes[id] = {});
+    if(pair == global_tracker->m_trackedTypes.end()) {
+        ptr = &(global_tracker->m_trackedTypes[id] = {});
         auto name = typeInfo.name();
         ptr->name = name;
         ptr->size = size;
@@ -116,31 +73,33 @@ void Tracker_impl::addTracking(const std::type_info& typeInfo, u32 size, const T
     #ifdef LOG_TRACKER
     engone::log::out << engone::log::GREEN << "Track "<<count<<": "<<typeInfo.name() <<" (left: "<<ptr->count<<")\n";
     #endif
-    if(loc.fname){
+    ptr->locations[]
+    if(loc.file){
         ptr->locations.add(loc);
         ptr->locations.last().count = count;
         ptr->locations.last().alloc_id = alloc_id;
     }
-    m_enableTracking = prev;
-    m_trackLock.unlock();
+    global_tracker->m_enableTracking = prev;
+    global_tracker->m_trackLock.unlock();
 }
-void Tracker_impl::delTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
-    if(!m_enableTracking)
+void DelTracking(void* ptr, const std::type_info& typeInfo, u32 size, const DebugLocation& loc, u32 count) {
+    ENSURE_GLOBAL_TRACKER
+     if(!global_tracker->m_enableTracking)
         return;
 
     auto id = typeInfo.hash_code();
 
-    m_trackLock.lock();
+    global_tracker->m_trackLock.lock();
 
-    int alloc_id = engone::atomic_add(&allocation_id, 1) - 1;
+    int alloc_id = engone::atomic_add(&global_tracker->allocation_id, 1) - 1;
 
-    bool prev = m_enableTracking;
-    m_enableTracking = false;
+    bool prev = global_tracker->m_enableTracking;
+    global_tracker->m_enableTracking = false;
 
-    auto pair = m_trackedTypes.find(id);
+    auto pair = global_tracker->m_trackedTypes.find(id);
     TrackerType* ptr = nullptr;
-    if(pair == m_trackedTypes.end()) {
-        ptr = &(m_trackedTypes[id] = {});
+    if(pair == global_tracker->m_trackedTypes.end()) {
+        ptr = &(global_tracker->m_trackedTypes[id] = {});
         auto name = typeInfo.name();
         ptr->name = name;
         ptr->size = size;
@@ -151,7 +110,7 @@ void Tracker_impl::delTracking(const std::type_info& typeInfo, u32 size, const T
     #ifdef LOG_TRACKER
     engone::log::out << engone::log::CYAN << "Unrack "<<count<<": "<<typeInfo.name() <<" (left: "<<ptr->count<<")\n";
     #endif
-    if(loc.fname) {
+    if(loc.file) {
         ptr->freed_locations.add(loc);
         ptr->freed_locations.last().count = count;
         ptr->freed_locations.last().alloc_id = alloc_id;
@@ -170,20 +129,23 @@ void Tracker_impl::delTracking(const std::type_info& typeInfo, u32 size, const T
     //     }
     //     // Assert(removed);
     }
-    m_enableTracking = prev;
-    m_trackLock.unlock();
+    global_tracker->m_enableTracking = prev;
+    global_tracker->m_trackLock.unlock();
 }
-
-void Tracker_impl::printTrackedTypes(){
+void PrintTrackedTypes(){
+    ENSURE_GLOBAL_TRACKER
+    
     using namespace engone;
 
-    m_trackLock.lock();
-    bool prev = m_enableTracking;
-    m_enableTracking = false;
+    global_tracker->m_trackLock.lock();
+    bool prev = global_tracker->m_enableTracking;
+    global_tracker->m_enableTracking = false;
 
     u32 totalMemory = 0;
     log::out << log::BLUE<<"Tracked types:\n";
-    for(auto& pair : m_trackedTypes) {
+    DynamicArray<DebugLocation> m_uniqueTrackLocations{};
+    
+    for(auto& pair : global_tracker->m_trackedTypes) {
         TrackerType* trackType = &pair.second;
         if(trackType->count == 0)
             continue;
@@ -198,7 +160,7 @@ void Tracker_impl::printTrackedTypes(){
             bool found = false;
             for(int k=0;k<m_uniqueTrackLocations.size();k++){
                 auto& loc2 = trackType->locations[k];
-                if(loc.fname == loc2.fname && loc.line == loc2.line && loc.alloc_id == loc2.alloc_id) {
+                if(loc.file == loc2.file && loc.line == loc2.line && loc.alloc_id == loc2.alloc_id) {
                     found = true;
                     break;
                 }
@@ -209,10 +171,10 @@ void Tracker_impl::printTrackedTypes(){
         }
         for(int k=0;k<m_uniqueTrackLocations.size();k++){
             auto& loc2 = trackType->locations[k];
-            int len = strlen(loc2.fname);
+            int len = strlen(loc2.file);
             int cutoff = len-1;
             int slashCount = 2;
-            std::string path = loc2.fname;
+            std::string path = loc2.file;
             
             ReplaceChar((char*)path.data(), path.length(),'\\','/');
             path = BriefString(path, 50);
@@ -238,16 +200,19 @@ void Tracker_impl::printTrackedTypes(){
         log::out << log::RED;
     log::out << "Tracked memory: "<<totalMemory<<"\n";
     
-    m_enableTracking = prev;
-    m_trackLock.unlock();
+    global_tracker->m_enableTracking = prev;
+    global_tracker->m_trackLock.unlock();
 }
-u32 Tracker_impl::getMemoryUsage(){
+u32 GetMemoryUsage(){
+    if(!global_tracker)
+        return 0;
     u32 memory = 0;
-    m_trackLock.lock();
-    for(auto& pair : m_trackedTypes) {
+    global_tracker->m_trackLock.lock();
+    for(auto& pair : global_tracker->m_trackedTypes) {
         TrackerType* trackType = &pair.second;
-        memory += trackType->locations.max * sizeof(TrackLocation);
+        memory += trackType->locations.max * sizeof(DebugLocation);
     }
-    m_trackLock.unlock();
+    global_tracker->m_trackLock.unlock();
     return memory;
 }
+#endif

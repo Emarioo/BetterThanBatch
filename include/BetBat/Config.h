@@ -23,6 +23,8 @@
    Major config
 #################
 
+// TODO: Clean up this file with a couple of main settings: DEBUG, RELEASE, PERFORMANCE_TEST
+
 Try to edit Config.cpp instead of this file because you will have to compile all headers and translation units otherwise.
 */
 
@@ -33,12 +35,12 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 // #define DEV_FILE "examples/garb.btb"
 // #define DEV_FILE "tests/simple/garb.btb"
 #ifdef OS_WINDOWS
-#define CONFIG_DEFAULT_TARGET TARGET_WINDOWS_x64
-// #define CONFIG_DEFAULT_LINKER LINKER_MSVC
-#define CONFIG_DEFAULT_LINKER LINKER_GCC
+    #define CONFIG_DEFAULT_TARGET TARGET_WINDOWS_x64
+    // #define CONFIG_DEFAULT_LINKER LINKER_MSVC
+    #define CONFIG_DEFAULT_LINKER LINKER_GNU
 #else
-#define CONFIG_DEFAULT_TARGET TARGET_UNIX_x64
-#define CONFIG_DEFAULT_LINKER LINKER_GCC
+    #define CONFIG_DEFAULT_TARGET TARGET_UNIX_x64
+    #define CONFIG_DEFAULT_LINKER LINKER_GNU
 #endif
 
 // #define RUN_TEST_SUITE
@@ -70,19 +72,16 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 #ifndef RELEASE
-// Don't enable tracker when optimizing for performance, the tracker is
-// very slow (mutexes, fix thread local storage for speed improvement)
-#define ENABLE_TRACKER
-// #define LOG_TRACKER
-#define LOG_MSG_LOCATION
-// #define DUMP_ALL_ASM
+    // Don't enable tracker when optimizing for performance, the tracker is
+    // very slow (mutexes, fix thread local storage for speed improvement)
+    #define ENABLE_TRACKER
+    // #define LOG_TRACKER
+    #define LOG_MSG_LOCATION
+    // #define DUMP_ALL_ASM
+    // #define LOG_ALLOCATIONS
 #endif
 
-// #define LOG_ALLOCATIONS
-// Config.h is included in Alloc.cpp for alloc to see the macro.
-// #define DEBUG_RESIZE
-
-#define PREPROC_REC_LIMIT 10
+#define PREPROC_REC_LIMIT 100
 
 // THESE SHOULD BE OFF FOR THE COMPILER TO WORK PROPERLY
 // #define DISABLE_BASE_IMPORT
@@ -94,18 +93,18 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 // not the ones that bound check in arrays
 // or perhaps you do both?
 #ifdef RELEASE
-// all asserts shouldn't be disabled.
-// bounds check can be disabled
-// asserts that probably won't fail and
-// are hit often can be disabled for performance.
-// #define DISABLE_ASSERTS
+    // all asserts shouldn't be disabled.
+    // bounds check can be disabled
+    // asserts that probably won't fail and
+    // are hit often can be disabled for performance.
+    // #define DISABLE_ASSERTS
 #endif
 
 #include "Engone/Asserts.h"
 
 #ifdef DEBUG
-#define LEXER_DEBUG_DETAILS
-// #define ILOG_REGS
+    #define LEXER_DEBUG_DETAILS
+    // #define ILOG_REGS
 #endif
 
 /*
@@ -115,11 +114,11 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 #define INCOMPLETE Assert(("Incomplete",false));
 
 #ifdef DEBUG
-#define LOG(CATEGORY, ...) if(global_loggingSection&(CATEGORY)) { engone::log::out << __VA_ARGS__; }
-#define LOG_CODE(CATEGORY, X) if(global_loggingSection&(CATEGORY)) { X }
+    #define LOG(CATEGORY, ...) if(global_loggingSection&(CATEGORY)) { engone::log::out << __VA_ARGS__; }
+    #define LOG_CODE(CATEGORY, X) if(global_loggingSection&(CATEGORY)) { X }
 #else
-#define LOG(CATEGORY,...)
-#define LOG_CODE(CATEGORY, X)
+    #define LOG(CATEGORY,...)
+    #define LOG_CODE(CATEGORY, X)
 #endif
 enum LoggingSection : u64 {
     LOG_ALL = 0xFFFF'FFFF'FFFF'0000,
@@ -147,29 +146,29 @@ enum LoggingSection : u64 {
 extern LoggingSection global_loggingSection;
 
 #ifdef DEBUG
-#define _LOG(F,...) { if(global_loggingSection & F) { __VA_ARGS__; } }
-#define _TLOG(x)    _LOG(LOG_TOKENIZER,x)
-#define _MLOG(x)    _LOG(LOG_PREPROCESSOR,x)
-#define _PLOG(x)    _LOG(LOG_PARSER,x)
-#define _TCLOG(...)   _LOG(LOG_TYPECHECKER,__VA_ARGS__)
-#define _GLOG(x)    _LOG(LOG_GENERATOR,x)
-#define _OLOG(x)    _LOG(LOG_OPTIMIZER,x)
-#define _CLOG(x)    _LOG(LOG_CONVERTER,x)
-#define _ILOG(x)    _LOG(LOG_INTERPRETER,x)
-#define _VLOG(x)    _LOG(LOG_OVERVIEW,x)
+    #define _LOG(F,...) { if(global_loggingSection & F) { __VA_ARGS__; } }
+    #define _TLOG(x)    _LOG(LOG_TOKENIZER,x)
+    #define _MLOG(x)    _LOG(LOG_PREPROCESSOR,x)
+    #define _PLOG(x)    _LOG(LOG_PARSER,x)
+    #define _TCLOG(...)   _LOG(LOG_TYPECHECKER,__VA_ARGS__)
+    #define _GLOG(x)    _LOG(LOG_GENERATOR,x)
+    #define _OLOG(x)    _LOG(LOG_OPTIMIZER,x)
+    #define _CLOG(x)    _LOG(LOG_CONVERTER,x)
+    #define _ILOG(x)    _LOG(LOG_INTERPRETER,x)
+    #define _VLOG(x)    _LOG(LOG_OVERVIEW,x)
 
-#define _MMLOG(x)   _LOG(LOG_MACRO_MATCH,x)
+    #define _MMLOG(x)   _LOG(LOG_MACRO_MATCH,x)
 #else
-#define _LOG(F,...)
-#define _TLOG(x) 
-#define _MLOG(x) 
-#define _PLOG(x) 
-#define _TCLOG(x)
-#define _GLOG(x) 
-#define _OLOG(x) 
-#define _CLOG(x) 
-#define _ILOG(x) 
-#define _VLOG(x) 
+    #define _LOG(F,...)
+    #define _TLOG(x) 
+    #define _MLOG(x) 
+    #define _PLOG(x) 
+    #define _TCLOG(x)
+    #define _GLOG(x) 
+    #define _OLOG(x) 
+    #define _CLOG(x) 
+    #define _ILOG(x) 
+    #define _VLOG(x) 
 
-#define _MMLOG(x)
+    #define _MMLOG(x)
 #endif

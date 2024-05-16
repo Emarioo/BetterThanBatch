@@ -12,6 +12,7 @@
 
 // #include "Engone/Util/RandomUtility.h"
 #include "Engone/PlatformLayer.h"
+#include "Engone/Asserts.h"
 
 //#define FORCE_HEAP
 
@@ -19,6 +20,160 @@
 #define DEBUG_GAME_MEMORY(x)
 
 namespace engone {
+    
+    
+    void Tracker::add(void* ptr, int bytes, const DebugLocation& debug) {
+        auto id = debug.type.hash_code();
+        int alloc_id = engone::atomic_add(&allocation_id, 1) - 1;
+
+        // @DEBUG
+        int alloc_ids[]{
+            0,
+            // 42
+            // 1, 103, 104, 106, 107
+        };
+        for(int i=0;i<sizeof(alloc_ids)/sizeof(*alloc_ids);i++) {
+            BREAK(alloc_id == alloc_ids[i]);
+        }
+
+        mutex.lock();
+
+        bool prev = m_enableTracking;
+        m_enableTracking = false;
+        
+        int count = debug.type_size == 0 ? bytes : bytes / debug.type_size;
+        TrackerType* tracked_type = nullptr;
+        {
+            auto pair = m_trackedTypes.find(id);
+            if(pair == m_trackedTypes.end()) {
+                tracked_type = &(m_trackedTypes[id] = {});
+                auto name = debug.type.name();
+                tracked_type->name = name;
+                tracked_type->size = debug.type_size;
+            } else {
+                tracked_type = &pair->second;
+            }
+            tracked_type->count += count;
+        }
+        #ifdef LOG_TRACKER
+        engone::log::out  << "Track "<<count<<": "<<engone::log::GREEN<<debug.type.name()<<engone::log::NO_COLOR <<" (left: "<<tracked_type->count<<") "<<ptr<<"\n";
+        engone::log::out.flush();
+        #endif
+        {
+            auto pair = tracked_type->locations.find(ptr);
+            if(pair != tracked_type->locations.end()) {
+                Assert(false); // pointer already exists? why?
+            } else {
+                auto loc = &(tracked_type->locations[ptr] = {});
+                loc->alloc_id = alloc_id;
+                loc->file = debug.file;
+                loc->line = debug.line;
+            }
+        }
+        m_enableTracking = prev;
+        mutex.unlock();
+    }
+    void Tracker::del(void* ptr, int bytes, const DebugLocation& debug) {
+        auto id = debug.type.hash_code();
+
+        mutex.lock();
+
+        bool prev = m_enableTracking;
+        m_enableTracking = false;
+        
+        int count = debug.type_size == 0 ? bytes : bytes / debug.type_size;
+        TrackerType* tracked_type = nullptr;
+        {
+            auto pair = m_trackedTypes.find(id);
+            if(pair == m_trackedTypes.end()) {
+                tracked_type = &(m_trackedTypes[id] = {});
+                auto name = debug.type.name();
+                tracked_type->name = name;
+                tracked_type->size = debug.type_size;
+            } else {
+                tracked_type = &pair->second;
+            }
+            if(debug.type_size == 0)
+                tracked_type->count -= bytes;
+            else
+                tracked_type->count -= bytes / debug.type_size;
+        }
+        #ifdef LOG_TRACKER
+        engone::log::out  << "Untrack "<<count<<": "<<engone::log::GREEN<<debug.type.name()<<engone::log::NO_COLOR <<" (left: "<<tracked_type->count<<") "<<ptr<<"\n";
+        engone::log::out.flush();
+        #endif
+        {
+            auto pair = tracked_type->locations.find(ptr);
+            if(pair != tracked_type->locations.end()) {
+                tracked_type->locations.erase(ptr);
+            } else {
+                Assert(false); // double free?
+            }
+        }
+        m_enableTracking = prev;
+        mutex.unlock();
+    }
+    
+    void Tracker::printAllocations(){
+        using namespace engone;
+
+        mutex.lock();
+        bool prev = m_enableTracking;
+        m_enableTracking = false;
+
+        u32 totalMemory = 0;
+        log::out << log::BLUE<<"Tracked types:\n";
+        // DynamicArray<DebugLocation> m_uniqueTrackLocations{};
+        
+        std::string cwd = engone::GetWorkingDirectory() + "/";
+        
+        for(auto& pair : m_trackedTypes) {
+            TrackerType* trackType = &pair.second;
+            if(trackType->count == 0)
+                continue;
+            
+            if(trackType->name.find("struct ") == 0) // Naming on Windows?
+                log::out <<" "<<log::LIME<< (trackType->name.c_str()+strlen("struct "))<<log::NO_COLOR <<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
+            else
+                log::out <<" "<<log::LIME<< trackType->name <<log::NO_COLOR<<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
+            for(auto pair : trackType->locations){
+                auto& loc = pair.second;
+                int len = strlen(loc.file);
+                int cutoff = len-1;
+                int slashCount = 2;
+                std::string path = loc.file;
+                
+                for(int i=0;i<path.size();i++) {
+                    if(path[i] == '\\')
+                        path[i] = '/';
+                }
+                
+                int where = path.find(cwd);
+                if(where == 0) {
+                    path = path.substr(cwd.length());
+                }
+                log::out << "  "<<(path) << ":"<<loc.line<< ", id: "<<loc.alloc_id<<"\n";
+            }
+            totalMemory += trackType->count * trackType->size;
+        }
+        if(totalMemory != 0)
+            log::out << log::RED;
+        log::out << "Tracked memory: "<<totalMemory<<"\n";
+        
+        m_enableTracking = prev;
+        mutex.unlock();
+    }
+    int Tracker::getMemoryUsage(){
+        u32 memory = 0;
+        // we use standard library and don't track memory usage.
+        // mutex.lock();
+        // for(auto& pair : m_trackedTypes) {
+        //     TrackerType* trackType = &pair.second;
+        //     memory += trackType->locations.max * sizeof(DebugLocation);
+        // }
+        // mutex.unlock();
+        return memory;
+    }
     
     static HeapAllocator global_heapAllocator{};
     HeapAllocator* GlobalHeapAllocator() {

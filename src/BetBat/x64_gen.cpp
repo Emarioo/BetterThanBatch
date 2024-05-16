@@ -266,9 +266,10 @@ bool X64Builder::_reserve(u32 newAllocationSize){
         tinyprog->_allocationSize = newAllocationSize;
         return true;
     } else {
-        TRACK_DELS(u8, tinyprog->_allocationSize);
-        u8* newText = (u8*)engone::Reallocate(tinyprog->text, tinyprog->_allocationSize, newAllocationSize);
-        TRACK_ADDS(u8, newAllocationSize);
+        u8* newText = TRACK_ARRAY_REALLOC(tinyprog->text, u8, tinyprog->_allocationSize, newAllocationSize);
+        // TRACK_DELS(u8, tinyprog->_allocationSize);
+        // u8* newText = (u8*)engone::Reallocate(tinyprog->text, tinyprog->_allocationSize, newAllocationSize);
+        // TRACK_ADDS(u8, newAllocationSize);
         Assert(newText);
         if(!newText)
             return false;

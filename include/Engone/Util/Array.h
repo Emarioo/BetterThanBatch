@@ -8,7 +8,8 @@
 // #endif
 
 // #include "BetBat/Util/Perf.h"
-#include "BetBat/Util/Tracker.h"
+// #include "BetBat/Util/Tracker.h"
+#include "Engone/Util/Allocator.h"
 
 #include "Engone/Asserts.h"
 
@@ -319,7 +320,9 @@ struct DynamicArray {
             // }
 
             // T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
-            T* newPtr = (T*)engone::Allocate(sizeof(T) * newMax);
+            // T* newPtr = (T*)engone::Allocate(sizeof(T) * newMax);
+            T* newPtr = TRACK_ARRAY_ALLOC(T, newMax);
+            
             Assert(newPtr);
             
             for(u32 i = 0; i < used; i++){
@@ -328,13 +331,14 @@ struct DynamicArray {
                 (_ptr + i)->~T();
             }
             
-            engone::Free(_ptr, sizeof(T) * max);
+            TRACK_ARRAY_FREE(_ptr, T, max);
+            // engone::Free(_ptr, sizeof(T) * max);
 
-            if (newMax > max) {
-                TRACK_ADDS(T, newMax - max);
-            } else if(newMax < max) {
-                TRACK_DELS(T, max - newMax);
-            }
+            // if (newMax > max) {
+            //     TRACK_ADDS(T, newMax - max);
+            // } else if(newMax < max) {
+            //     TRACK_DELS(T, max - newMax);
+            // }
 
             if(!newPtr)
                 return false;
@@ -544,9 +548,10 @@ struct QuickArray {
             //         (_ptr + i)->~T();
             //     }
             // }
-            TRACK_DELS(T, max);
-            T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
-            TRACK_ADDS(T, newMax);
+            T* newPtr = TRACK_ARRAY_REALLOC(_ptr, T, max, newMax);
+            // TRACK_DELS(T, max);
+            // T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
+            // TRACK_ADDS(T, newMax);
             Assert(newPtr);
             if(!newPtr)
                 return false;
