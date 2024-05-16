@@ -46,7 +46,7 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
         return ptr
 
     fileSize: u64;
-    file := FileOpen(&path, FILE_READ_ONLY, &fileSize);
+    file := FileOpen(path, FILE_READ_ONLY, &fileSize);
     if(!file)
         return null;
     data: void* = Allocate(fileSize);
@@ -247,7 +247,7 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
             time := 1000.0 * cast<f32>(zone.end - zone.start) / GetClockSpeed();
             timeText.string = tempStringData + strOffset;
             // log("data:",(cast<i64>tempStringData)," off:",cast<i64>strOffset," time:",time);
-            len: u32 = swrite_unsafe(tempStringData + strOffset, time);
+            len := swrite_unsafe(tempStringData + strOffset, time);
             // if len > 8
             //     len = 8;
             strOffset += len;

@@ -17,6 +17,7 @@ namespace Language {
     struct DirectoryIteratorData {
         Slice<char> name;
         u64 fileSize;
+        u64 lastModified;
         float lastWriteSeconds;
         bool isDirectory;
     };

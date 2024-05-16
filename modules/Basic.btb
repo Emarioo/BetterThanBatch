@@ -1,10 +1,19 @@
 #import "Logger"
 
+fn @intrinsic strlen(str: char*) -> u32;
+
 // Use native functions instead
 fn equal(a: char[], b: char[]) -> i32 {
     if a.len != b.len
         return false
-    return !memcmp(a.ptr, b.ptr, a.len);
+    for 0..a.len {
+        if a.ptr[nr] != b.ptr[nr]
+            return false
+    }
+    return true
+}
+fn equal(a: char*, b: char[]) -> i32 {
+    return equal(Slice<char>{a, strlen(a)}, b)
 }
 
 // #import "Logger"

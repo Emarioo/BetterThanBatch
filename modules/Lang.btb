@@ -118,11 +118,14 @@ fn std_print(type: lang_TypeId) {
     }
     std_print(" }");
 }
-fn std_print_any<T>(value: T, pretty: bool = false) {
+fn std_print_any<T>(value: T*, pretty: bool = false) {
     id := typeid(T);
     std_print_any(&value, id, pretty);
-    
 }
+// fn std_print_any<T>(value: T, pretty: bool = false) {
+//     id := typeid(T);
+//     std_print_any(&value, id, pretty);
+// }
 fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32 = 1) {
     
     if type.ptr_level != 0 {

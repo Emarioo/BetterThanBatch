@@ -1,8 +1,6 @@
-
-
-
 /*
-    OpenGL related code using GLFW and GLEW
+    GLAD Wrapper
+    (incomplete)
 */
 // #link "gdi32.lib user32.lib OpenGL32.lib"
 // #link "libs/glad/src/glad.c"
@@ -40,6 +38,7 @@
 #macro GL_ONE_MINUS_DST_COLOR 0x0307
 
 fn @import gladLoadGL() -> i32;
+fn @import gladLoadGLLoader(func: fn_ref) -> i32;
 
 fn @import glClear(mask: u32);
 fn @import glClearColor(red: f32, green: f32, blue: f32, alpha: f32);

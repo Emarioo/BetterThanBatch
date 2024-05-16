@@ -1530,6 +1530,7 @@ void Compiler::addLinkDirective(const std::string& text){
 }
 Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std::string* assumed_path_on_error) {
     using namespace engone;
+
     // absolute
     // ./path always from sourceDirectory
     // relative to cwd OR import directories
@@ -1548,6 +1549,8 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
         fullPath = path.text;
     }
 
+    bool keep_searching = true;
+
     //-- Search directory of current source file
     if(fullPath.text.find("./")==0) {
         Assert(!sourceDirectory.text.empty());
@@ -1562,46 +1565,53 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
                 *assumed_path_on_error = fullPath.text;
             return {};
         }
-    } 
-    //-- Search cwd or absolute path
-    else if(engone::FileExist(fullPath.text)){
-        // if(!fullPath.isAbsolute())
-        fullPath = fullPath.getAbsolute();
     }
-    else {
+    
+    //-- Search cwd or absolute path
+    // if(keep_searching){
+    //     if(engone::FileExist(fullPath.text)){
+    //         // if(!fullPath.isAbsolute())
+    //         fullPath = fullPath.getAbsolute();
+    //     }
+    // }
+    if (keep_searching) {
+        Path temp = sourceDirectory.text;
+        if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
+            temp.text += "/";
+        temp.text += fullPath.text;
+        for(int i=0;i<(int)importDirectories.size();i++){
+            const Path& dir = importDirectories[i];
+            Assert(dir.isDir() && dir.isAbsolute());
+            if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
+                temp = dir.text + fullPath.text;
+            else
+                temp = dir.text + "/" + fullPath.text;
+
+            if(FileExist(temp.text)) {
+                fullPath = temp.getAbsolute();
+                keep_searching = false;
+                break;
+            }
+        }
+    }
+    if (keep_searching) {
+        if(engone::FileExist(fullPath.text)){
+            fullPath = fullPath.getAbsolute();
+            keep_searching = false;
+        }
+    }
+    if (keep_searching) {
         Path temp = sourceDirectory.text;
         if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
             temp.text += "/";
         temp.text += fullPath.text;
         if(FileExist(temp.text)){ // search directory of current source file again but implicit ./
             fullPath = temp.getAbsolute();
-        } else {
-            //-- Search additional import directories.
-            // TODO: DO THIS WITH #INCLUDE TOO!
-            // We only read importDirectories which makes this thread safe
-            // if we had modified it in anyway then it wouldn't have been.
-            bool yes = false;
-            for(int i=0;i<(int)importDirectories.size();i++){
-                const Path& dir = importDirectories[i];
-                Assert(dir.isDir() && dir.isAbsolute());
-                if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
-                    temp = dir.text + fullPath.text;
-                else
-                    temp = dir.text + "/" + fullPath.text;
-
-                if(FileExist(temp.text)) {
-                    fullPath = temp.getAbsolute();
-                    yes = true;
-                    break;
-                }
-            }
-            if(!yes) {
-                // no path was assumed
-                // if(assumed_path_on_error)
-                //     *assumed_path_on_error = fullPath.text;
-                fullPath = "";
-            }
+            keep_searching = false;
         }
+    }
+    if(keep_searching) {
+        fullPath = ""; // failure, file not found
     }
     return fullPath;
 }

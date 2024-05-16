@@ -26,13 +26,14 @@
         {
             "name": "UNIX",
             "includePath": [
-                "${workspaceFolder}/**"
+                "c:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/**"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "OS_UNIX"
+                "OS_UNIX",
+                "COMPILER_GCC"
             ],
             "windowsSdkVersion": "10.0.19041.0",
             "compilerPath": "C:\\Program Files\\mingw-w64\\x86_64-12.2.0-release-posix-seh-ucrt-rt_v10-rev2\\mingw64\\bin\\g++.exe",
@@ -40,8 +41,17 @@
             "cppStandard": "c++17",
             "intelliSenseMode": "linux-gcc-x64",
             "forcedInclude": [
-                "include/pch.h"
-            ]
+                "c:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/include/pch.h"
+            ],
+            "compilerPathInCppPropertiesJson": "C:\\Program Files\\mingw-w64\\x86_64-12.2.0-release-posix-seh-ucrt-rt_v10-rev2\\mingw64\\bin\\g++.exe",
+            "mergeConfigurations": false,
+            "browse": {
+                "path": [
+                    "c:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/**",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

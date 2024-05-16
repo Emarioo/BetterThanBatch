@@ -615,7 +615,7 @@ unsigned int UIModule::location(const std::string& name){
     }
 }
 void UIModule::init(){
-      if(!initialized){
+    if(!initialized){
         shaderId = CreateUIShader();
         
         glGenVertexArrays(1,&vertexArrayId);

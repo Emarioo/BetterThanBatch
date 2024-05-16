@@ -1,0 +1,268 @@
+/*
+    A crude version control tool
+
+    TODO: Fix memory leaks. It's not such a big deal since the program will
+      start, perform an operation, and quit. If the tool is incorporated into a GUI application then we will need to fix memory leaks.
+
+    TODO: Split main into multiple files.
+        One for serialization and file formats.
+        One main for command line options and setup
+        One for workspace and operations on it
+
+    TODO: When reading file and array lengths, check if the
+        length is reasonable.
+        100000 is not reasonable, probably a corruption
+*/
+
+#import "String"
+#import "Array"
+#import "Logger"
+#import "OS"
+#import "Basic"
+#import "./gui.btb"
+#import "./workspace.btb"
+
+fn main(argc: i32, argv: char**) {
+
+    workspace: Workspace
+    path: StringBuilder
+    path.append("examples/version_control/workspace_a")
+    workspace.init(&path)
+
+    // t: StringBuilder
+    // i: SnapshotID
+    // i.n = 0xFFFF_FFFF_FFFF_FFFF
+    // t.append_hex(&i)
+    // log(t)
+    // start_gui(&workspace)
+    // return
+
+    if argc < 2 {
+        log("Crude version control v0.0.1")
+        log(" Branches: ", workspace.branches.size())
+        log(" Snapshots: ", workspace.snapshots.size())
+        log("Help message")
+        return
+    } else {
+        if equal(argv[1], "branch") {
+            if(argc < 3) {
+                if workspace.branches.size() == 0 {
+                    log("No branches")   
+                }
+                for @ptr workspace.branches.sliced_unsafe() {
+                    if workspace.active_branch == it.id {
+                        log(" *",it.name.sliced())
+                    } else {
+                        log("  ",it.name.sliced())
+                    }
+                }
+            } else if equal(argv[2], "del") {
+                if argc < 4 {
+                    log("Missing branch name")
+                    log("Usage: branch del [name] - delete branch")
+                } else {
+                    name: Slice<char> = Slice<char>{argv[3], strlen(argv[3])}
+                    found := workspace.find_index_of_branch(name)
+                    if found == -1 {
+                        log("'",name,"' is not a branch")
+                        log("Suggestion: branch - see available branches")
+                    } else {
+                        if workspace.active_branch == workspace.branches.get_unsafe(found).id {
+                            log("Cannot delete the active branch '",name,"'")
+                            log("Switch to another branch first")
+                        } else {
+                            log("Deleted branch '",name,"'")
+                            workspace.branches.remove(found)
+                        }
+                    }
+                }
+            } else if equal(argv[2], "add") {
+                if argc < 4 {
+                    log("Missing branch name")
+                    log("Usage: branch add [name] - delete branch")
+                } else {
+                    name: Slice<char> = Slice<char>{argv[3], strlen(argv[3])}
+                    found := workspace.find_index_of_branch(name)
+                    if found == -1 {
+                        workspace.create_branch(name)
+                        log("Created branch '",name,"'")
+                    } else {
+                        log("Cannot create branch '",name,"' because it already exists")
+                    }
+                }
+            } else if equal(argv[2], "help") {
+                log("Usage: branch [name] - switch to branch")
+                log("       branch add [name] - create branch")
+                log("       branch del [name] - delete branch")
+            } else {
+                name: Slice<char> = Slice<char>{argv[2], strlen(argv[2])}
+                found := workspace.find_index_of_branch(name)
+                if found == -1 {
+                    log("'",name,"' is not a branch")
+                    log("Suggestion: branch - see available branches")
+                } else {
+                    b := workspace.branches.get_unsafe(found)
+                    if workspace.active_branch == b.id {
+                        log("Branch '",name,"' is already active")
+                    } else {
+                        workspace.switch_branch(b.id)
+                        log("Switched to branch '",name,"'")
+                    }
+                }
+            }
+        } else if equal(argv[1], "snap") {
+            if(argc < 3) {
+                if workspace.active_branch == 0 {
+                    log("No active branch")
+                    return
+                }
+                branch := workspace.find_branch(workspace.active_branch)
+                if !branch {
+                    log("Branch was null!")   
+                    return
+                }
+                
+                snapshot := workspace.find_snapshot(branch.snapshot)
+                if !snapshot {
+                    log("No snapshots for branch '",branch.name.sliced(),"'")
+                    return
+                }
+                while snapshot {
+                    log(" #",snapshot.id,": ", snapshot.description.sliced())
+                    
+                    if snapshot.id == snapshot.parent {
+                        log("Snapshot is its own parent?")
+                        break
+                    }
+
+                    snapshot = workspace.find_snapshot(snapshot.parent)
+                }
+            } else if equal(argv[2], "del") {
+                log("del is incomplete")
+                // if argc < 4 {
+                //     log("Missing branch name")
+                //     log("Usage: branch del [name] - delete branch")
+                // } else {
+                //     name: Slice<char> = Slice<char>{argv[3], strlen(argv[3])}
+                //     found := workspace.find_index_of_branch(name)
+                //     if found == -1 {
+                //         log("'",name,"' is not a branch")
+                //         log("Suggestion: branch - see available branches")
+                //     } else {
+                //         if workspace.active_branch == workspace.branches.get_unsafe(found).id {
+                //             log("Cannot delete the active branch '",name,"'")
+                //             log("Switch to another branch first")
+                //         } else {
+                //             log("Deleted branch '",name,"'")
+                //             workspace.branches.remove(found)
+                //         }
+                //     }
+                // }
+            } else if equal(argv[2], "add") {
+                if argc < 4 {
+                    log("Description is required when adding snapshot")
+                    log("Usage: snap add [description]")
+                    return
+                }
+
+                id: SnapshotID
+                if argc > 3 {
+                    desc := Slice<char>{argv[3], strlen(argv[3])}
+                    id = workspace.create_snapshot(desc)
+                } else {
+                    id = workspace.create_snapshot()
+                }
+                
+                if id.n != 0
+                    log("Created snapshot")
+            } else if equal(argv[2], "desc") {
+                if argc < 4 {
+                    log("Missing snapshot description")
+                    log("Usage: snap desc [text]")
+                } else {
+                    if workspace.active_branch == 0 {
+                        log("No active branch")
+                        return
+                    }
+                    branch := workspace.find_branch(workspace.active_branch)
+                    if !branch {
+                        log("Branch was null!")
+                        return
+                    }
+                    
+                    text := Slice<char>{argv[3], strlen(argv[3])}
+                    yes := workspace.rename_snapshot(branch.snapshot, text)
+                    
+                    if yes {
+                        log("Description of #",branch.snapshot, " was replaced")
+                    }
+                }
+            } else if equal(argv[2], "help") {
+                log("Usage: snap - list snapshots of current branch")
+                log("       snap add - create snapshot")
+                log("       snap desc [text] - set/replace description of last snapshot")
+                log("       snap desc #[id] [text] - set/replace description of specified snapshot")
+                log("       snap del #[id] - delete snapshot")
+            } else {
+                log("bad command, see snap help")
+                // name: Slice<char> = Slice<char>{argv[2], strlen(argv[2])}
+                // found := workspace.find_index_of_branch(name)
+                // if found == -1 {
+                //     log("'",name,"' is not a branch")
+                //     log("Suggestion: branch - see available branches")
+                // } else {
+                //     b := workspace.branches.get_unsafe(found)
+                //     if workspace.active_branch == b.id {
+                //         log("Branch '",name,"' is already active")
+                //     } else {
+                //         workspace.switch_branch(b.id)
+                //         log("Switched to branch '",name,"'")
+                //     }
+                // }
+            }
+        } else if equal(argv[1], "log") {
+            if workspace.history.size() == 0 {
+                log("Log is empty")
+                return
+            }
+            
+            for @ptr workspace.history.sliced_unsafe() {
+                log(" ", it.content.sliced())
+            }
+        } else if equal(argv[1], "status") {
+            if workspace.files.size() == 0 {
+                log("No tracked files")
+            } else {
+                log("Tracked workspace files:")
+                for @ptr workspace.files.sliced_unsafe() {
+                    log(" ", it.path.sliced())
+                }
+            }
+            b := workspace.find_branch(workspace.active_branch)
+            s := workspace.find_snapshot(b.snapshot)
+            // log("id: ",b.snapshot.n)
+            if s.fileChanges.size() == 0 {
+                log("No snapshot changes")
+            } else {
+                log("Snapshot changes:")
+                for @ptr s.fileChanges.sliced_unsafe() {
+                    log(" ",nr,": ",it.path)
+                }
+            }
+        } else if equal(argv[1], "graph") {
+            // graph of all branches, all snapshots, how they depend on each other, their messages, their file changes
+            // you can do "graph [branch]" for specifics
+
+            return
+        } else if equal(argv[1], "gui") {
+            // log("GUI is incomplete")
+            start_gui(&workspace)
+            return
+        } else {
+            log("Unknown argument: ",argv[1])
+            return
+        }
+    }
+    
+    workspace.save_all()
+}

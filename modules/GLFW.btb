@@ -1,25 +1,11 @@
-
-
-
 /*
-    OpenGL related code using GLFW and GLEW
+    GLFW Wrapper
+    (incomplete)
 */
-// #link "gdi32.lib user32.lib OpenGL32.lib"
-// #link "libs/glfw-3.3.8/lib/glfw3_mt.lib"
-// #link "/NODEFAULTLIB:MSVCRT"
-// #link "/DEFAULTLIB:LIBCMT"
-// #link "/NODEFAULTLIB:LIBCMT"
-
-/*
-    Imports
-*/
-
-#macro GLFW_CONTEXT_VERSION_MAJOR  0x00022002
-#macro GLFW_CONTEXT_VERSION_MINOR  0x00022003
-#macro GLFW_OPENGL_PROFILE         0x00022008
-#macro GLFW_OPENGL_CORE_PROFILE    0x00032001
 fn @import glfwInit() -> i32;
 fn @import glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
+fn @import glfwDestroyWindow(window: void*)
+
 fn @import glfwTerminate();
 fn @import glfwMakeContextCurrent(window: void*);
 fn @import glfwWindowShouldClose(window: void*) -> i32;
@@ -27,3 +13,216 @@ fn @import glfwSwapBuffers(window: void*);
 fn @import glfwPollEvents();
 fn @import glfwWindowHint(target: i32, hint: i32);
 fn @import glfwGetWindowSize(window: void*, width: i32*, height: i32*);
+fn @import glfwSwapInterval(interval: i32);
+fn @import glfwGetCursorPos(window: void*, xpos: f64*, ypos: f64*);
+
+fn @import glfwSetKeyCallback(window: void*, callback: fn_ref);
+fn @import glfwSetMouseButtonCallback(window: void*, callback: fn_ref);
+fn @import glfwSetCursorPosCallback(window: void*, callback: fn_ref);
+fn @import glfwSetScrollCallback(window: void*, callback: fn_ref);
+
+fn @import glfwGetProcAddress(procname: char*) -> fn_ref;
+
+/*
+    COPY PASTED TEXT FROM glfw3.h
+*/
+#macro GLFW_CONTEXT_VERSION_MAJOR  0x00022002
+#macro GLFW_CONTEXT_VERSION_MINOR  0x00022003
+#macro GLFW_OPENGL_PROFILE         0x00022008
+#macro GLFW_OPENGL_CORE_PROFILE    0x00032001
+
+/* The unknown key */
+#macro GLFW_KEY_UNKNOWN            -1
+
+/* Printable keys */
+#macro GLFW_KEY_SPACE              32
+#macro GLFW_KEY_APOSTROPHE         39  /* ' */
+#macro GLFW_KEY_COMMA              44  /* , */
+#macro GLFW_KEY_MINUS              45  /* - */
+#macro GLFW_KEY_PERIOD             46  /* . */
+#macro GLFW_KEY_SLASH              47  /* / */
+#macro GLFW_KEY_0                  48
+#macro GLFW_KEY_1                  49
+#macro GLFW_KEY_2                  50
+#macro GLFW_KEY_3                  51
+#macro GLFW_KEY_4                  52
+#macro GLFW_KEY_5                  53
+#macro GLFW_KEY_6                  54
+#macro GLFW_KEY_7                  55
+#macro GLFW_KEY_8                  56
+#macro GLFW_KEY_9                  57
+#macro GLFW_KEY_SEMICOLON          59  /* ; */
+#macro GLFW_KEY_EQUAL              61  /* = */
+#macro GLFW_KEY_A                  65
+#macro GLFW_KEY_B                  66
+#macro GLFW_KEY_C                  67
+#macro GLFW_KEY_D                  68
+#macro GLFW_KEY_E                  69
+#macro GLFW_KEY_F                  70
+#macro GLFW_KEY_G                  71
+#macro GLFW_KEY_H                  72
+#macro GLFW_KEY_I                  73
+#macro GLFW_KEY_J                  74
+#macro GLFW_KEY_K                  75
+#macro GLFW_KEY_L                  76
+#macro GLFW_KEY_M                  77
+#macro GLFW_KEY_N                  78
+#macro GLFW_KEY_O                  79
+#macro GLFW_KEY_P                  80
+#macro GLFW_KEY_Q                  81
+#macro GLFW_KEY_R                  82
+#macro GLFW_KEY_S                  83
+#macro GLFW_KEY_T                  84
+#macro GLFW_KEY_U                  85
+#macro GLFW_KEY_V                  86
+#macro GLFW_KEY_W                  87
+#macro GLFW_KEY_X                  88
+#macro GLFW_KEY_Y                  89
+#macro GLFW_KEY_Z                  90
+#macro GLFW_KEY_LEFT_BRACKET       91  /* [ */
+#macro GLFW_KEY_BACKSLASH          92  /* \ */
+#macro GLFW_KEY_RIGHT_BRACKET      93  /* ] */
+#macro GLFW_KEY_GRAVE_ACCENT       96  /* ` */
+#macro GLFW_KEY_WORLD_1            161 /* non-US #1 */
+#macro GLFW_KEY_WORLD_2            162 /* non-US #2 */
+
+/* Function keys */
+#macro GLFW_KEY_ESCAPE             256
+#macro GLFW_KEY_ENTER              257
+#macro GLFW_KEY_TAB                258
+#macro GLFW_KEY_BACKSPACE          259
+#macro GLFW_KEY_INSERT             260
+#macro GLFW_KEY_DELETE             261
+#macro GLFW_KEY_RIGHT              262
+#macro GLFW_KEY_LEFT               263
+#macro GLFW_KEY_DOWN               264
+#macro GLFW_KEY_UP                 265
+#macro GLFW_KEY_PAGE_UP            266
+#macro GLFW_KEY_PAGE_DOWN          267
+#macro GLFW_KEY_HOME               268
+#macro GLFW_KEY_END                269
+#macro GLFW_KEY_CAPS_LOCK          280
+#macro GLFW_KEY_SCROLL_LOCK        281
+#macro GLFW_KEY_NUM_LOCK           282
+#macro GLFW_KEY_PRINT_SCREEN       283
+#macro GLFW_KEY_PAUSE              284
+#macro GLFW_KEY_F1                 290
+#macro GLFW_KEY_F2                 291
+#macro GLFW_KEY_F3                 292
+#macro GLFW_KEY_F4                 293
+#macro GLFW_KEY_F5                 294
+#macro GLFW_KEY_F6                 295
+#macro GLFW_KEY_F7                 296
+#macro GLFW_KEY_F8                 297
+#macro GLFW_KEY_F9                 298
+#macro GLFW_KEY_F10                299
+#macro GLFW_KEY_F11                300
+#macro GLFW_KEY_F12                301
+#macro GLFW_KEY_F13                302
+#macro GLFW_KEY_F14                303
+#macro GLFW_KEY_F15                304
+#macro GLFW_KEY_F16                305
+#macro GLFW_KEY_F17                306
+#macro GLFW_KEY_F18                307
+#macro GLFW_KEY_F19                308
+#macro GLFW_KEY_F20                309
+#macro GLFW_KEY_F21                310
+#macro GLFW_KEY_F22                311
+#macro GLFW_KEY_F23                312
+#macro GLFW_KEY_F24                313
+#macro GLFW_KEY_F25                314
+#macro GLFW_KEY_KP_0               320
+#macro GLFW_KEY_KP_1               321
+#macro GLFW_KEY_KP_2               322
+#macro GLFW_KEY_KP_3               323
+#macro GLFW_KEY_KP_4               324
+#macro GLFW_KEY_KP_5               325
+#macro GLFW_KEY_KP_6               326
+#macro GLFW_KEY_KP_7               327
+#macro GLFW_KEY_KP_8               328
+#macro GLFW_KEY_KP_9               329
+#macro GLFW_KEY_KP_DECIMAL         330
+#macro GLFW_KEY_KP_DIVIDE          331
+#macro GLFW_KEY_KP_MULTIPLY        332
+#macro GLFW_KEY_KP_SUBTRACT        333
+#macro GLFW_KEY_KP_ADD             334
+#macro GLFW_KEY_KP_ENTER           335
+#macro GLFW_KEY_KP_EQUAL           336
+#macro GLFW_KEY_LEFT_SHIFT         340
+#macro GLFW_KEY_LEFT_CONTROL       341
+#macro GLFW_KEY_LEFT_ALT           342
+#macro GLFW_KEY_LEFT_SUPER         343
+#macro GLFW_KEY_RIGHT_SHIFT        344
+#macro GLFW_KEY_RIGHT_CONTROL      345
+#macro GLFW_KEY_RIGHT_ALT          346
+#macro GLFW_KEY_RIGHT_SUPER        347
+#macro GLFW_KEY_MENU               348
+
+#macro GLFW_KEY_LAST               GLFW_KEY_MENU
+
+/*! @} */
+
+/*! @defgroup mods Modifier key flags
+ *  @brief Modifier key flags.
+ *
+ *  See [key input](@ref input_key) for how these are used.
+ *
+ *  @ingroup input
+ *  @{ */
+
+/*! @brief If this bit is set one or more Shift keys were held down.
+ *
+ *  If this bit is set one or more Shift keys were held down.
+ */
+#macro GLFW_MOD_SHIFT           0x0001
+/*! @brief If this bit is set one or more Control keys were held down.
+ *
+ *  If this bit is set one or more Control keys were held down.
+ */
+#macro GLFW_MOD_CONTROL         0x0002
+/*! @brief If this bit is set one or more Alt keys were held down.
+ *
+ *  If this bit is set one or more Alt keys were held down.
+ */
+#macro GLFW_MOD_ALT             0x0004
+/*! @brief If this bit is set one or more Super keys were held down.
+ *
+ *  If this bit is set one or more Super keys were held down.
+ */
+#macro GLFW_MOD_SUPER           0x0008
+/*! @brief If this bit is set the Caps Lock key is enabled.
+ *
+ *  If this bit is set the Caps Lock key is enabled and the @ref
+ *  GLFW_LOCK_KEY_MODS input mode is set.
+ */
+#macro GLFW_MOD_CAPS_LOCK       0x0010
+/*! @brief If this bit is set the Num Lock key is enabled.
+ *
+ *  If this bit is set the Num Lock key is enabled and the @ref
+ *  GLFW_LOCK_KEY_MODS input mode is set.
+ */
+#macro GLFW_MOD_NUM_LOCK        0x0020
+
+/*! @} */
+
+/*! @defgroup buttons Mouse buttons
+ *  @brief Mouse button IDs.
+ *
+ *  See [mouse button input](@ref input_mouse_button) for how these are used.
+ *
+ *  @ingroup input
+ *  @{ */
+#macro GLFW_MOUSE_BUTTON_1         0
+#macro GLFW_MOUSE_BUTTON_2         1
+#macro GLFW_MOUSE_BUTTON_3         2
+#macro GLFW_MOUSE_BUTTON_4         3
+#macro GLFW_MOUSE_BUTTON_5         4
+#macro GLFW_MOUSE_BUTTON_6         5
+#macro GLFW_MOUSE_BUTTON_7         6
+#macro GLFW_MOUSE_BUTTON_8         7
+#macro GLFW_MOUSE_BUTTON_LAST      GLFW_MOUSE_BUTTON_8
+#macro GLFW_MOUSE_BUTTON_LEFT      GLFW_MOUSE_BUTTON_1
+#macro GLFW_MOUSE_BUTTON_RIGHT     GLFW_MOUSE_BUTTON_2
+#macro GLFW_MOUSE_BUTTON_MIDDLE    GLFW_MOUSE_BUTTON_3
+/*! @} */
+

@@ -1,19 +1,7 @@
-
-
-
 /*
-    OpenGL related code using GLFW and GLEW
+    GLEW Wrapper
+    (incomplete)
 */
-// #link "gdi32.lib user32.lib OpenGL32.lib"
-// #link "libs/glew-2.1.0/lib/glew32s.lib"
-// #link "/NODEFAULTLIB:MSVCRT"
-// #link "/DEFAULTLIB:LIBCMT"
-// #link "/NODEFAULTLIB:LIBCMT"
-
-/*
-    Imports
-*/
-
 #macro GL_COLOR_BUFFER_BIT 0x00004000
 #macro GLEW_VERSION 1
 #macro GL_STATIC_DRAW 0x88E4
@@ -43,14 +31,14 @@
 #macro GL_DST_COLOR 0x0306
 #macro GL_ONE_MINUS_DST_COLOR 0x0307
 
-fn @import glewInit() -> i32;
-
 fn @import glClear(mask: u32);
+fn @import glewInit() -> i32;
 fn @import glClearColor(red: f32, green: f32, blue: f32, alpha: f32);
 fn @import glViewport(x: i32, y: i32, w: i32, h: i32);
 
 #macro glGenBuffers(...) __glewGenBuffers(...)
 fn @varimport __glewGenBuffers(size: i32, buffers: u32*);
+
 #macro glDeleteBuffers(...) __glewDeleteBuffers(...)
 fn @varimport __glewDeleteBuffers(size: i32, buffers: u32*);
 #macro glBindBuffer(...) __glewBindBuffer(...)
@@ -88,10 +76,13 @@ fn @varimport __glewVertexAttribPointer(index: u32, size: i32, type: u32, normal
 
 #macro glEnableVertexAttribArray(...) __glewEnableVertexAttribArray(...)
 fn @varimport __glewEnableVertexAttribArray(index: u32);
+
 #macro glGenVertexArrays(...) __glewGenVertexArrays(...)
 fn @varimport __glewGenVertexArrays(b: i32, arrays: u32*);
+
 #macro glBindVertexArray(...) __glewBindVertexArray(...)
 fn @varimport __glewBindVertexArray(array: u32);
+
 #macro glDeleteVertexArrays(...) __glewDeleteVertexArrays(...)
 fn @varimport __glewDeleteVertexArrays(n: i32, arrays: u32*);
 

@@ -7,6 +7,7 @@
 fn @intrinsic strlen(ptr: char*) -> i32;
 
 // heap allocated for now
+// null terminated
 struct StringBuilder {
     // I was gonna say, the order ptr, len, max
     // allows you to cast String to char[] but that's wrong
@@ -19,6 +20,7 @@ struct StringBuilder {
         reserve(0)
     }
 
+    fn size() -> u32 { return len }
     fn sliced() -> Slice<char> {
         return Slice<char>{ptr, len};
     }
@@ -34,6 +36,30 @@ struct StringBuilder {
             reserve(len + 20);
         }
         len += swrite_unsafe(ptr + len, value);
+    }
+    fn append(value: char) {
+        if len + 1u > max {
+            if !_reserve(len + 5)
+                return
+        }
+        ptr[len] = value
+        len++
+        ptr[len] = '\0'
+    }
+    fn append(value: u64) {
+        if len + 20 > max {
+            reserve(len + 20);
+        }
+        len += swrite_unsafe(ptr + len, value);
+    }
+    fn append(value: char) {
+        if len + 1u > max {
+            if !_reserve(len + 5)
+                return
+        }
+        ptr[len] = value
+        len++
+        ptr[len] = '\0'
     }
     fn append(value: f32) {
         if len + 25 > max {
@@ -64,14 +90,29 @@ struct StringBuilder {
         ptr[len] = '\0';
     }
     fn append(str: StringBuilder) {
-        if len + str.len > max {
-            if !reserve(str.len + max * 2) {
-                return;
-            }
+        append(str.sliced())
+    }
+    fn append_hex<T>(ptr: T*) {
+        bytes: u8* = cast<u8*>cast<void*>ptr
+        len: u32 = sizeof T
+        for 0..len {
+            hex0 := bytes[nr] & cast<u8>0x0F
+            hex1 := bytes[nr] >> cast<u8>4
+            if hex1 < 10u   append(cast<char>('0' + hex1))
+            else            append(cast<char>('a' + hex1 - 10))
+            if hex0 < 10u   append(cast<char>('0' + hex0))
+            else            append(cast<char>('a' + hex0 - 10))
         }
-        memcpy(ptr + len, str.ptr, str.len);
-        len += str.len;
-        ptr[len] = '\0';
+    }
+    fn append_hex(ptr: void*, len: u32) {
+        for 0..len {
+            hex0 := bytes[nr] & cast<u8>0x0F
+            hex1 := bytes[nr] >> cast<u8>4
+            if hex1 < 10u   append('0' + hex1)
+            else            append('a' + hex1 - 10)
+            if hex0 < 10u   append('0' + hex0)
+            else            append('a' + hex0 - 10)
+        }
     }
     
     // TODO: Some useful functions
@@ -114,19 +155,6 @@ struct StringBuilder {
         }
         return false;
     }
-    fn copy() -> StringBuilder {
-        s: StringBuilder
-        // sli := sliced()
-        // s.append("okay")
-        // s.append(ptr, len)
-        // s.append(sli)
-        s.append(sliced())
-        return s
-    }
-}
-operator [](b: StringBuilder, index: i32) -> char {
-    // TODO: bounds check
-    return b.ptr[index]
 }
 
 // #import "String"
@@ -157,6 +185,14 @@ fn equal(a: char*, b: char[]) -> bool {
     return true
 }
 
+fn @hide std_print(t: StringBuilder){
+    std_print(t.sliced())
+}
+
+
+operator ==(a: StringBuilder, b: Slice<char>) -> bool {
+    return a.sliced() == b
+}
 operator ==(a: Slice<char>, b: Slice<char>) -> bool {
     if a.len != b.len  return false;
     for a
@@ -168,6 +204,10 @@ operator ==(a: Slice<char>, b: Slice<char>) -> bool {
 operator !=(a: Slice<char>, b: Slice<char>) -> bool {
     return !(a == b);
 }
+
+// fn @hide swrite_hex_unsafe(ptr: void*, len: void*) -> u32 {
+    
+// }
 
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
@@ -220,6 +260,30 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> i32 {
 
     return cast<u64>(buffer - start);
 }
+fn @hide swrite_unsafe(buffer: char*, value: u64) -> u32 {
+    start := buffer;
+    if value == 0 {
+        buffer[0] = '0';
+        buffer[1] = '\0';
+        return 1;
+    }
+    str: char[21];
+    used := 20;
+    while value > 0u && used >= 0 {
+        num := value % 10u;
+        value = value / 10u;
+        str.ptr[used] = num + '0';
+        used--;
+    }
+    str.ptr += used + 1;
+    str.len -= used + 1;
+
+    memcpy(buffer, str.ptr, str.len);
+    buffer += str.len;
+    *buffer = '\0'; // not include in written bytes
+
+    return cast<u64>(buffer - start);
+}
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
 fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
@@ -227,9 +291,9 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
     start := buffer;
     bits: u32 = *cast<u32*>cast<void*>&t;
 
-    sign := (bits >> 31) & cast<u32>1;
-    exp := (bits >> 23) & 0xFF
-    mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
+    sign := (bits >> 31u) & 1u;
+    exp := (bits >> 23u) & cast<u32>0xFF
+    mantissa: u64 = cast<u64>0x80_0000 | (cast<u64>bits & cast<u64>0x7FFFFF)
 
     if sign {
         *buffer = '-';
@@ -282,7 +346,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
             intPart = (mantissa) >> decimalBits;
         // LN;
         // log(intPart)
-        { @dump_bc
+        { 
             buffer += swrite_unsafe(buffer, cast<i64>intPart);
         }
         *buffer = '.';
@@ -419,4 +483,30 @@ fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
         *read_chars = i;
     }
     return result;
+}
+// function assumes the text is a correct hexidecimal string
+// even length, characters which are digits or A-F
+fn parse_hex(text: Slice<char>, data: Slice<u8>*) {
+    Assert(text.len/2u == data.len)
+    for 0..text.len/2u {
+        tmp: u8 = 0
+        hex0 := text.ptr[2*nr]
+        hex1 := text.ptr[2*nr+1]
+        if hex0 <= '9' {
+            tmp = hex0 - '0'
+        } else if hex0 >= 'a' && hex0 <= 'f' {
+            tmp = hex0 - 'a' + 10
+        } else if hex0 >= 'A' && hex0 <= 'F' {
+            tmp = hex0 - 'A' + 10
+        }
+        tmp = tmp << cast<u8>4
+        if hex1 <= '9' {
+            tmp |= hex1 - '0'
+        } else if hex1 >= 'a' && hex1 <= 'f' {
+            tmp |= hex1 - 'a' + 10
+        } else if hex1 >= 'A' && hex1 <= 'F' {
+            tmp |= hex1 - 'A' + 10
+        }
+        data.ptr[nr] = tmp
+    }
 }

@@ -192,7 +192,8 @@ namespace engone {
 
 		result->fileSize = (u64)data.nFileSizeLow+(u64)data.nFileSizeHigh*((u64)MAXDWORD+1);
 		u64 time = (u64)data.ftLastWriteTime.dwLowDateTime+(u64)data.ftLastWriteTime.dwHighDateTime*((u64)MAXDWORD+1);
-		result->lastWriteSeconds = time/10000000.f; // 100-nanosecond intervals
+		result->lastModified = time;
+        result->lastWriteSeconds = time/10000000.f; // 100-nanosecond intervals
 		result->isDirectory = data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY;
 		if(result->isDirectory){
             info->second.directories.add(result->name);

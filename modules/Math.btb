@@ -80,6 +80,7 @@ fn create_random_generator(seed: u64 = StartMeasure()) -> RandomGenerator {
 }
 
 
+
 // From NativeLayer
 // fn @import sine(f: f32) -> f32;
 
@@ -105,6 +106,152 @@ fn create_random_generator(seed: u64 = StartMeasure()) -> RandomGenerator {
 //         }
 //     }
 // }
+
+
+// ###########################################
+//        CRYPTOGRAPHY STUFF?
+//   (move this to it's own crypto.btb file)
+// ##########################################
+
+/*
+    Requirements:
+        out_degest.len == 20
+    Warnings:
+        Do not use SHA-1 for security.
+*/
+fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
+    // https://en.wikipedia.org/wiki/SHA-1
+    
+    h0: u32 = 0x67452301
+    h1: u32 = 0xEFCDAB89
+    h2: u32 = 0x98BADCFE
+    h3: u32 = 0x10325476
+    h4: u32 = 0xC3D2E1F0
+
+    ml: u64 = message.len * 8u // message length in bits
+
+    // ##########################################
+    //  Pre-processing of chunk and data length
+    // ##########################################
+    
+    data_size := message.len
+    data_size += 1 // wiki: "append the bit '1' to the message"
+    mod := data_size % 64u // wiki: "append 0 ≤ k < 512 bits '0', such that the resulting message length in bits is congruent to −64 ≡ 448 (mod 512)"
+    if mod < 56u {
+        data_size += 56 - mod
+    } else if mod > 56u {
+        data_size += 56 + 64 - mod
+    }
+    data_size += 8 // wiki: "append ml, the original message length in bits"
+    Assert(data_size % 64 == 0)
+
+    // TODO: It would be nice if we didn't need to allocate this memory
+    data: u32* = cast<u32*>Allocate(data_size)
+    defer Free(data, data_size)
+    memzero(data, data_size) // some bits at the end should be zero, might as well zero everything (you could speed things up by just zeroing the last 512-1024 bits or so)
+
+    
+    // ###########################################
+    // Fill data with message and additional data
+    // #########################################
+    memcpy(data, message.ptr, message.len)
+
+    (cast<u8*>cast<void*>data)[message.len] = 0x80 // wiki: "append the bit '1' to the message"
+    for 0..8 {
+        (cast<u8*>cast<void*>data)[data_size - 8 + nr] = *(cast<u8*>cast<void*>&ml + (7 - nr)) // wiki: append ml, the original message length in bits, as a 64-bit big-endian integer. Thus, the total length is a multiple of 512 bits.
+    }
+    // log("msg_len: ", message.len," data_size: ", data_size," mod: ", mod)
+    // std_print_hex(data, data_size, false) log()
+
+    // #####################
+    //   Utility functions
+    // #####################
+    fn leftrotate(x: u32, n: u32) -> u32 {
+        // n <= 32
+        return (x << n) | (x >> (32u - n))
+    }
+    fn to_le(x: u32) -> u32 {
+        // return x
+        return (x >> 24u) |
+            ((x >>  8u) & cast<u32>0xFF00) |
+            ((x <<  8u) & cast<u32>0xFF0000) |
+            ((x << 24u) & cast<u32>0xFF000000)
+    }
+    fn to_be(x: u32) -> u32 {
+        return to_le(x)
+    }
+
+    // ##################
+    //   Process chunks
+    // ##################
+    words: u32[80]; // words
+    w := words.ptr
+    chunk_index: u32 = 0 // 512-bit chunk
+    while chunk_index < data_size / 64u { // data_size (bytes) / 64 (512 bits)
+        defer chunk_index++
+
+        // TODO: Optimize with SIMD, there is also an alternative
+        //   where you don't need 80 words.
+
+        // Load chunk data into words and switch endian?
+        for 0..16 {
+            w[nr] = to_le(data[chunk_index * 16u + nr])
+        }
+        for 16..80 {
+            i := nr
+            tmp: u32 = (w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16])
+            w[i] = leftrotate(tmp, 1)
+        }
+
+        a := h0
+        b := h1
+        c := h2
+        d := h3
+        e := h4
+        f: u32 = 0
+        k: u32 = 0
+
+        // computation
+        for 0..80 {
+            if 0 <= nr && nr <= 19 {
+                f = (b & c) | ((~b) & d)
+                k = 0x5A827999
+            } else if 20 <= nr && nr <= 39 {
+                f = b ^ c ^ d
+                k = 0x6ED9EBA1
+            } else if 40 <= nr && nr <= 59 {
+                f = (b & c) | (b & d) | (c & d) 
+                k = 0x8F1BBCDC
+            } else if 60 <= nr && nr <= 79 {
+                f = b ^ c ^ d
+                k = 0xCA62C1D6
+            }
+
+            temp := leftrotate(a, 5) + f + e + (k) + (w[nr])
+            e = d   
+            d = c
+            c = leftrotate(b, 30)
+            b = a
+            a = temp
+        }
+
+        h0 = (h0) + (a)
+        h1 = (h1) + (b)
+        h2 = (h2) + (c)
+        h3 = (h3) + (d)
+        h4 = (h4) + (e)
+    }
+
+    out: u32* = cast<u32*>cast<void*>out_digest.ptr
+    Assert(out_digest.len == 20)
+
+    // finalize output
+    out[0] = to_be(h0);
+    out[1] = to_be(h1);
+    out[2] = to_be(h2);
+    out[3] = to_be(h3);
+    out[4] = to_be(h4);
+}
 
 // TODO: Move elsewhere?
 // TODO: Not tested

@@ -194,8 +194,13 @@ echo Compiled in %finS%.%finS2% seconds
 @REM ##############################
 
 @REM Not using MSVC_COMPILE_OPTIONS because debug information may be added
+@REM #### GLAD ########
 cl /c /std:c++14 /nologo /TP /EHsc /Iinclude /Ilibs/stb/include /Ilibs/glad/include /Ilibs/glfw-3.3.9/include /DOS_WINDOWS /DCOMPILER_MSVC /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
 lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.9/lib-vc2022/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
+
+@REM #### GLEW ########
+@REM cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
+@REM lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
 
 @REM We need to compiler NativeLayer with MVSC and GCC linker because the user may use GCC on Windows and not just MSVC.
 SET GCC_COMPILE_OPTIONS=-std=c++14 -g
@@ -208,7 +213,7 @@ SET GCC_WARN=!GCC_WARN! -Wno-sign-compare
 SET GCC_PATHS=-Llibs\glfw-3.3.9\lib-mingw-w64 -Ilibs\glfw-3.3.9\include -Ilibs\glad\include -Lbin
 
 gcc -c !GCC_PATHS! libs/glad/src/glad.c -o bin/glad.o
-@REM ar rcs bin/libglad.a glad.o
+ar rcs bin/libglad.a bin/glad.o
 
 @REM @REM glfw, glew, opengl is not linked with here, it should be
 g++ -c -g !GCC_PATHS! !GCC_INCLUDE_DIRS! !GCC_WARN! -DOS_WINDOWS -DCOMPILER_GNU -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o

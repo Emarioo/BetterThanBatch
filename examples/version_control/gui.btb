@@ -1,0 +1,344 @@
+
+#import "./workspace.btb"
+#import "Graphics"
+
+fn start_gui(workspace: Workspace*) {
+    gui: GUIEnvironment
+    gui.init()
+
+    title := "Crude Version Control - Graph"
+    win_width := 800;
+    win_height := 600;
+    window := gui.createWindow(win_width, win_height, title);
+        // yes := glfwInit();
+        // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+        // window := glfwCreateWindow(win_width, win_height, title.ptr, null, null);
+
+        // glfwMakeContextCurrent(window);
+        
+		// glfwSetMouseButtonCallback(window, MouseCallback);
+
+        // err := glewInit();
+
+        // glViewport(0, 0, win_width, win_height);
+
+    //  yes := glfwInit();
+    // if !yes {
+    //     log("glfwInit failed");
+    //     return;
+    // }
+    // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // title := @cstr "Yes sir"
+    // width := 800;
+    // height := 600;
+    // window := glfwCreateWindow(width, height, title, null, null);
+    // if !window {
+    //     log("window failed");
+    //     glfwTerminate();
+    //     return;
+    // }
+
+    // glfwMakeContextCurrent(window);
+
+    // glfwSetMouseButtonCallback(window, MouseCallback)
+
+    // err := glewInit();
+    // if err {
+    //     msg := glewGetErrorString(err);
+    //     log("glew failed: ",msg)
+    //     glfwTerminate();
+    //     return;
+    // }
+
+    // glViewport(0, 0, width, height);
+    // GLCHECK
+
+    // vshader := "
+    //     #version 330 core
+    //     layout (location = 0) in vec3 aPos;
+    //     void main()
+    //     {
+    //         gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+    //     }
+    //     ";
+
+    // vertexShader := glCreateShader(GL_VERTEX_SHADER);
+    // GLCHECK
+    // glShaderSource(vertexShader, 1, &vshader.ptr, null);
+    // GLCHECK
+    // glCompileShader(vertexShader);
+    // GLCHECK
+
+    // success: i32; // reused further down
+    // infoLog: char[512];
+    // glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    // if !success {
+    //     glGetShaderInfoLog(vertexShader, 512, null, infoLog.ptr);
+    //     log("Vertex shader error: ",infoLog);
+    // }
+
+    // fshader := "
+    //     #version 330 core
+    //     out vec4 FragColor;
+
+    //     void main()
+    //     {
+    //         FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+    //     } 
+    //     ";
+
+    // fragmentShader := glCreateShader(GL_FRAGMENT_SHADER);
+    // GLCHECK
+    // glShaderSource(fragmentShader, 1, &fshader.ptr, null);
+    // GLCHECK
+    // glCompileShader(fragmentShader);
+    // GLCHECK
+
+    // glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    // GLCHECK
+    // if !success {
+    //     glGetShaderInfoLog(fragmentShader, 512, null, infoLog.ptr);
+    //     GLCHECK
+    //     log("Fragment shader error: ",infoLog);
+    // }
+
+    // shaderProgram := glCreateProgram();
+    // GLCHECK
+    // glAttachShader(shaderProgram, vertexShader);
+    // GLCHECK
+    // glAttachShader(shaderProgram, fragmentShader);
+    // GLCHECK
+    // glLinkProgram(shaderProgram);
+    // GLCHECK
+
+    // glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    // GLCHECK
+    // if !success {
+    //     glGetProgramInfoLog(shaderProgram, 512, null, infoLog.ptr);
+    //     GLCHECK
+    //     log("Fragment shader error: ",infoLog);
+    // }
+
+    // glUseProgram(shaderProgram);
+    // GLCHECK
+
+    // VBO: u32;
+    // VAO: u32;
+    // // vertices: f32[9];
+
+    // glGenVertexArrays(1, &VAO);
+    // GLCHECK
+    // glGenBuffers(1, &VBO);
+    // GLCHECK
+
+    // glBindVertexArray(VAO);
+    // GLCHECK
+
+    // glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    // GLCHECK
+    // // glBufferData(GL_ARRAY_BUFFER, 9 * sizeof f32 , vertices.ptr, GL_DYNAMIC_DRAW);
+    // glBufferData(GL_ARRAY_BUFFER, 9u * sizeof f32 , null, GL_DYNAMIC_DRAW);
+    // GLCHECK
+
+    // glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3u * sizeof f32, cast<void*>cast<u64>0);
+    // GLCHECK
+    // glEnableVertexAttribArray(0);
+    // GLCHECK
+
+    // vertices: f32[9] {
+    //     -0.5,
+    //     0, // set in loop
+    //     0.0,
+    //     0.5,
+    //     -0.5,
+    //     0.0,
+    //     0.0,
+    //     0.5,
+    //     0.0,
+    // };
+
+    // a := 0;
+    // dir := 1;
+    // while !glfwWindowShouldClose(window) {
+    //     if a > 400
+    //         dir = -1
+    //     if a <= 0
+    //         dir = 1
+    //     a += dir
+
+    //     glClearColor(a / 400.0,0.3,0.5,1);
+    //     glClear(GL_COLOR_BUFFER_BIT);
+
+    //     vertices.ptr[1] = a/400.0 - 0.8;
+
+    //     // TODO: Try element array
+    //     // TODO: Try uniform functions (glUniform4f)
+
+    //     glBufferSubData(GL_ARRAY_BUFFER, 0, 9u * sizeof f32, vertices.ptr);
+    //     // GLCHECK
+    //     glDrawArrays(GL_TRIANGLES, 0, 3);
+    //     // GLCHECK
+    //     glfwSwapBuffers(window);
+
+    //     glfwPollEvents();
+    //     Sleep(1)
+    // }
+
+    // glfwTerminate();
+
+    // yes := glfwInit();
+    // if !yes {
+    //     log("glfwInit failed");
+    //     return;
+    // }
+    // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    // window := glfwCreateWindow(win_width, win_height, title, null, null);
+    // if !window {
+    //     log("window failed");
+    //     glfwTerminate();
+    //     return;
+    // }
+
+    // glfwMakeContextCurrent(window);
+
+    // err := glewInit();
+    // if err {
+    //     msg := glewGetErrorString(err);
+    //     log("glew failed: ",msg)
+    //     glfwTerminate();
+    //     return;
+    // }
+
+
+    vshader := "
+        #version 330 core
+        layout (location = 0) in vec3 aPos;
+        void main()
+        {
+            gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+        }
+        ";
+
+    fshader := "
+        #version 330 core
+        out vec4 FragColor;
+
+        void main()
+        {
+            FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+        } 
+        ";
+
+    shaderProgram := CreateShaderProgram(vshader, fshader)
+
+    glUseProgram(shaderProgram);
+    GLCHECK
+
+    // gui.setInput(GLFW_KEY_B, true)
+
+    // glEnable(GL_BLEND)
+    // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    
+    // module := CreateUIModule();
+
+    // temp_string: char* = null
+    // temp_string_offset: u32 = 0
+    // temp_string = Allocate(0x10000)
+
+    white_color := UIColor{1,1,1,1}
+    background_color := UIColor{0.09,0.1,0.14,1}
+
+    while !glfwWindowShouldClose(window) {
+        // glfwGetWindowSize(window, &win_width, &win_height);
+        // glViewport(0,0,win_width,win_height);
+
+        // render background
+        glClearColor(background_color.r,background_color.g,background_color.b,background_color.a);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // temp_string_offset = 0
+
+        // layout_y := 0.0
+
+        // item_height := 25
+        // text_height := 20
+
+        // // todo: sort snapshots by time
+
+        // // render snapshot descriptions and id ordered by time
+        // for @ptr workspace.snapshots.sliced_unsafe() {
+
+        //     desc := module.makeText();
+        //     desc.color = white_color;
+        //     desc.x = 20;
+        //     desc.h = text_height;
+        //     desc.y = layout_y;
+
+        //     desc.string = it.description.ptr // be careful, snapshot description string builder may be resized
+        //     desc.length = it.description.len;
+
+        //     text_snap_hex := module.makeText();
+        //     text_snap_hex.color = white_color;
+        //     text_snap_hex.h = text_height;
+        //     text_snap_hex.y = layout_y;
+
+        //     str: StringBuilder
+        //     str.append_hex(&it.id)
+
+        //     // log(nr,":",str)
+
+        //     memcpy(temp_string + temp_string_offset, str.ptr, str.len + 1)
+        //     text_snap_hex.string = temp_string + temp_string_offset
+        //     text_snap_hex.length = str.len;
+
+        //     temp_string_offset += str.len + 1
+
+        //     text_snap_hex.x = win_width - 20 - module.getWidthOfText(text_snap_hex);
+
+        //     layout_y += item_height
+        // }
+
+        // // render graph
+
+        // // render toggle snapshot file changes
+
+        // RenderUIModule(module, win_width, win_height);
+
+        // if gui.isKeyDown(GLFW_KEY_A) {
+        //     log("A is down")
+        // }
+
+        // // vertices.ptr[1] = a/400.0 - 0.8;
+        // // // TODO: Try element array
+        // // // TODO: Try uniform functions (glUniform4f)
+
+        // // glBufferSubData(GL_ARRAY_BUFFER, 0, 9u * sizeof f32, vertices.ptr);
+        // // // GLCHECK
+        // // glDrawArrays(GL_TRIANGLES, 0, 3);
+        // // // GLCHECK
+
+        // gui.resetEvents(false)
+
+        // glfwSwapInterval(1)
+        glfwSwapBuffers(window);
+
+        glfwPollEvents();
+        Sleep(1)
+    }
+
+    // DestroyUIModule(module);
+
+    glfwTerminate();
+}
+
+
+fn @stdcall MouseCallback2(window: void*, button: i32, action: i32, mods: i32) {
+    log("click ",button," ", action)
+}

@@ -33,6 +33,8 @@ fn main(){
 
     glfwMakeContextCurrent(window);
 
+    glfwSetMouseButtonCallback(window, MouseCallback2)
+
     yes = gladLoadGL();
     if !yes {
         log("glad failed: ")
@@ -175,4 +177,9 @@ fn main(){
     }
 
     glfwTerminate();
+}
+
+
+fn @stdcall MouseCallback2(window: void*, button: i32, action: i32, mods: i32) {
+    log("click ",button," ", action)
 }

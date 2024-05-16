@@ -1705,7 +1705,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             // Assert(expression->constStrIndex!=-1);
             int& constIndex = expression->versions_constStrIndex[info.currentPolyVersion];
             auto& constString = info.ast->getConstString(constIndex);
-
+            
             TypeInfo* typeInfo = nullptr;
             if (expression->flags & ASTNode::NULL_TERMINATED) {
                 typeInfo = info.ast->convertToTypeInfo("char*", info.ast->globalScopeId, true);
@@ -4150,6 +4150,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         else if (statement->type == ASTStatement::IF) {
             _GLOG(SCOPE_LOG("IF"))
 
+            // BREAK(statement->firstExpression->nodeId == 67)
             TypeId dtype = {};
             DynamicArray<TypeId> tmp_types{};
             SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
@@ -5262,6 +5263,7 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
             ERR_SECTION(
                 log::out << log::RED << "Invalid function address for instruction["<<e.bcIndex << "]\n"
             )
+            
             auto pair = resolveFailures.find(e.funcImpl);
             if(pair == resolveFailures.end())
                 resolveFailures[e.funcImpl] = 1;

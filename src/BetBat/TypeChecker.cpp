@@ -753,7 +753,10 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             }
             overload->funcImpl->usages++;
 
-            for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
+            // BREAK(overload->astFunc->name == "create_snapshot")
+
+            for(int i=argTypes.size() + (expr->hasImplicitThis()?1:0); i<overload->astFunc->arguments.size();i++) {
+            // for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
                 auto& argImpl = overload->funcImpl->argumentTypes[i];
                 auto& arg = overload->astFunc->arguments[i];;
                 if(!arg.defaultValue)
@@ -1398,8 +1401,10 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             CheckFncall(info,scopeId,expr, outTypes, attempt, false);
         } else if(expr->typeId == AST_STRING){
             u32 index=0;
+            
             auto constString = info.ast->getConstString(expr->name,&index);
             // Assert(constString);
+            // log::out << " "<<expr->name << " "<<index<<"\n";
             expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
             if(expr->flags & ASTNode::NULL_TERMINATED) {
@@ -1543,6 +1548,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             }
             if(expr->right) {
                 typeArray.resize(0);
+                // BREAK(expr->nodeId == 291)
                 CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
                 if(expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0) {
                     // TODO: Skipping values with assignment is okay.
