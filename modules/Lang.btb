@@ -122,6 +122,7 @@ fn std_print_any<T>(value: T*, pretty: bool = false) {
     id := typeid(T);
     std_print_any(&value, id, pretty);
 }
+// Overloading needs fixing
 // fn std_print_any<T>(value: T, pretty: bool = false) {
 //     id := typeid(T);
 //     std_print_any(&value, id, pretty);

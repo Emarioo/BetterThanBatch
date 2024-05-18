@@ -14,11 +14,11 @@
 #import "File"
 #import "Logger"
 
-#if LINKER_MSVC
-    #load "bin/NativeLayer.lib" as native_layer
-#else
-    #load "bin/NativeLayer_gcc.lib" as native_layer
-#endif
+// #if LINKER_MSVC
+//     #load "bin/NativeLayer.lib" as native_layer
+// #else
+//     #load "bin/NativeLayer_gcc.lib" as native_layer
+// #endif
 
 #if LINK_BYTECODE
     #macro LINK_TYPE @native
@@ -26,8 +26,6 @@
     #macro LINK_TYPE @import(native_layer) @stdcall
 #elif OS_LINUX
     #macro LINK_TYPE @import(native_layer) @unixcall
-#else
-    No_implementation
 #endif
 
 
@@ -39,15 +37,15 @@ fn @intrinsic rdtsc() -> u64;
 // fn @intrinsic rdtscp() -> u64, u32;
 
 
-fn LINK_TYPE StartMeasure() -> u64;
-fn LINK_TYPE StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
-fn LINK_TYPE DiffMeasure(endSubStart: u64) -> f32; // TODO: Use f64 (double) when implemented
-fn LINK_TYPE NativeSleep(seconds: f32);
+// fn LINK_TYPE StartMeasure() -> u64;
+// fn LINK_TYPE StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
+// fn LINK_TYPE DiffMeasure(endSubStart: u64) -> f32; // TODO: Use f64 (double) when implemented
+// fn LINK_TYPE NativeSleep(seconds: f32);
 
 
-fn LINK_TYPE GetClockSpeed() -> u64;
+// fn LINK_TYPE GetClockSpeed() -> u64;
 
-fn LINK_TYPE ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
+// fn LINK_TYPE ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
 
 
 fn set_cursor(x: u32, y: u32) {

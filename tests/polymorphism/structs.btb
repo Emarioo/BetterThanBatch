@@ -27,6 +27,16 @@ b.set(5.23) // float caused x64 to crash with tmp and content in set method at s
 // struct A { n: i32; fn set() -> i32 { return n } }
 // A{5}.set()
 
+@TEST_CASE(pointer_poly)
+
+
+struct Box<T> {
+    t: T
+    fn get() -> T { return t }
+}
+
+box: Box<i32*>
+test 8; sizeof box.get() // should get size of pointer, not size of int
 
 @TEST_CASE(bug_poly_sizeof)
 

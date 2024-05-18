@@ -1,0 +1,5 @@
+
+#import "Linux"
+
+s := "Hello, World!\n"
+write(STDOUT_FILENO, s.ptr, s.len)

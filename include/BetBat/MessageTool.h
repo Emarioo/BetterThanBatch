@@ -35,7 +35,7 @@
 
 #define BASE_SECTION(CODE, CONTENT) { if(!info.ignoreErrors) info.errors++; int base_column = -1; StringBuilder err_type{}; err_type += CODE; if(info.compiler) info.compiler->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compiler) info.compiler->reporter.end_report(); }
 
-#define BASE_SECTION2(CONTENT) { if(!info.ignoreErrors) info.errors++; info.reporter->start_report(); MSG_CODE_LOCATION; CONTENT; info.reporter->end_report(); }
+#define BASE_SECTION2(CONTENT) if(info.showErrors) { if(!info.ignoreErrors) info.errors++; info.reporter->start_report(); MSG_CODE_LOCATION; CONTENT; info.reporter->end_report(); }
 
 #ifdef OS_WINDOWS
 #define ERR_HEAD2(T,...) info.reporter->err_head(T, __VA_ARGS__); info.compiler->addError(T, __VA_ARGS__);

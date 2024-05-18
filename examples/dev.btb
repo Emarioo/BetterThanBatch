@@ -1,27 +1,37 @@
+
+
+// #import "examples/linux/dir_iter.btb"
+
 // 
 // #import "Logger"
 // #import "demo/macros"
 
-#import "Linux"
+// #import "examples/dir-iterator"
 
 
-
-s := "Hello, World!\n"
-write(STDOUT_FILENO, s.ptr, s.len)
-
-
-// exit(23)
-
-// return 2
-
-// n := 2
-// // n = n + 1
-// n += 3
-// for 0..5 {
-//     n += it
+// struct Box {
+//     head: i32;
 // }
+// box: Box
+// p := &box
 
-// return 2;
+// p.head += 5
+
+
+#import "File"
+#import "Logger"
+#import "Basic"
+
+
+iter := DirectoryIteratorCreate("src")
+
+// how do we test that this works?
+item: DirIteratorItem*
+while DirectoryIteratorNext(iter, &item) {
+    log(item.name.sliced())
+}
+
+DirectoryIteratorDestroy(iter)
 
 // // TODO: Inline assembly, reading/writing to local variables
 // //   What about structs? Artifical instruction perhaps?

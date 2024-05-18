@@ -2,50 +2,43 @@
 #import "Logger"
 #import "Basic"
 
-// startTime = StartMeasure();
+fn main() {
+    iter: DirectoryIterator*;
+    // root = ".";
+    root := "src";
+    // root = "docs";
+    iter := DirectoryIteratorCreate(&root);
+    defer { DirectoryIteratorDestroy(iter); }
 
-startTime: u64 = 9;
-
-iter: DirectoryIterator*;
-// root = ".";
-root := "src";
-// root = "docs";
-iter := DirectoryIteratorCreate(&root);
-defer { DirectoryIteratorDestroy(iter); }
-
-result: DirectoryIteratorData*;
-loop := 0;
-// // printData(iter);
-// // result = 
-// // DirectoryIteratorNext(iter);
-// // DirectoryIteratorNext(iter._handle);
-// // iter.next()
-// // while cast<bool>(result = iter.next()) && loop < 100 {
-while result = iter.next() {
-    loop++;
-    // log("oh 1");
-    // result = iter.next()
-    // if !result
-    //     break
-    // log("oh 2");
-    // if result.isDirectory && !equal(result.name,root) {
-    //     iter.skip();
-    // printData(result);
-    //     // continue
-    // }
-    eh := matchEnd(result.name,".cpp")
-    if !eh
-        continue;
-    // log("):")
-    log(result.name);
-    // prints(result.name); prints("\n");
-    // prints(": ");
-    // printi(result.fileSize);
-    // prints(" bytes, ");
-    // printd(result.lastWriteSeconds);
+    result: DirectoryIteratorData*;
+    loop := 0;
+    // // printData(iter);
+    // // result = 
+    // // DirectoryIteratorNext(iter);
+    // // DirectoryIteratorNext(iter._handle);
+    // // iter.next()
+    // // while cast<bool>(result = iter.next()) && loop < 100 {
+    while result = iter.next() {
+        loop++;
+        // log("oh 1");
+        // result = iter.next()
+        // if !result
+        //     break
+        // log("oh 2");
+        // if result.isDirectory && !equal(result.name,root) {
+        //     iter.skip();
+        // printData(result);
+        //     // continue
+        // }
+        eh := matchEnd(result.name,".cpp")
+        if !eh
+            continue;
+        // log("):")
+        log(result.name);
+        // prints(result.name); prints("\n");
+        // prints(": ");
+        // printi(result.fileSize);
+        // prints(" bytes, ");
+        // printd(result.lastWriteSeconds);
+    }
 }
-
-// time = StopMeasure(startTime);
-
-// log("It took:",time*1000,"ms")
-// prints("It took: ");printd(time*1000);prints(" ms\n");

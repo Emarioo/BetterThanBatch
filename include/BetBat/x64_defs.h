@@ -268,3 +268,11 @@ About x64:
 #define PREFIX_REX (u8)0b01000000
 #define PREFIX_16BIT (u8)0x66
 #define PREFIX_LOCK (u8)0xF0
+
+
+#ifndef SYS_read
+// https://filippo.io/linux-syscall-table/
+#define SYS_read  0
+#define SYS_write 1
+#define SYS_exit  60
+#endif

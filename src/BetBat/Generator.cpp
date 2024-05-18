@@ -1189,8 +1189,8 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 allocated_stack_space = stackSpace;
             } else {
                 // How does unixcall deal with stack?
-                Assert(astFunc->arguments.size() <= 4); // INCOMPLETE, we need to allocate proper stack space
-                int stackSpace = 0;
+                // I guess we just allocate some for now.
+                int stackSpace = astFunc->arguments.size() * 8;
                 allocated_stack_space = stackSpace;
             }
         } break;
@@ -1387,17 +1387,33 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             }
         }
         if(lib_path.size() == 0) {
-            // TOOD: Improve error message by showing how to specify import.
-            //   Also link to the guide.md.
-            // NOTE: The error message points to the function definition,
-            //   not the function call because you need to fix the definition
-            //   and not the call.
-            ERR_SECTION(
-                ERR_HEAD2(astFunc->location)
-                ERR_MSG("You are trying to call a function that is imported but the function is not linked to any library. At the function definition, please specify which library the function should be imported from. The compiler does not know which library to link with unless you specify it).")
-                ERR_LINE2(astFunc->location, "this definition")
-                ERR_LINE2(expression->location, "this call")
-            )
+            if(astFunc->linked_library.size() != 0) {
+                ERR_SECTION(
+                    ERR_HEAD2(astFunc->location)
+                    ERR_MSG_COLORED("'"<<log::LIME<<astFunc->linked_library<<log::NO_COLOR<<"' is not a library. Did you misspell it?")
+                    ERR_LINE2(astFunc->location, "this definition")
+                    ERR_LINE2(expression->location, "this call")
+
+                    log::out << "These are the available libraries: ";
+                    for(int i=0;i<func_imp->libraries.size();i++){
+                        if(i!=0) log::out << ", ";
+                        log::out << log::LIME << func_imp->libraries[i].named_as << log::NO_COLOR;
+                    }
+                    log::out << "\n";
+                )
+            } else {
+                // TOOD: Improve error message by showing how to specify import.
+                //   Also link to the guide.md.
+                // NOTE: The error message points to the function definition,
+                //   not the function call because you need to fix the definition
+                //   and not the call.
+                ERR_SECTION(
+                    ERR_HEAD2(astFunc->location)
+                    ERR_MSG("You are trying to call a function that is imported but the function is not linked to any library. At the function definition, please specify which library the function should be imported from. The compiler does not know which library to link with unless you specify it).")
+                    ERR_LINE2(astFunc->location, "this definition")
+                    ERR_LINE2(expression->location, "this call")
+                )
+            }
         }
         if(astFunc->linkConvention == IMPORT) {
             addExternalRelocation(alias, lib_path, reloc);
@@ -1662,6 +1678,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     }
 
                     outTypeIds->add(varinfo->versions_typeId[info.currentPolyVersion]);
+                    if(outTypeIds->last() == AST_VOID)
+                        return SIGNAL_FAILURE;
                     return SIGNAL_SUCCESS;
                 } else if (id->type == Identifier::FUNCTION) {
                     _GLOG(log::out << " expr func push " << expression->name << "\n";)
@@ -2262,7 +2280,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 //     outTypeIds->add(castType);
                 //     // data is fine as it is, just change the data type
                 // } else { 
-                bool yes = performSafeCast(ltype, castType);
+                bool yes = (ltype.getPointerLevel() > 0 && castType.getPointerLevel() > 0) || performSafeCast(ltype, castType);
                 if (yes) {
                     outTypeIds->add(castType);
                 } else {
@@ -2373,6 +2391,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 }
                 auto& mem = typeInfo->astStruct->members[memberData.index];
                 if(mem.array_length > 0) {
+                    Assert(nonReference); // i threw this here, is that okay?
                     std::string slice_name = "Slice<" + ast->typeToString(memberData.typeId) + ">";
                     auto slice_info = info.ast->convertToTypeInfo(slice_name, info.ast->globalScopeId, true);
                     if(!slice_info) {
@@ -2410,38 +2429,69 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     
                     outTypeIds->add(exprId);
                 } else {
-                    auto memberData = typeInfo->getMember(expression->name);
-                    if(memberData.index==-1){
-                        Assert(info.hasForeignErrors());
-                        return SIGNAL_FAILURE;
-                    }
-                    auto& mem = typeInfo->astStruct->members[memberData.index];
-                    bool popped = false;
-                    BCRegister reg = BC_REG_B;
-                    if(exprId.getPointerLevel()>0){
-                        if(!popped)
-                            builder.emit_pop(reg);
-                        popped = true;
-                        builder.emit_mov_rm(BC_REG_C, reg, 8);
-                        reg = BC_REG_C;
-                    }
-                    if(memberData.offset!=0){
-                        if(!popped)
-                            builder.emit_pop(reg);
-                        popped = true;
-                        
-                        builder.emit_li32(BC_REG_A, memberData.offset);
-                        builder.emit_add(reg, BC_REG_A, false, 8);
-                    }
-                    if(popped)
-                        builder.emit_push(reg);
+                    if(!nonReference) {
+                        auto memberData = typeInfo->getMember(expression->name);
+                        if(memberData.index==-1){
+                            Assert(info.hasForeignErrors());
+                            return SIGNAL_FAILURE;
+                        }
+                        auto& mem = typeInfo->astStruct->members[memberData.index];
+                        bool popped = false;
+                        BCRegister reg = BC_REG_B;
+                        if(exprId.getPointerLevel()>0){
+                            if(!popped)
+                                builder.emit_pop(reg);
+                            popped = true;
+                            builder.emit_mov_rm(BC_REG_C, reg, 8);
+                            reg = BC_REG_C;
+                        }
+                        if(memberData.offset!=0){
+                            if(!popped)
+                                builder.emit_pop(reg);
+                            popped = true;
+                            
+                            builder.emit_li32(BC_REG_A, memberData.offset);
+                            builder.emit_add(reg, BC_REG_A, false, 8);
+                        }
+                        if(popped)
+                            builder.emit_push(reg);
 
-                    exprId = memberData.typeId;
-                    
-                    builder.emit_pop(BC_REG_B);
-                    result = generatePush(BC_REG_B,0, exprId);
-                    
-                    outTypeIds->add(exprId);
+                        exprId = memberData.typeId;
+                        
+                        builder.emit_pop(BC_REG_B);
+                        result = generatePush(BC_REG_B,0, exprId);
+                        
+                        outTypeIds->add(exprId);
+                    } else {
+                        if(typeInfo->astStruct && typeInfo->astStruct->name == "Slice") {
+                            // this is a hardcoded solution to popping members.
+                            auto memberData = typeInfo->getMember(expression->name);
+                            if(memberData.index==-1){
+                                Assert(info.hasForeignErrors());
+                                return SIGNAL_FAILURE;
+                            }
+                            if(memberData.index == 0) {
+                                builder.emit_pop(BC_REG_A);
+                                builder.emit_pop(BC_REG_T0);
+                                builder.emit_push(BC_REG_A);  // one we care about
+                            } else {
+                                builder.emit_pop(BC_REG_T0);
+                                // builder.emit_pop(BC_REG_A); // one we care about
+                            }
+                            exprId = memberData.typeId;
+                            
+                            outTypeIds->add(exprId);
+                        } else {
+                            // Note a great error
+                            ERR_SECTION(
+                                ERR_HEAD2(expression->left->location)
+                                ERR_MSG("'"<<compiler->lexer.tostring(expression->left->location)<<
+                                "' must be a reference to some memory. "
+                                "A variable, member or expression resulting in a dereferenced pointer would work.")
+                                ERR_LINE2(expression->left->location, "must be a reference")
+                            )
+                        }
+                    }
                 }
             }
             
@@ -3255,6 +3305,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 }
                 
                 if(expression->typeId==AST_ASSIGN){
+                    builder.emit_push(left_reg);
                     TypeId assignType={};
                     SignalIO result = generateReference(expression->left,&assignType,idScope);
                     if(result!=SIGNAL_SUCCESS)
@@ -3262,6 +3313,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     Assert(assignType == ltype);
                     Assert(BC_REG_B != left_reg);
                     builder.emit_pop(BC_REG_B);
+                    builder.emit_pop(left_reg);
                     int assignedSize = info.ast->getTypeSize(ltype);
                     builder.emit_mov_mr(BC_REG_B, left_reg, assignedSize);
                 }

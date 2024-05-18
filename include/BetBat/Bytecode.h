@@ -340,6 +340,7 @@ struct TinyBytecode {
         call_relocations.last().funcImpl = impl;
     }
     
+    // high_index is exclusive
     void print(int low_index, int high_index, Bytecode* code = nullptr, DynamicArray<std::string>* dll_functions = nullptr, bool force_newline = false);
 };
 struct BytecodeLocation {

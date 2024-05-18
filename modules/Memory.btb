@@ -24,7 +24,7 @@ fn Free(ptr: void*, old_size: i64 = 0) {
 //    free - AllocateHeap(0, ptr, old_size = 64)
 // realloc - AllocateHeap(128, ptr, old_size = 64)
 fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
-    #if OS_WINDOWS
+#if OS_WINDOWS
     heap := GetProcessHeap()
     if !size {
         if ptr
@@ -41,8 +41,25 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
         return null
     }
     return new_ptr
-    #else
-    TODO:
-    #endif
+#elif OS_LINUX
+
+    #load "c" as libc
+    fn @import(libc) malloc(size: i32) -> void*;
+    fn @import(libc) realloc(ptr: void*, size: i32) -> void*;
+    fn @import(libc) free(ptr: void*);
+
+    if !size {
+        if ptr
+            free(ptr)
+        return null
+    }
+    new_ptr: void*
+    if !ptr {
+        new_ptr = malloc(size)
+    } else {
+        new_ptr = realloc(ptr, size)
+    }
+    return new_ptr
+#endif
 }
 

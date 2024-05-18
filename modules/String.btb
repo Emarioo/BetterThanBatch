@@ -20,7 +20,6 @@ struct StringBuilder {
         reserve(0)
     }
 
-    fn size() -> u32 { return len }
     fn sliced() -> Slice<char> {
         return Slice<char>{ptr, len};
     }
@@ -51,15 +50,6 @@ struct StringBuilder {
             reserve(len + 20);
         }
         len += swrite_unsafe(ptr + len, value);
-    }
-    fn append(value: char) {
-        if len + 1u > max {
-            if !_reserve(len + 5)
-                return
-        }
-        ptr[len] = value
-        len++
-        ptr[len] = '\0'
     }
     fn append(value: f32) {
         if len + 25 > max {
@@ -154,6 +144,11 @@ struct StringBuilder {
             return true;
         }
         return false;
+    }
+    fn copy() -> StringBuilder {
+        s: StringBuilder
+        s.append(sliced())
+        return s
     }
 }
 

@@ -282,9 +282,11 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const StringView &name, ContentO
             && name == pair->second.name
             && pair->second.type == Identifier::VARIABLE) { // we can only reuse variable identifiers, not function identifiers
                 *out_reused_identical = true;
+                lock_variables.unlock();
                 return &pair->second;
             }
         }
+        lock_variables.unlock();
         return nullptr;
     }
 

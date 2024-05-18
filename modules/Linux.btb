@@ -21,60 +21,73 @@
 
 /* open/fcntl.  */
 #macro O_RDONLY     00
-#macro O_WRONLY	     01
-#macro O_RDWR		     02
-#macro O_CREAT	   0100	/* Not fcntl.  */
-#macro O_EXCL		   0200	/* Not fcntl.  */
-#macro O_NOCTTY	   0400	/* Not fcntl.  */
-#macro O_TRUNC	  01000	/* Not fcntl.  */
-#macro O_APPEND	  02000
-#macro O_NONBLOCK	  04000
-#macro O_SYNC	       04010000
-#macro O_ASYNC	 020000
-#macro O_LARGEFILE	0100000
-#macro O_DIRECTORY	0200000
-#macro O_NOFOLLOW	0400000
-#macro O_CLOEXEC   02000000
-#macro O_DIRECT	 040000
-#macro O_NOATIME   01000000
-#macro O_PATH     010000000
-#macro O_DSYNC	 010000
-#macro O_TMPFILE   (020000000 | O_DIRECTORY)
+#macro O_WRONLY      01
+#macro O_RDWR       02
+#macro O_CREAT    0x80 /* Not fcntl.  */
+#macro O_EXCL     0x100 /* Not fcntl.  */
+#macro O_NOCTTY    0x200 /* Not fcntl.  */
+#macro O_TRUNC   0x800 /* Not fcntl.  */
+#macro O_APPEND   0x1000
+#macro O_NONBLOCK   0x2000
+#macro O_SYNC        0x2008000
+#macro O_ASYNC  0x10000
+#macro O_LARGEFILE 0x80000
+#macro O_DIRECTORY 0x100000
+#macro O_NOFOLLOW 0x200000
+#macro O_CLOEXEC   0x1000000
+#macro O_DIRECT  0x20000
+#macro O_NOATIME   0x800000
+#macro O_PATH     0x8000000
+#macro O_DSYNC  0x8000
+#macro O_TMPFILE   (0x10000000 | O_DIRECTORY)
 
 #macro SEEK_SET 0 // seeks from start
 #macro SEEK_CUR 1 // seeks from current
 #macro SEEK_END 2 // seels from end
 
-#macro PROT_READ	0x1		/* Page can be read.  */
-#macro PROT_WRITE	0x2		/* Page can be written.  */
-#macro PROT_EXEC	0x4		/* Page can be executed.  */
-#macro PROT_NONE	0x0		/* Page can not be accessed.  */
+#macro PROT_READ 0x1  /* Page can be read.  */
+#macro PROT_WRITE 0x2  /* Page can be written.  */
+#macro PROT_EXEC 0x4  /* Page can be executed.  */
+#macro PROT_NONE 0x0  /* Page can not be accessed.  */
 
 /* Sharing types (must choose one and only one of these).  */
-#macro MAP_SHARED	0x01		/* Share changes.  */
-#macro MAP_PRIVATE	0x02		/* Changes are private.  */
-#macro MAP_SHARED_VALIDATE	0x03	/* Share changes and validate
-					   extension flags.  */
-#macro MAP_TYPE	0x0f		/* Mask for type of mapping.  */
+#macro MAP_SHARED 0x01  /* Share changes.  */
+#macro MAP_PRIVATE 0x02  /* Changes are private.  */
+#macro MAP_SHARED_VALIDATE 0x03 /* Share changes and validate
+        extension flags.  */
+#macro MAP_TYPE 0x0f  /* Mask for type of mapping.  */
 
 /* Other flags.  */
-#macro MAP_FIXED	0x10		/* Interpret addr exactly.  */
-#macro MAP_ANONYMOUS	0x20		/* Don't use a file.  */
-#macro MAP_32BIT	0x40		/* Only give out 32-bit addresses.  */
+#macro MAP_FIXED 0x10  /* Interpret addr exactly.  */
+#macro MAP_ANONYMOUS 0x20  /* Don't use a file.  */
+#macro MAP_32BIT 0x40  /* Only give out 32-bit addresses.  */
 
-#macro MAP_GROWSDOWN	0x00100		/* Stack-like segment.  */
-#macro MAP_DENYWRITE	0x00800		/* ETXTBSY.  */
-#macro MAP_EXECUTABLE	0x01000		/* Mark it as an executable.  */
-#macro MAP_LOCKED	0x02000		/* Lock the mapping.  */
-#macro MAP_NORESERVE	0x04000		/* Don't check for reservations.  */
-#macro MAP_POPULATE	0x08000		/* Populate (prefault) pagetables.  */
-#macro MAP_NONBLOCK	0x10000		/* Do not block on IO.  */
-#macro MAP_STACK	0x20000		/* Allocation is for a stack.  */
-#macro MAP_HUGETLB	0x40000		/* Create huge page mapping.  */
-#macro MAP_SYNC	0x80000		/* Perform synchronous page
-					   faults for the mapping.  */
-#macro MAP_FIXED_NOREPLACE 0x100000	/* MAP_FIXED but do not unmap
-					   underlying mapping.  */
+#macro MAP_GROWSDOWN 0x00100  /* Stack-like segment.  */
+#macro MAP_DENYWRITE 0x00800  /* ETXTBSY.  */
+#macro MAP_EXECUTABLE 0x01000  /* Mark it as an executable.  */
+#macro MAP_LOCKED 0x02000  /* Lock the mapping.  */
+#macro MAP_NORESERVE 0x04000  /* Don't check for reservations.  */
+#macro MAP_POPULATE 0x08000  /* Populate (prefault) pagetables.  */
+#macro MAP_NONBLOCK 0x10000  /* Do not block on IO.  */
+#macro MAP_STACK 0x20000  /* Allocation is for a stack.  */
+#macro MAP_HUGETLB 0x40000  /* Create huge page mapping.  */
+#macro MAP_SYNC 0x80000  /* Perform synchronous page
+        faults for the mapping.  */
+#macro MAP_FIXED_NOREPLACE 0x100000 /* MAP_FIXED but do not unmap
+        underlying mapping.  */
+
+#macro GRND_NONBLOCK 0x01
+#macro GRND_RANDOM 0x02
+
+#macro DT_UNKNOWN 0
+#macro DT_FIFO  1
+#macro DT_CHR   2
+#macro DT_DIR   4
+#macro DT_BLK   6
+#macro DT_REG   8
+#macro DT_LNK   10
+#macro DT_SOCK  12
+#macro DT_WHT   14
 
 #macro SYS_read     0
 #macro SYS_write    1
@@ -91,18 +104,25 @@
 
 #macro SYS_exit     60
 
+// #macro SYS_getdents 78
+#macro SYS_getdents64 217
+
+#macro SYS_getrandom 318
+
 // General macro for all syscalls
 #macro SYSCALL(NAME, RETURN_TYPE, ...)
 
 fn @unixcall @blank NAME( SYSCALL_args(...) ) -> RETURN_TYPE {
     asm {
         push rbp // 16-byte align, I assume syscalls require that
+        // sub rsp, 40
 
         // parameters and return values have already been set
         mov eax, SYS_ ## NAME
         syscall
 
         pop rbp
+        // add rsp, 40
         ret
     }
 }
@@ -124,10 +144,9 @@ fn @unixcall @blank NAME( SYSCALL_args(...) ) {
 
 // Function calls
 // TODO: ALL OF THESE HAVE NOT BEEN TESTED!
-SYSCALL_VOID(exit,   status: i32)
 SYSCALL(read,  i32,  fd: i32, buf: void*, count: u32)
 SYSCALL(write, i32,  fd: i32, buf: void*, count: u32)
-SYSCALL(open,  i32,  path: char*, flags: i32)
+SYSCALL(open,  i32,  path: char*, flags: i32, mode: i32 = 0)
 SYSCALL(close, i32,  fd: i32)
 SYSCALL(stat,  i32,  pathname: char*, statbuf: stat*)
 SYSCALL(fstat, i32,  fd: i32, statbuf: stat*);
@@ -137,61 +156,171 @@ SYSCALL(mmap,  void*, addr: void*, length: i32, prot: i32, flags: i32, fd: i32, 
 SYSCALL(mprotect,  i32, addr: void*, len: i32, prot: i32);
 SYSCALL(munmap,    i32, addr: void*, length: i32)
 
+SYSCALL_VOID(exit,   status: i32)
+
+SYSCALL(getrandom, i32, buf: void*, buflen: u32, flags: u32);
+
+// SYSCALL(getdents, i32, fd: i32, dirp: linux_dirent*, count: u32);
+SYSCALL(getdents64, i32, fd: i32, dirp: void*, count: u32);
 
 // used in timespec
-#macro __time_t i32
+// #macro __time_t i32
 
-// used in stat
-#macro __dev_t u32
-#macro __ino_t u32
-#macro __nlink_t u32
-#macro __mode_t u32
-#macro __uid_t u32
-#macro __gid_t u32
-#macro __off_t u32
-#macro __blksize_t u32
-#macro __blkcnt_t u32
-// used in stat, timespec
-#macro __syscall_slong_t i32
+// // used in stat
+// #macro __dev_t u64
+// #macro __ino_t u64
+// #macro __nlink_t u32
+// #macro __mode_t u32
+// #macro __uid_t u32
+// #macro __gid_t u32
+// #macro __off_t u64
+// #macro __blksize_t u32
+// #macro __blkcnt_t u32
+// // used in stat, timespec
+// #macro __syscall_slong_t i32
 
-struct timespec {
-    tv_sec: __time_t;
-    tv_nsec: __syscall_slong_t;
-}
+// struct timespec {
+//     tv_sec: __time_t;
+//     tv_nsec: __syscall_slong_t;
+// }
 
 
-// copied from /usr/include/x86_64-linux-gnu/bits/struct_stat.h
-// assumed these defines: __x86_64__, __USE_XOPEN2K8
-struct stat
-  {
-    st_dev: __dev_t;		/* Device.  */
-    st_ino: __ino_t;		/* File serial number.	*/
+// copied from /usr/include/x86_64-linux-gnu/asm/stat.h
+struct @no_padding stat {
+    st_dev: u64;  /* Device.  */
+    _pad0: u32;
+    st_ino: u32;  /* File serial number. */
     
-    st_nlink: __nlink_t;		/* Link count.  */
-    st_mode:  __mode_t;		/* File mode.  */
+    st_nlink: u32;  /* Link count.  */
+    st_mode:  u32;  /* File mode.  */
 
-    st_uid: __uid_t;	/* User ID of the file's owner.	*/
-    st_gid: __gid_t;	/* Group ID of the file's group.*/
+    st_uid: u32; /* User ID of the file's owner. */
+    st_gid: u32; /* Group ID of the file's group.*/
 
-    __pad0: i32;
+    st_rdev: u64;  /* Device number, if device.  */
+    _pad1: u32;
 
-    st_rdev: __dev_t;		/* Device number, if device.  */
+    st_size: i64;   /* Size of file, in bytes.  */
 
-    st_size: __off_t;			/* Size of file, in bytes.  */
-
-    st_blksize: __blksize_t;	/* Optimal block size for I/O.  */
-    st_blocks: __blkcnt_t;		/* Number 512-byte blocks allocated. */
+    st_blksize: u32; /* Optimal block size for I/O.  */
+    st_blocks: u64;  /* Number 512-byte blocks allocated. */
     /* Nanosecond resolution timestamps are stored in a format
        equivalent to 'struct timespec'.  This is the type used
        whenever possible but the Unix namespace rules do not allow the
        identifier 'timespec' to appear in the <sys/stat.h> header.
        Therefore we have to handle the use of this header in strictly
        standard-compliant sources special.  */
-    st_atim: timespec;		/* Time of last access.  */
-    st_mtim: timespec;		/* Time of last modification.  */
-    st_ctim: timespec;		/* Time of last status change.  */
+    st_atime:       u32;  /* Time of last access.  */
+    st_atime_nsec:  u32;  /* Time of last access.  */
+    st_mtime:       u32;  /* Time of last modification.  */
+    st_mtime_nsec:  u32;  /* Time of last modification.  */
+    st_ctime:       u32;  /* Time of last status change.  */
+    st_ctime_nsec:  u32;  /* Time of last status change.  */
 
-    __glibc_reserved: __syscall_slong_t[3]; // TODO: can we remove this?
+    st_ino: u64;
 };
+
+#macro ino64_t u64
+#macro off64_t i64
+#macro ino_t u32
+#macro off_t i32
+
+struct linux_dirent {
+    d_ino: ino_t;    /* 64-bit inode number */
+    d_off: off_t;    /* Not an offset; see getdents() */
+    d_reclen: u16; /* Size of this dirent */
+
+    d_name: char[1]; /* Filename (null-terminated) */
+
+    // access through *(cast<u8*>ptr + d_reclen - 1)
+    // d_type: u8;   /* File type */
+};
+
+struct linux_dirent64 {
+    d_ino: ino64_t;    /* 64-bit inode number */
+    d_off: off64_t;    /* Not an offset; see getdents() */
+    d_reclen: u16; /* Size of this dirent */
+    d_type: u8;   /* File type */
+
+    d_name: char[1]; /* Filename (null-terminated) */
+};
+
+#macro EPERM    1 /* Operation not permitted */
+#macro ENOENT   2 /* No such file or directory */
+#macro ESRCH    3 /* No such process */
+#macro EINTR    4 /* Interrupted system call */
+#macro EIO      5 /* I/O error */
+#macro ENXIO    6 /* No such device or address */
+#macro E2BIG    7 /* Argument list too long */
+#macro ENOEXEC  8 /* Exec format error */
+#macro EBADF    9 /* Bad file number */
+#macro ECHILD   10 /* No child processes */
+#macro EAGAIN   11 /* Try again */
+#macro ENOMEM   12 /* Out of memory */
+#macro EACCES   13 /* Permission denied */
+#macro EFAULT   14 /* Bad address */
+#macro ENOTBLK  15 /* Block device required */
+#macro EBUSY    16 /* Device or resource busy */
+#macro EEXIST   17 /* File exists */
+#macro EXDEV    18 /* Cross-device link */
+#macro ENODEV   19 /* No such device */
+#macro ENOTDIR  20 /* Not a directory */
+#macro EISDIR   21 /* Is a directory */
+#macro EINVAL   22 /* Invalid argument */
+#macro ENFILE   23 /* File table overflow */
+#macro EMFILE   24 /* Too many open files */
+#macro ENOTTY   25 /* Not a typewriter */
+#macro ETXTBSY  26 /* Text file busy */
+#macro EFBIG    27 /* File too large */
+#macro ENOSPC   28 /* No space left on device */
+#macro ESPIPE   29 /* Illegal seek */
+#macro EROFS    30 /* Read-only file system */
+#macro EMLINK   31 /* Too many links */
+#macro EPIPE    32 /* Broken pipe */
+#macro EDOM     33 /* Math argument out of domain of func */
+#macro ERANGE   34 /* Math result not representable */
+
+fn name_of_error(err: i64) -> char[] {
+    err = -err;
+    // TODO: Make a global table of strings.
+    switch (err) {
+        #macro SWITCH_CASES(X,Y,...) case X: return Y; SWITCH_CASES(...)
+        SWITCH_CASES(EPERM,"EPERM",
+            ENOENT, "ENOENT",
+            ESRCH, "ESRCH",
+            EINTR, "EINTR",
+            EIO, "EIO",
+            ENXIO, "ENXIO",
+            E2BIG, "E2BIG",
+            ENOEXEC, "ENOEXEC",
+            EBADF, "EBADF",
+            ECHILD, "ECHILD",
+            EAGAIN, "EAGAIN",
+            ENOMEM, "ENOMEM",
+            EACCES, "EACCES",
+            EFAULT, "EFAULT",
+            ENOTBLK, "ENOTBLK",
+            EBUSY, "EBUSY",
+            EEXIST, "EEXIST",
+            EXDEV, "EXDEV",
+            ENODEV, "ENODEV",
+            ENOTDIR, "ENOTDIR",
+            EISDIR, "EISDIR",
+            EINVAL, "EINVAL",
+            ENFILE, "ENFILE",
+            EMFILE, "EMFILE",
+            ENOTTY, "ENOTTY",
+            ETXTBSY, "ETXTBSY",
+            EFBIG, "EFBIG",
+            ENOSPC, "ENOSPC",
+            ESPIPE, "ESPIPE",
+            EROFS, "EROFS",
+            EMLINK, "EMLINK",
+            EPIPE, "EPIPE",
+            EDOM, "EDOM",
+            ERANGE, "ERANGE")
+    }
+    return "unknown"
+}
 
 #endif // OS_LINUX

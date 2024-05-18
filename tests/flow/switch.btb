@@ -77,7 +77,7 @@ switch msg {
     default: {}     @TEST_ERROR(ERROR_C_STYLED_DEFAULT_CASE)
 }
 
-enum Mouthful {
+enum @lenient_switch Mouthful {
     Batter,
     Bitter,
     Butter,

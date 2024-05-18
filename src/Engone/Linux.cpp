@@ -101,8 +101,6 @@ namespace engone {
 				}
 				info->second.directories.removeAt(0);
                 
-				
-				
 
                 // std::string temp = info->second.dir;
                 // if(!temp.empty())
@@ -133,6 +131,7 @@ namespace engone {
 					continue;
 				}
 			}
+			
 			dirent* entry = readdir(info->second.dirIter);
 			if(!entry) {
 				closedir(info->second.dirIter);
@@ -165,6 +164,8 @@ namespace engone {
 
 			break;
 		}
+
+		// stat64
 
 		int newLength = filepath_len;
 		// if(!info->second.dir.empty())
@@ -762,6 +763,8 @@ namespace engone {
     void Mutex::cleanup() {
         if (m_internalHandle != 0){
 			auto ptr = (pthread_mutex_t*)m_internalHandle;
+			
+			// printf("destroy %p\n", ptr);
 			int res = pthread_mutex_destroy(ptr);
 			free(ptr);
 			if(res != 0) {
@@ -780,25 +783,34 @@ namespace engone {
 				Assert(false);
 				return;
 			}
+			// printf("init %p\n", ptr);
 		}
 		if(m_internalHandle != 0) {
 			auto ptr = (pthread_mutex_t*)m_internalHandle;
+			u32 newId = Thread::GetThisThreadId();
+			// printf("lock %p\n", ptr);
+			if (m_ownerThread != 0) {
+				PL_PRINTF("Mutex : Locking twice, old owner: %lu, new owner: %u\n",m_ownerThread, newId);
+				Assert(false);
+			}
 			int res = pthread_mutex_lock(ptr);
 			if(res != 0) {
 				Assert(false);
 				return;
-			}
-			u32 newId = Thread::GetThisThreadId();
-			if (m_ownerThread != 0) {
-				PL_PRINTF("Mutex : Locking twice, old owner: %lu, new owner: %u\n",m_ownerThread,newId);
 			}
 			m_ownerThread = newId;
 		}
 	}
 	void Mutex::unlock() {
 		if (m_internalHandle != 0) {
+			if (m_ownerThread == 0) {
+				u32 newId = Thread::GetThisThreadId();
+				PL_PRINTF("Mutex : Unlocking twice, culprit: %u\n",newId);
+				Assert(false);
+			}
 			m_ownerThread = 0;
 			auto ptr = (pthread_mutex_t*)m_internalHandle;
+			// printf("unlock %p\n", ptr);
 			int res = pthread_mutex_unlock(ptr);
 			if(res != 0) {
 				Assert(false);

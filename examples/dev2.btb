@@ -1,7 +1,14 @@
 
-#import "File"
+// #import "File"
 // #import "Memory"
-#import "Logger"
+// #import "Logger"
+
+
+#if OS_LINUX
+
+#macro CONST 92
+
+#endif
 
 
 // iter := DirectoryIteratorCreate("src")

@@ -6,21 +6,26 @@
 */
 
 // TODO: import the right OS bindings
-#import "Win32"
 #import "Memory"
+
+#if OS_WINDOWS
+#import "Win32"
+#elif OS_LINUX
+#import "Linux"
+#endif
 
 enum @enclosed FileHandle : i64 { INVALID }
 
 // TODO: These should be scoped to this file
-fn HandleToInternal(n: FileHandle) -> void* {
+fn HandleToInternal(n: FileHandle) -> i64 {
     return cast<void*> ( cast<i64>n - 1 )
 }
-fn InternalToHandle(n: void*) -> FileHandle {
+fn InternalToHandle(n: i64) -> FileHandle {
     return cast_unsafe<FileHandle> ( cast<i64>n + 1 )
 }
 
 enum @specified FileOpenFlags {
-    FILE_READ_ONLY          = 0x1, // From Engone/Win32.cpp, DO NOT MODIFY
+    FILE_READ_ONLY          = 0x1,
     FILE_CLEAR_AND_WRITE    = 0x2,
     FILE_READ_AND_WRITE     = 0x4,
 }
@@ -38,7 +43,8 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
         memcpy(c_path, path.ptr, path.len)
         c_path[path.len] = '\0'
     }
-    
+
+#if OS_WINDOWS
     access: i32 = GENERIC_READ|GENERIC_WRITE
     sharing: i32 = FILE_SHARE_READ|FILE_SHARE_WRITE
     
@@ -106,6 +112,32 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
         }
     }
     return InternalToHandle(handle)
+#elif OS_LINUX
+    open_flags, mode: i32
+    
+    if flags & FILE_READ_ONLY
+        open_flags = O_RDONLY
+    if flags & FILE_READ_AND_WRITE
+        open_flags = O_RDWR
+    if flags & FILE_CLEAR_AND_WRITE {
+        fileFlags = O_CREAT | O_TRUNC | O_RDWR;
+        mode = S_IRUSR | S_IWUSR;
+    }
+
+    fd := open(c_path, open_flags, mode)
+    if fd == -1
+        return InternalToHandle(-1)
+
+    if outFileSize {
+        info: stat
+        res := fstat(fd, &info)
+        if res == -1 {
+            *outFileSize = 0 // TODO: handle error
+        } else
+            *outFileSize = info.st_size
+    }
+    return InternalToHandle(fd)
+#endif
 }
 // returns read bytes
 fn FileRead(file: FileHandle, buffer: void*, size: i32) -> i32 {
@@ -177,7 +209,6 @@ fn IteratorToInternal(n: DirIterator) -> i32 { return cast<i32>cast<i64>n-1 }
 struct DirIterator_impl {
     root: StringBuilder;
     current_dir: StringBuilder;
-    handle: HANDLE;
     remaining_directories: DynamicArray<StringBuilder>;
     
     item: DirIteratorItem;
@@ -191,9 +222,17 @@ struct DirIterator_impl {
             it.cleanup()   
         item.name.cleanup()
     }
+#if OS_WINDOWS
+    handle: HANDLE;
+#elif OS_LINUX
+    fd_current_dir: i32;
+    head: i32;
+    bytes_in_buffer: i32;
+    buffer: char[1024];
+#endif
 }
 
-global _directory_iterators: DynamicArray<DirIterator_impl>
+global _directory_iterators: DynamicArray<DirIterator_impl*>
 
 fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     if root_path.len == 0 
@@ -201,23 +240,31 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     
     index: i32 = -1
     for 0.._directory_iterators.size() {
-        iter := _directory_iterators.get_unsafe(nr)
-        if iter.valid()
+        iter := _directory_iterators.get(nr)
+        if iter && iter.valid()
             continue
             
         index = nr
         break
     }
     if index == -1 {
-        _directory_iterators.add(DirIterator_impl{})
+        it := AllocateHeap(sizeof DirIterator_impl)
+        _directory_iterators.add(it)
         index = _directory_iterators.size()-1
     }
     
-    iter := _directory_iterators.get_unsafe(index)
+    iter := _directory_iterators.get(index)
     
     iter.root.append(root_path)
-    iter.handle = INVALID_HANDLE_VALUE
     iter.remaining_directories.add(iter.root.copy())
+#if OS_WINDOWS
+    iter.handle = -1
+#elif OS_LINUX
+    iter.fd_current_dir = -1
+    iter.head = 0
+#else
+    incomplete
+#endif
     
     return InternalToIterator(cast<i64>index)
 }
@@ -225,23 +272,38 @@ fn DirectoryIteratorDestroy(iterator: DirIterator) {
     if iterator == DirIterator.INVALID
         return
     index := IteratorToInternal(iterator)
-    iter := _directory_iterators.get_unsafe(index)
+    iter := _directory_iterators.get(index)
     
+#if OS_WINDOWS
     if iter.handle != INVALID_HANDLE_VALUE {
         yes := FindClose(iter.handle)
         if !yes {
+            // TODO: Handle error
+        }
+    }
+#elif OS_LINUX
+    if iter.fd_current_dir != -1 {
+        yes := close(iter.fd_current_dir)
+        if yes < 0 {
             // TODO: Handle error   
         }
     }
+#else
+    incomplete
+#endif
     
     iter.cleanup()
+
+    AllocateHeap(0, iter)
+    _directory_iterators.ptr[index] = null
 }
 fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> bool {
     if iterator == DirIterator.INVALID
         return false
     index := IteratorToInternal(iterator)
-    iter := _directory_iterators.get_unsafe(index)
+    iter := _directory_iterators.get(index)
     
+#if OS_WINDOWS
     data: WIN32_FIND_DATAA
     cFileNameLen: i32
     while {
@@ -326,16 +388,114 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
         if iter.item.name[nr] == '\\'
             iter.item.name.data()[nr] = '/';
     }
+#elif OS_LINUX
+
+    file_name: char*;
+    file_name_len: i32;
+
+    entry: linux_dirent64*;
+
+    while {
+        if(iter.fd_current_dir < 0){
+            if(iter.remaining_directories.size()==0){
+                return false;
+            }
+            iter.current_dir.clear();
+            
+            dir := iter.remaining_directories.get(0);
+            iter.remaining_directories.remove(0);
+            
+            if(dir.size()!=0){
+                iter.current_dir.append(dir.sliced());
+            }
+            
+            // temp: StringBuilder = iter.current_dir.copy();
+            // if(temp.size())
+            //     temp.append("\\");
+            
+            // temp.append("*");
+
+            iter.fd_current_dir = open(iter.current_dir.data(), O_DIRECTORY)
+
+            if(iter.fd_current_dir < 0){
+                log("open dir failed")
+                continue;
+            }
+        }
+        
+        if iter.head >= iter.bytes_in_buffer {
+            iter.bytes_in_buffer = getdents64(iter.fd_current_dir, iter.buffer.ptr, iter.buffer.len)
+            iter.head = 0
+            if iter.bytes_in_buffer <= 0 {
+                if iter.bytes_in_buffer < 0 {
+                    log("getdents64 failed")
+                }
+                close(iter.fd_current_dir)
+                iter.fd_current_dir = -1
+                continue // end of directory
+            }
+        }
+
+        entry = cast<linux_dirent64*>iter.buffer.ptr + iter.head
+        iter.head += entry.d_reclen
+
+        file_name = entry.d_name.ptr
+        file_name_len = strlen(entry.d_name.ptr)
+
+        log(file_name)
+        
+        if equal(file_name, ".") || equal(file_name, "..")
+            continue
+        if file_name_len == 0
+            continue // impossible?
+
+        break;
+    }
+    
+    iter.item.name.clear()
+    
+    if iter.current_dir.size() {
+        iter.item.name.append(iter.current_dir.sliced())
+        iter.item.name.append("/")
+        iter.item.name.append(file_name, file_name_len)
+    } else {
+        iter.item.name.append(file_name, file_name_len)
+    }
+
+
+    safe: char[48]
+    file_info: stat;
+    res := stat(iter.item.name.sliced().ptr, &file_info)
+
+    safe_ptr: char* = cast<char*>&safe;
+    for 0..32 {
+        log(cast<i32>safe_ptr[nr*4]," ",cast<i32>safe_ptr[nr*4+1]," ",cast<i32>safe_ptr[nr*4+2]," ",cast<i32>safe_ptr[nr*4+3])
+    }
+
+    if res >= 0 {
+        iter.item.file_size = file_info.st_size
+        iter.item.last_write_time = file_info.st_mtime * 1000_000_000u + file_info.st_mtime_nsec
+    }
+    
+    iter.item.is_directory = (entry.d_type & cast<u8>DT_DIR) != 0
+    if(iter.item.is_directory){
+        iter.remaining_directories.add(iter.item.name.copy());
+    }
+
+#else
+    incomplete
+#endif
 
     if out_item ;
         *out_item = &iter.item
+
     return true;
 }
 fn DirectoryIteratorSkip(iterator: DirIterator) {
     if iterator == DirIterator.INVALID
         return
     index := IteratorToInternal(iterator)
-    iter := _directory_iterators.get_unsafe(index)
+    iter := _directory_iterators.get(index)
     
     if iter.remaining_directories.size()
         iter.remaining_directories.pop()

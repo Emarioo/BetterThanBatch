@@ -41,7 +41,7 @@ struct CheckInfo : public PhaseContext {
     // struct step    
     bool incompleteStruct = false;
     bool completedStruct = false;
-    bool showErrors = false;
+    bool showErrors = true;
 
     bool do_not_check_global_globals = false;
 

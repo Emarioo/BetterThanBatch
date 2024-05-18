@@ -1637,7 +1637,7 @@ namespace engone {
 
 		return true;
 	}
-	bool StartProgram(const char* commandLine, u32 flags, int* exitCode, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
+	bool StartProgram(const char* commandLine, u32 flags, int* exitCode, bool* non_normal_exit, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
 		// if (!FileExist(path)) {
 		// 	return false;
 		// }

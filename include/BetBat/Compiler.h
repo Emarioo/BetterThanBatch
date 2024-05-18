@@ -197,6 +197,7 @@ struct CompilerImport {
     struct Dep {
         u32 id;
         std::string as_name;
+        bool disabled = false;
         bool circular_dependency_to_myself = false;
     };
     DynamicArray<Dep> dependencies;
@@ -296,7 +297,7 @@ struct Compiler {
     // adds task if new import was created
     u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "", std::string* assumed_path_on_error = nullptr);
     // addImport existed but was removed because of addOrFindImport
-    void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "");
+    void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "", bool disabled = false);
     void addLibrary(u32 import_id, const std::string& path, const std::string& as_name = "");
     
     DynamicArray<Path> importDirectories;

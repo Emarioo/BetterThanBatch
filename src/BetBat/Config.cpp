@@ -13,7 +13,7 @@ LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_TOKENIZER
 // | LOG_PREPROCESSOR
 // | LOG_PARSER       
-// | LOG_TYPECHECKER  
+// | LOG_TYPECHECKER
 // | LOG_GENERATOR
 // | LOG_OPTIMIZER     
 // | LOG_CONVERTER     

@@ -272,11 +272,11 @@ engone::Logger& operator <<(engone::Logger&, TypeId typeId);
 struct StructImpl;
 struct FnOverloads {
     struct Overload {
-        ASTFunction* astFunc=0;
-        FuncImpl* funcImpl = 0;
+        ASTFunction* astFunc=nullptr;
+        FuncImpl* funcImpl = nullptr;
     };
     struct PolyOverload {
-        ASTFunction* astFunc=0;
+        ASTFunction* astFunc=nullptr;
         // DynamicArray<TypeId> argTypes{};
     };
     QuickArray<Overload> overloads{};
@@ -335,9 +335,9 @@ struct TypeInfo {
     // bool isVirtual() { return isVirtualType; }
     
     struct MemberData {
-        TypeId typeId;
-        int index;
-        int offset;
+        TypeId typeId{};
+        int index = 0;
+        int offset = 0;
     };
 
     u32 getSize();
@@ -349,7 +349,7 @@ struct TypeInfo {
 };
 struct FuncImpl {
     // std::string name;
-    ASTFunction* astFunction;
+    ASTFunction* astFunction = nullptr;
     struct Spot {
         TypeId typeId{};
         int offset=0;
@@ -430,10 +430,10 @@ struct ScopeInfo {
     ASTScope* astScope = nullptr; // may be null, some scopes don't belong to ASTScope
 
     // TODO: Move these elsewhere?
-    u32 bc_start; // we need tinycode id too
-    u32 bc_end;
-    u32 asm_start; // relative to function start
-    u32 asm_end;
+    u32 bc_start = 0; // we need tinycode id too
+    u32 bc_end = 0;
+    u32 asm_start = 0; // relative to function start
+    u32 asm_end = 0;
 
     void print(AST* ast);
 
@@ -520,14 +520,14 @@ struct ASTExpression : ASTNode {
             TypeId asmTypeString;
             lexer::TokenRange asm_range{};
             OperationType assignOpType;
-            ASTExpression* left;
-            ASTExpression* right;
+            ASTExpression* left = nullptr;
+            ASTExpression* right = nullptr;
             // OperationType assignOpType = (OperationType)0;
         // };
         // struct {
             QuickArray<ASTExpression*> args; // fncall or initialiser
-            // u32 nonNamedArgs = 0;
-            u32 nonNamedArgs;
+            u32 nonNamedArgs = 0;
+            // u32 nonNamedArgs;
     //     };
     // };
 
@@ -562,7 +562,6 @@ struct ASTExpression : ASTNode {
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
-    static const int ko = sizeof (ASTExpression);
 
 struct ASTStatement : ASTNode {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
@@ -614,14 +613,14 @@ struct ASTStatement : ASTNode {
     // with a union you have to use hasNodes before using the expressions.
     // this is annoying so I am not using a union but you might want to
     // to save 24 bytes.
-    union {
-        struct {
-            ASTExpression* firstExpression;
-            ASTScope* firstBody;
-            ASTScope* secondBody;
-        };
+    // union {
+    //     struct {
+            ASTExpression* firstExpression = nullptr;
+            ASTScope* firstBody  = nullptr;
+            ASTScope* secondBody = nullptr;
+        // };
         // DynamicArray<ASTExpression*> returnValues{};
-    };
+    // };
     struct SwitchCase {
         ASTExpression* caseExpr = nullptr;
         ASTScope* caseBody = nullptr;
@@ -653,18 +652,18 @@ struct ASTStruct : ASTNode {
         TYPE_CREATED,
         TYPE_ERROR, 
     };
-    lexer::SourceLocation location;
+    lexer::SourceLocation location{};
     std::string name;
     struct Member {
         std::string name;
-        lexer::SourceLocation location;
+        lexer::SourceLocation location{};
         ASTExpression* defaultValue = nullptr;
         TypeId stringType{};
         int array_length = 0;
     };
     DynamicArray<Member> members{};
     struct PolyArg {
-        lexer::SourceLocation location;
+        lexer::SourceLocation location{};
         std::string name;
         TypeInfo* virtualType = nullptr;
     };
@@ -706,7 +705,7 @@ struct ASTStruct : ASTNode {
 };
 struct ASTEnum : ASTNode {
     // TokenRange tokenRange{};
-    lexer::SourceLocation location; // name token
+    lexer::SourceLocation location{}; // name token
     std::string name{};
     struct Member {
         // Token name{};
@@ -754,15 +753,13 @@ struct ASTFunction : ASTNode {
     struct Arg {
         lexer::SourceLocation location;
         std::string name{};
-        // StringView name{};
         ASTExpression* defaultValue=0;
         TypeId stringType={};
         Identifier* identifier = nullptr;
     };
     struct Ret {
-        lexer::SourceLocation location;
-        // TokenRange valueToken{}; // for error messages
-        TypeId stringType;
+        lexer::SourceLocation location{};
+        TypeId stringType{};
     };
 
     // returns preprocessed id, do not use it for tasks without convertint
@@ -847,7 +844,7 @@ struct ASTScope : ASTNode {
     // using statements do. The code below should
     // maintain the order necessary to make using
     // work with functions and structs.
-    enum SpoType : u8 {
+    enum SpotType : u8 {
         STRUCT,
         ENUM,
         FUNCTION,
@@ -855,8 +852,8 @@ struct ASTScope : ASTNode {
         STATEMENT,
     };
     struct Spot {
-        SpoType spotType;
-        u32 index;
+        SpotType spotType = STRUCT;
+        u32 index = 0;
     };
     QuickArray<Spot> content{};
 

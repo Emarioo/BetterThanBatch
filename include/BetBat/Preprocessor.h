@@ -88,6 +88,9 @@ struct PreprocContext : PhaseContext {
     PreprocContext& info;
 
     bool ignoreErrors = false; // used with @no-code (unused in preprocessor but MessageTool needs it in generator and therefore also here, not elegant)
+    bool showErrors = true;
+
+    bool inside_conditional = false;
     
     bool evaluateTokens=false;
     u32 new_import_id=0;

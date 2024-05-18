@@ -22,6 +22,8 @@
 #undef STB_IMAGE_WRITE_IMPLEMENTATION
 #endif
 
+#include "fcntl.h"
+
 void garbage() {
     // int a[20];
     // int b = a[1] + (a[2] + (a[3] + (a[4] + (hm() + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (hm() + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
@@ -35,6 +37,13 @@ int main(int argc, const char** argv){
     #define EXIT_CODE_FAILURE 1
 
     ProfilerInitialize();
+
+    // int n = 020;
+
+    // int fd = open("examples", O_DIRECTORY);
+    // log::out << fd << "\n";
+
+    // return 0;
     
     DynamicArray<std::string> arguments{};
     for(int i=1;i<argc;i++) // is the first argument always the executable?

@@ -155,6 +155,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     X64Inst* original_recipient = nullptr;
     int original_recipient_regnr = 0;
 
+    #define PRINT_BYTECODE(MSG) \
+        tinycode->print(n->bc_index, n->bc_index+8, bytecode); \
+        log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR<< MSG; \
+        log::out.flush();
+
     DynamicArray<int> insts_to_delete{};
     for(int i=inst_list.size()-1;i>=0;i--) {
         auto n = inst_list[i];
@@ -191,6 +196,14 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         }
         if(n->base->opcode == BC_PUSH) {
             auto base = (InstBase_op1*)n->base;
+            
+            if(bc_push_list.size() == 0) {
+                PRINT_BYTECODE("The push at "<<n->bc_index << " is missing a pop\n")
+                // debug stuff
+                // tinycode->print(n->bc_index, n->bc_index+5, bytecode);
+                // log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR<<"The push at "<<n->bc_index << " is missing a pop\n";
+                // log::out.flush();
+            }
             auto& v = bc_push_list.last();  // TODO: What if bytecode is messed up and didn't add a pop?
             auto recipient = v.used_by;
             // auto reg_nr = v.reg_nr;
@@ -683,10 +696,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     };
     DynamicArray<SPMoment> sp_moments{};
     
-    // NOTE: If the generator runs out of registers then define the macro below
-    //   and run this command: btb -dev > out
-    //   Start from the end of the file and see which instruction forgets to 
-    //   free their registers.
+    // NOTE: If the generator runs out of registers or X64_REG_INVALID
+    //   appears then define the macro below.
+    //   Run this command for large programs: btb -dev > out
+    //   You may want to start reading from the end and up to see what
+    //   registers are being leaked.
     // #define DEBUG_REGISTER_USAGE
     
     #ifdef DEBUG_REGISTER_USAGE
@@ -768,6 +782,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             } break;
             case BC_MOV_MR:
             case BC_MOV_MR_DISP16: {
+
                 auto base = (InstBase_op2_ctrl*)n->base;
                 i16 imm = 0;
                 if(instruction_contents[opcode] & BASE_imm16) {
@@ -776,9 +791,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 if(base->op0 == BC_REG_LOCALS) {
                     imm -= callee_saved_space;
                 }
+                
                 // TODO: Which order are the ops push to the stack?
                 FIX_PRE_IN_OPERAND(1)
                 FIX_PRE_IN_OPERAND(0)
+                if(reg0->reg == X64_REG_INVALID|| reg1->reg == X64_REG_INVALID) {
+                    PRINT_BYTECODE("Register allocation failed?\n")
+                }
                 emit_mov_mem_reg(reg0->reg, reg1->reg, base->control, imm);
                 FIX_POST_IN_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
@@ -1256,11 +1275,17 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
                         emit4((u32)1); // 1 = stdout
 
-                        emit1(OPCODE_CALL_IMM);
-                        int reloc_pos = code_size();
-                        emit4((u32)0);
+                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                        emit4((u32)SYS_write);
 
-                        prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
+                        emit2(OPCODE_2_SYSCALL);
+
+                        // emit1(OPCODE_CALL_IMM);
+                        // int reloc_pos = code_size();
+                        // emit4((u32)0);
+
+                        // prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
                     #endif
                         break;
                     }
@@ -1330,11 +1355,18 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
                         emit4((u32)1); // stdout
 
-                        emit1(OPCODE_CALL_IMM);
-                        int reloc_pos = code_size();
-                        emit4((u32)0);
+                        
+                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                        emit4((u32)SYS_write);
 
-                        prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
+                        emit2(OPCODE_2_SYSCALL);
+
+                        // emit1(OPCODE_CALL_IMM);
+                        // int reloc_pos = code_size();
+                        // emit4((u32)0);
+
+                        // prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
                     #endif
                         break;
                     }
@@ -1382,7 +1414,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     // we have to manually exit when linking with -nostdlib
                     emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
                     emit_modrm_slash(MODE_REG, 0, X64_REG_A);
-                    emit4((u32)60); // SYS_exit = 60, https://filippo.io/linux-syscall-table/
+                    emit4((u32)SYS_exit);
                     emit2(OPCODE_2_SYSCALL);
                     emit1(OPCODE_RET);
                 } else {
@@ -3221,31 +3253,25 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_tinyprog_index);
                 prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_tinyprog_index);
                 #else
-                // TODO: FIX, look at windows version, I believe the assembly below is wrong.
+                
                 /*
                 sub    rsp,0x10  # must be 16-byte aligned when calling unix write
                 mov    rbx,rsp
                 mov    DWORD PTR [rbx],0x99999978 # temporary data
-                cmp    rdx,rax
+                cmp    rdi,rsi
                 je     hop
                 mov    BYTE PTR [rbx],0x5f # err character
                 hop:
                 mov    rdx,0x4 # buffer size
                 mov    rsi,rbx # buffer ptr
                 mov    rdi,0x2 # stderr
-                call   0
+                mov    eax, 1 # SYS_write
+                syscall
                 add    rsp,0x10
                 */
 
 
-                const u8 arr[]={
-                    0x48, 0x83, 0xEC, 0x10, 0x48, 0x89, 0xE3, 0xC7,
-                    0x03, 0x78, 0x99, 0x99, 0x99, 0x48, 0x39, 0xC2,
-                    0x74, 0x03, 0xC6, 0x03, 0x78, 0x48, 0xC7, 0xC2, 
-                    0x04, 0x00, 0x00, 0x00, 0x48, 0x89, 0xDE, 0x48, 
-                    0xC7, 0xC7, 0x02, 0x00, 0x00, 0x00, 0xE8, 0x00, 
-                    0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x10 
-                };
+                const u8 arr[]={ 0x48, 0x83, 0xEC, 0x10, 0x48, 0x89, 0xE3, 0xC7, 0x03, 0x78, 0x99, 0x99, 0x99, 0x48, 0x39, 0xF7, 0x74, 0x03, 0xC6, 0x03, 0x5F, 0x48, 0xC7, 0xC2, 0x04, 0x00, 0x00, 0x00, 0x48, 0x89, 0xDE, 0x48, 0xC7, 0xC7, 0x02, 0x00, 0x00, 0x00, 0xB8, 0x01, 0x00, 0x00, 0x00, 0x0F, 0x05, 0x48, 0x83, 0xC4, 0x10 };
                 int start_addr = code_size();
                 emit_bytes(arr,sizeof(arr));
 
@@ -3255,7 +3281,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 set_imm8(start_addr + 0xb, (imm>>8)&0xFF);
                 set_imm8(start_addr + 0xc, (imm>>16)&0xFF);
 
-                prog->addNamedUndefinedRelocation("write", start_addr + 0x27, current_tinyprog_index);
+
+                // prog->addNamedUndefinedRelocation("write", start_addr + 0x27, current_tinyprog_index);
 
                 #endif
 

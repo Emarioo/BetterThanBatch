@@ -425,6 +425,8 @@ void Compiler::processImports() {
                 // Step 1. Which dependency depends on myself.
                 CompilerImport* im = imports.get(task.import_id-1);
                 for(auto& dep : im->dependencies) {
+                    // if(!dep.disabled) continue;
+
                     DynamicArray<u32> checked_ids{};
                     DynamicArray<u32> ids_to_check{};
                     ids_to_check.add(dep.id);
@@ -737,6 +739,9 @@ void Compiler::processImports() {
 
                 // log::out << BriefString(imp->path) << " deps:\n";
                 for(int i=0;i<imp->dependencies.size();i++) {
+                    if(imp->dependencies[i].disabled)
+                        continue;
+
                     auto dep = imports.get(imp->dependencies[i].id-1);
                     auto dep_scope = ast->getScope(dep->scopeId);
                     my_scope->sharedScopes.add(dep_scope);
@@ -1480,11 +1485,21 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     
     return imp.import_id;
 }
-void Compiler::addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name) {
+void Compiler::addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name, bool disabled) {
     lock_imports.lock();
     auto imp = imports.get(import_id-1);
     Assert(imp);
-    imp->dependencies.add({dep_import_id, as_name});
+    bool found = false;
+    for(int i=0;i<imp->dependencies.size();i++) {
+        // TODO: Multiple imports, named differently won't work.
+        if(imp->dependencies[i].id == dep_import_id) {
+            found = true;
+            imp->dependencies[i].disabled = disabled; // update
+            break;
+        }
+    }
+    if(!found)
+        imp->dependencies.add({dep_import_id, as_name, disabled});
 
     lock_imports.unlock();
     // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add depend: "<<import_id<<"->"<<dep_import_id<<" ("<<TrimCWD(imp->path)<<")\n")

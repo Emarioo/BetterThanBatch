@@ -615,6 +615,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
                     // u64 num = 0;
                     // memcpy(&num, num_data.ptr, num_data.len);
                     arrayLength = lexer::ConvertInteger(num_data);
+                    
                     if(arrayLength<=0){
                         ERR_SECTION(
                             ERR_HEAD2(tok1)
@@ -1213,6 +1214,8 @@ SignalIO ParseAnnotation(ParseInfo& info, StringView* out_annotation_name, lexer
 SignalIO ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
     ZoneScopedC(tracy::Color::OrangeRed1);
 
+    // fncall->nonNamedArgs = 0; // can't do this because caller sets it to 1 if expr is a method call
+
     // TODO: sudden end, error handling
     bool expectComma=false;
     bool mustBeNamed=false;
@@ -1365,6 +1368,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     // Create "this" argument in methods
                     // tmp->args->add(values.last());
                     tmp->args.add(values.last());
+                    tmp->nonNamedArgs = 0;
                     tmp->nonNamedArgs++;
                     values.pop();
                     

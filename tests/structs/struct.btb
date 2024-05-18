@@ -34,6 +34,21 @@ _test 23; a.n;
 // base2: Base = .{3}
 // base2 = .{7}
 
+@TEST_CASE(slice_method)
+
+fn sl() -> char[] { return "ok" }
+_test 2; sl().len // generator missed a push/pop at one point
+
+@TEST_CASE(assign_add)
+
+struct Box {
+    head: i32;
+}
+
+box: Box
+p := &box
+
+p.head += 5 // x64_gen crashed, X64_REG_INVALID appeared somehow
 
 @TEST_CASE(array_in_struct)
 

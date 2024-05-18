@@ -19,41 +19,19 @@ struct GenContext : public PhaseContext {
     GenContext() : info(*this) { } // well this is dumb
     GenContext& info;
 
-    // struct AlignInfo {
-    //     int diff=0;
-    //     int size=0;
-    // };
-    // DynamicArray<AlignInfo> stackAlignment;
-    // int virtualStackPointer = 0;
     int currentFrameOffset = 0;
 
     BytecodeBuilder builder{};
 
-    // void addPop(int reg);
-    // DON'T USE withoutInstruction UNLESS YOU ARE 100% CERTAIN ABOUT WHAT YOU ARE DOING.
-    // It's mainly used for cast with ast_asm.
-    // void addPush(int reg, bool withoutInstruction = false);
-    // void addIncrSp(i16 offset);
-    // void addAlign(int alignment);
-    // int saveStackMoment();
-    // void restoreStackMoment(int moment, bool withoutModification = false, bool withoutInstruction = false);
-
     void popInstructions(u32 count);
 
     QuickArray<ASTNode*> nodeStack; // kind of like a stack trace
-    // ASTNode* prevNode=nullptr;
-    // TokenStream* lastStream=nullptr;
+    
     u32 lastLine = 0;
     u32 lastLocationIndex = (u32)-1;
     void pushNode(ASTNode* node);
     void popNode();
-    // returns false if a modified or different instruction was added
-    // bool addInstruction(Instruction inst, bool bypassAsserts = false);
-    // void addLoadIm(u8 reg, i32 value);
-    // void addLoadIm2(u8 reg, i64 value);
-    // different from load immediate
-    // void addImm(i32 value);
-    // void addCall(LinkConventions linkConvention, CallConventions callConvention);
+
     void addExternalRelocation(const std::string& name, const std::string& lib_path, u32 codeAddress) {
         if(!disableCodeGeneration)
             bytecode->addExternalRelocation(name, lib_path, tinycode->index, codeAddress);
@@ -61,7 +39,6 @@ struct GenContext : public PhaseContext {
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
     DebugFunction* debugFunction = nullptr;
-    // u32 debugFunctionIndex = (u32)-1;
     ASTFunction* currentFunction=nullptr;
     FuncImpl* currentFuncImpl=nullptr;
     ScopeId currentScopeId = 0;
@@ -73,6 +50,7 @@ struct GenContext : public PhaseContext {
     // won't work with multiple threads
     // bool disableCodeGeneration = false; // used with @no-code
     bool ignoreErrors = false; // used with @no-code
+    bool showErrors = true;
 
     int funcDepth=0;
     struct LoopScope {
@@ -95,16 +73,6 @@ struct GenContext : public PhaseContext {
     };
     DynamicArray<ResolveCall> callsToResolve;
     void addCallToResolve(int bcIndex, FuncImpl* funcImpl);
-
-
-    // static const int FRAME_SIZE=16; // pc, fp
-    // what the relative stack pointer should be right after a funtion call.
-    // frame pointer should be pushed afterwards which will result in -16 as virtualStackPointer
-    // static const int VIRTUAL_STACK_START = 0;
-
-    // Extra details
-    // FuncImpl* recentFuncImpl=nullptr; // used by fncall
-
 
     SignalIO framePush(TypeId typeId, i32* outFrameOffset, bool genDefault, bool staticData);
     SignalIO generatePush(BCRegister baseReg, int offset, TypeId typeId);

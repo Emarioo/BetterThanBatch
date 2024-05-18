@@ -369,7 +369,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer:
                 *printedError = true;
             return {};
         }
-        typeId.setPointerLevel(plevel);
+        typeId.setPointerLevel(typeId.getPointerLevel() + plevel);
         return typeId;
     }
 
@@ -449,7 +449,7 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
                 // We don't care about another turn. We failed but we don't set
                 // completedStructs to false since this will always fail.
             } else {
-                _TCLOG(log::out << "Created struct type "<<info.ast->typeToString(structInfo->id)<<" in scope "<<scope->scopeId<<"\n";)
+                _TCLOG(log::out << log::LIME << "struct '"<<info.ast->typeToString(structInfo->id)<<"'"<< log::NO_COLOR <<" in scope "<<scope->scopeId<<"\n";)
                 astStruct->state = ASTStruct::TYPE_CREATED;
                 structInfo->astStruct = astStruct;
 
@@ -1723,17 +1723,18 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     std::string msgtype = "not member of "+info.ast->typeToString(leftType);
                     ERR_SECTION(
                         ERR_HEAD2(expr->location)
-                        ERR_MSG_LOG("'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(leftType)<<"'.";
-                            log::out << "These are the members: ";
-                            for(int i=0;i<(int)ti->astStruct->members.size();i++){
-                                if(i!=0)
-                                    log::out << ", ";
-                                log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
-                            }
-                            log::out <<"\n";
-                            log::out << "\n"
-                        )
+                        ERR_MSG("'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(leftType)<<"'.")
                         ERR_LINE2(expr->location,msgtype.c_str());
+                        log::out << "These are the members: ";
+                        for(int i=0;i<(int)ti->astStruct->members.size();i++){
+                            if(i!=0)
+                                log::out << ", ";
+                            log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR;
+                            // TODO: Option to print types along with member names.
+                            // log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
+                        }
+                        log::out <<"\n";
+                        log::out << "\n"
                     )
                     if(outTypes)
                         outTypes->add(AST_VOID);
@@ -1894,7 +1895,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                         ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
                     )
                 }
-            } else if(!info.ast->castable(typeArray.last(),ti)){
+            } else if(!(typeArray.last().getPointerLevel() > 0 && ti.getPointerLevel() > 0) && !info.ast->castable(typeArray.last(),ti)){
                 std::string strleft = info.ast->typeToString(typeArray.last());
                 std::string strcast = info.ast->typeToString(ti);
                 ERR_SECTION(
@@ -3429,6 +3430,7 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     info.incompleteStruct = false;
     info.completedStruct = false;
     info.showErrors = !ignore_errors;
+    info.ignoreErrors = !info.showErrors;
     CheckStructs(info, scope);
     
     // if(!info.showErrors)
