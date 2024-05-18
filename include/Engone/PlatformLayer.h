@@ -271,7 +271,7 @@ namespace engone {
 	// exitCode is ignored unless you wait for the process to finish.
 	// TODO: Implement APIProcess so that you can get do some stuff in the mean time and then wait
 	//   for the process to finishd and get the exitCode.
-	bool StartProgram(char* commandLine, u32 flags=0, int* exitCode=0, APIFile inFile={}, APIFile outFile={}, APIFile errFile={});
+	bool StartProgram(const char* commandLine, u32 flags=0, int* exitCode=0, APIFile inFile={}, APIFile outFile={}, APIFile errFile={});
 
 	APIPipe PipeCreate(u64 pipeBuffer, bool inheritRead, bool inheritWrite);
 	// Set close_read, close_write if you want to close a specific end of the pipe

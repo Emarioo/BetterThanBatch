@@ -1033,10 +1033,10 @@ void Compiler::run(CompileOptions* options) {
             generate_bc_file = true;
             bc_file = options->output_file;
         } else {
-            log::out << "You specified '"<<format<<"' as format for the output file but it I the compiler have no idea what to generate.\n";
+            log::out << "You specified '"<<format<<"' as file extension for the output file but the compiler has no idea what to generate.\n";
             #define PRINT_FORMAT_OPTIONS\
                 log::out << log::RED << "  Specify .o (or .obj) for object file\n";             \
-                log::out << log::RED << "          .exe for executable\n";                      \
+                log::out << log::RED << "          .exe for executable (or no extension if on Linux)\n";                      \
                 log::out << log::RED << "          .bc for bytecode\n";                      \
                 log::out << log::RED << "  or no output file for the default "<<exe_file<<"\n"; 
             PRINT_FORMAT_OPTIONS
@@ -1382,7 +1382,7 @@ void Compiler::run(CompileOptions* options) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS
                 int exitCode;
-                engone::StartProgram("test.exe",PROGRAM_WAIT, &exitCode);
+                engone::StartProgram(exe_file.c_str(),PROGRAM_WAIT, &exitCode);
                 log::out << log::LIME <<"Exit code: " << exitCode << "\n";
 
                 // Some user friendly information about crashes
@@ -1397,7 +1397,7 @@ void Compiler::run(CompileOptions* options) {
             case TARGET_UNIX_x64: {
                 #ifdef OS_UNIX
                 int exitCode;
-                engone::StartProgram("test.exe",PROGRAM_WAIT, &exitCode);
+                engone::StartProgram(exe_file.c_str(),PROGRAM_WAIT, &exitCode);
                 log::out << log::LIME <<"Exit code: " << exitCode << "\n";
                 #else
                 log::out << log::RED << "You cannot run a Unix program on Windows. Consider changing target when compiling (--target win-x64)\n";
