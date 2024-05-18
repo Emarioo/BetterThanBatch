@@ -28,7 +28,7 @@
 #define MegaBytes(x) (x*1024llu*1024llu)
 #define GigaBytes(x) (x*1024llu*1024llu*1024llu)
 
-#ifdef OS_UNIX
+#ifdef OS_LINUX
 #define FORMAT_64 "%l"
 #else
 #define FORMAT_64 "%ll"
@@ -271,7 +271,7 @@ namespace engone {
 	// exitCode is ignored unless you wait for the process to finish.
 	// TODO: Implement APIProcess so that you can get do some stuff in the mean time and then wait
 	//   for the process to finishd and get the exitCode.
-	bool StartProgram(const char* commandLine, u32 flags=0, int* exitCode=0, APIFile inFile={}, APIFile outFile={}, APIFile errFile={});
+	bool StartProgram(const char* commandLine, u32 flags=0, int* exitCode=0, bool* non_normal_exit = nullptr, APIFile inFile={}, APIFile outFile={}, APIFile errFile={});
 
 	APIPipe PipeCreate(u64 pipeBuffer, bool inheritRead, bool inheritWrite);
 	// Set close_read, close_write if you want to close a specific end of the pipe
@@ -301,6 +301,7 @@ namespace engone {
 	DynamicLibrary LoadDynamicLibrary(const std::string& path);
 	void UnloadDynamicLibrary(DynamicLibrary library);
 	// You may need to cast the function pointer to the appropriate function
+	// Also used for global variables
 	VoidFunction GetFunctionPointer(DynamicLibrary library, const std::string& name);
 
 	// Converts arguments from WinMain into simpler arguments. Not unicode.

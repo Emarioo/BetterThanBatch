@@ -414,6 +414,16 @@ struct QuickArray {
         _reserve(0);
     }
 
+    QuickArray(const QuickArray<T>& arr) {
+        bool yes = _reserve(arr.max);
+        Assert(yes);
+        yes = resize(arr.used);
+        Assert(yes);
+        for(int i=0;i<used;i++){
+            // don't use quick array with items that need constructing and destructing
+            _ptr[i] = arr._ptr[i];
+        }
+    }
     QuickArray(QuickArray<T>& arr) {
         stealFrom(arr);
     }

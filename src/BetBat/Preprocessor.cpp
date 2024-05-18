@@ -34,17 +34,11 @@ SignalIO PreprocContext::parseMacroDefinition() {
     lexer::Token name_token = gettok();
     
     if(name_token.type != lexer::TOKEN_IDENTIFIER){
-        // TODO: Create new error report system (or finalize the started one)?
-        //   We should do a complete failure here stopping preprocessing because
-        //   everything else could be wrong. All imports which import the current
-        //   will not be preprocessed or parsed minimizing meaningless errors.
-        if(!evaluateTokens) { // don't print message twice
-            ERR_SECTION(
-                ERR_HEAD2(name_token)
-                ERR_MSG("'"<<lexer->tostring(name_token)<<"' is not a valid name for macros. All characters must be one of a-Z or 0-9 except for the first character which must be a-Z. No special characters like: $@?,:;.")
-                ERR_LINE2(name_token, "bad");
-            )
-        }
+        ERR_SECTION(
+            ERR_HEAD2(name_token)
+            ERR_MSG("'"<<lexer->tostring(name_token)<<"' is not a valid name for macros. All characters must be one of a-Z or 0-9 except for the first character which must be a-Z. No special characters like: $@?,:;.")
+            ERR_LINE2(name_token, "bad");
+        )
         return SIGNAL_COMPLETE_FAILURE;
     }
     
@@ -61,13 +55,11 @@ SignalIO PreprocContext::parseMacroDefinition() {
     } else {
         lexer::Token token = gettok();
         if(token.type != '('){
-            if(!evaluateTokens) { // don't print message twice
-                ERR_SECTION(
-                    ERR_HEAD2(token)
-                    ERR_MSG("'"<<lexer->tostring(token)<<"' is not allowed directly after a macro's name. Either use a '(' to specify macro arguments or a space to indicate no arguments and then the content of the macro.")
-                    ERR_LINE2(token,"bad");
-                )
-            }
+            ERR_SECTION(
+                ERR_HEAD2(token)
+                ERR_MSG("'"<<lexer->tostring(token)<<"' is not allowed directly after a macro's name. Either use a '(' to specify macro arguments or a space to indicate no arguments and then the content of the macro.")
+                ERR_LINE2(token,"bad");
+            )
             return SIGNAL_COMPLETE_FAILURE;
         }
         advance();
@@ -122,14 +114,12 @@ SignalIO PreprocContext::parseMacroDefinition() {
                 // cool
             } else{
                 if(!hadError){
-                    if(!evaluateTokens) { // don't print message twice
-                        ERR_SECTION(
-                            ERR_HEAD2(token)
-                            ERR_MSG("'"<<lexer->tostring(token)<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.")
-                            ERR_LINE2(token, "bad");
-                        )
-                    }
-                    return SIGNAL_COMPLETE_FAILURE;
+                    ERR_SECTION(
+                        ERR_HEAD2(token)
+                        ERR_MSG("'"<<lexer->tostring(token)<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.")
+                        ERR_LINE2(token, "bad");
+                    )
+                    return SIGNAL_COMPLETE_FAILURE; // ensures that we don't preprocess again if we aren't evaluating macros
                 }
                 hadError = true;
             }
@@ -167,14 +157,16 @@ SignalIO PreprocContext::parseMacroDefinition() {
                 break;
             }
             if(lexer->equals_identifier(mac_tok, "macro")){
-                if(!evaluateTokens) { // don't print message twice
+                invalidContent = true;
+                // if(!evaluateTokens) { // don't print message twice
                     ERR_SECTION(
                         ERR_HEAD2(mac_tok)
                         ERR_MSG("Macro definitions inside macros are not allowed.")
                         ERR_LINE2(mac_tok,"not allowed")
+                        ERR_LINE2(name_token,"inside this macro")
                     )
-                }
-                invalidContent = true;
+                    return SIGNAL_COMPLETE_FAILURE;
+                // }
             }
             //not end, continue
         }
@@ -185,15 +177,16 @@ SignalIO PreprocContext::parseMacroDefinition() {
             }
         }
         if(token.type == lexer::TOKEN_EOF&&multiline){
-            if(!evaluateTokens) { // don't print message twice
-                ERR_SECTION(
-                    ERR_HEAD2(name_token)
-                    ERR_MSG("Missing '#endmacro' for macro '"<<lexer->tostring(name_token)<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments). Note that you must specify the end for empty macros. They are otherwise assumed to be multi-line macros.")
-                    ERR_LINE2(name_token, "this needs #endmacro somewhere")
-                    ERR_LINE2(gettok(-1),"macro content ends here!")
-                )
-            }
             invalidContent = true;
+            // if(!evaluateTokens) { // don't print message twice
+            ERR_SECTION(
+                ERR_HEAD2(name_token)
+                ERR_MSG("Missing '#endmacro' for macro '"<<lexer->tostring(name_token)<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments). Note that you must specify the end for empty macros. They are otherwise assumed to be multi-line macros.")
+                ERR_LINE2(name_token, "this needs #endmacro somewhere")
+                ERR_LINE2(gettok(-1),"macro content ends here!")
+            )
+            // }
+            return SIGNAL_COMPLETE_FAILURE;
             break;
         }
     }
@@ -582,10 +575,12 @@ SignalIO PreprocContext::parseIf(){
                 }
             }
         }
-        // TODO: what about errors?
         
         if(active){
-            parseOne(); // nocheckin, is this right?
+            auto signal = parseOne();
+            if(signal == SIGNAL_COMPLETE_FAILURE) {
+                return SIGNAL_COMPLETE_FAILURE;
+            }
         }else{
             advance();
             // log::out << log::GRAY<<" skip "<<skip << "\n";
@@ -700,6 +695,11 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         return SIGNAL_NO_MATCH;
     advance();
     
+    LOG(LOG_PREPROCESSOR, 
+        log::LIME << "Eval " << macro_name<<"\n";
+    )
+    
+
     typedef DynamicArray<lexer::Token> TokenList;
     
     // TODO: Optimize by not allocating tokens on the heap.
@@ -815,6 +815,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     }
 
     #define SET_SUFFIX(VAR,FROM) VAR = (VAR & ~lexer::TOKEN_FLAG_ANY_SUFFIX) | (FROM & lexer::TOKEN_FLAG_ANY_SUFFIX)
+    int appended_tokens = 0;
     
     auto apply_concat=[&](Layer* layer, lexer::Token token, StringView* view = nullptr, bool compute_source = true) {
         if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
@@ -843,13 +844,29 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 int col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
                 lexer->popTokenFromImport(new_lexer_import);
 
-                StringView new_view = new_data;
-                lexer::Token new_token{};
-                new_token.type = lexer::TOKEN_IDENTIFIER;
-                new_token.flags = lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED;
-                new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
-                lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, ln, col);
-                layer->concat_next_token = false;
+                MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, new_data);
+                if (macroroot) {
+                    // layer->step(); // name
+                    
+                    Layer* layer_macro = createLayer(true);
+                    layer_macro->root = macroroot;
+                    layer_macro->sethead((u32)0);
+                    layer_macro->adjacent_callee = layer->adjacent_callee;
+                    layer_macro->unwrapped = layer->unwrapped;
+                    layer->unwrapped = false;
+                    layers.add(layer_macro);
+                    // we need to specify that when we do eval_content
+                    // the tokens should be appended to input_arguments
+                    layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
+                } else {
+                    StringView new_view = new_data;
+                    lexer::Token new_token{};
+                    new_token.type = lexer::TOKEN_IDENTIFIER;
+                    new_token.flags = lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED;
+                    new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
+                    lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, ln, col);
+                    layer->concat_next_token = false;
+                }
                 return true;
             } else {
                 layer->concat_next_token = false;
@@ -862,9 +879,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         layer->concat_next_token = false;
         return false;
     };
+
+    int counter_directive = 0;
+
+    // rename to 'index_of_first_token' or 'token_count_before_eval'
     int index_of_prev_token = new_lexer_import->getTokenCount();
     // lexer->appendToken(new_lexer_import, list[j], appended_tokens != 0, nullptr, 0, macro_source->line, macro_source->column);
-    int appended_tokens = 0;
     while(layers.size() != 0) {
         if(layers.size() >= PREPROC_REC_LIMIT) {
             // TODO: Better error message, maybe provide macro call stack with arguments?
@@ -942,7 +962,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                         if(layer->unwrapped) {
                             // TODO: unwrapped for arguments not implemented. Do we care?
                             //   Do error message?
-                            layer->unwrapped = false;   
+                            layer->unwrapped = false;
                         }
                         layer->step();
                         
@@ -1014,7 +1034,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 if(!layer->specific) {
                     ERR_SECTION(
                         ERR_HEAD2(macro_token)
-                        ERR_MSG_COLORED("MACRO MADNESS! While processing the macro '"<<log::GREEN<<macro_name <<log::NO_COLOR<<"', the evaluation of macro '"<<log::GREEN<<layer->root->name<<log::NO_COLOR<<"' with '"<<log::GREEN<<(layer->input_arguments.size())<<log::NO_COLOR<<"' arguments occurred. This is not allowed since '"<<log::GREEN <<layer->root->name<<log::NO_COLOR<<"' is not defined for that amount of arguments. Below are the definitions")
+                        ERR_MSG_COLORED("While processing the macro '"<<log::GREEN<<macro_name <<log::NO_COLOR<<"', the evaluation of macro '"<<log::GREEN<<layer->root->name<<log::NO_COLOR<<"' with '"<<log::GREEN<<(layer->input_arguments.size())<<log::NO_COLOR<<"' arguments occurred. This is not allowed since '"<<log::GREEN <<layer->root->name<<log::NO_COLOR<<"' is not defined for that amount of arguments. Below are the definitions")
                         ERR_LINE2(macro_token,"macro evaluation started here")
                         for(auto& pair : layer->root->specificMacros) {
                             ERR_LINE2(pair.second->location, "" << (int)pair.second->parameters.size() << " arguments");
@@ -1073,18 +1093,17 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                     layer->adjacent_callee->input_arguments.last().add(list[j]);
                                 }
                             } else {
-                                auto t = lexer->appendToken(new_lexer_import, list[j], appended_tokens != 0, nullptr, 0, macro_source->line, macro_source->column);
+                                bool concated = false;
+                                if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
+                                    if(apply_concat(layer, list[j], nullptr, appended_tokens != 0)) {
+                                        concated = true;
+                                    }
+                                }
+                                if(!concated) {
+                                    auto t = lexer->appendToken(new_lexer_import, list[j], appended_tokens != 0, nullptr, 0, macro_source->line, macro_source->column);
+                                        // auto t = lexer->appendToken(new_lexer_import, list[j], true);
+                                }
                                 appended_tokens++;
-
-                                // TODO: Concat logic has not been tested!
-                                //   What do we expect/want this to do?
-                                // if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
-                                //     if(!apply_concat(layer, list[j])) {
-                                //         auto t = lexer->appendToken(new_lexer_import, list[j], true);
-                                //     }
-                                // } else {
-                                //     auto t = lexer->appendToken(new_lexer_import, list[j], true);
-                                // }
                                 layer->concat_next_token = false;
                             }
                         }
@@ -1171,6 +1190,17 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                         auto src = macro_source;
                         Assert(src);
                         std::string temp = std::to_string(src->column);
+
+                        lexer::Token tok{};
+                        tok.type = lexer::TOKEN_LITERAL_INTEGER;
+                        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+                        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
+                        
+                        some_str = temp;
+                        some_tok = tok;
+                        signal = SIGNAL_SUCCESS;
+                    } else if(directive_str == "counter") {
+                        std::string temp = std::to_string(counter_directive++);
 
                         lexer::Token tok{};
                         tok.type = lexer::TOKEN_LITERAL_INTEGER;

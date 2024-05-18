@@ -127,7 +127,7 @@ struct CompileOptions {
     bool verbose=false;
     bool executeOutput = false;
 
-    // bool 
+    bool disable_preload = false;
 
     bool quit = false;
     bool instant_report = true;

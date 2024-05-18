@@ -114,7 +114,7 @@ namespace engone {
 		Logger& operator<<(uint32 value);
 		Logger& operator<<(uint16 value);
 		Logger& operator<<(uint8 value);
-		Logger& operator<<(volatile long value);
+		// Logger& operator<<(volatile long value); // what's the purpose of this?
 
 		Logger& operator<<(double value);
 		Logger& operator<<(float value);

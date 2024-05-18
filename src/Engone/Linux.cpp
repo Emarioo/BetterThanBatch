@@ -3,7 +3,7 @@
 #include "Engone/Asserts.h"
 
 // Todo: Compile for Linux and test the functions
-#ifdef OS_UNIX
+#ifdef OS_LINUX
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -1064,7 +1064,7 @@ namespace engone {
 
 		// return true;
 	}
-	bool StartProgram(const char* commandLine, u32 flags, int* exitCode, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
+	bool StartProgram(char* commandLine, u32 flags, int* exitCode, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
 		// if (!FileExist(path)) {
 		// 	return false;
 		// }

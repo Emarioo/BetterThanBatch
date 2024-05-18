@@ -252,9 +252,10 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             y--;
             SetConsoleCursorPos(x,y);
             FillConsoleAt(' ', x, y, w);
-            #elif defined(OS_UNIX)
-            int new_y_pos = ?;
-            printf("\033[0,%d", new_y_pos);
+            #elif defined(OS_LINUX)
+            // getting cursor pos doesn't seem easy on linux ):
+            // int new_y_pos = ?;
+            // printf("\033[0,%d", new_y_pos);
             #endif
             
             if(line.empty()) {
@@ -592,10 +593,18 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 if(c == STDCALL) {
                     // Makehshift is a bad name
                     // it's more like a StackSwitcher_stdcall
+                    #ifdef OS_WINDOWS
                     Makeshift_stdcall(f, (void*)stack_pointer);
+                    #else
+                    Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
+                    #endif
                 } else if(c == UNIXCALL) {
                     // Makeshift_unixcall(f, (void*)stack_pointer);
+                    #ifdef OS_LINUX
+                    Makeshift_sysvcall(f, (void*)stack_pointer);
+                    #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
+                    #endif
                 } else { 
                     // Makeshift function for betcall?
                     Assert(false); 
@@ -765,7 +774,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
             // nocheckin, we assume 32 bit float operation
             
-            #pragma region
             if(IS_CONTROL_FLOAT(control)) {
                 if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
                     switch(opcode){
@@ -858,7 +866,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 }
                 #undef OP
             }
-            #pragma endregion
         } break;
         case BC_LAND:
         case BC_LOR:

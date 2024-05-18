@@ -719,7 +719,9 @@ namespace dwarf {
                     int off_start = stream->getWriteHead();
                     stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
                     
-                    WRITE_SLEB(var.frameOffset + RBP_CONSTANT_OFFSET)
+                    int extra_off = -fun->offset_from_bp_to_locals; // extra offset due to non-volatile registers, i think return values with betcall is accounted for in var.frameOffset
+                    
+                    WRITE_SLEB(var.frameOffset + extra_off + RBP_CONSTANT_OFFSET)
                     *block_length = stream->getWriteHead() - off_start; // we write block length later since we don't know the size of the LEB128 integer
                 }
                 while(curLevel>0) {

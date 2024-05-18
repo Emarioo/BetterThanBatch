@@ -13,7 +13,7 @@
 
 # clear
 
-if [ $1 = run ]; then
+if [ "$1" = "run" ]; then
     btb -dev
     exit
 fi
@@ -34,7 +34,7 @@ echo "Compiled in $((($runtime) / 1000)).$((($endTime - $startTime) % 1000)) sec
 
 if [ "$err" = 0 ]; then
     # cp bin/btb btb
-    if [ $# = 0 ]; then
+    if [ "$#" = 0 ]; then
         ./bin/btb -dev
         # ./bin/btb --test tests/flow/defer.btb
         # ./bin/btb tests/flow/defer.btb

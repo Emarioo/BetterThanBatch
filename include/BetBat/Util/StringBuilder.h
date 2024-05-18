@@ -50,20 +50,10 @@ struct StringView {
 
 
 };
-bool operator==(const std::string& str, const StringView& view) {
-    if(str.length() != view.len) return false;
-    return view.equals(str.c_str());
-}
-bool operator==(const StringView& view, const std::string& str) {
-    if(str.length() != view.len) return false;
-    return view.equals(str.c_str());
-}
-bool operator==(const StringView& str, const StringView& view) {
-    return str.equals(view.ptr,view.len);
-}
-bool operator==(const StringView& view, const char* str) {
-    return view.equals(str);
-}
+bool operator==(const std::string& str, const StringView& view);
+bool operator==(const StringView& view, const std::string& str);
+bool operator==(const StringView& str, const StringView& view);
+bool operator==(const StringView& view, const char* str);
 
 // String inside the builder is null terminated
 // TODO: Allocator which the builder uses

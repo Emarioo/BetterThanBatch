@@ -24,10 +24,12 @@ struct DebugLocalVar {
 };
 struct DebugFunction {
     DebugFunction(FuncImpl* impl, TinyBytecode* tinycode, u32 fileIndex) : 
-        funcAst(impl ? impl->astFunction : nullptr), funcImpl(impl), tinycode(tinycode), fileIndex(fileIndex) { }
+        fileIndex(fileIndex), funcAst(impl ? impl->astFunction : nullptr), funcImpl(impl), tinycode(tinycode) { }
     
     u32 asm_start; // set later
     u32 asm_end;
+
+    u32 offset_from_bp_to_locals = 0; // zero unless non-volatile registers are used, or x64 gen puts other things on the stack.
 
     std::string name;
     // ScopeId scopeId; // can be derived from funcAst so we could skip this member

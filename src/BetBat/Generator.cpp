@@ -1194,9 +1194,9 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 allocated_stack_space = stackSpace;
             }
         } break;
-        case CDECL_CONVENTION: {
-            Assert(false); // INCOMPLETE
-        } break;
+        // case CDECL_CONVENTION: {
+        //     Assert(false); // INCOMPLETE
+        // } break;
         case INTRINSIC: {
             // do nothing
         } break;
@@ -3561,11 +3561,14 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             // builder.emit_alloc_local(BC_REG_B, funcImpl->returnSize);
             // genMemzero(BC_REG_B, BC_REG_C, funcImpl->returnSize);
         // #else
-            builder.emit_alloc_local(BC_REG_INVALID, funcImpl->returnSize);
         // #endif
 
-            allocated_stack_space += funcImpl->returnSize;
-            info.currentFrameOffset -= funcImpl->returnSize;
+            if(!function->blank_body) {
+                builder.emit_alloc_local(BC_REG_INVALID, funcImpl->returnSize);
+
+                allocated_stack_space += funcImpl->returnSize;
+                info.currentFrameOffset -= funcImpl->returnSize;
+            }
 
             _GLOG(log::out << "Return values:\n";)
             for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
@@ -3584,9 +3587,32 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             arg.virtualType->id = funcImpl->polyArgs[i];
         }
 
+        if(function->blank_body && ((astStruct && astStruct->polyArgs.size()) || function->polyArgs.size())) {
+            ERR_SECTION(
+                ERR_HEAD2(function->location)
+                ERR_MSG("Specifying @blank for functions is a bad idea for polymorphic functions. @blank is meant to be used as a 'clean slate' for inline assembly.")
+                if(function->polyArgs.size()) {
+                    ERR_LINE2(function->location,"this function is polymorphic")
+                    if(astStruct && astStruct->polyArgs.size()) {
+                        ERR_LINE2(astStruct->location,"this parent struct is polymorphic")
+                    }
+                } else {
+                    ERR_LINE2(astStruct->location,"this parent struct is polymorphic...")
+                    ERR_LINE2(function->location,"...to this function")
+                }
+            )
+        }
+
         // dfun->codeStart = info.bytecode->length();
 
         if(funcImpl->astFunction->name == "main") {
+            if(function->blank_body) {
+                ERR_SECTION(
+                    ERR_HEAD2(function->location)
+                    ERR_MSG("The main function cannot be @blank because it's the entry point which initializes type information and global data.")
+                    ERR_LINE2(function->location, "here")
+                )
+            }
             generatePreload();
         }
         
@@ -3605,7 +3631,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
         }
 
-        if (funcImpl->returnTypes.size() != 0) {
+        if (funcImpl->returnTypes.size() != 0 && !function->blank_body) { // blank body requires the user to manually return arguments through assembly. It's the user's fault if they did it incorrectly.
             // check last statement for a return and "exit" early
             bool foundReturn = function->body->statements.size()>0 && 
                 function->body->statements.get(function->body->statements.size()-1) ->type == ASTStatement::RETURN;
@@ -3630,8 +3656,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         if(builder.get_last_opcode() != BC_RET) {
             // add return with no return values if it doesn't exist
             // this is only fine if the function doesn't return values
-            if(allocated_stack_space != 0)
+            if(allocated_stack_space != 0) {
+                Assert(!function->blank_body); // we should not have allocated stack space
                 builder.emit_free_local(allocated_stack_space);
+            }
             builder.emit_ret();
         }
         
@@ -5142,149 +5170,6 @@ SignalIO GenContext::generateData() {
 
     return SIGNAL_SUCCESS;
 }
-#ifdef gone
-Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
-    using namespace engone;
-    ZoneScopedC(tracy::Color::Blue);
-#ifdef LOG_ALLOC
-    static bool sneaky=false;
-    if(!sneaky){
-        sneaky=true;
-        TrackType(sizeof(GenContext::LoopScope), "LoopScope");
-    }
-#endif
-
-    // _VLOG(log::out <<log::BLUE<<  "##   Generator   ##\n";)
-
-    GenContext info{};
-    bytecode = Bytecode::Create();
-    info.ast = ast;
-    info.compileInfo = compileInfo;
-    info.currentScopeId = ast->globalScopeId;
-    // bytecode->nativeRegistry = info.compileInfo->nativeRegistry;
-
-    // SignalIO result = GenerateData(info); // nocheckin
-
-    // TODO: No need to create debug information if the compile options
-    //  doesn't specify it.
-    bytecode->debugInformation = DebugInformation::Create(ast);
-
-    // TODO: Skip function generation if there are no functions.
-    //   We would need to go through every scope to know that though.
-    //   Maybe the type checker can inform the generator?
-    // bytecode->addDebugText("FUNCTION SEGMENT\n");
-    bytecode->setLocationInfo("FUNCTION SEGMENT");
-    // _GLOG(log::out << "Jump to skip functions\n";)
-    // bytecode->add_notabug({BC_JMP});
-    // int skipIndex = bytecode->length();
-    // info.addImm(0);
-    // IMPORTANT: Functions are generated before the code because
-    //  compile time execution will need these functions to exist.
-    //  There is still a dependency problem if you use compile time execution
-    //  in a function which uses a function which hasn't been generated yet.
-    // result = GenerateFunctions(info, info.ast->mainBody); // nocheckin
-    // if(skipIndex == bytecode->length() -1) {
-    //     // skip jump instruction if no functions where generated
-    //     // info.popInstructions(2); // pop JMP and immediate
-    //     bytecode->instructionSegment.used = 0;
-    //     _GLOG(log::out << "Delete jump instruction\n";)
-    // } else {
-    //     bytecode->getIm(skipIndex) = bytecode->length();
-    // }
-
-    bytecode->setLocationInfo("GLOBAL CODE SEGMENT");
-    // bytecode->addDebugText("GLOBAL CODE SEGMENT\n");
-
-    // It is dangerous to take a pointer to an element of an array that may reallocate the elements
-    // but the array should only reallocate when generating new functions which we have already done.
-    // this function is the last function we are adding. Taking the pointer is therefore not dangerous.
-    
-    bool hasMain = false;
-    for(int i=0;i<bytecode->exportedSymbols.size();i++) {
-        auto& sym = bytecode->exportedSymbols[i];
-        if(sym.name == "main") {
-            hasMain = true;
-            break;
-        }
-    }
-
-    if(!hasMain) {
-        auto di = bytecode->debugInformation;
-        info.debugFunctionIndex = di->functions.size();
-        DebugInformation::Function* dfun = di->addFunction("main");
-        bytecode->addExportedSymbol("main", bytecode->length());
-        
-        if(info.ast->mainBody->statements.size()>0) {
-            dfun->fileIndex = di->addOrGetFile(info.ast->mainBody->statements[0]->tokenRange.tokenStream()->streamName);
-        } else {
-            dfun->fileIndex = di->addOrGetFile(info.compileInfo->options->sourceFile.text);
-        }
-        // TODO: You could create a funcImpl for main here BUT we don't need to because this main
-        //  encapsulates the global code which doesn't have a function with arguments.
-        dfun->funcImpl = nullptr;
-        dfun->funcAst = nullptr;
-        dfun->funcStart = bytecode->length();
-        dfun->bc_start = bytecode->length();
-        // IMPORTANT TODO: A global main body does not have one tokenstream...
-        dfun->tokenStream = info.ast->mainBody->tokenRange.tokenStream();
-        info.currentScopeDepth = -1;
-        // dfun->scopeId = info.ast->globalScopeId;
-
-        info.currentPolyVersion = 0;
-        info.virtualStackPointer = GenContext::VIRTUAL_STACK_START;
-        info.currentFrameOffset = 0;
-        builder.emit_push(BC_REG_BP);
-        builder.emit_mov_rr(BC_REG_BP, BC_REG_SP);
-        
-        dfun->codeStart = bytecode->length();
-        dfun->entry_line = info.ast->mainBody->tokenRange.firstToken.line;
-
-        // GeneratePreload(info); // nocheckin
-
-        // TODO: What to do about result? nothing?
-        // result = GenerateBody(info, info.ast->mainBody); // nocheckin
-        
-        dfun->codeEnd = bytecode->length();
-
-        builder.emit_pop(BC_REG_BP);
-
-        builder.emit_({BC_RET});
-        dfun->funcEnd = bytecode->length();
-        dfun->bc_end = bytecode->length();
-    }
-
-    std::unordered_map<FuncImpl*, int> resolveFailures;
-    for(auto& e : info.callsToResolve){
-        auto& inst = bytecode->get(e.bcIndex);
-        // Assert(e.funcImpl->address != Identifier::ADDRESS_INVALID);
-        if(e.funcImpl->address != FuncImpl::ADDRESS_INVALID){
-            *((i32*)&inst) = e.funcImpl->address;
-        } else {
-            ERR_SECTION(
-                log::out << log::RED << "Invalid function address for instruction["<<e.bcIndex << "]\n"
-            )
-            
-            auto pair = resolveFailures.find(e.funcImpl);
-            if(pair == resolveFailures.end())
-                resolveFailures[e.funcImpl] = 1;
-            else
-                pair->second++;
-        }
-    }
-    // if(resolveFailures.size()!=0 && !info.hasErrors()){
-    if(resolveFailures.size()!=0){
-        log::out << log::RED << "Invalid function resolutions:\n";
-        for(auto& pair : resolveFailures){
-            info.errors += pair.second;
-            log::out << log::RED << " "<<pair.first->name <<": "<<pair.second<<" bad address(es)\n";
-        }
-    }
-    info.callsToResolve.cleanup();
-
-    info.compileInfo->options->compileStats.errors += info.errors;
-    return bytecode;
-}
-#endif
 
 void TestGenerate(BytecodeBuilder& b);
 

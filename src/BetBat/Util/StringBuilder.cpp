@@ -22,3 +22,19 @@ engone::Logger& operator<<(engone::Logger& logger, const StringBuilder& stringBu
         logger.print(stringBuilder.data(),stringBuilder.size());
     return logger;
 }
+
+
+bool operator==(const std::string& str, const StringView& view) {
+    if(str.length() != view.len) return false;
+    return view.equals(str.c_str());
+}
+bool operator==(const StringView& view, const std::string& str) {
+    if(str.length() != view.len) return false;
+    return view.equals(str.c_str());
+}
+bool operator==(const StringView& str, const StringView& view) {
+    return str.equals(view.ptr,view.len);
+}
+bool operator==(const StringView& view, const char* str) {
+    return view.equals(str);
+}

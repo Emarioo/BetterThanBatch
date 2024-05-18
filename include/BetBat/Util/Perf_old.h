@@ -149,7 +149,7 @@ struct MeasureScope {
         _interlockedadd64(&scopeStat->totalCycles, diff);
         _interlockedadd64(&scopeStat->uniqueCycles, diff-outsideCycles);
         _InterlockedIncrement(&scopeStat->hits);
-        #elif defined(OS_UNIX)
+        #elif defined(OS_LINUX)
         scopeStatLock.lock();
         if(parent) {
             parent->outsideCycles += diff;

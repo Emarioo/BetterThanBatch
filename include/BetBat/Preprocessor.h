@@ -53,7 +53,7 @@ struct Preprocessor {
     
     MacroRoot* create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank);
     void insertCertainMacro(u32 import_id, MacroRoot* rootMacro, MacroSpecific* localMacro);
-    bool Preprocessor::removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int argumentAmount, bool variadic);
+    bool removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int argumentAmount, bool variadic);
     MacroRoot* matchMacro(u32 import_id, const std::string& name);
     MacroSpecific* matchArgCount(MacroRoot* root, int count);
 private:

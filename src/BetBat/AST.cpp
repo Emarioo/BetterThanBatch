@@ -6,7 +6,7 @@ const char* ToString(CallConventions stuff){
         CASE(BETCALL,"betcall")
         CASE(STDCALL,"stdcall")
         CASE(INTRINSIC,"intrinsic")
-        CASE(CDECL_CONVENTION,"cdecl")
+        // CASE(CDECL_CONVENTION,"cdecl")
         CASE(UNIXCALL,"unixcall")
     }
     return "<unknown-call>";

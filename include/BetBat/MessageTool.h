@@ -37,8 +37,11 @@
 
 #define BASE_SECTION2(CONTENT) { if(!info.ignoreErrors) info.errors++; info.reporter->start_report(); MSG_CODE_LOCATION; CONTENT; info.reporter->end_report(); }
 
-#define ERR_HEAD2(T, ...) info.reporter->err_head(T, __VA_ARGS__); info.compiler->addError(T, __VA_ARGS__);
-// info.compileInfo->options->compileStats.addError(TR, __VA_ARGS__); nocheckin, we need to add error in ERR_HEAD!
+#ifdef OS_WINDOWS
+#define ERR_HEAD2(T,...) info.reporter->err_head(T, __VA_ARGS__); info.compiler->addError(T, __VA_ARGS__);
+#else
+#define ERR_HEAD2(T, ...) info.reporter->err_head(T __VA_OPT__(,) __VA_ARGS__); info.compiler->addError(T __VA_OPT__(,) __VA_ARGS__);
+#endif
 #define ERR_LINE2(T, STR) info.reporter->err_mark(T, StringBuilder{} << STR); 
 
 #define BASE_WARN_SECTION(CODE, CONTENT) { info.compiler->options->compileStats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compiler) info.compiler->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compiler) info.compiler->reporter.end_report(); }

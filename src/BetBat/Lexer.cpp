@@ -230,6 +230,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     
     // Token quote_token{};
 
+    #define IS_CHR_SPACE(C) (C == ' ' || C == '\t')
+
     u64 index=0;
     while(index<length) {
         char prevChr = 0;
@@ -310,7 +312,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 // new_tokens->flags = 0;
                 if(nextChr=='\n')
                     new_tokens->flags |= TOKEN_FLAG_NEWLINE;
-                else if(nextChr==' ')
+                else if(IS_CHR_SPACE(nextChr))
                     new_tokens->flags |= TOKEN_FLAG_SPACE;
                 if(isSingleQuotes)
                     new_tokens->flags |= TOKEN_FLAG_SINGLE_QUOTED;
@@ -500,7 +502,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             // TODO: is checking line feed necessary? line feed flag of last token is set further up.
             if(chr=='\n')
                 new_tokens->flags |= TOKEN_FLAG_NEWLINE;
-            else if(chr==' ')
+            else if(IS_CHR_SPACE(chr))
                 new_tokens->flags |= TOKEN_FLAG_SPACE;
             // if(isAlpha)
             //     token.flags |= TOKEN_ALPHANUM;
@@ -751,7 +753,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
 
             if(nextChr =='\n')
                 new_tokens->flags = TOKEN_FLAG_NEWLINE;
-            else if(nextChr==' ')
+            else if(IS_CHR_SPACE(nextChr))
                 new_tokens->flags = TOKEN_FLAG_SPACE;
             // _TLOG(log::out << " : Add " << token <<"\n";)
             _TLOG(log::out << " : special\n";)
@@ -1330,8 +1332,9 @@ void Lexer::popTokenFromImport(Import* imp) {
         auto& info = chunk->tokens.last();
         // info.data_offset
         u8 len = (u8)chunk->aux_data[info.data_offset];
-        int size = info.data_offset + 1 + len + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
-        if(chunk->aux_used == size) {
+        
+        int size = 1 + len + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
+        if(chunk->aux_used == info.data_offset + size) {
             chunk->aux_used -= size;
         } else {
             Assert(false); // the math is wrong
@@ -1363,10 +1366,9 @@ void Lexer::popMultipleTokensFromImport(Import* imp, int index_of_last_token_to_
         auto& info = chunk->tokens.last();
         // info.data_offset
         u8 len = (u8)chunk->aux_data[info.data_offset];
-        len += 1 + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
-        int size = info.data_offset + len;
-        if(chunk->aux_used == size) {
-            chunk->aux_used -= len;
+        int size = len + 1 + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
+        if(chunk->aux_used == info.data_offset + size) {
+            chunk->aux_used -= size;
         } else {
             Assert(false); // the math is wrong
         }
@@ -1781,7 +1783,8 @@ u64 ConvertHexadecimal(const StringView& view) {
     Assert(view.ptr[0]!='-'); // not handled here
 
     int start = 0;
-    if(view.len >= 2 && view.ptr[0] == '0' || view.ptr[1] == 'x')
+    if(view.len >= 2 && (view.ptr[1] == 'x')) // i changed this line, was that okay?
+    // if(view.len >= 2 && view.ptr[0] == '0' || view.ptr[1] == 'x')
         start = 2;
     
     u64 hex = 0;

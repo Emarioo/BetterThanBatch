@@ -64,7 +64,7 @@ Path::Path(const std::string& path) : text(path), _type((Type)0) {
             }
         }
     }
-#elif defined(OS_UNIX)
+#elif defined(OS_LINUX)
     size_t lastSlash = text.find_last_of("/");
 
     if(lastSlash + 1 == text.length()){
@@ -941,6 +941,7 @@ void Compiler::processImports() {
                             for(auto t : imp->tinycodes)
                                 GenerateX64(this, t);
                         } break;
+                        default: Assert(false);
                     }
                 }
                    // TODO: Print some interesting info?
@@ -989,10 +990,14 @@ void Compiler::run(CompileOptions* options) {
     // What are we trying to generate?
     // #################################
     
+    #ifdef OS_WINDOWS
+    // Linux developers only care about DWARF (probably)
+    // It's Windows developers that expect PDB which we don't provide.
     if(options->useDebugInformation) {
         log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
         // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
     }
+    #endif
     if(options->source_file.size() == 0 && !options->source_buffer.buffer) {
         log::out << log::RED << "No source file was specified.\n";
         return;
@@ -1081,6 +1086,7 @@ void Compiler::run(CompileOptions* options) {
     
     
     bool skip_preload = false;
+    skip_preload = options->disable_preload;
     // skip_preload = true;
     if(skip_preload) {
         log::out << log::YELLOW << "Preload is skipped!\n";
@@ -1111,7 +1117,7 @@ void Compiler::run(CompileOptions* options) {
         if(options->target == TARGET_WINDOWS_x64) {
             preload += "#macro OS_WINDOWS #endmacro\n";
         } else if(options->target == TARGET_UNIX_x64) {
-            preload += "#macro OS_UNIX #endmacro\n";
+            preload += "#macro OS_LINUX #endmacro\n";
         } else if(options->target == TARGET_BYTECODE) {
             preload += "#macro OS_BYTECODE #endmacro\n";
         }
@@ -1193,15 +1199,19 @@ void Compiler::run(CompileOptions* options) {
         while(imps.iterate_reverse(iter)) {
             auto pair = printed_imps.find(iter.ptr->path);
             if(pair == printed_imps.end()) {
-                // print first occurence of import (from preprocessor)
-                if(TrimDir(iter.ptr->path) == "macros.btb") { // TODO: Temporary if
+                // print first occurrence of import (from preprocessor)
+                // if(TrimDir(iter.ptr->path) == "macros.btb") { // TODO: Temporary if-statement
                     log::out << log::GOLD << iter.ptr->path<<"\n";
+                    // log::out << log::GOLD << "pre: " << iter.ptr->path<<"\n";
                     lexer.print(iter.ptr->file_id);
                     log::out << "\n";
-                }
+                // }
                 printed_imps[iter.ptr->path] = true;
             } else {
-                // skip second occurence of import (from lexer)
+                // log::out << log::GOLD << "lex: " << iter.ptr->path<<"\n";
+                // lexer.print(iter.ptr->file_id);
+                // log::out << "\n";
+                // skip second occurrence of import (from lexer)
             }
         }
         return;
@@ -1237,6 +1247,7 @@ void Compiler::run(CompileOptions* options) {
             obj_write_success = ObjectFile::WriteFile(OBJ_ELF, obj_file, program, this);
             options->compileStats.generatedFiles.add(obj_file);
         } break;
+        default: Assert(false);
     }
     
     if(!obj_write_success) {
@@ -1301,12 +1312,17 @@ void Compiler::run(CompileOptions* options) {
             cmd += obj_file + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
             cmd += "-nostdlib ";
+            cmd += "--entry main ";
             // cmd += "-ffreestanding "; // these do not make a difference (with mingw on windows at least)
             // cmd += "-Os ";
             // cmd += "-nostartfiles ";
             // cmd += "-nodefaultlibs ";
             // cmd += "-s ";
-            cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
+            if(options->target == TARGET_WINDOWS_x64) {
+                cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
+            } else if(options->target == TARGET_UNIX_x64) {
+                // cmd += "-lc "; // link clib because it has wrappers for syscalls, NOTE: We actually don't need this, we use syscalls in assembly.
+            }
             
             for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
                 auto& dir = bytecode->linkDirectives[i];
@@ -1395,10 +1411,16 @@ void Compiler::run(CompileOptions* options) {
                 #endif
             } break;
             case TARGET_UNIX_x64: {
-                #ifdef OS_UNIX
+                #ifdef OS_LINUX
                 int exitCode;
-                engone::StartProgram(exe_file.c_str(),PROGRAM_WAIT, &exitCode);
-                log::out << log::LIME <<"Exit code: " << exitCode << "\n";
+                bool some_crash = false;
+                std::string f = "./"+exe_file; // TODO: won't work if exe_file is absolute
+                engone::StartProgram(f.c_str(),PROGRAM_WAIT, &exitCode, &some_crash);
+                if(some_crash) {
+                    log::out << log::RED <<"Crash, exit code: " << exitCode << "\n";
+                } else {
+                    log::out << log::LIME <<"Exit code: " << exitCode << "\n";
+                }
                 #else
                 log::out << log::RED << "You cannot run a Unix program on Windows. Consider changing target when compiling (--target win-x64)\n";
                 #endif
@@ -1644,10 +1666,9 @@ CompilerImport* Compiler::getImport(u32 import_id){
     lock_imports.unlock();
     return imp;
 }
-static const char* annotation_names[]{
+const char* annotation_names[]{
     "unknown",
     "custom",
-
 };
-static const char* const PRELOAD_NAME = "<preload>";
-static const char* const TYPEINFO_NAME = "Lang.btb";
+const char* const PRELOAD_NAME = "<preload>";
+const char* const TYPEINFO_NAME = "Lang.btb";
