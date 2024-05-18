@@ -1,30 +1,33 @@
 # BetterThanBatch
 A compiler for a new programming language.
 
-- It will be better than batch for your average scripting needs.
-- It will be useful for making neat programs, exploring data structures
-and visualising data using a straight forward rendering
-library (abstraction of Vulkan or OpenGL).
-- Actually good somewhat complete standard library (graphics, audio, file formats, networking)
-- Fast compiler with a smooth user experience. You don't need to setup a project folder and a build system to compile a single file.
+- Good for your every day scripting needs.
+- Useful for visualizing data structures, programs...?
+- Standard library with essentials for platform independent programs (graphics, audio, file formats, networking)
+- Fast compiler, good error messages, no external build system.
 
 Inspiration from:
 - Jai (by Jonathan Blow)
-- Batch file (not for the reason you think)
 - C/C++
 - and a bit of Rust
 
 Example of errors with named arguments
 ![](/docs/img/err-named-arg.png)
 
-**NOTE:** A rewrite of the compiler is in progress. See rewrite-2.1 for the latest work. The dev branch is the most stable however.
+**DISCLAIMER**: The compiler is not ready for serious projects. Both because the bug list isn't empty but also because the language isn't complete. New features will be added and old features will be removed.
 
 ## Status of features/things
-|Thing|Status|
+|Project|Status|
 |-|-|
 |Windows build|Yes|
-|Linux (Ubuntu) build|Broken (will be fixed after rewrite)|
-|Documentation|Half complete guide to the language, more to come|
+|Linux (Ubuntu) build|Broke after rewrite-2.1, it's in the works|
+|Documentation|Half complete guide, a couple of examples|
+|x86-64|Yes|
+|ARM-64|No|
+|Test cases|Covers simple cases, not advanced ones|
+
+|Features|Status|
+|-|-|
 |Preprocessor|Yes, #macro, #if, #line, #file|
 |Polymorphism|Yes, but some issues with matching overloaded functions|
 |Function overloading|Yes|
@@ -33,50 +36,42 @@ Example of errors with named arguments
 |Linking with external functions|No, it needs reworking|
 |Type information|Yes, but needs reworking|
 |Compile time execution|Not started|
-|x64 generator|Work in progress (almost done)|
+|x64 backend|Yes|
 |Debug information|Only DWARF, some issues with visibilty of local variables|
-|Inline assembly|Incomplete|
-|ARM64|Not started|
-
+|x64 inline assembly|Yes|
 
 |Minor features|Status|
 |-|-|
 |#include|No, incomplete|
 
-## Disclaimer
-The compiler is not ready for use in serious projects. Both because the bug list isn't empty but also because the language isn't complete. New features will be added, old features will be removed and so on. Recently, a convenient system for testing was implemented which has ensured that the compiler is working in simple situations.
+# How to get started
+**Option 1:** Download a release of `BTB Compiler` at https://github.com/Emarioo/BetterThanBatch/releases. Then unzip it in a folder of your choice and edit your environment variable `PATH` with the path to the compiler executable (for convenience). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
 
-You can compile the compiler for Windows and Ubuntu (probably most Unix systems, only tested on Ubuntu though).
+**Option 2:** Clone the repo and build the compiler executable yourself, see [Building](#building). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
 
-The documentation and guide is being worked on but there are examples and `examples/dev.btb` usually contain the new additions in each commit.
+# Building
 
-## Guide
-[Full Guide](/docs/guide/00-Introduction.md) (work in progress).
+## Linux
+**Requirements**: `g++`
 
-## Examples
+Run `build.sh`. Once built, the executable can be found in `bin/btb`. I recommend editing environment variable `PATH` so that you have access to `btb` from anywhere.
+
+## Windows
+**Requirements**: `cl` and `link` OR `g++`.
+
+In `build.bat`, comment/uncomment the way you want to build the compiler.
+If you are using Visual Studio Tools (cl, link) then open the VS Developer Command Prompt and `cd` to the cloned repository. Then run `build.bat`.
+If you are using MinGW and `g++` then you can simply run `build.bat` (as long as `g++` is in your PATH env. variable).
+
+Once built, the executable can be found in `bin/btb.exe`. I recommend editing environment variable `PATH` so that you have access to `btb.exe` from anywhere.
+
+# Examples
 **NOTE:** These have been tested on my computer with my environment which means that it might not work on your computer. You may need to clone the repo, build the compiler with MSVC, and run `compiler.exe --run examples/graphics/quad.btb` to make it work. You have to build the repo because there is no release yet.
 
 [Rendering test](/examples/graphics/quad.btb) rendering with GLEW, GLFW, and OpenGL
 
 [Line counter](/examples/linecounter.btb) reading files, multiple threads
 
-[Binary viewer](/examples/binary_viewer/main.btb) parsing/reading binary files, lexing
+<!-- incomplete [Binary viewer](/examples/binary_viewer/main.btb) parsing/reading binary files, lexing -->
 
-[Recent random code](/examples/dev.btb)
 
-# Usage
-The official usage of the compiler has not been established yet. `btb --help` will show the current way of compiling files and describe useful flags.
-
-These commands will most likely work.
-`btb main.btb --run` (`--run` will also run the executable after it's been built)
-
-# Building
-On Linux/Unix you only to run `build.sh`.
-
-On Windows however, you need to go into `build.bat` and comment or uncomment a variable at the top depending on whether you are compiling using `g++` or with Visual Studio tools (MSVC). Then you can run the script.
-
-The compiler executable can be found at this path `bin/btb.exe` (skip the `.exe` on Unix).
-
-**NOTE**: The script assumes that `link` and `cl` (with MSVC) are accesible from the command line. Running `vcvars64.bat` will set the appropriate environment variables (vcvars can be found here `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build`). Personally, I have set the environment variables manually instead of having vcvars64.bat do it everytime because the script can be rather slow.
-
-**NOTE**: The Linux/Unix version is not tested after every commit but you can expect every 5-10 commits to be tested with Ubuntu.

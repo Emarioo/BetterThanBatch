@@ -1,7 +1,6 @@
 
+#macro add(x, ...) x + add(...)
+#macro add(x, y) x + y
 
-x := 252
-
-
-
+return add(1,2,3,4)
 

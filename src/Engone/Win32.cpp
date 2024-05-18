@@ -1692,9 +1692,10 @@ namespace engone {
 		DWORD createFlags = 0;
 		if(flags&PROGRAM_NEW_CONSOLE)
 			createFlags |= CREATE_NEW_CONSOLE;
+		std::string cmd = commandLine;
 			
 		BOOL yes = CreateProcessA(NULL,   // the path
-                       commandLine,        // Command line
+                       (char*)cmd.data(),        // Command line
                        NULL,           // Process handle not inheritable
                        NULL,           // Thread handle not inheritable
                        inheritHandles,          // Set handle inheritance

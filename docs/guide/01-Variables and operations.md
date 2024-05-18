@@ -9,7 +9,7 @@ c := a - 9
 c = 2 * b  // reassign a value to a variable, note the sole '=' without the ':'
 ```
 
-**NOTE**: Semi-colon ';' is used to separate statements (like variable assignments/declarations) but it is optional. There is ambiguity in the syntax most commonly multiplcation and dereference. The semi-colon helps solve the ambiguity. Semi-colon may not be optional in the future.
+**NOTE**: Semi-colon ';' is used to separate statements (like variable assignments/declarations) but it is optional. There is ambiguity in the syntax where semi-colon is required, multiplication and dereference for example.
 
 ## Arithmetic operations
 
@@ -28,7 +28,7 @@ These are the (current) primitive types:
 
 **Signed integers**: i8, i16, i32, i64 (1, 2, 4, and 8 bytes respectively)
 
-**Unsigned integers**: i8, i16, i32, i64 (cannot represent a negative number)
+**Unsigned integers**: u8, u16, u32, u64 (cannot represent a negative number)
 
 **Character**: char (represents a 1-byte character, ASCII)
 
@@ -58,7 +58,7 @@ a =  9241s          // signed integer literal
 a =  9241u          // unsigned integer literal
 a =  0x92_39        // integer literal but hexidecimal form
 a =  0b1_0110_0101  // integer literal but binary form
-// underscore can be used to separate the bytes/bits in hexidecimal or binary forms making it easier grasp their value
+// underscore can be used to separate the digits/hexidecimals/bits making it easier to grasp their value
 
 f := 3.144   // float literal
 f := 3.144d  // 64-bit float literal
@@ -103,7 +103,7 @@ arr.ptr[arr.len-1] = 92
 
 ```
 
-**NOTE**: In the future, not having the automatic scaling may be a nuisance and thus could change. The reason we do not is because `void*` do not have a size and so you can't increment them. You could of course see void* as an edge case and use a 1-byte scaling. In C/C++ you are required to do quite a few casts and it would be nice if you didn't need to. Sometimes you can feel as though you are fighting the pointer arithmetic and pointer conversions but in this language you are only fighting it one way.
+**NOTE**: In the future, not having the automatic scaling may be a nuisance and thus could change. The reason we don't is because we want pointer arithmetic on `void*` but since it is 0 in size, it doesn't make since to scale it by 0 bytes. You could of course see void* as an edge case and use a 1-byte scaling. In C/C++ you are required to do quite a few casts and it would be nice if you didn't need to. Sometimes you can feel as though you are fighting the pointer arithmetic which isn't good.
 
 ## More operations
 Words: bitwise operator, comparison/equality operator, logical operator
@@ -127,8 +127,22 @@ true  = false || true     (logical or)
 
 ## Type conversions
 TODO: Pointer, integer, decimal conversion
+TODO: More information about casting
+```c++
+n: i32 = 5
+f: f32 = n // n is implicitly casted to float
 
-TODO: Cast keyword
+f := cast<f32> n // explicit cast to float
+```
+
+```c++
+i: i32*;
+
+f: f32* = i // you cannot implicitly cast pointers of different types
+f: void* = i // unless you are converting to void
+
+f: f32* = cast<f32*> i // forcefully cast the pointer type
+```
 
 ## Possible mistakes
 The language makes it slightly more difficult to create unintentional bugs when mismatching
@@ -141,5 +155,7 @@ Converting small integers to large integers is fine but sometimes you may write 
 a: u8 = 5
 b: u32 = a << 16    
 // shifting an 8-bit integer 16 bits will always result in 0, b will not be 0x5_0000
+
+b: u32 = cast<u32> a << 16 // you must cast 'a' first
 
 ```
