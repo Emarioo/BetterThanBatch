@@ -93,7 +93,7 @@ struct BucketArray {
 			}
             m_buckets = newBuckets;
             
-			memset(m_buckets + m_buckets_max, 0, (newMax - m_buckets_max) * sizeof(Bucket));
+			memset((void*)(m_buckets + m_buckets_max), 0, (newMax - m_buckets_max) * sizeof(Bucket));
 			// for (int i = m_buckets_max; i < newMax; i++) {
                 
 			// 	*((Frame*)m_frames.data + i) = Frame(m_frames.getAllocType()); // char
@@ -179,7 +179,7 @@ struct BucketArray {
 			}
             m_buckets = newBuckets;
             
-			memset(m_buckets + m_buckets_max, 0, (newMax - m_buckets_max) * sizeof(Bucket));
+			memset((void*)(m_buckets + m_buckets_max), 0, (newMax - m_buckets_max) * sizeof(Bucket));
 			bucketIndex = m_buckets_max;
             m_buckets_max = newMax;
 		}

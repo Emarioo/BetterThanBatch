@@ -20,7 +20,7 @@ enum CallConventions : u8 {
     BETCALL, // The default. Native functions use this.
     STDCALL, // Currently default x64 calling convention.
     INTRINSIC, // Special implementation. Usually a function directly coupled to an instruction.
-    CDECL_CONVENTION, // Not implemented yet. CDECL is a macro and unavailable so _CONVENTION was added to the name.
+    // CDECL_CONVENTION, // Not implemented yet. CDECL is a macro and unavailable so _CONVENTION was added to the name.
     // https://www.ired.team/miscellaneous-reversing-forensics/windows-kernel-internals/linux-x64-calling-convention-stack-frame
     UNIXCALL, // System V AMD64 ABI calling convention.
 };
@@ -133,7 +133,7 @@ extern const char* prim_op_names[];
 // the names may change. Perhaps prim and op will be split into
 // their own tables.
 #define PRIM_NAME(X) ((X) >= 0 && (X) < AST_PRIMITIVE_COUNT ? prim_op_names[X] : nullptr)
-#define OP_NAME(X) (((X) >= AST_PRIMITIVE_COUNT && (X) < AST_OPERATION_COUNT) ? prim_op_names[X] : nullptr)
+#define OP_NAME(X) (((X) >= (OperationType)AST_PRIMITIVE_COUNT && (X) < AST_OPERATION_COUNT) ? prim_op_names[X] : nullptr)
 #define STATEMENT_NAME(X) ((X) >= 0 && (X) < ASTStatement::STATEMENT_COUNT ? statement_names[X] : nullptr)
 struct ASTNode {
     // TODO: Add a flag which you can check to know whether there are enums or not.
@@ -562,7 +562,7 @@ struct ASTExpression : ASTNode {
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
-    static const int ko = sizeof ASTExpression;
+    static const int ko = sizeof (ASTExpression);
 
 struct ASTStatement : ASTNode {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
@@ -810,6 +810,7 @@ struct ASTFunction : ASTNode {
         return polyArgs.size()!=0;
     }
     
+    bool blank_body = false; // tells the generator to create no instructions except a return.
     LinkConventions linkConvention = LinkConventions::NONE;
     CallConventions callConvention = BETCALL;
     // A lot of places need to know whether a function has a body.

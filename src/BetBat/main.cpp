@@ -61,9 +61,9 @@ int main(int argc, const char** argv){
 
         options.output_file = "test.exe";
         options.source_file = "examples/dev.btb";
-        options.target = TARGET_BYTECODE;
-        options.target = TARGET_WINDOWS_x64;
-        options.linker = LINKER_MSVC;
+        // options.target = TARGET_BYTECODE;
+        // options.target = TARGET_WINDOWS_x64;
+        // options.linker = LINKER_MSVC;
         // options.linker = LINKER_GNU;
         options.executeOutput = true;
         // options.only_preprocess = true;
@@ -215,7 +215,7 @@ int main(int argc, const char** argv){
         ZoneNamedN(zone0,"sleep",true);
         engone::Sleep(0.5); // give time for program to connect and send data to tracy profiler
     }
-    // log::out << "Finished\n";
+    log::out << "Finished\n";
 
     return EXIT_CODE_SUCCESS;
 }
@@ -356,6 +356,8 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
             for(;i<commands.size();i++) {
                 options->userArguments.add(commands[i]);
             }
+        } else if(arg == "-nopreload") {
+            options->disable_preload = true;
         } else {
             if(arg[0] == '-') {
                 log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";

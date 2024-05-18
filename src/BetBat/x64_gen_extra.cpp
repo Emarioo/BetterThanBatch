@@ -320,7 +320,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         //     n->reg0 = alloc_artifical_reg(n->bc_index, X64_REG_A);
                         // }
                         map_reg(n,0);
-                    }
+                    } break;
+                    default: Assert(false);
                     }
                 } else if(n->base->opcode == BC_MOV_MR || n->base->opcode == BC_MOV_MR_DISP16 || n->base->opcode == BC_JNZ || n->base->opcode == BC_JZ) {
                     auto base = (InstBase_op1*)n->base;
@@ -498,36 +499,65 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         relativeRelocations.add(rel);
     };
     
-    emit_push(X64_REG_BP);
+    bool is_entry_point = tinycode->name == "main"; // TODO: temporary, we should let the user specify entry point, the whole compiler assumes "main" as entry point...
 
-    emit1(PREFIX_REXW);
-    emit1(OPCODE_MOV_REG_RM);
-    emit_modrm(MODE_REG, X64_REG_BP, X64_REG_SP);
+    bool is_blank = false;
+    if(tinycode->debugFunction->funcAst) {
+        is_blank = tinycode->debugFunction->funcAst->blank_body; // TODO: We depend on debugFunction, change this
+    }
+
+    if(!is_blank) {
+        if(!is_entry_point || compiler->options->target == TARGET_WINDOWS_x64) {
+            // entry point on unix systems don't need BP restored
+            // the stack is also already 16-byte aligned.
+            emit_push(X64_REG_BP);
+        }
+        emit1(PREFIX_REXW);
+        emit1(OPCODE_MOV_REG_RM);
+        emit_modrm(MODE_REG, X64_REG_BP, X64_REG_SP);
+    }
     
     // Microsoft x64 calling convention
     //    Callee saved: RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15, and XMM6-XMM15 
     // System V ABI convention
     //    Callee saved: RBX, RBP,           RSP, R12, R13, R14, R15
     
-    // TODO: Don't save these unless we use them.
-    //   System V ABI doesn't need DI and SI.
-    const X64Register callee_saved_regs[]{
+    // TODO: Don't save non-volatile registers unless they are used.
+    //   Altough, if a function has inline assembly then
+    //   the user may expect the program to automatically save them.
+    //   But if a user returns in the inline assembly
+    //   they might forget to restore the stack and free
+    //   allocated memory so there are bigger problems.
+    const X64Register stdcall_callee_saved_regs[]{
         X64_REG_B,
         X64_REG_DI,
         X64_REG_SI,
         X64_REG_R12,
     };
-    int callee_saved_regs_len = sizeof(callee_saved_regs)/sizeof(*callee_saved_regs);
-    
-    
-    // We need to save registers if the caller expects that
-    //   if we use stdcall, unixcall i guess?
+    const X64Register unixcall_callee_saved_regs[]{
+        X64_REG_B,
+        X64_REG_R12,
+        //   System V ABI doesn't save DI and SI.
+    };
+    const X64Register* callee_saved_regs = nullptr;
+    int callee_saved_regs_len = 0;
     
     bool enable_callee_saved_registers = false;
-    // tinycode->is_used_as_function_pointer;
-    // if(tinycode->call_convention == STDCALL || tinycode->call_convention == UNIXCALL) {
-    //     enable_callee_saved_registers = true;
-    // }
+    if(tinycode->call_convention == STDCALL) {
+        enable_callee_saved_registers = true;
+        callee_saved_regs = stdcall_callee_saved_regs;
+        callee_saved_regs_len = sizeof(stdcall_callee_saved_regs)/sizeof(*stdcall_callee_saved_regs);
+
+    } else if (tinycode->call_convention == UNIXCALL) {
+        enable_callee_saved_registers = true;
+        callee_saved_regs = unixcall_callee_saved_regs;
+        callee_saved_regs_len = sizeof(unixcall_callee_saved_regs)/sizeof(*unixcall_callee_saved_regs);
+    }
+
+    if(is_blank || (is_entry_point && compiler->options->target != TARGET_WINDOWS_x64)) {
+        // entry point on unix systems don't need non-volatile registers restored
+        enable_callee_saved_registers = false;
+    }
     
     callee_saved_space = 0;
     if(enable_callee_saved_registers) {
@@ -577,6 +607,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         // BC_REG_XMM7,
     };
 
+
     DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
     int virtual_stack_pointer = 0; // TODO: abstract into X64Builder?
 
@@ -605,6 +636,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     // TODO: If the function (tinycode) has parameters and is stdcall or unixcall
     //   then we need the args will be passed through registers and we must
     //   move them to the stack space.
+    int unixcall_args_offset = 0;
     if(tinycode->call_convention == STDCALL) {
         // Assert(false);
         for(int i=0;i<accessed_params.size() && i < 4; i++) {
@@ -619,7 +651,30 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             emit_mov_mem_reg(reg_args,reg,control,off);
         }
     } else if(tinycode->call_convention == UNIXCALL) {
-        Assert(false);
+        unixcall_args_offset = callee_saved_space;
+        // If the function only accesses arguments through inline assembly then the user must save the registers manually.
+        // unless we provide a special get_arg instruction in the inline assembly?
+        if(is_blank && accessed_params.size()) {
+            log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
+            log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
+        }
+        for(int i=0;i<accessed_params.size() && i < 6; i++) {
+            auto control = accessed_params[i].control;
+
+            int off = unixcall_args_offset - i * 8;
+            X64Register reg_args = X64_REG_BP;
+            X64Register reg = unixcall_normal_regs[i];
+            if(IS_CONTROL_FLOAT(control)) {
+                Assert(false); // double check how floats are passed
+                reg = unixcall_normal_regs[i];
+            }
+
+            emit_mov_mem_reg(reg_args,reg,control,off);
+
+            callee_saved_space += 8;
+        }
+        if(callee_saved_space - unixcall_args_offset != 0)
+            emit_sub_imm32(X64_REG_SP, (i32)(callee_saved_space - unixcall_args_offset));
     }
     
     struct SPMoment {
@@ -689,6 +744,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 if(instruction_contents[opcode] & BASE_imm16) {
                     imm = ((InstBase_op2_ctrl_imm16*)n->base)->imm16;
                 }
+
+                if(base->op1 == BC_REG_LOCALS) {
+                    imm -= callee_saved_space;
+                }
                 
                 FIX_PRE_IN_OPERAND(1)
                 FIX_PRE_OUT_OPERAND(0)
@@ -700,7 +759,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     if(IS_CONTROL_SIGNED(base->control)) {
                         emit_movsx(reg0->reg,reg0->reg,base->control);
                     } else {
-                        emit_movzx(reg0->reg,reg0->reg,base->control);
+                        if(GET_CONTROL_SIZE(base->control) != CONTROL_32B)
+                            emit_movzx(reg0->reg,reg0->reg,base->control);
                     }
                 }
                 FIX_POST_OUT_OPERAND(0)
@@ -712,6 +772,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 i16 imm = 0;
                 if(instruction_contents[opcode] & BASE_imm16) {
                     imm = ((InstBase_op2_ctrl_imm16*)n->base)->imm16;
+                }
+                if(base->op0 == BC_REG_LOCALS) {
+                    imm -= callee_saved_space;
                 }
                 // TODO: Which order are the ops push to the stack?
                 FIX_PRE_IN_OPERAND(1)
@@ -833,6 +896,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         imm += 16 - misalignment;
                     }
                 }
+                // TODO: unixcall does not need stack space for first 6 args.
+                //   BUT, we do right now since SET_ARG temporarily places
+                //   the args their and then loads them into registers
+                //   before BC_CALL
                 if(imm != 0) {
                     if(base->op0 != BC_REG_INVALID) {
                         FIX_PRE_OUT_OPERAND(0)
@@ -896,6 +963,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 X64Register reg_params = X64_REG_BP;
                 int off = base->imm16 + FRAME_SIZE;
+                if(tinycode->call_convention == UNIXCALL) {
+                    if(base->imm16 < 6 * 8) {
+                        off = -unixcall_args_offset - base->imm16;
+                    }
+                }
                 emit_mov_reg_mem(reg0->reg, reg_params, base->control, off);
                 
                 if(IS_CONTROL_SIGNED(base->control)) {
@@ -944,6 +1016,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         }
                         // TODO: movzx, movsx on returned value?
                     } break;
+                    default: Assert(false);
                 }
             } break;
             case BC_SET_RET: {
@@ -976,6 +1049,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                         FIX_POST_IN_OPERAND(0)
                     } break;
+                    default: Assert(false);
                 }
             } break;
             case BC_PTR_TO_LOCALS: {
@@ -983,7 +1057,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 FIX_PRE_OUT_OPERAND(0);
 
                 X64Register reg_local = X64_REG_BP;
-                int off = base->imm16 + callee_saved_space;
+                int off = base->imm16 - callee_saved_space;
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
                 emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
                 emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
@@ -1002,10 +1076,16 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 X64Register reg_params = X64_REG_BP;
 
+                int off = base->imm16 + FRAME_SIZE;
+                if(tinycode->call_convention == UNIXCALL) {
+                    if(base->imm16 < 6 * 8) {
+                        off = -unixcall_args_offset - base->imm16;
+                    }
+                }
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
                 emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
                 emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
-                emit4((u32)(base->imm16 + FRAME_SIZE));
+                emit4((u32)(off));
 
                 emit_prefix(PREFIX_REXW, reg0->reg, reg_params);
                 emit1(OPCODE_ADD_REG_RM);
@@ -1051,8 +1131,21 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         }
                     } break;
                     case UNIXCALL: {
-                        Assert(false);
-                        // unixcall_normal_regs
+                        if(recent_set_args.size() > 6) {
+                            Assert(("x64 gen can't handle Sys V ABI with more than 6 arguments.", false));
+                        }
+                        for(int i=0;i<recent_set_args.size() && i < 6;i++) {
+                            auto& arg = recent_set_args[i];
+                            auto control = arg.control;
+
+                            int off = i * 8;
+                            X64Register reg_args = X64_REG_SP;
+                            X64Register reg = unixcall_normal_regs[i];
+                            if(IS_CONTROL_FLOAT(control))
+                                reg = unixcall_float_regs[i];
+
+                            emit_mov_reg_mem(reg,reg_args,control,off);
+                        }
                     } break;
                     default: Assert(false);
                 }
@@ -1150,28 +1243,24 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         // len = [rsp + 8]
                         // char* ptr = *(char**)(fp+argoffset);
                         // u64 len = *(u64*)(fp+argoffset+8);
-                        prog->add(PREFIX_REXW);
-                        prog->add(OPCODE_MOV_REG_RM);
-                        emit_modrm(MODE_DEREF, REG_SI, X64_REG_SP);
+                        emit1(PREFIX_REXW);
+                        emit1(OPCODE_MOV_REG_RM);
+                        emit_modrm(MODE_DEREF, X64_REG_SI, X64_REG_SP);
                         
-                        prog->add((u8)(PREFIX_REXW));
-                        prog->add(OPCODE_MOV_REG_RM);
-                        emit_modrm(MODE_DEREF_DISP8, REG_D, X64_REG_SP);
-                        prog->add((u8)8);
+                        emit1(PREFIX_REXW);
+                        emit1(OPCODE_MOV_REG_RM);
+                        emit_modrm(MODE_DEREF_DISP8, X64_REG_D, X64_REG_SP);
+                        emit1((u8)8);
 
-                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        prog->addModRM(MODE_REG, 0, REG_DI);
-                        prog->add4((u32)1); // 1 = stdout
+                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
+                        emit4((u32)1); // 1 = stdout
 
-                        prog->add(OPCODE_CALL_IMM);
-                        int reloc_pos = prog->code_size();
-                        prog->add4((u32)0);
+                        emit1(OPCODE_CALL_IMM);
+                        int reloc_pos = code_size();
+                        emit4((u32)0);
 
-                        // We call the Unix write system call, altough not directly
-                        X64Program::NamedUndefinedRelocation reloc0{};
-                        reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
-                        reloc0.textOffset = reloc_pos;
-                        prog->namedUndefinedRelocations.add(reloc0);
+                        prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
                     #endif
                         break;
                     }
@@ -1217,9 +1306,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                     #else
                         // char = [rsp + 7]
-                        prog->add(PREFIX_REXW);
-                        prog->add(OPCODE_MOV_REG_RM);
-                        prog->addModRM(MODE_REG, REG_SI, X64_REG_SP);
+                        emit1(PREFIX_REXW);
+                        emit1(OPCODE_MOV_REG_RM);
+                        emit_modrm(MODE_REG, X64_REG_SI, X64_REG_SP);
 
                         // add an offset, but not needed?
                         // prog->add(PREFIX_REXW);
@@ -1230,26 +1319,22 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         // TODO: You may want to save registers. This is not needed right
                         //   now since we basically handle everything through push and pop.
 
-                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        prog->addModRM(MODE_REG, 0, REG_D);
-                        prog->add4((u32)1); // 1 byte/char length
+                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        emit_modrm_slash(MODE_REG, 0, X64_REG_D);
+                        emit4((u32)1); // 1 byte/char length
 
                         // prog->add(OPCODE_MOV_RM_REG);
                         // prog->addModRM(MODE_REG, REG_SI, REG_SI); // pointer to buffer
 
-                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        prog->addModRM(MODE_REG, 0, REG_DI);
-                        prog->add4((u32)1); // stdout
+                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
+                        emit4((u32)1); // stdout
 
-                        prog->add(OPCODE_CALL_IMM);
-                        int reloc_pos = prog->code_size();
-                        prog->add4((u32)0);
+                        emit1(OPCODE_CALL_IMM);
+                        int reloc_pos = code_size();
+                        emit4((u32)0);
 
-                        // We call the Unix write system call, altough not directly
-                        X64Program::NamedUndefinedRelocation reloc0{};
-                        reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
-                        reloc0.textOffset = reloc_pos;
-                        prog->namedUndefinedRelocations.add(reloc0);
+                        prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
                     #endif
                         break;
                     }
@@ -1272,6 +1357,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 switch(base->call) {
                     case BETCALL: break;
                     case STDCALL:
+                    case INTRINSIC:
                     case UNIXCALL: {
                         // nocheckin, TODO: FIXME, do we need to modify the register allocation loop before generation?
                         // auto r = alloc_register(X64_REG_A, false);
@@ -1281,9 +1367,29 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 break;
             } break;
             case BC_RET: {
-                pop_callee_saved_regs();
-                emit_pop(X64_REG_BP);
-                emit1(OPCODE_RET);
+                if(callee_saved_space - unixcall_args_offset != 0) {
+                    emit_add_imm32(X64_REG_SP, (i32)(callee_saved_space - unixcall_args_offset));
+                }
+
+                if(is_blank) {
+                    // user handles the rest
+                    emit1(OPCODE_RET);
+                } else if(compiler->options->target == TARGET_UNIX_x64 && is_entry_point) {
+                    Assert(tinycode->call_convention == UNIXCALL);
+                    emit1(OPCODE_MOV_REG_RM);
+                    emit_modrm(MODE_REG, X64_REG_DI, X64_REG_A);
+
+                    // we have to manually exit when linking with -nostdlib
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                    emit4((u32)60); // SYS_exit = 60, https://filippo.io/linux-syscall-table/
+                    emit2(OPCODE_2_SYSCALL);
+                    emit1(OPCODE_RET);
+                } else {
+                    pop_callee_saved_regs();
+                    emit_pop(X64_REG_BP);
+                    emit1(OPCODE_RET);
+                }
             } break;
             case BC_JNZ: {
                 auto base = (InstBase_op1_imm32*)n->base;
@@ -3115,15 +3221,14 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_tinyprog_index);
                 prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_tinyprog_index);
                 #else
-                Assert(false);
                 // TODO: FIX, look at windows version, I believe the assembly below is wrong.
                 /*
                 sub    rsp,0x10  # must be 16-byte aligned when calling unix write
                 mov    rbx,rsp
-                mov    DWORD PTR [rbx],0x99993a57 # temporary data
+                mov    DWORD PTR [rbx],0x99999978 # temporary data
                 cmp    rdx,rax
                 je     hop
-                mov    BYTE PTR [rbx],0x78 # err character
+                mov    BYTE PTR [rbx],0x5f # err character
                 hop:
                 mov    rdx,0x4 # buffer size
                 mov    rsi,rbx # buffer ptr
@@ -3133,21 +3238,24 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 */
 
 
-                u8 arr[]={
+                const u8 arr[]={
                     0x48, 0x83, 0xEC, 0x10, 0x48, 0x89, 0xE3, 0xC7,
-                    0x03, 0x57, 0x3A, 0x99, 0x99, 0x48, 0x39, 0xC2,
+                    0x03, 0x78, 0x99, 0x99, 0x99, 0x48, 0x39, 0xC2,
                     0x74, 0x03, 0xC6, 0x03, 0x78, 0x48, 0xC7, 0xC2, 
                     0x04, 0x00, 0x00, 0x00, 0x48, 0x89, 0xDE, 0x48, 
                     0xC7, 0xC7, 0x02, 0x00, 0x00, 0x00, 0xE8, 0x00, 
                     0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x10 
                 };
-                Program_x64::NamedUndefinedRelocation reloc0{};
-                reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
-                reloc0.textOffset = prog->size() + 0x27;
-                prog->namedUndefinedRelocations.add(reloc0);
-                arr[0x0B] = (imm>>8)&0xFF; // set location info
-                arr[0x0C] = imm&0xFF;
-                prog->addRaw(arr,sizeof(arr));
+                int start_addr = code_size();
+                emit_bytes(arr,sizeof(arr));
+
+                int imm = base->imm32;
+                Assert((imm & ~0xFFFF) == 0);
+                set_imm8(start_addr + 0xa, imm&0xFF);
+                set_imm8(start_addr + 0xb, (imm>>8)&0xFF);
+                set_imm8(start_addr + 0xc, (imm>>16)&0xFF);
+
+                prog->addNamedUndefinedRelocation("write", start_addr + 0x27, current_tinyprog_index);
 
                 #endif
 
@@ -3242,6 +3350,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         }
     }
     Assert(fun);
+
+    fun->offset_from_bp_to_locals = callee_saved_space;
 
     for(int i=0;i<fun->lines.size();i++) {
         auto& ln = fun->lines[i];
@@ -3356,20 +3466,28 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
     defer { if(asmLog) engone::FileClose(asmLog); };
     
     int exitCode = 0;
-    yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, {}, asmLog, asmLog);
+    yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, nullptr, {}, asmLog, asmLog);
     Assert(yes);
     if(exitCode != 0) {
         u64 fileSize = engone::FileGetSize(asmLog);
-        engone::FileSetHead(asmLog, 0);
-        
-        QuickArray<char> errorMessages{};
-        errorMessages.resize(fileSize);
-        
-        yes = engone::FileRead(asmLog, errorMessages.data(), errorMessages.size());
-        Assert(yes);
-        
-        // log::out << std::string(errorMessages.data(), errorMessages.size());
-        ReformatAssemblerError(compiler->options->linker, asmInst, errorMessages, -asm_line_offset);
+        if(fileSize != 0) {
+            engone::FileSetHead(asmLog, 0);
+            QuickArray<char> errorMessages{};
+            errorMessages.resize(fileSize);
+            
+            yes = engone::FileRead(asmLog, errorMessages.data(), errorMessages.size());
+            Assert(yes);
+            if(yes) {
+                // log::out << std::string(errorMessages.data(), errorMessages.size());
+                ReformatAssemblerError(compiler->options->linker, asmInst, errorMessages, -asm_line_offset);
+            }
+        } else {
+            // If asmLog is empty then we probably misused it
+            // and assembler printed to the compiler's stdout.
+            // We print a message anyway in case the user just
+            // got "Compiler failed with 5 errors". Debugging that would be rough without this message.
+            log::out << log::RED << "Assembly error\n";
+        }
         SEND_ERROR();
         return false;
     }

@@ -17,4 +17,9 @@
 #define WHILE_TRUE_N(LIMIT) u64 COMBINE(limit,__LINE__)=LIMIT; while(Assert(COMBINE(limit,__LINE__)--))
 // #endif
 
+#ifdef OS_WINDOWS
 #define BREAK(COND) if(COND) __debugbreak();
+#else
+// does linux have debugbreak?
+#define BREAK(COND)
+#endif

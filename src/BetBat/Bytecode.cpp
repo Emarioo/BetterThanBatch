@@ -914,7 +914,7 @@ bool TinyBytecode::applyRelocations(Bytecode* code) {
     return suc;
 }
 
-extern const char* cast_names[] {
+const char* cast_names[] {
     "uint->uint",
     "uint->sint",
     "sint->uint",
@@ -925,7 +925,7 @@ extern const char* cast_names[] {
     "sint->float",
     "float->float",
 };
-extern const char* instruction_names[] {
+const char* instruction_names[] {
     "halt", // BC_HALT
     "nop", // BC_NOP
     "mov_rr", // BC_MOV_RR
@@ -992,7 +992,7 @@ InstBaseType operator|(InstBaseType a, InstBaseType b) {
 }
 #define BASE_op3 (BASE_op3 | BASE_op2 | BASE_op1)
 #define BASE_op2 (BASE_op2 | BASE_op1)
-extern InstBaseType instruction_contents[256] {
+InstBaseType instruction_contents[256] {
     BASE_NONE, // BC_HALT
     BASE_NONE, // BC_NOP
     
@@ -1075,7 +1075,7 @@ extern InstBaseType instruction_contents[256] {
 };
 #undef BASE_op2
 #undef BASE_op3
-extern const char* register_names[] {
+const char* register_names[] {
     "invalid", // BC_REG_INVALID
     "a", // BC_REG_A
     "b", // BC_REG_B

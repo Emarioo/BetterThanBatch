@@ -5,13 +5,13 @@
 #ifdef WIN32
 #define OS_WINDOWS
 #elif defined(_linux_)
-#define OS_UNIX
+#define OS_LINUX
 #endif
 
 #ifdef OS_WINDOWS
 #define OS_NAME "Windows"
-#elif defined(OS_UNIX)
-#define OS_NAME "Unix"
+#elif defined(OS_LINUX)
+#define OS_NAME "Linux"
 #else
 #define OS_NAME "<os-none>"
 #endif

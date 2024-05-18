@@ -11,7 +11,7 @@
 #include <time.h>
 #include <string.h>
 
-#ifdef OS_UNIX
+#ifdef OS_LINUX
 #include <unistd.h>
 #endif
 
@@ -24,7 +24,7 @@ namespace engone {
 	static void _GetClock(char* str) {
 		time_t t;
 		time(&t);
-		#ifdef OS_UNIX
+		#ifdef OS_LINUX
 		tm* tmp = localtime(&t);
 		#else
 		tm _tm;
@@ -392,7 +392,7 @@ namespace engone {
 	GEN_LOG_NUM(int16, 6, "%hd")
 	GEN_LOG_NUM(uint16, 5, "%hu")
 	GEN_LOG_NUM(uint8, 3, "%hu")
-	GEN_LOG_NUM(volatile long, 11, "%d")
+	// GEN_LOG_NUM(volatile long, 11, "%d")
 	GEN_LOG_NUM(double, 27, "%.2lf")
 	GEN_LOG_NUM(float, 20, "%.2f")
 

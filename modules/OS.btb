@@ -12,6 +12,7 @@
 
 #import "Memory"
 #import "File"
+#import "Logger"
 
 #if LINKER_MSVC
     #load "bin/NativeLayer.lib" as native_layer
@@ -23,7 +24,7 @@
     #macro LINK_TYPE @native
 #elif OS_WINDOWS
     #macro LINK_TYPE @import(native_layer) @stdcall
-#elif OS_UNIX
+#elif OS_LINUX
     #macro LINK_TYPE @import(native_layer) @unixcall
 #else
     No_implementation
@@ -47,3 +48,20 @@ fn LINK_TYPE NativeSleep(seconds: f32);
 fn LINK_TYPE GetClockSpeed() -> u64;
 
 fn LINK_TYPE ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
+
+
+fn set_cursor(x: u32, y: u32) {
+    std_print("\e[",(x),";",(y),"H")
+}
+fn move_cursor(x: i32, y: i32) {
+    if y > 0 {
+        std_print("\e[",y,"A");
+    } else if y < 0 {
+        std_print("\e[",-y,"B");
+    }
+    if x > 0 {
+        std_print("\e[",x,"C");
+    } else if x < 0 {
+        std_print("\e[",-x,"D");
+    }
+}

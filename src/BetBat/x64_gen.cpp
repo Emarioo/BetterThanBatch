@@ -171,7 +171,7 @@ X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
                 X64_REG_R10,
                 X64_REG_R11,
                 X64_REG_R12,
-                // X64_REG_R13,
+                // X64_REG_R13, // if you add these, then make sure to callee save them since they are non-volatile
                 // X64_REG_R14,
                 // X64_REG_R15,
             };
@@ -847,7 +847,7 @@ void X64Builder::emit_mov_reg_reg(X64Register reg, X64Register rm, int size) {
     }
 }
 
-static const char* x64_register_names[]{
+const char* x64_register_names[]{
     "INVALID",// X64_REG_INVALID = 0,
     "A",// X64_REG_A,
     "C",// X64_REG_C,

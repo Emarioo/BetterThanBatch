@@ -35,7 +35,9 @@ About x64:
 #define OPCODE_CALL_IMM (u8)0xE8
 #define OPCODE_CALL_RM_SLASH_2 (u8)0xFF
 #define OPCODE_NOP (u8)0x90
-
+// syscall is preferred over int 80 instructions on 64-bit systems
+// apparently less overhead
+#define OPCODE_2_SYSCALL (u16)0x050F
 
 #define OPCODE_ADD_REG8_RM8 (u8)0x02
 #define OPCODE_ADD_REG_RM (u8)0x03

@@ -1,0 +1,6 @@
+
+
+// macro evaluation on concatenated identifiers
+#macro AB 1
+#macro content(x) A ## x
+a := content(B)

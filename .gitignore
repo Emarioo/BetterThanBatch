@@ -22,12 +22,13 @@ out
 # Sometimes I test some assembly or C++ and create new
 # temporary files at the root of the project. The stuff below
 # filters that out.
+# Hmm, the filters below didn't work for hacky_sysvcall.s
 
-*.cpp
-*.c
-*.s
-*.asm
-!*/*.cpp
-!*/*.c
-!*/*.s
-!*/*.asm
+# *.cpp
+# *.c
+# *.s
+# *.asm
+# !*/*.cpp
+# !*/*.c
+# !*/*.s
+# !*/*.asm

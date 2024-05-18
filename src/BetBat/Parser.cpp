@@ -49,7 +49,7 @@ bool IsSingleOp(OperationType nowOp){
 // two arrow tokens
 OperationType IsOp(lexer::TokenInfo* token, lexer::TokenInfo* token1, const StringView& view, int& extraNext){
     // TODO: Optimize by reordering the cases based on the operations frequencies in the average codebase.
-    switch(token->type) {
+    switch((u16)token->type) { // cast to u16 to avoid g++ compiler warnings
     case '+':  return AST_ADD;
     case '-':  return AST_SUB;
     case '*':  return AST_MUL;
@@ -101,7 +101,7 @@ OperationType IsOp(lexer::TokenInfo* token, lexer::TokenInfo* token1, const Stri
 //     return (OperationType)0;
 // }
 OperationType IsAssignOp(lexer::TokenInfo* token){
-    switch(token->type) {
+    switch((u16)token->type) { // cast to u16 to avoid gcc compiler warnings
     case '+': return AST_ADD;
     case '-': return AST_SUB;
     case '*': return AST_MUL;
@@ -1785,7 +1785,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 ASTExpression* tmp = nullptr;
                 Assert(view.ptr[0]!='-');// ensure that the tokenizer hasn't been changed
                 // to clump the - together with the number token
-                if(token->flags&(lexer::TOKEN_FLAG_ANY_SUFFIX)==0 && tok_suffix.type == 'd') {
+                if((token->flags&lexer::TOKEN_FLAG_ANY_SUFFIX)==0 && tok_suffix.type == 'd') {
                     info.advance(2);
                     tmp = info.ast->createExpression(TypeId(AST_FLOAT64));
                     tmp->f64Value = lexer::ConvertDecimal(view);
@@ -1830,7 +1830,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // zero for that exact reason.
                 ASTExpression* tmp = nullptr;
                 int hex_prefix = 0;
-                if(view.len>=2 && *(u16*)view.ptr == 'x0') // 'x0' and not '0x' because of little endian or something like that
+                if(view.len>=2 && *(u16*)view.ptr == 0x7830) // 0x7830 represents '0x' (backwards because little endian)
                     hex_prefix = 2;
                     
                 int significant_digits = 0;
@@ -3179,6 +3179,8 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             } else if (view_fn_name == "intrinsic"){
                 function->callConvention = CallConventions::INTRINSIC;
                 // function->linkConvention = NATIVE;
+            } else if (view_fn_name == "blank"){
+                function->blank_body = true;
             } else {
                 auto tok = info.gettok();
                 // It should not warn you because it is quite important that you use the right annotations with functions
@@ -3688,6 +3690,12 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
                 std::string typeToken{};
                 auto signal = ParseTypeId(info,typeToken, nullptr);
                 
+                // TODO: Show error of two lines in case user typed:
+                /*  hello:
+                    }       <- only this line will be seen
+                */
+
+
                 SIGNAL_INVALID_DATATYPE(typeToken)
 
                 // Assert(result==SIGNAL_SUCCESS);

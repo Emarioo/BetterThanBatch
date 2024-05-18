@@ -1,0 +1,197 @@
+/*
+    This file contains Unix specific features.
+    - Wrapper for syscalls
+    
+    Note that this module is just for convenience.
+    The headers for Linux are complex with many #ifdefs (struct_stat.h for example)
+    so this file assumes a lot of things. It should be fine on a modern 64-bit Linux machine.
+
+    Most defines are copied from /usr/include/x86_64-linux-gnu/bits/...
+
+    TODO: Sockets, fork, execv, dup, pipe
+    TODO: This file is dependent on macros and inline assembly. If those break then this file will not compile. Should we make some sort of backup wrapper?
+*/
+
+#if OS_LINUX // wraps everything in this file
+
+#macro STDIN_FILENO  0
+#macro STDOUT_FILENO 1
+#macro STDERR_FILENO 2
+
+
+/* open/fcntl.  */
+#macro O_RDONLY     00
+#macro O_WRONLY	     01
+#macro O_RDWR		     02
+#macro O_CREAT	   0100	/* Not fcntl.  */
+#macro O_EXCL		   0200	/* Not fcntl.  */
+#macro O_NOCTTY	   0400	/* Not fcntl.  */
+#macro O_TRUNC	  01000	/* Not fcntl.  */
+#macro O_APPEND	  02000
+#macro O_NONBLOCK	  04000
+#macro O_SYNC	       04010000
+#macro O_ASYNC	 020000
+#macro O_LARGEFILE	0100000
+#macro O_DIRECTORY	0200000
+#macro O_NOFOLLOW	0400000
+#macro O_CLOEXEC   02000000
+#macro O_DIRECT	 040000
+#macro O_NOATIME   01000000
+#macro O_PATH     010000000
+#macro O_DSYNC	 010000
+#macro O_TMPFILE   (020000000 | O_DIRECTORY)
+
+#macro SEEK_SET 0 // seeks from start
+#macro SEEK_CUR 1 // seeks from current
+#macro SEEK_END 2 // seels from end
+
+#macro PROT_READ	0x1		/* Page can be read.  */
+#macro PROT_WRITE	0x2		/* Page can be written.  */
+#macro PROT_EXEC	0x4		/* Page can be executed.  */
+#macro PROT_NONE	0x0		/* Page can not be accessed.  */
+
+/* Sharing types (must choose one and only one of these).  */
+#macro MAP_SHARED	0x01		/* Share changes.  */
+#macro MAP_PRIVATE	0x02		/* Changes are private.  */
+#macro MAP_SHARED_VALIDATE	0x03	/* Share changes and validate
+					   extension flags.  */
+#macro MAP_TYPE	0x0f		/* Mask for type of mapping.  */
+
+/* Other flags.  */
+#macro MAP_FIXED	0x10		/* Interpret addr exactly.  */
+#macro MAP_ANONYMOUS	0x20		/* Don't use a file.  */
+#macro MAP_32BIT	0x40		/* Only give out 32-bit addresses.  */
+
+#macro MAP_GROWSDOWN	0x00100		/* Stack-like segment.  */
+#macro MAP_DENYWRITE	0x00800		/* ETXTBSY.  */
+#macro MAP_EXECUTABLE	0x01000		/* Mark it as an executable.  */
+#macro MAP_LOCKED	0x02000		/* Lock the mapping.  */
+#macro MAP_NORESERVE	0x04000		/* Don't check for reservations.  */
+#macro MAP_POPULATE	0x08000		/* Populate (prefault) pagetables.  */
+#macro MAP_NONBLOCK	0x10000		/* Do not block on IO.  */
+#macro MAP_STACK	0x20000		/* Allocation is for a stack.  */
+#macro MAP_HUGETLB	0x40000		/* Create huge page mapping.  */
+#macro MAP_SYNC	0x80000		/* Perform synchronous page
+					   faults for the mapping.  */
+#macro MAP_FIXED_NOREPLACE 0x100000	/* MAP_FIXED but do not unmap
+					   underlying mapping.  */
+
+#macro SYS_read     0
+#macro SYS_write    1
+#macro SYS_open     2
+#macro SYS_close    3
+#macro SYS_stat     4
+#macro SYS_fstat    5
+#macro SYS_lstat    6
+// #macro SYS_poll     7
+#macro SYS_lseek    8
+#macro SYS_mmap     9
+#macro SYS_mprotect 10
+#macro SYS_munmap   11
+
+#macro SYS_exit     60
+
+// General macro for all syscalls
+#macro SYSCALL(NAME, RETURN_TYPE, ...)
+
+fn @unixcall @blank NAME( SYSCALL_args(...) ) -> RETURN_TYPE {
+    asm {
+        push rbp // 16-byte align, I assume syscalls require that
+
+        // parameters and return values have already been set
+        mov eax, SYS_ ## NAME
+        syscall
+
+        pop rbp
+        ret
+    }
+}
+#endmacro
+#macro SYSCALL_VOID(NAME, ...)
+fn @unixcall @blank NAME( SYSCALL_args(...) ) {
+    asm {
+        mov eax, SYS_ ## NAME
+        syscall
+    }
+}
+#endmacro
+#macro SYSCALL_args(X,...) X, SYSCALL_args(...)
+#macro SYSCALL_args(X) X
+#macro SYSCALL_args() #endmacro
+// More than 6 arguments must be passed to the stack
+// which the SYSCALL macro doesn't account for.
+#macro SYSCALL_args(a,b,c,d,e,f,g) CANT_HAVE_7_ARGS_TO_SYSCALL
+
+// Function calls
+// TODO: ALL OF THESE HAVE NOT BEEN TESTED!
+SYSCALL_VOID(exit,   status: i32)
+SYSCALL(read,  i32,  fd: i32, buf: void*, count: u32)
+SYSCALL(write, i32,  fd: i32, buf: void*, count: u32)
+SYSCALL(open,  i32,  path: char*, flags: i32)
+SYSCALL(close, i32,  fd: i32)
+SYSCALL(stat,  i32,  pathname: char*, statbuf: stat*)
+SYSCALL(fstat, i32,  fd: i32, statbuf: stat*);
+SYSCALL(lstat, i32,  pathname: char*, statbuf: stat*)
+SYSCALL(lseek, i32,  fd: i32, offset: i32, whence: i32)
+SYSCALL(mmap,  void*, addr: void*, length: i32, prot: i32, flags: i32, fd: i32, offset: i32)
+SYSCALL(mprotect,  i32, addr: void*, len: i32, prot: i32);
+SYSCALL(munmap,    i32, addr: void*, length: i32)
+
+
+// used in timespec
+#macro __time_t i32
+
+// used in stat
+#macro __dev_t u32
+#macro __ino_t u32
+#macro __nlink_t u32
+#macro __mode_t u32
+#macro __uid_t u32
+#macro __gid_t u32
+#macro __off_t u32
+#macro __blksize_t u32
+#macro __blkcnt_t u32
+// used in stat, timespec
+#macro __syscall_slong_t i32
+
+struct timespec {
+    tv_sec: __time_t;
+    tv_nsec: __syscall_slong_t;
+}
+
+
+// copied from /usr/include/x86_64-linux-gnu/bits/struct_stat.h
+// assumed these defines: __x86_64__, __USE_XOPEN2K8
+struct stat
+  {
+    st_dev: __dev_t;		/* Device.  */
+    st_ino: __ino_t;		/* File serial number.	*/
+    
+    st_nlink: __nlink_t;		/* Link count.  */
+    st_mode:  __mode_t;		/* File mode.  */
+
+    st_uid: __uid_t;	/* User ID of the file's owner.	*/
+    st_gid: __gid_t;	/* Group ID of the file's group.*/
+
+    __pad0: i32;
+
+    st_rdev: __dev_t;		/* Device number, if device.  */
+
+    st_size: __off_t;			/* Size of file, in bytes.  */
+
+    st_blksize: __blksize_t;	/* Optimal block size for I/O.  */
+    st_blocks: __blkcnt_t;		/* Number 512-byte blocks allocated. */
+    /* Nanosecond resolution timestamps are stored in a format
+       equivalent to 'struct timespec'.  This is the type used
+       whenever possible but the Unix namespace rules do not allow the
+       identifier 'timespec' to appear in the <sys/stat.h> header.
+       Therefore we have to handle the use of this header in strictly
+       standard-compliant sources special.  */
+    st_atim: timespec;		/* Time of last access.  */
+    st_mtim: timespec;		/* Time of last modification.  */
+    st_ctim: timespec;		/* Time of last status change.  */
+
+    __glibc_reserved: __syscall_slong_t[3]; // TODO: can we remove this?
+};
+
+#endif // OS_LINUX

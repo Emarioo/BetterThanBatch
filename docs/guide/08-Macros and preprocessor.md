@@ -100,7 +100,30 @@ equals(a,1,4) -> ( a == 1 && a == 4 )
 
 TODO: Explain recursion limit (100 or something, but can be increased per macro).
 
-**DISCLAIMER**: The preprocessor does not handle whitespace very well. The output of recursive macros may have space and new lines where you don't want them. Normal macros are usually fine.
+**DISCLAIMER**: The preprocessor does not handle whitespace very well. The output of recursive macros may have strange indentation and new lines where you don't want them.
+
+Here are some useful extra directives for macros
+```c++
+#macro add(x,...) x + add(...)
+#macro add(x,y) x + y
+
+// unwrap/spread tokens from a macro separated by commas.
+#macro LIST 1,2,3,4
+add(#unwrap LIST)
+
+// concatenation with ##
+#macro LN var ## #line: i32;
+LN
+
+// counter, each occurrence of counter increments a temporary
+// counter within the macro evaluation. Separate evaluation
+// has independent counters. A local version of #unique.
+#macro DECL(x,...) var ## #counter: i32; DECL(...)
+
+DECL(a,a)
+
+DECL(a,a,a,a)
+```
 
 ## Conditional directives
 Conditional directives can leave out tokens from the source code based on conditions.

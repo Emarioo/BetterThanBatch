@@ -54,5 +54,5 @@ struct VirtualMachine {
 #ifdef OS_WINDOWS
 extern "C" void __stdcall Makeshift_stdcall(engone::VoidFunction func, void* stack_pointer);
 #else
-// extern "C"  void Makeshift_stdcall(engone::VoidFunction func, void* stack_pointer);
+extern "C"  void Makeshift_sysvcall(engone::VoidFunction func, void* stack_pointer);
 #endif

@@ -183,6 +183,7 @@ bool GenerateTree(FuzzerContext* context) {
             case FuzzerNode::DECL: {
                 break;
             }
+            default: Assert(false);
             }
         }
     }
@@ -295,6 +296,7 @@ bool GenerateNode(FuzzerContext* context, FuzzerNode* node, FuzzerNode* parent, 
         }
         break;   
     }
+    default: Assert(false);
     }
     return true;
 }

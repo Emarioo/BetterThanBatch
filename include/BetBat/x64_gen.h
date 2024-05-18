@@ -88,9 +88,14 @@ struct X64Program {
         namedUndefinedRelocations.cleanup();
         
         for(auto p : tinyPrograms) {
-            p->~X64TinyProgram();    
-            TRACK_FREE(p, X64TinyProgram);
+            // may be null if we had an error
+            // tinyPrograms is resized based on requested_index so if a bytecode with a high index was generated first and then an error happened the other bytecodes won't even try to create tinyPrograms, therefore leaving some nullptrs.
+            if(p) {
+                p->~X64TinyProgram();    
+                TRACK_FREE(p, X64TinyProgram);
+            }
         }
+        tinyPrograms.cleanup();
 
         // compiler->program borrows debugInformation from compiler->code
         // and it is unclear who should destroy it so we don't.
@@ -381,7 +386,7 @@ struct X64Builder {
     }
 
     void clear_register_map() {
-        memset(bc_register_map, 0, sizeof bc_register_map);
+        memset((void*)bc_register_map, 0, sizeof (bc_register_map));
     }
     
     void map_reg(X64Inst* n, int nr) {
