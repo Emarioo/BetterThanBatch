@@ -5,8 +5,8 @@
 - TODO: File monitoring
 */
 
-// TODO: import the right OS bindings
 #import "Memory"
+#import "Lang" // temporary
 
 #if OS_WINDOWS
 #import "Win32"
@@ -442,7 +442,6 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
         file_name = entry.d_name.ptr
         file_name_len = strlen(entry.d_name.ptr)
 
-        log(file_name)
         
         if equal(file_name, ".") || equal(file_name, "..")
             continue
@@ -462,15 +461,18 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
         iter.item.name.append(file_name, file_name_len)
     }
 
+    // log(file_name)
 
     safe: char[48]
     file_info: stat;
     res := stat(iter.item.name.sliced().ptr, &file_info)
 
-    safe_ptr: char* = cast<char*>&safe;
-    for 0..32 {
-        log(cast<i32>safe_ptr[nr*4]," ",cast<i32>safe_ptr[nr*4+1]," ",cast<i32>safe_ptr[nr*4+2]," ",cast<i32>safe_ptr[nr*4+3])
-    }
+    // std_print_any(&file_info, true)
+
+    // safe_ptr: char* = cast<char*>&safe;
+    // for 0..32 {
+    //     log(cast<i32>safe_ptr[nr*4]," ",cast<i32>safe_ptr[nr*4+1]," ",cast<i32>safe_ptr[nr*4+2]," ",cast<i32>safe_ptr[nr*4+3])
+    // }
 
     if res >= 0 {
         iter.item.file_size = file_info.st_size

@@ -110,7 +110,7 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER)
     int offset=0;
-    int alignedSize=0; // offset will be aligned to match this at the end
+    int alignedSize=1; // offset will be aligned to match this at the end
 
     Assert(astStruct->polyArgs.size() == structImpl->polyArgs.size());
     
@@ -197,6 +197,9 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
             }
             success = false;
             continue;
+        }
+        if(astStruct->no_padding) {
+            asize = 1; // disable alignment
         }
         if(alignedSize<asize)
             alignedSize = asize > 8 ? 8 : asize;

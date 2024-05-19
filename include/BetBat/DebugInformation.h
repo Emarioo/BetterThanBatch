@@ -36,6 +36,7 @@ struct DebugFunction {
 
     u32 declared_at_line = 0;
     u32 fileIndex;
+    u32 import_id; // needed in DWARF.cpp, scope of function when main doesnt't have ASTFunction
     ASTFunction* funcAst = nullptr; // needed for name of arguments
     FuncImpl* funcImpl = nullptr; // needed for type information (arguments, return values)
     TinyBytecode* tinycode = nullptr;

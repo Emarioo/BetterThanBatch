@@ -22,7 +22,7 @@ namespace lang {
     };
     struct Slice {
         void* ptr;
-        u64 len;
+        i64 len;
     };
     struct TypeId {
         u16 index0;
@@ -31,6 +31,7 @@ namespace lang {
     };
     struct TypeInfo {
         Primitive type;
+        u8 _pad; // reserved?
         u16 size;
         Range name; // refers to lang_strings
 

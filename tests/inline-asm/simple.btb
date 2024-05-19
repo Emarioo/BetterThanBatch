@@ -54,3 +54,14 @@ more_params(asm<i32>(9, 2){
 fn more_params(n: i32) {
     _test 11; n
 }
+
+
+// @TEST_CASE(variables_in_inline_asm)
+// // TODO: Inline assembly, reading/writing to local variables
+// //   What about structs? Artifical instruction perhaps?
+// num := 65
+// new_num := asm<i32> {
+//     mov eax, [num]
+//     add eax, 123
+//     push rax
+// }

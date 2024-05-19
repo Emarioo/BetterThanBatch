@@ -857,8 +857,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             // TODO: Allow binary and hexidecimal literals
             auto tok = lexer->getTokenFromImport(new_import_id, token_count-1);
             auto prev_src = lexer->getTokenSource_unsafe({tok});
-            if((tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
-            (token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
+            if((tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
+            (token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
                 // TODO: There is bug if we concat two identifiers which become a keyword
                 if(TOKEN_IS_KEYWORD(tok.type)) {
                     new_data += TOK_KEYWORD_NAME(tok.type);
@@ -880,7 +880,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             }
         }
         if(layer->quote_next_token) {
-            if((token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
+            if((token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
                 if(view) {
                     new_data += std::string(*view);
                 } else if(TOKEN_IS_KEYWORD(token.type)) {

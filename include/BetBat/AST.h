@@ -671,6 +671,8 @@ struct ASTStruct : ASTNode {
 
     State state=TYPE_EMPTY;
 
+    bool no_padding = false;
+
     StructImpl* nonPolyStruct = nullptr;
 
     ScopeId scopeId=0;

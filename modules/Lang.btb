@@ -37,6 +37,7 @@ struct lang_TypeId {
 }
 struct lang_TypeInfo {
     type: lang_Primitive;
+    _pad: u8; // reserved?
     size: u16;
     name: Range; // refers to lang_strings
 
@@ -120,7 +121,7 @@ fn std_print(type: lang_TypeId) {
 }
 fn std_print_any<T>(value: T*, pretty: bool = false) {
     id := typeid(T);
-    std_print_any(&value, id, pretty);
+    std_print_any(value, id, pretty);
 }
 // Overloading needs fixing
 // fn std_print_any<T>(value: T, pretty: bool = false) {
@@ -195,4 +196,10 @@ fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32
     }
     
     std_print("}");
+}
+
+
+fn dump_type_info() {
+
+
 }

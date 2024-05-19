@@ -1,7 +1,9 @@
+You can skip this chapter without missing much.
+
 # Coding style in this language
 The language and compiler do not impose a coding style. You are free to do as you wish. There is however a standard coding style that should preferably be used so that programmers can read each others' code with ease. The standard library is consistent with the coding style defined in this document.
 
-**NOTE:** The style is work in progress.
+**NOTE:** The style is work in progress. To be honest, we might just skip this entirely. It's just a few things that should be standardized.
 
 **TODO:** Give numbers to the areas of coding style. Example: *1 Project structure*, *2 Naming convention* *2.1 Function names*
 

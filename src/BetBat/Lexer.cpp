@@ -219,6 +219,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
 
     bool inHexidecimal = false;
     bool inBinary = false;
+    bool inOctal = false;
     // int commentNestDepth = 0; // C doesn't have this and it's not very good. /*/**/*/
     
     bool canBeDot = false; // used to deal with decimals (eg. 255.92) as one token
@@ -475,6 +476,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     if(chr == '0' && nextChr == 'b') {
                         inBinary = true;
                     }
+                    if(chr == '0' && nextChr == 'o') {
+                        inOctal = true;
+                    }
                 } else {
                     canBeDot = false;
                     isAlpha = true;
@@ -493,8 +497,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         bool nextLiteralSuffix = false;
         {
             char tmp = nextChr | 32;
-            if(isNumber && isDecimal && !inHexidecimal && !inBinary) {
-                nextLiteralSuffix = !inHexidecimal && !inBinary && isNumber && ((tmp>='a'&&tmp<='z') || nextChr == '_');
+            if(isNumber && isDecimal && !inHexidecimal && !inBinary && !inOctal) {
+                nextLiteralSuffix = !inHexidecimal && !inBinary && !inOctal && isNumber && ((tmp>='a'&&tmp<='z') || nextChr == '_');
             }
         }
         if(str_start != str_end && (isDelim || isQuotes || isComment || isSpecial || nextLiteralSuffix || index==length)){
@@ -517,6 +521,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 new_tokens->type = TOKEN_LITERAL_HEXIDECIMAL;
             else if(inBinary)
                 new_tokens->type = TOKEN_LITERAL_BINARY;
+            else if(inOctal)
+                new_tokens->type = TOKEN_LITERAL_OCTAL;
             else if(isNumber) // should come after hexidecimal
                 new_tokens->type = TOKEN_LITERAL_INTEGER;
             else {
@@ -611,6 +617,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             isDecimal=false;
             inHexidecimal = false;
             inBinary = false;
+            inOctal = false;
 
             // token = {};
             str_start = 0;
@@ -1514,6 +1521,7 @@ const char* token_type_names[] {
     // "tok_lit_dec",    // TOKEN_LITERAL_DECIMAL,
     // "tok_lit_hex",    // TOKEN_LITERAL_HEXIDECIMAL,
     // "tok_lit_bin",    // TOKEN_LITERAL_BINARY,
+    // "tok_lit_oct",    // TOKEN_LITERAL_OCTAL,
 
     "null", // TOKEN_NULL = TOKEN_KEYWORD_BEGIN,
     "true", // TOKEN_TRUE,
@@ -1878,7 +1886,7 @@ Lexer::VirtualFile* Lexer::findVirtualFile(const std::string& virtual_path) {
 bool Lexer::isIntegerLiteral(Token token, i64* value) {
     auto& type = token.type;
 
-    if(!(type == TOKEN_LITERAL_BINARY || type == TOKEN_LITERAL_INTEGER || type == TOKEN_LITERAL_HEXIDECIMAL || (type == TOKEN_LITERAL_STRING && (token.flags & TOKEN_FLAG_SINGLE_QUOTED)))) {
+    if(!(type == TOKEN_LITERAL_OCTAL || type == TOKEN_LITERAL_BINARY || type == TOKEN_LITERAL_INTEGER || type == TOKEN_LITERAL_HEXIDECIMAL || (type == TOKEN_LITERAL_STRING && (token.flags & TOKEN_FLAG_SINGLE_QUOTED)))) {
         return false;
     }
 
@@ -1911,6 +1919,19 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
             }
             num += chr - '0';
             num *= 2;
+        }
+        *value = num;
+    } else if(type == TOKEN_LITERAL_OCTAL) {
+        i64 num = 0;
+        for(int i=2;i<len;i++) { // i=2 -> skip '0o'
+            char chr = data[i];
+            if(chr == '_') continue;
+            if(!(chr >= '0' && chr <= '7')) {
+                // Assert(false);
+                return false;
+            }
+            num += chr - '0';
+            num *= 8;
         }
         *value = num;
     } else if(type == TOKEN_LITERAL_HEXIDECIMAL) {

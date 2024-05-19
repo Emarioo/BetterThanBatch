@@ -1,43 +1,20 @@
 
 
-// #import "examples/linux/dir_iter.btb"
+#import "examples/linux/dir_iter.btb"
 
-// 
-// #import "Logger"
-// #import "demo/macros"
-
-// #import "examples/dir-iterator"
 
 
 // struct Box {
-//     head: i32;
+//     items: i32[20]
 // }
 // box: Box
-// p := &box
 
-// p.head += 5
+// // should cause error, box.items evaluates to a slice
+// // *(box.items + 9 * sizeof i32)
 
+// box.items[9] = 3
+// _test 3; box.items[9]
+// _test 3; *(box.items.ptr + 9 * sizeof i32)
 
-#import "File"
-#import "Logger"
-#import "Basic"
-
-
-iter := DirectoryIteratorCreate("src")
-
-// how do we test that this works?
-item: DirIteratorItem*
-while DirectoryIteratorNext(iter, &item) {
-    log(item.name.sliced())
-}
-
-DirectoryIteratorDestroy(iter)
-
-// // TODO: Inline assembly, reading/writing to local variables
-// //   What about structs? Artifical instruction perhaps?
-// num := 65
-// new_num := asm<i32> {
-//     mov eax, [num]
-//     add eax, 123
-//     push rax
-// }
+// _test 16; sizeof box.items
+// _test 80; sizeof box

@@ -1,4 +1,5 @@
-
+// TODO: Rename file to Windows.btb instead of Win32.btb? I guess
+//   we have bindings for the Win 32 API so it's fine as is?
 
 #if OS_WINDOWS
 

@@ -1,8 +1,6 @@
 # Linking in the compiler
-**NOTE:** The document consistently used the term dynamic libraries instead of shared libraries.
-
 We begin with the basics.
-1. The compiler generates an object file (main.o).
+1. The compiler generates an object file (bin/main.o).
 2. Then the compiler provides the linker (MSVC, GCC, CLANG) with necessary information such as the object file, path of output file, and libraries to link with.
 
 Libraries to link with is specified in the program itself. There are two ways of doing this.
@@ -10,9 +8,9 @@ Libraries to link with is specified in the program itself. There are two ways of
 `#link "path_to_lib"` - Is used to pass arguments directly to the linker
 `#load "path_to_lib" as Lib` - Is used to pass libraries to the linker.
 
-`#link` exists in case you want to interact with the linker in a way that the language and compiler doesn't support. Note that the arguments of one linker isn't always compatible with another linker.
+`#link` exists in case you want to interact with the linker in a way that the language and compiler doesn't support. Note that the arguments of one linker isn't always compatible with another linker (MSVC, GNU).
 
-`#load` exists to link with libraries independently from the linker. You just specify the path to the library and don't have to worry about `g++ -Ldir_to_lib -llib_file` and `link path_to_lib` (MSVC, Windows).
+`#load` exists to link with libraries independently from the linker. You just specify the path to the library and don't have to worry about `g++ -Ldir_to_lib -llib_file` (GNU Linux or MinGW Windows) and `link path_to_lib` (MSVC Windows).
 
 ## Linking a library
 Let's say this is your project structure.

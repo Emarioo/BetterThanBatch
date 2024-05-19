@@ -165,6 +165,14 @@ str := #quote i_am_a_string
 // Increments a global counter at compile time. You are guaranteed to receive a unique unsigned 32-bit integer.
 id0 = #unique // 0
 id1 = #unique // 1
+
+// #counter evaluates to a local counter and increments it
+// the counter exists per macro evaluation, thereby being local.
+#macro add(x,...) #counter + add(...)
+#macro add(x,y) #counter + #counter
+
+add(a,b,c,d)       // = 6
+add(a,b,c,d,e,f,g) // = 21
 ```
 
 

@@ -27,7 +27,6 @@ struct NotAParadox {
 }
 ```
 
-# Incomplete features
 
 ## Arrays in structs
 Structs can have arrays which are declared similarily to arrays on the stack. The size of the struct is exactly that which you specified. With arrays on the stack, both a slice (16 bytes) and the elements are put on the stack. The slice being additional memory. This is not the case in the struct.
@@ -52,6 +51,20 @@ for 0..name.str.len-1 {
 
 log(name.str)
 ```
+
+## Special annotations
+
+```c++
+// @no_padding will disable alignment calculations
+struct @no_padding Data {
+    a: i16
+    // 2 bytes would normally be reserved here to align
+    // the following 32-bit integer. The no_padding stops that.
+    b: i32
+} // sizeof Data == 6 (not 8 as we would expect with alignment and padding)
+```
+
+# Incomplete features
 
 ## Unions
 

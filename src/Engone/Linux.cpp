@@ -17,6 +17,8 @@
 #include <time.h>
 #include <dirent.h>
 #include <sys/random.h>
+#include <dlfcn.h>
+#include <sys/mman.h>
 
 #include <unordered_map>
 #include <vector>
@@ -157,13 +159,8 @@ namespace engone {
 				// 	printf("%s, %d\n",entry->d_name, buf.st_mode);
 				// }
 			}
-
-
-
 			break;
 		}
-
-		// stat64
 
 		int newLength = filepath_len;
 		// if(!info->second.dir.empty())
@@ -435,50 +432,50 @@ namespace engone {
 
         return path;
 	}
-    struct AllocInfo {
-		std::string name;
-		int count;
-	};
-	static std::unordered_map<u64, AllocInfo> allocTracking;
+    // struct AllocInfo {
+	// 	std::string name;
+	// 	int count;
+	// };
+	// static std::unordered_map<u64, AllocInfo> allocTracking;
     // TODO: TrackType and PrintTracking is the same on Linux and Windows.
     // This will be a problem if code is changed in one file but not in the other.
-	#define ENGONE_TRACK_ALLOC 0
-	#define ENGONE_TRACK_FREE 1
-	#define ENGONE_TRACK_REALLOC 2
-	static bool s_trackerEnabled=true;
-    void TrackType(u64 bytes, const std::string& name){
-		auto pair = allocTracking.find(bytes);
-		if(pair==allocTracking.end()){
-			allocTracking[bytes] = {name,0};	
-		} else {
-			pair->second.name += "|";
-			pair->second.name += name;
-		}
-	}
-    void PrintTracking(u64 bytes, int type){
-		if(!s_trackerEnabled)
-			return;
+	// #define ENGONE_TRACK_ALLOC 0
+	// #define ENGONE_TRACK_FREE 1
+	// #define ENGONE_TRACK_REALLOC 2
+	// static bool s_trackerEnabled=true;
+    // void TrackType(u64 bytes, const std::string& name){
+	// 	auto pair = allocTracking.find(bytes);
+	// 	if(pair==allocTracking.end()){
+	// 		allocTracking[bytes] = {name,0};	
+	// 	} else {
+	// 		pair->second.name += "|";
+	// 		pair->second.name += name;
+	// 	}
+	// }
+    // void PrintTracking(u64 bytes, int type){
+	// 	if(!s_trackerEnabled)
+	// 		return;
 
-		auto pair = allocTracking.find(bytes);
-		if(pair!=allocTracking.end()){
-			if(type==ENGONE_TRACK_ALLOC)
-				pair->second.count++;
-			else if(type==ENGONE_TRACK_FREE)
-				pair->second.count--;
-			// else if(type==ENGONE_TRACK_REALLOC)
-			// 	pair->second.count--;
-			printf("%s %s (%d left)\n",type==ENGONE_TRACK_ALLOC?"alloc":(type==ENGONE_TRACK_FREE?"free" : "realloc"), pair->second.name.c_str(),pair->second.count);
-		}
-	}
-	void SetTracker(bool on){
-		s_trackerEnabled = on;
-	}
-    void PrintRemainingTrackTypes(){
-		for(auto& pair : allocTracking){
-			if(pair.second.count!=0)
-				printf(" %s (%lu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
-		}
-	}
+	// 	auto pair = allocTracking.find(bytes);
+	// 	if(pair!=allocTracking.end()){
+	// 		if(type==ENGONE_TRACK_ALLOC)
+	// 			pair->second.count++;
+	// 		else if(type==ENGONE_TRACK_FREE)
+	// 			pair->second.count--;
+	// 		// else if(type==ENGONE_TRACK_REALLOC)
+	// 		// 	pair->second.count--;
+	// 		printf("%s %s (%d left)\n",type==ENGONE_TRACK_ALLOC?"alloc":(type==ENGONE_TRACK_FREE?"free" : "realloc"), pair->second.name.c_str(),pair->second.count);
+	// 	}
+	// }
+	// void SetTracker(bool on){
+	// 	s_trackerEnabled = on;
+	// }
+    // void PrintRemainingTrackTypes(){
+	// 	for(auto& pair : allocTracking){
+	// 		if(pair.second.count!=0)
+	// 			printf(" %s (%lu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
+	// 	}
+	// }
 
 	static std::unordered_map<void*, int> s_userAllocations;
 
@@ -543,8 +540,8 @@ namespace engone {
 				// 	s_userAllocations[newPtr] = newBytes;
 				// )
                 
-				if(allocTracking.size()!=0)
-					printf("%s %lu -> %lu\n","realloc", oldBytes, newBytes);
+				// if(allocTracking.size()!=0)
+				// 	printf("%s %lu -> %lu\n","realloc", oldBytes, newBytes);
 				// PrintTracking(newBytes,ENGONE_TRACK_REALLOC);
                 // s_allocStatsMutex.lock();
                 s_allocatedBytes+=newBytes-oldBytes;
@@ -670,6 +667,20 @@ namespace engone {
 		// fprintf(stdout,"{%d}",(int)color);
 		// fflush(stdout);
 	}
+	std::string GetPathToExecutable() {
+		std::string out{};
+		out.resize(0x180);
+
+		char self[PATH_MAX] = { 0 };
+		int len = readlink("/proc/self/exe", (char*)out.data(), out.size());
+
+		if(len < 0 || len > out.size())
+			return "";
+
+		out.resize(len);
+		return out;
+	}
+
 	int GetConsoleWidth() {
 		struct winsize w;
 		int err = ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
@@ -1079,7 +1090,7 @@ namespace engone {
 
 		// return true;
 	}
-	bool StartProgram(char* commandLine, u32 flags, int* exitCode, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
+	bool StartProgram(const char* commandLine, u32 flags, int* exitCode, bool* non_normal_exit, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
 		// if (!FileExist(path)) {
 		// 	return false;
 		// }
@@ -1123,12 +1134,14 @@ namespace engone {
             auto old_out = engone::GetStandardOut();
             auto old_err = engone::GetStandardErr();
 
+			bool any_error = false;
 			if(fStdin)
-				engone::SetStandardIn(fStdin);
+				any_error |= engone::SetStandardIn(fStdin);
 			if(fStdout)
-				engone::SetStandardOut(fStdout);
+				any_error |= engone::SetStandardOut(fStdout);
 			if(fStderr)
-				engone::SetStandardErr(fStderr);
+				any_error |= engone::SetStandardErr(fStderr);
+
 			
 			int err = execvp(argv[0], argv);
             
@@ -1140,7 +1153,10 @@ namespace engone {
 				engone::SetStandardErr(old_err);
             
             Assert(err == -1);
-            PL_PRINTF("execv\n");
+			if(any_error || err < 0) {
+				printf("[UnixError] %s, execv(\"%s\")\n", strerror(errno), argv[0]);
+			}
+            // PL_PRINTF("execv\n");
 			FreeArguments(argc, argv);
 			exit(0);
 			return false;
@@ -1156,6 +1172,13 @@ namespace engone {
 					if(exitCode)
 						*exitCode = WEXITSTATUS(status);
 				}
+				if(WIFSIGNALED(status)) {
+					if(non_normal_exit) {
+						*non_normal_exit = true;
+						// *non_normal_exit = WTERMSIG(status);
+					}
+				}
+
 			}
 		}
         FreeArguments(argc, argv);
@@ -1228,6 +1251,19 @@ namespace engone {
 		}
 		Free(argv, totalSize);
 	}
-    
+		DynamicLibrary LoadDynamicLibrary(const std::string& path) {
+		auto ptr = dlopen(path.c_str(), 0);
+		// print error?
+		return ptr;
+	}
+	void UnloadDynamicLibrary(DynamicLibrary library) {
+		dlclose(library);
+	}
+	// You may need to cast the function pointer to the appropriate function
+	VoidFunction GetFunctionPointer(DynamicLibrary library, const std::string& name) {
+		auto ptr = dlsym(library, name.c_str());
+		return (VoidFunction)ptr;
+	}
+
 }
 #endif

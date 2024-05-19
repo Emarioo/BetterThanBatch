@@ -1,6 +1,11 @@
 #include "BetBat/Generator.h"
 #include "BetBat/Compiler.h"
 
+// include Lang.h here so that we don't
+// have to recompile everything if we
+// make a change in it.
+#include "BetBat/Lang.h"
+
 #undef ERRTYPE
 #undef ERRTYPE1
 #define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD2(R, ERROR_TYPE_MISMATCH) ERR_MSG_LOG("Types do not match! This was found '" << engone::log::GREEN<< info.ast->typeToString(LT) <<engone::log::NO_COLOR<< "' while this was expected '" << engone::log::GREEN<<info.ast->typeToString(RT) << engone::log::NO_COLOR<< "' " << M << "\n\n") ERR_LINE2(R,"expects "+info.ast->typeToString(RT)))
@@ -5072,7 +5077,7 @@ SignalIO GenContext::generateData() {
     if(compiler->typeinfo_import_id == 0) {
         // TODO: We don't have import to type information. Either that's a bug or we didn't import Lang.btb.
         //   If it's a bug we want to message the user. How do we know that though?
-        //   We shouldn't spam the user about type information not being imported.
+        //   We shouldn't spam the user about type information not being imported unless they wanted it.
     } else {
         Identifier* identifiers[VAR_COUNT]{nullptr,nullptr,nullptr};
         // compiler->lock_imports.lock();
@@ -5275,6 +5280,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
 
             auto di = context.bytecode->debugInformation;
             auto dfun = di->addFunction(nullptr, context.tinycode, imp->path, 1);
+            dfun->import_id = imp->import_id;
             context.debugFunction = dfun;
             context.bytecode->addExportedFunction("main", context.tinycode->index);
 

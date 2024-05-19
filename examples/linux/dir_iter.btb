@@ -3,53 +3,57 @@
 #import "Logger"
 
 fn main() {
+    #import "Lang"
+    st: stat
+    stat("src/BetBat/main.cpp".ptr, &st)
+    std_print_any(&st, true)
 
-    buf: char[1024]
+    // buf: char[1024]
 
-    path := "examples"
-    // log("Opening ",path)
-    fd := open(path.ptr, O_DIRECTORY, 0)
-    if fd < 0 {
-        log("Error on open, ", name_of_error(fd))
-        return
-    }
-    // log("Opened ",path, ", ",fd)
+    // path := "examples"
+    // // log("Opening ",path)
+    // fd := open(path.ptr, O_DIRECTORY, 0)
+    // if fd < 0 {
+    //     log("Error on open, ", name_of_error(fd))
+    //     return
+    // }
+    // // log("Opened ",path, ", ",fd)
 
-    bytes: i32 
-    while bytes = getdents64(fd, buf.ptr, 60) {
-        if bytes < 0 || bytes == 0 {
-            log("Error on getdents, ", name_of_error(bytes), " fd: ",fd)
-            break
-        }
+    // bytes: i32 
+    // while bytes = getdents64(fd, buf.ptr, 60) {
+    //     if bytes < 0 || bytes == 0 {
+    //         log("Error on getdents, ", name_of_error(bytes), " fd: ",fd)
+    //         break
+    //     }
 
-        // log("getdents ",fd, ", ",bytes)
+    //     // log("getdents ",fd, ", ",bytes)
 
-        head: i32 = 0
-        while head < bytes {
-            dir: linux_dirent64* = cast<linux_dirent64*>(buf.ptr + head)
+    //     head: i32 = 0
+    //     while head < bytes {
+    //         dir: linux_dirent64* = cast<linux_dirent64*>(buf.ptr + head)
 
-            len := dir.d_reclen - sizeof linux_dirent64
-            name := dir.d_name.ptr
+    //         len := dir.d_reclen - sizeof linux_dirent64
+    //         name := dir.d_name.ptr
             
-            // log(" name[",len,"]: ", name)
-            log(name)
+    //         // log(" name[",len,"]: ", name)
+    //         log(name)
 
-            if dir.d_type == DT_REG
-                log(" type: regular")
-            else if dir.d_type == DT_DIR
-                log(" type: directory")
-            else
-                log(" type: ", dir.d_type)
+    //         if dir.d_type == DT_REG
+    //             log(" type: regular")
+    //         else if dir.d_type == DT_DIR
+    //             log(" type: directory")
+    //         else
+    //             log(" type: ", dir.d_type)
             
-            // log(" reclen: ", dir.d_reclen)
-            // log(" ino: ", dir.d_ino)
-            // log(" off: ", dir.d_off)
+    //         // log(" reclen: ", dir.d_reclen)
+    //         // log(" ino: ", dir.d_ino)
+    //         // log(" off: ", dir.d_off)
 
-            // log()
+    //         // log()
 
-            head += dir.d_reclen
-        }
+    //         head += dir.d_reclen
+    //     }
 
-        // write(1,buf.ptr,buf.len)
-    }
+    //     // write(1,buf.ptr,buf.len)
+    // }
 }

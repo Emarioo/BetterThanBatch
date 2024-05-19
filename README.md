@@ -20,11 +20,11 @@ Example of errors with named arguments
 |Project|Status|
 |-|-|
 |Windows build|Yes|
-|Linux (Ubuntu) build|Broke after rewrite-2.1, it's in the works|
-|Documentation|Half complete guide, a couple of examples|
+|Linux (Ubuntu) build|Mostly works, still fixing things|
+|Documentation|Half complete guide|
 |x86-64|Yes|
 |ARM-64|No|
-|Test cases|Covers simple cases, not advanced ones|
+|Test cases|Covers simple cases|
 
 |Features|Status|
 |-|-|
@@ -33,16 +33,12 @@ Example of errors with named arguments
 |Function overloading|Yes|
 |Operator overloading|Yes|
 |Namespaces|No, incomplete|
-|Linking with external functions|No, it needs reworking|
-|Type information|Yes, but needs reworking|
+|Linking with external functions|Yes, with #load and @import but could be better|
+|Type information|Yes, but needs a refactor/redesign|
 |Compile time execution|Not started|
 |x64 backend|Yes|
-|Debug information|Only DWARF, some issues with visibilty of local variables|
+|Debug information|Only DWARF|
 |x64 inline assembly|Yes|
-
-|Minor features|Status|
-|-|-|
-|#include|No, incomplete|
 
 # How to get started
 **Option 1:** Download a release of `BTB Compiler` at https://github.com/Emarioo/BetterThanBatch/releases. Then unzip it in a folder of your choice and edit your environment variable `PATH` with the path to the compiler executable (for convenience). Then have a look at [A little guide](/docs/guide/00-Introduction.md).

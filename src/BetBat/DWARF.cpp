@@ -384,6 +384,9 @@ namespace dwarf {
                             auto& memImpl = typeInfo->structImpl->members[mi];
                             auto& memAst = typeInfo->astStruct->members[mi];
 
+                            // NOTE: If two members are named the same then the debugger won't
+                            //   show the members of the type.
+
                             WRITE_LEB(abbrev_struct_member)
                             stream->write(memAst.name.c_str(), memAst.name.length());
                             // stream->write(memAst.name.ptr, memAst.name.len);
@@ -613,23 +616,31 @@ namespace dwarf {
                     // bool skip = false;
                 };
                 DynamicArray<Scope> scopeStack{};
-                if(fun->funcAst)
+                if(fun->funcAst) {
                     scopeStack.add({fun->funcAst->scopeId});
-                else {
+                } else {
+                    auto imp = compiler->getImport(fun->import_id);
+                    scopeStack.add({imp->scopeId});
+
+                    // NOTE: I tried to be cheeky with the code below but
+                    //   that's not gonna work since variables may be in
+                    //   two local scopes. Assuming all variables come from
+                    //   that local scope is a terrible assumption. - Emarioo, 2024-05-19
+
                     // Previously we added ast->globalScopeId
                     // But with rewrite-0.2.1 we changed so that we have import
                     // scopes and only them can be in global scope
                     // Temporarily, we will find the highest used scope
                     // This only runs on the main function so it's not really
                     // going to slow things down.
-                    ScopeId highest = -1;
-                    for(int vi=0;vi<fun->localVariables.size();vi++) {
-                        auto& var = fun->localVariables[vi];
-                        if(highest == -1 || var.scopeId < highest) {
-                            highest = var.scopeId;
-                        }
-                    }
-                    scopeStack.add({highest});
+                    // ScopeId highest = -1;
+                    // for(int vi=0;vi<fun->localVariables.size();vi++) {
+                    //     auto& var = fun->localVariables[vi];
+                    //     if(highest == -1 || var.scopeId < highest) {
+                    //         highest = var.scopeId;
+                    //     }
+                    // }
+                    // scopeStack.add({highest});
                     // scopeStack.add(ast->globalScopeId);
                 }
                 int curLevel = 0;

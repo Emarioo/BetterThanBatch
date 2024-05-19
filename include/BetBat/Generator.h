@@ -6,7 +6,6 @@
 #include "BetBat/DebugInformation.h"
 #include "BetBat/Util/Profiler.h"
 
-#include "BetBat/Lang.h"
 struct CompilerImport;
 struct GenContext : public PhaseContext {
     TinyBytecode* tinycode = nullptr;

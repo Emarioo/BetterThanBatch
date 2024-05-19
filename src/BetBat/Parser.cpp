@@ -341,11 +341,15 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
    
     bool hideAnnotation = false;
 
+    bool no_padding = false;
+
     while (name_token->type == lexer::TOKEN_ANNOTATION){
         info.advance();
         // TODO: Parse annotation parentheses
         if(name_view == "hide"){
             hideAnnotation=true;
+        } else if(name_view == "no_padding"){
+            no_padding=true;
         } else {
             ERR_SECTION(
                 ERR_HEAD2(name_tok)
@@ -378,6 +382,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
     // astStruct->tokenRange.tokenStream = info.tokens;
     astStruct->name = name_view;
     astStruct->setHidden(hideAnnotation);
+    astStruct->no_padding = no_padding;
     StringView view{};
     auto token = info.getinfo(&view);
     if(token->type == '<'){
@@ -536,12 +541,12 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
             // )
         } else if(name_token->type == lexer::TOKEN_IDENTIFIER){
             for(auto& mem : astStruct->members) {
-                if(mem.name == view) {
+                if(mem.name == name_view) {
                     ERR_SECTION(
                         ERR_HEAD2(name_tok)
                         ERR_MSG("The name '"<<info.lexer->tostring(name_tok)<<"' is already used in another member of the struct. You cannot have two members with the same name.")
-                        ERR_LINE2(mem.location, "last")
-                        ERR_LINE2(name_tok, "now")
+                        ERR_LINE2(mem.location, "first")
+                        ERR_LINE2(name_tok, "last")
                     )
                     break;
                 }
