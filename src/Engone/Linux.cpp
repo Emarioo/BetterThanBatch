@@ -26,7 +26,7 @@
 
 
 #ifdef PL_PRINT_ERRORS
-#define PL_PRINTF(...) printf("[UnixError %d] %s, ", errno, strerror(errno)); printf(__VA_ARGS__);
+#define PL_PRINTF(...) printf("[LinuxError %d] %s, ", errno, strerror(errno)); printf(__VA_ARGS__);
 #else
 #define PL_PRINTF(...)
 #endif
@@ -1108,7 +1108,7 @@ namespace engone {
         // FileExist does not work for programs in PATH
         // bool yes = FileExist(argv[0]);
         // if(!yes) {
-        //     printf("[UnixError] StartProgram, '%s' does not exist\n", argv[0]);
+        //     printf("[LinuxError] StartProgram, '%s' does not exist\n", argv[0]);
         // }
         
 		int pid = fork();
@@ -1118,32 +1118,26 @@ namespace engone {
 			return false;
 		}
 		if(pid == 0) {
-
-			// for(int i=0;i<argc+1;i++){
-			// 	printf("%d: %p\n",i, argv[i]);
-			// }
-
-			// char* a = nullptr;
-			// int ind = 0;
-			// while((a = argv[ind++])){
-			// 	printf("%d: %d, %s\n", ind-1,strlen(a), a);
-			// }
-			// printf("%s\n", commandLine);
-            
             auto old_in = engone::GetStandardIn();
             auto old_out = engone::GetStandardOut();
             auto old_err = engone::GetStandardErr();
 
 			bool any_error = false;
 			if(fStdin)
-				any_error |= engone::SetStandardIn(fStdin);
+				any_error |= !engone::SetStandardIn(fStdin);
 			if(fStdout)
-				any_error |= engone::SetStandardOut(fStdout);
+				any_error |= !engone::SetStandardOut(fStdout);
 			if(fStderr)
-				any_error |= engone::SetStandardErr(fStderr);
+				any_error |= !engone::SetStandardErr(fStderr);
 
-			
+			if(any_error) {
+				printf("[LinuxError] One ore more pipes to StartProgram were invalid.\n"); // TODO: Print the file descriptors.
+				return false;
+			}
+
 			int err = execvp(argv[0], argv);
+
+			// we only end up here if execvp failed
             
             if(old_in)
 				engone::SetStandardIn(old_in);
@@ -1151,30 +1145,37 @@ namespace engone {
 				engone::SetStandardOut(old_out);
 			if(old_err)
 				engone::SetStandardErr(old_err);
+			// printf("%d\n",err);
             
-            Assert(err == -1);
-			if(any_error || err < 0) {
-				printf("[UnixError] %s, execv(\"%s\")\n", strerror(errno), argv[0]);
+			if(err < 0) {
+				printf("[LinuxError] %s, execv(\"%s\")\n", strerror(errno), argv[0]);
+				FreeArguments(argc, argv);
+				exit(1); // error
 			}
             // PL_PRINTF("execv\n");
 			FreeArguments(argc, argv);
 			exit(0);
-			return false;
+			return false; // shouldn't happen
 		}
 		
+		bool failed = false;
 		if(flags&PROGRAM_WAIT){
 			int status = 0;
 			int err = waitpid(pid, &status, 0);
-			if(err == -1) {
+			if(err < 0) {
 				PL_PRINTF("waitpid\n");
+				failed = true;
 			} else {
 				if(WIFEXITED(status)) {
+					int new_status = WEXITSTATUS(status);
 					if(exitCode)
-						*exitCode = WEXITSTATUS(status);
+						*exitCode = new_status;
+					failed = new_status != 0;
 				}
 				if(WIFSIGNALED(status)) {
 					if(non_normal_exit) {
 						*non_normal_exit = true;
+						failed = true;
 						// *non_normal_exit = WTERMSIG(status);
 					}
 				}
@@ -1182,7 +1183,7 @@ namespace engone {
 			}
 		}
         FreeArguments(argc, argv);
-		return true;
+		return !failed;
 	}
 	void ConvertArguments(const char* args, int& argc, char**& argv) {
 		if (args == nullptr) {
@@ -1242,7 +1243,7 @@ namespace engone {
 		}
 	}
 	void FreeArguments(int argc, char** argv) {
-		int totalSize = (argc + 1) * sizeof(char*); // argc +1 because the array is terminated with a nullptr (Unix execv needs it)
+		int totalSize = (argc + 1) * sizeof(char*); // argc +1 because the array is terminated with a nullptr (Linux execv needs it)
 		int index = totalSize;
 		for (int i = 0; i < argc; i++) {
 			int length = strlen(argv[i]);

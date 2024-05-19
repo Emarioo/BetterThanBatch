@@ -1,0 +1,25 @@
+
+#import "Logger"
+
+fn main(argc: i32, argv: char**, envp: char**) {
+
+    // manually calculate offsets or let the compiler generate
+    // it for you (argv, envp)
+    _argv := &argc + 8
+    _envp := &argc + 8 + argc * 8 + 8 // argv is terminated by a nullptr, hence the additional +8
+    // envp is also terminated by nullptr
+
+    _test 1; argc
+    _test argv; _argv
+    _test envp; _envp
+
+    for 0..argc {
+        log(argv[nr])
+    }
+
+    envc := 0
+    while envp[envc] {
+        log(envp[envc])
+        envc++;
+    }
+}

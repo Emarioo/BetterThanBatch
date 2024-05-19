@@ -101,7 +101,7 @@ struct ParseInfo : public PhaseContext {
         #ifdef LEXER_DEBUG_DETAILS
         lexer::Chunk* chunk = lexer_chunks[fcindex];
         if(info->flags & lexer::TOKEN_FLAG_HAS_DATA)
-            info->s = (char*)chunk->aux_data + info->data_offset + 1;
+            info->s = chunk->get_data(info->data_offset);
         #endif
 
         return info;
@@ -122,7 +122,7 @@ struct ParseInfo : public PhaseContext {
             
         //     auto info = tokens_base + tindex;
         //     if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
-        //         *string = {(char*)last_chunk->aux_data + info->data_offset + 1, last_chunk->aux_data[info->data_offset]};
+        //         *string = last_chunk->get_string(info->data_offset);
         //     return info;
         // }
 
@@ -148,9 +148,8 @@ struct ParseInfo : public PhaseContext {
             return &eof;
         }
         if((info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
-            *string = {(char*)chunk->aux_data + info->data_offset + 1, 
-            chunk->aux_data[info->data_offset]};
-            info->s = (char*)chunk->aux_data + info->data_offset + 1;
+            *string = chunk->get_string(info->data_offset);
+            info->s = chunk->get_data(info->data_offset);
         }
 
         return info;
@@ -184,7 +183,7 @@ struct ParseInfo : public PhaseContext {
 
         #ifdef LEXER_DEBUG_DETAILS
         if(info->flags & lexer::TOKEN_FLAG_HAS_DATA)
-            out.s= (char*)chunk->aux_data + info->data_offset + 1;
+            out.s = chunk->get_data(info->data_offset);
         #endif
 
         out.flags = info->flags;
@@ -218,9 +217,9 @@ struct ParseInfo : public PhaseContext {
             // return out;
         }
         if((info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
-            *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+            *string = chunk->get_string(info->data_offset);
             #ifdef LEXER_DEBUG_DETAILS
-            out.s = (char*)chunk->aux_data + info->data_offset + 1;
+            out.s = chunk->get_data(info->data_offset);
             #endif
         }
 

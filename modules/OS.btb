@@ -32,11 +32,6 @@
 // #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 #macro Assert(expression) #endmacro
 
-// returns time stamp counter and IA32_TSC_AUX 
-fn @intrinsic rdtsc() -> u64;
-// fn @intrinsic rdtscp() -> u64, u32;
-
-
 // fn LINK_TYPE StartMeasure() -> u64;
 // fn LINK_TYPE StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 // fn LINK_TYPE DiffMeasure(endSubStart: u64) -> f32; // TODO: Use f64 (double) when implemented
@@ -46,6 +41,13 @@ fn @intrinsic rdtsc() -> u64;
 // fn LINK_TYPE GetClockSpeed() -> u64;
 
 // fn LINK_TYPE ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
+
+// Returns false if anything failed, NOT if the program you called
+// failed. Check 'exit_code' for that.
+// 'asynchronous' will run the command without waiting for status code
+fn ExecuteCommand(cmd: Slice<char>, exit_code: i32*, asynchronous: bool = false) -> bool {
+
+}
 
 
 fn set_cursor(x: u32, y: u32) {

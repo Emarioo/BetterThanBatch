@@ -377,13 +377,25 @@ void X64Builder::emit_modrm_slash(u8 mod, u8 reg, X64Register _rm){
     emit1((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
 }
 void X64Builder::emit_modrm(u8 mod, X64Register _reg, X64Register _rm){
+    u8 reg = _reg - 1;
+    u8 rm = _rm - 1;
     if(_rm == X64_REG_SP && mod != MODE_REG) {
         // SP register is not allowed with standard modrm byte, we must use a SIB
         emit_modrm_sib(mod, _reg, SIB_SCALE_1, SIB_INDEX_NONE, _rm);
         return;
     }
-    u8 reg = _reg - 1;
-    u8 rm = _rm - 1;
+    if(_rm == X64_REG_BP && mod == MODE_DEREF) {
+        // BP register is not allowed with without a displacement.
+        // But we can use a displacement of zero. HOWEVER!
+        // bp with zero displacement points to the previous frame's base pointer which we shouldn't overwrite so we SHOULD assert.
+        if(!disable_modrm_asserts) {
+            Assert(("mov reg, [bp] is a bug",false));
+        }
+        mod = MODE_DEREF_DISP8;
+        emit1((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
+        emit1((u8)0);
+        return;
+    }
     Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);
     // You probably made a mistake and used REG_BP thinking it works with just ModRM byte.
     Assert(("Use addModRM_SIB instead",!(mod!=0b11 && rm==0b100)));

@@ -572,6 +572,7 @@ namespace dwarf {
                 stream->write_late((void**)&sibling_ref4, sizeof(u32));
                 if(fun->funcImpl) {
                     Assert(fun->funcImpl->argumentTypes.size() == fun->funcAst->arguments.size());
+                    // log::out << "func " << fun->name<<"\n";
                     for(int pi=0;pi<fun->funcImpl->argumentTypes.size();pi++){
                         auto& arg_ast = fun->funcAst->arguments[pi];
                         auto& arg_impl = fun->funcImpl->argumentTypes[pi];
@@ -599,7 +600,26 @@ namespace dwarf {
                         stream->write_late((void**)&block_length, 1); // DW_AT_location, begins with block length
                         int off_start = stream->getWriteHead();
                         stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
-                        WRITE_SLEB(arg_impl.offset)
+
+                        int arg_off = arg_impl.offset;
+                        // log::out << "  arg " << arg_off<<"\n";
+                        if(fun->funcAst->callConvention == UNIXCALL) {
+                            // nocheckin TODO: Don't hardcode this. What about non-volatile registers, what if x64_gen changes and puts more stuff on stack?
+                            if(fun->name == "main") {
+                                if(pi == 0) {
+                                    // I came up with the offsets by trial and error
+                                    arg_off = RBP_CONSTANT_OFFSET;
+                                } else {
+                                    // I came up with the offsets by trial and error
+                                    arg_off = arg_impl.offset - RBP_CONSTANT_OFFSET;
+                                }
+                            } else {
+                                // this offset was calculated without trial and error
+                                // -16 for non-volatile registers: rbx, r12
+                                arg_off = -16-8-arg_impl.offset - RBP_CONSTANT_OFFSET;
+                            }
+                        }
+                        WRITE_SLEB(arg_off)
                         *block_length = stream->getWriteHead() - off_start; // we write block length later since we don't know the size of the LEB128 integer
                     }
                 }

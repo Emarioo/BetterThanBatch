@@ -102,6 +102,9 @@
 #macro SYS_mprotect 10
 #macro SYS_munmap   11
 
+#macro SYS_fork     57
+#macro SYS_vfork    58
+#macro SYS_execve   59
 #macro SYS_exit     60
 
 // #macro SYS_getdents 78
@@ -165,6 +168,10 @@ SYSCALL(mmap,  void*, addr: void*, length: i32, prot: i32, flags: i32, fd: i32, 
 SYSCALL(mprotect,  i32, addr: void*, len: i32, prot: i32);
 SYSCALL(munmap,    i32, addr: void*, length: i32)
 
+SYSCALL(fork,   i32)
+SYSCALL(vfork,  i32)
+// environment variables can be be acquired from the envp argument in main(argc: i32, argv: char**, envp: char**)
+SYSCALL(execve, i32, pathname: char*, argv: char**, envp: char**)
 SYSCALL_VOID(exit,   status: i32)
 
 SYSCALL(getrandom, i32, buf: void*, buflen: u32, flags: u32);

@@ -35,6 +35,8 @@ loop_end:
 }
 
 @TEST_CASE(inline_assembly_stack)
+// NOTE: There seems to be an infinite loop here if stack isn't aligned.
+//   Bug perhaps? _test might assume 16-byte alignment (it calls write syscall on Linux which may cause the loop?)
 
 // make sure the generator tracks push and pop from inline assembly
 we_good(asm<i32>{push 1})

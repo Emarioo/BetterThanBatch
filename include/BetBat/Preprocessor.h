@@ -134,7 +134,7 @@ struct PreprocContext : PhaseContext {
 
             #ifdef LEXER_DEBUG_DETAILS
             if(info->flags & lexer::TOKEN_FLAG_HAS_DATA) {
-                out.s = (char*)chunk->aux_data + info->data_offset + 1;
+                out.s = chunk->get_data(info->data_offset);
             }
             #endif
     
@@ -189,9 +189,9 @@ struct PreprocContext : PhaseContext {
             }
 
             if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
-                *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+                *string = chunk->get_string(info->data_offset);
                 #ifdef LEXER_DEBUG_DETAILS
-                out.s = (char*)chunk->aux_data + info->data_offset + 1;
+                out.s = chunk->get_data(info->data_offset);
                 #endif
             }
     
@@ -226,9 +226,9 @@ struct PreprocContext : PhaseContext {
                 return &eof;
             }
             if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
-                *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+                *string = chunk->get_string(info->data_offset);
                 #ifdef LEXER_DEBUG_DETAILS
-                info->s = (char*)chunk->aux_data + info->data_offset + 1;
+                info->s = chunk->get_data(info->data_offset);
                 #endif
             }
             return info;

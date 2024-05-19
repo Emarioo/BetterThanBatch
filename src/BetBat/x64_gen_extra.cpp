@@ -653,15 +653,17 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     if(tinycode->call_convention == STDCALL) {
         // Assert(false);
         for(int i=0;i<accessed_params.size() && i < 4; i++) {
-            auto control = accessed_params[i].control;
+            auto& param = accessed_params[i];
 
             int off = i * 8 + FRAME_SIZE;
+            param.offset_from_rbp = off;
+
             X64Register reg_args = X64_REG_BP;
             X64Register reg = stdcall_normal_regs[i];
-            if(IS_CONTROL_FLOAT(control))
+            if(IS_CONTROL_FLOAT(param.control))
                 reg = stdcall_float_regs[i];
 
-            emit_mov_mem_reg(reg_args,reg,control,off);
+            emit_mov_mem_reg(reg_args,reg,param.control,param.offset_from_rbp);
         }
     } else if(tinycode->call_convention == UNIXCALL) {
         unixcall_args_offset = callee_saved_space;
@@ -670,24 +672,77 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         if(is_blank && accessed_params.size()) {
             log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
             log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
+            compiler->options->compileStats.errors++; // nochecking, TODO: call some function instead
         }
-        for(int i=0;i<accessed_params.size() && i < 6; i++) {
-            auto control = accessed_params[i].control;
-
-            int off = unixcall_args_offset - i * 8;
-            X64Register reg_args = X64_REG_BP;
-            X64Register reg = unixcall_normal_regs[i];
-            if(IS_CONTROL_FLOAT(control)) {
-                Assert(false); // double check how floats are passed
-                reg = unixcall_normal_regs[i];
+        if (is_entry_point) {
+            // entry point has it's arguments put on the stack, not in rdi, rsi...
+            int count = accessed_params.size();
+            if(count != 0) {
+                // TODO: Proper error
+                Assert(("entry point can't have more than 3 args",count <= 3));
+                int num = count-1;
+                emit_sub_imm32(X64_REG_SP, (i32)(num*8));
+                callee_saved_space += 8 * num;
+                virtual_stack_pointer -= 8 * num;
             }
+            X64Register tmp_reg = X64_REG_A;
+            if(accessed_params.size() > 0) {
+                auto& param = accessed_params[0];
+                param.offset_from_rbp = 0;
+            }
+            if(accessed_params.size() > 1) {
+                auto& param = accessed_params[1];
+                param.offset_from_rbp = -8;
+                emit_mov_reg_reg(tmp_reg, X64_REG_BP);
+                emit_add_imm32(tmp_reg, 8);
+                emit_mov_mem_reg(X64_REG_BP,tmp_reg,param.control,param.offset_from_rbp);
+            }
+            if(accessed_params.size() > 2) {
+                auto& param = accessed_params[2];
+                param.offset_from_rbp = -16;
+                // emit_mov_reg_reg(tmp_reg, X64_REG_BP); reuse rax from second param
+                emit_add_imm32(tmp_reg, 8); // +8 (null of argv)
 
-            emit_mov_mem_reg(reg_args,reg,control,off);
+                X64Register extra_reg = X64_REG_D;
+                disable_modrm_asserts = true;
+                emit_mov_reg_mem(extra_reg,X64_REG_BP,CONTROL_32B,0); // argc
+                disable_modrm_asserts = false;
 
-            callee_saved_space += 8;
+                emit1(PREFIX_REXW);
+                emit1(OPCODE_SHL_RM_IMM8_SLASH_4);
+                emit_modrm_slash(MODE_REG, 4, extra_reg);
+                emit1((u8)3);
+
+                emit1(PREFIX_REXW);
+                emit1(OPCODE_ADD_REG_RM);
+                emit_modrm(MODE_REG, tmp_reg, extra_reg);
+
+                emit_mov_mem_reg(X64_REG_BP,tmp_reg,param.control,param.offset_from_rbp);
+            }
+        } else {
+            int count = accessed_params.size();
+            if(count != 0) {
+                emit_sub_imm32(X64_REG_SP, (i32)(count * 8));
+                callee_saved_space += count * 8;
+                virtual_stack_pointer -= 8 * count;
+            }
+            for(int i=0;i<accessed_params.size() && i < 6; i++) {
+                auto& param = accessed_params[i];
+                auto control = param.control;
+
+                int off = unixcall_args_offset - (1+i) * 8;
+                param.offset_from_rbp = off;
+
+                X64Register reg_args = X64_REG_BP;
+                X64Register reg = unixcall_normal_regs[i];
+                if(IS_CONTROL_FLOAT(control)) {
+                    Assert(false); // double check how floats are passed
+                    reg = unixcall_normal_regs[i];
+                }
+
+                emit_mov_mem_reg(reg_args,reg,param.control,param.offset_from_rbp);
+            }
         }
-        if(callee_saved_space - unixcall_args_offset != 0)
-            emit_sub_imm32(X64_REG_SP, (i32)(callee_saved_space - unixcall_args_offset));
     }
     
     struct SPMoment {
@@ -983,11 +1038,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 X64Register reg_params = X64_REG_BP;
                 int off = base->imm16 + FRAME_SIZE;
                 if(tinycode->call_convention == UNIXCALL) {
-                    if(base->imm16 < 6 * 8) {
-                        off = -unixcall_args_offset - base->imm16;
-                    }
+                    int param_index = base->imm16 / 8;
+                    Assert(param_index < accessed_params.size());
+                    off = accessed_params[param_index].offset_from_rbp;
                 }
+                disable_modrm_asserts = true;
                 emit_mov_reg_mem(reg0->reg, reg_params, base->control, off);
+                disable_modrm_asserts = false;
                 
                 if(IS_CONTROL_SIGNED(base->control)) {
                     emit_movsx(reg0->reg, reg0->reg, base->control);
@@ -1097,8 +1154,12 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 int off = base->imm16 + FRAME_SIZE;
                 if(tinycode->call_convention == UNIXCALL) {
-                    if(base->imm16 < 6 * 8) {
-                        off = -unixcall_args_offset - base->imm16;
+                    if(is_entry_point) {
+                        off -= 16; // args on stack, no return address or previous rbp
+                    } else {
+                        if(base->imm16 < 6 * 8) {
+                            off = -unixcall_args_offset - base->imm16;
+                        }
                     }
                 }
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
@@ -1399,6 +1460,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 break;
             } break;
             case BC_RET: {
+                // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
+                
                 if(callee_saved_space - unixcall_args_offset != 0) {
                     emit_add_imm32(X64_REG_SP, (i32)(callee_saved_space - unixcall_args_offset));
                 }
@@ -3046,11 +3109,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 if(reg0->reg == X64_REG_D) {
                     emit1(PREFIX_REXW);
                     emit1(OPCODE_OR_REG_RM);
-                    emit_modrm(MODE_REG, X64_REG_A, X64_REG_D);
+                    emit_modrm(MODE_REG, X64_REG_D, X64_REG_A);
                 } else {
                     emit1(PREFIX_REXW);
                     emit1(OPCODE_OR_REG_RM);
-                    emit_modrm(MODE_REG, X64_REG_D, X64_REG_A);
+                    emit_modrm(MODE_REG, X64_REG_A,X64_REG_D);
                     emit_pop(X64_REG_D);
                     
                     emit_mov_reg_reg(reg0->reg, X64_REG_A);
@@ -3465,7 +3528,7 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
     } else {
         pretext = ".intel_syntax noprefix\n.text\n";
         posttext = "\n"; // assembler complains about not having a newline so we add one here
-        asm_line_offset = 2;
+        asm_line_offset = 3;
         cmd = "as -o " + obj_file + " ";
     }
     cmd += asm_file;
@@ -3494,8 +3557,7 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
     
     int exitCode = 0;
     yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, nullptr, {}, asmLog, asmLog);
-    Assert(yes);
-    if(exitCode != 0) {
+    if(exitCode != 0 || !yes) {
         u64 fileSize = engone::FileGetSize(asmLog);
         if(fileSize != 0) {
             engone::FileSetHead(asmLog, 0);

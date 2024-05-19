@@ -1,20 +1,53 @@
 
+// #import "Logger"
+// #import "String"
+// #import "Linux"
 
-#import "examples/linux/dir_iter.btb"
 
+#import "Logger"
+#import "Lang"
 
+struct Soul {
+    ko: i32;
+    numsi: f32;
+}
+struct App {
+    a: i32;
+    soul: Soul;
+    tr: bool;
+}
+app: App;
+app.a = 932
+app.tr = true
+app.soul.numsi = 232.232
+app.soul.ko = 2
+std_print_any(&app, true);
 
-// struct Box {
-//     items: i32[20]
+// fn main(argc: i32, argv: char**, envp: char**) {
+
+//     // for 0..argc {
+//     //     log(argv[nr])
+//     // }
+
+//     args: char*[] {
+//         "hello".ptr,
+//         null
+//     }
+
+//     envc := 0
+//     while envp[envc] {
+//         env := envp[envc]
+//         envc++;
+
+//         if equal_start("PATH=",env) {
+//             // log(env)
+//             arr := split(":",substring(env,5))
+//             for arr.sliced_unsafe() {
+//                 log(it)
+//             }
+//         }
+//     }
+
+//     err := execve("bin/btb".ptr,args.ptr,null)
+//     log(name_of_error(err))
 // }
-// box: Box
-
-// // should cause error, box.items evaluates to a slice
-// // *(box.items + 9 * sizeof i32)
-
-// box.items[9] = 3
-// _test 3; box.items[9]
-// _test 3; *(box.items.ptr + 9 * sizeof i32)
-
-// _test 16; sizeof box.items
-// _test 80; sizeof box

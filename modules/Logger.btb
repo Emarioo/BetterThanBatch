@@ -4,7 +4,6 @@
 // fn @native prints(str: char[]);
 // fn @native printc(str: char);
 
-fn @intrinsic strlen(str: char*) -> i32;
 
 /*
     The reason functions are named "print" and not "log"

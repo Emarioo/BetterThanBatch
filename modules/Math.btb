@@ -16,6 +16,7 @@
 fn @intrinsic sqrt(v: f32) -> f32;
 fn @intrinsic round(v: f32) -> f32;
 // TODO: Intrinsics for pow, min, and max
+//   There is pow in inline assembly but is the implementation good?
 
 
 fn random64() -> u64 {
@@ -417,4 +418,63 @@ fn std_print(f: f16) {
         decimals.len = lastZero;
         std_print(decimals)
     }
+}
+
+// better than O(n) for larger n (y) at least
+fn pow(x: i64, y: i64) -> i64 {
+    if y < 0
+        return 0
+    if y == 1
+        return x
+
+    // keep the code version in case inline assembly breaks
+    // res: i64 = x
+    // y--
+    // n := 0
+    // while y {
+    //     // log("res ",res,", n ",n,", y ",y)
+    //     if y >= n * 2 && y & cast<i64>1 == 0 {
+    //         res *= res
+    //         y /= 2
+    //         n *= 2
+    //     } else {
+    //         res *= x
+    //         y--
+    //         n++
+    //     }
+    // }
+    // assembly version
+    res := asm<i64>(x,y-1) {
+        mov rdi, 0   // n
+        pop rsi      // y
+        pop rdx      // x
+        mov rax, rdx // accumulator
+
+    while_loop:
+        mov rcx, rdi
+        shl rcx, 1
+        cmp rsi, rcx
+        jl else
+        test rsi, 1
+        jnz else
+    // if:
+        imul rax, rax
+
+        shr rsi, 1
+        shl rdi, 1
+        jmp end
+    else:
+        imul rax, rdx
+
+        dec rsi
+        inc rdi
+    end:
+
+        cmp rsi, 0
+        jnz while_loop
+
+        push rax
+    }
+
+    return res
 }

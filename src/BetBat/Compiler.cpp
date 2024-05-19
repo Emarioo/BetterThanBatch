@@ -1103,7 +1103,7 @@ void Compiler::run(CompileOptions* options) {
         "struct Slice<T> {"
         // "struct @hide Slice<T> {"
             "ptr: T*;"
-            "len: u64;"
+            "len: i64;"
         "}\n"
         // "operator [](slice: Slice<char>, index: u32) -> char {"
         //     "return slice.ptr[index];"
@@ -1116,6 +1116,9 @@ void Compiler::run(CompileOptions* options) {
         "fn @native prints(str: char[]);\n"
         "fn @native printc(str: char);\n"
         "fn @native printi(n: i32);\n"
+        "fn @intrinsic rdtsc() -> i64;\n"
+        "fn @intrinsic strlen(str: char*) -> i32;\n"
+
         // "#macro Assert(X) { prints(#quoted X); }"
         // "#macro Assert(X) { prints(#quoted X); *cast<char>null; }"
         ;
@@ -1368,6 +1371,7 @@ void Compiler::run(CompileOptions* options) {
         }
 
         int exitCode = 0;
+        bool failed = false;
         {
             ZoneNamedNC(zone0,"Linker",tracy::Color::Blue2, true);
             
@@ -1376,14 +1380,16 @@ void Compiler::run(CompileOptions* options) {
             // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
             
             options->compileStats.start_linker = engone::StartMeasure();
-            engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+            bool yes = engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+            failed = !yes;
             options->compileStats.end_linker = engone::StartMeasure();
             options->compileStats.generatedFiles.add(exe_file);
         }
         options->compileStats.end_linker = StartMeasure();
-        if(exitCode != 0) {
-            log::out << log::RED << "linker failed\n";
+        if(exitCode != 0 || failed) {
+            log::out << log::RED << "Linker failed: '"<<cmd<<"'\n";
             options->compileStats.errors++;
+            return;
         }    
     } else {
         // TODO: If bytecode is the target and the user specified

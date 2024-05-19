@@ -234,7 +234,7 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
         print_version();
         log::out << log::GOLD << "The compiler suggests 'btb.exe -help'.\n";
         // print_help();
-        options->quit = false;
+        options->quit = true;
         return true;
     }
 

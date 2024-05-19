@@ -172,7 +172,7 @@ fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32
     std_print("{")
     if pretty  std_print('\n')
     members := lang_typemembers(type);
-    if members.len > 0u {
+    if members.len > 0 {
         for @ptr members {
             if nr != 0 {
                 std_print(", ");

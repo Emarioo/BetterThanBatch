@@ -8,6 +8,9 @@
 // TODO: import the right OS bindings
 #import "Win32"
 
+// temporary
+#import "Logger"
+
 fn @intrinsic memcpy(dst: void*, src: void*, len: i64);
 fn @intrinsic memzero(dst: void*, len: i64);
 
@@ -55,6 +58,7 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
     }
     new_ptr: void*
     if !ptr {
+        // malloc may crash if sp isn't aligned, bug in x64_gen if so
         new_ptr = malloc(size)
     } else {
         new_ptr = realloc(ptr, size)

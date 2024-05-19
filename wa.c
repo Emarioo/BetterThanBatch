@@ -1,29 +1,9 @@
 
-struct State {
-    int a;
-    int b;
-    int c;
-    int d;
-    int e;
-    int f;
-    int g;
-    int h;
-    int i;
-    int j;
-    int k;
-    int l;
-    int m;
-    int n;
-    int o;
-    int p;
-    int q;
-    int r;
-    int s;
-    int km;
-};
+extern void exit(int status);
 
 int main() {
-    struct State st;
+    int a = 0;
 
-    st.a = 0;
+    exit(a % 16);
+    // return argc;
 }

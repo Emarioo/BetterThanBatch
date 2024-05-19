@@ -2396,7 +2396,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 }
                 auto& mem = typeInfo->astStruct->members[memberData.index];
                 if(mem.array_length > 0) {
-                    Assert(nonReference); // i threw this here, is that okay?
+                    // Assert(nonReference); // i threw this here, is that okay?
                     std::string slice_name = "Slice<" + ast->typeToString(memberData.typeId) + ">";
                     auto slice_info = info.ast->convertToTypeInfo(slice_name, info.ast->globalScopeId, true);
                     if(!slice_info) {
@@ -3998,19 +3998,20 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // builder.emit_mov_rr(BC_REG_D, BC_REG_ARGS);
                     genMemzero(reg_data, BC_REG_B, arraySize);
                     #endif
-                    TypeInfo* elementInfo = info.ast->getTypeInfo(elementType);
-                    if(elementInfo->astStruct) {
-                        // TODO: Annotation to disable this
-                        // TODO: Create a loop with cmp, je, jmp instructions instead of
-                        //  "unrolling" the loop like this. We generate a lot of instructions from this.
-                        for(int j = 0;j<varname.arrayLength;j++) {
-                            SignalIO result = generateDefaultValue(reg_data, elementSize * j, elementType);
-                            // SignalIO result = generateDefaultValue(BC_REG_BP, arrayFrameOffset + elementSize * j, elementType);
-                            if(result!=SIGNAL_SUCCESS)
-                                return SIGNAL_FAILURE;
+
+                    if(elementType.isNormalType()) {
+                        TypeInfo* elementInfo = info.ast->getTypeInfo(elementType);
+                        if(elementInfo->astStruct) {
+                            // TODO: Annotation to disable this
+                            // TODO: Create a loop with cmp, je, jmp instructions instead of
+                            //  "unrolling" the loop like this. We generate a lot of instructions from this.
+                            for(int j = 0;j<varname.arrayLength;j++) {
+                                SignalIO result = generateDefaultValue(reg_data, elementSize * j, elementType);
+                                // SignalIO result = generateDefaultValue(BC_REG_BP, arrayFrameOffset + elementSize * j, elementType);
+                                if(result!=SIGNAL_SUCCESS)
+                                    return SIGNAL_FAILURE;
+                            }
                         }
-                    } else {
-                        
                     }
                     // data type may be zero if it wasn't specified during initial assignment
                     // a = 9  <-  implicit / explicit  ->  a : i32 = 9
@@ -4244,22 +4245,12 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // generate body anyway or not?
                 continue;
             }
-            // if(dtype!=AST_BOOL8){
-            //     ERR_HEAD2(statement->expression->token) << "Expected a boolean, not '"<<TypeIdToStr(dtype)<<"'\n";
-            //     continue;
-            // }
-            Assert(dtype.isValid()); // We expect a good type, otherwise result should have been a failure
-            u32 size = info.ast->getTypeSize(dtype);
-            // Assert(size != 0);
-            if(size==0) {
-                Assert(info.hasForeignErrors());
-            }
 
-            if(size > 8) {
+            if(!performSafeCast(dtype, AST_BOOL)) {
                 ERR_SECTION(
                     ERR_HEAD2(statement->firstExpression->location)
-                    ERR_MSG("The type '"<<info.ast->typeToString(dtype)<<"' in this expression was bigger than 8 bytes and can't be used in an if statement.")
-                    ERR_LINE2(statement->firstExpression->location, size << " bytes is to much")
+                    ERR_MSG("The type '"<<log::GREEN<<info.ast->typeToString(dtype)<<log::NO_COLOR<<"' cannot be converted to a boolean which if-statements require.")
+                    ERR_LINE2(statement->firstExpression->location, "not a bool type")
                 )
                 generatePop(BC_REG_INVALID, 0, dtype);
                 continue;
@@ -4489,10 +4480,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // generate body anyway or not?
                     continue;
                 }
-                if(!(AST::IsInteger(dtype) || dtype == AST_CHAR || dtype == AST_BOOL)) {
+                if(!performSafeCast(dtype, AST_BOOL)) {
                     ERR_SECTION(
                         ERR_HEAD2(statement->firstExpression->location)
-                        ERR_MSG_COLORED("The condition of while loops is limited to char, integer, and bool. '"<<log::GREEN<<ast->typeToString(dtype)<<log::NO_COLOR<<"' is not one of them.")
+                        ERR_MSG_COLORED("The type '"<<log::GREEN<<ast->typeToString(dtype)<<log::NO_COLOR<<"' cannot be converted to a boolean which is the accepted type for conditions.")
                         ERR_LINE2(statement->firstExpression->location,"here")
                     )
                     continue;

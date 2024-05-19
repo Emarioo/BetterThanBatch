@@ -47,12 +47,12 @@ plate := asm<Plate> {
 log("cake.name: ",plate.cake.name," cake.size: ", plate.cake.size, " color: ", plate.color)
 ```
 
-If you want to "give" the assembly values then you can use this syntax: `asm<type>(expressions) {...}`. The expressions within the parenethesis can be seen as arguments pushed to stack which the assembly can then pop. Note once again that assembly is typeless and that any amount of expressions with any type is allowed. Pushing large structs is certainly not recommended.
+If you want to "give" the assembly values then you can use this syntax: `asm<type>(expressions) {...}`. The expressions within the parenethesis can be seen as arguments pushed to stack which the assembly can then pop. Note once again that assembly is typeless and that any amount of expressions with any type is allowed. Pushing large structs is certainly not recommended. Also note that exppressions are pushed from left to right and you must therefore pop in reverse.
 ```c++
 
 n := asm<i32>(6, 9) {
-    pop rax
-    pop rdx
+    pop rax // 9
+    pop rdx // 6
     add rax, rdx
     push rax
 }

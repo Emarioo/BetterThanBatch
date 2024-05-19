@@ -352,6 +352,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     struct TestResult {
         int totalTests;
         int failedTests;
+        DynamicArray<TestCase::Error> missing_errors; // missing but expected errors
         DynamicArray<u16> failedLocations;
         DynamicArray<CompileOptions::TestLocation> testLocations;
     };
@@ -428,8 +429,10 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                     break;
                 }
             }
-            if(!found)
+            if(!found) {
                 failedTests++;
+                result.missing_errors.add(expectedError);
+            }
         }
         for(int j=0;j<compiler.errorTypes.size();j++){
             auto& actualError = compiler.errorTypes[j];
@@ -592,6 +595,9 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                 break;
             }
             log::out <<log::RED<< "   "<<loc->file<<":"<<loc->line<<":"<<loc->column<<"\n";
+        }
+        for(auto& err : result.missing_errors){
+            log::out <<log::RED<< "   "<<"LN "<<err.line << ": "<<ToCompileErrorString({false, err.errorType})<<"\n";
         }
     }
     

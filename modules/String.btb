@@ -1,10 +1,9 @@
 #import "Memory"
 #import "Logger"
+#import "Array"
 
 #macro LN printc('L'); printc('N'); std_print(cast<i64>#line); std_print('\n')
 
-
-fn @intrinsic strlen(ptr: char*) -> i32;
 
 // heap allocated for now
 // null terminated
@@ -168,17 +167,6 @@ struct StringBuilder {
 // log(str.sliced())
 
 // #import "OS"
-
-fn equal(a: char*, b: char[]) -> bool {
-    a_len := strlen(a)
-    if a_len != b.len
-        return false
-    for 0..a_len {
-        if a[nr] != b[nr]
-            return false
-    }
-    return true
-}
 
 fn @hide std_print(t: StringBuilder){
     std_print(t.sliced())
@@ -503,5 +491,124 @@ fn parse_hex(text: Slice<char>, data: Slice<u8>*) {
             tmp |= hex1 - 'A' + 10
         }
         data.ptr[nr] = tmp
+    }
+}
+
+#import "Logger"
+
+// TODO:: The debugger can't handle macros.
+//   Add it to DWARF or use fewer macros.
+#macro SLICE_OVERLOADS(FUNC, A0, A1, RET)
+fn FUNC(A0: char*, A1: char*) -> RET {
+    return FUNC(Slice<char>{A0,strlen(A0)}, Slice<char>{A1,strlen(A1)})
+}
+fn FUNC(A0: char[], A1: char*) -> bool {
+    return FUNC(A0, Slice<char>{A1,strlen(A1)})
+}
+fn FUNC(A0: char*, A1: char[]) -> bool {
+    return FUNC(Slice<char>{A0,strlen(A0)}, A1)
+}
+#endmacro
+SLICE_OVERLOADS(equal, a, b, bool)
+fn equal(a: char[], b: char[]) -> bool {
+    if a.len != b.len
+        return false
+    for a {
+        if it != b.ptr[nr]
+            return false
+    }
+    return true
+}
+SLICE_OVERLOADS(equal_start, pattern, text, bool)
+fn equal_start(pattern: char[], text: char[]) -> bool {
+    if text.len < pattern.len || pattern.len == 0
+        return false
+    for pattern {
+        if it != text.ptr[nr]
+            return false
+    }
+    return true
+}
+SLICE_OVERLOADS(equal_end, pattern, text, bool)
+fn equal_end(pattern: char[], text: char[]) -> bool {
+    if text.len < pattern.len || pattern.len == 0
+        return false
+    for @rev pattern {
+        if it != text.ptr[nr]
+            return false
+    }
+    return true
+}
+// returns -1 if not found
+// returns index of the first character of the first found matched string
+SLICE_OVERLOADS(find, pattern, text, i32)
+fn find(pattern: char[], text: char[]) -> i32 {
+    if text.len < pattern.len || pattern.len == 0
+        return -1;
+    correct := 0;
+    for text {
+        if it == pattern.ptr[correct] {
+            correct++;
+            if correct == pattern.len
+                return nr - pattern.len + 1
+        } else {
+            correct = 0;
+        }
+    }
+    return -1;
+}
+// the returned array contains substrings referencing memory in 'text'
+// if 'text' is freed than the array will point to invalid memory
+fn split(pattern: char[], text: char[]) -> DynamicArray<char[]> {
+    arr: DynamicArray<char[]>;
+    if pattern.len == 0
+        return arr
+
+    correct := 0
+    split_start := 0
+    for text {
+        if it == pattern[correct] {
+            correct++
+            if correct == pattern.len {
+                arr.add(Slice<char>{text.ptr + split_start, nr + 1 - pattern.len  - split_start})
+                correct = 0;
+                split_start = nr + 1
+            }
+        } else {
+            correct = 0
+            if nr == text.len - 1 {
+                arr.add(Slice<char>{text.ptr + split_start, 1 + nr - split_start})
+                break
+            }
+        }
+    }
+
+    return arr
+}
+fn substring(text: char*, start: i32, end: i32 = -1) -> char[] {
+    return substring(Slice<char>{text,strlen(text)}, start, end)
+}
+fn substring(text: char[], start: i32, end: i32 = -1) -> char[] {
+    if start >= text.len || end >= text.len || start < 0
+        return Slice<char>{}
+    if end < 0
+        return Slice<char>{text.ptr + start, text.len - start}
+    return Slice<char>{text.ptr + start, start - end}
+}
+
+// Look at Utility.cpp
+// fn FormatTime() {
+    
+// }
+
+fn printData<T>(t: T*) {
+    at := 0;
+    while at < sizeof T {
+        byte: u8 = *(cast<u8*>cast<void*>t + at);
+        if at % 8 == 0 {
+            std_print('\n',at,": ");
+        }
+        std_print(byte, ' ')
+        at++
     }
 }

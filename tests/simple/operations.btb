@@ -101,7 +101,8 @@ _test cast<u64>1; ptr;
 cast<u64>cast<char*>null
 cast<u64>cast<void*>null
 cast<u64*>cast<void*>null
-@TEST_ERROR(ERROR_CASTING_TYPES) cast<u64*>cast<char*>null
+// @TEST_ERROR(ERROR_CASTING_TYPES) 
+cast<u64*>cast<char*>null // acutally allowed
 
 // On error, program and tests won't execute
 // but we want to test errors without having a seperate

@@ -167,18 +167,18 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         // if(info->type & (TOKEN_LITERAL_STRING|TOKEN_ANNOTATION|TOKEN_IDENTIFIER))
             info->flags |= TOKEN_FLAG_NULL_TERMINATED; // always null terminate, we atoi to convert literal integers to numbers and it needs null termination
         if(info->flags & TOKEN_FLAG_HAS_DATA) {
-            u8 len = last_chunk->aux_data[info->data_offset];
+            int len = last_chunk->get_len(info->data_offset);
             // If we had null termination first time we added data then we should have specified it now to.
             // probably bug otherwise.
-            if(last_chunk->aux_used == info->data_offset + 1 + len + (info->flags&TOKEN_FLAG_NULL_TERMINATED?1:0)) {
-                Assert(len+size < 0x100); // check integer overflow
+            if(last_chunk->aux_used == info->data_offset + AUX_SIZE_OF_LEN_PREFIX + len + (info->flags&TOKEN_FLAG_NULL_TERMINATED?1:0)) {
+                Assert(len+size <= AUX_LEN_MAX); // check integer overflow
                 // Previous data exists at the end so we can just append the new data.
                 last_chunk->alloc_aux_space(size);
                 // chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size);
-                last_chunk->aux_data[info->data_offset] = len + size;
-                memcpy(last_chunk->aux_data + info->data_offset + 1 + len, ptr, size);
+                last_chunk->set_len(info->data_offset, len + size);
+                memcpy(last_chunk->aux_data + info->data_offset + AUX_SIZE_OF_LEN_PREFIX + len, ptr, size);
                 if(info->flags&TOKEN_FLAG_NULL_TERMINATED) {
-                    last_chunk->aux_data[info->data_offset + 1 + len + size] = '\0';
+                    last_chunk->aux_data[info->data_offset + AUX_SIZE_OF_LEN_PREFIX + len + size] = '\0';
                 }
             } else {
                 // We have move memory because previous data wasn't at the end and there is probably not any space.
@@ -187,19 +187,19 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 Assert(false);
             }
         } else {
-            Assert(size <= 0x100);
+            Assert(size <= AUX_LEN_MAX);
             info->flags |= TOKEN_FLAG_HAS_DATA;
             info->data_offset = last_chunk->aux_used;
             if(info->flags&TOKEN_FLAG_NULL_TERMINATED) {
                 info->flags |= TOKEN_FLAG_NULL_TERMINATED;
-                last_chunk->alloc_aux_space(size + 2);
-                last_chunk->aux_data[info->data_offset] = size;
-                memcpy(last_chunk->aux_data + info->data_offset+1, ptr, size);
-                last_chunk->aux_data[info->data_offset + 1 + size] = '\0';
+                last_chunk->alloc_aux_space(size + 1 + AUX_SIZE_OF_LEN_PREFIX);
+                last_chunk->set_len(info->data_offset, size);
+                memcpy(last_chunk->aux_data + info->data_offset + AUX_SIZE_OF_LEN_PREFIX, ptr, size);
+                last_chunk->aux_data[info->data_offset + AUX_SIZE_OF_LEN_PREFIX + size] = '\0';
             } else {
-                last_chunk->alloc_aux_space(size + 1);
-                last_chunk->aux_data[info->data_offset] = size;
-                memcpy(last_chunk->aux_data + info->data_offset+1, ptr, size);
+                last_chunk->alloc_aux_space(size + AUX_SIZE_OF_LEN_PREFIX);
+                last_chunk->set_len(info->data_offset, size);
+                memcpy(last_chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
             }
         }
     };
@@ -892,14 +892,14 @@ void Lexer::appendToken(Import* imp, Token tok, StringView* string) {
         
         info->data_offset = chunk->aux_used;
         if(tok.flags & TOKEN_FLAG_NULL_TERMINATED) {
-            chunk->alloc_aux_space(size + 2);
-            chunk->aux_data[info->data_offset] = size;
-            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
-            chunk->aux_data[info->data_offset + 1 + size] = '\0';
+            chunk->alloc_aux_space(size + AUX_SIZE_OF_LEN_PREFIX + 1);
+            chunk->set_len(info->data_offset, size);
+            memcpy(chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
+            chunk->aux_data[info->data_offset + AUX_SIZE_OF_LEN_PREFIX + size] = '\0';
         } else {
-            chunk->alloc_aux_space(size + 1);
-            chunk->aux_data[info->data_offset] = size;
-            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+            chunk->alloc_aux_space(size + AUX_SIZE_OF_LEN_PREFIX);
+            chunk->set_len(info->data_offset, size);
+            memcpy(chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
         }
     }
     Assert(cindex != 0);
@@ -1013,14 +1013,14 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
         
         info->data_offset = chunk->aux_used;
         if(token.flags & TOKEN_FLAG_NULL_TERMINATED) {
-            chunk->alloc_aux_space(size + 2);
-            chunk->aux_data[info->data_offset] = size;
-            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
-            chunk->aux_data[info->data_offset + 1 + size] = '\0';
+            chunk->alloc_aux_space(size + 1 + AUX_SIZE_OF_LEN_PREFIX);
+            chunk->set_len(info->data_offset, size);
+            memcpy(chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
+            chunk->aux_data[info->data_offset + AUX_SIZE_OF_LEN_PREFIX + size] = '\0';
         } else {
-            chunk->alloc_aux_space(size + 1);
-            chunk->aux_data[info->data_offset] = size;
-            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+            chunk->alloc_aux_space(size + AUX_SIZE_OF_LEN_PREFIX);
+            chunk->set_len(info->data_offset, size);
+            memcpy(chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
         }
     } else if(from_info->flags & TOKEN_FLAG_HAS_DATA) {
         const void* ptr=nullptr;
@@ -1028,14 +1028,14 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
         
         info->data_offset = chunk->aux_used;
         if(from_info->flags & TOKEN_FLAG_NULL_TERMINATED) {
-            chunk->alloc_aux_space(size + 2);
-            chunk->aux_data[info->data_offset] = size;
-            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
-            chunk->aux_data[info->data_offset + 1 + size] = '\0';
+            chunk->alloc_aux_space(size + 1 + AUX_SIZE_OF_LEN_PREFIX);
+            chunk->set_len(info->data_offset, size);
+            memcpy(chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
+            chunk->aux_data[info->data_offset + AUX_SIZE_OF_LEN_PREFIX + size] = '\0';
         } else {
-            chunk->alloc_aux_space(size + 1);
-            chunk->aux_data[info->data_offset] = size;
-            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+            chunk->alloc_aux_space(size + AUX_SIZE_OF_LEN_PREFIX);
+            chunk->set_len(info->data_offset, size);
+            memcpy(chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
         }
     }
 
@@ -1219,19 +1219,19 @@ u32 Lexer::modifyTokenData(Token token, void* ptr, u32 size, bool with_null_term
     auto info = chunk->tokens.getPtr(tindex);
 
     if(info->flags & TOKEN_FLAG_HAS_DATA) {
-        u8 len = chunk->aux_data[info->data_offset];
+        int len = chunk->get_len(info->data_offset);
         // If we had null termination first time we added data then we should have specified it now to.
         // probably bug otherwise.
         Assert((bool)with_null_termination == (bool)(info->flags&TOKEN_FLAG_NULL_TERMINATED));
-        if(chunk->aux_used == info->data_offset + 1 + len + (info->flags&TOKEN_FLAG_NULL_TERMINATED?1:0)) {
-            Assert(len+size < 0x100); // check integer overflow
+        if(chunk->aux_used == info->data_offset + AUX_SIZE_OF_LEN_PREFIX + len + (info->flags&TOKEN_FLAG_NULL_TERMINATED?1:0)) {
+            Assert(len+size <= AUX_LEN_MAX); // check integer overflow
             // Previous data exists at the end so we can just append the new data.
             chunk->alloc_aux_space(size);
             // chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size);
-            chunk->aux_data[info->data_offset] = len + size;
-            memcpy(chunk->aux_data + info->data_offset + 1 + len, ptr, size);
+            chunk->set_len(info->data_offset, len + size);
+            memcpy(chunk->aux_data + info->data_offset + AUX_SIZE_OF_LEN_PREFIX + len, ptr, size);
             if(with_null_termination) {
-                chunk->aux_data[info->data_offset + 1 + len + size] = '\0';
+                chunk->aux_data[info->data_offset + AUX_SIZE_OF_LEN_PREFIX + len + size] = '\0';
             }
         } else {
             // We have move memory because previous data wasn't at the end and there is probably not any space.
@@ -1245,14 +1245,14 @@ u32 Lexer::modifyTokenData(Token token, void* ptr, u32 size, bool with_null_term
         info->data_offset = chunk->aux_used;
         if(with_null_termination) {
             info->flags |= TOKEN_FLAG_NULL_TERMINATED;
-            chunk->alloc_aux_space(size + 2);
-            chunk->aux_data[info->data_offset] = size;
-            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
-            chunk->aux_data[info->data_offset + 1 + size] = '\0';
+            chunk->alloc_aux_space(size + 1 + AUX_SIZE_OF_LEN_PREFIX);
+            chunk->set_len(info->data_offset, size);
+            memcpy(chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
+            chunk->aux_data[info->data_offset + AUX_SIZE_OF_LEN_PREFIX + size] = '\0';
         } else {
-            chunk->alloc_aux_space(size + 1);
-            chunk->aux_data[info->data_offset] = size;
-            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+            chunk->alloc_aux_space(size + AUX_SIZE_OF_LEN_PREFIX);
+            chunk->set_len(info->data_offset, size);
+            memcpy(chunk->aux_data + info->data_offset+AUX_SIZE_OF_LEN_PREFIX, ptr, size);
         }
     }
     return 0; // TODO: Don't always return 0, what should we do?
@@ -1338,9 +1338,9 @@ void Lexer::popTokenFromImport(Import* imp) {
         auto chunk = imp->chunks.last();
         auto& info = chunk->tokens.last();
         // info.data_offset
-        u8 len = (u8)chunk->aux_data[info.data_offset];
+        int len = chunk->get_len(info.data_offset);
         
-        int size = 1 + len + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
+        int size = AUX_SIZE_OF_LEN_PREFIX + len + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
         if(chunk->aux_used == info.data_offset + size) {
             chunk->aux_used -= size;
         } else {
@@ -1372,8 +1372,8 @@ void Lexer::popMultipleTokensFromImport(Import* imp, int index_of_last_token_to_
         auto chunk = imp->chunks.last();
         auto& info = chunk->tokens.last();
         // info.data_offset
-        u8 len = (u8)chunk->aux_data[info.data_offset];
-        int size = len + 1 + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
+        u8 len = chunk->get_len(info.data_offset);
+        int size = len + AUX_SIZE_OF_LEN_PREFIX + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
         if(chunk->aux_used == info.data_offset + size) {
             chunk->aux_used -= size;
         } else {
@@ -1447,9 +1447,9 @@ Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file, StringVie
     }
 
     if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
-        *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+        *string = chunk->get_string(info->data_offset);
         #ifdef LEXER_DEBUG_DETAILS
-        out.s = (char*)chunk->aux_data + info->data_offset + 1;
+        out.s = chunk->get_data(info->data_offset);
         #endif
     }
     
@@ -1708,8 +1708,8 @@ u32 Lexer::getDataFromToken(Token tok, const void** ptr){
     Chunk* chunk = _chunks.get(cindex);
     lock_chunks.unlock();
 
-    *ptr = chunk->aux_data + info->data_offset + 1;
-    u8 len = chunk->aux_data[info->data_offset];
+    *ptr = chunk->get_data(info->data_offset);
+    int len = chunk->get_len(info->data_offset);
     return len;
 }
 void Lexer::print(u32 fileid) {

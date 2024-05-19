@@ -165,7 +165,22 @@ namespace lexer {
         u8* aux_data=nullptr; // auxiliary
         u32 aux_used=0;
         u32 aux_max=0;
+        #define AUX_SIZE_OF_LEN_PREFIX 2
+        #define AUX_LEN_MAX 0xFFFF
         
+        char* get_data(int data_offset) {
+            return (char*)aux_data + data_offset + AUX_SIZE_OF_LEN_PREFIX;
+        }
+        StringView get_string(int data_offset) {
+            return { get_data(data_offset), get_len(data_offset) };
+        }
+        u16 get_len(int data_offset) {
+            return *(u16*)((char*)aux_data + data_offset);
+        }
+        void set_len(int data_offset, u16 val) {
+            *(u16*)((char*)aux_data + data_offset)  = val;
+        }
+
         void alloc_aux_space(u32 n) {
             if(aux_used + n > aux_max) {
                 engone::Allocator* allocator = engone::GlobalHeapAllocator();

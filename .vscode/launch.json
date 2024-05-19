@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb",
-            "args": ["-dev"],
+            // "args": ["-dev"],
             // "args": ["modules/Linux.btb","--preproc"],
             // "args": ["-pm","*dev.btb"],
             // "args": ["-twe","*operations.btb"],

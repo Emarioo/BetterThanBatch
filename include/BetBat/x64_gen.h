@@ -307,9 +307,11 @@ struct X64Builder {
     DynamicArray<int> push_offsets{}; // used when set arguments while values are pushed and popped
     int ret_offset = 0;
     int callee_saved_space = 0;
+    bool disable_modrm_asserts = false;
 
     struct Arg {
         InstructionControl control = CONTROL_NONE;
+        int offset_from_rbp = 0;
     };
     DynamicArray<Arg> recent_set_args;
 
