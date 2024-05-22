@@ -32,9 +32,9 @@ struct Options {
     }
     threadAmount: u32 = 5;
     rootPath: char[];
-    whitelistedDirectories: DynamicArray<StringBuilder>;
-    whitelistedFormats: DynamicArray<StringBuilder>;
-    blacklistedDirectories: DynamicArray<StringBuilder>;
+    whitelistedDirectories: Array<StringBuilder>;
+    whitelistedFormats: Array<StringBuilder>;
+    blacklistedDirectories: Array<StringBuilder>;
     // blacklistedPaths? sometimes you may want to blacklist names in file names
     // whitelistedFormats can be used to allow specific files
 }
@@ -76,7 +76,7 @@ fn CalculateFiles(options: Options*) {
         return
     }
     LN
-    files: DynamicArray<StringBuilder>;
+    files: Array<StringBuilder>;
 
     result: DirectoryIteratorData*;
     // iterator.result works too
@@ -189,11 +189,11 @@ struct ThreadInfo {
     masterInfo: MasterInfo*;
 }
 struct MasterInfo {
-    files: DynamicArray<StringBuilder>;
+    files: Array<StringBuilder>;
     usedFiles: u32 = 0;
     data: CalcData;
 
-    threadInfos: DynamicArray<ThreadInfo>;
+    threadInfos: Array<ThreadInfo>;
     
     // thread safe    
     fn nextFile() -> char[] {

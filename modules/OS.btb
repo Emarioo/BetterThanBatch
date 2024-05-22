@@ -14,6 +14,12 @@
 #import "File"
 #import "Logger"
 
+#if OS_WINDOWS
+#import "Win32"
+#elif OS_LINUX
+#import "Linux"
+#endif
+
 // #if LINKER_MSVC
 //     #load "bin/NativeLayer.lib" as native_layer
 // #else
@@ -32,21 +38,149 @@
 // #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 #macro Assert(expression) #endmacro
 
+
 // fn LINK_TYPE StartMeasure() -> u64;
 // fn LINK_TYPE StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 // fn LINK_TYPE DiffMeasure(endSubStart: u64) -> f32; // TODO: Use f64 (double) when implemented
 // fn LINK_TYPE NativeSleep(seconds: f32);
 
+fn ProcessSleep(seconds: f32) {
+    #if OS_WINDOWS
+    
+    #elif OS_LINUX
+    
+    #endif   
+}
 
 // fn LINK_TYPE GetClockSpeed() -> u64;
 
 // fn LINK_TYPE ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
 
+// Somewhat Linux specific
+global global_environment: char**
+fn SetEnvironment(env: char**) {
+    global_environment = env
+}
+fn GetEnvironment() -> char** {
+    return global_environment
+}
+fn FindEnvironmentVar(name: Slice<char>) -> char* {
+    envc := 0
+    while global_environment[envc] {
+        env := global_environment[envc]
+        envc++;
+
+        if equal_start(name, env) && env[name.len] == '=' {
+            return substring(env, 5).ptr
+        }
+    }
+    return null
+}
+fn DumpEnvironment(envp: char** = null) {
+    if !envp
+        envp = global_environment
+    envc := 0
+    while envp[envc] {
+        env := envp[envc]
+        envc++;
+
+        log(env)
+        // if equal_start("PATH=",env) {
+        //     // log(env)
+        //     arr := split(":",substring(env,5))
+        //     for arr.sliced_unsafe() {
+        //         log(it)
+        //     }
+        // }
+    }
+}
+
 // Returns false if anything failed, NOT if the program you called
 // failed. Check 'exit_code' for that.
 // 'asynchronous' will run the command without waiting for status code
-fn ExecuteCommand(cmd: Slice<char>, exit_code: i32*, asynchronous: bool = false) -> bool {
+fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool = false) -> bool {
+#if OS_WINDOWS
+    // TODO:
+    // return true
+#elif OS_LINUX
 
+
+
+    // We might be able to get away with vfork, it's just that we must copy cmd
+    // because it might point to invalid memory if asynchronous was specified
+    pid := fork()
+
+    if pid < 0 {
+        log("Error in 'ExecuteCommand': fork, ", name_of_error(pid))
+        return false;
+    }
+
+    if pid == 0 {
+        // child process
+        if !global_environment
+            log("Warning in 'ExecuteCommand': global_environment is null, see SetEnvironment.")
+
+        real_path := FindFile(cmd, true)
+        // real_path: StringBuilder
+        // real_path.append("okay")
+        // real_path: StringBuilder
+        defer {
+            real_path.cleanup();
+        }
+        temp_args: char*[]{
+            cmd.ptr,
+            null
+        }
+        real_args: char** = args
+        if !real_args {
+            // temp_args[0] = real_path.ptr
+            real_args = temp_args.ptr
+        }
+
+        // log("rp ",real_path.ptr)
+        ptr := Allocate(2423)
+
+        if real_path.ptr {
+        // if false {
+            // log("cmd: ", real_path)
+            res := execve(real_path.ptr, real_args, global_environment)
+            if res < 0 {
+                log("Error in 'ExecuteCommand': execve, ", name_of_error(res))
+                exit(0)
+            }
+        } else {
+            res := execve(cmd.ptr, real_args, global_environment)
+            if res < 0 {
+                log("Error in 'ExecuteCommand': execve, ", name_of_error(res))
+                exit(0)
+            }
+        }
+        log("OHH NOOOO THIS SHOULD BE UNREACHABLE!!")
+    }
+    // parent process
+
+    info: siginfo
+    flags: i32 = WEXITED
+    if asynchronous
+        flags = WNOHANG
+    res := waitid(P_PID, pid, &info, flags)
+    if res < 0 {
+        std_print_any(&info)
+        if info.si_code != CLD_EXITED {
+            // log error
+            log("Error in 'ExecuteCommand': waitid, ", name_of_error(res))
+            return false
+        }
+    }
+    // #import "Lang"
+
+    // std_print_any(&info, true)
+    if exit_code {
+        *exit_code = info.status
+    }
+
+    return true
+#endif
 }
 
 

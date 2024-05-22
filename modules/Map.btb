@@ -20,8 +20,8 @@ struct MapIterator<Key,Val> {
 // Strings or types with allocations are not handled.
 // Slice<char> can be used but you are responsible for the memory of the slice's pointer.
 struct Map<Key,Val> {
-    chains: DynamicArray<MapChain<Key,Val>>; // bucket array? save us some reallocations
-    table: DynamicArray<i32>;
+    chains: Array<MapChain<Key,Val>>; // bucket array? save us some reallocations
+    table: Array<i32>;
     count: i32;
     
     #macro MAP_CHAIN_INDEX_NULL 0

@@ -29,7 +29,7 @@ fn DestroyTokenStream(stream: TokenStream*) {
     Free(stream, sizeof(TokenStream));
 }
 struct TokenStream {
-    tokens: DynamicArray<Token>;
+    tokens: Array<Token>;
     rawData: ByteStream;
 
     fn size() -> u32 {

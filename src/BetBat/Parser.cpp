@@ -3064,7 +3064,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 specifiedConvention = true;
                 if(info.compiler->options->target == TARGET_WINDOWS_x64) {
                     function->callConvention = CallConventions::STDCALL;
-                } else if(info.compiler->options->target == TARGET_UNIX_x64) {
+                } else if(info.compiler->options->target == TARGET_LINUX_x64) {
                     function->callConvention = CallConventions::UNIXCALL;
                 } else {
                     #ifdef OS_WINDOWS

@@ -21,14 +21,14 @@ struct Workspace {
     history_dir: StringBuilder;
     data_dir: StringBuilder;
     
-    snapshots: DynamicArray<Snapshot>;
-    branches: DynamicArray<Branch>;
-    history: DynamicArray<LogOperation>;
+    snapshots: Array<Snapshot>;
+    branches: Array<Branch>;
+    history: Array<LogOperation>;
     
     active_branch: BranchID;
     active_snapshot: SnapshotID;
     
-    files: DynamicArray<WorkspaceFile>;
+    files: Array<WorkspaceFile>;
     #macro WORKSPACE_SUB_DIR ".cvc"
     
     // initialize the workspace
@@ -421,7 +421,7 @@ struct Workspace {
 
         now := find_snapshot(id)
 
-        loaded_files: DynamicArray<Slice<char>>;
+        loaded_files: Array<Slice<char>>;
         defer loaded_files.cleanup()
 
         // log("snapshot ", id.n)
@@ -667,7 +667,7 @@ struct Snapshot {
     parent: SnapshotID; // is multiple parents possible
     
     // data, files
-    fileChanges: DynamicArray<FileChange>;
+    fileChanges: Array<FileChange>;
 }
 enum ChangeType : u8 {
     CHANGE_CREATION,
@@ -679,10 +679,10 @@ struct FileChange {
     changeType: ChangeType;
     hash: FileHash;
 
-    // changes: DynamicArray<TextChange>;
+    // changes: Array<TextChange>;
 }
 struct FileHash {
-    arr: DynamicArray<u8>; // TODO: u8[20] when structs support static arrays
+    arr: Array<u8>; // TODO: u8[20] when structs support static arrays
 
     fn sliced() -> Slice<u8> {
         return arr.sliced_unsafe()

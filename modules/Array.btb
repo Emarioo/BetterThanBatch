@@ -6,13 +6,21 @@
 
 // TODO: Asserts
 // Note that memory is uninitialized
-struct DynamicArray<T> {
+struct Array<T> {
     // zero initialized by default
     ptr: T*;
     max: i32; // allocated bytes
     len: i32; // elements in allocation
 
-    fn cleanup() { reserve(0); }
+    fn cleanup(free_stuff: bool = true) {
+        if !free_stuff {
+            ptr = null
+            len = 0
+            max = 0
+        } else {
+            reserve(0);
+        }
+    }
 
     // returns index where element was inserted
     // fn add(newElement: T) -> i32 {
@@ -31,9 +39,16 @@ struct DynamicArray<T> {
         return ptr_elem;
         // return ind;
     }
+    // DOES NOT CALL CLEANUP ON ITEMS
+    fn clear() {
+        len = 0
+    }
     fn data() -> T* { return ptr }
     fn size() -> i32 { return len; }
     fn sliced_unsafe() -> Slice<T> {
+        return Slice<T>{ptr, len};
+    }
+    fn sliced() -> Slice<T> {
         return Slice<T>{ptr, len};
     }
     fn pop() {
@@ -122,7 +137,7 @@ struct DynamicArray<T> {
 // Some code to quickly test an array
 // #import "Logger"
 // #import "Array"
-// arr: DynamicArray<i32>;
+// arr: Array<i32>;
 // arr.add(4)
 // arr.add(23)
 // arr.pop()

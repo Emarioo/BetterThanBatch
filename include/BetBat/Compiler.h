@@ -250,6 +250,9 @@ struct Compiler {
 
     CompileOptions* options = nullptr;
 
+    bool has_generated_entry_point = false;
+    bool force_default_entry_point = false; // libc requires it's own entry point
+
     u32 initial_import_id = 0;
     u32 preload_import_id = 0;
     u32 typeinfo_import_id = 0;

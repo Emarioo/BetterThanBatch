@@ -3,8 +3,8 @@
 #import "Logger"
 #import "String"
 
-content: DynamicArray<Slice<char>>
-result: DynamicArray<Slice<char>>
+content: Array<Slice<char>>
+result: Array<Slice<char>>
 
 #macro ADD(X,Y) content.add(X) result.add(Y)
 

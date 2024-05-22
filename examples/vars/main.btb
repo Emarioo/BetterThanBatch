@@ -28,7 +28,7 @@ struct LoadableItem {
     data: void*;
 }
 struct HotloadedVariables {
-    items: DynamicArray<LoadableItem>;
+    items: Array<LoadableItem>;
     path: StringBuilder;
 
     fn submit<T>(t: T*) {

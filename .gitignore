@@ -1,34 +1,31 @@
-# ignore lib and dll unless they are from libs
+# Ignore Linux executables in root (they rarely have a file extensions)
+/*
+!*.*
+!*/
+
+# Ignore generated binaries
+bin
+*.exe
 *.lib
 *.dll
-!libs/**
-
-bin
-logs
-*.log
-*.exe
 .vs
 *.ilk
 *.obj
 *.o
+*.out
 *.obj
 *.pdb
-tracy
-!libs/tracy-0.10/**
 
-# I often name stdout output from program 'out', no need to commit that
+# Don't ignore files from libs
+!libs/**
+
+# Ignore logging
 out
+logs
+*.log
 
-# Sometimes I test some assembly or C++ and create new
-# temporary files at the root of the project. The stuff below
-# filters that out.
-# Hmm, the filters below didn't work for hacky_sysvcall.s
-
-# *.cpp
-# *.c
-# *.s
-# *.asm
-# !*/*.cpp
-# !*/*.c
-# !*/*.s
-# !*/*.asm
+# Ignore temporary C/C++ files from root
+/*.cpp
+/*.c
+/*.s
+/*.asm

@@ -1,6 +1,6 @@
 @TEST_CASE(hash_map_test)
 /*
-    The tests assume that DynamicArray doesn't have a bug in it.
+    The tests assume that Array doesn't have a bug in it.
 */
 
 #import "Map"
@@ -13,7 +13,7 @@ struct Entry {
     val: i32;
 }
 
-fn InsertValues(map: Map<i32,i32>*, entries: DynamicArray<Entry>*, count: u32) {
+fn InsertValues(map: Map<i32,i32>*, entries: Array<Entry>*, count: u32) {
     for 0..count {
         random: u64 = random64();
         key: i32 = (random & cast<u64>0xFFFF_FFFF);
@@ -33,7 +33,7 @@ fn InsertValues(map: Map<i32,i32>*, entries: DynamicArray<Entry>*, count: u32) {
         entries.add(Entry{key,val});
     }
 }
-fn RemoveValues(map: Map<i32,i32>*, entries: DynamicArray<Entry>*, count: u32) {
+fn RemoveValues(map: Map<i32,i32>*, entries: Array<Entry>*, count: u32) {
     for 0..count {
         if entries.len == 0
             break;
@@ -48,7 +48,7 @@ fn RemoveValues(map: Map<i32,i32>*, entries: DynamicArray<Entry>*, count: u32) {
 }
 
 // returns number of failures
-fn CheckValues(map: Map<i32,i32>*, entries: DynamicArray<Entry>*) -> u32 {
+fn CheckValues(map: Map<i32,i32>*, entries: Array<Entry>*) -> u32 {
     failures := 0;
     for @ptr entries.sliced_unsafe() {
         val := map.get_unsafe(it.key);
@@ -64,7 +64,7 @@ fn CheckValues(map: Map<i32,i32>*, entries: DynamicArray<Entry>*) -> u32 {
     return failures;
 }
 // returns number of failures
-fn CheckIterator(map: Map<i32,i32>*, entries: DynamicArray<Entry>*) -> u32 {
+fn CheckIterator(map: Map<i32,i32>*, entries: Array<Entry>*) -> u32 {
     failures := 0;
     iter: MapIterator<i32,i32>;
     while map.iterate_unsafe(&iter) {
@@ -83,7 +83,7 @@ fn CheckIterator(map: Map<i32,i32>*, entries: DynamicArray<Entry>*) -> u32 {
 
 fn TestMap(tableSize: u32, count: i32) -> u32 {
     map: Map<i32,i32>;
-    entries: DynamicArray<Entry>;
+    entries: Array<Entry>;
     failures := 0;
     map.init(tableSize);
     

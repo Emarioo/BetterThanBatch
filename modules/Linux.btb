@@ -89,6 +89,78 @@
 #macro DT_SOCK  12
 #macro DT_WHT   14
 
+#macro S_IFMT   0o170000 // bit mask for the file type bit field
+#macro S_IFSOCK 0o140000 // socket
+#macro S_IFLNK  0o120000 // symbolic link
+#macro S_IFREG  0o100000 // regular file
+#macro S_IFBLK  0o060000 // block device
+#macro S_IFDIR  0o040000 // directory
+#macro S_IFCHR  0o020000 // character device
+#macro S_IFIFO  0o010000 // FIFO
+
+#macro P_ALL  0 /* Wait for any child.  */
+#macro P_PID  1 /* Wait for specified process.  */
+#macro P_PGID 2 /* Wait for members of process group.  */
+
+
+/* Bits in the third argument to `waitpid'.  */
+#macro	WNOHANG		1	/* Don't block waiting.  */
+#macro	WUNTRACED	2	/* Report status of stopped children.  */
+
+/* Bits in the fourth argument to `waitid'.  */
+#macro WSTOPPED	2	/* Report stopped child (same as WUNTRACED). */
+#macro WEXITED	4	/* Report dead child.  */
+#macro WCONTINUED	8	/* Report continued child.  */
+#macro WNOWAIT	0x01000000 /* Don't reap, just poll status.  */
+
+/* If WIFEXITED(STATUS), the low-order 8 bits of the status.  */
+#macro	WEXITSTATUS(status)	(((status) & 0xff00) >> 8)
+
+/* If WIFSIGNALED(STATUS), the terminating signal.  */
+#macro	WTERMSIG(status)	((status) & 0x7f)
+
+/* If WIFSTOPPED(STATUS), the signal that stopped the child.  */
+#macro	WSTOPSIG(status)	WEXITSTATUS(status)
+
+/* Nonzero if STATUS indicates normal termination.  */
+#macro	WIFEXITED(status)	(WTERMSIG(status) == 0)
+
+/* Nonzero if STATUS indicates termination by a signal.  */
+#macro WIFSIGNALED(status) ((cast<char> (((status) & 0x7f) + 1) >> 1) > 0)
+
+/* Nonzero if STATUS indicates the child is stopped.  */
+#macro	WIFSTOPPED(status)	(((status) & 0xff) == 0x7f)
+
+/* Nonzero if STATUS indicates the child continued after a stop.  We only
+   define this if <bits/waitflags.h> provides the WCONTINUED flag bit.  */
+#macro WIFCONTINUED(status)	((status) == __W_CONTINUED)
+
+/* Nonzero if STATUS indicates the child dumped core.  */
+#macro	WCOREDUMP(status)	((status) & __WCOREFLAG)
+
+/* Macros for constructing status values.  */
+// #macro	__W_EXITCODE(ret, sig)	((ret) << 8 | (sig))
+// #macro	__W_STOPCODE(sig)	((sig) << 8 | 0x7f)
+// #macro __W_CONTINUED		0xffff
+// #macro	__WCOREFLAG		0x80
+
+#macro SIGCHLD		17	/* Child terminated or stopped.  */
+
+#macro CLD_EXITED 1               /* Child has exited.  */
+#macro  CLD_KILLED 2                   /* Child was killed.  */
+#macro  CLD_DUMPED 3                   /* Child terminated abnormally.  */
+#macro  CLD_TRAPPED 4                  /* Traced child has trapped.  */
+#macro  CLD_STOPPED 5                  /* Child has stopped.  */
+#macro  CLD_CONTINUED 6                 /* Stopped child has continued.  */
+
+#macro	R_OK	4		/* Test for read permission.  */
+#macro	W_OK	2		/* Test for write permission.  */
+#macro	X_OK	1		/* Test for execute permission.  */
+#macro	F_OK	0		/* Test for existence.  */
+
+/*#################3
+    SYSCALLS
+################*/
 #macro SYS_read     0
 #macro SYS_write    1
 #macro SYS_open     2
@@ -102,24 +174,28 @@
 #macro SYS_mprotect 10
 #macro SYS_munmap   11
 
+#macro SYS_access   21
+#macro SYS_pipe   22
+
+#macro SYS_dup   32
+#macro SYS_dup2   33
+
+#macro SYS_nanosleep 35
+
 #macro SYS_fork     57
 #macro SYS_vfork    58
 #macro SYS_execve   59
 #macro SYS_exit     60
 
+
 // #macro SYS_getdents 78
+#macro SYS_getcwd     79
 #macro SYS_getdents64 217
+
+#macro SYS_waitid 247
 
 #macro SYS_getrandom 318
 
-#macro S_IFMT   0o170000 // bit mask for the file type bit field
-#macro S_IFSOCK 0o140000 // socket
-#macro S_IFLNK  0o120000 // symbolic link
-#macro S_IFREG  0o100000 // regular file
-#macro S_IFBLK  0o060000 // block device
-#macro S_IFDIR  0o040000 // directory
-#macro S_IFCHR  0o020000 // character device
-#macro S_IFIFO  0o010000 // FIFO
 
 // General macro for all syscalls
 #macro SYSCALL(NAME, RETURN_TYPE, ...)
@@ -130,6 +206,7 @@ fn @unixcall @blank NAME( SYSCALL_args(...) ) -> RETURN_TYPE {
         // sub rsp, 40
 
         // parameters and return values have already been set
+        mov r10, rcx // 4th argument is passed through r10, not rcx
         mov eax, SYS_ ## NAME
         syscall
 
@@ -168,16 +245,28 @@ SYSCALL(mmap,  void*, addr: void*, length: i32, prot: i32, flags: i32, fd: i32, 
 SYSCALL(mprotect,  i32, addr: void*, len: i32, prot: i32);
 SYSCALL(munmap,    i32, addr: void*, length: i32)
 
+SYSCALL(access,  i32, path: char*, mode: i32)
+SYSCALL(pipe,  i32, fildes: int*)
+
+SYSCALL(dup, i32, fildes: i32)
+SYSCALL(dup2, i32, oldfd: i32, newfd: i32)
+
+SYSCALL(nanosleep, i32, rqtp: timespec*, rmtp: timespec*)
+
 SYSCALL(fork,   i32)
 SYSCALL(vfork,  i32)
 // environment variables can be be acquired from the envp argument in main(argc: i32, argv: char**, envp: char**)
 SYSCALL(execve, i32, pathname: char*, argv: char**, envp: char**)
 SYSCALL_VOID(exit,   status: i32)
 
-SYSCALL(getrandom, i32, buf: void*, buflen: u32, flags: u32);
+SYSCALL(getcwd, char*, buf: char*, size: i32)
 
 // SYSCALL(getdents, i32, fd: i32, dirp: linux_dirent*, count: u32);
 SYSCALL(getdents64, i32, fd: i32, dirp: void*, count: u32);
+
+SYSCALL(waitid, i32, type: i32, id: i32, info: siginfo*, options: i64, ru: void* = null);
+
+SYSCALL(getrandom, i32, buf: void*, buflen: u32, flags: u32);
 
 // I could not find the correct stat structure anywhere but
 // this structure seems to be correct.
@@ -229,6 +318,22 @@ struct linux_dirent64 {
 
     d_name: char[1]; /* Filename (null-terminated) */
 };
+
+// This struct may be incorrect, I could not find a struct that matched
+// the values that waitid returned but this order and integer sizes seem to work.
+struct siginfo {
+    si_signo: i32;
+    si_errno: i32;
+    si_code : i32;
+    uid: i32;
+    pid: i32;
+    status: i64;
+}
+
+struct timespec {
+    tv_sec: i64;
+    tv_nsec: i64;
+}
 
 #macro EPERM    1 /* Operation not permitted */
 #macro ENOENT   2 /* No such file or directory */

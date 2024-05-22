@@ -8,7 +8,7 @@ struct StackPiece {
 }
 struct StackAllocator {
     data: void*;
-    stack: DynamicArray<StackPiece>;
+    stack: Array<StackPiece>;
     fn allocate(size: i32, ptr: void*) -> void* {
         if size == 0 {
             // free the stack piece

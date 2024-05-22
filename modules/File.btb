@@ -6,6 +6,8 @@
 */
 
 #import "Memory"
+#import "String"
+#import "OS"
 #import "Lang" // temporary
 
 #if OS_WINDOWS
@@ -198,7 +200,7 @@ enum @enclosed DirIterator : i64 { INVALID }
 fn InternalToIterator(n: i32) -> DirIterator { return cast_unsafe<DirIterator>cast<i64>(n+1) }
 fn IteratorToInternal(n: DirIterator) -> i32 { return cast<i32>cast<i64>n-1 }
 
-// TODO: We depend on DynamicArray and StringBuilder for quick implementation of dir iterators
+// TODO: We depend on Array and StringBuilder for quick implementation of dir iterators
 //   but it would be nice to not depend on them.
 #import "Array"
 #import "String"
@@ -209,7 +211,7 @@ fn IteratorToInternal(n: DirIterator) -> i32 { return cast<i32>cast<i64>n-1 }
 struct DirIterator_impl {
     root: StringBuilder;
     current_dir: StringBuilder;
-    remaining_directories: DynamicArray<StringBuilder>;
+    remaining_directories: Array<StringBuilder>;
     
     item: DirIteratorItem;
     
@@ -222,17 +224,17 @@ struct DirIterator_impl {
             it.cleanup()   
         item.name.cleanup()
     }
-#if OS_WINDOWS
+    #if OS_WINDOWS
     handle: HANDLE;
-#elif OS_LINUX
+    #elif OS_LINUX
     fd_current_dir: i32;
     head: i32;
     bytes_in_buffer: i32;
     buffer: char[1024];
-#endif
+    #endif
 }
 
-global _directory_iterators: DynamicArray<DirIterator_impl*>
+global _directory_iterators: Array<DirIterator_impl*>
 
 fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     if root_path.len == 0 
@@ -241,14 +243,22 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     index: i32 = -1
     for 0.._directory_iterators.size() {
         iter := _directory_iterators.get(nr)
-        if iter && iter.valid()
-            continue
-            
+        if iter {
+            if iter.valid() // TODO: Use &&
+                continue
+            else {
+                log("REALLY BAD ERROR IN DIRECTORY ITERATOR CREATE")
+            }
+        }
         index = nr
+        iter = AllocateHeap(sizeof DirIterator_impl)
+        memzero(iter, sizeof *iter)
+        _directory_iterators.ptr[index] = iter
         break
     }
     if index == -1 {
         it := AllocateHeap(sizeof DirIterator_impl)
+        memzero(it, sizeof *it)
         _directory_iterators.add(it)
         index = _directory_iterators.size()-1
     }
@@ -257,14 +267,14 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     
     iter.root.append(root_path)
     iter.remaining_directories.add(iter.root.copy())
-#if OS_WINDOWS
+    #if OS_WINDOWS
     iter.handle = -1
-#elif OS_LINUX
+    #elif OS_LINUX
     iter.fd_current_dir = -1
     iter.head = 0
-#else
+    #else
     incomplete
-#endif
+    #endif
     
     return InternalToIterator(cast<i64>index)
 }
@@ -274,23 +284,23 @@ fn DirectoryIteratorDestroy(iterator: DirIterator) {
     index := IteratorToInternal(iterator)
     iter := _directory_iterators.get(index)
     
-#if OS_WINDOWS
+    #if OS_WINDOWS
     if iter.handle != INVALID_HANDLE_VALUE {
         yes := FindClose(iter.handle)
         if !yes {
             // TODO: Handle error
         }
     }
-#elif OS_LINUX
+    #elif OS_LINUX
     if iter.fd_current_dir != -1 {
         yes := close(iter.fd_current_dir)
         if yes < 0 {
             // TODO: Handle error   
         }
     }
-#else
+    #else
     incomplete
-#endif
+    #endif
     
     iter.cleanup()
 
@@ -303,7 +313,7 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
     index := IteratorToInternal(iterator)
     iter := _directory_iterators.get(index)
     
-#if OS_WINDOWS
+    #if OS_WINDOWS
     data: WIN32_FIND_DATAA
     cFileNameLen: i32
     while {
@@ -388,12 +398,14 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
         if iter.item.name[nr] == '\\'
             iter.item.name.data()[nr] = '/';
     }
-#elif OS_LINUX
+    #elif OS_LINUX
 
     file_name: char*;
     file_name_len: i32;
 
     entry: linux_dirent64*;
+
+    home_dir: char* = null
 
     while {
         if(iter.fd_current_dir < 0){
@@ -405,22 +417,26 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
             dir := iter.remaining_directories.get(0);
             iter.remaining_directories.remove(0);
             
-            if(dir.size()!=0){
+            Assert(dir.size() != 0)
+
+            if equal_start("~/",dir.sliced())  {
+                if !home_dir {
+                    home_dir = FindEnvironmentVar("HOME")
+                    iter.current_dir.append(home_dir)
+                    iter.current_dir.append("/")
+                }
+                iter.current_dir.append(substring(dir.sliced(), 2));
+            } else {
                 iter.current_dir.append(dir.sliced());
             }
-            
-            // temp: StringBuilder = iter.current_dir.copy();
-            // if(temp.size())
-            //     temp.append("\\");
-            
-            // temp.append("*");
 
-            iter.fd_current_dir = open(iter.current_dir.data(), O_DIRECTORY)
+            fd := open(iter.current_dir.data(), O_DIRECTORY)
 
-            if(iter.fd_current_dir < 0){
-                log("open dir failed")
+            if(fd < 0){
+                log("Error in 'DitectoryIteratorNext': open(\"",iter.current_dir,"\"), ", name_of_error(fd))
                 continue;
             }
+            iter.fd_current_dir = fd
         }
         
         if iter.head >= iter.bytes_in_buffer {
@@ -484,9 +500,9 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
         iter.remaining_directories.add(iter.item.name.copy());
     }
 
-#else
+    #else
     incomplete
-#endif
+    #endif
 
     if out_item ;
         *out_item = &iter.item
@@ -501,4 +517,161 @@ fn DirectoryIteratorSkip(iterator: DirIterator) {
     
     if iter.remaining_directories.size()
         iter.remaining_directories.pop()
+}
+fn GetWorkingDirectory() -> StringBuilder {
+    #if OS_WINDODWS
+    #elif OS_LINUX
+    cwd: StringBuilder
+    cwd.resize(255)
+    cwd_err := cast<i64>getcwd(cwd.data(), cwd.size()-1)
+    if cwd_err < 0 {
+        log("Error in 'GetWorkingDirectory': getcwd, ",name_of_error(cwd_err))
+        cwd.cleanup()
+        return cwd
+    }
+    cwd.resize(strlen(cwd.ptr))
+    return cwd
+    #endif
+}
+// converts path to absolute path
+fn AbsolutePath(path: char[]) -> StringBuilder {
+    #if OS_WINDODWS
+    #elif OS_LINUX
+    b: StringBuilder
+    if equal_start("~/", path) {
+        home_dir := FindEnvironmentVar("HOME")
+        b.append(home_dir)
+        b.append(substring(path,1)) // skip ~, keep /
+    } else if equal_start("/", path) {
+        b.append(path)
+    } else if equal_start("./", path) {
+        cwd := GetWorkingDirectory()
+        cwd.append(substring(path, 1)) // skip ., keep /
+        return cwd
+    } else {
+        cwd := GetWorkingDirectory()
+        b.append("/");
+        b.append(path);
+        return cwd
+    }
+    return b
+    #endif
+}
+
+// returns absolute path to the found file, empty string if nothing was found
+// if multiple files match then any one can be picked (depends on DirectoryIterator)
+// if recursive then the specified directories (CWD, PATH, dirs) will be searched recursively (skipping those that start with '.')
+// if search_env_path, additionally search directories in PATH
+fn FindFile(path: char[], search_env_path: bool = false, recursive: bool = false) -> StringBuilder {
+    // TODO: Rename function to FindFileInEnvPath?
+    // TODO: Perhaps have another function FindFile(path, directories_to_search)?
+    #if OS_WINDOWS
+    #elif OS_LINUX
+    result: StringBuilder
+    if access(path.ptr, F_OK) == 0 {
+        result.append(path)
+        return result
+    }
+
+    dirs: Array<StringBuilder>
+    defer {
+        for dirs.sliced()
+            it.cleanup()
+        dirs.cleanup()
+    }
+    if search_env_path {
+        env_path := FindEnvironmentVar("PATH")
+
+        if env_path {
+            extra_paths := split(":",env_path)
+            for extra_paths.sliced_unsafe() {
+                // log(it)
+                s: StringBuilder
+                s.append(AbsolutePath(it))
+                dirs.add(s)
+            }
+        }
+    }
+
+    cwd := Slice<char> {Allocate(256), 256}
+    defer Free(cwd.ptr)
+    cwd_err := cast<i64>getcwd(cwd.ptr, cwd.len-1)
+    if cwd_err < 0 {
+        log("Error in 'FindFile': getcwd, ",name_of_error(cwd_err))
+        return result
+    }
+    cwd.len = strlen(cwd.ptr)
+
+    root: StringBuilder
+    defer { root.cleanup() }
+    slash_pos := find("/", path, reverse = true)
+    // log("pos ",slash_pos)
+    file_name: StringBuilder
+    if(slash_pos != -1) {
+        file_name.append(substring(path, slash_pos))
+    } else {
+        file_name.append("/")
+        file_name.append(path)
+    }
+
+    root.append(cwd)
+    if slash_pos != -1 {
+        root.append("/")
+        root.append(substring(path, 0, slash_pos))
+    }
+
+    // remove duplicates, TODO: the way we check duplicates is a little flawed, look into it
+    root_exists := false
+    for dirs.sliced() {
+        // log(it, " == ", root)
+        if !recursive {
+            if it == root {
+                root_exists = true
+                break
+            }
+        } else {
+            if equal_start(it.sliced(), root.sliced()) {
+                root_exists = true
+                break
+            } else if equal_start(root.sliced(), it.sliced()) && recursive {
+                // swap
+                dirs.ptr[nr].cleanup()
+                dirs.ptr[nr] = root
+                root.cleanup(false)
+                root_exists = true
+                break
+            }
+        }
+    }
+    if !root_exists {
+        dirs.add(root)
+        root.cleanup(false)
+    }
+
+    // for dirs.sliced() {
+    //     log(it)
+    // }
+
+    // log("root ",root, ", file ",file_name)
+    for dirs.sliced_unsafe() {
+        iter := DirectoryIteratorCreate(it.sliced())
+        defer DirectoryIteratorDestroy(iter)
+        item: DirIteratorItem*;
+        while DirectoryIteratorNext(iter, &item) {
+            if item.is_directory {
+                if find("/.",item.name.sliced()) != -1 || !recursive
+                    DirectoryIteratorSkip(iter)
+            }
+            // log(item.name, " == ", file_name)
+            yes := equal_end(file_name.sliced(), item.name.sliced())
+            if yes {
+                // log("found ",item.name)
+                result.append(item.name)
+                return result
+            }
+        }
+    }
+
+    return result
+    #endif
 }

@@ -2,7 +2,7 @@
 
 #import "Array"
 
-arr: DynamicArray<i32>
+arr: Array<i32>
 
 arr.add(24)
 arr.add(92)

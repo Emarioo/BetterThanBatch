@@ -397,7 +397,7 @@ struct GUIEnvironment {
 
     // GLFWwindow* m_glfwWindow=nullptr;
     
-    m_inputs: DynamicArray<GUIInput>;
+    m_inputs: Array<GUIInput>;
     // std::vector<std::string> m_pathDrops;
     
     // u32 m_charIn = 0;

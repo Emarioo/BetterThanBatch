@@ -1343,7 +1343,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                         CallConventions expected_convention = CallConventions::UNIXCALL;
                         if(info.compiler->options->target == TARGET_WINDOWS_x64)
                             expected_convention = CallConventions::STDCALL;
-                        if(info.compiler->options->target == TARGET_UNIX_x64)
+                        if(info.compiler->options->target == TARGET_LINUX_x64)
                             expected_convention = CallConventions::UNIXCALL;
                         if (overload->astFunc->callConvention != expected_convention) {
                             ERR_SECTION(

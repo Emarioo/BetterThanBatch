@@ -15,8 +15,14 @@ struct StringBuilder {
     len: i32;
     max: i32; // does not include \0
 
-    fn cleanup() {
-        reserve(0)
+    fn cleanup(free_stuff: bool = true) {
+        if !free_stuff {
+            ptr = null
+            len = 0
+            max = 0
+        } else {
+            reserve(0)
+        }
     }
 
     fn sliced() -> Slice<char> {
@@ -78,6 +84,9 @@ struct StringBuilder {
         len += size;
         ptr[len] = '\0';
     }
+    fn append(str: char*) {
+        append(str, strlen(str))
+    }
     fn append(str: StringBuilder) {
         append(str.sliced())
     }
@@ -104,6 +113,14 @@ struct StringBuilder {
         }
     }
     
+    fn resize(newLen: i32) -> bool {
+        if newLen > max {
+            if !reserve(newLen)
+                return false;
+        }
+        len = newLen;
+        return true;
+    }
     // TODO: Some useful functions
     fn reserve(newMax: i32) -> bool {
         // log("newMax",newMax)
@@ -150,7 +167,9 @@ struct StringBuilder {
         return s
     }
 }
-
+operator [](b: StringBuilder, index: i32) -> char {
+    return b.get(index)
+}
 // #import "String"
 // #import "Logger"
 
@@ -168,11 +187,17 @@ struct StringBuilder {
 
 // #import "OS"
 
+fn sliced(s: char*) -> char[] {
+    return Slice<char>{s, strlen(s)}
+}
+
 fn @hide std_print(t: StringBuilder){
     std_print(t.sliced())
 }
 
-
+operator ==(a: StringBuilder, b: StringBuilder) -> bool {
+    return a.sliced() == b.sliced()
+}
 operator ==(a: StringBuilder, b: Slice<char>) -> bool {
     return a.sliced() == b
 }
@@ -502,10 +527,10 @@ fn parse_hex(text: Slice<char>, data: Slice<u8>*) {
 fn FUNC(A0: char*, A1: char*) -> RET {
     return FUNC(Slice<char>{A0,strlen(A0)}, Slice<char>{A1,strlen(A1)})
 }
-fn FUNC(A0: char[], A1: char*) -> bool {
+fn FUNC(A0: char[], A1: char*) -> RET {
     return FUNC(A0, Slice<char>{A1,strlen(A1)})
 }
-fn FUNC(A0: char*, A1: char[]) -> bool {
+fn FUNC(A0: char*, A1: char[]) -> RET {
     return FUNC(Slice<char>{A0,strlen(A0)}, A1)
 }
 #endmacro
@@ -534,33 +559,48 @@ fn equal_end(pattern: char[], text: char[]) -> bool {
     if text.len < pattern.len || pattern.len == 0
         return false
     for @rev pattern {
-        if it != text.ptr[nr]
+        if it != text.ptr[text.len + nr - pattern.len]
             return false
     }
     return true
 }
 // returns -1 if not found
-// returns index of the first character of the first found matched string
+// returns the index to the first character of pattern found in the text.
+// if not reverse, then first match is returned, otherwise, last match is returned
 SLICE_OVERLOADS(find, pattern, text, i32)
-fn find(pattern: char[], text: char[]) -> i32 {
+fn find(pattern: char[], text: char[], reverse: bool = false) -> i32 {
     if text.len < pattern.len || pattern.len == 0
         return -1;
-    correct := 0;
-    for text {
-        if it == pattern.ptr[correct] {
-            correct++;
-            if correct == pattern.len
-                return nr - pattern.len + 1
-        } else {
-            correct = 0;
+    if !reverse {
+        correct := 0;
+        for text {
+            if it == pattern.ptr[correct] {
+                correct++;
+                if correct == pattern.len
+                    return nr - pattern.len + 1
+            } else {
+                correct = 0;
+            }
+        }
+    } else {
+        correct := pattern.len-1;
+        for @reverse text {
+            if it == pattern.ptr[correct] {
+                correct--;
+                if correct == -1
+                    return nr
+            } else {
+                correct = pattern.len-1;
+            }
         }
     }
     return -1;
 }
+SLICE_OVERLOADS(split, pattern, text, Array<char[]>)
 // the returned array contains substrings referencing memory in 'text'
 // if 'text' is freed than the array will point to invalid memory
-fn split(pattern: char[], text: char[]) -> DynamicArray<char[]> {
-    arr: DynamicArray<char[]>;
+fn split(pattern: char[], text: char[]) -> Array<char[]> {
+    arr: Array<char[]>;
     if pattern.len == 0
         return arr
 
@@ -588,12 +628,13 @@ fn split(pattern: char[], text: char[]) -> DynamicArray<char[]> {
 fn substring(text: char*, start: i32, end: i32 = -1) -> char[] {
     return substring(Slice<char>{text,strlen(text)}, start, end)
 }
+// end is exclusive
 fn substring(text: char[], start: i32, end: i32 = -1) -> char[] {
     if start >= text.len || end >= text.len || start < 0
         return Slice<char>{}
     if end < 0
         return Slice<char>{text.ptr + start, text.len - start}
-    return Slice<char>{text.ptr + start, start - end}
+    return Slice<char>{text.ptr + start, end - start}
 }
 
 // Look at Utility.cpp

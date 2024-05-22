@@ -1,0 +1,11 @@
+/*
+    Work in progress
+*/
+
+#load "c" as libc
+fn @import(libc) malloc(size: i32) -> void*;
+fn @import(libc) free(ptr: void*);
+
+// fn @import(libc) exit(st: i32);
+// fn @import(libc) fork() -> i32;
+// fn @import(libc) waitpid(pid: i32, st: i32*, options: i32) -> i32;

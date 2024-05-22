@@ -1,0 +1,19 @@
+#include "OS"
+#include "String"
+
+fn main(argc: i32, argv: char**, envp: char**) {
+    // for 0..argc
+    //     log(argv[nr])
+
+    SetEnvironment(envp)
+    
+    args: char*[] {
+        "gcc".ptr,
+        null
+    }
+
+    exit_code: i32
+    yes := ExecuteCommand(sliced(args[0]), args.ptr, &exit_code)
+
+    // FileFind()
+}

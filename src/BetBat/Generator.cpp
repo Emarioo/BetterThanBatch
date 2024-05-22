@@ -2068,7 +2068,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 builder.emit_fake_pop();
             }
             
-            builder.emit_asm(asm_index, input_count, type.isValid());
+            builder.emit_asm(asm_index, input_count, type != AST_VOID);
             
             if(type.isValid()) {
                 SignalIO result = generateArtificialPush(expression->versions_asmType[info.currentPolyVersion]);
@@ -3496,7 +3496,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             case TARGET_WINDOWS_x64:
                 function->callConvention = STDCALL;
                 break;
-            case TARGET_UNIX_x64:
+            case TARGET_LINUX_x64:
                 function->callConvention = UNIXCALL;
                 break;
             case TARGET_BYTECODE:
@@ -4094,7 +4094,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     }
 
                     if(!performSafeCast(rightTypes[0], elementType)){
-                        Assert(!info.hasForeignErrors());
+                        Assert(info.hasForeignErrors());
                         continue;
                     }
                     switch(varinfo->type) {
@@ -4887,7 +4887,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     }
                 } else {
                     TypeId retType = AST_VOID;
-                    if(compiler->options->target == TARGET_UNIX_x64) {
+                    if(compiler->options->target == TARGET_LINUX_x64) {
                         retType = AST_UINT8;
                     } else {
                         retType = AST_INT32;
@@ -5249,7 +5249,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
             CallConventions main_conv;
             switch(compiler->options->target) {
                 case TARGET_WINDOWS_x64: main_conv = STDCALL; break;
-                case TARGET_UNIX_x64: main_conv = UNIXCALL; break;
+                case TARGET_LINUX_x64: main_conv = UNIXCALL; break;
                 case TARGET_BYTECODE: main_conv = BETCALL; break;
                 default: Assert(false);
             }

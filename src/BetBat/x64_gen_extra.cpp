@@ -514,6 +514,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     
     bool is_entry_point = tinycode->name == "main"; // TODO: temporary, we should let the user specify entry point, the whole compiler assumes "main" as entry point...
 
+    if(compiler->force_default_entry_point) {
+        is_entry_point = false;
+    }
+
     bool is_blank = false;
     if(tinycode->debugFunction->funcAst) {
         is_blank = tinycode->debugFunction->funcAst->blank_body; // TODO: We depend on debugFunction, change this
@@ -730,7 +734,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 auto& param = accessed_params[i];
                 auto control = param.control;
 
-                int off = unixcall_args_offset - (1+i) * 8;
+                int off = -unixcall_args_offset - (1+i) * 8;
                 param.offset_from_rbp = off;
 
                 X64Register reg_args = X64_REG_BP;
@@ -1081,13 +1085,22 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         //   and use the return value? No because some function do not
                         //   anything so we would have wasted rax. Then what do we do?
 
-                        // For now we assume RAX has been reserved
                         auto reg0 = get_artifical_reg(n->reg0);
                         if(reg0->floaty) {
                             reg0->reg = alloc_register(X64_REG_XMM0, true); 
                             Assert(reg0->reg != X64_REG_INVALID);
                         } else {
-                            reg0->reg = alloc_register(X64_REG_A, false);
+                            // X64_REG_A is used by mul and rdtsc, we can't reserve it
+                            // (well, we could but then we would need to temporarily push/pop rax before using it, instead we move A to a new register)
+                            FIX_PRE_OUT_OPERAND(0)
+                            reg0->reg = alloc_register();
+                            
+                            if(IS_CONTROL_SIGNED(base->control)) {
+                                emit_movsx(reg0->reg, X64_REG_A, base->control);
+                            } else if(!IS_CONTROL_FLOAT(base->control)) {
+                                emit_movzx(reg0->reg, X64_REG_A, base->control);
+                            } else Assert(false);
+                            
                             Assert(reg0->reg != X64_REG_INVALID);
                         }
                         // TODO: movzx, movsx on returned value?
@@ -1469,7 +1482,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 if(is_blank) {
                     // user handles the rest
                     emit1(OPCODE_RET);
-                } else if(compiler->options->target == TARGET_UNIX_x64 && is_entry_point) {
+                } else if(compiler->options->target == TARGET_LINUX_x64 && is_entry_point) {
                     Assert(tinycode->call_convention == UNIXCALL);
                     emit1(OPCODE_MOV_REG_RM);
                     emit_modrm(MODE_REG, X64_REG_DI, X64_REG_A);

@@ -278,18 +278,18 @@ const char* ToString(TargetPlatform target){
     #define CASE(X,N) case X: return N;
     switch(target){
         CASE(TARGET_WINDOWS_x64,"win-x64")
-        CASE(TARGET_UNIX_x64,"unix-x64")
+        CASE(TARGET_LINUX_x64,"linux-x64")
         CASE(TARGET_BYTECODE,"bytecode")
         CASE(TARGET_UNKNOWN,"unknown-target")
         default: Assert(false);
     }
-    return "unknown";
+    return "unknown-target";
     #undef CASE
 }
 TargetPlatform ToTarget(const std::string& str){
     #define CASE(N,X) if (str==X) return N;
     CASE(TARGET_WINDOWS_x64,"win-x64")
-    CASE(TARGET_UNIX_x64,"unix-x64")
+    CASE(TARGET_LINUX_x64,"linux-x64")
     CASE(TARGET_BYTECODE,"bytecode")
     return TARGET_UNKNOWN;
     #undef CASE
@@ -306,7 +306,7 @@ const char* ToString(LinkerChoice v) {
         CASE(LINKER_UNKNOWN,"unknown-linker")
         default: {}
     }
-    return "unknown";
+    return "unknown-linker";
     #undef CASE
 }
 LinkerChoice ToLinker(const std::string& str) {
@@ -942,7 +942,7 @@ void Compiler::processImports() {
                             // do nothing
                         } break;
                         case TARGET_WINDOWS_x64:
-                        case TARGET_UNIX_x64: {
+                        case TARGET_LINUX_x64: {
                             for(auto t : imp->tinycodes)
                                 GenerateX64(this, t);
                         } break;
@@ -1022,7 +1022,7 @@ void Compiler::run(CompileOptions* options) {
                 options->output_file = bc_file;
             } break;
             case TARGET_WINDOWS_x64:
-            case TARGET_UNIX_x64: {
+            case TARGET_LINUX_x64: {
                 options->output_file = exe_file;
             } break;
             default: Assert(false);
@@ -1053,7 +1053,7 @@ void Compiler::run(CompileOptions* options) {
             return;
         }
     } else {
-        if(options->target == TARGET_UNIX_x64) {
+        if(options->target == TARGET_LINUX_x64) {
             exe_file = options->output_file;
         } else {
             log::out << log::RED << "The specified output file '"<<options->output_file<<"' does not have a format. This is assumed to be an executable when targeting Linux but you are not ("<<options->target<<")\n";
@@ -1075,7 +1075,7 @@ void Compiler::run(CompileOptions* options) {
             // do nothing
         } break;
         case TARGET_WINDOWS_x64:
-        case TARGET_UNIX_x64: {
+        case TARGET_LINUX_x64: {
             program = X64Program::Create();
             program->debugInformation = bytecode->debugInformation;
         } break;
@@ -1124,7 +1124,7 @@ void Compiler::run(CompileOptions* options) {
         ;
         if(options->target == TARGET_WINDOWS_x64) {
             preload += "#macro OS_WINDOWS #endmacro\n";
-        } else if(options->target == TARGET_UNIX_x64) {
+        } else if(options->target == TARGET_LINUX_x64) {
             preload += "#macro OS_LINUX #endmacro\n";
         } else if(options->target == TARGET_BYTECODE) {
             preload += "#macro OS_BYTECODE #endmacro\n";
@@ -1183,7 +1183,7 @@ void Compiler::run(CompileOptions* options) {
             // do nothing
         } break;
         case TARGET_WINDOWS_x64:
-        case TARGET_UNIX_x64: {
+        case TARGET_LINUX_x64: {
             GenerateX64_finalize(this);
         } break;
         default: Assert(false);
@@ -1251,7 +1251,7 @@ void Compiler::run(CompileOptions* options) {
             obj_write_success = ObjectFile::WriteFile(OBJ_COFF, obj_file, program, this);
             options->compileStats.generatedFiles.add(obj_file);
         } break;
-        case TARGET_UNIX_x64: {
+        case TARGET_LINUX_x64: {
             obj_write_success = ObjectFile::WriteFile(OBJ_ELF, obj_file, program, this);
             options->compileStats.generatedFiles.add(obj_file);
         } break;
@@ -1319,8 +1319,12 @@ void Compiler::run(CompileOptions* options) {
 
             cmd += obj_file + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
-            cmd += "-nostdlib ";
-            cmd += "--entry main ";
+            
+            if(!force_default_entry_point) {
+                cmd += "-nostdlib ";
+                cmd += "--entry main ";
+            }
+
             // cmd += "-ffreestanding "; // these do not make a difference (with mingw on windows at least)
             // cmd += "-Os ";
             // cmd += "-nostartfiles ";
@@ -1328,7 +1332,7 @@ void Compiler::run(CompileOptions* options) {
             // cmd += "-s ";
             if(options->target == TARGET_WINDOWS_x64) {
                 cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
-            } else if(options->target == TARGET_UNIX_x64) {
+            } else if(options->target == TARGET_LINUX_x64) {
                 // cmd += "-lc "; // link clib because it has wrappers for syscalls, NOTE: We actually don't need this, we use syscalls in assembly.
             }
             
@@ -1344,6 +1348,7 @@ void Compiler::run(CompileOptions* options) {
                 if(pair == dirs.end())
                     dirs[dir] = true;
             }
+            // nocheckin, uncomment
             for(auto& pair : dirs) {
                 if(pair.first == "/") {
                     // TODO: This will always happen when linking with
@@ -1421,7 +1426,7 @@ void Compiler::run(CompileOptions* options) {
                 log::out << log::RED << "You cannot run a Windows program on Linux. Consider changing target when compiling (--target unix-x64)\n";
                 #endif
             } break;
-            case TARGET_UNIX_x64: {
+            case TARGET_LINUX_x64: {
                 #ifdef OS_LINUX
                 int exitCode;
                 bool some_crash = false;
@@ -1531,6 +1536,16 @@ void Compiler::addTask_type_body(u32 import_id) {
 }
 void Compiler::addLibrary(u32 import_id, const std::string& path, const std::string& as_name) {
     using namespace engone;
+    if(options->target == TARGET_LINUX_x64) {
+        // TODO: When on Windows, use default entry point if a C runtime was specified.
+        if(path == "c") { // libc
+            if(has_generated_entry_point) {
+                // TODO: Improve error message, although it shouldn't happen.
+                log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR <<"When using libc, your program should no longer be the entry point. The libc's entry point should be used instead (things might break otherwise). However, the entry point was generated before libc library was detected. This should not happen, contact developer for a quick fix.\n";
+            }
+            force_default_entry_point = true;
+        }
+    }
     lock_imports.lock();
     auto imp = imports.get(import_id-1);
     Assert(imp);

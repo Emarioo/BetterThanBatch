@@ -74,11 +74,11 @@ struct TypeDefinition {
     size: u32;
     name: char[];
 
-    fields: DynamicArray<Field>;
+    fields: Array<Field>;
 }
 struct FormatSpec {
     base_field: u32; // FieldType or reference to a TypeDefinition 
-    definitions: DynamicArray<TypeDefinition>; // TODO: BucketArray
+    definitions: Array<TypeDefinition>; // TODO: BucketArray
 
     fn init() {
         #macro ADD(...) definitions.add(TypeDefinition{TYPE_##...});
@@ -178,7 +178,7 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
         type: u32 = 0; // 0 refers to specification
         fieldIndex: u32 = 0;
     }
-    stack: DynamicArray<Layer>;
+    stack: Array<Layer>;
     stack.add(Layer{type = spec.base_field, fieldIndex = 0});
 
     std_prints("Interpret stream of ",stream.len," bytes\n")

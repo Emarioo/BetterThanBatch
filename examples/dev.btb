@@ -1,53 +1,22 @@
 
-// #import "Logger"
-// #import "String"
-// #import "Linux"
-
-
+// #import "OS"
 #import "Logger"
+#import "Linux"
 #import "Lang"
+// #import "String"
 
-struct Soul {
-    ko: i32;
-    numsi: f32;
+fn main(argc: i32, argv: char**, envp: char**) -> i32 {
+
+    start := rdtsc()
+    
+    time: __kernel_timespec
+    time.tv_sec = 1
+    time.tv_nsec = 1000000
+    err := nanosleep(&time, null)
+    
+    end := rdtsc()
+    
+    log("cycles: ",end-start)
+
+    return 0
 }
-struct App {
-    a: i32;
-    soul: Soul;
-    tr: bool;
-}
-app: App;
-app.a = 932
-app.tr = true
-app.soul.numsi = 232.232
-app.soul.ko = 2
-std_print_any(&app, true);
-
-// fn main(argc: i32, argv: char**, envp: char**) {
-
-//     // for 0..argc {
-//     //     log(argv[nr])
-//     // }
-
-//     args: char*[] {
-//         "hello".ptr,
-//         null
-//     }
-
-//     envc := 0
-//     while envp[envc] {
-//         env := envp[envc]
-//         envc++;
-
-//         if equal_start("PATH=",env) {
-//             // log(env)
-//             arr := split(":",substring(env,5))
-//             for arr.sliced_unsafe() {
-//                 log(it)
-//             }
-//         }
-//     }
-
-//     err := execve("bin/btb".ptr,args.ptr,null)
-//     log(name_of_error(err))
-// }
