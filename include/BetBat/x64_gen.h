@@ -227,10 +227,11 @@ struct X64Builder {
     
     struct RegisterInfo {
         bool used = false;
+        int artifical_reg=0;
     };
     std::unordered_map<X64Register, RegisterInfo> registers;
     
-    X64Register alloc_register(X64Register reg = X64_REG_INVALID, bool is_float = false);
+    X64Register alloc_register(int artifical, X64Register reg = X64_REG_INVALID, bool is_float = false);
     bool is_register_free(X64Register reg);
     void free_register(X64Register reg);
     void free_all_registers();
@@ -338,7 +339,8 @@ struct X64Builder {
         bool floaty = false;
         u8 size = 0;
         int started_by_bc_index = false; // responsible for freeing register
-
+        
+        bool freed = false;
     };
     DynamicArray<ArtificalValue> artificalRegisters{};
     // int alloc_artifical_stack() {
@@ -373,7 +375,7 @@ struct X64Builder {
     ArtificalValue* get_and_alloc_artifical_reg(int id) {
         lock_register_resize = true;
         if(artificalRegisters[id].reg == X64_REG_INVALID) {
-            artificalRegisters[id].reg = alloc_register(X64_REG_INVALID, artificalRegisters[id].floaty);
+            artificalRegisters[id].reg = alloc_register(id, X64_REG_INVALID, artificalRegisters[id].floaty);
             Assert(artificalRegisters[id].reg != X64_REG_INVALID);
         }
         return &artificalRegisters[id];
@@ -385,6 +387,12 @@ struct X64Builder {
         //     Assert(artificalRegisters[id].reg != X64_REG_INVALID);
         // }
         return &artificalRegisters[id];
+    }
+    void free_artifical(int id) {
+        auto reg = &artificalRegisters[id];
+        free_register(reg->reg);
+        reg->reg = X64_REG_INVALID;
+        reg->freed = true;
     }
 
     void clear_register_map() {

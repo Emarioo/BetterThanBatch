@@ -2444,8 +2444,11 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
         }
     } else {
         if(fnOverloads->polyOverloads.size()!=0){
-            log::out << log::YELLOW << "WARNING: Ambiguity for polymorphic overloads is not checked! (implementation incomplete) '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n";
-            // WARN_HEAD3(function->location,"Ambiguity for polymorphic overloads is not checked! '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n\n";)
+            std::string path;
+            int line, column;
+            info.compiler->lexer.get_source_information(function->location, &path, &line, &column);
+            // log::out << 
+            log::out << log::YELLOW << path <<":"<<line<<":"<<column<< " (warning): Ambiguity for polymorphic overloads is not checked! (implementation incomplete) '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n";
         }
         // Base poly overload is added without regard for ambiguity. It's hard to check ambiguity so to it later.
         fnOverloads->addPolyOverload(function);

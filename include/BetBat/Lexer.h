@@ -302,6 +302,7 @@ namespace lexer {
         const BucketArray<Import>& getImports() { return imports; }
         // const DynamicArray<Import*>& getImports() { return _imports; }
         
+        bool get_source_information(SourceLocation loc, std::string* path, int* line, int* column, Import** out_imp = nullptr);
         
         Import* getImport_unsafe(SourceLocation location) {
             u32 cindex, tindex;

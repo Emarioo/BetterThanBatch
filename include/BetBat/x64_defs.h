@@ -140,8 +140,9 @@ About x64:
 // not sign extended
 #define OPCODE_AND_RM8_IMM8_SLASH_4 (u8)0x80
 
-// sign extension, use 0x66 prefix for 16-bit
+// sign extension
 #define OPCODE_2_MOVSX_REG_RM8 (u16)0xBE0F
+#define OPCODE_2_MOVSX_REG_RM16 (u16)0xBF0F
 // intel manual encourages REX.W with MOVSXD. Use normal mov otherwise
 #define OPCODE_MOVSXD_REG_RM (u8)0x63
 

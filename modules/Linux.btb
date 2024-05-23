@@ -6,9 +6,9 @@
     The headers for Linux are complex with many #ifdefs (struct_stat.h for example)
     so this file assumes a lot of things. It should be fine on a modern 64-bit Linux machine.
 
-    Most defines are copied from /usr/include/x86_64-linux-gnu/bits/...
+    Most macros are copied from /usr/include/x86_64-linux-gnu/bits/...
 
-    TODO: Sockets, fork, execv, dup, pipe
+    TODO: getaddrinfo (it's not a syscall, what do we do? force user to link with libc?)
     TODO: This file is dependent on macros and inline assembly. If those break then this file will not compile. Should we make some sort of backup wrapper?
 */
 
@@ -17,7 +17,6 @@
 #macro STDIN_FILENO  0
 #macro STDOUT_FILENO 1
 #macro STDERR_FILENO 2
-
 
 /* open/fcntl.  */
 #macro O_RDONLY     00
@@ -132,7 +131,7 @@
 #macro	WIFSTOPPED(status)	(((status) & 0xff) == 0x7f)
 
 /* Nonzero if STATUS indicates the child continued after a stop.  We only
-   define this if <bits/waitflags.h> provides the WCONTINUED flag bit.  */
+   macro this if <bits/waitflags.h> provides the WCONTINUED flag bit.  */
 #macro WIFCONTINUED(status)	((status) == __W_CONTINUED)
 
 /* Nonzero if STATUS indicates the child dumped core.  */
@@ -158,6 +157,25 @@
 #macro	X_OK	1		/* Test for execute permission.  */
 #macro	F_OK	0		/* Test for existence.  */
 
+#macro SOCK_STREAM    1
+#macro SOCK_DGRAM     2
+#macro SOCK_RAW       3
+#macro SOCK_RDM       4
+#macro SOCK_SEQPACKET 5
+#macro SOCK_DCCP      6
+#macro SOCK_PACKET    10  
+
+#macro SOCK_NONBLOCK   O_NONBLOCK
+
+// include/linux/socket.h
+#macro AF_INET		2	/* Internet IP Protocol 	*/
+
+#macro SHUT_RD 0
+#macro SHUT_WR 1
+#macro SHUT_RDWR 2
+
+#macro INADDR_ANY 0
+
 /*#################3
     SYSCALLS
 ################*/
@@ -181,6 +199,22 @@
 #macro SYS_dup2   33
 
 #macro SYS_nanosleep 35
+
+#macro SYS_socket 41
+#macro SYS_connect 42
+#macro SYS_accept 43
+// use read/write instead of send/recv
+// #macro SYS_sendto 44
+// #macro SYS_recvfrom 45
+// #macro SYS_sendmsg 46
+// #macro SYS_recvmsg 47
+#macro SYS_shutdown 48
+#macro SYS_bind 49
+#macro SYS_listen 50
+#macro SYS_getsockname 51
+
+// #macro SYS_setsockopt 54
+
 
 #macro SYS_fork     57
 #macro SYS_vfork    58
@@ -246,12 +280,27 @@ SYSCALL(mprotect,  i32, addr: void*, len: i32, prot: i32);
 SYSCALL(munmap,    i32, addr: void*, length: i32)
 
 SYSCALL(access,  i32, path: char*, mode: i32)
-SYSCALL(pipe,  i32, fildes: int*)
+SYSCALL(pipe,  i32, fildes: i32*)
 
 SYSCALL(dup, i32, fildes: i32)
 SYSCALL(dup2, i32, oldfd: i32, newfd: i32)
 
 SYSCALL(nanosleep, i32, rqtp: timespec*, rmtp: timespec*)
+
+SYSCALL(socket, i32, domain: i32, type: i32, protocol: i32)
+SYSCALL(connect, i32, sockfd: i32, addr: sockaddr*, addrlen: i32)
+SYSCALL(accept, i32, sockfd: i32, addr: sockaddr*, addrlen: i32*)
+// SYSCALL(sendto, i32, sockfd: i32, buf: void*, len: i32, flags: i32, dest_addr: sockaddr*, addrlen: i32)
+// SYSCALL(recvfrom, i32, )
+// SYSCALL(sendmsg, i32, )
+// SYSCALL(recvmsg, i32, )
+SYSCALL(shutdown, i32, sockfd: i32, how: i32)
+SYSCALL(bind, i32, sockfd: i32, addr: sockaddr*, addrlen: i32)
+SYSCALL(listen, i32, sockfd: i32, backlog: i32)
+SYSCALL(getsockname, i32, sockfd: i32, addr: sockaddr*, addrlen: i32*)
+
+// SYSCALL(setsockopt, i32, )
+
 
 SYSCALL(fork,   i32)
 SYSCALL(vfork,  i32)
@@ -267,6 +316,38 @@ SYSCALL(getdents64, i32, fd: i32, dirp: void*, count: u32);
 SYSCALL(waitid, i32, type: i32, id: i32, info: siginfo*, options: i64, ru: void* = null);
 
 SYSCALL(getrandom, i32, buf: void*, buflen: u32, flags: u32);
+
+// htonq, ntohq (64-bit swap?)
+fn htonl(hostlong: u32) -> u32 {
+    // TODO: We assume the program is compiled for x86 (little endian)
+    //   If we support ARM, we need to change this.
+    return asm<u32>(hostlong) {
+        pop rax
+        bswap eax
+        push rax
+    }
+    // return (hostlong << 24) | ((hostlong << 8) & 0xFF0000) | (hostlong >> 24) | ((hostlong >> 8) & 0xFF00) 
+}
+fn htons(hostshort: u16) -> u16 {
+    return asm<u32>(hostshort) {
+        pop rax
+        xchg al, ah
+        push rax
+    }
+    // return (hostshort << 8) | (hostshort >> 8)
+}
+fn ntohl(netlong: u32) -> u32 {
+    return htonl(netlong)
+    // return (netlong << 24) | ((netlong << 8) & 0xFF0000) | (netlong >> 24) | ((netlong >> 8) & 0xFF00) 
+}
+fn ntohs(netshort: u16) -> u16 {
+    return htons(netlong)
+    // return (netshort << 8) | (netshort >> 8)
+}
+
+/*###############
+    STRUCTS
+##############*/
 
 // I could not find the correct stat structure anywhere but
 // this structure seems to be correct.
@@ -335,6 +416,19 @@ struct timespec {
     tv_nsec: i64;
 }
 
+// base sockaddr
+struct sockaddr {
+    sa_family: i16;
+    padding: u8[14];
+}
+// cast to sockaddr in function calls
+struct sockaddr_in {
+    sin_family: u16;
+    sin_port: u16;
+    sin_addr: u32;
+    padding: u8[8]; // sockaddr_in should be padded to 16 bytes
+}
+
 #macro EPERM    1 /* Operation not permitted */
 #macro ENOENT   2 /* No such file or directory */
 #macro ESRCH    3 /* No such process */
@@ -370,12 +464,111 @@ struct timespec {
 #macro EDOM     33 /* Math argument out of domain of func */
 #macro ERANGE   34 /* Math result not representable */
 
+#macro ENOSYS          38      /* Invalid system call number */
+
+#macro ENOTEMPTY       39      /* Directory not empty */
+#macro ELOOP           40      /* Too many symbolic links encountered */
+#macro EWOULDBLOCK     EAGAIN  /* Operation would block */
+#macro ENOMSG          42      /* No message of desired type */
+#macro EIDRM           43      /* Identifier removed */
+#macro ECHRNG          44      /* Channel number out of range */
+#macro EL2NSYNC        45      /* Level 2 not synchronized */
+#macro EL3HLT          46      /* Level 3 halted */
+#macro EL3RST          47      /* Level 3 reset */
+#macro ELNRNG          48      /* Link number out of range */
+#macro EUNATCH         49      /* Protocol driver not attached */
+#macro ENOCSI          50      /* No CSI structure available */
+#macro EL2HLT          51      /* Level 2 halted */
+#macro EBADE           52      /* Invalid exchange */
+#macro EBADR           53      /* Invalid request descriptor */
+#macro EXFULL          54      /* Exchange full */
+#macro ENOANO          55      /* No anode */
+#macro EBADRQC         56      /* Invalid request code */
+#macro EBADSLT         57      /* Invalid slot */
+
+// #macro EDEADLOCK       EDEADLK
+
+#macro EBFONT          59      /* Bad font file format */
+#macro ENOSTR          60      /* Device not a stream */
+#macro ENODATA         61      /* No data available */
+#macro ETIME           62      /* Timer expired */
+#macro ENOSR           63      /* Out of streams resources */
+#macro ENONET          64      /* Machine is not on the network */
+#macro ENOPKG          65      /* Package not installed */
+#macro EREMOTE         66      /* Object is remote */
+#macro ENOLINK         67      /* Link has been severed */
+#macro EADV            68      /* Advertise error */
+#macro ESRMNT          69      /* Srmount error */
+#macro ECOMM           70      /* Communication error on send */
+#macro EPROTO          71      /* Protocol error */
+#macro EMULTIHOP       72      /* Multihop attempted */
+#macro EDOTDOT         73      /* RFS specific error */
+#macro EBADMSG         74      /* Not a data message */
+#macro EOVERFLOW       75      /* Value too large for macrod data type */
+#macro ENOTUNIQ        76      /* Name not unique on network */
+#macro EBADFD          77      /* File descriptor in bad state */
+#macro EREMCHG         78      /* Remote address changed */
+#macro ELIBACC         79      /* Can not access a needed shared library */
+#macro ELIBBAD         80      /* Accessing a corrupted shared library */
+#macro ELIBSCN         81      /* .lib section in a.out corrupted */
+#macro ELIBMAX         82      /* Attempting to link in too many shared libraries */
+#macro ELIBEXEC        83      /* Cannot exec a shared library directly */
+#macro EILSEQ          84      /* Illegal byte sequence */
+#macro ERESTART        85      /* Interrupted system call should be restarted */
+#macro ESTRPIPE        86      /* Streams pipe error */
+#macro EUSERS          87      /* Too many users */
+#macro ENOTSOCK        88      /* Socket operation on non-socket */
+#macro EDESTADDRREQ    89      /* Destination address required */
+#macro EMSGSIZE        90      /* Message too long */
+#macro EPROTOTYPE      91      /* Protocol wrong type for socket */
+#macro ENOPROTOOPT     92      /* Protocol not available */
+#macro EPROTONOSUPPORT 93      /* Protocol not supported */
+#macro ESOCKTNOSUPPORT 94      /* Socket type not supported */
+#macro EOPNOTSUPP      95      /* Operation not supported on transport endpoint */
+#macro EPFNOSUPPORT    96      /* Protocol family not supported */
+#macro EAFNOSUPPORT    97      /* Address family not supported by protocol */
+#macro EADDRINUSE      98      /* Address already in use */
+#macro EADDRNOTAVAIL   99      /* Cannot assign requested address */
+#macro ENETDOWN        100     /* Network is down */
+#macro ENETUNREACH     101     /* Network is unreachable */
+#macro ENETRESET       102     /* Network dropped connection because of reset */
+#macro ECONNABORTED    103     /* Software caused connection abort */
+#macro ECONNRESET      104     /* Connection reset by peer */
+#macro ENOBUFS         105     /* No buffer space available */
+#macro EISCONN         106     /* Transport endpoint is already connected */
+#macro ENOTCONN        107     /* Transport endpoint is not connected */
+#macro ESHUTDOWN       108     /* Cannot send after transport endpoint shutdown */
+#macro ETOOMANYREFS    109     /* Too many references: cannot splice */
+#macro ETIMEDOUT       110     /* Connection timed out */
+#macro ECONNREFUSED    111     /* Connection refused */
+#macro EHOSTDOWN       112     /* Host is down */
+#macro EHOSTUNREACH    113     /* No route to host */
+#macro EALREADY        114     /* Operation already in progress */
+#macro EINPROGRESS     115     /* Operation now in progress */
+#macro ESTALE          116     /* Stale file handle */
+#macro EUCLEAN         117     /* Structure needs cleaning */
+#macro ENOTNAM         118     /* Not a XENIX named type file */
+#macro ENAVAIL         119     /* No XENIX semaphores available */
+#macro EISNAM          120     /* Is a named type file */
+#macro EREMOTEIO       121     /* Remote I/O error */
+#macro EDQUOT          122     /* Quota exceeded */
+
+#macro ENOMEDIUM       123     /* No medium found */
+#macro EMEDIUMTYPE     124     /* Wrong medium type */
+#macro ECANCELED       125     /* Operation Canceled */
+#macro ENOKEY          126     /* Required key not available */
+#macro EKEYEXPIRED     127     /* Key has expired */
+#macro EKEYREVOKED     128     /* Key has been revoked */
+#macro EKEYREJECTED    129     /* Key was rejected by service */
+
+
 fn name_of_error(err: i64) -> char[] {
     err = -err;
     // TODO: Make a global table of strings.
     switch (err) {
         #macro SWITCH_CASES(X,Y,...) case X: return Y; SWITCH_CASES(...)
-        SWITCH_CASES(EPERM,"EPERM",
+        SWITCH_CASES(
+            EPERM,"EPERM",
             ENOENT, "ENOENT",
             ESRCH, "ESRCH",
             EINTR, "EINTR",
@@ -408,9 +601,104 @@ fn name_of_error(err: i64) -> char[] {
             EMLINK, "EMLINK",
             EPIPE, "EPIPE",
             EDOM, "EDOM",
-            ERANGE, "ERANGE")
+            ERANGE, "ERANGE",
+            ENOSYS, "ENOSYS",                    /* Invalid system call number */
+            ENOTEMPTY, "ENOTEMPTY",              /* Directory not empty */
+            ELOOP, "ELOOP",                      /* Too many symbolic links encountered */
+            EWOULDBLOCK, "EWOULDBLOCK",          /* Operation would block */
+            ENOMSG, "ENOMSG",                    /* No message of desired type */
+            EIDRM, "EIDRM",                      /* Identifier removed */
+            ECHRNG, "ECHRNG",                    /* Channel number out of range */
+            EL2NSYNC, "EL2NSYNC",                /* Level 2 not synchronized */
+            EL3HLT, "EL3HLT",                    /* Level 3 halted */
+            EL3RST, "EL3RST",                    /* Level 3 reset */
+            ELNRNG, "ELNRNG",                    /* Link number out of range */
+            EUNATCH, "EUNATCH",                  /* Protocol driver not attached */
+            ENOCSI, "ENOCSI",                    /* No CSI structure available */
+            EL2HLT, "EL2HLT",                    /* Level 2 halted */
+            EBADE, "EBADE",                      /* Invalid exchange */
+            EBADR, "EBADR",                      /* Invalid request descriptor */
+            EXFULL, "EXFULL",                    /* Exchange full */
+            ENOANO, "ENOANO",                    /* No anode */
+            EBADRQC, "EBADRQC",                  /* Invalid request code */
+            EBADSLT, "EBADSLT",                  /* Invalid slot */
+            // EDEADLOCK, "EDEADLOCK",              
+            EBFONT, "EBFONT",                    /* Bad font file format */
+            ENOSTR, "ENOSTR",                    /* Device not a stream */
+            ENODATA, "ENODATA",                  /* No data available */
+            ETIME, "ETIME",                      /* Timer expired */
+            ENOSR, "ENOSR",                      /* Out of streams resources */
+            ENONET, "ENONET",                    /* Machine is not on the network */
+            ENOPKG, "ENOPKG",                    /* Package not installed */
+            EREMOTE, "EREMOTE",                  /* Object is remote */
+            ENOLINK, "ENOLINK",                  /* Link has been severed */
+            EADV, "EADV",                        /* Advertise error */
+            ESRMNT, "ESRMNT",                    /* Srmount error */
+            ECOMM, "ECOMM",                      /* Communication error on send */
+            EPROTO, "EPROTO",                    /* Protocol error */
+            EMULTIHOP, "EMULTIHOP",              /* Multihop attempted */
+            EDOTDOT, "EDOTDOT",                  /* RFS specific error */
+            EBADMSG, "EBADMSG",                  /* Not a data message */
+            EOVERFLOW, "EOVERFLOW",              /* Value too large for macrod data type */
+            ENOTUNIQ, "ENOTUNIQ",                /* Name not unique on network */
+            EBADFD, "EBADFD",                    /* File descriptor in bad state */
+            EREMCHG, "EREMCHG",                  /* Remote address changed */
+            ELIBACC, "ELIBACC",                  /* Can not access a needed shared library */
+            ELIBBAD, "ELIBBAD",                  /* Accessing a corrupted shared library */
+            ELIBSCN, "ELIBSCN",                  /* .lib section in a.out corrupted */
+            ELIBMAX, "ELIBMAX",                  /* Attempting to link in too many shared libraries */
+            ELIBEXEC, "ELIBEXEC",                /* Cannot exec a shared library directly */
+            EILSEQ, "EILSEQ",                    /* Illegal byte sequence */
+            ERESTART, "ERESTART",                /* Interrupted system call should be restarted */
+            ESTRPIPE, "ESTRPIPE",                /* Streams pipe error */
+            EUSERS, "EUSERS",                    /* Too many users */
+            ENOTSOCK, "ENOTSOCK",                /* Socket operation on non-socket */
+            EDESTADDRREQ, "EDESTADDRREQ",        /* Destination address required */
+            EMSGSIZE, "EMSGSIZE",                /* Message too long */
+            EPROTOTYPE, "EPROTOTYPE",            /* Protocol wrong type for socket */
+            ENOPROTOOPT, "ENOPROTOOPT",          /* Protocol not available */
+            EPROTONOSUPPORT, "EPROTONOSUPPORT",  /* Protocol not supported */
+            ESOCKTNOSUPPORT, "ESOCKTNOSUPPORT",  /* Socket type not supported */
+            EOPNOTSUPP, "EOPNOTSUPP",            /* Operation not supported on transport endpoint */
+            EPFNOSUPPORT, "EPFNOSUPPORT",        /* Protocol family not supported */
+            EAFNOSUPPORT, "EAFNOSUPPORT",        /* Address family not supported by protocol */
+            EADDRINUSE, "EADDRINUSE",            /* Address already in use */
+            EADDRNOTAVAIL, "EADDRNOTAVAIL",      /* Cannot assign requested address */
+            ENETDOWN, "ENETDOWN",                /* Network is down */
+            ENETUNREACH, "ENETUNREACH",          /* Network is unreachable */
+            ENETRESET, "ENETRESET",              /* Network dropped connection because of reset */
+            ECONNABORTED, "ECONNABORTED",        /* Software caused connection abort */
+            ECONNRESET, "ECONNRESET",            /* Connection reset by peer */
+            ENOBUFS, "ENOBUFS",                  /* No buffer space available */
+            EISCONN, "EISCONN",                  /* Transport endpoint is already connected */
+            ENOTCONN, "ENOTCONN",                /* Transport endpoint is not connected */
+            ESHUTDOWN, "ESHUTDOWN",              /* Cannot send after transport endpoint shutdown */
+            ETOOMANYREFS, "ETOOMANYREFS",        /* Too many references: cannot splice */
+            ETIMEDOUT, "ETIMEDOUT",              /* Connection timed out */
+            ECONNREFUSED, "ECONNREFUSED",        /* Connection refused */
+            EHOSTDOWN, "EHOSTDOWN",              /* Host is down */
+            EHOSTUNREACH, "EHOSTUNREACH",        /* No route to host */
+            EALREADY, "EALREADY",                /* Operation already in progress */
+            EINPROGRESS, "EINPROGRESS",          /* Operation now in progress */
+            ESTALE, "ESTALE",                    /* Stale file handle */
+            EUCLEAN, "EUCLEAN",                  /* Structure needs cleaning */
+            ENOTNAM, "ENOTNAM",                  /* Not a XENIX named type file */
+            ENAVAIL, "ENAVAIL",                  /* No XENIX semaphores available */
+            EISNAM, "EISNAM",                    /* Is a named type file */
+            EREMOTEIO, "EREMOTEIO",              /* Remote I/O error */
+            EDQUOT, "EDQUOT",                    /* Quota exceeded */
+            ENOMEDIUM, "ENOMEDIUM",              /* No medium found */
+            EMEDIUMTYPE, "EMEDIUMTYPE",          /* Wrong medium type */
+            ECANCELED, "ECANCELED",              /* Operation Canceled */
+            ENOKEY, "ENOKEY",                    /* Required key not available */
+            EKEYEXPIRED, "EKEYEXPIRED",          /* Key has expired */
+            EKEYREVOKED, "EKEYREVOKED",          /* Key has been revoked */
+            EKEYREJECTED, "EKEYREJECTED",        /* Key was rejected by service */
+
+            
+        )
     }
-    return "unknown"
+    return "<unnamed>"
 }
 
 #endif // OS_LINUX

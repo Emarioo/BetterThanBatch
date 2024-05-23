@@ -19,6 +19,7 @@
 #include <sys/random.h>
 #include <dlfcn.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
 
 #include <unordered_map>
 #include <vector>
@@ -76,6 +77,7 @@ namespace engone {
 		// 	DirectoryIteratorDestroy(iterator);
 		// 	return 0;
 		// }
+        
 		return iterator;
 	}
 	bool DirectoryIteratorNext(DirectoryIterator iterator, DirectoryIteratorData* result){

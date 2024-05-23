@@ -1957,5 +1957,44 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
 
     return true;
 }
+bool Lexer::get_source_information(SourceLocation loc, std::string* path, int* line, int* column, Import** out_imp) {
+    std::string cwd = engone::GetWorkingDirectory() + "/";
+    ReplaceChar((char*)cwd.data(), cwd.length(), '\\','/');
+    int index = 0;
+    
+    u32 cindex,tindex;
+    decode_origin(loc.tok.origin, &cindex, &tindex);
+
+    auto chunk = getChunk_unsafe(cindex);
+    lexer::TokenInfo* info=nullptr;
+    lexer::TokenSource* src=nullptr;
+    if(loc.tok.type == lexer::TOKEN_EOF) {
+        info = &chunk->tokens[tindex-1];
+        src = &chunk->sources[tindex-1];
+    } else {
+        info = &chunk->tokens[tindex];
+        src = &chunk->sources[tindex];
+    }
+    auto imp = getImport_unsafe(chunk->import_id);
+    if(out_imp)
+        *out_imp = imp;
+
+    while(imp->path.size() > index && cwd.size() > index) {
+        if(imp->path[index] != cwd[index])
+            break;
+        index++;
+    }
+    if(path) {
+        if(index != 0)
+            *path = imp->path.substr(index);
+        else
+            *path = imp->path;
+    }
+    if(line)
+        *line = src->line;
+    if(column)
+        *column = src->column;
+    return true;
+}
 }
 

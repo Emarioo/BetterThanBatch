@@ -473,8 +473,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     // #define FIX_PRE_IN_OPERAND(N) auto reg##N = get_and_alloc_artifical_reg(n->reg##N);
     #define FIX_PRE_OUT_OPERAND(N) auto reg##N = get_and_alloc_artifical_reg(n->reg##N);
 
-    #define FIX_POST_IN_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_register(reg##N->reg);
-    #define FIX_POST_OUT_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_register(reg##N->reg);
+    // #define FIX_POST_IN_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_register(reg##N->reg);
+    // #define FIX_POST_OUT_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_register(reg##N->reg);
+    #define FIX_POST_IN_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_artifical(n->reg##N);
+    #define FIX_POST_OUT_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_artifical(n->reg##N);
 
     DynamicArray<i32> _bc_to_x64_translation;
     _bc_to_x64_translation.resize(tinycode->size());
@@ -1087,13 +1089,12 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                         auto reg0 = get_artifical_reg(n->reg0);
                         if(reg0->floaty) {
-                            reg0->reg = alloc_register(X64_REG_XMM0, true); 
+                            reg0->reg = alloc_register(n->reg0, X64_REG_XMM0, true); 
                             Assert(reg0->reg != X64_REG_INVALID);
                         } else {
                             // X64_REG_A is used by mul and rdtsc, we can't reserve it
                             // (well, we could but then we would need to temporarily push/pop rax before using it, instead we move A to a new register)
                             FIX_PRE_OUT_OPERAND(0)
-                            reg0->reg = alloc_register();
                             
                             if(IS_CONTROL_SIGNED(base->control)) {
                                 emit_movsx(reg0->reg, X64_REG_A, base->control);
@@ -1103,7 +1104,6 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             
                             Assert(reg0->reg != X64_REG_INVALID);
                         }
-                        // TODO: movzx, movsx on returned value?
                     } break;
                     default: Assert(false);
                 }
@@ -3104,9 +3104,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             case BC_RDTSC: {
                 auto reg0 = get_artifical_reg(n->reg0);
                 if(is_register_free(X64_REG_D)) {
-                    reg0->reg = alloc_register(X64_REG_D);
+                    reg0->reg = alloc_register(n->reg0, X64_REG_D);
                 } else {
-                    reg0->reg = alloc_register();
+                    reg0->reg = alloc_register(n->reg0);
                     emit_push(X64_REG_D);
                 }
 
@@ -3377,7 +3377,21 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         
             default: Assert(false);
         }
+        // if(tinycode->name == "main") {
+            // for(auto& pair : registers) {
+            //     pair.second.used   
+            // }
+            // for(int i=1;i<artificalRegisters.size();i++) {
+            //     auto& reg = artificalRegisters[i];
+            //     // if(n->bc_index > reg.started_by_bc_index) {
+            //         if(!reg.freed) {
+            //             log::out << i << " was not freed, bc: "<<reg.started_by_bc_index<<"\n";
+            //         }
+            //     // }
+            // }
+        // }
     }
+    
 
     // TODO: If you have many relocations you can use process them using multiple threads.
     //  It can't be too few because the overhead of managing the threads would be worse

@@ -81,7 +81,7 @@ Try to edit Config.cpp instead of this file because you will have to compile all
     // #define LOG_ALLOCATIONS
 #endif
 
-#define PREPROC_REC_LIMIT 100
+#define PREPROC_REC_LIMIT 1000
 
 // THESE SHOULD BE OFF FOR THE COMPILER TO WORK PROPERLY
 // #define DISABLE_BASE_IMPORT

@@ -140,7 +140,7 @@ bool GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
 void X64Builder::free_all_registers() {
     registers.clear();
 }
-X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
+X64Register X64Builder::alloc_register(int artifical, X64Register reg, bool is_float) {
     using namespace engone;
     // #define DO_LOG(X) X
     #define DO_LOG(X)
@@ -150,10 +150,12 @@ X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
             if(pair == registers.end()) {
                 registers[reg] = {};
                 registers[reg].used = true;
+                registers[reg].artifical_reg = artifical;
                 DO_LOG(log::out << "alloc " << reg<<"\n";)
                 return reg;
             } else if(!pair->second.used) {
                 pair->second.used = true;
+                pair->second.artifical_reg = artifical;
                 DO_LOG(log::out << "alloc " << reg<<"\n";)
                 return reg;
             }
@@ -181,11 +183,13 @@ X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
                 if(pair == registers.end()) {
                     registers[reg] = {};
                     registers[reg].used = true;
+                    registers[reg].artifical_reg = artifical;
                     Assert(reg != RESERVED_REG0 && reg != RESERVED_REG1);
                     DO_LOG(log::out << "alloc " << reg<<"\n";)
                     return reg;
                 } else if(!pair->second.used) {
                     pair->second.used = true;
+                    pair->second.artifical_reg = artifical;
                     Assert(reg != RESERVED_REG0 && reg != RESERVED_REG1);
                     DO_LOG(log::out << "alloc " << reg<<"\n";)
                     return reg;
@@ -198,10 +202,12 @@ X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
             if(pair == registers.end()) {
                 registers[reg] = {};
                 registers[reg].used = true;
+                registers[reg].artifical_reg = artifical;
                 DO_LOG(log::out << "alloc " << reg<<"\n";)
                 return reg;
             } else if(!pair->second.used) {
                 pair->second.used = true;
+                pair->second.artifical_reg = artifical;
                 DO_LOG(log::out << "alloc " << reg<<"\n";)
                 return reg;
             }
@@ -218,10 +224,12 @@ X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
                 if(pair == registers.end()) {
                     registers[reg] = {};
                     registers[reg].used = true;
+                    registers[reg].artifical_reg = artifical;
                     DO_LOG(log::out << "alloc " << reg<<"\n";)
                     return reg;
                 } else if(!pair->second.used) {
                     pair->second.used = true;
+                    pair->second.artifical_reg = artifical;
                     DO_LOG(log::out << "alloc " << reg<<"\n";)
                     return reg;
                 }
@@ -236,7 +244,7 @@ bool X64Builder::is_register_free(X64Register reg) {
     if(pair == registers.end()) {
         return true;
     }
-    return false;
+    return !pair->second.used;
 }
 void X64Builder::free_register(X64Register reg) {
     auto pair = registers.find(reg);
@@ -244,6 +252,7 @@ void X64Builder::free_register(X64Register reg) {
         Assert(false);
     }
     pair->second.used = false;
+    pair->second.artifical_reg = 0;
 }
 bool X64Builder::_reserve(u32 newAllocationSize){
     if(newAllocationSize==0){
@@ -444,8 +453,7 @@ void X64Builder::emit_movsx(X64Register reg, X64Register rm, InstructionControl 
     if(GET_CONTROL_SIZE(control) == CONTROL_8B) {
         emit2(OPCODE_2_MOVSX_REG_RM8);
     } else if(GET_CONTROL_SIZE(control) == CONTROL_16B) {
-        emit1(PREFIX_16BIT);
-        emit2(OPCODE_2_MOVSX_REG_RM8);
+        emit2(OPCODE_2_MOVSX_REG_RM16);
     }  else if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
         emit1(OPCODE_MOVSXD_REG_RM);
     } else {

@@ -281,38 +281,16 @@ void Reporter::err_head(lexer::Token token, CompileError errcode){
     // NOTE: Stream name is an absolute path. If the path contains CWD then skip that part to reduce
     //   the clutter on the screen. The user can probably deduce where the file is even if we drop the CWD part.
     //   Make sure you can still click on the path in your editor/terminal to quick jump to the location. (at least in vscode)
-    std::string cwd = engone::GetWorkingDirectory() + "/";
-    ReplaceChar((char*)cwd.data(), cwd.length(), '\\','/');
-    int index = 0;
+    std::string path;
+    int line, column;
+    lexer::Import* imp;
+    lexer->get_source_information({token}, &path, &line, &column, &imp);
     
-    u32 cindex,tindex;
-    lexer->decode_origin(token.origin, &cindex, &tindex);
-
-    auto chunk = lexer->getChunk_unsafe(cindex);
-    lexer::TokenInfo* info=nullptr;
-    lexer::TokenSource* src=nullptr;
-    if(token.type == lexer::TOKEN_EOF) {
-        info = &chunk->tokens[tindex-1];
-        src = &chunk->sources[tindex-1];
-    } else {
-        info = &chunk->tokens[tindex];
-        src = &chunk->sources[tindex];
-    }
-    auto imp = lexer->getImport_unsafe(chunk->import_id);
-
     prev_import = imp;
     base_column = -1;
 
-    while(imp->path.size() > index && cwd.size() > index) {
-        if(imp->path[index] != cwd[index])
-            break;
-        index++;
-    }
-    if(index != 0)
-        log::out << "./" << imp->path.substr(index);
-    else
-        log::out << imp->path;
-    log::out <<":"<<(src->line)<<":"<<(src->column);
+    log::out << path;
+    log::out <<":"<<(line)<<":"<<(column);
 
     log::out << " ("<<ToCompileErrorString({true,errcode})<<")";
     log::out << ": " <<  MESSAGE_COLOR;
