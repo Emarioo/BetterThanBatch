@@ -1,0 +1,449 @@
+// TODO: Rename file to Windows.btb instead of Win32.btb? I guess
+//   we have bindings for the Win 32 API so it's fine as is?
+
+#if OS_WINDOWS
+
+#load "Kernel32.lib" as Kernel
+
+#macro HANDLE void*
+#macro INVALID_HANDLE_VALUE (cast<HANDLE>cast<i64>-1)
+
+// https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
+fn @import(Kernel) CloseHandle(
+  hObject: HANDLE
+) -> bool;
+
+/*########################
+    MEMORY, ALLOCATIONS
+#########################*/
+
+#macro STATUS_NO_MEMORY cast<void*>cast<i64>0xC0000017
+#macro STATUS_ACCESS_VIOLATION cast<void*>cast<i64>0xC0000005
+
+// https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-getprocessheap
+fn @import(Kernel) GetProcessHeap() -> HANDLE;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc
+fn @import(Kernel) HeapAlloc(
+    hHeap: HANDLE,
+    dwFlags: i32,
+    dwBytes: i64
+) -> void*;
+// https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heaprealloc
+fn @import(Kernel) HeapReAlloc(
+    hHeap: HANDLE,
+    dwFlags: i32,
+    lpMem: void*,
+    dwBytes: i64
+) -> void*;
+// https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapfree
+fn @import(Kernel) HeapFree(
+    hHeap: HANDLE,
+    dwFlags: i32,
+    lpMem: void*
+) -> bool;
+
+/*########################
+    FILE SYSTEM
+#########################*/
+
+#macro CREATE_NEW                      1
+#macro CREATE_ALWAYS                   2
+#macro OPEN_EXISTING                   3
+#macro OPEN_ALWAYS                     4
+#macro TRUNCATE_EXISTING               5
+#macro GENERIC_READ                    0x80000000
+#macro GENERIC_WRITE                   0x40000000
+#macro GENERIC_EXECUTE                 0x20000000
+#macro GENERIC_ALL                     0x10000000
+#macro FILE_SHARE_READ                 0x00000001  
+#macro FILE_SHARE_WRITE                0x00000002  
+#macro FILE_SHARE_DELETE               0x00000004  
+#macro FILE_ATTRIBUTE_NORMAL           0x00000080  
+#macro FILE_ATTRIBUTE_DIRECTORY        0x00000010
+
+#macro MAX_PATH          260
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
+fn @import(Kernel) CreateFileA(
+  lpFileName: char*,
+  dwDesiredAccess: i32,
+  dwShareMode: i32,
+  lpSecurityAttributes: void*, // optional, TODO: Type should be LPSECURITY_ATTRIBUTES instead of void*
+  dwCreationDisposition: i32,
+  dwFlagsAndAttributes: i32,
+  hTemplateFile: HANDLE // optional
+) -> HANDLE;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesizeex
+fn @import(Kernel) GetFileSizeEx(
+  hFile: HANDLE,
+  lpFileSizeHigh: i64*
+) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
+fn @import(Kernel) ReadFile(
+  hFile: HANDLE,
+  lpBuffer: void*,
+  nNumberOfBytesToRead: i32,
+  lpNumberOfBytesRead: i32*,
+  lpOverlapped: void* // optional, TODO: Don't do void?
+) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile
+fn @import(Kernel) WriteFile(
+  hFile: HANDLE,
+  lpBuffer: void*,
+  nNumberOfBytesToWrite: i32,
+  lpNumberOfBytesWritten: i32*,
+  lpOverlapped: void* // optional, TODO: Don't be void?
+) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirstfilea
+fn @import(Kernel) FindFirstFileA(
+  lpFileName: char*,
+  lpFindFileData: WIN32_FIND_DATAA*
+) -> HANDLE;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findnextfilea
+fn @import(Kernel) FindNextFileA(
+  hFindFile: HANDLE,
+  lpFindFileData: WIN32_FIND_DATAA*
+) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findclose
+fn @import(Kernel) FindClose(
+  hFindFile: HANDLE
+) -> bool;
+
+// A user may want to use the name 'Sleep' so we rename the function
+fn @import(Kernel,alias="Sleep") win32_Sleep(
+  dwMilliseconds: u32
+);
+
+struct FILETIME {
+    dwLowDateTime:  u32;
+    dwHighDateTime: u32;
+}
+struct WIN32_FIND_DATAA {
+    dwFileAttributes: u32;
+    ftCreationTime:   FILETIME; // NOTE: FILETIME could be replaced with i64 but you would need to disable padding in the struct
+    ftLastAccessTime: FILETIME;
+    ftLastWriteTime:  FILETIME;
+    nFileSizeHigh:    u32;
+    nFileSizeLow:     u32;
+    dwReserved0:      u32;
+    dwReserved1:      u32;
+    cFileName: char[MAX_PATH];
+    cAlternateFileName: char[14];
+//   dwFileType: i32; // Obsolete. Do not use.
+//   dwCreatorType: i32; // Obsolete. Do not use
+//   wFinderFlags: i16; // Obsolete. Do not use
+}
+
+/*#############
+    SOCKETS
+###############*/
+
+#load "Ws2_32.lib" as Winsock
+fn @import(Winsock) WSAStartup(
+  wVersionRequired: u32,
+  lpWSAData: WSADATA*
+) -> i32;
+
+fn @import(Winsock) WSACleanup() -> i32;
+fn @import(Winsock) WSAGetLastError() -> i32;
+
+#macro SOCKET u64
+fn @import(Winsock) socket(
+  af: i32,
+  type: i32,
+  protocol: i32
+) -> SOCKET;
+fn @import(Winsock) closesocket(
+  s: SOCKET
+) -> i32;
+fn @import(Winsock) bind(
+  s: SOCKET,
+  addr: sockaddr*,
+  namelen: i32
+) -> i32;
+fn @import(Winsock) listen(
+  s: SOCKET,
+  backlog: i32 // use SOMAXCONN for a reasonably sized backlog
+) -> i32;
+#macro SOMAXCONN 0x7fffffff
+
+fn @import(Winsock) accept(
+  s: SOCKET,
+  addr: sockaddr*,
+  addrlen: i32
+) -> SOCKET;
+fn @import(Winsock) connect(
+  s: SOCKET,
+  name: sockaddr*,
+  namelen: i32
+) -> i32;
+// TODO: select, WSAPoll
+
+fn @import(Winsock) recv(
+  s: SOCKET,
+  buf: char*,
+  len: i32,
+  flags: i32 // MSG_OOB, MSG_PEEK, MSG_WAITALL
+) -> i32;
+fn @import(Winsock) send(
+  s: SOCKET,
+  buf: char*,
+  len: i32,
+  flags: i32 //  MSG_OOB, MSG_DONTROUTE
+) -> i32;
+#macro MSG_OOB         0x1      /* process out-of-band data */
+#macro MSG_PEEK        0x2      /* peek at incoming message */
+#macro MSG_DONTROUTE   0x4      /* send without using routing tables */
+#macro MSG_WAITALL     0x8      /* do not complete until packet is completely filled */
+
+
+
+fn @import(Winsock) getaddrinfo(
+  pNodeName: char*,
+  pServiceName: char*,
+  pHints: addrinfo*,
+  ppResult: addrinfo**
+) -> i32;
+fn @import(Winsock) freeaddrinfo(
+  pAddrInfo: addrinfo*
+);
+
+#macro WSADESCRIPTION_LEN      257
+#macro WSASYS_STATUS_LEN       129
+
+struct WSADATA {
+        wVersion: u16;
+        wHighVersion: u16;
+// #ifdef _WIN64
+        iMaxSockets: u16;
+        iMaxUdpDg: u16;
+        lpVendorInfo: char*;
+        szDescription: char[WSADESCRIPTION_LEN]; // Windows docs use '_LEN+1' but the language does not support operations when deciding length of array so _LEN has +1 built in
+        szSystemStatus: char[WSASYS_STATUS_LEN];
+// #else
+// #endif
+}
+
+struct addrinfo {
+    ai_flags: i32;
+    ai_family: i32;
+    ai_socktype: i32;
+    ai_protocol: i32;
+    ai_addrlen: i64;
+    ai_canonname: char*;
+    ai_addr: sockaddr*;
+    ai_next: addrinfo*;
+}
+
+struct sockaddr {
+    sa_family: u16;
+    sa_data: char[14];
+};
+
+struct sockaddr_in {
+    sin_family: u16;
+    sin_port: u16;
+    sin_addr: u32;
+    sin_zero: char[8];
+};
+
+#macro AF_UNSPEC 0
+#macro AF_INET 2
+#macro AF_IPX 6
+#macro AF_APPLETALK 16
+#macro AF_NETBIOS 17
+#macro AF_INET6 23
+#macro AF_IRDA 26
+#macro AF_BTH 32
+
+#macro SOCK_STREAM 1
+#macro SOCK_DGRAM 2
+#macro SOCK_RAW 3
+#macro SOCK_RDM 4
+#macro SOCK_SEQPACKET 5
+
+#macro IPPROTO_ICMP 1
+#macro IPPROTO_IGMP 2
+#macro BTHPROTO_RFCOMM 3
+#macro IPPROTO_TCP 6
+#macro IPPROTO_UDP 17
+#macro IPPROTO_ICMPV6 58
+#macro IPPROTO_RM 113
+
+#macro INVALID_SOCKET 0xFFFF_FFFF_FFFF_FFFF
+#macro SOCKET_ERROR 0xFFFF_FFFF_FFFF_FFFF
+
+#macro INADDR_ANY 0
+
+/*###########
+    EXTRA
+############*/
+
+// NOTE: These are also defined in Linux.btb
+// htonq, ntohq (64-bit swap?)
+fn htonl(hostlong: u32) -> u32 {
+    // TODO: We assume the program is compiled for x86 (little endian)
+    //   If we support ARM, we need to change this.
+    return asm<u32>(hostlong) {
+        pop rax
+        bswap eax
+        push rax
+    }
+    // return (hostlong << 24) | ((hostlong << 8) & 0xFF0000) | (hostlong >> 24) | ((hostlong >> 8) & 0xFF00) 
+}
+fn htons(hostshort: u16) -> u16 {
+    return asm<u32>(hostshort) {
+        pop rax
+        xchg al, ah
+        push rax
+    }
+    // return (hostshort << 8) | (hostshort >> 8)
+}
+fn ntohl(netlong: u32) -> u32 {
+    return htonl(netlong)
+    // return (netlong << 24) | ((netlong << 8) & 0xFF0000) | (netlong >> 24) | ((netlong >> 8) & 0xFF00) 
+}
+fn ntohs(netshort: u16) -> u16 {
+    return htons(netlong)
+    // return (netshort << 8) | (netshort >> 8)
+}
+
+
+/*###########################################
+    WSA Errors (copied from winerror.h)
+    https://learn.microsoft.com/en-us/windows/win32/winsock/windows-sockets-error-codes-2
+############################################*/
+
+// A blocking operation was interrupted by a call to WSACancelBlockingCall.
+#macro WSAEINTR                         10004
+// The file handle supplied is not valid.
+#macro WSAEBADF                         10009
+// An attempt was made to access a socket in a way forbidden by its access permissions.
+#macro WSAEACCES                        10013
+// The system detected an invalid pointer address in attempting to use a pointer argument in a call.
+#macro WSAEFAULT                        10014
+// An invalid argument was supplied.
+#macro WSAEINVAL                        10022
+// Too many open sockets.
+#macro WSAEMFILE                        10024
+// A non-blocking socket operation could not be completed immediately.
+#macro WSAEWOULDBLOCK                   10035
+// A blocking operation is currently executing.
+#macro WSAEINPROGRESS                   10036
+// An operation was attempted on a non-blocking socket that already had an operation in progress.
+#macro WSAEALREADY                      10037
+// An operation was attempted on something that is not a socket.
+#macro WSAENOTSOCK                      10038
+// A required address was omitted from an operation on a socket.
+#macro WSAEDESTADDRREQ                  10039
+// A message sent on a datagram socket was larger than the internal message buffer or some other network limit, or the buffer used to receive a datagram into was smaller than the datagram itself.
+#macro WSAEMSGSIZE                      10040
+// A protocol was specified in the socket function call that does not support the semantics of the socket type requested.
+#macro WSAEPROTOTYPE                    10041
+// An unknown, invalid, or unsupported option or level was specified in a getsockopt or setsockopt call.
+#macro WSAENOPROTOOPT                   10042
+// The requested protocol has not been configured into the system, or no implementation for it exists.
+#macro WSAEPROTONOSUPPORT               10043
+// The support for the specified socket type does not exist in this address family.
+#macro WSAESOCKTNOSUPPORT               10044
+// The attempted operation is not supported for the type of object referenced.
+#macro WSAEOPNOTSUPP                    10045
+// The protocol family has not been configured into the system or no implementation for it exists.
+#macro WSAEPFNOSUPPORT                  10046
+// An address incompatible with the requested protocol was used.
+#macro WSAEAFNOSUPPORT                  10047
+// Only one usage of each socket address (protocol/network address/port) is normally permitted.
+#macro WSAEADDRINUSE                    10048
+// The requested address is not valid in its context.
+#macro WSAEADDRNOTAVAIL                 10049
+// A socket operation encountered a dead network.
+#macro WSAENETDOWN                      10050
+// A socket operation was attempted to an unreachable network.
+#macro WSAENETUNREACH                   10051
+// The connection has been broken due to keep-alive activity detecting a failure while the operation was in progress.
+#macro WSAENETRESET                     10052
+// An established connection was aborted by the software in your host machine.
+#macro WSAECONNABORTED                  10053
+// An existing connection was forcibly closed by the remote host.
+#macro WSAECONNRESET                    10054
+// An operation on a socket could not be performed because the system lacked sufficient buffer space or because a queue was full.
+#macro WSAENOBUFS                       10055
+// A connect request was made on an already connected socket.
+#macro WSAEISCONN                       10056
+// A request to send or receive data was disallowed because the socket is not connected and (when sending on a datagram socket using a sendto call) no address was supplied.
+#macro WSAENOTCONN                      10057
+// A request to send or receive data was disallowed because the socket had already been shut down in that direction with a previous shutdown call.
+#macro WSAESHUTDOWN                     10058
+// Too many references to some kernel object.
+#macro WSAETOOMANYREFS                  10059
+// A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond.
+#macro WSAETIMEDOUT                     10060
+// No connection could be made because the target machine actively refused it.
+#macro WSAECONNREFUSED                  10061
+// Cannot translate name.
+#macro WSAELOOP                         10062
+// Name component or name was too long.
+#macro WSAENAMETOOLONG                  10063
+// A socket operation failed because the destination host was down.
+#macro WSAEHOSTDOWN                     10064
+// A socket operation was attempted to an unreachable host.
+#macro WSAEHOSTUNREACH                  10065
+// Cannot remove a directory that is not empty.
+#macro WSAENOTEMPTY                     10066
+// A Windows Sockets implementation may have a limit on the number of applications that may use it simultaneously.
+#macro WSAEPROCLIM                      10067
+// Ran out of quota.
+#macro WSAEUSERS                        10068
+// Ran out of disk quota.
+#macro WSAEDQUOT                        10069
+// File handle reference is no longer available.
+#macro WSAESTALE                        10070
+// Item is not available locally.
+#macro WSAEREMOTE                       10071
+// WSAStartup cannot function at this time because the underlying system it uses to provide network services is currently unavailable.
+#macro WSASYSNOTREADY                   10091
+// The Windows Sockets version requested is not supported.
+#macro WSAVERNOTSUPPORTED               10092
+// Either the application has not called WSAStartup, or WSAStartup failed.
+#macro WSANOTINITIALISED                10093
+// Returned by WSARecv or WSARecvFrom to indicate the remote party has initiated a graceful shutdown sequence.
+#macro WSAEDISCON                       10101
+// No more results can be returned by WSALookupServiceNext.
+#macro WSAENOMORE                       10102
+// A call to WSALookupServiceEnd was made while this call was still processing. The call has been canceled.
+#macro WSAECANCELLED                    10103
+// The procedure call table is invalid.
+#macro WSAEINVALIDPROCTABLE             10104
+// The requested service provider is invalid.
+#macro WSAEINVALIDPROVIDER              10105
+// The requested service provider could not be loaded or initialized.
+#macro WSAEPROVIDERFAILEDINIT           10106
+// A system call has failed.
+#macro WSASYSCALLFAILURE                10107
+// No such service is known. The service cannot be found in the specified name space.
+#macro WSASERVICE_NOT_FOUND             10108
+// The specified class was not found.
+#macro WSATYPE_NOT_FOUND                10109
+// No more results can be returned by WSALookupServiceNext.
+#macro WSA_E_NO_MORE                    10110
+// A call to WSALookupServiceEnd was made while this call was still processing. The call has been canceled.
+#macro WSA_E_CANCELLED                  10111
+// A database query failed because it was actively refused.
+#macro WSAEREFUSED                      10112
+// No such host is known.
+#macro WSAHOST_NOT_FOUND                11001
+// This is usually a temporary error during hostname resolution and means that the local server did not receive a response from an authoritative server.
+#macro WSATRY_AGAIN                     11002
+// A non-recoverable error occurred during a database lookup.
+#macro WSANO_RECOVERY                   11003
+// The requested name is valid, but no data of the requested type was found.
+#macro WSANO_DATA                       11004
+
+#endif // OS_WINDOWS

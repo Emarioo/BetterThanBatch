@@ -8,7 +8,7 @@
 // asin,acos,atan2?
 
 #if OS_WINDOWS
-#import "Win32"
+#import "Windows"
 #elif OS_LINUX
 #import "Linux"
 #endif

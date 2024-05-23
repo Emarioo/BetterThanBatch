@@ -565,7 +565,6 @@ u8* PDBFile::takePointer(u32 streamNumber, u32 offset, u32 bytes){
 }
 PDBFile* PDBFile::Deconstruct(const char* path) {
     using namespace engone;
-    
     u64 fileSize = 0;
     auto file = FileOpen(path, FILE_READ_ONLY, &fileSize);
     if(!file)

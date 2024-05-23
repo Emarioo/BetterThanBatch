@@ -1475,8 +1475,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             case BC_RET: {
                 // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
                 
-                if(callee_saved_space - unixcall_args_offset != 0) {
-                    emit_add_imm32(X64_REG_SP, (i32)(callee_saved_space - unixcall_args_offset));
+                if(callee_saved_space - callee_saved_regs_len*8  - unixcall_args_offset > 0) {
+                    emit_add_imm32(X64_REG_SP, (i32)(callee_saved_space - callee_saved_regs_len*8 - unixcall_args_offset));
                 }
 
                 if(is_blank) {

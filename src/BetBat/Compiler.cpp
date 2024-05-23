@@ -1283,10 +1283,12 @@ void Compiler::run(CompileOptions* options) {
             cmd += obj_file + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
             
-            cmd += "/ENTRY:main ";
-            cmd += "/NODEFAULTLIB "; // entry point must be set manually with NODEFAULTLIB
-            // cmd += "/NODEFAULTLIB[:library] ";
-            // cmd += "/DEFAULTLIB:MSVCRT ";
+            // turn off because parsing command line arguments must be done manually when using our own entry point
+            // cmd += "/NODEFAULTLIB "; // entry point must be set manually with NODEFAULTLIB
+            // cmd += "/ENTRY:main ";
+            // this runtime instead
+            cmd += "/DEFAULTLIB:MSVCRT ";
+            
             // cmd += "/DEFAULTLIB:LIBCMT ";
             cmd += "Kernel32.lib "; // _test and prints uses WriteFile so we must link with kernel32
             
@@ -1321,8 +1323,14 @@ void Compiler::run(CompileOptions* options) {
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
             
             if(!force_default_entry_point) {
-                cmd += "-nostdlib ";
-                cmd += "--entry main ";
+                if(options->target == TARGET_WINDOWS_x64) {
+                    // Always use cruntime entry point on Windows because
+                    // parsing command line arguments is though.
+                    // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
+                } else {
+                    cmd += "-nostdlib ";
+                    cmd += "--entry main ";
+                }
             }
 
             // cmd += "-ffreestanding "; // these do not make a difference (with mingw on windows at least)

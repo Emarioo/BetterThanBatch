@@ -1,0 +1,14 @@
+@TEST_CASE(stack_crash)
+// uses a lot of stack space with some recursion
+// the test makes sure we don't crash
+
+fn rec(n: i32, sp: u64) {
+    if n == 0
+        return
+    arr: char[10048]
+    
+    rec(n-1, sp)
+}
+
+a: i32
+rec(6, &a)

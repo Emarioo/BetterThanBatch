@@ -9,3 +9,23 @@ fn @import(libc) free(ptr: void*);
 // fn @import(libc) exit(st: i32);
 // fn @import(libc) fork() -> i32;
 // fn @import(libc) waitpid(pid: i32, st: i32*, options: i32) -> i32;
+
+/* TODO: Test addrinfo
+
+struct addrinfo {
+    ai_flags: i32;
+    ai_family: i32;
+    ai_socktype: i32;
+    ai_protocol: i32;
+    ai_addrlen: i32;
+    ai_addr: sockaddr*; // TODO: define sockaddr, reuse from Linux.btb?
+    ai_canonname: char*;
+    ai_next: addrinfo*;
+};
+
+fn @import(libc) getaddrinfo(node: char*, service: char*, hints: addrinfo*, res: addrinfo**) -> i32;
+fn @import(libc) freeaddrinfo(res: addrinfo*);
+
+// TODO: Add errors for getaddrinfo
+
+*/

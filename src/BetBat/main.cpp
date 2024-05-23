@@ -22,7 +22,12 @@
 #undef STB_IMAGE_WRITE_IMPLEMENTATION
 #endif
 
-#include "fcntl.h"
+// #include "fcntl.h"
+
+#include "Engone/Win32Includes.h"
+#undef FILE_READ_ONLY // bye bye Windows defined flag
+#undef IMAGE_REL_AMD64_REL32
+#undef coff
 
 void garbage() {
     // int a[20];
@@ -36,7 +41,28 @@ int main(int argc, const char** argv){
     #define EXIT_CODE_SUCCESS 0
     #define EXIT_CODE_FAILURE 1
 
+    // // auto cmd = GetCommandLineA();
+    // // int cmd_len = 0;
+    // // int arg_count = 0;
+    // // for(int i=0;i<)
+    
+    // // int len = strlen(cmd);
+    // // malloc(len + )
+    
+    // // 10
+    // // 5 5*8 40
+    // // btb -a -r -t -y -i -i
+
+    // int num = 0;
+    // auto args = CommandLineToArgvW((const wchar_t*)cmd, &num);
+    // log::out << num<<"\n";
+    // for(int i=0;i<num;i++) {
+    //     const char* ok = (const char*)args[i];
+    //     log::out << ok << "\n";
+    // }
+
     ProfilerInitialize();
+    
 
     // int n = 020;
 

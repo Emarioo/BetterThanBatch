@@ -5,7 +5,7 @@
 
     TODO: The implementation is defined in NativeLayer.cpp.
       We will deprecate NativeLayer and just write the implementation in .btb files.
-      Either all versions in OS.btb or in separate Win32.btb, Unix.btb.
+      Either all versions in OS.btb or in separate Windows.btb, Unix.btb.
 
 
 */
@@ -15,7 +15,7 @@
 #import "Logger"
 
 #if OS_WINDOWS
-#import "Win32"
+#import "Windows"
 #elif OS_LINUX
 #import "Linux"
 #endif

@@ -20,6 +20,9 @@
 #include <vector>
 #include <string>
 
+#include "WinSock2.h"
+#include "ws2tcpip.h"
+
 // #define NOMINMAX
 // #define _WIN32_WINNT 0x0601
 // #define WIN32_LEAN_AND_MEAN
@@ -29,6 +32,7 @@
 // Cheeky include
 #include "BetBat/Util/Perf.h"
 #include "Engone/Win32Includes.h"
+#undef FILE_READ_ONLY // bye bye Windows defined flag
 
 #include "Engone/Util/Array.h"
 
@@ -90,6 +94,9 @@ namespace engone {
 		if(info==s_rdiInfos.end()){
 			return false;
 		}
+        // SOMAXCONN
+        // SOCKET
+        // WSADATA
         // printf("NEXT\n");
 
 		WIN32_FIND_DATAA data;
@@ -347,7 +354,6 @@ namespace engone {
         DWORD access = GENERIC_READ|GENERIC_WRITE;
         DWORD sharing = WIN_SHARE_READ|WIN_SHARE_WRITE;
 		Assert(flags != 0);
-		#undef FILE_READ_ONLY // bye bye Windows defined flag
         if(flags & FILE_READ_ONLY){
             access = GENERIC_READ;
 		}

@@ -169,6 +169,8 @@
 
 // include/linux/socket.h
 #macro AF_INET		2	/* Internet IP Protocol 	*/
+// #macro AF_INET6
+// TODO: Add more AF_
 
 #macro SHUT_RD 0
 #macro SHUT_WR 1
@@ -317,6 +319,7 @@ SYSCALL(waitid, i32, type: i32, id: i32, info: siginfo*, options: i64, ru: void*
 
 SYSCALL(getrandom, i32, buf: void*, buflen: u32, flags: u32);
 
+// NOTE: These are also defined in Windows.btb
 // htonq, ntohq (64-bit swap?)
 fn htonl(hostlong: u32) -> u32 {
     // TODO: We assume the program is compiled for x86 (little endian)
