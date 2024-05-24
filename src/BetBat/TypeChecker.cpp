@@ -1970,9 +1970,15 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
         case AST_BOR:
         case AST_BXOR: {
             // TODO: Signed unsigned doesn't matter, the size and integer does
+            auto linfo = info.ast->getTypeInfo(leftType);
+            auto rinfo = info.ast->getTypeInfo(rightType);
             int lsize = info.ast->getTypeSize(leftType);
             int rsize = info.ast->getTypeSize(rightType);
             if((AST::IsInteger(leftType) || leftType == AST_CHAR) && (AST::IsInteger(rightType) || rightType == AST_CHAR) && lsize == rsize) {
+                if(outTypes) {
+                    outTypes->add(leftType);
+                }
+            } else if (linfo && rinfo && linfo->astEnum && linfo->astEnum == rinfo->astEnum) {
                 if(outTypes) {
                     outTypes->add(leftType);
                 }

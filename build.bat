@@ -234,5 +234,6 @@ if !compileSuccess! == 0 (
     rem
 
     bin\btb -dev
+    @REM bin\btb examples/dev.btb -g
     @REM bin\btb --test
 )

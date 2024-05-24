@@ -13,6 +13,7 @@
 // This means that you can safely take a pointer to the struct or element you write and modify it
 // without worrying about the boundary.
 // Write operations do not invalidate previous pointers. Operations like finalize() may invalidate pointers.
+// TODO: Deprecate "write_late". Where a pointer is returned. That does not work if two allocations are crossed, we would need to return two pointers which is bad.
 struct ByteStream {
     #define ENSURE_ALLOCATOR if(!m_allocator) m_allocator = engone::GlobalHeapAllocator();
     static ByteStream* Create(engone::Allocator* allocator) {
@@ -68,8 +69,10 @@ struct ByteStream {
         
         if(!allocation || allocation->writtenBytes + size > allocation->max) {
             bool suc = allocations.add({});
-            if(!suc)
+            if(!suc) {
+                Assert(false);
                 return false;
+            }
             lastAllocation = allocations.size()-1;
             
             allocation = &allocations[lastAllocation];
@@ -78,6 +81,7 @@ struct ByteStream {
             allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
             if(!allocation->ptr) {
                 allocations.removeAt(allocations.size()-1);
+                Assert(false);
                 return false;   
             }
         }
@@ -88,47 +92,39 @@ struct ByteStream {
         writtenBytes+=size;
         return true;
     }
-    bool write_late_at(u32 offset, void** out_ptr, u32 size) {
+    bool write_at(u32 offset, void* ptr, u32 size) {
         Assert(size != 0);
         Assert(!unknown_state);
         Assert(offset < writtenBytes);
-        if(out_ptr)
-            *out_ptr = nullptr;
-        
-        Allocation* first = nullptr;
-        Allocation* second = nullptr;
+        Assert(ptr);
+          
         int seek_offset = 0;
+        int written_bytes = 0;
         for(int i=0;i<allocations.size();i++) {
             auto& all = allocations[i];
 
-            if(offset >= seek_offset && offset < seek_offset + all.writtenBytes) {
-                first = &all;
-                if (i + 1 < allocations.size())
-                    second = &allocations[i+1];
-                break;
+            int diff = offset + written_bytes - seek_offset;
+            if(diff >= 0 && diff < all.writtenBytes) {
+                auto dst = all.ptr + diff;
+                
+                int clamped_size = size - written_bytes;
+                if (clamped_size > all.writtenBytes - diff) {
+                    clamped_size = all.writtenBytes - diff;
+                }
+                
+                memcpy(dst, (u8*)ptr + written_bytes, clamped_size);
+                written_bytes += clamped_size;
+                
+                if(written_bytes == size)
+                    break;
             }
             seek_offset += all.writtenBytes;
         }
-
-        if(!first)
-            return false; // offset is out of range
         
-        if(size < first->writtenBytes - (offset - seek_offset)) {
-            if(out_ptr)
-                *out_ptr = first->ptr + (offset - seek_offset);
-            return true;
-        } else if (second) {
-            // we could technically write into 3 allocations if we need to but
-            // that's a rare case which requires more complications. Not worthh it.
-            
-            // I realized a flaw, we can't return two pointers...
+        Assert(written_bytes == size);
+        if(written_bytes != size)
             return false;
-
-            // return true;
-        } else {
-            // offset + size is out of range
-            return false;
-        }
+        return true;
     }
     // ALWAYS call wrote_unknown after calling this
     bool write_unknown(void** out_ptr, u32 max_size) {
@@ -142,8 +138,10 @@ struct ByteStream {
         
         if(!allocation || allocation->writtenBytes + max_size > allocation->max) {
             bool suc = allocations.add({});
-            if(!suc)
+            if(!suc) {
+                Assert(false);
                 return false;
+            }
             lastAllocation = allocations.size()-1;
             
             allocation = &allocations[lastAllocation];
@@ -152,6 +150,7 @@ struct ByteStream {
             allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
             if(!allocation->ptr) {
                 allocations.removeAt(allocations.size()-1);
+                Assert(false);
                 return false;   
             }
         }
@@ -247,8 +246,10 @@ struct ByteStream {
         int max = writtenBytes;
         ENSURE_ALLOCATOR
         u8* ptr = (u8*)m_allocator->allocate(max);
-        if(!ptr)
+        if(!ptr) {
+            Assert(false);
             return false;
+        }
             
         // combine allocations into one
         int offset = 0;
@@ -462,11 +463,10 @@ struct ByteStream {
         // don't pass by value is type is bigger than 8?
         Assert(sizeof(T) <= 8);
 
-        void* ptr = nullptr;
-        bool yes = write_late_at(offset, &ptr, sizeof(T));
-        if(!yes) return false;
+        bool yes = write_at(offset, &value, sizeof (T));
+        Assert(yes);
 
-        memcpy(ptr,&value,sizeof(T));
+        // memcpy(ptr,&value,sizeof(T));
         return true;
     }
     

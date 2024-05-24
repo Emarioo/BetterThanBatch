@@ -1,0 +1,173 @@
+/*
+    Very simple web server
+*/
+
+#import "Logger"
+#import "String"
+#import "Windows"
+#import "File"
+#import "Memory"
+
+#macro PORT 8080
+
+fn main(argc: i32, argv: char**) -> i32 {
+
+    wsaData: WSADATA
+    err := WSAStartup(0x0202, &wsaData)
+    if err != 0 {
+        log("WSA failed")
+        return 1
+    }
+    defer WSACleanup()
+        
+    server := socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    if server == INVALID_SOCKET {
+        log("socket failed")
+        return 1
+    }
+    defer closesocket(server)
+    
+    addr: sockaddr_in
+    addr.sin_family = AF_INET
+    addr.sin_port = htons(PORT)
+    addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
+    
+    err = bind(server, cast<sockaddr*>&addr, sizeof addr)
+    if err == SOCKET_ERROR {
+        log("bind failed")   
+        return 1
+    }
+    
+    err = listen(server, SOMAXCONN)
+    if err == SOCKET_ERROR {
+        log("listen failed")
+        return 1
+    }
+    
+    buffer: char[1024]
+    while {
+        log("#waiting")
+        client := accept(server, null, 0)
+        if client == INVALID_SOCKET {
+            log("accept failed")
+            return 1
+        }
+        defer closesocket(client)
+        
+        while {
+            bytes := recv(client, buffer.ptr, buffer.len, 0)
+            if bytes == 0 {
+                break
+            } else if bytes < 0 {
+                err := WSAGetLastError()
+                if err == WSAECONNRESET
+                    break
+                log("recv failed ", err)
+                return 1
+            }
+
+            // std_print(buffer.ptr, bytes)
+            // log() // newline
+            
+            msg := Slice<char>{buffer.ptr, bytes}
+            
+            if substring(msg,0,4) != "GET " {
+                log("missing GET")
+                break
+            }
+            head := 4
+            path: StringBuilder
+            defer path.cleanup()
+            while {
+                chr := msg[head]
+                head++
+                if chr == ' ' || chr == '\n' || chr == '\r' || chr == '\t'
+                    break
+                path.append(chr)
+            }
+            version := "HTTP/1.1\r\n"
+            if substring(msg,head,head + version.len) != version {
+                log("missing HTTP/1.1, or path was bad")
+                break
+            }
+            // skip rest for now
+            
+            
+            log("get ", path)
+            
+            if !IsPathSanitized(path) {
+                log("path is not safe")
+                break   
+            }
+            
+            if(path == "/") {
+                path.append("examples/windows/index.html");
+            }
+            real_path := Slice<char>{path.ptr+1, path.len-1}
+            
+            
+            response: StringBuilder
+            defer response.cleanup()
+            
+            filesize: i64
+            file := FileOpen(real_path, FILE_READ_ONLY, &filesize)
+            if !file {
+                response.append("HTTP/1.1 404 Not Found\r\n")
+                response.append("Connection: close\r\n")
+                response.append("\r\n")
+                log("send: Not Found")
+            } else {
+                defer FileClose(file)
+                
+                response.append("HTTP/1.1 200 OK\r\n")
+                response.append("Content-Length: ")
+                response.append(filesize)
+                response.append("\r\n")
+                response.append("Connection: close\r\n")
+                response.append("\r\n")
+                
+                header_len := response.len
+                response.resize(header_len + filesize)
+                
+                // filedata := Allocate(filesize)
+                // defer if filedata  Free(filedata)
+                err = FileRead(file, response.ptr + header_len, filesize)
+                if !err {
+                    log("FileRead failed")   
+                    break
+                }
+                log("send: ",real_path)
+            }
+            
+            err = send(client, response.ptr, response.len, 0)
+            if err == SOCKET_ERROR {
+                log("send failed")
+                break
+            }
+            
+            break // we close connection because we only have one thread
+        }
+    }
+    return 0
+}
+
+fn IsPathSanitized(path: StringBuilder) -> bool {
+    // Crude sanitization
+    if path.ptr[0] != '/'
+       return false
+    for 1..path.len {
+        chr := path[nr]
+        if path.ptr[nr-1] == '.' && chr == '.'
+            return false
+        if chr >= '0' && chr <= '9'
+            continue
+        if chr >= 'A' && chr <= 'Z'
+            continue
+        if chr >= 'a' && chr <= 'z'
+            continue
+        if chr == '_' || chr == '-' || chr == '-' || chr == '.'
+            continue
+        return false
+    }
+    return true
+}

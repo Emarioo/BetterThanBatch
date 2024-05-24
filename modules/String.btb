@@ -43,7 +43,7 @@ struct StringBuilder {
     }
     fn append(value: char) {
         if len + 1u > max {
-            if !_reserve(len + 5)
+            if !reserve(len + 5)
                 return
         }
         ptr[len] = value

@@ -343,6 +343,9 @@ namespace dwarf {
                     addType(arg_impl.typeId);
                 }
             }
+            
+            // #define DEBUG_VAL32 0x5f5f5f5f
+            #define DEBUG_VAL32 0x1
 
             AST* ast = debug->ast;
             struct LateTypeRef {
@@ -379,6 +382,24 @@ namespace dwarf {
                         u32* sibling_ref4 = nullptr;
                         stream->write_late((void**)&sibling_ref4, sizeof(u32));
                         
+                        //  {
+                        // WRITE_LEB(abbrev_struct_member)
+                        // std::string tmp ="hahaonijk";
+                        // stream->write(tmp.c_str(), tmp.length());
+                        // // stream->write(memAst.name.ptr, memAst.name.len);
+                        // stream->write1('\0');
+                        // int typeref = getTypeRef(AST_UINT32);
+                        // if(typeref == 0) {
+                        //     addType(AST_UINT32);
+                        //     // log::out << "Late "<<ast->typeToString(memImpl.typeId)<<" at "<< (stream->getWriteHead() - offset_section)<<"\n";
+                        //     lateTypeRefs.add({stream->getWriteHead() - offset_section, AST_UINT32 });
+                        //     stream->write4(DEBUG_VAL32); // not known yet
+                        // } else {
+                        //     stream->write4(typeref); // ref4
+                        // }
+                        // stream->write2(12); // data location
+                        // }
+                        
                         Assert(typeInfo->structImpl->members.size() == typeInfo->astStruct->members.size());
                         for (int mi=0;mi<typeInfo->structImpl->members.size();mi++) {
                             auto& memImpl = typeInfo->structImpl->members[mi];
@@ -396,14 +417,14 @@ namespace dwarf {
                                 addType(memImpl.typeId);
                                 // log::out << "Late "<<ast->typeToString(memImpl.typeId)<<" at "<< (stream->getWriteHead() - offset_section)<<"\n";
                                 lateTypeRefs.add({stream->getWriteHead() - offset_section, memImpl.typeId });
-                                stream->write4(0); // not known yet
+                                stream->write4(DEBUG_VAL32); // not known yet
                             } else {
                                 stream->write4(typeref); // ref4
                             }
                             Assert(memImpl.offset < 0xFFFF);
                             stream->write2(memImpl.offset); // data location
                         }
-                        
+                       
                         WRITE_LEB(0); // end of members in structure
 
                         *sibling_ref4 = stream->getWriteHead() - offset_section;
@@ -422,7 +443,7 @@ namespace dwarf {
                         if (typeRef == 0) {
                             addType(typeInfo->astEnum->colonType);
                             lateTypeRefs.add({stream->getWriteHead() - offset_section, typeInfo->astEnum->colonType });
-                            stream->write4(0); // not known yet
+                            stream->write4(DEBUG_VAL32); // not known yet
                         } else {
                             stream->write4(typeRef);
                         }
@@ -524,8 +545,11 @@ namespace dwarf {
             for(int i=0;i<lateTypeRefs.size();i++) {
                 auto& ref = lateTypeRefs[i];
                 u32 typeref = allTypes[ref.typeId.getId()].reference[ref.typeId.getPointerLevel()];
-                // log::out << "Late write "<<ast->typeToString(ref.typeId)<<" at "<<ref.section_offset<<"\n";
+                // log::out << "Late write "<<ast->typeToString(ref.typeId)<<" at "<<ref.section_offset<<" = "<<typeref<<"\n";
                 stream->write_at<u32>(offset_section + ref.section_offset, typeref);
+                
+                // if(i <= 3)
+                // stream->write_at<u32>(offset_section + ref.section_offset, 0x102);
             }
 
             // We need this because we added a 16-byte offset in .debug_frame.

@@ -7,6 +7,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb",
             "args": ["-dev"],
+            // "args": ["examples/dev.btb","-g"],
             // "args": ["modules/Linux.btb","--preproc"],
             // "args": ["-pm","*dev.btb"],
             // "args": ["-twe","*operations.btb"],
@@ -45,7 +46,7 @@
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],
             // "args": ["-pm", "dev*"],
             // "args": ["-dev"],
-            "args": ["examples/dev"],
+            "args": ["examples/dev.btb","-g"],
             // "args": [""],
             // "args": ["oi.btb"],
             "stopAtEntry": false,
@@ -75,7 +76,8 @@
             "type": "cppdbg",
             "request": "launch",
             // "program": "${workspaceFolder}/bin/temp.exe",
-            "program": "${workspaceFolder}/test.exe",
+            // "program": "${workspaceFolder}/test.exe",
+            "program": "${workspaceFolder}/main.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -92,7 +94,7 @@
                 {
                     "description": "Set Disassembly Flavor to Intel",
                     "text": "-gdb-set disassembly-flavor intel",
-                    // "ignoreFailures": true
+                    "ignoreFailures": true
                 }
             ]
         },

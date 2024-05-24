@@ -550,10 +550,10 @@ struct ASTExpression : ASTNode {
     // you could use a union with some of these to save memory
     // outTypeSizeof and castType could perhaps be combined?
     PolyVersions<int> versions_constStrIndex{};
-    union {
+    // union {
         PolyVersions<TypeId> versions_outTypeSizeof{};
         PolyVersions<TypeId> versions_outTypeTypeid;
-    };
+    // };
     PolyVersions<TypeId> versions_castType{};
     PolyVersions<TypeId> versions_asmType{};
 

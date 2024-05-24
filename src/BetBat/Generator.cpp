@@ -139,6 +139,12 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
         // }
         return true;
     }
+    if(to == AST_BOOL) {
+        auto finfo = info.ast->getTypeInfo(from);
+        if(finfo->astEnum) {
+            return true;
+        }
+    }
     if (AST::IsInteger(from) && AST::IsInteger(to)) {
         builder.emit_pop(from_reg);
         if (AST::IsSigned(from) && AST::IsSigned(to))
@@ -4249,7 +4255,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             if(!performSafeCast(dtype, AST_BOOL)) {
                 ERR_SECTION(
                     ERR_HEAD2(statement->firstExpression->location)
-                    ERR_MSG("The type '"<<log::GREEN<<info.ast->typeToString(dtype)<<log::NO_COLOR<<"' cannot be converted to a boolean which if-statements require.")
+                    ERR_MSG_COLORED("The type '"<<log::GREEN<<info.ast->typeToString(dtype)<<log::NO_COLOR<<"' cannot be converted to a boolean which if-statements require.")
                     ERR_LINE2(statement->firstExpression->location, "not a bool type")
                 )
                 generatePop(BC_REG_INVALID, 0, dtype);
