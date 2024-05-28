@@ -233,6 +233,7 @@ if !compileSuccess! == 0 (
 :RUN_COMPILER
     rem
 
+    @REM bin\btb -dev
     bin\btb -dev
     @REM bin\btb examples/dev.btb -g
     @REM bin\btb --test

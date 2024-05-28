@@ -178,52 +178,236 @@ int OpPrecedence(int op){
     return 0;
 }
 
-enum ParseFlags : u32 {
-    PARSE_NO_FLAGS = 0x0,
-    // INPUT
-    PARSE_INSIDE_SWITCH = 0x1,
-    PARSE_TRULY_GLOBAL = 0x2,
-    // OUTPUT
-    PARSE_HAS_CURLIES = 0x4,
-    PARSE_HAS_CASE_FALL = 0x8, // annotation @fall for switch cases
-};
-
-/*#####################################
-    Declaration of parse functions
-######################################*/
-// The function will not parse any tokens if they didn't conform to a type. If outTypeId is empty, no tokens were parsed.
-SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed = nullptr);
-SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct);
-SignalIO ParseNamespace(ParseInfo& info, ASTScope*& astNamespace);
-SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum);
-// out_arguments may be null to parse but ignore arguments
-SignalIO ParseAnnotationArguments(ParseInfo& info, lexer::TokenRange* out_arguments);
-SignalIO ParseAnnotation(ParseInfo& info, StringView* out_annotation_name, lexer::TokenRange* out_arguments);
-// parses arguments and puts them into fncall->left
-SignalIO ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count);
-SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression);
-SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement);
-// returns 0 if syntax is wrong for flow parsing
-SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* parentStruct, bool is_operator);
-SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement);
-// out token contains a newly allocated string. use delete[] on it
-SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags = PARSE_NO_FLAGS, ParseFlags* out_flags = nullptr);
 
 /*###############################
     Code for parse functions
 #################################*/
 
-SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed){
+SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
     using namespace engone;
     
     int startToken = info.gethead();
     
+    outTypeId = {};
+    
     // char[][]
     // Array<char[],Array<char[],char[]>>[]
     // Array < char [
-        
+    
+    /* a sketch in BNF of type syntax
+        type = "(" normal_type ")" | "(" function_type ")"
 
+        normal_type = identifier [ poly_list ] { "*" }
+
+        poly_list = "<" [ type_list ] ">"
+
+        type_list = type { "," type }
+
+        fn < (fn () -> i32) * >
+
+        fn ( fn() -> i32, i32 )
+
+        fn () -> fn () -> i32 , i32
+
+        fn <fn () -> i32, i32>
+
+        var: fn () -> i32, i32
+
+        function_type = "fn" [ convention ] [ poly_list ] "(" [ type_list ] ")" [ "->" return_types ] { "*" }
+
+        return_types = [ "(" type_list ")" ] | type if inside(type_list) else type_list
+
+        convention = "@stdcall" | "@betcall" | "@unixcall"
+    */
+    
+    struct Env {
+        std::string buffer="";
+        // bool new_type = true;
+        // bool type_list = false;
+        bool func_params = false;
+        bool func_returns = false;
         
+        bool only_pointer = false;
+        bool may_be_name = true;
+        
+        bool expect_closing_paren = false;
+        // bool consume_closing_paren = false;
+    };
+    DynamicArray<Env> envs;
+    envs.add({});
+    
+    lexer::TokenInfo* token = nullptr;
+    lexer::SourceLocation loc{};
+    StringView view{};
+    #define CURTOK() { token = info.getinfo(&view); loc = info.getloc(); if(token->type == lexer::TOKEN_EOF) break; }
+    
+    // TODO: Cleanup and simplify this code.
+    //   It's also not complete, correct syntax will be fine but invalid syntax could get through the parser and
+    //   into type checker.
+    while(true) {
+        CURTOK();
+        
+        if(envs.last().func_params) {
+            if(token->type == ')') {
+                info.advance();
+                envs.last().buffer += ")";
+            } else Assert(false); // nocheckin, throw error?
+            CURTOK();
+            auto token2 = info.getinfo(1);
+            if (( 0 == (token->flags & lexer::TOKEN_FLAG_ANY_SUFFIX) && token->type == '-' && token2->type == '>')) {
+                info.advance(2);
+                envs.last().buffer += "->";
+                envs.last().func_returns = true;
+                envs.last().func_params = false;
+                envs.last().may_be_name = false;
+                envs.add({});
+                continue;
+            } else {
+                // no return values
+                // ERR_SECTION(
+                //     ERR_HEAD2(loc)
+                //     ERR_MSG("Function ")
+                // )
+            }
+            if(envs.size() > 1) {
+                envs[envs.size()-2].buffer += envs.last().buffer;
+                envs.pop();
+            } else {
+                break;
+            }
+            continue;
+        } else if(envs.last().func_returns) {
+            if(envs.size() > 1) {
+                envs[envs.size()-2].buffer += envs.last().buffer;
+                envs.pop();
+            } else {
+                // envs[envs.size()-2].buffer += envs.last().buffer;
+                break;
+            }
+            continue;
+        }
+        if(!envs.last().only_pointer) {
+            if (token->type == lexer::TOKEN_FUNCTION && envs.last().may_be_name) {
+                info.advance();
+                envs.last().buffer.append("fn");
+                
+                while (true) {
+                    CURTOK();
+                    if (token->type != lexer::TOKEN_ANNOTATION) {
+                        break;
+                    }
+                    info.advance();
+                    envs.last().buffer.append("@");
+                    envs.last().buffer.append(view);
+                }
+                
+                CURTOK()
+                if (token->type != '(') {
+                    ERR_SECTION(
+                        ERR_HEAD2(loc)
+                        ERR_MSG("Invalid syntax for function pointer, expected '('.")
+                        ERR_LINE2(loc, "here")
+                    )
+                    break;
+                }
+                info.advance();
+                envs.last().buffer.append("(");
+                envs.last().func_params = true;
+                envs.add({});
+                envs.last().expect_closing_paren = true;
+                // envs.last().consume_closing_paren = false;
+                continue;
+            } else if (token->type == lexer::TOKEN_IDENTIFIER && envs.last().may_be_name) {
+                info.advance();
+                envs.last().buffer += view;
+                envs.last().may_be_name = false;
+                continue;
+            } else if (token->type == lexer::TOKEN_NAMESPACE_DELIM) {
+                info.advance();
+                envs.last().buffer += "::";
+                envs.last().may_be_name = true;
+                // flawed?
+                continue;
+            } else if (token->type == '<') {
+                info.advance();
+                envs.last().buffer += "<";
+                envs.last().may_be_name = false;
+                envs.add({});
+                continue;
+            } else if (token->type == '[') {
+                auto token = info.getinfo(&view, 1);
+                if(token->type == ']') {
+                    info.advance(2);
+                    std::string tmp = envs.last().buffer;
+                    envs.last().buffer = "Slice<" + tmp + ">";
+                    continue;
+                } else {
+                    break;
+                }
+            } else if (token->type == '(' && envs.last().may_be_name) {
+                if(envs.size() == 1) {
+                    break;
+                }
+                info.advance();
+                envs.last().buffer += "(";
+                envs.last().may_be_name = false;
+                envs.add({});
+                envs.last().expect_closing_paren = true;
+                // envs.last().consume_closing_paren = false;
+                continue;
+            }
+        }
+        if (token->type == '*') {
+            info.advance();
+            envs.last().buffer += "*";
+            envs.last().only_pointer = true;
+        } else if (token->type == ',') {
+            if(envs.size() == 1) {
+                break;
+            }
+            info.advance();
+            envs[envs.size()-2].buffer += envs.last().buffer;
+            envs[envs.size()-2].buffer += ",";
+            envs.last().buffer.clear();
+            envs.last().may_be_name = true;
+            envs.last().only_pointer = false;
+        } else if (token->type == '>') {
+            if(envs.size() == 1) {
+                break;
+            }
+            info.advance();
+            envs[envs.size()-2].buffer += envs.last().buffer;
+            envs[envs.size()-2].buffer += ">";
+            envs.pop();
+        } else if (token->type == ')') {
+            if(envs.size() == 1) {
+                break;
+            }
+            // if(envs.last().expect_closing_paren) {
+                envs[envs.size()-2].buffer += envs.last().buffer;
+                envs.pop();   
+                continue;
+            // }
+            // info.advance();
+            // envs[envs.size()-2].buffer += envs.last().buffer;
+            // envs[envs.size()-2].buffer += ")";
+            // envs.pop();
+        } else {
+            break;
+        }
+    }
+    
+    outTypeId = "";
+    for(int i=0;i<envs.size();i++) {
+        outTypeId += envs[i].buffer; 
+    }
+    if(tokensParsed)
+        *tokensParsed = info.gethead() - startToken;
+        
+    // log::out << "Parsed: '" << outTypeId << "'\n";
+    return SIGNAL_SUCCESS;
+    #undef NEXT
+#ifdef gone
     // TODO: Optimize
     DynamicArray<std::string> strings;
     strings.add({});
@@ -328,8 +512,9 @@ SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed)
     if(tokensParsed)
         *tokensParsed = info.gethead() - startToken;
     return SIGNAL_SUCCESS;
+#endif
 }
-SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
+SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
     using namespace engone;
     // MEASURE;
     ZoneScopedC(tracy::Color::OrangeRed1);
@@ -491,7 +676,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
             wasFunction = true;
             ASTFunction* func = 0;
 
-            SignalIO signal = ParseFunction(info, func, astStruct, false);
+            SignalIO signal = parseFunction(func, astStruct, false);
             switch(signal) {
             case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
             case SIGNAL_SUCCESS: break;
@@ -560,7 +745,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
             }
             info.advance();
             auto type_tok = info.gettok();
-            auto signal = ParseTypeId(info,typeToken,nullptr);
+            auto signal = parseTypeId(typeToken,nullptr);
 
             SIGNAL_INVALID_DATATYPE(typeToken)
             // switch(signal){
@@ -649,7 +834,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
             token = info.getinfo();
             if(token->type == '='){
                 info.advance();
-                signal = ParseExpression(info,defaultValue);
+                signal = parseExpression(defaultValue);
             }
             switch(signal) {
             case SIGNAL_SUCCESS: {
@@ -725,7 +910,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
     _GLOG(log::out << "Parsed struct "<<log::LIME<< name_view <<log::NO_COLOR << " with "<<astStruct->members.size()<<" members\n";)
     return SIGNAL_SUCCESS;
 }
-SignalIO ParseNamespace(ParseInfo& info, ASTScope*& astNamespace){
+SignalIO ParseContext::parseNamespace(ASTScope*& astNamespace){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
@@ -812,19 +997,19 @@ SignalIO ParseNamespace(ParseInfo& info, ASTScope*& astNamespace){
 
         if(token->type == lexer::TOKEN_FUNCTION) {
             info.advance();
-            signal = ParseFunction(info,tempFunction, nullptr, false);
+            signal = parseFunction(tempFunction, nullptr, false);
         } else if(token->type == lexer::TOKEN_OPERATOR) {
             info.advance();
-            signal = ParseFunction(info,tempFunction, nullptr, true);
+            signal = parseFunction(tempFunction, nullptr, true);
         } else if(token->type == lexer::TOKEN_STRUCT) {
             info.advance();
-            signal = ParseStruct(info,tempStruct);
+            signal = parseStruct(tempStruct);
         } else if(token->type == lexer::TOKEN_ENUM) {
             info.advance();
-            signal = ParseEnum(info,tempEnum);
+            signal = parseEnum(tempEnum);
         } else if(token->type == lexer::TOKEN_NAMESPACE) {
             info.advance();
-            signal = ParseNamespace(info,tempNamespace);
+            signal = parseNamespace(tempNamespace);
         } else {
             auto token = info.gettok();
             ERR_SECTION(
@@ -862,7 +1047,7 @@ SignalIO ParseNamespace(ParseInfo& info, ASTScope*& astNamespace){
     return error;
 }
 
-SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum){
+SignalIO ParseContext::parseEnum(ASTEnum*& astEnum){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
@@ -919,7 +1104,7 @@ SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum){
         info.advance();
 
         std::string tokenType{};
-        auto signal = ParseTypeId(info, tokenType);
+        auto signal = parseTypeId(tokenType);
         
         SIGNAL_INVALID_DATATYPE(tokenType)
 
@@ -1135,7 +1320,7 @@ SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum){
     return error;
 }
 
-SignalIO ParseAnnotationArguments(ParseInfo& info, lexer::TokenRange* out_arguments) {
+SignalIO ParseContext::parseAnnotationArguments(lexer::TokenRange* out_arguments) {
     // MEASURE;
 
     if(out_arguments)
@@ -1192,7 +1377,7 @@ SignalIO ParseAnnotationArguments(ParseInfo& info, lexer::TokenRange* out_argume
     
     return SIGNAL_SUCCESS;
 }
-SignalIO ParseAnnotation(ParseInfo& info, StringView* out_annotation_name, lexer::TokenRange* out_arguments) {
+SignalIO ParseContext::parseAnnotation(StringView* out_annotation_name, lexer::TokenRange* out_arguments) {
     // MEASURE;
 
     *out_annotation_name = {};
@@ -1209,14 +1394,14 @@ SignalIO ParseAnnotation(ParseInfo& info, StringView* out_annotation_name, lexer
 
     // ParseAnnotationArguments check for suffix of the previous token
     // Args will not be parsed in cases like this: @hello (sad, arg) but will here: @hello(happy)
-    auto signal = ParseAnnotationArguments(info, out_arguments);
+    auto signal = parseAnnotationArguments(out_arguments);
 
     SIGNAL_SWITCH_LAZY()
 
     return SIGNAL_SUCCESS;
 }
 
-SignalIO ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
+SignalIO ParseContext::parseArguments(ASTExpression* fncall, int* count){
     ZoneScopedC(tracy::Color::OrangeRed1);
 
     // fncall->nonNamedArgs = 0; // can't do this because caller sets it to 1 if expr is a method call
@@ -1264,7 +1449,7 @@ SignalIO ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
         }
 
         ASTExpression* expr=0;
-        auto signal = ParseExpression(info,expr);
+        auto signal = parseExpression(expr);
         
         SIGNAL_SWITCH_LAZY()
 
@@ -1280,7 +1465,7 @@ SignalIO ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
     return SIGNAL_SUCCESS;
 }
 
-SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
+SignalIO ParseContext::parseExpression(ASTExpression*& expression){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
@@ -1355,7 +1540,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 auto poly_tiny = info.gettok();
                 std::string polyTypes="";
                 if(token->type == '<' && 0==(token->flags&lexer::TOKEN_FLAG_SPACE)){
-                    auto signal = ParseTypeId(info, polyTypes);
+                    auto signal = parseTypeId(polyTypes);
 
                     SIGNAL_INVALID_DATATYPE(polyTypes)
                 }
@@ -1383,7 +1568,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
 
                     // Parse the other arguments
                     int count = 0;
-                    auto signal = ParseArguments(info, tmp, &count);
+                    auto signal = parseArguments(tmp, &count);
                     switch(signal){
                         case SIGNAL_SUCCESS: break;
                         case SIGNAL_COMPLETE_FAILURE: {
@@ -1487,7 +1672,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 info.advance();
 
                 ASTExpression* indexExpr=nullptr;
-                auto signal = ParseExpression(info, indexExpr);
+                auto signal = parseExpression(indexExpr);
                 SIGNAL_SWITCH_LAZY()
 
                 auto tok = info.gettok();
@@ -1614,7 +1799,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 info.advance();
                 tok = info.gettok();
                 std::string datatype{};
-                auto signal = ParseTypeId(info,datatype);
+                auto signal = parseTypeId(datatype);
 
                 SIGNAL_INVALID_DATATYPE(datatype)
 
@@ -2013,7 +2198,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 }
 
                 ASTExpression* left=nullptr;
-                auto signal = ParseExpression(info, left);
+                auto signal = parseExpression(left);
                 tmp->left = left;
                 // tmp->constantValue = true;// nocheckin
 
@@ -2049,7 +2234,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     
                     std::string type{};
                     int n=0;
-                    auto signal = ParseTypeId(info, type, &n);
+                    auto signal = parseTypeId(type, &n);
                     SIGNAL_INVALID_DATATYPE(type)
                     
                     auto tok = info.gettok();
@@ -2079,7 +2264,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                             break;
                         }
                         ASTExpression* arg = nullptr;
-                        auto signal = ParseExpression(info, arg);
+                        auto signal = parseExpression(arg);
                         switch(signal) {
                             case SIGNAL_SUCCESS: break;
                             default: return SIGNAL_COMPLETE_FAILURE;
@@ -2171,7 +2356,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 //  ParseTypeId has some logic for it so things are possible
                 //  it's just hard.
                 if(tok.type == '<' && !(token->flags&lexer::TOKEN_FLAG_SPACE)){
-                    auto signal = ParseTypeId(info, polyTypes);
+                    auto signal = parseTypeId(polyTypes);
                     SIGNAL_INVALID_DATATYPE(polyTypes)
                     // switch(signal){
                     // case SIGNAL_SUCCESS: break;
@@ -2212,7 +2397,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     tmp->name = ns;
 
                     int count = 0;
-                    auto signal = ParseArguments(info, tmp, &count);
+                    auto signal = parseArguments(tmp, &count);
                     switch(signal){
                         case SIGNAL_SUCCESS: break;
                         case SIGNAL_COMPLETE_FAILURE: {
@@ -2285,7 +2470,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         }
 
                         ASTExpression* expr=0;
-                        auto signal = ParseExpression(info,expr);
+                        auto signal = parseExpression(expr);
                         switch(signal) {
                         case SIGNAL_SUCCESS: break;
                         case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
@@ -2387,7 +2572,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // parse again
                 info.advance();
                 ASTExpression* tmp=0;
-                auto signal = ParseExpression(info,tmp);
+                auto signal = parseExpression(tmp);
                 SIGNAL_SWITCH_LAZY()
                 
                 auto tok = info.gettok();
@@ -2587,7 +2772,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
     return SIGNAL_COMPLETE_FAILURE;
 }
 
-SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
+SignalIO ParseContext::parseFlow(ASTStatement*& statement){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
@@ -2604,7 +2789,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             auto tok_if = info.gettok();
             info.advance();
             ASTExpression* expr=nullptr;
-            auto signal = ParseExpression(info,expr);
+            auto signal = parseExpression(expr);
 
             SIGNAL_SWITCH_LAZY()
 
@@ -2612,7 +2797,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
 
             ASTScope* body=nullptr;
             ParseFlags parsed_flags = PARSE_NO_FLAGS;
-            signal = ParseBody(info,body, info.currentScopeId, PARSE_NO_FLAGS, &parsed_flags);
+            signal = parseBody(body, info.currentScopeId, PARSE_NO_FLAGS, &parsed_flags);
 
             SIGNAL_SWITCH_LAZY()
 
@@ -2620,7 +2805,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             auto tok = info.gettok();
             if(tok.type == lexer::TOKEN_ELSE){
                 info.advance();
-                signal = ParseBody(info,elseBody, info.currentScopeId);
+                signal = parseBody(elseBody, info.currentScopeId);
 
                 SIGNAL_SWITCH_LAZY()
             }
@@ -2655,7 +2840,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             if(tok.type == '{') {
                 // no expression, infinite loop
             } else {
-                auto signal = ParseExpression(info,expr);
+                auto signal = parseExpression(expr);
                 SIGNAL_SWITCH_LAZY()
             }
 
@@ -2663,7 +2848,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
 
             info.functionScopes.last().loopScopes.add({});
             ASTScope* body=0;
-            auto signal = ParseBody(info,body, info.currentScopeId);
+            auto signal = parseBody(body, info.currentScopeId);
             info.functionScopes.last().loopScopes.pop();
             SIGNAL_SWITCH_LAZY()
 
@@ -2711,12 +2896,12 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             }
             
             ASTExpression* expr=0;
-            auto signal = ParseExpression(info,expr);
+            auto signal = parseExpression(expr);
             SIGNAL_SWITCH_LAZY()
 
             ASTScope* body=0;
             info.functionScopes.last().loopScopes.add({});
-            signal = ParseBody(info,body, info.currentScopeId);
+            signal = parseBody(body, info.currentScopeId);
             info.functionScopes.last().loopScopes.pop();
             SIGNAL_SWITCH_LAZY()
 
@@ -2747,7 +2932,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
                         info.advance();
                         break;
                     }
-                    auto signal = ParseExpression(info,expr);
+                    auto signal = parseExpression(expr);
                     SIGNAL_SWITCH_LAZY()
                     statement->arrayValues.add(expr);
                     
@@ -2768,7 +2953,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
         } else if(token->type == lexer::TOKEN_SWITCH){
             info.advance();
             ASTExpression* switchExpression=0;
-            auto signal = ParseExpression(info,switchExpression);
+            auto signal = parseExpression(switchExpression);
             SIGNAL_SWITCH_LAZY()
             
             auto tok = info.gettok();
@@ -2817,7 +3002,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
                         
                         // TokenRange args;
                         // auto res = ParseAnnotationArguments(info, &args);
-                        auto signal = ParseAnnotationArguments(info, nullptr);
+                        auto signal = parseAnnotationArguments(nullptr);
 
                         continue;
                     }else {
@@ -2875,7 +3060,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
                 
                 ASTExpression* caseExpression=nullptr;
                 if(!defaultCase){
-                    auto signal = ParseExpression(info,caseExpression);
+                    auto signal = parseExpression(caseExpression);
                     SIGNAL_SWITCH_LAZY()
                     auto tok_colon = info.gettok();
                     if(tok_colon.type != ':') {
@@ -2888,7 +3073,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
                 
                 ParseFlags parsed_flags = PARSE_NO_FLAGS;
                 ASTScope* caseBody=nullptr;
-                auto signal = ParseBody(info,caseBody, info.currentScopeId, PARSE_INSIDE_SWITCH, &parsed_flags);
+                auto signal = parseBody(caseBody, info.currentScopeId, PARSE_INSIDE_SWITCH, &parsed_flags);
                 SIGNAL_SWITCH_LAZY()
                 
                 auto token2 = info.getinfo(&view);
@@ -2900,7 +3085,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
                         statement->setNoCode(true);
                         info.advance();
                         
-                        auto signal = ParseAnnotationArguments(info, nullptr);
+                        auto signal = parseAnnotationArguments(nullptr);
                         
                     } else {
                         // TODO: ERR annotation not supported   
@@ -2933,7 +3118,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             info.advance();
 
             ASTScope* body = nullptr;
-            auto signal = ParseBody(info, body, info.currentScopeId);
+            auto signal = parseBody(body, info.currentScopeId);
             SIGNAL_SWITCH_LAZY()
 
             statement = info.ast->createStatement(ASTStatement::DEFER);
@@ -3014,14 +3199,14 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
         //     )
         // }
 
-        auto signal = ParseExpression(info, statement->testValue);
+        auto signal = parseExpression(statement->testValue);
         SIGNAL_SWITCH_LAZY()
 
         auto tok = info.gettok();
         if(tok.type == ';')
             info.advance();
         
-        signal = ParseExpression(info, statement->firstExpression);
+        signal = parseExpression(statement->firstExpression);
         SIGNAL_SWITCH_LAZY()
 
         // statement->tokenRange.firstToken = firstToken;
@@ -3035,7 +3220,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
     }
     return SIGNAL_NO_MATCH;
 }
-SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* parentStruct, bool is_operator){
+SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentStruct, bool is_operator){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
@@ -3063,26 +3248,26 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 // Implicitly specify convention
                 specifiedConvention = true;
                 if(info.compiler->options->target == TARGET_WINDOWS_x64) {
-                    function->callConvention = CallConventions::STDCALL;
+                    function->callConvention = CallConvention::STDCALL;
                 } else if(info.compiler->options->target == TARGET_LINUX_x64) {
-                    function->callConvention = CallConventions::UNIXCALL;
+                    function->callConvention = CallConvention::UNIXCALL;
                 } else {
                     #ifdef OS_WINDOWS
-                    function->callConvention = CallConventions::STDCALL;
+                    function->callConvention = CallConvention::STDCALL;
                     #else
-                    function->callConvention = CallConventions::UNIXCALL;
+                    function->callConvention = CallConvention::UNIXCALL;
                     #endif
                 }
                 
                 if (view_fn_name == "dllimport") {
                     // TODO: dllimport should probably be limited to Windows only.
-                    function->linkConvention = LinkConventions::DLLIMPORT;
+                    function->linkConvention = LinkConvention::DLLIMPORT;
                     needsExplicitCallConvention = true;
                 } else if (view_fn_name == "varimport"){
-                    function->linkConvention = LinkConventions::VARIMPORT;
+                    function->linkConvention = LinkConvention::VARIMPORT;
                     needsExplicitCallConvention = true;
                 } else if (view_fn_name == "import"){
-                    function->linkConvention = LinkConventions::IMPORT;
+                    function->linkConvention = LinkConvention::IMPORT;
                 }
 
                 info.advance();
@@ -3167,26 +3352,26 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 
                 needsExplicitCallConvention = true;
             } else if (view_fn_name == "stdcall"){
-                function->callConvention = CallConventions::STDCALL;
+                function->callConvention = CallConvention::STDCALL;
                 specifiedConvention = true;
             // } else if (Equal(name,"@cdecl")){
             // cdecl has not been implemented. It doesn't seem important.
             // default x64 calling convention is used.
             //     Assert(false); // not implemented in type checker and generator. type checker might work as is.
-            //     function->callConvention = CallConventions::CDECL_CONVENTION;
+            //     function->callConvention = CallConvention::CDECL_CONVENTION;
             //     specifiedConvention = true;
             } else if (view_fn_name == "betcall"){
-                function->callConvention = CallConventions::BETCALL;
-                function->linkConvention = LinkConventions::NONE;
+                function->callConvention = CallConvention::BETCALL;
+                function->linkConvention = LinkConvention::NONE;
                 specifiedConvention = true;
             // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
             } else if (view_fn_name == "unixcall"){
-                function->callConvention = CallConventions::UNIXCALL;
+                function->callConvention = CallConvention::UNIXCALL;
                 specifiedConvention = true;
             } else if (view_fn_name == "native"){
                 function->linkConvention = NATIVE;
             } else if (view_fn_name == "intrinsic"){
-                function->callConvention = CallConventions::INTRINSIC;
+                function->callConvention = CallConvention::INTRINSIC;
                 // function->linkConvention = NATIVE;
             } else if (view_fn_name == "blank"){
                 function->blank_body = true;
@@ -3209,7 +3394,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             tok_name = info.gettok();
             continue;
         }
-        if(function->linkConvention != LinkConventions::NONE){
+        if(function->linkConvention != LinkConvention::NONE){
             // function->setHidden(true);
             // native doesn't use a calling convention
             if(needsExplicitCallConvention && !specifiedConvention){
@@ -3314,7 +3499,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 break;
             }
             std::string datatype{};
-            auto signal = ParseTypeId(info, datatype);
+            auto signal = parseTypeId(datatype);
 
             SIGNAL_INVALID_DATATYPE(datatype)
 
@@ -3435,7 +3620,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
 
         std::string dataType{};
         auto bad = info.gettok();
-        auto signal = ParseTypeId(info,dataType);
+        auto signal = parseTypeId(dataType);
 
         if(dataType.empty()) {
             // TODO: Better error message
@@ -3470,7 +3655,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 // This is a semantic error so we can continue parsing just fine.
             }
             
-            auto signal = ParseExpression(info,defaultValue);
+            auto signal = parseExpression(defaultValue);
             SIGNAL_SWITCH_LAZY()
 
             // prevDefault = defaultValue->tokenRange;
@@ -3531,7 +3716,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             }
             
             std::string datatype{};
-            auto signal = ParseTypeId(info,datatype);
+            auto signal = parseTypeId(datatype);
 
             SIGNAL_INVALID_DATATYPE(datatype)
 
@@ -3551,7 +3736,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 info.advance();
                 continue;
             } else {
-                if(function->linkConvention != LinkConventions::NONE)
+                if(function->linkConvention != LinkConvention::NONE)
                     break;
                 if(!printedErrors){
                     printedErrors=true;
@@ -3601,7 +3786,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
         
         info.functionScopes.add({});
         ASTScope* body = 0;
-        auto signal = ParseBody(info,body, function->scopeId);
+        auto signal = parseBody(body, function->scopeId);
         function->body = body;
         info.functionScopes.pop();
         SIGNAL_SWITCH_LAZY()
@@ -3627,7 +3812,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
     return SIGNAL_SUCCESS;
 }
 
-SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
+SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
@@ -3697,7 +3882,7 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
                 }
             } else {
                 std::string typeToken{};
-                auto signal = ParseTypeId(info,typeToken, nullptr);
+                auto signal = parseTypeId(typeToken, nullptr);
                 
                 // TODO: Show error of two lines in case user typed:
                 /*  hello:
@@ -3798,7 +3983,7 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
     if(tok.type == '=') {
         info.advance(); // =
 
-        auto signal = ParseExpression(info,statement->firstExpression);
+        auto signal = parseExpression(statement->firstExpression);
         SIGNAL_SWITCH_LAZY()
 
     // } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)) {
@@ -3813,7 +3998,7 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
                 break;
             }
             ASTExpression* expr = nullptr;
-            auto signal = ParseExpression(info, expr);
+            auto signal = parseExpression(expr);
             SIGNAL_SWITCH_LAZY()
             
             Assert(expr);
@@ -3864,7 +4049,7 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
     // statement->tokenRange.endIndex = info.at()+1;
     return SIGNAL_SUCCESS;  
 }
-SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags, ParseFlags* out_flags){
+SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags, ParseFlags* out_flags){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     // Note: two infos in case ParseDeclaration modifies it and then fails.
@@ -3995,12 +4180,12 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
                 noCode = true;
                 info.advance();
                 
-                auto signal = ParseAnnotationArguments(info, nullptr);
+                auto signal = parseAnnotationArguments(nullptr);
                 SIGNAL_SWITCH_LAZY()
             } else if(view == "TEST_CASE") {
                 info.advance();
 
-                auto signal = ParseAnnotationArguments(info, nullptr);
+                auto signal = parseAnnotationArguments(nullptr);
                 SIGNAL_SWITCH_LAZY()
             } else if(view == "no_code") {
                 noCode = true;
@@ -4021,57 +4206,57 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
         SignalIO signal=SIGNAL_NO_MATCH;
         if(token->type == '{'){
             ASTScope* body=nullptr;
-            signal = ParseBody(info, body, info.currentScopeId);
+            signal = parseBody(body, info.currentScopeId);
             
             tempStatement = info.ast->createStatement(ASTStatement::BODY);
             tempStatement->firstBody = body;
             // tempStatement->tokenRange = body->tokenRange;
         } else if(token->type == lexer::TOKEN_STRUCT) {
             info.advance();
-            signal = ParseStruct(info,tempStruct);
+            signal = parseStruct(tempStruct);
             astNode = (ASTNode*)tempStruct;
             if(tempStruct)
                 bodyLoc->add(info.ast, tempStruct);
             info.nextContentOrder.last()++;
         } else if(token->type == lexer::TOKEN_FUNCTION) {
             info.advance();
-            signal = ParseFunction(info,tempFunction, nullptr, false);
+            signal = parseFunction(tempFunction, nullptr, false);
             astNode = (ASTNode*)tempFunction;
             if(tempFunction)
                 bodyLoc->add(info.ast, tempFunction);
             info.nextContentOrder.last()++;
         } else if(token->type == lexer::TOKEN_OPERATOR) {
             info.advance();
-            signal = ParseFunction(info,tempFunction, nullptr, true);
+            signal = parseFunction(tempFunction, nullptr, true);
             astNode = (ASTNode*)tempFunction;
             if(tempFunction)
                 bodyLoc->add(info.ast, tempFunction);
             info.nextContentOrder.last()++;
         } else if(token->type == lexer::TOKEN_ENUM) {
             info.advance();
-            signal = ParseEnum(info,tempEnum);
+            signal = parseEnum(tempEnum);
             astNode = (ASTNode*)tempEnum;
             if(tempEnum)
                 bodyLoc->add(info.ast, tempEnum);
             info.nextContentOrder.last()++;
         } else if(token->type == lexer::TOKEN_NAMESPACE) {
             info.advance();
-            signal = ParseNamespace(info,tempNamespace);
+            signal = parseNamespace(tempNamespace);
             astNode = (ASTNode*)tempNamespace;
             if(tempNamespace)
                 bodyLoc->add(info.ast, tempNamespace);
             info.nextContentOrder.last()++;
         }
         if(signal==SIGNAL_NO_MATCH)
-            signal = ParseFlow(info,tempStatement);
+            signal = parseFlow(tempStatement);
         if(signal==SIGNAL_NO_MATCH) {
-            signal = ParseDeclaration(info,tempStatement);
+            signal = parseDeclaration(tempStatement);
         }
         if(signal==SIGNAL_NO_MATCH){
             // bad name of function? it parses an expression
             // prop assignment or function call
             ASTExpression* expr=nullptr;
-            signal = ParseExpression(info,expr);
+            signal = parseExpression(expr);
             if(expr){
                 tempStatement = info.ast->createStatement(ASTStatement::EXPRESSION);
                 tempStatement->firstExpression = expr;
@@ -4241,7 +4426,7 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     ZoneScopedC(tracy::Color::OrangeRed1);
     _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     
-    ParseInfo info{};
+    ParseContext info{};
     info.compiler = compiler;
     info.lexer = &compiler->lexer;
     info.ast = compiler->ast;
@@ -4271,7 +4456,7 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     info.currentScopeId = body->scopeId;
 
     info.functionScopes.add({});
-    auto signal = ParseBody(info, body, info.ast->globalScopeId, PARSE_TRULY_GLOBAL);
+    auto signal = info.parseBody(body, info.ast->globalScopeId, PARSE_TRULY_GLOBAL);
     info.functionScopes.pop();
     
     info.compiler->options->compileStats.errors += info.errors;

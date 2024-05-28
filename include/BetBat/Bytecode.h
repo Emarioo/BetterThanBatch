@@ -85,6 +85,7 @@ enum InstructionOpcode : u8 {
 
     BC_JMP,
     BC_CALL,
+    BC_CALL_REG,
     BC_RET,
     // jump if not zero
     BC_JNZ,
@@ -280,9 +281,15 @@ struct InstBase_op3 {
 };
 struct InstBase_link_call_imm32 {
     InstructionOpcode opcode;
-    LinkConventions link;
-    CallConventions call;
+    LinkConvention link;
+    CallConvention call;
     i32 imm32;
+};
+struct InstBase_op1_link_call {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    LinkConvention link;
+    CallConvention call;
 };
 #pragma pack(pop)
 
@@ -307,7 +314,7 @@ typedef u32 TinyBytecodeID;
 struct TinyBytecode {
     std::string name;
     QuickArray<u8> instructionSegment{};
-    CallConventions call_convention = CallConventions::BETCALL;
+    CallConvention call_convention = CallConvention::BETCALL;
     int index = 0;
     int size() const { return instructionSegment.size(); }
     // debug information
@@ -361,7 +368,7 @@ struct Bytecode {
     static void Destroy(Bytecode*);
     void cleanup();
     
-    TinyBytecode* createTiny(const std::string& name, CallConventions convention) {
+    TinyBytecode* createTiny(const std::string& name, CallConvention convention) {
         auto ptr = TRACK_ALLOC(TinyBytecode);
         new(ptr)TinyBytecode();
         ptr->call_convention = convention;
@@ -490,7 +497,8 @@ struct BytecodeBuilder {
     void emit_ptr_to_locals(BCRegister reg, int imm16);
     void emit_ptr_to_params(BCRegister reg, int imm16);
 
-    void emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm = 0);
+    void emit_call(LinkConvention l, CallConvention c, i32* index_of_relocation, i32 imm = 0);
+    void emit_call_reg(BCRegister reg, LinkConvention l, CallConvention c);
     void emit_ret();
     
     void emit_jmp(int pc);

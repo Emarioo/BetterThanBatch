@@ -54,7 +54,7 @@ namespace engone {
 	// 	char* ptr;
 	// 	u32 len;
 	// 	u32 max;
-	// 	bool _reserve();
+	// 	bool reserve();
 	// };
 	struct DirectoryIteratorData{
 		struct {

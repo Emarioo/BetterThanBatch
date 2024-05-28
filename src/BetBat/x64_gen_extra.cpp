@@ -97,6 +97,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         || t == BC_SET_ARG
         || t == BC_SET_RET
         || t == BC_CALL
+        || t == BC_CALL_REG
         || t == BC_ATOMIC_ADD
         || t == BC_ATOMIC_CMP_SWAP
         || t == BC_MEMCPY
@@ -244,7 +245,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             }
         }
         last_was_pop = false;
-        if(n->base->opcode == BC_CALL) {
+        if(n->base->opcode == BC_CALL || n->base->opcode == BC_CALL_REG) {
             // TODO: Push list?
             // NOTE: We assume that registers aren't used between calls. The bytecode should have asserts so it doesn't happen.
             clear_register_map();
@@ -505,7 +506,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         i32 bc_addr=0; // address in bytecode, needed when looking up absolute offset in bc_to_x64_translation
     };
     DynamicArray<RelativeRelocation> relativeRelocations;
-    relativeRelocations._reserve(40);
+    relativeRelocations.reserve(40);
     auto addRelocation32 = [&](int inst_addr, int imm32_addr, int bc_addr) {
         RelativeRelocation rel{};
         rel.inst_addr = inst_addr;
@@ -1063,7 +1064,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             case BC_GET_VAL: {
                 auto base = (InstBase_op1_ctrl_imm16*)n->base;
                 auto call_base = (InstBase_link_call_imm32*)last_inst_call->base;
-                switch(call_base->call) {
+                auto call_base_r = (InstBase_op1_link_call*)last_inst_call->base;
+                CallConvention conv = call_base->call;
+                if(last_inst_call->base->opcode == BC_CALL_REG)
+                    conv = call_base_r ->call;
+                switch(conv) {
                     case BETCALL: {
                         FIX_PRE_OUT_OPERAND(0)
 
@@ -1196,17 +1201,31 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 const u8 BYTE_OF_BC_JMP = 1 + 4; // TODO: DON'T HARDCODE VALUES!
                 addRelocation32(imm_offset - 1, imm_offset, n->bc_index + BYTE_OF_BC_JMP + base->imm32);
             } break;
-            case BC_CALL: {
+            case BC_CALL:
+            case BC_CALL_REG: {
                 auto base = (InstBase_link_call_imm32*)n->base;
+                auto base_r = (InstBase_op1_link_call*)n->base;
                 last_inst_call = n;
-                // Setup arguments
+                
+                CallConvention conv = base->call;
+                ArtificalValue* reg0 = nullptr;
+                X64Register ptr_reg = X64_REG_INVALID;
+                if(opcode == BC_CALL_REG) {
+                    // FIX_PRE_IN_OPERAND(0)
+                    reg0 = get_artifical_reg(n->reg0);
+                    
+                    ptr_reg = X64_REG_R10;
+                    emit_mov_reg_reg(ptr_reg, reg0->reg);
+                    
+                    conv = base_r->call;
+                }
+                
                 // Arguments are pushed onto the stack by set_arg instructions.
                 // Some calling conventions require the first four arguments in registers
                 // We move the args on stack to registers.
                 // TODO: We could improve by directly moving args to registers
                 //  but it's more complicated.
-                // Assert(push_offset == 0); push_offset does not have to be zero
-                switch(base->call) {
+                switch(conv) {
                     case BETCALL: break;
                     case STDCALL: {
                         // recent_set_args
@@ -1244,7 +1263,15 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
                 recent_set_args.resize(0);
                 ret_offset = 0;
-                if(base->link == LinkConventions::VARIMPORT || base->link == LinkConventions::DLLIMPORT) {
+                if(opcode == BC_CALL_REG) {
+                    emit_prefix(0, X64_REG_INVALID, ptr_reg);
+                    emit1(OPCODE_CALL_RM_SLASH_2);
+                    emit_modrm_slash(MODE_REG, 2, CLAMP_EXT_REG(ptr_reg));
+                    
+                    FIX_POST_IN_OPERAND(0)
+                    break;
+                }
+                if(base->link == LinkConvention::VARIMPORT || base->link == LinkConvention::DLLIMPORT) {
                     // log::out << log::RED << "@varimport is incomplete. It was specified in a function named '"<<tinycode->name<<"'\n";
                     // Assert(("incomplete @varimport",false));
                     emit1(OPCODE_CALL_RM_SLASH_2);
@@ -1254,7 +1281,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                     map_strict_translation(n->bc_index + 3, offset);
 
-                } else if(base->link == LinkConventions::IMPORT) {
+                } else if(base->link == LinkConvention::IMPORT) {
                     emit1(OPCODE_CALL_IMM);
                     int offset = code_size();
                     emit4((u32)0);
@@ -1263,7 +1290,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     // +3 = 1 (opcode) + 1 (link) + 1 (convention)
                     map_strict_translation(n->bc_index + 3, offset);
 
-                } else if (base->link == LinkConventions::NONE){ // or export
+                } else if (base->link == LinkConvention::NONE){ // or export
                     // Assert(false);
                     emit1(OPCODE_CALL_IMM);
                     int offset = code_size();
@@ -1275,18 +1302,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     // bc_to_x64_translation[n->bc_index + 3] = offset;
                     // prog->addInternalFuncRelocation(current_tinyprog_index, offset, n->imm);
 
-                    // RelativeRelocation reloc{};
-                    // reloc.currentIP = code_size();
-                    // reloc.bcAddress = n->bc_index + n->imm + BYTE_OF_BC_JZ;
-                    // reloc.immediateToModify = code_size()-4; // NOTE: RelativeRelocation assumes 32-bit integer JMP_IMM8 would not work without changes
-                    // relativeRelocations.add(reloc);
-
-                    // RelativeRelocation reloc{};
-                    // reloc.currentIP = prog->size();
-                    // reloc.bcAddress = imm;
-                    // reloc.immediateToModify = prog->size()-4;
-                    // relativeRelocations.add(reloc);
-                } else if (base->link == LinkConventions::NATIVE){
+                } else if (base->link == LinkConvention::NATIVE){
                     //-- native function
                     switch((i32)base->imm32) {
                     // You could perhaps implement a platform layer which the language always links too.
@@ -1460,7 +1476,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 } else {
                     Assert(false);
                 }
-                switch(base->call) {
+                switch(conv) {
                     case BETCALL: break;
                     case STDCALL:
                     case INTRINSIC:
@@ -1565,6 +1581,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 
                 Assert(!IS_REG_XMM(reg0->reg)); // loading pointer into xmm makes no sense, it's a compiler bug
 
+
                 emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
                 emit1(OPCODE_LEA_REG_M);
                 emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
@@ -1574,24 +1591,27 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 FIX_POST_OUT_OPERAND(0)
             } break;
             case BC_CODEPTR: {
-                Assert(false);
-                // u8 size = DECODE_REG_SIZE(op0);
-                // Assert(size==8);
+                auto base = (InstBase_op1_imm32*)n->base;
+                FIX_PRE_OUT_OPERAND(0)
+                
+                Assert(!IS_REG_XMM(reg0->reg)); // loading pointer into xmm makes no sense, it's a compiler bug
+                
+                int tinycode_index = base->imm32 - 1;
 
-                // prog->add(PREFIX_REXW);
-                // prog->add(OPCODE_LEA_REG_M);
-                // prog->addModRM_rip(BCToProgramReg(op0,8), (u32)0);
-                // RelativeRelocation reloc{};
-                // reloc.immediateToModify = prog->size()-4;
-                // reloc.currentIP = prog->size();
-                // reloc.bcAddress = imm;
-                // relativeRelocations.add(reloc);
-                // // NamedRelocation reloc{};
-                // // reloc.dataOffset = imm;
-                // // reloc.
-                // // reloc.textOffset = prog->size() - 4;
-                // // prog->dataRelocations.add(reloc);
-                // // prog->namedRelocations.add();
+                emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
+                emit1(OPCODE_LEA_REG_M);
+                emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
+                i32 imm_offset = code_size() - 4; // -4 to refer to the 32-bit immediate in modrm_rip
+                
+                
+                // +2 = 1 (opcode) + 1 (operand)
+                map_strict_translation(n->bc_index + 2, imm_offset);
+                
+                // emit1(OPCODE_NOP);
+                
+                // prog->addInternalFuncRelocation(current_tinyprog_index, imm_offset, tinycode_index); // already done by call_relocations
+                
+                FIX_POST_OUT_OPERAND(0)
             } break;
             case BC_ADD:
             case BC_SUB:
@@ -3688,7 +3708,7 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
         i32 textSize = section->SizeOfRawData;
         // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
         asmInst.iStart = bytecode->rawInstructions.used;
-        bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + textSize);
+        bytecode->rawInstructions.reserve(bytecode->rawInstructions.used + textSize);
         memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
         bytecode->rawInstructions.used += textSize;
         asmInst.iEnd = bytecode->rawInstructions.used;
@@ -3723,7 +3743,7 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
         // u32 len = section->SizeOfRawData;
         // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
         asmInst.iStart = bytecode->rawInstructions.used;
-        bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + textSize);
+        bytecode->rawInstructions.reserve(bytecode->rawInstructions.used + textSize);
         memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
         bytecode->rawInstructions.used += textSize;
         asmInst.iEnd = bytecode->rawInstructions.used;

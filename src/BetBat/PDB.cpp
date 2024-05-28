@@ -647,7 +647,7 @@ PDBFile* PDBFile::Deconstruct(const char* path) {
         pdb->streams.add({});
         Stream* stream = &pdb->streams.last();
         stream->size = size;
-        stream->blockIndices._reserve(blocks);
+        stream->blockIndices.reserve(blocks);
 
         log::out << "stream " << streamIndex << ", size "<<size<<"\n";
         log::out << " blocks["<<blocks<<"]:";
@@ -696,7 +696,7 @@ PDBFile* PDBFile::Deconstruct(const char* path) {
             oldStreams.add({});
             auto stream = &oldStreams.last();
             stream->size = size;
-            stream->blockIndices._reserve(blocks);
+            stream->blockIndices.reserve(blocks);
 
             log::out << "stream " << streamIndex << ", size "<<size<<"\n";
             log::out << " blocks["<<blocks<<"]:";
@@ -1776,7 +1776,7 @@ void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
 //         StreamOld* stream = new StreamOld();
 //         pdb->streams2.add(stream);
 //         stream->byteSize = size;
-//         stream->blockIndices._reserve(blocks);
+//         stream->blockIndices.reserve(blocks);
 
 //         log::out << "stream " << streamIndex << ", size "<<size<<"\n";
 //         log::out << " blocks["<<blocks<<"]:";
@@ -1818,7 +1818,7 @@ void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
 //             StreamOld* stream = new StreamOld();
 //             pdb->streams_old.add(stream);
 //             stream->byteSize = size;
-//             stream->blockIndices._reserve(blocks);
+//             stream->blockIndices.reserve(blocks);
 
 //             log::out << "stream " << streamIndex << ", size "<<size<<"\n";
 //             log::out << " blocks["<<blocks<<"]:";

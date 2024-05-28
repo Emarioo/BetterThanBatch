@@ -575,8 +575,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 pc += imm;
         } break;
         case BC_CALL: {
-            LinkConventions l = (LinkConventions)instructions[pc++];
-            CallConventions c = (CallConventions)instructions[pc++];
+            LinkConvention l = (LinkConvention)instructions[pc++];
+            CallConvention c = (CallConvention)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
 
@@ -632,6 +632,22 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 tinycode = bytecode->tinyBytecodes[tiny_index];
             }
         } break;
+        case BC_CALL_REG: {
+            op0 = (BCRegister)instructions[pc++];
+            LinkConvention l = (LinkConvention)instructions[pc++];
+            CallConvention c = (CallConvention)instructions[pc++];
+
+            // Finish printing the instruction so that the function
+            // we call doesn't print it's own stuff within the instruction.
+            if(logging)
+                log::out << "\n";
+            log::out.flush();
+            printed_newline = true;
+            
+            Assert(false); // how do we call a function pointer?
+
+            
+        } break;
         case BC_RET: {
             i64 diff = stack_pointer - (i64)stack.data();
             if(diff == (i64)(stack.max)) {
@@ -670,6 +686,14 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
+
+            Assert(false);
+            // TODO: How do we store tinycode_id as function pointer?
+            //   Inline assembly can't call tinycode_id...
+            //   I guess inline assembly don't work in VM anyway.
+                        
+            int new_tiny_index = imm-1;
+            registers[op0] = (u64)(bytecode->dataSegment.data() + imm);
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
@@ -967,305 +991,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
             _ILOG(log::out << "\n";)
         } break;
-        #ifdef gone
-        // case BC_CALL: {
-        //     i32 addr = *(i32*)(codePtr + pc);
-        //     pc++;
-            
-        //     LinkConventions linkConvention = (LinkConventions)DECODE_REG0(inst);
-        //     CallConventions callConvention = (CallConventions)DECODE_REG1(inst);
-        //     Assert(linkConvention == LinkConventions::NONE || linkConvention==LinkConventions::NATIVE);
-        //     // void* ptr = getReg(r0);
-        //     // i64 addr = *((i64*)ptr);
-            
-        //     _ILOG(log::out << addr<<"\n";)
-        //     if(addr>(int)length){
-        //         log::out << log::YELLOW << "Call to instruction beyond all bytecode\n";
-        //     }
-        //     _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
-        //     // _ILOG(log::out<<"save fp at "<<sp<<"\n";)
-        //     // savedFp = (u64*)sp;
-        //     // SP_CHANGE(-8)
-        //     sp-=8;
-        //     *((u64*) sp) = pc; // pc points to the next instruction, +1 not needed 
-        //     // SP_CHANGE(-8)
-        //     pc = addr;
-            
-        //     _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
-    
-        //     // if((i64)addr<0){
-        //     if(linkConvention == LinkConventions::NATIVE){
-        //         int argoffset = GenInfo::FRAME_SIZE; // native functions doesn't save
-        //         // the frame pointer. FRAME_SIZE is based on that you do so -8 to get just pc being saved
-                
-        //         // auto* nativeFunction = nativeRegistry->findFunction(addr);
-        //         // if(nativeFunction){
-
-        //         // } else {
-        //         //     _ILOG(log::out << log::RED << addr<<" is not a native function\n";)
-        //         // }
-        //         u64 fp = sp - 8;
-
-        //         switch (addr) {
-        //         case NATIVE_Allocate:{
-        //             u64 size = *(u64*)(fp+argoffset);
-        //             void* ptr = engone::Allocate(size);
-        //             if(ptr)
-        //                 userAllocatedBytes += size;
-        //             _ILOG(log::out << "alloc "<<size<<" -> "<<ptr<<"\n";)
-        //             *(u64*)(fp-8) = (u64)ptr;
-        //             break;
-        //         }
-        //         break; case NATIVE_Reallocate:{
-        //             void* ptr = *(void**)(fp+argoffset);
-        //             u64 oldsize = *(u64*)(fp +argoffset + 8);
-        //             u64 size = *(u64*)(fp+argoffset+16);
-        //             ptr = engone::Reallocate(ptr,oldsize,size);
-        //             if(ptr)
-        //                 userAllocatedBytes += size - oldsize;
-        //             _ILOG(log::out << "realloc "<<size<<" ptr: "<<ptr<<"\n";)
-        //             *(u64*)(fp-8) = (u64)ptr;
-        //             break;
-        //         }
-        //         break; case NATIVE_Free:{
-        //             void* ptr = *(void**)(fp+argoffset);
-        //             u64 size = *(u64*)(fp+argoffset+8);
-        //             engone::Free(ptr,size);
-        //             userAllocatedBytes -= size;
-        //             _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
-        //             break;
-        //         }
-        //         break; case NATIVE_printi:{
-        //             i64 num = *(i64*)(fp+argoffset);
-        //             #ifdef ILOG
-        //             log::out << log::LIME<<"print: "<<num<<"\n";
-        //             #else                    
-        //             log::out << num;
-        //             #endif
-        //             break;
-        //         }
-        //         break; case NATIVE_printd:{
-        //             float num = *(float*)(fp+argoffset);
-        //             #ifdef ILOG
-        //             log::out << log::LIME<<"print: "<<num<<"\n";
-        //             #else                    
-        //             log::out << num;
-        //             #endif
-        //             break;
-        //         }
-        //         break; case NATIVE_printc: {
-        //             char chr = *(char*)(fp+argoffset); // +7 comes from the alignment after char
-        //             #ifdef ILOG
-        //             log::out << log::LIME << "print: "<<chr<<"\n";
-        //             #else
-        //             log::out << chr;
-        //             #endif
-        //             break;
-        //         }
-        //         break; case NATIVE_prints: {
-        //             char* ptr = *(char**)(fp+argoffset);
-        //             u64 len = *(u64*)(fp+argoffset+8);
-                    
-        //             #ifdef ILOG
-        //             log::out << log::LIME << "print: ";
-        //             for(u32 i=0;i<len;i++){
-        //                 log::out << ptr[i];
-        //             }
-        //             log::out << "\n";
-        //             #else
-        //             for(u32 i=0;i<len;i++){
-        //                 log::out << ptr[i];
-        //             }
-        //             #endif
-        //             break;
-        //         }
-        //         break; case NATIVE_FileOpen:{
-        //             // The order may seem strange but it's actually correct.
-        //             // It's just complicated.
-        //             // slice
-        //             Language::Slice<char>* path = *(Language::Slice<char>**)(fp+argoffset + 0);
-        //             u32 flags = *(u32*)(fp+argoffset+8);
-        //             u64* outFileSize = *(u64**)(fp+argoffset+16);
-
-        //             // INCOMPLETE
-        //             u64 file = FileOpen(path, flags, outFileSize);
-
-        //             *(u64*)(fp-8) = (u64)file;
-        //             break;
-        //         }
-        //         break; case NATIVE_FileRead:{
-        //             // The order may seem strange but it's actually correct.
-        //             // It is just complicated.
-        //             // slice
-        //             u64 file = *(u64*)(fp+argoffset);
-        //             void* buffer = *(void**)(fp+argoffset+8);
-        //             u64 readBytes = *(u64*)(fp+argoffset+16);
-
-        //             u64 bytes = FileRead(file, buffer, readBytes);
-        //             *(u64*)(fp-8) = (u64)bytes;
-        //             break;
-        //         }
-        //         break; case NATIVE_FileWrite:{
-        //             // The order may seem strange but it's actually correct.
-        //             // It is just complicated.
-        //             // slice
-        //             u64 file = *(u64*)(fp+argoffset);
-        //             void* buffer = *(void**)(fp+argoffset+8);
-        //             u64 writeBytes = *(u64*)(fp+argoffset+16);
-
-        //             u64 bytes = FileWrite(file, buffer, writeBytes);
-        //             *(u64*)(fp-8) = (u64)bytes;
-        //             break;
-        //         }
-        //         break; case NATIVE_FileClose:{
-        //             APIFile file = *(APIFile*)(fp+argoffset);
-        //             FileClose(file);
-        //             // log::out << log::GRAY<<"FileClose: "<<file<<"\n";
-        //             break;
-        //         }
-        //         break; case NATIVE_DirectoryIteratorCreate:{
-        //             // slice
-        //             // char* strptr = *(char**)(fp+argoffset + 0);
-        //             // u64 len = *(u64*)(fp+argoffset+8);
-        //             Language::Slice<char>* rootPath= *(Language::Slice<char>**)(fp + argoffset + 0);
-
-        //             // INCOMPLETE
-        //             // std::string rootPath = std::string(strptr,len);
-        //             auto iterator = DirectoryIteratorCreate(rootPath);
-
-        //             // log::out << log::GRAY<<"Create dir iterator: "<<rootPath<<"\n";
-
-        //             // auto iterator = (Language::DirectoryIterator*)engone::Allocate(sizeof(Language::DirectoryIterator));
-        //             // new(iterator)Language::DirectoryIterator();
-        //             // iterator->_handle = (u64)iterHandle;
-        //             // iterator->rootPath.ptr = (char*)engone::Allocate(len);
-        //             // iterator->rootPath.len = len;
-        //             // memcpy(iterator->rootPath.ptr, strptr, len);
-
-        //             *(Language::DirectoryIterator**)(fp-8) = iterator;
-        //             break;
-        //         }
-        //         break; case NATIVE_DirectoryIteratorDestroy:{
-        //             Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
-        //             // INCOMPLETE
-        //             DirectoryIteratorDestroy(iterator);
-
-        //             // log::out << log::GRAY<<"Destroy dir iterator: "<<iterator->rootPath<<"\n";
-        //             // if(iterator->result.name.ptr) {
-        //             //     engone::Free(iterator->result.name.ptr, iterator->result.name.len);
-        //             //     iterator->result.name.ptr = nullptr;
-        //             //     iterator->result.name.len = 0;
-        //             // }
-        //             // engone::Free(iterator->rootPath.ptr,iterator->rootPath.len);
-        //             // iterator->~DirectoryIterator();
-        //             // engone::Free(iterator,sizeof(Language::DirectoryIterator));
-        //             break;
-        //         }
-        //         break; case NATIVE_DirectoryIteratorNext:{
-        //             Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
-                    
-        //             auto data = DirectoryIteratorNext(iterator);
-
-        //             // DirectoryIteratorData result{};
-        //             // bool success = DirectoryIteratorNext((DirectoryIterator)iterator->_handle, &result);
-        //             // INCOMPLETE
-        //             // if(iterator->result.name.ptr) {
-        //             //     engone::Free(iterator->result.name.ptr, iterator->result.name.len);
-        //             //     iterator->result.name.ptr = nullptr;
-        //             //     iterator->result.name.len = 0;
-        //             // }
-        //             // // if(success){
-        //             // //     iterator->result.lastWriteSeconds = result.lastWriteSeconds;
-        //             // //     iterator->result.fileSize = result.fileSize;
-        //             // //     iterator->result.isDirectory = result.isDirectory;
-        //             // //     iterator->result.name.ptr = (char*)Allocate((u64)result.name.length());
-        //             // //     memcpy(iterator->result.name.ptr, result.name.data(), result.name.length());
-        //             // //     iterator->result.name.len = (u64)result.name.length();
-        //             // // }
-        //             // // if(success)
-        //             // // log::out << log::GRAY<<"Next dir iterator: "<<iterator->rootPath<<", file: "<<result.name<<"\n";
-        //             // // else
-        //             // // log::out << log::GRAY<<"Next dir iterator: "<<iterator->rootPath<<", finished\n";
-        //             // if(success)
-        //             //     *(Language::DirectoryIteratorData**)(fp-8) = &iterator->result;
-        //             // else
-        //             // *(Language::DirectoryIteratorData**)(fp-8) = nullptr;
-        //             *(Language::DirectoryIteratorData**)(fp-8) = data;
-        //             break;
-        //         }
-        //         break; case NATIVE_DirectoryIteratorSkip:{
-        //             Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
-                    
-        //             DirectoryIteratorSkip(iterator);
-
-        //             // // log::out << log::GRAY<<"Skip dir iterator: "<<iterator->result.name<<"\n";
-        //             break;
-        //         }
-        //         break; case NATIVE_CurrentWorkingDirectory:{
-                    
-        //             std::string temp = GetWorkingDirectory();
-        //             ReplaceChar((char*)temp.data(), temp.length(),'\\','/');
-        //             Assert(temp.length()<CWD_LIMIT);
-        //             memcpy(cwdBuffer,temp.data(),temp.length());
-        //             usedCwd = temp.length();
-
-        //             *(char**)(fp-16) = cwdBuffer;
-        //             *(u64*)(fp-8) = temp.length();
-        //             // log::out << log::GRAY<<"CWD: "<<temp<<"\n";
-        //             break;
-        //         }
-        //         break; case NATIVE_StartMeasure:{
-        //             auto timePoint = StartMeasure();
-                    
-        //             *(u64*)(fp-8) = (u64)timePoint;
-
-        //             // log::out << log::GRAY<<"Start mesaure: "<<(u64)timePoint<<"\n";
-        //             break;
-        //         }
-        //         break; case NATIVE_StopMeasure:{
-        //             u64 timePoint = *(u64*)(fp+argoffset + 0);
-
-        //             double time = StopMeasure(timePoint);
-
-        //             *(float*)(fp - 8) = (float)time;
-        //             // log::out << log::GRAY<<"Stop measure: "<<(u64)timePoint << ", "<<time<<"\n";
-        //             break;
-        //         }
-        //         break; case NATIVE_CmdLineArgs:{
-        //             *(Language::Slice<char>**)(fp - 16) = cmdArgs.ptr;
-        //             *(u64*)(fp - 8) = cmdArgs.len;
-        //             // log::out << log::GRAY<<"Cmd line args: len: "<<cmdArgs.len<<"\n";
-        //             break;
-        //         }
-        //         break; case NATIVE_NativeSleep:{
-        //             float sleepTime = *(float*)(fp + argoffset + 4);
-        //             Sleep(sleepTime);
-        //             break;
-        //         }
-        //         break; default:{
-        //             // auto* nativeFunction = bytecode->nativeRegistry->findFunction(addr);
-        //             auto* nativeFunction = nativeRegistry->findFunction(addr);
-        //             if(nativeFunction){
-        //                 // _ILOG(
-        //                 log::out << log::RED << "Native '"<<nativeFunction->name<<"' ("<<addr<<") has no impl. in interpreter\n";
-        //                 // )
-        //             } else {
-        //                 // _ILOG(
-        //                 log::out << log::RED << addr<<" is not a native function\n";
-        //                 // )
-        //             }
-        //             // break from loop after a few times?
-        //             // break won't work in switch statement.
-        //         }
-        //         } // switch
-        //         // jump to BC_RET case
-        //         goto TINY_GOTO;
-        //     }
-            
-        //     break;
-        // }
-       
-        #endif
         default: {
             log::out << log::RED << "Implement "<< log::PURPLE<< opcode << "\n";
             return;

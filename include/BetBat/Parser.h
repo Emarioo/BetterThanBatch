@@ -6,14 +6,29 @@
 
 struct CompileInfo;
 namespace parser {
+    
+    
+enum ParseFlags : u32 {
+    PARSE_NO_FLAGS = 0x0,
+    // INPUT
+    PARSE_INSIDE_SWITCH = 0x1,
+    PARSE_TRULY_GLOBAL = 0x2,
+    // OUTPUT
+    PARSE_HAS_CURLIES = 0x4,
+    PARSE_HAS_CASE_FALL = 0x8, // annotation @fall for switch cases
+};
+    
 // TODO: Rename to ParseContext?
-struct ParseInfo : public PhaseContext {
+struct ParseContext : public PhaseContext {
     lexer::Lexer* lexer=nullptr;
     // Compiler* compiler=nullptr;
     AST* ast=nullptr;
     Reporter* reporter = nullptr;
+    
+    ParseContext() : info(*this) { } // well this is dumb
+    ParseContext& info;
 
-    // ParseInfo() : tokens(tokens){}
+    // ParseContext() : tokens(tokens){}
     // int index=0; // index of the next token, index-1 is the current token
     // TokenStream* tokens;
     int funcDepth=0;
@@ -240,6 +255,23 @@ struct ParseInfo : public PhaseContext {
     // returns token index into import of the next token to read
     // The token gettok will read.
     u32 gethead() { return head; }
+
+    SignalIO parseTypeId(std::string& outTypeId, int* tokensParsed = nullptr);
+    SignalIO parseStruct(ASTStruct*& astStruct);
+    SignalIO parseNamespace(ASTScope*& astNamespace);
+    SignalIO parseEnum(ASTEnum*& astEnum);
+    // out_arguments may be null to parse but ignore arguments
+    SignalIO parseAnnotationArguments(lexer::TokenRange* out_arguments);
+    SignalIO parseAnnotation(StringView* out_annotation_name, lexer::TokenRange* out_arguments);
+    // parses arguments and puts them into fncall->left
+    SignalIO parseArguments(ASTExpression* fncall, int* count);
+    SignalIO parseExpression(ASTExpression*& expression);
+    SignalIO parseFlow(ASTStatement*& statement);
+    // returns 0 if syntax is wrong for flow parsing
+    SignalIO parseFunction(ASTFunction*& function, ASTStruct* parentStruct, bool is_operator);
+    SignalIO parseDeclaration(ASTStatement*& statement);
+    // out token contains a newly allocated string. use delete[] on it
+    SignalIO parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags = PARSE_NO_FLAGS, ParseFlags* out_flags = nullptr);
 
 };
 

@@ -1007,7 +1007,7 @@ bool FileCOFF::WriteFile(const std::string& path, X64Program* program, u32 from,
             Debug symbols
         */
         if(debugSSection) {
-            funcSymbols._reserve(program->debugInformation->functions.size());
+            funcSymbols.reserve(program->debugInformation->functions.size());
             ALIGN4
             debugSSection->PointerToRawData = outOffset;
             

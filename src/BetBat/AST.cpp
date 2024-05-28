@@ -1,6 +1,6 @@
 #include "BetBat/AST.h"
 
-const char* ToString(CallConventions stuff){
+const char* ToString(CallConvention stuff){
     #define CASE(X,N) case X: return N;
     switch(stuff){
         CASE(BETCALL,"betcall")
@@ -12,7 +12,7 @@ const char* ToString(CallConventions stuff){
     return "<unknown-call>";
     #undef CASE
 }
-const char* ToString(LinkConventions stuff){
+const char* ToString(LinkConvention stuff){
     #define CASE(X,N) case X: return N;
     switch(stuff){
         CASE(NONE,"none")
@@ -24,17 +24,17 @@ const char* ToString(LinkConventions stuff){
     return "<unknown-link>";
     #undef CASE
 }
-engone::Logger& operator<<(engone::Logger& logger, CallConventions convention){
+engone::Logger& operator<<(engone::Logger& logger, CallConvention convention){
     return logger << ToString(convention);
 }
-engone::Logger& operator<<(engone::Logger& logger, LinkConventions convention){
+engone::Logger& operator<<(engone::Logger& logger, LinkConvention convention){
     return logger << ToString(convention);
 }
 
-StringBuilder& operator<<(StringBuilder& builder, CallConventions convention){
+StringBuilder& operator<<(StringBuilder& builder, CallConvention convention){
     return builder << ToString(convention);
 }
-StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
+StringBuilder& operator<<(StringBuilder& builder, LinkConvention convention){
     return builder << ToString(convention);
 }
 
@@ -60,8 +60,6 @@ const char* prim_op_names[]{
     
     "ast_string",    // AST_STRING
     "null",         // AST_NULL
-
-    "fn_ref",        // AST_FUNC_REFERENCE
 
     "ast_id",        // AST_ID
     "ast_call",     // AST_FNCALL
@@ -192,7 +190,6 @@ AST *AST::Create() {
     ADD(AST_CHAR, 1);
     ADD(AST_NULL, 8);
     ADD(AST_STRING, 0);
-    ADD(AST_FUNC_REFERENCE, 8);
     ADD(AST_ID,0);
     ADD(AST_SIZEOF,0);
     ADD(AST_NAMEOF,0);
@@ -582,7 +579,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
             found_sint = false; // we don't use int
             found_uint = false;
             for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                TypeId implArgType = overload.funcImpl->argumentTypes[j+startOfRealArguments].typeId;
+                TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
                 if(!ast->castable(argTypes[j], implArgType)) {
                     found = false;
                     break;
@@ -591,7 +588,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
             }
         } else {
             for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                TypeId implArgType = overload.funcImpl->argumentTypes[j+startOfRealArguments].typeId;
+                TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
                 if(argTypes[j] != implArgType) {
                     found = false;
                     // NOTE: What about implicitly casting float?
@@ -671,7 +668,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
         bool doesPolyArgsMatch = true;
         // The number of poly args must match. Using 1 poly arg when referring to a function with 2
         // does not make sense.
-        if(overload.funcImpl->polyArgs.size() != polyArgs.size() && !implicitPoly)
+        if(overload.funcImpl->signature.polyArgs.size() != polyArgs.size() && !implicitPoly)
             continue;
         if((overload.funcImpl->structImpl == nullptr) != (parentStruct == nullptr))
             continue;
@@ -693,7 +690,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
         if(!implicitPoly){
             // The args must match exactly. Otherwise, a new implementation should be generated.
             for(int j=0;j<(int)polyArgs.size();j++){
-                if(polyArgs[j] != overload.funcImpl->polyArgs[j]){
+                if(polyArgs[j] != overload.funcImpl->signature.polyArgs[j]){
                     doesPolyArgsMatch = false;
                     break;
                 }
@@ -714,7 +711,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
 
             if(canCast) {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(!ast->castable(argTypes[j], overload.funcImpl->argumentTypes[j+1].typeId)) {
+                    if(!ast->castable(argTypes[j], overload.funcImpl->signature.argumentTypes[j+1].typeId)) {
                         found = false;
                         break;
                     }
@@ -722,7 +719,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                 }
             } else {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(argTypes[j] != overload.funcImpl->argumentTypes[j+1].typeId) {
+                    if(argTypes[j] != overload.funcImpl->signature.argumentTypes[j+1].typeId) {
                         // TODO: foundInt, see non-poly version of getOverload
                         found = false;
                         break;
@@ -740,7 +737,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
                     if(fncall->isMemberCall() && j == 0)
                         continue;
-                    if(!ast->castable(argTypes[j], overload.funcImpl->argumentTypes[j].typeId)) {
+                    if(!ast->castable(argTypes[j], overload.funcImpl->signature.argumentTypes[j].typeId)) {
                         found = false;
                         break;
                     }
@@ -750,7 +747,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
                     if(fncall->isMemberCall() && j == 0)
                         continue;
-                    if(argTypes[j] != overload.funcImpl->argumentTypes[j].typeId) {
+                    if(argTypes[j] != overload.funcImpl->signature.argumentTypes[j].typeId) {
                         // TODO: foundInt, see non-poly version of getOverload
                         found = false;
                         break;
@@ -777,7 +774,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
 }
 // void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, QuickArray<TypeId>* structPolyArgs){
 void ASTFunction::pushPolyState(FuncImpl* funcImpl) {
-    pushPolyState(&funcImpl->polyArgs, funcImpl->structImpl);
+    pushPolyState(&funcImpl->signature.polyArgs, funcImpl->structImpl);
 }
 void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* structParent) {
     Assert((parentStruct == nullptr) == (structParent == nullptr));
@@ -1126,7 +1123,7 @@ void AST::cleanup() {
     }
     _typeInfos.cleanup();
     _constStringMap.clear();
-    _constStrings._reserve(0);
+    _constStrings.reserve(0);
 
 
     // for(auto& str : tempStrings){
@@ -1378,7 +1375,6 @@ TypeInfo* AST::createType(StringView name, ScopeId scopeId){
     scope->nameTypeMap[name] = ptr;
     if(ptr->id.getId() >= _typeInfos.size()) {
         _typeInfos.resize(ptr->id.getId() + AST_PRIMITIVE_COUNT);
-
     }
     _typeInfos[ptr->id.getId()] = ptr;
     // ll(this);
@@ -1455,6 +1451,97 @@ void AST::printTypesFromScope(ScopeId scopeId, int scopeLimit){
 }
 TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transformVirtual) {
     using namespace engone;
+    
+    std::string tmp = typeString;
+    if (tmp.substr(0,3) == "fn(" || tmp.substr(0,3) == "fn@") {
+        // TODO: Function pointers don't work with polymorphism, do not use polymorphic type in function pointers.
+        
+        // log::out << "convert '"<<tmp<<"'\n";
+        
+        DynamicArray<TypeId> args;
+        DynamicArray<TypeId> rets;
+        CallConvention convention = BETCALL;
+        
+        int head = 2;
+        int str_start = 0;
+        int depth = 0;
+        bool process_args = true;
+        bool process_anot = false;
+        while(head < tmp.size()) {
+            char chr = tmp[head];
+            char next_chr = 0;
+            if (head+1 < tmp.size())
+                next_chr = tmp[head+1];
+            head++;
+            
+            if(depth == 0) {
+                if(chr == '-' && next_chr == '>') {
+                    head++;
+                    process_args = false;
+                    continue;
+                }
+            }
+            if(chr == '@' && depth == 0) {
+                process_anot = true;
+                continue;
+            }
+            
+            if(chr == '(') {
+                depth++;
+                if(depth == 1) {
+                    if(process_anot) {
+                        process_anot = false;
+                        int str_end = head-1;
+                        std::string inner_type = std::string(tmp.data() + str_start, str_end - str_start);
+                        // log::out << "anot "<<inner_type<<"\n";
+                        if(inner_type == "stdcall")
+                            convention = STDCALL;
+                        else if(inner_type == "unixcall")
+                            convention = UNIXCALL;
+                        else if(inner_type == "betcall")
+                            convention = BETCALL;
+                        else {
+                            // do we just ignore?
+                        }
+                    }
+                    continue;
+                }
+            }
+            if(chr == ')') {
+                depth--;
+            }
+            
+            if(chr == ',' || ( depth == 0 && chr == ')') || (head == tmp.size() && !process_args)) {
+                if(str_start == 0) {
+                    continue;
+                }
+                int str_end = head-1;
+                if(head == tmp.size() && !process_args)
+                    str_end = head;
+                std::string inner_type = std::string(tmp.data() + str_start, str_end - str_start);
+                // log::out << "type "<<inner_type << "\n";
+                auto type = convertToTypeId(inner_type, scopeId, false); // transformVirtual is false because we don't handle it correctly
+                // type may not be converted if polymorphic version wasn't created?
+                if(process_args) {
+                    args.add(type);
+                } else {
+                    rets.add(type);
+                
+                }
+                str_start = 0;
+                continue;
+            }
+            if(str_start == 0)
+                str_start = head-1;
+        }
+        
+        auto type = findOrAddFunctionSignature(args, rets, convention);
+        
+        if(!type)
+            return AST_VOID;
+        return type->id;
+    }
+    
     u32 pointerLevel = 0;
     StringView namespacing = {};
     StringView typeName;
@@ -1555,6 +1642,160 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
     }
 }
 
+TypeInfo* AST::findOrAddFunctionSignature(DynamicArray<TypeId>& args, DynamicArray<TypeId>& rets, CallConvention conv) {
+    // find type
+    for(auto type : function_types) {
+        Assert(type->funcType);
+        
+        auto func = type->funcType;
+        if(func->argumentTypes.size() != args.size() || func->returnTypes.size() != rets.size())
+            continue;
+        if(func->convention != conv)
+            continue;
+            
+        bool match = true;
+        for(int i=0;i<func->argumentTypes.size();i++) {
+            if(func->argumentTypes[i].typeId != args[i]) {
+                match = false;
+                break;
+            }
+        }
+        if(!match)
+            continue;
+        for(int i=0;i<func->returnTypes.size();i++) {
+            if(func->returnTypes[i].typeId != rets[i]) {
+                match = false;
+                break;
+            }
+        }
+        if(!match)
+            continue;
+            
+        return type;
+    }
+    
+    // create type
+    auto type = (TypeInfo *)allocate(sizeof(TypeInfo));
+    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), 8};
+    type->scopeId = globalScopeId;
+    if(type->id.getId() >= _typeInfos.size()) {
+        _typeInfos.resize(type->id.getId() + AST_PRIMITIVE_COUNT);
+    }
+    _typeInfos[type->id.getId()] = type;
+    
+    function_types.add(type);
+    
+    auto func_type = (FunctionSignature *)allocate(sizeof(FunctionSignature));
+    new(func_type) FunctionSignature{};
+    type->funcType = func_type;
+    func_type->argSize = 0; // TODO: Fix sizes
+    func_type->returnSize = 0;
+    func_type->convention = conv;
+    for(auto t : args)
+        func_type->argumentTypes.add({t}); // TODO: Set offsets of Spot
+    for(auto t : rets)
+        func_type->returnTypes.add({t});
+        
+    int offset = 0;
+    for(auto& arg : func_type->argumentTypes) {
+        
+        int size =  getTypeSize(arg.typeId);
+        int asize = getTypeAlignedSize(arg.typeId);
+        if(conv == STDCALL || conv == UNIXCALL)
+            asize = 8;
+        if(size ==0 || asize == 0) // Probably due to an error which was logged. We don't want to assert and crash the compiler.
+            continue;
+        if((offset%asize) != 0){
+            offset += asize - offset%asize;
+        }
+        arg.offset = offset;
+        offset += size;
+    }
+    int diff = offset%8;
+    if(diff!=0)
+        offset += 8-diff; // padding to ensure 8-byte alignment
+
+    func_type->argSize = offset;
+
+    offset = 0;
+    
+    for(auto& ret : func_type->returnTypes){
+        int size =  getTypeSize(ret.typeId);
+        int asize = getTypeAlignedSize(ret.typeId);
+        if(conv == STDCALL || conv == UNIXCALL)
+            asize = 8;
+        if(size == 0 || asize == 0){ // We don't want to crash the compiler with assert.
+            continue;
+        }
+        
+        if ((offset)%asize != 0){
+            offset += asize - (offset)%asize;
+        }
+        ret.offset = offset;
+        offset += size;
+    }
+    if((offset)%8!=0)
+        offset += 8-(offset)%8; // padding to ensure 8-byte alignment
+    func_type->returnSize = offset;
+        
+    return type;
+}
+TypeInfo* AST::findOrAddFunctionSignature(FunctionSignature* signature) {
+    // find type
+    for(auto type : function_types) {
+        Assert(type->funcType);
+        
+        auto func = type->funcType;
+        if(func->argumentTypes.size() != signature->argumentTypes.size() || func->returnTypes.size() != signature->returnTypes.size())
+            continue;
+        if(func->convention != signature->convention)
+            continue;
+            
+        bool match = true;
+        for(int i=0;i<func->argumentTypes.size();i++) {
+            if(func->argumentTypes[i].typeId != signature->argumentTypes[i].typeId) {
+                match = false;
+                break;
+            }
+        }
+        if(!match)
+            continue;
+        for(int i=0;i<func->returnTypes.size();i++) {
+            if(func->returnTypes[i].typeId != signature->returnTypes[i].typeId) {
+                match = false;
+                break;
+            }
+        }
+        if(!match)
+            continue;
+            
+        return type;
+    }
+    
+    // create type
+    auto type = (TypeInfo *)allocate(sizeof(TypeInfo));
+    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), 8};
+    type->scopeId = globalScopeId;
+    if(type->id.getId() >= _typeInfos.size()) {
+        _typeInfos.resize(type->id.getId() + AST_PRIMITIVE_COUNT);
+    }
+    _typeInfos[type->id.getId()] = type;
+    
+    function_types.add(type);
+    
+    auto func_type = (FunctionSignature *)allocate(sizeof(FunctionSignature));
+    new(func_type) FunctionSignature{};
+    type->funcType = func_type;
+    func_type->argSize = signature->argSize;
+    func_type->returnSize = signature->returnSize;
+    func_type->convention = signature->convention;
+    for(auto t : signature->argumentTypes)
+        func_type->argumentTypes.add(t);
+    for(auto t : signature->returnTypes)
+        func_type->returnTypes.add(t);
+    return type;
+}
+
 TypeInfo *AST::getBaseTypeInfo(TypeId id) {
     Assert(!id.isString());
     if(!id.isValid() && !id.isString()) return nullptr;
@@ -1612,6 +1853,29 @@ std::string AST::typeToString(TypeId typeId){
     TypeInfo* ti = getBaseTypeInfo(typeId);
     if(!ti)
         return "";
+        
+    if(ti->funcType) {
+        // TODO: Annotations
+        out += "fn";
+        if(ti->funcType->convention == CallConvention::STDCALL)
+            out += "@stdcall";
+        if(ti->funcType->convention == CallConvention::UNIXCALL)
+            out += "@unixcall";
+        out += "(";
+        for(int i=0;i<ti->funcType->argumentTypes.size();i++) {
+            if(i != 0) out += ",";
+            out += typeToString(ti->funcType->argumentTypes[i].typeId);
+        }
+        out += ")";
+        if(ti->funcType->returnTypes.size()) {
+            out += "->";
+            for(int i=0;i<ti->funcType->returnTypes.size();i++) {
+                if(i != 0) out += ",";
+                out += typeToString(ti->funcType->returnTypes[i].typeId);
+            }
+        }
+        return out;
+    }
 
     ScopeInfo* scope = getScope(ti->scopeId);
     std::string ns = scope->getFullNamespace(this);
@@ -2053,28 +2317,28 @@ std::string AST::nameOfFuncImpl(FuncImpl* impl) {
         }
         name+=">";
     }
-    if(impl->polyArgs.size()) {
+    if(impl->signature.polyArgs.size()) {
         name+="<";
-        for(int i=0;i<impl->polyArgs.size();i++) {
+        for(int i=0;i<impl->signature.polyArgs.size();i++) {
             if(i!=0)
                 name+=",";
-            name+=typeToString(impl->polyArgs[i]);
+            name+=typeToString(impl->signature.polyArgs[i]);
         }
         name+=">";
     }
     name+="(";
-    for(int i=0;i<impl->argumentTypes.size();i++){
+    for(int i=0;i<impl->signature.argumentTypes.size();i++){
          if(i!=0)
             name+=",";
-        name+=typeToString(impl->argumentTypes[i].typeId);
+        name+=typeToString(impl->signature.argumentTypes[i].typeId);
     }
     name+=")";
-    if(impl->returnTypes.size()) {
+    if(impl->signature.returnTypes.size()) {
         name+="->";
-        for(int i=0;i<impl->returnTypes.size();i++){
+        for(int i=0;i<impl->signature.returnTypes.size();i++){
             if(i!=0)
                 name+=",";
-            name+=typeToString(impl->returnTypes[i].typeId);
+            name+=typeToString(impl->signature.returnTypes[i].typeId);
         }
     }
     return name;
@@ -2132,11 +2396,11 @@ StructImpl* AST::createStructImpl(TypeId typeId){
 void FuncImpl::print(AST* ast, ASTFunction* astFunc){
     using namespace engone;
     log::out << astFunction->name <<"(";
-    for(int i=0;i<(int)argumentTypes.size();i++){
+    for(int i=0;i<(int)signature.argumentTypes.size();i++){
         if(i!=0) log::out << ", ";
         if(astFunc)
             log::out << astFunc->arguments[i].name <<": ";
-        log::out << ast->typeToString(argumentTypes[i].typeId);
+        log::out << ast->typeToString(signature.argumentTypes[i].typeId);
     }
     log::out << ")";
 }
@@ -2332,7 +2596,7 @@ void ASTFunction::print(AST *ast, int depth) {
             }
             log::out << "\n";
         }
-        if(linkConvention != LinkConventions::NONE){
+        if(linkConvention != LinkConvention::NONE){
             PrintSpace(depth+1);
             log::out << "Native/External\n";
         }else{

@@ -269,7 +269,7 @@ namespace dwarf {
                 u32 addend;
             };
             DynamicArray<Reloc> relocs{};
-            relocs._reserve(debug->functions.size() * 2 + 4);
+            relocs.reserve(debug->functions.size() * 2 + 4);
 
             WRITE_LEB(abbrev_compUnit) // abbrev code
             stream->write("BTB Compiler 0.2.1");
@@ -338,8 +338,8 @@ namespace dwarf {
 
                 // TODO: Add return values, types
 
-                for(int pi=0;pi<fun->funcImpl->argumentTypes.size();pi++){
-                    auto& arg_impl = fun->funcImpl->argumentTypes[pi];
+                for(int pi=0;pi<fun->funcImpl->signature.argumentTypes.size();pi++){
+                    auto& arg_impl = fun->funcImpl->signature.argumentTypes[pi];
                     addType(arg_impl.typeId);
                 }
             }
@@ -474,7 +474,7 @@ namespace dwarf {
                         WRITE_LEB(0); // end of members in enum
                         
                         *sibling_ref4 = stream->getWriteHead() - offset_section;
-                    } else if (queuedType == AST_FUNC_REFERENCE) {
+                    } else if(typeInfo->funcType) {
                         // TODO: Implement function references/pointers
                         log::out << " func ref (not implemented)\n";
                         allType.reference[0] = stream->getWriteHead() - offset_section;
@@ -483,6 +483,15 @@ namespace dwarf {
                         stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
                         stream->write1(8); // size
                         stream->write1(DW_ATE_unsigned);
+                    // } else if (queuedType == AST_FUNC_REFERENCE) {
+                    //     // TODO: Implement function references/pointers
+                    //     log::out << " func ref (not implemented)\n";
+                    //     allType.reference[0] = stream->getWriteHead() - offset_section;
+                    //     WRITE_LEB(abbrev_base_type)
+
+                    //     stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                    //     stream->write1(8); // size
+                    //     stream->write1(DW_ATE_unsigned);
                     } else {
                         Assert(queuedType.getId() < AST_TRUE_PRIMITIVES);
                         // other type
@@ -595,11 +604,11 @@ namespace dwarf {
                 u32* sibling_ref4 = nullptr;
                 stream->write_late((void**)&sibling_ref4, sizeof(u32));
                 if(fun->funcImpl) {
-                    Assert(fun->funcImpl->argumentTypes.size() == fun->funcAst->arguments.size());
+                    Assert(fun->funcImpl->signature.argumentTypes.size() == fun->funcAst->arguments.size());
                     // log::out << "func " << fun->name<<"\n";
-                    for(int pi=0;pi<fun->funcImpl->argumentTypes.size();pi++){
+                    for(int pi=0;pi<fun->funcImpl->signature.argumentTypes.size();pi++){
                         auto& arg_ast = fun->funcAst->arguments[pi];
-                        auto& arg_impl = fun->funcImpl->argumentTypes[pi];
+                        auto& arg_impl = fun->funcImpl->signature.argumentTypes[pi];
                         WRITE_LEB(abbrev_param)
                         stream->write(arg_ast.name.c_str(), arg_ast.name.length()); // arg_ast.name is a Token and not zero terminated
                         // stream->write(arg_ast.name.ptr, arg_ast.name.len); // arg_ast.name is a Token and not zero terminated

@@ -387,6 +387,14 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer:
         // ERR_HEAD2(err_location) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // print error? base type for polymorphic type doesn't exist
     }
+    if(!baseInfo->astStruct) {
+        ERR_SECTION(
+            ERR_HEAD2(err_location)
+            ERR_MSG("Polymorphic type '"<<typeString<<"' is not a struct and cannot be polymorphic.")
+            ERR_LINE2(err_location, "here")
+        )
+        return {};
+    }
     if(polyTokens.size() != baseInfo->astStruct->polyArgs.size()) {
         ERR_SECTION(
             ERR_HEAD2(err_location)
@@ -526,9 +534,9 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     Assert(!outTypes || outTypes->size()==0);
     #define FNCALL_SUCCESS \
         if(outTypes) {\
-            for(auto& ret : overload->funcImpl->returnTypes)\
+            for(auto& ret : overload->funcImpl->signature.returnTypes)\
                 outTypes->add(ret.typeId); \
-            if(overload->funcImpl->returnTypes.size()==0)\
+            if(overload->funcImpl->signature.returnTypes.size()==0)\
                 outTypes->add(AST_VOID);\
         }\
         expr->versions_overload[info.currentPolyVersion] = *overload;
@@ -720,7 +728,8 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         }
         if(!fnOverloads) {
             Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName);
-            if(!iden || iden->type != Identifier::FUNCTION){
+            
+            if(!iden) {
                 if(operatorOverloadAttempt || attempt)
                     return SIGNAL_NO_MATCH;
 
@@ -732,7 +741,77 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                 FNCALL_FAIL
                 return SIGNAL_FAILURE;
             }
-            fnOverloads = &iden->funcOverloads;
+            expr->identifier = iden;
+            if(iden->type == Identifier::FUNCTION) {
+                fnOverloads = &iden->funcOverloads;
+            } else if(iden->type == Identifier::VARIABLE){
+                auto var = info.ast->getVariableByIdentifier(iden);
+                auto type = var->versions_typeId[info.currentPolyVersion];
+                
+                auto type_info = info.ast->getTypeInfo(type);
+                if(!type_info->funcType) {
+                    if(operatorOverloadAttempt || attempt)
+                        return SIGNAL_NO_MATCH;
+
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("The identifier '"<<baseName <<"' is a variable but not a function pointer. You can only \"call\" variables if they are a function pointer.")
+                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                    )
+                    FNCALL_FAIL
+                    return SIGNAL_FAILURE;
+                }
+                
+                if(expr->nonNamedArgs != argTypes.size()) {
+                    if(operatorOverloadAttempt || attempt)
+                        return SIGNAL_NO_MATCH;
+
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("Named arguments is not possible when calling a function pointer that does not have parameter names.")
+                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                    )
+                    FNCALL_FAIL
+                    return SIGNAL_FAILURE;
+                }
+                
+                auto f = type_info->funcType;
+                
+                bool matched = true;
+                if(f->argumentTypes.size() != argTypes.size()) {
+                    matched = false;   
+                } else {
+                    for(int i=0;i<f->argumentTypes.size();i++) {
+                        if(!info.ast->castable(argTypes[i], f->argumentTypes[i].typeId)) {
+                            matched = false;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!matched) {
+                    if(operatorOverloadAttempt || attempt)
+                        return SIGNAL_NO_MATCH;
+
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("Args don't match with function pointer.")
+                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                    )
+                    FNCALL_FAIL
+                    return SIGNAL_FAILURE;
+                }
+                
+                if(outTypes) {
+                    if(f->returnTypes.size()==0)
+                        outTypes->add(AST_VOID);
+                    else
+                        for(auto& ret : f->returnTypes)
+                            outTypes->add(ret.typeId);
+                }
+                expr->versions_func_type[info.currentPolyVersion] = f;
+                return SIGNAL_SUCCESS;
+            }
         }
     }
     bool implicitPoly = false; // implicit poly does not affect parentStruct
@@ -760,7 +839,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
 
             for(int i=argTypes.size() + (expr->hasImplicitThis()?1:0); i<overload->astFunc->arguments.size();i++) {
             // for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
-                auto& argImpl = overload->funcImpl->argumentTypes[i];
+                auto& argImpl = overload->funcImpl->signature.argumentTypes[i];
                 auto& arg = overload->astFunc->arguments[i];;
                 if(!arg.defaultValue)
                     continue;
@@ -824,8 +903,8 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                 for (int i = 0; i < fnOverloads->overloads.size();i++) {
                     auto& overload = fnOverloads->overloads[i];
                     log::out << "(";
-                    for(int j=0;j<overload.funcImpl->argumentTypes.size();j++){
-                        auto& argType = overload.funcImpl->argumentTypes[j];
+                    for(int j=0;j<overload.funcImpl->signature.argumentTypes.size();j++){
+                        auto& argType = overload.funcImpl->signature.argumentTypes[j];
                         if(j!=0)
                             log::out << ", ";
                         log::out << log::LIME << info.ast->typeToString(argType.typeId) << log::NO_COLOR;
@@ -894,8 +973,8 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     //         for (int i = 0; i < fnOverloads->overloads.size();i++) {
     //             auto& overload = fnOverloads->overloads[i];
     //             log::out << "(";
-    //             for(int j=0;j<overload.funcImpl->argumentTypes.size();j++){
-    //                 auto& argType = overload.funcImpl->argumentTypes[j];
+    //             for(int j=0;j<overload.funcImpl->signature.argumentTypes.size();j++){
+    //                 auto& argType = overload.funcImpl->signature.argumentTypes[j];
     //                 if(j!=0)
     //                     log::out << ", ";
     //                 log::out << log::LIME << info.ast->typeToString(argType.typeId) << log::NO_COLOR;
@@ -1247,11 +1326,11 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     FuncImpl* funcImpl = info.ast->createFuncImpl(polyFunc);
     funcImpl->structImpl = parentStructImpl;
 
-    funcImpl->polyArgs.resize(fnPolyArgs.size());
+    funcImpl->signature.polyArgs.resize(fnPolyArgs.size());
 
     for(int i=0;i<(int)fnPolyArgs.size();i++){
         TypeId id = fnPolyArgs[i];
-        funcImpl->polyArgs[i] = id;
+        funcImpl->signature.polyArgs[i] = id;
     }
     // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
     SignalIO result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
@@ -1281,9 +1360,9 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                 if(argTypes.size()==0){
                     log::out << "zero arguments";
                 }
-                for(int i=0;i<(int)funcImpl->argumentTypes.size();i++){
+                for(int i=0;i<(int)funcImpl->signature.argumentTypes.size();i++){
                     if(i!=0) log::out << ", ";
-                    log::out <<info.ast->typeToString(funcImpl->argumentTypes[i].typeId);
+                    log::out <<info.ast->typeToString(funcImpl->signature.argumentTypes[i].typeId);
                 }
                 log::out << "\n";
                 log::out << log::CYAN<<"Passed args: "<<log::LIME;
@@ -1340,33 +1419,55 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                 } else if(iden->type == Identifier::FUNCTION) {
                     if(iden->funcOverloads.overloads.size() == 1) {
                         auto overload = &iden->funcOverloads.overloads[0];
-                        CallConventions expected_convention = CallConventions::UNIXCALL;
-                        if(info.compiler->options->target == TARGET_WINDOWS_x64)
-                            expected_convention = CallConventions::STDCALL;
-                        if(info.compiler->options->target == TARGET_LINUX_x64)
-                            expected_convention = CallConventions::UNIXCALL;
-                        if (overload->astFunc->callConvention != expected_convention) {
+                        
+                        if (overload->astFunc->callConvention == INTRINSIC) {
                             ERR_SECTION(
                                 ERR_HEAD2(expr->location)
-                                ERR_MSG("You can only take a reference from functions that use "<<ToString(expected_convention)<<" (calling convention). The system for function pointers is a temporary solution and can't support anything else. But it exists at least; making threads possible.")
-                                ERR_LINE2(expr->location, "function must use stdcall")
+                                ERR_MSG("You cannot take a pointer to an intrinsic function.")
+                                ERR_LINE2(expr->location, "here")
+                                ERR_LINE2(overload->astFunc->location, "this function")
                             )
                             if(outTypes) outTypes->add(AST_VOID);
+                            return SIGNAL_FAILURE;
+                        }
+                        if (overload->astFunc->linkConvention != LinkConvention::NONE) {
+                            ERR_SECTION(
+                                ERR_HEAD2(expr->location)
+                                ERR_MSG("You cannot take a pointer to an external/imported function (yet).")
+                                ERR_LINE2(expr->location, "here")
+                                ERR_LINE2(overload->astFunc->location, "this function")
+                            )
+                            if(outTypes) outTypes->add(AST_VOID);
+                            return SIGNAL_FAILURE;
+                        }
+                            
+                        if(overload->astFunc->body && overload->funcImpl->usages == 0){
+                            info.compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
+                        }
+                        overload->funcImpl->usages++;
+                        
+                        // TODO: Don't create new arrays, restructure funcImpl so that you can just
+                        //   pass arrays when finding function type
+                        // DynamicArray<TypeId> args{};
+                        // DynamicArray<TypeId> rets{};
+                        // auto f = overload->funcImpl;
+                        // args.reserve(f->signature.argumentTypes.size());
+                        // rets.reserve(f->signature.returnTypes.size());
+                        // for(auto& t : f->signature.argumentTypes)
+                        //     args.add(t.typeId);
+                        // for(auto& t : f->signature.returnTypes)
+                        //     rets.add(t.typeId);
+                        auto type = info.ast->findOrAddFunctionSignature(&overload->funcImpl->signature);
+                        if(!type) {
+                            Assert(("can this crash?",false));
                         } else {
-                            if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                                info.compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
-                                // TypeChecker::CheckImpl checkImpl{};
-                                // checkImpl.astFunc = overload->astFunc;
-                                // checkImpl.funcImpl = overload->funcImpl;
-                                // info.typeChecker->checkImpls.add(checkImpl);
-                            }
-                            overload->funcImpl->usages++;
-                            if(outTypes) outTypes->add(AST_FUNC_REFERENCE);
+                            if(outTypes)
+                                outTypes->add(type->id);
                         }
                     } else {
                         ERR_SECTION(
                             ERR_HEAD2(expr->location)
-                            ERR_MSG("Function is overloaded. Taking a reference would therefore be ambiguous. You must rename the function so that it only has one overload. There will be a better way to solve this in the future.")
+                            ERR_MSG("Function is overloaded. Taking a reference would therefore be ambiguous. You must rename the function so that it only has one overload.")
                             ERR_LINE2(expr->location, "ambiguous")
                         )
                         if(outTypes) outTypes->add(AST_VOID);
@@ -2027,7 +2128,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
 
     // log::out << "IMPL " << func->name<<"\n";
 
-    Assert(funcImpl->polyArgs.size() == func->polyArgs.size());
+    Assert(funcImpl->signature.polyArgs.size() == func->polyArgs.size());
     // for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
     //     TypeId id = funcImpl->polyArgs[i];
     //     Assert(id.isValid());
@@ -2065,16 +2166,16 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
 
     // TODO: Handle calling conventions
 
-    funcImpl->argumentTypes.resize(func->arguments.size());
-    funcImpl->returnTypes.resize(func->returnValues.size());
+    funcImpl->signature.argumentTypes.resize(func->arguments.size());
+    funcImpl->signature.returnTypes.resize(func->returnValues.size());
+    funcImpl->signature.convention = func->callConvention;
 
     int offset = 0; // offset starts before call frame (fp, pc)
 
-    // Based on 8-bit alignment. The last argument must be aligned by it.
     for(int i=0;i<(int)func->arguments.size();i++){
 
         auto& arg = func->arguments[i];
-        auto& argImpl = funcImpl->argumentTypes[i];
+        auto& argImpl = funcImpl->signature.argumentTypes[i];
         if(arg.stringType.isString()){
             bool printedError = false;
             // Token token = info.ast->getStringFromTypeString(arg.typeId);
@@ -2160,27 +2261,22 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
     // reverse
     // for(int i=0;i<(int)func->arguments.size();i++){
     //     // auto& arg = func->arguments[i];
-    //     auto& argImpl = funcImpl->argumentTypes[i];
+    //     auto& argImpl = funcImpl->signature.argumentTypes[i];
     //     // TypeInfo* typeInfo = info.ast->getTypeInfo(arg.typeId);
     //     int size = info.ast->getTypeSize(argImpl.typeId);
     //     argImpl.offset = offset - argImpl.offset - size;
     //     // log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
     // }
-    funcImpl->argSize = offset;
+    funcImpl->signature.argSize = offset;
 
-    // return values should also have 8-bit alignment but since the call frame already
-    // is aligned there is no need for any special stuff here.
-    //(note that the special code would exist where functions are generated and not here)
     offset = 0;
     if(outTypes){
         Assert(outTypes->size()==0);
     }
     
-    // for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
-    for(int i=(int)funcImpl->returnTypes.size()-1;i>=0;i--){
-        auto& retImpl = funcImpl->returnTypes[i];
+    for(int i=(int)funcImpl->signature.returnTypes.size()-1;i>=0;i--){
+        auto& retImpl = funcImpl->signature.returnTypes[i];
         auto& retStringType = func->returnValues[i].stringType;
-        // TypeInfo* typeInfo = 0;
         if(retStringType.isString()){
             bool printedError = false;
             auto ti = CheckType(info, func->scopeId, retStringType, func->location, &printedError);
@@ -2224,16 +2320,16 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
     if((offset)%8!=0)
         offset += 8-(offset)%8; // padding to ensure 8-byte alignment
 
-    // for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
-    //     auto& ret = funcImpl->returnTypes[i];
+    // for(int i=0;i<(int)funcImpl->signature.returnTypes.size();i++){
+    //     auto& ret = funcImpl->signature.returnTypes[i];
     //     // TypeInfo* typeInfo = info.ast->getTypeInfo(arg.typeId);
     //     int size = info.ast->getTypeSize(ret.typeId);
     //     ret.offset = ret.offset - offset;
     //     // log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
     // }
-    funcImpl->returnSize = offset;
+    funcImpl->signature.returnSize = offset;
 
-    if(outTypes && funcImpl->returnTypes.size()==0){
+    if(outTypes && funcImpl->signature.returnTypes.size()==0){
         outTypes->add(AST_VOID);
     }
     return SIGNAL_SUCCESS;
@@ -2351,7 +2447,7 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
             //         function->nonDefaults+1 > overload.astFunc->arguments.size())
             //         continue;
             //     for (u32 j=0;j<function->nonDefaults || j<overload.astFunc->nonDefaults;j++){
-            //         if(overload.funcImpl->argumentTypes[j+1].typeId != argTypes[j+1]){
+            //         if(overload.funcImpl->signature.argumentTypes[j+1].typeId != argTypes[j+1]){
             //             found = false;
             //             break;
             //         }
@@ -2362,7 +2458,7 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
                     function->nonDefaults > overload.astFunc->arguments.size())
                     continue;
                 for (u32 j=0;j<function->nonDefaults || j<overload.astFunc->nonDefaults;j++){
-                    if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]){
+                    if(overload.funcImpl->signature.argumentTypes[j].typeId != argTypes[j]){
                         found = false;
                         break;
                     }
@@ -2595,7 +2691,7 @@ SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcIm
     _TCLOG(log::out << "arg:\n";)
     for (int i=0;i<(int)func->arguments.size();i++) {
         auto& arg = func->arguments[i];
-        auto& argImpl = funcImpl->argumentTypes[i];
+        auto& argImpl = funcImpl->signature.argumentTypes[i];
         _TCLOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
         // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
         auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
@@ -2609,7 +2705,7 @@ SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcIm
     // _TCLOG(log::out << "ret:\n";)
     // for (int i=0;i<(int)func->returnValues.size();i++) {
     //     auto& ret = func->returnValues[i];
-    //     auto& retImpl = funcImpl->returnTypes[i];
+    //     auto& retImpl = funcImpl->signature.returnTypes[i];
     //     _TCLOG(log::out << " [" <<i <<"] : "<< info.ast->typeToString(retImpl.typeId) <<"\n";)
     //     // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
     //     // auto varinfo = info.ast->identifierToVariable(arg.identifier);
@@ -2659,7 +2755,7 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
     // typeArray.resize(0);
     if(now->firstExpression){
         // may not exist, meaning just a declaration, no assignment
-        // if(Equal(now->firstExpression->name, "_reserve")) {
+        // if(Equal(now->firstExpression->name, "reserve")) {
             // __debugbreak();
             // log::out << "okay\n";
         // }

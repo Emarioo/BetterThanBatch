@@ -254,7 +254,7 @@ void X64Builder::free_register(X64Register reg) {
     pair->second.used = false;
     pair->second.artifical_reg = 0;
 }
-bool X64Builder::_reserve(u32 newAllocationSize){
+bool X64Builder::reserve(u32 newAllocationSize){
     if(newAllocationSize==0){
         if(tinyprog->_allocationSize!=0){
             TRACK_ARRAY_FREE(tinyprog->text, u8, tinyprog->_allocationSize);

@@ -114,14 +114,14 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             lexer_import->chunk_indices.add(cindex);
             lexer_import->chunks.add(last_chunk);
             
-            last_chunk->tokens._reserve(TOKEN_ORIGIN_TOKEN_MAX);
-            last_chunk->sources._reserve(TOKEN_ORIGIN_TOKEN_MAX);
+            last_chunk->tokens.reserve(TOKEN_ORIGIN_TOKEN_MAX);
+            last_chunk->sources.reserve(TOKEN_ORIGIN_TOKEN_MAX);
         } else {
             int prev_index=0;
             if(prev_token)
                 prev_index = prev_token - last_chunk->tokens.data(); 
-            last_chunk->tokens._reserve(TOKEN_ORIGIN_TOKEN_MAX);
-            last_chunk->sources._reserve(TOKEN_ORIGIN_TOKEN_MAX);
+            last_chunk->tokens.reserve(TOKEN_ORIGIN_TOKEN_MAX);
+            last_chunk->sources.reserve(TOKEN_ORIGIN_TOKEN_MAX);
             if(prev_token)
                 prev_token = prev_index + last_chunk->tokens.data(); 
         }

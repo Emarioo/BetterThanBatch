@@ -24,7 +24,7 @@ struct TinyArray {
     TinyArray() = default;
     ~TinyArray() { cleanup(); }
     void cleanup(){
-        _reserve(0);
+        reserve(0);
     }
 
     T* _ptr = nullptr;
@@ -44,7 +44,7 @@ struct TinyArray {
 
     bool add(const T& t){
         if(used + 1 > max){
-            if(!_reserve(5 + max * 1.5)){
+            if(!reserve(5 + max * 1.5)){
                 return false;
             }
         }
@@ -99,7 +99,7 @@ struct TinyArray {
     T* data() const {
         return _ptr;
     }
-    bool _reserve(u32 newMax){
+    bool reserve(u32 newMax){
         // MEASURE
         if(newMax==0){
             if(owner){
@@ -158,7 +158,7 @@ struct TinyArray {
     // Will not shrink alloction to fit the new size
     bool resize(u32 newSize){
         if(newSize>max){
-            bool yes = _reserve(newSize);
+            bool yes = reserve(newSize);
             if(!yes)
                 return false;
         }
@@ -181,7 +181,7 @@ struct DynamicArray {
     DynamicArray() = default;
     ~DynamicArray() { cleanup(); }
     void cleanup(){
-        _reserve(0);
+        reserve(0);
     }
 
     DynamicArray(DynamicArray<T>& arr) = delete;
@@ -189,7 +189,7 @@ struct DynamicArray {
         // if(arr.used>0){
             // engone::log::out << "copy "<<arr.used<<"\n";
         // }
-        // bool yes = _reserve(arr.max);
+        // bool yes = reserve(arr.max);
         // Assert(yes);
         bool yes = resize(arr.used);
         Assert(yes);
@@ -204,7 +204,7 @@ struct DynamicArray {
         // if(arr.used>0){
             // engone::log::out << "copy "<<arr.used<<"\n";
         // }
-        // bool yes = _reserve(arr.max);
+        // bool yes = reserve(arr.max);
         // Assert(yes);
         bool yes = resize(arr.used);
         Assert(yes);
@@ -219,7 +219,7 @@ struct DynamicArray {
 
     bool add(const T& t){
         if(used + 1 > max){
-            if(!_reserve(1 + max * 1.5)){
+            if(!reserve(1 + max * 1.5)){
                 return false;
             }
         }
@@ -285,7 +285,7 @@ struct DynamicArray {
     T* data() const {
         return _ptr;
     }
-    bool _reserve(u32 newMax){
+    bool reserve(u32 newMax){
         // MEASURE
         if(newMax==0){
             if(max!=0){
@@ -354,7 +354,7 @@ struct DynamicArray {
     // Will not shrink alloction to fit the new size
     bool resize(u32 newSize){
         if(newSize>max){
-            bool yes = _reserve(newSize);
+            bool yes = reserve(newSize);
             if(!yes)
                 return false;
         }
@@ -411,11 +411,11 @@ struct QuickArray {
     QuickArray() = default;
     ~QuickArray() { cleanup(); }
     void cleanup(){
-        _reserve(0);
+        reserve(0);
     }
 
     QuickArray(const QuickArray<T>& arr) {
-        bool yes = _reserve(arr.max);
+        bool yes = reserve(arr.max);
         Assert(yes);
         yes = resize(arr.used);
         Assert(yes);
@@ -439,7 +439,7 @@ struct QuickArray {
         if(arr.used>0){
         // engone::log::out << "copy "<<arr.used<<"\n";
         }
-        bool yes = _reserve(arr.max);
+        bool yes = reserve(arr.max);
         Assert(yes);
         yes = resize(arr.used);
         Assert(yes);
@@ -457,7 +457,7 @@ struct QuickArray {
     //     // if(arr.used>0){
     //         // engone::log::out << "copy "<<arr.used<<"\n";
     //     // }
-    //     bool yes = _reserve(arr.max);
+    //     bool yes = reserve(arr.max);
     //     Assert(yes);
     //     yes = resize(arr.used);
     //     Assert(yes);
@@ -472,7 +472,7 @@ struct QuickArray {
 
     bool add(const T& t){
         if(used + 1 > max){
-            if(!_reserve(5 + max * 1.5)){
+            if(!reserve(5 + max * 1.5)){
                 return false;
             }
         }
@@ -528,7 +528,7 @@ struct QuickArray {
     T* data() const {
         return _ptr;
     }
-    bool _reserve(u32 newMax){
+    bool reserve(u32 newMax){
         // MEASURE
         if(newMax==0){
             if(max!=0){
@@ -578,7 +578,7 @@ struct QuickArray {
     // New elements are zero initialized
     bool resize(u32 newSize){
         if(newSize>max){
-            bool yes = _reserve(newSize);
+            bool yes = reserve(newSize);
             if(!yes)
                 return false;
         }

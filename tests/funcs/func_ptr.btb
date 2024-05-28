@@ -1,0 +1,50 @@
+@TEST_CASE(function_pointer)
+
+fn @stdcall okay(a: i32, b: i32) -> i32 {
+    return a + b + 5
+}
+
+f := okay
+
+_test 27; asm<i32>(f) {
+    pop rbx
+    mov ecx, 19
+    mov edx, 3
+    call rbx
+    push rax
+}
+
+_test 12; f(4, 3)
+
+fn hi(a: i32, b: i32) -> i32 {
+    return a + b + 5
+}
+h := hi
+
+_test 12; h(4, 3)
+
+
+var3: fn (i32, mo[]) -> i32, i32
+var3: fn (i32, i64<i64>*, mo[]) -> i32, i32
+
+@TEST_CASE(func_ptr_callback)
+
+fn map(arr: i32[], callback: fn(i32,i32)) {
+    for arr {
+        callback(nr, it)
+    }
+}
+
+list: i32[16] {
+    3,5,7,8,23,5,87,9,3,6,8 // 164 = 3+5+7+8+23+5+87+9+3+6+8
+}
+
+global sum: i32;
+
+fn act(i: i32, x: i32) {
+    sum += x
+}
+
+map(list,act)
+
+_test 164; sum

@@ -239,7 +239,7 @@ struct X64Builder {
     int code_size() const { return tinyprog->head; }
     void ensure_bytes(int size) {
         if(tinyprog->head + size >= tinyprog->_allocationSize ){
-            bool yes = _reserve(tinyprog->_allocationSize * 2 + 50 + size);
+            bool yes = reserve(tinyprog->_allocationSize * 2 + 50 + size);
             Assert(yes);
         }
     }
@@ -281,7 +281,7 @@ struct X64Builder {
     void set_imm32(u32 offset, u32 value);
     void set_imm8(u32 offset, u8 value);
     
-    bool _reserve(u32 size);
+    bool reserve(u32 size);
 
     // float registers require size, general registers will always use REXW
     void emit_mov_reg_reg(X64Register reg, X64Register rm, int size = 0);

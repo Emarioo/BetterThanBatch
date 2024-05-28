@@ -80,7 +80,7 @@ struct StringBuilder {
         builder.len=0;
         builder.max=0;
         builder.borrowing=false;
-        // bool yes = _reserve(arr.max);
+        // bool yes = reserve(arr.max);
         // Assert(yes);
         // yes = resize(arr.used);
         // Assert(yes);
@@ -104,7 +104,7 @@ struct StringBuilder {
         builder.len=0;
         builder.max=0;
         builder.borrowing=false;
-        // Assert(bool yes = _reserve(arr.max));
+        // Assert(bool yes = reserve(arr.max));
         // Assert(yes = resize(arr.used));
         // for(int i=0;i<used;i++){
         //     _ptr[i] = arr._ptr[i];
@@ -112,7 +112,7 @@ struct StringBuilder {
     }
     void cleanup(){
         if(!borrowing)
-            _reserve(0);
+            reserve(0);
         else {
             _ptr = nullptr;
             max = 0;
@@ -236,10 +236,10 @@ struct StringBuilder {
     void ensure(u32 length) {
         if(max>=length)
             return;
-        bool yes = _reserve(max + length + 10);
+        bool yes = reserve(max + length + 10);
         Assert(yes);
     }
-    bool _reserve(u32 newMax) {
+    bool reserve(u32 newMax) {
         Assert(!borrowing);
         if(newMax==0){
             if(max!=0){

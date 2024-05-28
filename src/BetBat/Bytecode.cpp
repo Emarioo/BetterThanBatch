@@ -1,7 +1,7 @@
 #include "BetBat/Bytecode.h"
 #include "BetBat/Compiler.h"
 
-// included to get CallConventions
+// included to get CallConvention
 #include "BetBat/x64_gen.h"
 
 #define ENABLE_BYTECODE_OPTIMIZATIONS
@@ -105,7 +105,7 @@ int Bytecode::appendData(const void* data, int size){
     defer { lock_global_data.unlock(); };
     if(dataSegment.max < dataSegment.used + size){
         int oldMax = dataSegment.max;
-        dataSegment._reserve(dataSegment.max*2 + 2*size);
+        dataSegment.reserve(dataSegment.max*2 + 2*size);
         memset(dataSegment.data() + oldMax, DEFAULT_DATA_BYTE, dataSegment.max - oldMax);
     }
     int index = dataSegment.used;
@@ -130,7 +130,7 @@ int Bytecode::add_assembly(const char* text, int len, const std::string& file, i
     
     if(rawInlineAssembly.max < rawInlineAssembly.used + len){
         int oldMax = rawInlineAssembly.max;
-        rawInlineAssembly._reserve(rawInlineAssembly.max*2 + 2*len);
+        rawInlineAssembly.reserve(rawInlineAssembly.max*2 + 2*len);
         memset(rawInlineAssembly.data() + oldMax, ' ', rawInlineAssembly.max - oldMax);
     }
     inst.start = rawInlineAssembly.size();
@@ -403,7 +403,7 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
     emit_control(control);
     emit_imm16(imm);
 }
-void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm) {
+void BytecodeBuilder::emit_call(LinkConvention l, CallConvention c, i32* index_of_relocation, i32 imm) {
     if(disable_code_gen) return;
 
     emit_opcode(BC_CALL);
@@ -411,6 +411,18 @@ void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index
     emit_imm8(c);
     *index_of_relocation = tinycode->instructionSegment.used;
     emit_imm32(imm);
+
+    has_return_values = true;
+    ret_offset = pushed_offset;
+    pushed_offset_max = pushed_offset;
+}
+void BytecodeBuilder::emit_call_reg(BCRegister reg, LinkConvention l, CallConvention c) {
+    if(disable_code_gen) return;
+
+    emit_opcode(BC_CALL_REG);
+    emit_operand(reg);
+    emit_imm8(l);
+    emit_imm8(c);
 
     has_return_values = true;
     ret_offset = pushed_offset;
@@ -1022,6 +1034,7 @@ InstBaseType instruction_contents[256] {
 
     BASE_imm32,                         // BC_JMP,
     BASE_link | BASE_call | BASE_imm32, // BC_CALL
+    BASE_op1 | BASE_link | BASE_call, // BC_CALL
     BASE_NONE,                          // BC_RET,
     BASE_op1 | BASE_imm32,              // BC_JNZ,
     BASE_op1 | BASE_imm32,              // BC_JZ,
@@ -1299,8 +1312,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             log::out << " " << log::GREEN << imm;
         } break;
         case BC_CALL: {
-            LinkConventions l = (LinkConventions)instructions[pc++];
-            CallConventions c = (CallConventions)instructions[pc++];
+            LinkConvention l = (LinkConvention)instructions[pc++];
+            CallConvention c = (CallConvention)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
@@ -1322,6 +1335,13 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 else
                     log::out << log::LIME << "?";
             }
+        } break;
+        case BC_CALL_REG: {
+            op0 = (BCRegister)instructions[pc++];
+            LinkConvention l = (LinkConvention)instructions[pc++];
+            CallConvention c = (CallConvention)instructions[pc++];
+            
+            log::out << " " << register_names[op0] << ", " << l << ", " << c <<  ", ";
         } break;
         case BC_JMP: {
             imm = *(i32*)&instructions[pc];

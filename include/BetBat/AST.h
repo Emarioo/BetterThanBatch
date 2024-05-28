@@ -16,7 +16,7 @@ struct FuncImpl;
 struct ASTExpression;
 struct ASTScope;
 
-enum CallConventions : u8 {
+enum CallConvention : u8 {
     BETCALL, // The default. Native functions use this.
     STDCALL, // Currently default x64 calling convention.
     INTRINSIC, // Special implementation. Usually a function directly coupled to an instruction.
@@ -24,7 +24,7 @@ enum CallConventions : u8 {
     // https://www.ired.team/miscellaneous-reversing-forensics/windows-kernel-internals/linux-x64-calling-convention-stack-frame
     UNIXCALL, // System V AMD64 ABI calling convention.
 };
-enum LinkConventions : u8 {
+enum LinkConvention : u8 {
     NONE=0x00, // no linkConvention export/import
     // DLLEXPORT, // .drectve section is needed to pass /EXPORT: to the linker. The exported function must use stdcall convention
     IMPORT=0x80, // external from the source code, linkConvention with static library or object files
@@ -34,14 +34,14 @@ enum LinkConventions : u8 {
 };
 
 #define IS_IMPORT(X) (X&(u8)0x80)
-const char* ToString(CallConventions stuff);
-const char* ToString(LinkConventions stuff);
+const char* ToString(CallConvention stuff);
+const char* ToString(LinkConvention stuff);
 
-engone::Logger& operator<<(engone::Logger& logger, CallConventions convention);
-engone::Logger& operator<<(engone::Logger& logger, LinkConventions convention);
+engone::Logger& operator<<(engone::Logger& logger, CallConvention convention);
+engone::Logger& operator<<(engone::Logger& logger, LinkConvention convention);
 
-StringBuilder& operator<<(StringBuilder& builder, CallConventions convention);
-StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention);
+StringBuilder& operator<<(StringBuilder& builder, CallConvention convention);
+StringBuilder& operator<<(StringBuilder& builder, LinkConvention convention);
 
 
 enum PrimitiveType : u16 {
@@ -66,8 +66,6 @@ enum PrimitiveType : u16 {
 
     AST_STRING, // converted to char[]
     AST_NULL, // converted to void*
-
-    AST_FUNC_REFERENCE,
 
     // TODO: should these be moved somewhere else?
     AST_ID, // variable, enum, type
@@ -315,6 +313,18 @@ struct StructImpl {
     
     QuickArray<TypeId> polyArgs;
 };
+struct FunctionSignature {
+    struct Spot {
+        TypeId typeId{};
+        int offset=0;
+    };
+    QuickArray<Spot> argumentTypes;
+    QuickArray<Spot> returnTypes;
+    int argSize=0;
+    int returnSize=0;
+    QuickArray<TypeId> polyArgs;
+    CallConvention convention=BETCALL;
+};
 struct TypeInfo {
     TypeInfo(const StringView& name, TypeId id, u32 size=0) :  name(name), id(id), originalId(id), _size(size) {}
     TypeInfo(TypeId id, u32 size=0) : id(id), originalId(id), _size(size) {}
@@ -326,9 +336,10 @@ struct TypeInfo {
     u32 _size=0;
     // u32 _alignedSize=0;
     u32 arrlen=0;
-    ASTStruct* astStruct=0;
-    StructImpl* structImpl=0; // nullptr means pure/base poly type 
-    ASTEnum* astEnum=0;
+    ASTStruct* astStruct=nullptr;
+    StructImpl* structImpl=nullptr; // nullptr means pure/base poly type 
+    ASTEnum* astEnum=nullptr;
+    FunctionSignature* funcType=nullptr;
 
     ScopeId scopeId = 0;
     // bool isVirtualType = false;
@@ -350,25 +361,24 @@ struct TypeInfo {
 struct FuncImpl {
     // std::string name;
     ASTFunction* astFunction = nullptr;
-    struct Spot {
-        TypeId typeId{};
-        int offset=0;
-    };
     u32 usages = 0;
     bool isUsed() { return usages!=0; }
-    QuickArray<Spot> argumentTypes;
-    QuickArray<Spot> returnTypes;
-    int argSize=0;
-    int returnSize=0;
-    // i64 address = ADDRESS_INVALID; // Set by generator
+    
+    FunctionSignature signature;
+    // struct Spot {
+    //     TypeId typeId{};
+    //     int offset=0;
+    // };
+    // QuickArray<Spot> argumentTypes;
+    // QuickArray<Spot> returnTypes;
+    // int argSize=0;
+    // int returnSize=0;
+    // QuickArray<TypeId> polyArgs;
+    
     int tinycode_id = 0; // 0 is invalid, set by generator
-    // u32 polyVersion=0;
     u32 polyVersion=-1; // We can catch mistakes if we use -1 as default value
-    QuickArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
     void print(AST* ast, ASTFunction* astFunc);
-    // static const i64 ADDRESS_INVALID = -1; // undefined or not address that hasn't been set
-    // static const u64 ADDRESS_EXTERNAL = -21;
 };
 struct Identifier {
     Identifier() {}
@@ -546,6 +556,7 @@ struct ASTExpression : ASTNode {
     // The contents of overload is stored here. This is not a pointer since
     // the array containing the overload may be resized.
     PolyVersions<FnOverloads::Overload> versions_overload{};
+    PolyVersions<FunctionSignature*> versions_func_type{};
 
     // you could use a union with some of these to save memory
     // outTypeSizeof and castType could perhaps be combined?
@@ -810,13 +821,13 @@ struct ASTFunction : ASTNode {
     }
     
     bool blank_body = false; // tells the generator to create no instructions except a return.
-    LinkConventions linkConvention = LinkConventions::NONE;
-    CallConventions callConvention = BETCALL;
+    LinkConvention linkConvention = LinkConvention::NONE;
+    CallConvention callConvention = BETCALL;
     // A lot of places need to know whether a function has a body.
     // When function should have a body or not has changed a lot recently
     // and I have needed to rewrite a lot. Having the requirement abstracted in
     // a function will prevent some of the changes you would need to make.
-    bool needsBody() { return linkConvention == LinkConventions::NONE && callConvention != INTRINSIC; }
+    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC; }
 
     void print(AST* ast, int depth);
 };
@@ -1052,6 +1063,12 @@ struct AST {
     u32 nextTypeId=AST_OPERATION_COUNT;
     // TODO: Use a bucket array, might not make a difference since typeInfos are allocated in a linear allocator. 
     QuickArray<TypeInfo*> _typeInfos; // not private because DWARF uses it and I don't want to use friend
+
+    QuickArray<TypeInfo*> function_types;
+    
+    // TODO: annotations
+    TypeInfo* findOrAddFunctionSignature(DynamicArray<TypeId>& args, DynamicArray<TypeId>& rets, CallConvention conv);
+    TypeInfo* findOrAddFunctionSignature(FunctionSignature* signature);
 
     MUTEX(lock_scopes);
     volatile u32 nextScopeInfoIndex = 0;

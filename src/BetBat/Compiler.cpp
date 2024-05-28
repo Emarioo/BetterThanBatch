@@ -998,10 +998,11 @@ void Compiler::run(CompileOptions* options) {
     #ifdef OS_WINDOWS
     // Linux developers only care about DWARF (probably)
     // It's Windows developers that expect PDB which we don't provide.
-    if(options->useDebugInformation) {
-        log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
-        // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
-    }
+    // This text clutters the console so I commented it out. - Emarioo, 2024-05-26
+    // if(options->useDebugInformation) {
+    //     log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
+    //     // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
+    // }
     #endif
     if(options->source_file.size() == 0 && !options->source_buffer.buffer) {
         log::out << log::RED << "No source file was specified.\n";
