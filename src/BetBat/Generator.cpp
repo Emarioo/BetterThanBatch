@@ -3874,13 +3874,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
     MAKE_NODE_SCOPE(body); // no need, the scope itself doesn't generate code
 
     Bytecode::Dump debugDump{};
+    debugDump.tinycode_index = tinycode->index;
     if(body->flags & ASTNode::DUMP_ASM) {
         debugDump.dumpAsm = true;
     }
     if(body->flags & ASTNode::DUMP_BC) {
         debugDump.dumpBytecode = true;
     }
-    // debugDump.bc_startIndex = bytecode->length();
+    debugDump.bc_startIndex = builder.get_pc();
     
     bool codeWasDisabled = info.disableCodeGeneration;
     bool errorsWasIgnored = info.ignoreErrors;
@@ -3913,13 +3914,11 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         info.currentScopeId = savedScope; 
         info.ignoreErrors = errorsWasIgnored;
         if(debugDump.dumpAsm || debugDump.dumpBytecode) {
-            // compiler->lexer.getImport_unsafe(body->loc);
-            Assert(false); // nocheckin, no token range
             // debugDump.description = body->tokenRange.tokenStream()->streamName + ":"+std::to_string(body->tokenRange.firstToken.line);
             // debugDump.description = TrimDir(body->tokenRange.tokenStream()->streamName) + ":"+std::to_string(body->tokenRange.firstToken.line);
-            // debugDump.bc_endIndex = bytecode->length();
+            debugDump.bc_endIndex = builder.get_pc();
             Assert(debugDump.bc_startIndex <= debugDump.bc_endIndex);
-            info.bytecode->debugDumps.add(debugDump);
+            bytecode->debugDumps.add(debugDump);
         }
     };
 

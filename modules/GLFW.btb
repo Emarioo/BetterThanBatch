@@ -3,9 +3,21 @@
     (incomplete)
 */
 
-#load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib" as GLFW
-#load "user32.lib" // glfw3 requires these libraries
-#load "gdi32.lib"
+// TODO: The location of GLFW library may change, if you compile with gcc or msvc
+//   then we would use different libraries. How to deal with that.
+#if OS_WINDOWS
+    #if LINKER_MSVC
+        #load "libs/glfw-3.3.9/lib-vc2022/glfw3.lib" as GLFW
+    #else
+        #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib" as GLFW
+    #endif
+    #load "user32.lib" // glfw3 requires these libraries
+    #load "gdi32.lib"
+    #load "advapi32.lib"
+    #load "shell32.lib"
+#else
+    // linux?
+#endif
 
 #macro GLFW_API @import(GLFW)
 

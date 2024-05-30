@@ -148,13 +148,7 @@
         "big_string": {
 			"name": "string.quoted.double",
 			"begin": "@strbeg",
-			"end": "@strend",
-			"patterns": [
-				{
-					"name": "entity.name.tag",
-					"match": "s"
-				}
-			]
+			"end": "@strend"
 		},
 		"operators":{
 			"name":"keyword.operator",

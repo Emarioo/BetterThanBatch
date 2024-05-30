@@ -15,7 +15,7 @@ fn main() {
     // fd := open(path.ptr, O_DIRECTORY, 0)
     // if fd < 0 {
     //     log("Error on open, ", name_of_error(fd))
-    //     return
+    //     return;
     // }
     // // log("Opened ",path, ", ",fd)
 

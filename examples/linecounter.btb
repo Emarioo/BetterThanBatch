@@ -73,7 +73,7 @@ fn CalculateFiles(options: Options*) {
     defer { DirectoryIteratorDestroy(iterator); }
     if !iterator {
         // error message
-        return
+        return;
     }
     LN
     files: Array<StringBuilder>;

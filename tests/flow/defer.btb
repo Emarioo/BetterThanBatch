@@ -27,7 +27,7 @@ fn fun(i: i32){
     defer step(fun_step, 1, "fun2 defer\n")
     if(i >1){
         step(fun_step, 0, "before return\n")
-        return
+        return;
     }
     step(fun_step, 0, "end of fun\n")
 }
@@ -70,7 +70,7 @@ while i < 10; {
 //     defer prints("fun2 defer\n")
 //     if(i >1){
 //         prints("before return\n");
-//         return
+//         return;
 //     }
 //     prints("end of fun\n")
 // }

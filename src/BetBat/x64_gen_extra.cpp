@@ -157,7 +157,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     int original_recipient_regnr = 0;
 
     #define PRINT_BYTECODE(MSG) \
-        tinycode->print(n->bc_index, n->bc_index+8, bytecode); \
+        tinycode->print(n->bc_index - 30, n->bc_index+8, bytecode); \
         log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR<< MSG; \
         log::out.flush();
 
@@ -816,9 +816,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             case BC_MOV_RM:
             case BC_MOV_RM_DISP16: {
                 auto base = (InstBase_op2_ctrl*)n->base;
+                auto base_imm = (InstBase_op2_ctrl_imm16*)n->base;
                 i16 imm = 0;
                 if(instruction_contents[opcode] & BASE_imm16) {
-                    imm = ((InstBase_op2_ctrl_imm16*)n->base)->imm16;
+                    imm = base_imm->imm16;
                 }
 
                 if(base->op1 == BC_REG_LOCALS) {
@@ -846,9 +847,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             case BC_MOV_MR_DISP16: {
 
                 auto base = (InstBase_op2_ctrl*)n->base;
+                auto base_imm = (InstBase_op2_ctrl_imm16*)n->base;
                 i16 imm = 0;
                 if(instruction_contents[opcode] & BASE_imm16) {
-                    imm = ((InstBase_op2_ctrl_imm16*)n->base)->imm16;
+                    imm = base_imm->imm16;
                 }
                 if(base->op0 == BC_REG_LOCALS) {
                     imm -= callee_saved_space;
@@ -857,7 +859,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 // TODO: Which order are the ops push to the stack?
                 FIX_PRE_IN_OPERAND(1)
                 FIX_PRE_IN_OPERAND(0)
-                if(reg0->reg == X64_REG_INVALID|| reg1->reg == X64_REG_INVALID) {
+                if(reg0->reg == X64_REG_INVALID|| reg1->reg == X64_REG_INVALID || (reg0->reg == X64_REG_BP && imm == 0)) {
                     PRINT_BYTECODE("Register allocation failed?\n")
                 }
                 emit_mov_mem_reg(reg0->reg, reg1->reg, base->control, imm);

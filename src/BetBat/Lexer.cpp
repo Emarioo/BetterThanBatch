@@ -336,27 +336,28 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                             }
                         }
                         if(is_end) {
+                            // log::out << line <<  "\n";
+                            // index--;
                             while(index < length) {
                                 char chr = text[index];
                                 index++;
                                 if(chr == ' ' || chr == '\r') {
-                                    index++;
                                     column++;
                                     continue;
                                 }
                                 if (chr == '\t') {
-                                    index++;
                                     column += 4;
-                                    continue;   
+                                    continue;
                                 }
                                 if (chr == '\n') { 
-                                    index++;
                                     column = 1;
                                     line++;
                                     continue;
                                 }
                                 break;
                             }
+                            // log::out << line <<  "\n";
+                            
                             index += raw_str_end_len;
                             column += raw_str_end_len;
                             inQuotes=false;

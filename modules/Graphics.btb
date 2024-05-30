@@ -1,34 +1,386 @@
+/*
+    A module for rendering things independent on the platform/operating system.
+    
+    DISCLAIMER: Currently only works on Windows (I don't have an Apple or Linux computer)
+*/
 
-// TODO: Linking with the right libraries is annoying, how do we improve it?
-#if LINKER_MSVC
-    #link "gdi32.lib user32.lib OpenGL32.lib"
-    #link "libs/glfw-3.3.9/lib-vc2022/glfw3_mt.lib"
-    // #link "libs/glew-2.1.0/lib/glew32s.lib"
-#elif LINKER_GCC
-    // not sure how to compile with glfw and gcc
-    #link "-Llibs/glew-2.1.0/lib -Llibs/glfw-3.3.9/lib-mingw-w64"
-    #link "-lgdi32 -luser32 -lOpenGL32 -lglfw3 -lkernel32 -ladvapi32 -lshell32 -lwinspool -lcomdlg32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32"
-    // GLEW
-    // #link "-lgdi32 -luser32 -lOpenGL32 -lglew32s -lglfw3 -lkernel32 -ladvapi32 -lshell32 -lwinspool -lcomdlg32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32"
-#endif
-// #link "/NODEFAULTLIB:MSVCRT"
-// #link "/DEFAULTLIB:LIBCMT"
-// #link "/NODEFAULTLIB:LIBCMT"
-
+// only OpenGL for now
 #import "GLFW"
 #import "GLAD"
+#import "STB"
 // #import "GLEW"
 
 #import "Logger"
 #import "Lang"
-#import "Array" // used by GUIEnvironment.m_inputs
+#import "Array"
+#import "Memory"
+#import "OS"
 
-global glErrCode: bool = false;
-// #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",cast<i64>#line,cast<i64>glErrCode,":",glewGetErrorString(glErrCode)); }
-#macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error ",#file,":",cast<i64>#line," code: ",cast<i64>glErrCode); }
-#if !GLCHECK
-#macro GLCHECK #endmacro
-#endif
+/* #####################################################
+    GRAPHICS LIBRARY (depends on GLAD, GLFW, OPENGL)
+    1. management
+##################################################### */
+
+struct WindowContext {
+    glfw_window: void*;
+    width: i32; // read only
+    height: i32;
+    running: bool = true;
+    
+    base_shader: u32;
+    
+    font: Font*;
+    
+    fn defaultFont() -> Font* {
+        return font
+    }
+    
+    vbo: u32;
+    vao: u32;
+    ibo: u32;
+}
+struct Texture {
+    id: u32;
+    width: i32;
+    height: i32;
+    
+    // temporary?
+    data: u8*;
+    data_len: i32;
+}
+struct Font {
+    id: u32;
+    width:  i32;
+    height: i32;
+    
+    char_width: i32;
+    cell_w: i32;
+    cell_h: i32;
+    
+    // temporary?
+    data: u8*;
+    data_len: i32;
+    
+    fn get_uvwh(chr: char) -> f32, f32, f32, f32 {
+        return 
+            cast<f32> cell_w * (cast<i32> chr % 16) / cast<f32> width,
+            cast<f32> cell_h * (cast<i32> chr / 16) / cast<f32> height,
+            cast<f32> cell_w * (cast<i32> chr % 16) / cast<f32> width + cast<f32>char_width / width,
+            cast<f32> cell_h * (cast<i32> chr / 16) / cast<f32> height + cast<f32>cell_h / height;
+    }
+    fn width_of_text(text: char[], text_height: f32) -> f32 {
+        return text.len * cast<f32> char_width/cast<f32>cell_h * text_height
+    }
+}
+
+fn DestroyWindow(window: WindowContext*) {
+    // TODO: Anything else to destroy? glfwTerminate if we only have one window left?
+    
+    glfwDestroyWindow(window.glfw_window)
+    Free(window)
+}
+fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of something new") -> WindowContext* {
+    yes := glfwInit();
+    if !yes {
+        log("glfwInit failed");
+        return null;
+    }
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
+    if !glfw_window {
+        log("window failed");
+        glfwTerminate();
+        return null
+    }
+
+    glfwMakeContextCurrent(glfw_window)
+
+    yes = gladLoadGL()
+    // yes = gladLoadGLLoader(glfwGetProcAddress)
+    if !yes {
+        log("gladLoadGL failed")
+        glfwTerminate()
+        return null;
+    }
+
+    glViewport(0, 0, width, height)
+    GLCHECK
+
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    // glEnable(GL_CULL)
+
+    window: WindowContext* = Allocate(sizeof WindowContext);
+    *window = WindowContext{}
+    window.glfw_window = glfw_window
+    window.width = width
+    window.height = height
+    
+    vshader := @strbeg
+        #version 330 core
+        layout(location = 0) in vec2 vPos;
+        layout(location = 1) in vec2 vUV;
+        layout(location = 2) in vec4 vColor;
+        layout(location = 3) in float vTexture;
+
+        uniform vec2 uWindow;
+
+        out vec2 fUV;
+        out vec4 fColor;
+        flat out int fTexture;
+
+        void main() {	
+            fUV=vUV;
+            fColor=vColor;
+            fTexture=int(vTexture);
+
+            gl_Position = vec4((vPos.x)/uWindow.x*2.0-1.0, 1.0-(vPos.y)/uWindow.y*2.0, 0, 1);
+            // gl_Position = vec4(vPos.x,vPos.y, 0, 1);
+        };
+        @strend;
+    fshader := @strbeg
+        #version 330 core
+        layout(location = 0) out vec4 oColor;
+
+        in vec2 fUV;
+        in vec4 fColor;
+        flat in int fTexture;
+
+        // uniform sampler2D uSampler;
+        uniform sampler2D uSampler[8];
+
+        void main() {
+            // oColor = vec4(1,1,1,1);
+            // oColor = fColor;
+            if (fTexture==-1){
+                oColor = fColor;
+            } else {
+                oColor = fColor * texture(uSampler[fTexture], fUV);
+            }
+            // Text font needs to be white. Text color will be limited to some colors otherwise.
+        };
+
+        @strend
+    
+    window.base_shader = CreateShaderProgram(vshader, fshader)
+    
+    VBO: u32;
+    VAO: u32;
+    IBO: u32;
+
+    glGenVertexArrays(1, &VAO);
+    GLCHECK
+    glGenBuffers(1, &VBO);
+    GLCHECK
+    glGenBuffers(1, &IBO);
+    GLCHECK
+
+    window.vao = VAO
+    window.vbo = VBO
+    window.ibo = IBO
+
+    glBindVertexArray(VAO);
+    GLCHECK
+    
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    GLCHECK
+    #macro BASE_SHADER_MAX_RECT 50
+    #macro BASE_SHADER_MAX_VERTEX (4*BASE_SHADER_MAX_RECT)
+    // #macro BASE_SHADER_VERTEX_STRIDE 2
+    #macro BASE_SHADER_VERTEX_STRIDE 9
+    glBufferData(GL_ARRAY_BUFFER, BASE_SHADER_MAX_VERTEX * BASE_SHADER_VERTEX_STRIDE * sizeof f32 , null, GL_DYNAMIC_DRAW);
+    GLCHECK
+
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, BASE_SHADER_VERTEX_STRIDE * sizeof f32, cast<void*>cast<u64>(0 * sizeof f32));
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, BASE_SHADER_VERTEX_STRIDE * sizeof f32, cast<void*>cast<u64>(2 * sizeof f32));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, BASE_SHADER_VERTEX_STRIDE * sizeof f32, cast<void*>cast<u64>(4 * sizeof f32));
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, BASE_SHADER_VERTEX_STRIDE * sizeof f32, cast<void*>cast<u64>(8 * sizeof f32));
+    glEnableVertexAttribArray(3);
+    
+    indices: u32* = Allocate(6*BASE_SHADER_MAX_RECT * sizeof u32);
+    defer Free(indices)
+    for i: 0..BASE_SHADER_MAX_RECT {
+        indices[i * 6] = i * 4 + 0;
+        indices[i * 6 + 1] = i * 4 + 1;
+        indices[i * 6 + 2] = i * 4 + 2;
+        indices[i * 6 + 3] = i * 4 + 2;
+        indices[i * 6 + 4] = i * 4 + 3;
+        indices[i * 6 + 5] = i * 4 + 0;
+    }
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, 6*BASE_SHADER_MAX_RECT*sizeof u32, indices, GL_STATIC_DRAW);
+    
+    // TODO: Don't hardcode font path
+    window.font = CreateFont("assets/fonts/consolas42.png")
+
+    return window;
+}
+// refresh screen buffer, poll events
+fn RefreshWindow(window: WindowContext*) {
+    glfwSwapBuffers(window.glfw_window);
+    glfwPollEvents();
+
+    window.running = !glfwWindowShouldClose(window.glfw_window)
+
+    // temporary
+    ProcessSleep(0.001) // don't use up CPU resources
+    // ProcessSleep(0.5) // don't use up CPU resources
+    
+    // user may not always want this
+    // glClearColor(0.2, 0.2, 0.2, 1);
+    // glClear(GL_COLOR_BUFFER_BIT);
+}
+
+/* ##################################
+    Graphics library
+    2. rendering functions
+################################## */
+
+struct Color {
+    r: f32;
+    g: f32;
+    b: f32;
+    a: f32 = 1.0;
+}
+
+fn FillColor(window: WindowContext*, color: Color) {
+    glClearColor(color.r, color.g, color.b, color.a);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color) {
+    // @dumpbc
+    glUseProgram(window.base_shader);
+    
+    glDisable(GL_DEPTH_TEST)
+    glEnable(GL_BLEND)
+    
+    // glDisable(GL_CULL)
+    
+    // TODO: Store location in a map
+    loc := glGetUniformLocation(window.base_shader, "uWindow".ptr)
+    
+    glUniform2f(loc,window.width,window.height);
+    
+    vertices: f32[] {
+        // x ,y, uv.x, uv.y, color.rgba, texture
+        x, y, 0, 0, color.r, color.b, color.g, color.a, -1,
+        x, y + h, 0, 1, color.r, color.b, color.g, color.a, -1,
+        x + w, y + h, 1, 1, color.r, color.b, color.g, color.a, -1,
+        x + w , y, 1, 0, color.r, color.b, color.g, color.a, -1,
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
+    glBindVertexArray(window.vao);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, window.ibo);
+    glDrawElements(GL_TRIANGLES, 6 * 1, GL_UNSIGNED_INT, null)
+    
+    // glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: Texture*) {
+    glUseProgram(window.base_shader);
+    
+    glDisable(GL_DEPTH_TEST)
+    glEnable(GL_BLEND)
+    
+    // glDisable(GL_CULL)
+    
+    strbuf: StringBuilder
+    strbuf.append("uSampler[0]")
+    loc_sample := glGetUniformLocation(window.base_shader, strbuf.ptr)
+    sample_index := 0
+    glUniform1i(loc_sample, sample_index);
+    
+    glActiveTexture(GL_TEXTURE0+0);
+    glBindTexture(GL_TEXTURE_2D, texture.id);
+    
+    // TODO: Store location in a map
+    loc := glGetUniformLocation(window.base_shader, "uWindow".ptr)
+    
+    glUniform2f(loc,window.width,window.height);
+    
+    color := Color{1,1,1}
+    
+    vertices: f32[] {
+        // x ,y, uv.x, uv.y, color.rgba, texture
+        x, y, 0, 0, color.r, color.b, color.g, color.a, texture.id,
+        x, y + h, 0, 1, color.r, color.b, color.g, color.a, texture.id,
+        x + w, y + h, 1, 1, color.r, color.b, color.g, color.a, texture.id,
+        x + w , y, 1, 0, color.r, color.b, color.g, color.a, texture.id,
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
+    glBindVertexArray(window.vao);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, window.ibo);
+    glDrawElements(GL_TRIANGLES, 6 * 1, GL_UNSIGNED_INT, null)
+}
+// TODO: Font* argument?
+fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
+    glUseProgram(window.base_shader);
+    
+    glDisable(GL_DEPTH_TEST)
+    glEnable(GL_BLEND)
+    
+    // glDisable(GL_CULL)
+    
+    strbuf: StringBuilder
+    strbuf.append("uSampler[0]")
+    loc_sample := glGetUniformLocation(window.base_shader, strbuf.ptr)
+    sample_index := 0
+    glUniform1i(loc_sample, sample_index);
+    
+    font := window.font
+    
+    glActiveTexture(GL_TEXTURE0+0);
+    glBindTexture(GL_TEXTURE_2D, font.id);
+    
+    // TODO: Store location in a map
+    loc := glGetUniformLocation(window.base_shader, "uWindow".ptr)
+    
+    glUniform2f(loc,window.width,window.height);
+    
+    color := Color{1,1,1}
+    
+    // TODO: Batch draw calls
+    for text {
+        // log(it)
+        u, v, uw, vh := font.get_uvwh(it)
+        
+        off := nr * cast<f32> (font.char_width) / font.cell_h * h
+        w := cast<f32> font.char_width / font.cell_w * h
+        
+        // log(it," ", off," ", w, " ", font.char_width)
+        // log(it," ",u," ",v," ",uw," ",vh)
+        
+        vertices: f32[] {
+            // x ,y, uv.x, uv.y, color.rgba, texture
+            x + off,     y,     u,  v, color.r, color.b, color.g, color.a,  font.id,
+            x + off,     y + h, u,  vh, color.r, color.b, color.g, color.a, font.id,
+            x + off + w, y + h, uw, vh, color.r, color.b, color.g, color.a, font.id,
+            x + off + w, y,     uw, v, color.r, color.b, color.g, color.a,  font.id,
+        }
+        glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
+        glBindVertexArray(window.vao);
+        
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, window.ibo);
+        glDrawElements(GL_TRIANGLES, 6 * 1, GL_UNSIGNED_INT, null)
+    }
+}
+
+
+/*##############################
+    SOME USEFUL FUNCTIONS
+############################*/
+
 
 // returns GLFWwindow*
 fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
@@ -74,6 +426,7 @@ fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
 
     return window;
 }
+
 // returns program id which can be passes to glUseProgram
 fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
     vertexShader := glCreateShader(GL_VERTEX_SHADER);
@@ -128,396 +481,65 @@ fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
 
     return shaderProgram;
 }
-struct UIColor{
-    r: f32;
-    g: f32;
-    b: f32;
-    a: f32;
-}
-struct UIBox {
-    x: f32;
-    y: f32;
-    w: f32;
-    h: f32;
-    color: UIColor;
-    textureId: i32 = -1;
-};
-struct UIText {
-    x: f32;
-    y: f32;
-    h: f32;
-    length: u32 = 0;
-    string: char* = null;
-    // std::string text;
-    color: UIColor;
-    fontId: i32 = 0;
+
+fn CreateTexture(path: char[]) -> Texture* {
+    texture: Texture* = Allocate(sizeof Texture);
+    *texture = Texture{}
     
-    editing: bool = false;
-    cursorIndex: i32 = -1;
-};
+    channels: i32
+    stbi_set_flip_vertically_on_load(false);
+    texture.data = stbi_load(path.ptr,&texture.width,&texture.height,&channels,4); // 4 = rgba
+    texture.data_len = 4 * texture.width * texture.height
+    
+    glGenTextures(1, &texture.id);
+    glBindTexture(GL_TEXTURE_2D,texture.id);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-struct UIModule {
-    /* ... */
-    fn makeBox(id: u64 = 0) -> UIBox* {
-        return MakeBox(this, id);
-    }
-    fn makeText(id: u64 = 0) -> UIText* {
-        return MakeText(this, id);
-    }
-    fn getWidthOfText(text: UIText*) -> f32 {
-        return GetWidthOfText(this, text);
-    }
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture.width, texture.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, texture.data);
+    GLCHECK
+    glBindTexture(GL_TEXTURE_2D,0);
+    GLCHECK
+    
+    return texture
 }
-fn @import CreateUIModule() -> UIModule*;
-fn @import DestroyUIModule(ptr: UIModule*);
-fn @import RenderUIModule(ptr: UIModule*, width: f32, height: f32);
-fn @import GetWidthOfText(ptr: UIModule*, text: UIText*) -> f32;
-fn @import MakeBox(ptr: UIModule*, id: u64 = 0) -> UIBox*;
-fn @import MakeText(ptr: UIModule*, id: u64 = 0) -> UIText*;
+fn CreateFont(path: char[]) -> Font* {
+    font: Font* = Allocate(sizeof Font);
+    *font = Font{}
+    
+    channels: i32
+    stbi_set_flip_vertically_on_load(false);
+    font.data = stbi_load(path.ptr,&font.width,&font.height,&channels,4); // 4 = rgba
+    font.data_len = 4 * font.width * font.height
+    
+    glGenTextures(1, &font.id);
+    glBindTexture(GL_TEXTURE_2D,font.id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-
-
-// ############################################
-//   GRAPHICS USER INTERFACE LIBRARY/WRAPPER
-//        (rendering, events)
-// ############################################
-
-/*
-    Initialize graphics environment
-*/
-// TODO: namespace gui when namespaces work
-enum GUIBackend {
-    BACKEND_GLFW_AND_OPENGL
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, font.width, font.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, font.data);
+    GLCHECK
+    glBindTexture(GL_TEXTURE_2D,0);
+    GLCHECK
+    
+    // hardcoded for consolas42.png
+    font.char_width = 35;
+    font.cell_w = font.width/16; // 16*16 = 256 characters
+    font.cell_h = font.height/16;
+    
+    return font
 }
-struct GUIEnvironment {
-    fn init(backend: GUIBackend = BACKEND_GLFW_AND_OPENGL) {
-        Assert(backend != BACKEND_GLFW_AND_OPENGL)
-
-        yes := glfwInit();
-        if !yes {
-            log("glfwInit failed");
-            return;
-        }
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-        global_active_gui = this
-    }
-    fn cleanup() {
-        glfwTerminate();
-    }
-    fn createWindow(width: i32, height: i32, title: char[] = "GUI") -> void* {
-        window := glfwCreateWindow(width, height, title.ptr, null, null);
-        if !window {
-            log("window failed");
-            glfwTerminate();
-            return null;
-        }
-
-        glfwMakeContextCurrent(window);
+fn DestroyTexture(texture: Texture*) {
+    // TODO: destroy texture in OpenGL
         
-        // glfwSetKeyCallback(window, KeyCallback);
-		glfwSetMouseButtonCallback(window, MouseCallback);
-		// glfwSetCursorPosCallback(window, CursorPosCallback);
-		// glfwSetScrollCallback(window, ScrollCallback);
-		// glfwSetWindowFocusCallback(window, FocusCallback);
-		// glfwSetWindowSizeCallback(window, ResizeCallback);
-		// glfwSetWindowCloseCallback(window, CloseCallback);
-		// glfwSetWindowPosCallback(window, PosCallback);
-		// glfwSetCharCallback(window, CharCallback);
-		// glfwSetDropCallback(window, DropCallback);
-
-        // err := glewInit();
-        err := gladLoadGLLoader(glfwGetProcAddress);
-        if err {
-            // msg := glewGetErrorString(err);
-            // log("glew failed: ",msg)
-            log("glad failed")
-            glfwDestroyWindow(window)
-            return null;
-        }
-
-        glViewport(0, 0, width, height);
-        GLCHECK
-
-        // glEnable(GL_BLEND)
-        // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-
-
-        // glEnable(GL_CULL)
-        return window;
-    }
-
-    // True if cursor is visible.
-    // bool isCursorVisible() const { return m_cursorVisible; }
-
-    fn getMouseX() -> f32 { return m_mouseX; }
-    fn getMouseY() -> f32 { return m_mouseY; }
-    // raw input from first person
-    // float getRawMouseX() const;
-    // float getRawMouseY() const;
-    fn setMouseX(x: f32) { m_mouseX=x; }
-    fn setMouseY(y: f32) { m_mouseY=y; }
-    fn getScrollX() -> f32 {
-        return m_tickScrollX;
-	}
-    fn getScrollY() -> f32 {
-        return m_tickScrollY;
-    }
-    fn setScrollX(x: f32) { m_frameScrollX += x; m_tickScrollX += x;}
-    fn setScrollY(y: f32) { m_frameScrollY += y; m_tickScrollY += y; }
-
-    fn setInput(code: i32, down: bool) {
-        index: i32 = -1;
-		for @ptr inp: m_inputs.sliced_unsafe() {
-			if (inp.code == code) {
-				index = nr;
-				break;
-			}
-		}
-        input: GUIInput*;
-		if index==-1 {
-			index = m_inputs.size();
-			m_inputs.add(GUIInput{});
-            input = m_inputs.get_unsafe(index)
-            input.code = code;
-		} else {
-            input = m_inputs.get_unsafe(index)
-        }
-		if (down) {
-			if (!input.down) {
-				// printf("PRESSED %c (%d)\n",(char)code,code);
-				// log::out << "PRESSED "<<(char)code << " ("<<code << ")\n";
-				input.down = true;
-				input.tickPressed++;
-				input.framePressed++;
-			}
-		}else{
-			// log::out << "RELEASED "<<(char)code << " ("<<code << ")\n";
-			// printf("RELEASED %c (%d)\n",(char)code,code);
-			input.down = false;
-			input.tickReleased++;
-			input.frameReleased++;
-		}
-    }
-
-    // std::string pollPathDrop();
-    // u32 pollChar();
-    // void resetPollChar();
-
-    fn isKeyDown(code: i32) -> bool {
-        for @ptr inp: m_inputs.sliced_unsafe() {
-			if (inp.code == code)
-				return inp.down;
-		}
-		return false;
-    }
-    fn isKeyPressed(code: i32) -> bool {
-        for @ptr inp: m_inputs.sliced_unsafe() {
-			if (inp.code == code) {
-				// log::out << "IS "<<(char)code<<"\n";
-				// if (m_parent->isRenderingWindow()) {
-				// 	if (m_inputs[i].framePressed > 0) {
-				// 		return true;
-				// 	}
-				// } else {
-					if (inp.tickPressed > 0) {
-						// log::out << " Done\n";
-						return true;
-					}
-				// }
-				return false;
-			}
-		}
-		return false;
-    }
-    fn isKeyReleased(code: i32) -> bool {
-        for @ptr inp: m_inputs.sliced_unsafe() {
-			if (inp.code == code) {
-				// if (m_parent->isRenderingWindow()) {
-				// 	if (m_inputs[i].frameReleased > 0) {
-				// 		return true;
-				// 	}
-				// }
-				// else {
-					if (inp.tickReleased > 0) {
-						return true;
-					}
-				// }
-				return false;
-			}
-		}
-		return false;
-    }
-    
-    // void enableFirstPerson(bool yes);
-    // bool isFirstPerson() const { return m_enabledFirstPerson; }
-    
-    // std::string pollClipboard();
-    // void setClipboard(const std::string& str);
-
-    // // If true, the cursor will be made visible.
-    // void setCursorVisible(bool visible);
-    // // Whether the cursor is locked to the window.
-    // bool isCursorLocked() const { return m_cursorLocked;}
-    // // If true, the cursor will be made invisible and locked to the window. Use this when you want the player to lock around.
-    // void lockCursor(bool locked);
-
-    fn resetEvents(resetFrameInput: bool) {
-        resetFrameInput = false;
-        if (resetFrameInput) {
-            m_frameScrollX = 0;
-            m_frameScrollY = 0;
-            // m_frameRawMouseX = 0;
-            // m_frameRawMouseY = 0;
-            for @ptr inp: m_inputs.sliced_unsafe() {
-                inp.framePressed = 0;
-                inp.frameReleased = 0;
-            }
-        } else {
-            m_tickScrollX = 0;
-            m_tickScrollY = 0;
-            // m_tickRawMouseX = 0;
-            // m_tickRawMouseY = 0;
-            for @ptr inp: m_inputs.sliced_unsafe() {
-                if(inp.tickPressed!=0){
-                    code := inp.code;
-                    // log::out << "RESET "<<(char)code << " ("<<code << ")\n";
-                    // printf("RESET %c (%d)\n",(char)code,code);
-                }
-                inp.tickPressed = 0;
-                inp.tickReleased = 0;
-            }
-        }
-    }
-
-    // GLFWwindow* m_glfwWindow=nullptr;
-    
-    m_inputs: Array<GUIInput>;
-    // std::vector<std::string> m_pathDrops;
-    
-    // u32 m_charIn = 0;
-    // u32 m_charOut = 0;
-    // bool m_emptyCharArray = true;
-    // static const u32 CHAR_ARRAY_SIZE = 20;
-    // u32 m_charArray[CHAR_ARRAY_SIZE];
-
-    // bool m_enabledFirstPerson = false;
-
-    m_mouseX: f32 = 0;
-    m_mouseY:  f32 = 0;
-    m_lastMouseX: f32 = -1;
-    m_lastMouseY: f32 = -1;
-    // float m_tickRawMouseX = 0, m_tickRawMouseY = 0, m_frameRawMouseX = 0, m_frameRawMouseY = 0;
-    m_tickScrollX: f32 =0;
-    m_tickScrollY: f32 = 0;
-    m_frameScrollX: f32 = 0;
-    m_frameScrollY: f32 = 0;
-
-    // bool m_cursorVisible = true, m_cursorLocked = false, m_focus = true;
-}
-struct GUIInput {
-    code: i32 = 0;
-    down: bool = false;
-    tickPressed: u8 = 0;
-    framePressed: u8 = 0;
-    tickReleased: u8 = 0;
-    frameReleased: u8 = 0;
-};
-global global_active_gui: GUIEnvironment* = null
-
-// global map<GLFWwindow*, InputModule*> moduleMapping; // Todo: doesn't work with dlls
-fn GetMappedModule(window: void*) -> GUIEnvironment* {
-    return global_active_gui
-    // auto win = moduleMapping.find(window);
-    // if (win != moduleMapping.end())
-    //     return win->second;
-    // return nullptr;
-}
-// fn @stdcall CharCallback(window: void*, chr: u32) {
-//     gui := GetMappedModule(window);
-//     if (!gui) {
-//         log::out << "InputModule isn't mapped\n";
-//         return;
-//     }
-//     // if (input->m_charIn == input->m_charOut && !input->m_emptyCharArray) {
-//     //     log::out << log::RED << "CharCallback : m_charArray["<<InputModule::CHAR_ARRAY_SIZE<<"] of InputModule is full, skipping "<<chr<<" (increase size to prevent this).\n";
-//     //     return; // list is full
-//     // }
-
-//     // input->m_charArray[input->m_charIn] = chr;
-//     // input->m_charIn = (input->m_charIn+1)% InputModule::CHAR_ARRAY_SIZE;
-//     // input->m_emptyCharArray = false;
-// }
-// fn @stdcall DropCallback(window: void*, count: i32, paths: char**) {
-//     gui := GetMappedModule(window);
-//     if (!gui) {
-//         log::out << "InputModule isn't mapped\n";
-//         return;
-//     }
-//     // for (int i = 0; i < count; ++i) {
-//     //     input->m_pathDrops.push_back(paths[i]);
-//     // }
-// }
-#macro GLFW_CALLBACK_ATTR @stdcall
-fn GLFW_CALLBACK_ATTR KeyCallback(window: void*, key: i32, scancode: i32, action: i32, mods: i32) {
-    gui := GetMappedModule(window);
-    if (!gui) {
-        log("InputModule isn't mapped")
-        return;
-    }
-    log("key ",cast<char>key, " ", scancode, " ", action)
-
-    gui.setInput(key, action != 0); // if not 0 means if pressed or repeating
-
-    if (action != 0 && (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE || key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT)) {
-        // CharCallback(window, key);
-    }
-}
-
-fn GLFW_CALLBACK_ATTR MouseCallback(window: void*, button: i32, action: i32, mods: i32) {
-    // gui := GetMappedModule(window);
-
-    // if (!gui) {
-    //     log("InputModule isn't mapped")
-    //     return;
-    // }
-
-    // 
-    mx: f64;
-    my: f64;
-    fn wa(t: char){
-        // log("sp ", a)
-        // printc(t);
-        printc('\n');
-    }
-    wa('a');
-    // glfwGetCursorPos(window, &mx, &my);
-    // gui.setMouseX(cast<f32>mx);
-    // gui.setMouseY(cast<f32>my);
-    // gui.setInput(button, action != 0);
-    //log("click ", button, " ", action)
-}
-fn GLFW_CALLBACK_ATTR CursorPosCallback(window: void*, mx: f64, my: f64) {
-    gui := GetMappedModule(window);
-    if (!gui) {
-        log("InputModule isn't mapped")
-        return;
-    }
-    gui.setMouseX(cast<f32>mx);
-    gui.setMouseY(cast<f32>my);
-    log("cursor pos ", mx," ", my)
-}
-fn GLFW_CALLBACK_ATTR ScrollCallback(window: void*, xoffset: f64, yoffset: f64) {
-    gui := GetMappedModule(window);
-    if (!gui) {
-        log("InputModule isn't mapped")
-        return;
-    }
-    gui.setScrollX(cast<f32>xoffset);
-    gui.setScrollY(cast<f32>yoffset);
-
-    log("scroll ",xoffset, " ", yoffset)
-}
+    stbi_image_free(texture.data)
+    Free(texture)
+}   

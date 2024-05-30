@@ -1,2 +1,3 @@
 
-#import "examples/graphics/quad.btb"
+// #import "examples/graphics/quad.btb"
+#import "examples/graphics/game.btb"

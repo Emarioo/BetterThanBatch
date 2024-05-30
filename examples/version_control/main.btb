@@ -35,14 +35,14 @@ fn main(argc: i32, argv: char**) {
     // t.append_hex(&i)
     // log(t)
     // start_gui(&workspace)
-    // return
+    // return;
 
     if argc < 2 {
         log("Crude version control v0.0.1")
         log(" Branches: ", workspace.branches.size())
         log(" Snapshots: ", workspace.snapshots.size())
         log("Help message")
-        return
+        return;
     } else {
         if equal(argv[1], "branch") {
             if(argc < 3) {
@@ -114,18 +114,18 @@ fn main(argc: i32, argv: char**) {
             if(argc < 3) {
                 if workspace.active_branch == 0 {
                     log("No active branch")
-                    return
+                    return;
                 }
                 branch := workspace.find_branch(workspace.active_branch)
                 if !branch {
                     log("Branch was null!")   
-                    return
+                    return;
                 }
                 
                 snapshot := workspace.find_snapshot(branch.snapshot)
                 if !snapshot {
                     log("No snapshots for branch '",branch.name.sliced(),"'")
-                    return
+                    return;
                 }
                 while snapshot {
                     log(" #",snapshot.id,": ", snapshot.description.sliced())
@@ -162,7 +162,7 @@ fn main(argc: i32, argv: char**) {
                 if argc < 4 {
                     log("Description is required when adding snapshot")
                     log("Usage: snap add [description]")
-                    return
+                    return;
                 }
 
                 id: SnapshotID
@@ -182,12 +182,12 @@ fn main(argc: i32, argv: char**) {
                 } else {
                     if workspace.active_branch == 0 {
                         log("No active branch")
-                        return
+                        return;
                     }
                     branch := workspace.find_branch(workspace.active_branch)
                     if !branch {
                         log("Branch was null!")
-                        return
+                        return;
                     }
                     
                     text := Slice<char>{argv[3], strlen(argv[3])}
@@ -223,7 +223,7 @@ fn main(argc: i32, argv: char**) {
         } else if equal(argv[1], "log") {
             if workspace.history.size() == 0 {
                 log("Log is empty")
-                return
+                return;
             }
             
             for @ptr workspace.history.sliced_unsafe() {
@@ -253,14 +253,14 @@ fn main(argc: i32, argv: char**) {
             // graph of all branches, all snapshots, how they depend on each other, their messages, their file changes
             // you can do "graph [branch]" for specifics
 
-            return
+            return;
         } else if equal(argv[1], "gui") {
             // log("GUI is incomplete")
             start_gui(&workspace)
-            return
+            return;
         } else {
             log("Unknown argument: ",argv[1])
-            return
+            return;
         }
     }
     

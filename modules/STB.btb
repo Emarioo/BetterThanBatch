@@ -1,0 +1,34 @@
+
+/*
+    Bindings for:
+    stb_image.h
+    stb_image_write.h
+        
+    You must compile stb into a static library.
+*/
+
+#load "bin/stb_image.lib" as STB_IMAGE
+
+#macro STB_IMPORT @import(STB_IMAGE)
+
+fn STB_IMPORT stbi_set_flip_vertically_on_load(flag_true_if_should_flip: bool)
+fn STB_IMPORT stbi_load(filename: char*, x: i32*, y: i32*, channels_in_file: i32*, desired_channels: i32) -> u8*;
+fn STB_IMPORT stbi_image_free(retval_from_stbi_load: void*);
+
+
+fn TestSTB() {
+    #import "Logger"
+    
+    path := "examples/graphics/blob.png" // you may need to change path
+    
+    channels, w, h: i32
+    data := stbi_load(path.ptr, &w, &h, &channels, 4)
+    for y: 0..h {
+        for x: 0..w {
+            v := data[4*(x+y*w) + 2] // +2 = blue
+            std_print(v)
+            std_print(" ")
+        }
+        std_print("\n")
+    }    
+}

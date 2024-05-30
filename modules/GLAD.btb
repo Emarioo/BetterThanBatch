@@ -4,8 +4,16 @@
 */
 // #link "gdi32.lib user32.lib OpenGL32.lib"
 // #link "libs/glad/src/glad.c"
+#load "OpenGL32.lib"
 
 #load "bin/glad.lib" as GLAD
+
+global glErrCode: bool = false;
+// #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",#file,":",cast<i64>#line," code: "cast<i64>glErrCode,", ",glewGetErrorString(glErrCode)); }
+#macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error ",#file,":",cast<i64>#line," code: ",cast<i64>glErrCode); }
+#if !GLCHECK
+    #macro GLCHECK #endmacro
+#endif
 
 #macro GLAD_IMPORT @import(GLAD)
 #macro GLAD_VARIMPORT(X) @varimport(GLAD, alias = #quoted glad_##X) X
@@ -21,12 +29,20 @@
 #macro GL_FRAGMENT_SHADER 0x8B30
 #macro GL_VERTEX_SHADER 0x8B31
 
-#macro GL_FLOAT 0x1406
+#macro GL_BYTE 0x1400
+#macro GL_UNSIGNED_BYTE 0x1401
+#macro GL_SHORT 0x1402
+#macro GL_UNSIGNED_SHORT 0x1403
+#macro GL_INT 0x1404
 #macro GL_UNSIGNED_INT 0x1405
+#macro GL_FLOAT 0x1406
+
 #macro GL_FALSE 0
 #macro GL_TRUE 1
 #macro GL_TRIANGLES 0x0004
 #macro GL_CULL_FACE 0x0B44
+
+#macro GL_DEPTH_TEST 0x0B71
 
 #macro GL_BLEND 0x0BE2
 #macro GL_SRC_COLOR 0x0300
@@ -37,6 +53,35 @@
 #macro GL_ONE_MINUS_DST_ALPHA 0x0305
 #macro GL_DST_COLOR 0x0306
 #macro GL_ONE_MINUS_DST_COLOR 0x0307
+
+#macro GL_TEXTURE_2D 0x0DE1
+#macro GL_TEXTURE0 0x84C0
+
+#macro GL_NEAREST 0x2600
+#macro GL_LINEAR 0x2601
+#macro GL_NEAREST_MIPMAP_NEAREST 0x2700
+#macro GL_LINEAR_MIPMAP_NEAREST 0x2701
+#macro GL_NEAREST_MIPMAP_LINEAR 0x2702
+#macro GL_LINEAR_MIPMAP_LINEAR 0x2703
+#macro GL_TEXTURE_MAG_FILTER 0x2800
+#macro GL_TEXTURE_MIN_FILTER 0x2801
+#macro GL_TEXTURE_WRAP_S 0x2802
+#macro GL_TEXTURE_WRAP_T 0x2803
+#macro GL_REPEAT 0x2901
+#macro GL_CLAMP_TO_EDGE 0x812F
+
+#macro GL_TEXTURE 0x1702
+#macro GL_COLOR 0x1800
+#macro GL_DEPTH 0x1801
+#macro GL_STENCIL 0x1802
+#macro GL_STENCIL_INDEX 0x1901
+#macro GL_DEPTH_COMPONENT 0x1902
+#macro GL_RED 0x1903
+#macro GL_GREEN 0x1904
+#macro GL_BLUE 0x1905
+#macro GL_ALPHA 0x1906
+#macro GL_RGB 0x1907
+#macro GL_RGBA 0x1908
 
 fn GLAD_IMPORT gladLoadGL() -> i32;
 fn GLAD_IMPORT gladLoadGLLoader(func: fn()) -> i32;
@@ -63,7 +108,7 @@ fn GLAD_VARIMPORT(glUseProgram)(program: u32);
 fn GLAD_VARIMPORT(glGetProgramiv)(program: u32, pname: u32, param: i32*);
 fn GLAD_VARIMPORT(glGetProgramInfoLog)(program: u32, bufSize: i32, length: i32*, infoLog: char*);
 fn GLAD_VARIMPORT(glDeleteShader)(shader: u32);
-fn GLAD_VARIMPORT(glGetUniformLocation)(program: u32, name: char*);
+fn GLAD_VARIMPORT(glGetUniformLocation)(program: u32, name: char*) -> u32;
 
 fn GLAD_VARIMPORT(glUniform1i)(location: i32, v0: i32);
 fn GLAD_VARIMPORT(glUniform2i)(location: i32, v0: i32, v1: i32);
@@ -83,6 +128,13 @@ fn GLAD_VARIMPORT(glDeleteVertexArrays)(n: i32, arrays: u32*);
 fn GLAD_VARIMPORT(glDrawArrays)(mode: u32, first: i32, count: i32);
 fn GLAD_VARIMPORT(glDrawElements)(mode: u32, count: i32, type: u32, indices: void*);
 // TODO: Add glPolygonMode, GL_FRONT_AND_BACK, GL_LINE, GL_FILL
+
+fn GLAD_VARIMPORT(glActiveTexture)(texture: i32)
+fn GLAD_VARIMPORT(glBindTexture)(target: u32, texture: u32)
+fn GLAD_VARIMPORT(glGenTextures)(n: i32, textures: u32*);
+fn GLAD_VARIMPORT(glDeleteTextures)(n: i32, textures: u32*);
+fn GLAD_VARIMPORT(glTexParameteri)(target: u32, pname: i32, param: i32);
+fn GLAD_VARIMPORT(glTexImage2D)(target: u32, level: i32, internalformat: i32, width: i32, height: i32, border: i32, format: u32, type: u32, pixels: void*);
 
 fn GLAD_VARIMPORT(glEnable)(cap: u32);
 fn GLAD_VARIMPORT(glDisable)(cap: u32);

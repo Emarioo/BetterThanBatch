@@ -916,6 +916,38 @@ void Compiler::processImports() {
                 }
                 
                 if(!new_errors) {
+                    if(bytecode->debugDumps.size() != 0) {
+                        for(int i=0;i<(int)bytecode->debugDumps.size();i++) {
+                            auto& dump = bytecode->debugDumps[i];
+                            bool found = false;
+                            for(int j=0;j<imp->tinycodes.size();j++) {
+                                auto t = imp->tinycodes[j];
+                                if (t->index == dump.tinycode_index){
+                                    found = true;
+                                    break;
+                                }
+                            }
+                            if(!found)
+                                continue;
+                            if(dump.dumpBytecode) {
+                                if(dump.description.empty()) {
+                                    log::out << log::LIME << "## Dump:\n";
+                                } else {
+                                    log::out << log::LIME << "## Dump: "<<log::GOLD<<dump.description<<"\n";
+                                }
+                                auto tinycode = bytecode->tinyBytecodes[dump.tinycode_index];
+                                tinycode->print(dump.bc_startIndex, dump.bc_endIndex, bytecode);
+                            }
+                            if (dump.dumpAsm) {
+                                // TODO: Write to object file, then run disassembler?
+                            }
+                            
+                            bytecode->debugDumps.removeAt(i);
+                            i--;
+                        }
+                    }
+                    
+                    
                     // @DEBUG
                     LOG_CODE(LOG_BYTECODE,
                         for(auto t : imp->tinycodes) {
@@ -1271,7 +1303,7 @@ void Compiler::run(CompileOptions* options) {
             
             if(options->useDebugInformation) {
                 // TODO: TEMPORARY text
-                log::out << log::GOLD << "Debug information (DWARF) cannot be linked using the MSVC linker. Plrease choose a different linker like GNU/g++ using the flag "<<log::LIME<<"--linker gcc"<<log::GOLD<<" (make sure to have gcc installed).\n";
+                log::out << log::GOLD << "Debug information (DWARF) cannot be linked using the MSVC linker. Plrease choose a different linker like GNU/g++ using the flag "<<log::LIME<<"--linker gnu"<<log::GOLD<<" (make sure to have gcc installed).\n";
                 // The compiler does not support PDB debug information, it only supports DWARF. DWARF
                 // uses sections with long names but MSVC linker truncates those names.
                 // That's why you cannot use MVSC linker.
@@ -1417,6 +1449,25 @@ void Compiler::run(CompileOptions* options) {
             options->compileStats.printSuccess(options);
         }
     }
+    
+    // We dump while compiling, sometimes we want to know bytecode because x64_gen crashes. We won't see dump if we print it out at the end.
+    // if(bytecode->debugDumps.size() != 0) {
+    //     for(int i=0;i<(int)bytecode->debugDumps.size();i++) {
+    //         auto& dump = bytecode->debugDumps[i];
+    //         if(dump.dumpBytecode) {
+    //             if(dump.description.empty()) {
+    //                 log::out << "Dump:\n";
+    //             } else {
+    //                 log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
+    //             }
+    //             auto tinycode = bytecode->tinyBytecodes[dump.tinycode_index];
+    //             tinycode->print(dump.bc_startIndex, dump.bc_endIndex, bytecode);
+    //         }
+    //         if (dump.dumpAsm) {
+    //             // TODO: Write to object file, then run disassembler?
+    //         }
+    //     }
+    // }
     
     if(options->executeOutput) {
         switch(options->target) {

@@ -39,3 +39,15 @@ n(1,2);
 // n();
 // fn a() -> u8, u8, u8 { return 1,6,4 }
 // a()
+
+
+@TEST_CASE(func_syntax)
+
+fn get() -> i32, i32 {
+    return // this should not be recognized as a return with no arguments
+        2, // we must not assume this is a statement
+        6;
+}
+
+x,y := get()
+

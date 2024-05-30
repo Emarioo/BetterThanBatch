@@ -1327,13 +1327,13 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 if(f) {
                     log::out << log::LIME << f->name;
                 } else
-                    log::out << log::LIME << "?";
+                    log::out << log::LIME << imm;
             } else {
                 int ind = imm - 1;
-                if(imm != 0)
+                if(ind > 0 && ind < code->tinyBytecodes.size())
                     log::out << log::LIME << code->tinyBytecodes[ind]->name;
                 else
-                    log::out << log::LIME << "?";
+                    log::out << log::LIME << imm;
             }
         } break;
         case BC_CALL_REG: {

@@ -4,7 +4,7 @@
 
 fn rec(n: i32, sp: u64) {
     if n == 0
-        return
+        return;
     arr: char[10048]
     
     rec(n-1, sp)

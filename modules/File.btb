@@ -280,7 +280,7 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
 }
 fn DirectoryIteratorDestroy(iterator: DirIterator) {
     if iterator == DirIterator.INVALID
-        return
+        return;
     index := IteratorToInternal(iterator)
     iter := _directory_iterators.get(index)
     
@@ -511,7 +511,7 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
 }
 fn DirectoryIteratorSkip(iterator: DirIterator) {
     if iterator == DirIterator.INVALID
-        return
+        return;
     index := IteratorToInternal(iterator)
     iter := _directory_iterators.get(index)
     

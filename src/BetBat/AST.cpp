@@ -1155,6 +1155,10 @@ void AST::cleanup() {
         destroy(n);
     for(auto n : enums)
         destroy(n);
+        
+    for(auto n : function_types) {
+        n->funcType->~FunctionSignature();
+    }
 
     // make sure allocated nodes and other objects in linear allocator
     // have been destroyed before freeing it.

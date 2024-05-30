@@ -1,0 +1,398 @@
+/*
+    Old code that will be built into Graphics.btb at some point.
+*/
+
+
+struct UIColor{
+    r: f32;
+    g: f32;
+    b: f32;
+    a: f32;
+}
+struct UIBox {
+    x: f32;
+    y: f32;
+    w: f32;
+    h: f32;
+    color: UIColor;
+    textureId: i32 = -1;
+};
+struct UIText {
+    x: f32;
+    y: f32;
+    h: f32;
+    length: u32 = 0;
+    string: char* = null;
+    // std::string text;
+    color: UIColor;
+    fontId: i32 = 0;
+    
+    editing: bool = false;
+    cursorIndex: i32 = -1;
+};
+
+struct UIModule {
+    /* ... */
+    fn makeBox(id: u64 = 0) -> UIBox* {
+        return MakeBox(this, id);
+    }
+    fn makeText(id: u64 = 0) -> UIText* {
+        return MakeText(this, id);
+    }
+    fn getWidthOfText(text: UIText*) -> f32 {
+        return GetWidthOfText(this, text);
+    }
+}
+fn @import CreateUIModule() -> UIModule*;
+fn @import DestroyUIModule(ptr: UIModule*);
+fn @import RenderUIModule(ptr: UIModule*, width: f32, height: f32);
+fn @import GetWidthOfText(ptr: UIModule*, text: UIText*) -> f32;
+fn @import MakeBox(ptr: UIModule*, id: u64 = 0) -> UIBox*;
+fn @import MakeText(ptr: UIModule*, id: u64 = 0) -> UIText*;
+
+
+
+// ############################################
+//   GRAPHICS USER INTERFACE LIBRARY/WRAPPER
+//        (rendering, events)
+// ############################################
+
+/*
+    Initialize graphics environment
+*/
+// TODO: namespace gui when namespaces work
+enum GUIBackend {
+    BACKEND_GLFW_AND_OPENGL
+}
+struct GUIEnvironment {
+    fn init(backend: GUIBackend = BACKEND_GLFW_AND_OPENGL) {
+        Assert(backend != BACKEND_GLFW_AND_OPENGL)
+
+        yes := glfwInit();
+        if !yes {
+            log("glfwInit failed");
+            return;
+        }
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+        global_active_gui = this
+    }
+    fn cleanup() {
+        glfwTerminate();
+    }
+    fn createWindow(width: i32, height: i32, title: char[] = "GUI") -> void* {
+        window := glfwCreateWindow(width, height, title.ptr, null, null);
+        if !window {
+            log("window failed");
+            glfwTerminate();
+            return null;
+        }
+
+        glfwMakeContextCurrent(window);
+        
+        // glfwSetKeyCallback(window, KeyCallback);
+		glfwSetMouseButtonCallback(window, MouseCallback);
+		// glfwSetCursorPosCallback(window, CursorPosCallback);
+		// glfwSetScrollCallback(window, ScrollCallback);
+		// glfwSetWindowFocusCallback(window, FocusCallback);
+		// glfwSetWindowSizeCallback(window, ResizeCallback);
+		// glfwSetWindowCloseCallback(window, CloseCallback);
+		// glfwSetWindowPosCallback(window, PosCallback);
+		// glfwSetCharCallback(window, CharCallback);
+		// glfwSetDropCallback(window, DropCallback);
+
+        // err := glewInit();
+        err := gladLoadGLLoader(glfwGetProcAddress);
+        if err {
+            // msg := glewGetErrorString(err);
+            // log("glew failed: ",msg)
+            log("glad failed")
+            glfwDestroyWindow(window)
+            return null;
+        }
+
+        glViewport(0, 0, width, height);
+        GLCHECK
+
+        // glEnable(GL_BLEND)
+        // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+
+
+        // glEnable(GL_CULL)
+        return window;
+    }
+
+    // True if cursor is visible.
+    // bool isCursorVisible() const { return m_cursorVisible; }
+
+    fn getMouseX() -> f32 { return m_mouseX; }
+    fn getMouseY() -> f32 { return m_mouseY; }
+    // raw input from first person
+    // float getRawMouseX() const;
+    // float getRawMouseY() const;
+    fn setMouseX(x: f32) { m_mouseX=x; }
+    fn setMouseY(y: f32) { m_mouseY=y; }
+    fn getScrollX() -> f32 {
+        return m_tickScrollX;
+	}
+    fn getScrollY() -> f32 {
+        return m_tickScrollY;
+    }
+    fn setScrollX(x: f32) { m_frameScrollX += x; m_tickScrollX += x;}
+    fn setScrollY(y: f32) { m_frameScrollY += y; m_tickScrollY += y; }
+
+    fn setInput(code: i32, down: bool) {
+        index: i32 = -1;
+		for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code) {
+				index = nr;
+				break;
+			}
+		}
+        input: GUIInput*;
+		if index==-1 {
+			index = m_inputs.size();
+			m_inputs.add(GUIInput{});
+            input = m_inputs.get_unsafe(index)
+            input.code = code;
+		} else {
+            input = m_inputs.get_unsafe(index)
+        }
+		if (down) {
+			if (!input.down) {
+				// printf("PRESSED %c (%d)\n",(char)code,code);
+				// log::out << "PRESSED "<<(char)code << " ("<<code << ")\n";
+				input.down = true;
+				input.tickPressed++;
+				input.framePressed++;
+			}
+		}else{
+			// log::out << "RELEASED "<<(char)code << " ("<<code << ")\n";
+			// printf("RELEASED %c (%d)\n",(char)code,code);
+			input.down = false;
+			input.tickReleased++;
+			input.frameReleased++;
+		}
+    }
+
+    // std::string pollPathDrop();
+    // u32 pollChar();
+    // void resetPollChar();
+
+    fn isKeyDown(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code)
+				return inp.down;
+		}
+		return false;
+    }
+    fn isKeyPressed(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code) {
+				// log::out << "IS "<<(char)code<<"\n";
+				// if (m_parent->isRenderingWindow()) {
+				// 	if (m_inputs[i].framePressed > 0) {
+				// 		return true;
+				// 	}
+				// } else {
+					if (inp.tickPressed > 0) {
+						// log::out << " Done\n";
+						return true;
+					}
+				// }
+				return false;
+			}
+		}
+		return false;
+    }
+    fn isKeyReleased(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code) {
+				// if (m_parent->isRenderingWindow()) {
+				// 	if (m_inputs[i].frameReleased > 0) {
+				// 		return true;
+				// 	}
+				// }
+				// else {
+					if (inp.tickReleased > 0) {
+						return true;
+					}
+				// }
+				return false;
+			}
+		}
+		return false;
+    }
+    
+    // void enableFirstPerson(bool yes);
+    // bool isFirstPerson() const { return m_enabledFirstPerson; }
+    
+    // std::string pollClipboard();
+    // void setClipboard(const std::string& str);
+
+    // // If true, the cursor will be made visible.
+    // void setCursorVisible(bool visible);
+    // // Whether the cursor is locked to the window.
+    // bool isCursorLocked() const { return m_cursorLocked;}
+    // // If true, the cursor will be made invisible and locked to the window. Use this when you want the player to lock around.
+    // void lockCursor(bool locked);
+
+    fn resetEvents(resetFrameInput: bool) {
+        resetFrameInput = false;
+        if (resetFrameInput) {
+            m_frameScrollX = 0;
+            m_frameScrollY = 0;
+            // m_frameRawMouseX = 0;
+            // m_frameRawMouseY = 0;
+            for @ptr inp: m_inputs.sliced_unsafe() {
+                inp.framePressed = 0;
+                inp.frameReleased = 0;
+            }
+        } else {
+            m_tickScrollX = 0;
+            m_tickScrollY = 0;
+            // m_tickRawMouseX = 0;
+            // m_tickRawMouseY = 0;
+            for @ptr inp: m_inputs.sliced_unsafe() {
+                if(inp.tickPressed!=0){
+                    code := inp.code;
+                    // log::out << "RESET "<<(char)code << " ("<<code << ")\n";
+                    // printf("RESET %c (%d)\n",(char)code,code);
+                }
+                inp.tickPressed = 0;
+                inp.tickReleased = 0;
+            }
+        }
+    }
+
+    // GLFWwindow* m_glfwWindow=nullptr;
+    
+    m_inputs: Array<GUIInput>;
+    // std::vector<std::string> m_pathDrops;
+    
+    // u32 m_charIn = 0;
+    // u32 m_charOut = 0;
+    // bool m_emptyCharArray = true;
+    // static const u32 CHAR_ARRAY_SIZE = 20;
+    // u32 m_charArray[CHAR_ARRAY_SIZE];
+
+    // bool m_enabledFirstPerson = false;
+
+    m_mouseX: f32 = 0;
+    m_mouseY:  f32 = 0;
+    m_lastMouseX: f32 = -1;
+    m_lastMouseY: f32 = -1;
+    // float m_tickRawMouseX = 0, m_tickRawMouseY = 0, m_frameRawMouseX = 0, m_frameRawMouseY = 0;
+    m_tickScrollX: f32 =0;
+    m_tickScrollY: f32 = 0;
+    m_frameScrollX: f32 = 0;
+    m_frameScrollY: f32 = 0;
+
+    // bool m_cursorVisible = true, m_cursorLocked = false, m_focus = true;
+}
+struct GUIInput {
+    code: i32 = 0;
+    down: bool = false;
+    tickPressed: u8 = 0;
+    framePressed: u8 = 0;
+    tickReleased: u8 = 0;
+    frameReleased: u8 = 0;
+};
+global global_active_gui: GUIEnvironment* = null
+
+// global map<GLFWwindow*, InputModule*> moduleMapping; // Todo: doesn't work with dlls
+fn GetMappedModule(window: void*) -> GUIEnvironment* {
+    return global_active_gui
+    // auto win = moduleMapping.find(window);
+    // if (win != moduleMapping.end())
+    //     return win->second;
+    // return nullptr;
+}
+// fn @stdcall CharCallback(window: void*, chr: u32) {
+//     gui := GetMappedModule(window);
+//     if (!gui) {
+//         log::out << "InputModule isn't mapped\n";
+//         return;
+//     }
+//     // if (input->m_charIn == input->m_charOut && !input->m_emptyCharArray) {
+//     //     log::out << log::RED << "CharCallback : m_charArray["<<InputModule::CHAR_ARRAY_SIZE<<"] of InputModule is full, skipping "<<chr<<" (increase size to prevent this).\n";
+//     //     return; // list is full
+//     // }
+
+//     // input->m_charArray[input->m_charIn] = chr;
+//     // input->m_charIn = (input->m_charIn+1)% InputModule::CHAR_ARRAY_SIZE;
+//     // input->m_emptyCharArray = false;
+// }
+// fn @stdcall DropCallback(window: void*, count: i32, paths: char**) {
+//     gui := GetMappedModule(window);
+//     if (!gui) {
+//         log::out << "InputModule isn't mapped\n";
+//         return;
+//     }
+//     // for (int i = 0; i < count; ++i) {
+//     //     input->m_pathDrops.push_back(paths[i]);
+//     // }
+// }
+#macro GLFW_CALLBACK_ATTR @stdcall
+fn GLFW_CALLBACK_ATTR KeyCallback(window: void*, key: i32, scancode: i32, action: i32, mods: i32) {
+    gui := GetMappedModule(window);
+    if (!gui) {
+        log("InputModule isn't mapped")
+        return;
+    }
+    log("key ",cast<char>key, " ", scancode, " ", action)
+
+    gui.setInput(key, action != 0); // if not 0 means if pressed or repeating
+
+    if (action != 0 && (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE || key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT)) {
+        // CharCallback(window, key);
+    }
+}
+
+fn GLFW_CALLBACK_ATTR MouseCallback(window: void*, button: i32, action: i32, mods: i32) {
+    // gui := GetMappedModule(window);
+
+    // if (!gui) {
+    //     log("InputModule isn't mapped")
+    //     return;
+    // }
+
+    // 
+    mx: f64;
+    my: f64;
+    fn wa(t: char){
+        // log("sp ", a)
+        // printc(t);
+        printc('\n');
+    }
+    wa('a');
+    // glfwGetCursorPos(window, &mx, &my);
+    // gui.setMouseX(cast<f32>mx);
+    // gui.setMouseY(cast<f32>my);
+    // gui.setInput(button, action != 0);
+    //log("click ", button, " ", action)
+}
+fn GLFW_CALLBACK_ATTR CursorPosCallback(window: void*, mx: f64, my: f64) {
+    gui := GetMappedModule(window);
+    if (!gui) {
+        log("InputModule isn't mapped")
+        return;
+    }
+    gui.setMouseX(cast<f32>mx);
+    gui.setMouseY(cast<f32>my);
+    log("cursor pos ", mx," ", my)
+}
+fn GLFW_CALLBACK_ATTR ScrollCallback(window: void*, xoffset: f64, yoffset: f64) {
+    gui := GetMappedModule(window);
+    if (!gui) {
+        log("InputModule isn't mapped")
+        return;
+    }
+    gui.setScrollX(cast<f32>xoffset);
+    gui.setScrollY(cast<f32>yoffset);
+
+    log("scroll ",xoffset, " ", yoffset)
+}

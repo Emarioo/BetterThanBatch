@@ -394,6 +394,7 @@ struct Bytecode {
     struct Dump {
         bool dumpBytecode = false;
         bool dumpAsm = false;
+        int tinycode_index = -1;
         int bc_startIndex = 0;
         int bc_endIndex = 0;
         int asm_startIndex = 0;

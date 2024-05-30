@@ -1,12 +1,13 @@
 /*
-    Quick showcase of rendering
+    Quick showcase of rendering.
     
     Resources:
         https://learnopengl.com
         https://www.glfw.org/documentation.html
 */
 
-#import "Graphics"
+#import "GLAD"
+#import "GLFW"
 #import "Logger"
 #import "OS"
 
@@ -45,12 +46,22 @@ fn main(){
 
     vshader := "
         #version 330 core
-        layout (location = 0) in vec3 aPos;
+        layout (location = 0) in vec2 aPos;
         void main()
         {
-            gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+            gl_Position = vec4(aPos.x, aPos.y, 0.0, 1.0);
         }
         ";
+    fshader := "
+        #version 330 core
+        out vec4 FragColor;
+
+        void main()
+        {
+            FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+        } 
+        ";
+
 
     vertexShader := glCreateShader(GL_VERTEX_SHADER);
     GLCHECK
@@ -67,16 +78,7 @@ fn main(){
         log("Vertex shader error: ",infoLog);
     }
 
-    fshader := "
-        #version 330 core
-        out vec4 FragColor;
-
-        void main()
-        {
-            FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
-        } 
-        ";
-
+ 
     fragmentShader := glCreateShader(GL_FRAGMENT_SHADER);
     GLCHECK
     glShaderSource(fragmentShader, 1, &fshader.ptr, null);
@@ -124,27 +126,40 @@ fn main(){
     glBindVertexArray(VAO);
     GLCHECK
 
+    
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     GLCHECK
     // glBufferData(GL_ARRAY_BUFFER, 9 * sizeof f32 , vertices.ptr, GL_DYNAMIC_DRAW);
-    glBufferData(GL_ARRAY_BUFFER, 9 * sizeof f32 , null, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, VERTEX_COUNT * sizeof f32 , null, GL_DYNAMIC_DRAW);
     GLCHECK
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof f32, cast<void*>cast<u64>0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof f32, cast<void*>cast<u64>0);
     GLCHECK
     glEnableVertexAttribArray(0);
     GLCHECK
 
-    vertices: f32[9] {
+    // #macro VERTEX_COUNT 6
+    #macro VERTEX_COUNT 12
+    vertices: f32[.] {
         -0.5,
-        0, // set in loop
-        0.0,
+        -0.5, // set in loop
+        
         0.5,
         -0.5,
-        0.0,
-        0.0,
+        
+        -0.5,
         0.5,
-        0.0,
+        
+        -0.5,
+        0.5,
+        
+        0.5,
+        -0.5,
+        
+        0.5,
+        0.5,
+        
+        
     };
 
     a := 0;
@@ -164,19 +179,19 @@ fn main(){
         // TODO: Try element array
         // TODO: Try uniform functions (glUniform4f)
 
-        glBufferSubData(GL_ARRAY_BUFFER, 0, 9 * sizeof f32, vertices.ptr);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, VERTEX_COUNT * sizeof f32, vertices.ptr);
         // GLCHECK
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glDrawArrays(GL_TRIANGLES, 0, VERTEX_COUNT / 2);
         // GLCHECK
         glfwSwapBuffers(window);
 
         glfwPollEvents();
-        ProcessSleep(0.001)
+        
+        ProcessSleep(0.001) // don't use up CPU resources
     }
 
     glfwTerminate();
 }
-
 
 fn @stdcall MouseCallback2(window: void*, button: i32, action: i32, mods: i32) {
     log("click ",button," ", action)

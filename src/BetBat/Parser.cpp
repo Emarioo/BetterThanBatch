@@ -349,6 +349,10 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 continue;
             } else if (token->type == '[') {
                 auto token = info.getinfo(&view, 1);
+                // char[] { 1, 3 }  could be an array on stack
+                // or the end of a function (char[] as return value)
+                // auto token2 = info.getinfo(2);
+                // if(token->type == ']' && token2->type != '{') {
                 if(token->type == ']') {
                     info.advance(2);
                     std::string tmp = envs.last().buffer;
@@ -2953,8 +2957,19 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
             info.advance();
             
             statement = info.ast->createStatement(ASTStatement::RETURN);
-            if((token->flags & lexer::TOKEN_FLAG_NEWLINE) == 0) {
-                token = info.getinfo();
+            
+            /* Here's the thing, a user may type return with return values on a new line.
+                We cannot assume the user wanted to return 0 arguments if we see a newline.
+                So we must force the user to type a semi-colon so we know what they want.
+                return
+                    value0,
+                    value2;
+                
+            */
+            // if((token->flags & lexer::TOKEN_FLAG_NEWLINE) == 0) {
+            token = info.getinfo();
+            if(token->type != '}') {
+                // token = info.getinfo();
                 WHILE_TRUE {
                     ASTExpression* expr=0;
                     auto tok = info.gettok();
@@ -2975,10 +2990,6 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
                     info.advance();
                 }
             }
-            
-            // statement->rvalue = base;
-            // statement->tokenRange.firstToken = firstToken;
-            // statement->tokenRange.endIndex = info.at()+1;
             return SIGNAL_SUCCESS;
         } else if(token->type == lexer::TOKEN_SWITCH){
             info.advance();
@@ -3879,6 +3890,8 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
 
     lexer::Token lengthTokenOfLastVar{};
 
+    bool dynamic_array_length = false;
+
     //-- Evaluate variables on the left side
     // int startIndex = info.at()+1;
     // DynamicArray<ASTStatement::VarName> varnames{};
@@ -3957,6 +3970,10 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
                             )
                             arrayLength = 0;
                         }
+                    } else if(tok1.type == '.') {
+                        lengthTokenOfLastVar = tok1;
+                        arrayLength = 0;
+                        dynamic_array_length = true;
                     } else {
                         ERR_SECTION(
                             ERR_HEAD2(tok1)
@@ -3965,7 +3982,12 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
                         )
                     }
                     typeToken = "Slice<" + typeToken + ">";
+                } else if(typeToken.substr(0,6) == "Slice<" && tok0.type == '{') {
+                    // info.advance(); DO NOT ADVANCE '{'
+                    arrayLength = 0;
+                    dynamic_array_length = true;
                 }
+
                 TypeId strId = info.ast->getTypeString(typeToken);
 
                 int index = statement->varnames.size()-1;
@@ -4053,10 +4075,8 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
                 )
             }
         }
-        if(statement->varnames.last().arrayLength<1){
-            // Set arrayLength explicitly if it was 0.
-            // Otherwise the user set a length for the array and defined less values which is okay.
-            // The rest of the values in the array will be zero initialized
+        if(dynamic_array_length){
+            // Set array length based on expressions
             statement->varnames.last().arrayLength = statement->arrayValues.size();
         }
         if(statement->arrayValues.size() > statement->varnames.last().arrayLength) {
@@ -4143,10 +4163,10 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
     StringView view{};
     auto token = info.getinfo(&view);
     while(token->type == lexer::TOKEN_ANNOTATION) {
-        if(view == "dump_asm") {
+        if(view == "dumpasm") {
             info.advance();
             bodyLoc->flags |= ASTNode::DUMP_ASM;
-        } else if(view ==  "dump_bc") {
+        } else if(view ==  "dumpbc") {
             info.advance();
             bodyLoc->flags |= ASTNode::DUMP_BC;
         } else {

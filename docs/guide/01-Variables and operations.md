@@ -79,6 +79,7 @@ value: i32 = *ptr;  // dereference the pointer to get the value at the pointer's
 ints: i32[20];             // zero initialized array
 ints: i32[20] { 3, 8, 4 }; // initialize with values
 // the type of 'ints' is Slice<i32>
+ints: i32[.] { 3, 8, 4 };  // array length based on number of expressions
 
 // Arrays have a pointer and a length
 ints.ptr[0]  // first element from the pointer

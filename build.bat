@@ -212,11 +212,20 @@ SET GCC_DEFINITIONS=-DOS_WINDOWS -DCOMPILER_GNU
 SET GCC_WARN=-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unknown-warning-option -Wno-unused-but-set-variable -Wno-nonnull-compare 
 SET GCC_WARN=!GCC_WARN! -Wno-sign-compare 
 
-SET GCC_PATHS=-Llibs\glfw-3.3.9\lib-mingw-w64 -Ilibs\glfw-3.3.9\include -Ilibs\glad\include -Lbin
+SET GCC_PATHS=-Llibs\glfw-3.3.9\lib-mingw-w64 -Ilibs\glfw-3.3.9\include -Ilibs\glad\include -Lbin -Ilibs/stb/include
 
+@REM NOTE: If a function is undefined then it may be a good idea to recompile these libraries.
 if not exist bin/libglad.a (
     gcc -c !GCC_PATHS! libs/glad/src/glad.c -o bin/glad.o
     ar rcs bin/libglad.a bin/glad.o
+)
+if not exist bin/glad.lib (
+    gcc -c !GCC_PATHS! libs/glad/src/glad.c -o bin/glad.o
+    ar rcs bin/glad.lib bin/glad.o
+)
+if not exist bin/stb_image.lib (
+    gcc -c !GCC_PATHS! libs/stb/src/stb_image.c -o bin/stb_image.o
+    ar rcs bin/stb_image.lib bin/stb_image.o
 )
 
 @REM @REM glfw, glew, opengl is not linked with here, it should be

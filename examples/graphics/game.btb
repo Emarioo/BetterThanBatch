@@ -1,0 +1,39 @@
+/*
+    An example of a game, not sure what it will be yet.
+
+*/
+
+
+#import "Graphics"
+
+fn main() -> i32 {
+    window := CreateWindow(800,600)
+    blob := CreateTexture("examples/graphics/blob.png")
+
+    t := 0
+    while window.running {
+        t++
+        
+        FillColor(window, Color{0.2,0.2,0.2})
+        
+        text := "This is blob"
+        text_h := 40
+        blob_size := 140
+        
+        font := window.defaultFont()
+        text_w := font.width_of_text(text, text_h)
+        
+        DrawText(window, window.width/2 - text_w/2, window.height/2 - blob_size, text_h, text)
+        
+        DrawTexture(window, window.width/2-blob_size/2, window.height/2-blob_size/2, blob_size, blob_size, blob)
+        
+        // FillRect(window, t, 10, 100., 100., Color{0.5,1,1})
+        // FillRect(window, 0.1, 0.1, 0.2, 0.2, Color{1,1,1})
+        
+        RefreshWindow(window)
+    }
+    
+    DestroyTexture(blob)
+    DestroyWindow(window)
+    return 0
+}

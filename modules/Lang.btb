@@ -152,18 +152,18 @@ fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32
     
     type_id := type.index();
     switch type_id {
-    case AST_UINT8:     std_print(*cast<u8*>  (ptr)) return
-    case AST_UINT16:    std_print(*cast<u16*> (ptr)) return
-    case AST_UINT32:    std_print(*cast<u32*> (ptr)) return
-    case AST_UINT64:    std_print(*cast<u64*> (ptr)) return
-    case AST_INT8:      std_print(*cast<i8*>  (ptr)) return
-    case AST_INT16:     std_print(*cast<i16*> (ptr)) return
-    case AST_INT32:     std_print(*cast<i32*> (ptr)) return
-    case AST_INT64:     std_print(*cast<i64*> (ptr)) return
-    case AST_BOOL:      std_print(*cast<bool*>(ptr)) return
-    case AST_CHAR:      std_print(*cast<char*>(ptr)) return
-    case AST_FLOAT32:   std_print(*cast<f32*> (ptr)) return
-    case AST_FLOAT64:   std_print(*cast<f64*> (ptr)) return
+    case AST_UINT8:     std_print(*cast<u8*>  (ptr)) return;
+    case AST_UINT16:    std_print(*cast<u16*> (ptr)) return;
+    case AST_UINT32:    std_print(*cast<u32*> (ptr)) return;
+    case AST_UINT64:    std_print(*cast<u64*> (ptr)) return;
+    case AST_INT8:      std_print(*cast<i8*>  (ptr)) return;
+    case AST_INT16:     std_print(*cast<i16*> (ptr)) return;
+    case AST_INT32:     std_print(*cast<i32*> (ptr)) return;
+    case AST_INT64:     std_print(*cast<i64*> (ptr)) return;
+    case AST_BOOL:      std_print(*cast<bool*>(ptr)) return;
+    case AST_CHAR:      std_print(*cast<char*>(ptr)) return;
+    case AST_FLOAT32:   std_print(*cast<f32*> (ptr)) return;
+    case AST_FLOAT64:   std_print(*cast<f64*> (ptr)) return;
     }
     
     fn indent(n: i32) { for 0..n  std_print("  ") }
