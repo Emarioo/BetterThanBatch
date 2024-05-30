@@ -1,0 +1,13 @@
+@TEST_CASE(bad_syntax)
+
+a := 0
+b := 2
+
+if a == b
+    _test 1; 1;
+else nr > m.beg {
+    _test 0; 1;
+}
+// sometimes you forget 'if' after else and it's valid syntax
+// TODO: Expression after else should not be allowed, tell the user to
+//   put it on another line.

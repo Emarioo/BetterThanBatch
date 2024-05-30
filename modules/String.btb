@@ -630,8 +630,12 @@ fn substring(text: char*, start: i32, end: i32 = -1) -> char[] {
 }
 // end is exclusive
 fn substring(text: char[], start: i32, end: i32 = -1) -> char[] {
-    if start >= text.len || end >= text.len || start < 0
+    if start >= text.len
         return Slice<char>{}
+    if end > text.len
+        end = text.len
+    if start < 0
+        start = 0
     if end < 0
         return Slice<char>{text.ptr + start, text.len - start}
     return Slice<char>{text.ptr + start, end - start}

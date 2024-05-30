@@ -46,9 +46,9 @@
 
 fn ProcessSleep(seconds: f32) {
     #if OS_WINDOWS
-    
+    win32_Sleep(seconds * 1000)
     #elif OS_LINUX
-    
+    todo
     #endif   
 }
 

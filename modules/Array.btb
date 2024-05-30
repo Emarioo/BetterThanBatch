@@ -70,6 +70,11 @@ struct Array<T> {
             return T{}; // TODO: Assert instead
         return ptr[index];
     }
+    fn last() -> T* {
+        if(len == 0)
+            return null; // TODO: Assert instead
+        return &ptr[len - 1];
+    }
     fn get_unsafe(index: i32) -> T* {
         if(index >= len)
             return null;

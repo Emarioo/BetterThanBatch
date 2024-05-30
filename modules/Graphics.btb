@@ -1,6 +1,6 @@
 
 // TODO: Linking with the right libraries is annoying, how do we improve it?
-#ifdef LINKER_MSVC
+#if LINKER_MSVC
     #link "gdi32.lib user32.lib OpenGL32.lib"
     #link "libs/glfw-3.3.9/lib-vc2022/glfw3_mt.lib"
     // #link "libs/glew-2.1.0/lib/glew32s.lib"
@@ -23,13 +23,11 @@
 #import "Lang"
 #import "Array" // used by GUIEnvironment.m_inputs
 
-fn @import Sleep(ms: i32); // windows sleep, remove this later
-
 global glErrCode: bool = false;
 // #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",cast<i64>#line,cast<i64>glErrCode,":",glewGetErrorString(glErrCode)); }
 #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error ",#file,":",cast<i64>#line," code: ",cast<i64>glErrCode); }
-#ifndef GLCHECK
-#macro GLCHECK
+#if !GLCHECK
+#macro GLCHECK #endmacro
 #endif
 
 // returns GLFWwindow*

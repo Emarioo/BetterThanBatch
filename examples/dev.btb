@@ -1,22 +1,2 @@
 
-#import "Logger"
-
-
-fn say(v: i16) {
-    // log("int");
-}
-fn say(v: i64) {
-    // log("int64");
-}
-fn say(v: char) {
-    // log("chr");
-}
-@TEST_ERROR(ERROR_OVERLOAD_MISMATCH) say(32)
-
-fn say2(v: i16) {
-    // log("int");
-}
-fn say2(v: char) {
-    // log("chr");
-}
-say2(32) // should be fine, i32 is casted to i16
+#import "examples/graphics/quad.btb"

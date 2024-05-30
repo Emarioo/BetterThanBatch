@@ -24,7 +24,7 @@ struct Thread {
 fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
     // TODO: Handle error
     thread: Thread;
-    #ifdef OS_WINDOWS
+    #if OS_WINDOWS
         threadId: u32 = 0;
         thread.os_handle = cast_unsafe<u64>CreateThread(null, 0, func, param, null, &threadId);
         thread.id = threadId;
@@ -39,7 +39,7 @@ fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
 }
 fn ThreadDestroy(thread: Thread) {
     // TODO: Handle error
-    #ifdef OS_WINDOWS
+    #if OS_WINDOWS
         CloseHandle(thread.os_handle);
     #else
         ThreadJoin(thread); // temporary
@@ -47,7 +47,7 @@ fn ThreadDestroy(thread: Thread) {
 }
 fn ThreadJoin(thread: Thread) {
     // TODO: Handle error
-    #ifdef OS_WINDOWS
+    #if OS_WINDOWS
         WaitForSingleObject(thread.os_handle, 0xFFFFFFFF); // 0xFFFFFFFF wait indefinitely
     #else
         // Assert(sizeof(pthread) == sizeof(thread.os_handle));
@@ -55,7 +55,7 @@ fn ThreadJoin(thread: Thread) {
     #endif
 }
 fn ThreadSelfId() -> ThreadId {
-    #ifdef OS_WINDOWS
+    #if OS_WINDOWS
         return cast_unsafe<u64>pthread_self();
     #else
         return GetCurrentThreadId();
@@ -65,7 +65,7 @@ fn ThreadSelfId() -> ThreadId {
 /*
     OS SPECIFIC
 */
-#ifdef OS_WINDOWS
+#if OS_WINDOWS
     fn @dllimport CreateThread(
     /* [in, optional]  LPSECURITY_ATTRIBUTES   */ lpThreadAttributes: void*,
     /* [in]            SIZE_T                  */ dwStackSize: u64,

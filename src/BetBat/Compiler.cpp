@@ -1293,8 +1293,8 @@ void Compiler::run(CompileOptions* options) {
             // cmd += "/DEFAULTLIB:LIBCMT ";
             cmd += "Kernel32.lib "; // _test and prints uses WriteFile so we must link with kernel32
             
-            for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
-                auto& dir = bytecode->linkDirectives[i];
+            for (int i = 0;i<(int)linkDirectives.size();i++) {
+                auto& dir = linkDirectives[i];
                 cmd += dir + " ";
             }
             for(auto& path : program->libraries) {
@@ -1345,8 +1345,8 @@ void Compiler::run(CompileOptions* options) {
                 // cmd += "-lc "; // link clib because it has wrappers for syscalls, NOTE: We actually don't need this, we use syscalls in assembly.
             }
             
-            for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
-                auto& dir = bytecode->linkDirectives[i];
+            for (int i = 0;i<(int)linkDirectives.size();i++) {
+                auto& dir = linkDirectives[i];
                 cmd += dir + " ";
             }
 
@@ -1560,22 +1560,25 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
     Assert(imp);
     // imports.requestSpot(dep_import_id-1,nullptr);
     bool found = false;
-    for(int i=0;i<imp->libraries.size();i++) {
-        auto& lib = imp->libraries[i];
-        if(lib.path == path) {
-            // Multiple paths could possibly be the same.
-            // Imagine "src/math.lib" and "./math.lib" where the dot indicates
-            // the directory of the current source file ("src/main.btb")
-            found = true;
-            break;
-        }
-        if(lib.named_as == as_name) {
-            found = true;
-            // TODO: Improve error message
-            options->compileStats.errors++;
-            log::out << log::RED << "Multiple libraries cannot be named the same ("<<as_name<<").\n";
-            log::out << log::RED << " \""<<BriefString(path)<<"\" collides with \""<<lib.path<<"\"\n";
-            break;
+    if(as_name.size() != 0) {
+        for(int i=0;i<imp->libraries.size();i++) {
+            auto& lib = imp->libraries[i];
+            if(lib.path == path) {
+                // Multiple paths could possibly be the same.
+                // Imagine "src/math.lib" and "./math.lib" where the dot indicates
+                // the directory of the current source file ("src/main.btb")
+                found = true;
+                break;
+            }
+            if(lib.named_as == as_name) {
+                found = true;
+                // TODO: Improve error message, which source file the library came from
+                options->compileStats.errors++;
+                LOG_MSG_LOCATION
+                log::out << log::RED << "Multiple libraries cannot be named the same ("<<as_name<<").\n";
+                log::out << log::RED << " \""<<BriefString(path)<<"\" collides with \""<<lib.path<<"\"\n";
+                break;
+            }
         }
     }
     if(!found) {

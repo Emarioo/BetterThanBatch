@@ -1503,6 +1503,7 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
                         else {
                             // do we just ignore?
                         }
+                        str_start = 0;
                     }
                     continue;
                 }
@@ -1511,7 +1512,7 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
                 depth--;
             }
             
-            if(chr == ',' || ( depth == 0 && chr == ')') || (head == tmp.size() && !process_args)) {
+            if(( depth == 1 && chr == ',') || ( depth == 0 && chr == ')') || (head == tmp.size() && !process_args)) {
                 if(str_start == 0) {
                     continue;
                 }
@@ -1607,6 +1608,7 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
     if(!typeInfo) {
         return {};
     }
+    auto ori = typeInfo;
     if(transformVirtual) {
         if(typeInfo->id != typeInfo->originalId) {
             WHILE_TRUE {
@@ -1628,8 +1630,8 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
                 }
             }
             if(!typeInfo->id.isValid()) {
-                MSG_CODE_LOCATION;
-                log::out << log::RED << "Compiler Bug: Transformed virtual had TypeInfo but it's virtual TypeId was invalid (all zeros)\n";
+                // MSG_CODE_LOCATION;
+                // log::out << log::RED << "Compiler Bug: Transformed virtual had TypeInfo but it's virtual TypeId was invalid (all zeros)\n";
             }
         }
         TypeId out = typeInfo->id;

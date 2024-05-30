@@ -1477,9 +1477,10 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 //   and not the call.
                 ERR_SECTION(
                     ERR_HEAD2(astFunc->location)
-                    ERR_MSG("You are trying to call a function that is imported but the function is not linked to any library. At the function definition, please specify which library the function should be imported from. The compiler does not know which library to link with unless you specify it).")
+                    ERR_MSG("You are trying to call an external function that isn't linked to a library. At the function definition, specify which library to link with.")
                     ERR_LINE2(astFunc->location, "this definition")
                     ERR_LINE2(expression->location, "this call")
+                    ERR_EXAMPLE(1, "#load \"stuff.lib\" as Stuff\nfn @import(Stuff) DoStuff()")
                 )
             }
         }
@@ -1488,7 +1489,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         } else if(astFunc->linkConvention == DLLIMPORT){
             addExternalRelocation("__imp_"+alias, lib_path, reloc);
         } else if(astFunc->linkConvention == VARIMPORT){
-            Assert(false);
+            // Assert(false);
             // TODO: VARIMPORT refers to a global variable that is a function pointer.
             // Not sure how to handle this.
             // An additional way is to allow ´global @import MyFunction: fn (i32) -> i32;
@@ -1763,7 +1764,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
                         // export function when debugging, nice to see if objdump refer to the function we expect
                         // TODO: only add if unique
-                        bytecode->addExportedFunction(expression->name, id->funcOverloads.overloads[0].funcImpl->tinycode_id-1);
+                        // TODO: Can't add if function wasn't generated, how do we fix that?
+                        if(id->funcOverloads.overloads[0].funcImpl->tinycode_id-1 != -1) {
+                            bytecode->addExportedFunction(expression->name, id->funcOverloads.overloads[0].funcImpl->tinycode_id-1);
+                        }
                     } else {
                         ERR_SECTION(
                             ERR_HEAD2(expression->location)
@@ -2464,7 +2468,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     return SIGNAL_FAILURE;
                 }
                 auto typeInfo = info.ast->getTypeInfo(exprId.baseType());
-                if(!typeInfo || !typeInfo->astStruct){ // one level of pointer is okay.
+                if(!typeInfo || !typeInfo->astStruct){
                     ERR_SECTION(
                         ERR_HEAD2(expression->location)
                         ERR_MSG("'"<<info.ast->typeToString(exprId)<<"' is not a struct. Cannot access member.")
@@ -2518,12 +2522,12 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     outTypeIds->add(exprId);
                 } else {
                     if(!nonReference) {
-                        auto memberData = typeInfo->getMember(expression->name);
-                        if(memberData.index==-1){
-                            Assert(info.hasForeignErrors());
-                            return SIGNAL_FAILURE;
-                        }
-                        auto& mem = typeInfo->astStruct->members[memberData.index];
+                        // auto memberData = typeInfo->getMember(expression->name);
+                        // if(memberData.index==-1){
+                        //     Assert(info.hasForeignErrors());
+                        //     return SIGNAL_FAILURE;
+                        // }
+                        // auto& mem = typeInfo->astStruct->members[memberData.index];
                         bool popped = false;
                         BCRegister reg = BC_REG_B;
                         if(exprId.getPointerLevel()>0){
@@ -2570,14 +2574,32 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             
                             outTypeIds->add(exprId);
                         } else {
+                            Assert(exprId.getPointerLevel() == 1);
+                            BCRegister reg = BC_REG_B;
+                            builder.emit_pop(reg);
+                            
+                            builder.emit_mov_rm(BC_REG_C, reg, 8);
+                            reg = BC_REG_C;
+                            
+                            if(memberData.offset!=0){
+                                builder.emit_li32(BC_REG_A, memberData.offset);
+                                builder.emit_add(reg, BC_REG_A, false, 8);
+                            }
+
+                            exprId = memberData.typeId;
+                            
+                            result = generatePush(BC_REG_B, 0, exprId);
+                            
+                            outTypeIds->add(exprId);
+                            
                             // Note a great error
-                            ERR_SECTION(
-                                ERR_HEAD2(expression->left->location)
-                                ERR_MSG("'"<<compiler->lexer.tostring(expression->left->location)<<
-                                "' must be a reference to some memory. "
-                                "A variable, member or expression resulting in a dereferenced pointer would work.")
-                                ERR_LINE2(expression->left->location, "must be a reference")
-                            )
+                            // ERR_SECTION(
+                            //     ERR_HEAD2(expression->left->location)
+                            //     ERR_MSG("'"<<compiler->lexer.tostring(expression->left->location)<<
+                            //     "' must be a reference to some memory. "
+                            //     "A variable, member or expression resulting in a dereferenced pointer would work.")
+                            //     ERR_LINE2(expression->left->location, "must be a reference")
+                            // )
                         }
                     }
                 }
@@ -3121,7 +3143,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 if(tmp_types.size()) rtype = tmp_types.last();
                 if (err != SIGNAL_SUCCESS)
                     return err;
-                
+                if(!ltype.isValid() || !rtype.isValid())
+                    return SIGNAL_FAILURE;
                 TypeInfo* left_info = info.ast->getTypeInfo(ltype.baseType());
                 TypeInfo* right_info = info.ast->getTypeInfo(rtype.baseType());
                 Assert(left_info && right_info);
@@ -4628,32 +4651,33 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             ScopeId scopeForVariables = statement->firstBody->scopeId;
 
             Assert(statement->varnames.size()==2);
-            auto& varnameIt = statement->varnames[0];
-            auto& varnameNr = statement->varnames[1];
-            if(!varnameIt.versions_assignType[info.currentPolyVersion].isValid() || !varnameNr.versions_assignType[info.currentPolyVersion].isValid()){
-                // error has probably been handled somewhere. no need to print again.
-                continue;
-            }
-            if(!varnameNr.identifier || !varnameIt.identifier) {
-                if(!info.hasForeignErrors()){
-                    ERR_SECTION(
-                        ERR_HEAD2(statement->location)
-                        ERR_MSG("Identifier '"<<(varnameNr.identifier ? (varnameIt.identifier ? StringBuilder{} << varnameIt.name : "") : (varnameIt.identifier ? (StringBuilder{} << varnameNr.name <<" and " << varnameIt.name) : StringBuilder{} << varnameNr.name))<<"' in for loop was null. Bug in compiler?")
-                        ERR_LINE2(statement->location, "")
-                    )
-                }
-                continue;
-            }
-            auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
-            auto varinfo_item = info.ast->getVariableByIdentifier(varnameIt.identifier);
+            // auto& varnameIt = statement->varnames[0];
+            // auto& varnameNr = statement->varnames[1];
+            // if(!varnameIt.versions_assignType[info.currentPolyVersion].isValid() || !varnameNr.versions_assignType[info.currentPolyVersion].isValid()){
+            //     // error has probably been handled somewhere. no need to print again.
+            //     continue;
+            // }
+            // if(!varnameNr.identifier || !varnameIt.identifier) {
+            //     if(!info.hasForeignErrors()){
+            //         ERR_SECTION(
+            //             ERR_HEAD2(statement->location)
+            //             ERR_MSG("Identifier '"<<(varnameNr.identifier ? (varnameIt.identifier ? StringBuilder{} << varnameIt.name : "") : (varnameIt.identifier ? (StringBuilder{} << varnameNr.name <<" and " << varnameIt.name) : StringBuilder{} << varnameNr.name))<<"' in for loop was null. Bug in compiler?")
+            //             ERR_LINE2(statement->location, "")
+            //         )
+            //     }
+            //     continue;
+            // }
+            // auto varinfo_item = info.ast->getVariableByIdentifier(varnameIt.identifier);
 
             // NOTE: We add debug information last because varinfo does not have the frame offsets yet.
 
             if(statement->rangedForLoop){
+                auto& varnameNr = statement->varnames[0];
+                auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
                 {
                     TypeId typeId = AST_INT32; // you may want to use the type in varname, the reason i don't is because
                     framePush(typeId, &varinfo_index->versions_dataOffset[info.currentPolyVersion],false, false);
-                    varinfo_item->versions_dataOffset[info.currentPolyVersion] = varinfo_index->versions_dataOffset[info.currentPolyVersion];
+                    // varinfo_item->versions_dataOffset[info.currentPolyVersion] = varinfo_index->versions_dataOffset[info.currentPolyVersion];
 
                     TypeId dtype = {};
                     // Type should be checked in type checker and further down
@@ -4726,7 +4750,17 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 for (auto ind : loopScope->resolveBreaks) {
                     builder.fix_jump_imm32_here(ind);
                 }
+                debugFunction->addVar(varnameNr.name,
+                    varinfo_index->versions_dataOffset[info.currentPolyVersion],
+                    varinfo_index->versions_typeId[info.currentPolyVersion],
+                    info.currentScopeDepth + 1,
+                    varnameNr.identifier->scopeId);
             }else{
+                auto& varnameIt = statement->varnames[0];
+                auto& varnameNr = statement->varnames[1];
+                auto varinfo_item = info.ast->getVariableByIdentifier(varnameIt.identifier);
+                auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
+
                 {
                     SignalIO result = framePush(varinfo_index->versions_typeId[info.currentPolyVersion], &varinfo_index->versions_dataOffset[info.currentPolyVersion], false, false);
 
@@ -4852,22 +4886,23 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 for (auto ind : loopScope->resolveBreaks) {
                     builder.fix_jump_imm32_here(ind);
                 }
+                
+                // only add 'it' for Sliced loop (not ranged)
+                debugFunction->addVar(varnameIt.name,
+                    varinfo_item->versions_dataOffset[info.currentPolyVersion],
+                    varinfo_item->versions_typeId[info.currentPolyVersion],
+                    info.currentScopeDepth + 1, // +1 because variables exist within stmt->firstBody, not the current scope
+                    varnameIt.identifier->scopeId);
+                debugFunction->addVar(varnameNr.name,
+                    varinfo_index->versions_dataOffset[info.currentPolyVersion],
+                    varinfo_index->versions_typeId[info.currentPolyVersion],
+                    info.currentScopeDepth + 1,
+                    varnameNr.identifier->scopeId);
             }
             
             builder.emit_free_local(stackBeforeLoop - info.currentFrameOffset);
             info.currentFrameOffset = stackBeforeLoop;
             
-            debugFunction->addVar(varnameIt.name,
-                varinfo_item->versions_dataOffset[info.currentPolyVersion],
-                varinfo_item->versions_typeId[info.currentPolyVersion],
-                info.currentScopeDepth + 1, // +1 because variables exist within stmt->firstBody, not the current scope
-                varnameIt.identifier->scopeId);
-            debugFunction->addVar(varnameNr.name,
-                varinfo_index->versions_dataOffset[info.currentPolyVersion],
-                varinfo_index->versions_typeId[info.currentPolyVersion],
-                info.currentScopeDepth + 1,
-                varnameNr.identifier->scopeId);
-
             // pop loop happens in defer
         } else if(statement->type == ASTStatement::BREAK) {
             GenContext::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);

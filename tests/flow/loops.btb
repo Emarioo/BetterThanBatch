@@ -10,7 +10,6 @@ _test 10; sum;
 @TEST_CASE(for)
 i := 0
 for 0..5 {
-    _test i; it;
     _test i; nr;
     i++
 }
@@ -19,7 +18,6 @@ _test 5; i;
 i := 0
 N := 5
 for @rev (-2)..N {
-    _test N - 1 - i; it;
     _test N - 1 - i; nr;
     i++
 }

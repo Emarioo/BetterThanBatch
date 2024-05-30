@@ -170,13 +170,22 @@ struct X64Program {
     void addInternalFuncRelocation(i32 from_func, u32 text_offset, i32 to_func) {
         internalFuncRelocations.add({from_func, text_offset, to_func});
     }
-
+    
+    DynamicArray<std::string> forced_libraries;
     DynamicArray<std::string> libraries; // path to libraries, unique entries
     
     // gather up libraries from named undefined relocations
     // done after all x64 generation is done
     void compute_libraries();
 
+    void addForcedLibrary(std::string path) {
+        for(auto& s : forced_libraries) {
+            if(s == path) {
+                return;
+            }
+        }
+        forced_libraries.add(path);
+    }
 
     DebugInformation* debugInformation = nullptr;
 

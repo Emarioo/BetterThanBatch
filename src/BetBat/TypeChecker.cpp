@@ -827,11 +827,6 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         if(overload){
             if(overload->astFunc->body && overload->funcImpl->usages == 0){
                 info.compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
-
-                // TypeChecker::CheckImpl checkImpl{};
-                // checkImpl.astFunc = overload->astFunc;
-                // checkImpl.funcImpl = overload->funcImpl;
-                // info.typeChecker->checkImpls.add(checkImpl);
             }
             overload->funcImpl->usages++;
 
@@ -3192,64 +3187,70 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             SignalIO result=SIGNAL_FAILURE;
 
             Assert(now->varnames.size()==2);
-            auto& varnameIt = now->varnames[0];
-            auto& varnameNr = now->varnames[1];
+            // auto& varname0 = now->varnames[0]; // it with sliced, nr with ranged
+            // auto& varname1 = now->varnames[1]; // nr with sliced
 
             ScopeId varScope = now->firstBody->scopeId;
             
+            auto bad_var = [&](VariableInfo* varinfo, const std::string& name) {
+                if(!varinfo) {
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location)
+                        ERR_MSG("Cannot add variable '"<<name<<"' to use in for loop. Is it already defined?")
+                        ERR_LINE2(now->location,"")
+                    )
+                }
+            };
+            
             bool reused_index = false;
             bool reused_item = false;
-            auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier, &reused_index);
-            auto varinfo_item = info.ast->addVariable(varScope, varnameIt.name, CONTENT_ORDER_ZERO, &varnameIt.identifier, &reused_item);
-            if(!varinfo_index || !varinfo_item) {
-                ERR_SECTION(
-                    ERR_HEAD2(now->location)
-                    ERR_MSG("Cannot add variable '"<<varnameNr.name<<"' or '"<<varnameIt.name<<"' to use in for loop. Is it already defined?")
-                    ERR_LINE2(now->location,"")
-                )
-                continue;
-            }
+            // auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier, &reused_index);
+            
+            // bad_var(varinfo_index, varnameNr.name);
+            
             auto iterinfo = info.ast->getTypeInfo(typeArray.last());
             if(iterinfo&&iterinfo->astStruct){
                 if(iterinfo->astStruct->name == "Slice"){
-                    Identifier* nrId = nullptr;
-                    // Where to put nrId identifier in AST?
-                    // if(varinfo_index) {
+                    if(now->varnames[0].name.size() == 0)
+                        now->varnames[0].name = "it";
+                    if(now->varnames[1].name.size() == 0)
+                        now->varnames[1].name = "nr";
+                    auto& varnameIt = now->varnames[0];
+                    auto& varnameNr = now->varnames[1];
+    
+                    auto varinfo_item = info.ast->addVariable(varScope, varnameIt.name, CONTENT_ORDER_ZERO, &varnameIt.identifier, &reused_item);
+                    
+                    bad_var(varinfo_item, varnameIt.name);
+                    
+                    auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier, &reused_index);
+            
+                    bad_var(varinfo_index, varnameNr.name);
+                    
+                    // Identifier* nrId = nullptr;
                     varinfo_index->versions_typeId[info.currentPolyVersion] = AST_INT64;
                     varnameNr.versions_assignType[info.currentPolyVersion] = AST_INT64;
-                    // } else {
-                    //     ERR_SECTION(
-                    //         ERR_HEAD2(now->location)
-                    //         ERR_MSG("Cannot add '"<<varnameNr.name<<"' variable to use in for loop. Is it already defined?")
-                    //         ERR_LINE2(now->location,"")
-                    //     )
-                    // }
-
-                    // _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
-                    // if(varinfo_item){
-                        auto memdata = iterinfo->getMember("ptr");
-                        auto itemtype = memdata.typeId;
-                        itemtype.setPointerLevel(itemtype.getPointerLevel()-1);
-                        varnameIt.versions_assignType[info.currentPolyVersion] = itemtype;
-                        
-                        auto vartype = memdata.typeId;
-                        if(!now->isPointer()){
-                            vartype.setPointerLevel(vartype.getPointerLevel()-1);
-                        }
-                        varinfo_item->versions_typeId[info.currentPolyVersion] = vartype;
-                    // } else {
-                    //     ERR_SECTION(
-                    //         ERR_HEAD2(now->location)
-                    //         ERR_MSG("Cannot add '"<<varnameIt.name<<"' variable to use in for loop. Is it already defined?")
-                    //         ERR_LINE2(now->location,"")
-                    //     )
-                    // }
+                    
+                    auto memdata = iterinfo->getMember("ptr");
+                    auto itemtype = memdata.typeId;
+                    itemtype.setPointerLevel(itemtype.getPointerLevel()-1);
+                    varnameIt.versions_assignType[info.currentPolyVersion] = itemtype;
+                    
+                    auto vartype = memdata.typeId;
+                    if(!now->isPointer()){
+                        vartype.setPointerLevel(vartype.getPointerLevel()-1);
+                    }
+                    varinfo_item->versions_typeId[info.currentPolyVersion] = vartype;
 
                     SignalIO result = CheckRest(info, now->firstBody);
-                    // info.ast->removeIdentifier(varScope, varname.name);
-                    // info.ast->removeIdentifier(varScope, "nr");
                     continue;
                 } else if(iterinfo->astStruct->members.size() == 2) {
+                    if(now->varnames[0].name.size() == 0)
+                        now->varnames[0].name = "nr";
+                    auto& varnameNr = now->varnames[0];
+                    auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier, &reused_index);
+            
+                    bad_var(varinfo_index, varnameNr.name);
+                    
                     auto mem0 = iterinfo->getMember(0);
                     auto mem1 = iterinfo->getMember(1);
                     if(mem0.typeId == mem1.typeId && AST::IsInteger(mem0.typeId)){
@@ -3262,34 +3263,10 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                         }
                         TypeId inttype = mem0.typeId;
                         now->rangedForLoop = true;
-                        // auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, contentOrder, &varnameNr.identifier);
-                        // if(varinfo_index) {
                         varnameNr.versions_assignType[info.currentPolyVersion] = inttype;
                         varinfo_index->versions_typeId[info.currentPolyVersion] = inttype;
-                        // } else {
-                        //     ERR_SECTION(
-                        //         ERR_HEAD2(now->location)
-                        //         ERR_MSG("Cannot add '"<<varnameNr.name<<"' variable to use in for loop. Is it already defined?")
-                        //         ERR_LINE2(now->location,"")
-                        //     )
-                        // }
-
-                        // _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
-                        // auto varinfo_item = info.ast->addVariable(varScope, varnameIt.name, contentOrder, &varnameIt.identifier);
-                        // if(varinfo_item){
-                        varnameIt.versions_assignType[info.currentPolyVersion] = inttype;
-                        varinfo_item->versions_typeId[info.currentPolyVersion] = inttype;
-                        // } else {
-                        //     ERR_SECTION(
-                        //         ERR_HEAD2(now->location)
-                        //         ERR_MSG("Cannot add '"<<varnameIt.name<<"' variable to use in for loop. Is it already defined?")
-                        //         ERR_LINE2(now->location, "")
-                        //     )
-                        // }
 
                         SignalIO result = CheckRest(info, now->firstBody);
-                        // info.ast->removeIdentifier(varScope, varname.name);
-                        // info.ast->removeIdentifier(varScope, "nr");
                         continue;
                     }
                 }

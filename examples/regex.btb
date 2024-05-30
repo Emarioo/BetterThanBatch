@@ -1,7 +1,271 @@
 /*
-    
+    Simple regular expressions
 */
 
+#import "Array"
+#import "Memory"
+#import "String"
+
 fn main() {
+    text := @strbeg aaab @strend
+    pattern := @strbeg a*b @strend
     
+    // log("Find '", pattern, "' in '", text,"'")
+    matches := regex(pattern, text)
+    
+    log("Found ", matches.len, " matches")
+    for m: matches.sliced() {
+        str := substring(text, m.beg, m.end)
+        log(m.beg, " : ", m.end, "  ", str)
+    }
+}
+
+fn logging() {
+    text := @strbeg print(\"int\") @strend
+    pattern := @strbeg int @strend
+    
+    // log("Find '", pattern, "' in '", text,"'")
+    matches := regex(pattern, text)
+    
+    log("Found ", matches.len, " matches")
+    for m: matches.sliced() {
+        str := substring(text, m.beg, m.end)
+        log(" ", text)
+        std_print(" ")
+        for 0..text.len {
+            // log(nr, " ", m.beg)
+            if nr == m.beg
+                std_print('^')
+            else if nr > m.beg && nr < m.end {
+                std_print('~')
+            } else std_print(' ')
+        }
+        std_print("\n")
+        // log(m.beg, " : ", m.end, "  ", str)
+    }
+}
+    
+fn regex(pattern: char[], text: char[]) -> Array<Range> {
+    cmds := parse_pattern(pattern)
+    defer cmds.cleanup()
+    matches: Array<Range>
+    
+    for cmds.sliced() {
+        log(it)
+    }
+    
+    // \b(key|hi\d)\b
+    // BOUNDARY, { OR, [ ID, ( ID, DIGIT ) ] }
+    
+    struct Path {
+        head_start: i32;
+        cmd_head: i32;
+        cmd_count: i32;
+    }
+    paths: Array<Path>
+    paths.add(Path{}) // first path is the that handles the complete unmatched case
+    
+    head := 0
+    while head < text.len {
+        paths.get_unsafe(0).head_start = head
+        chr := text[head]
+        head++
+        
+        if chr == '\r'
+            continue
+
+        len := paths.len // iterate through previous paths.len, we don't check newly added paths
+        log("'",chr, "' ", len)
+        for 0..len {
+            path := paths.get_unsafe(nr)
+            
+            real_cmd := cmds.get(path.cmd_head)
+        
+            log(" p",nr, " ", real_cmd.type)
+        
+            cmd: CMD* = real_cmd
+            
+            if real_cmd.type == ZERO_OR_MORE {
+                cmd = cmds.get(path.cmd_head-1)
+            }
+        
+            matched := true
+            switch cmd.type {
+                case CHAR:
+                    if chr != cmd.chr
+                        matched = false
+                case WHITESPACE:
+                    if !( chr == ' ' || chr == '\t' || chr == '\n' )
+                        matched = false
+                case ANY:
+                    if chr == '\n'
+                        matched = false
+                case:
+                    matched = false
+            }
+            
+            if real_cmd.type == ZERO_OR_MORE {
+                if !matched
+                    head--
+                else if head != text.len 
+                    path.cmd_head--
+                    // path.cmd_head
+                matched = true
+            }
+            
+            if !matched {
+                log(" no match ", nr)
+                if nr != 0 {
+                    paths.remove(nr)
+                    nr--;
+                    len--;
+                } else {
+                    path.cmd_head = 0
+                    path.cmd_count = 0
+                }
+            } else {
+                if path.cmd_head+1 == cmds.len {
+                    log(" match")
+                    matches.add(Range{ path.head_start, head })
+                    
+                    if nr != 0 {
+                        paths.remove(nr)
+                        nr--
+                        len--
+                        
+                        // remove paths covering the same match
+                        // start := path.head_start
+                        // for ind: 0..paths.len {
+                        //     // log(" r ",ind, " ", paths.get_unsafe(ind).head_start, "=",start)
+                        //     if paths.get_unsafe(ind).head_start == start {
+                        //         paths.remove(ind)
+                        //         ind--
+                        //         nr--
+                        //         len--
+                        //     }
+                        // }
+                    }
+                } else if nr == 0 {
+                    log(" new path ", paths.len)
+                    paths.add(*path)
+                    paths.last().head_start = head - 1
+                    paths.last().cmd_head = 1
+                } else {
+                    
+                    path.cmd_head++
+                    // paths.add(*path)
+                    // paths.last().head_start = head - 1
+                }
+            }
+        }
+    }
+
+    // remove overlaps    
+    // for i: 0..matches.len {
+    //     for j: i+1..matches.len {
+    //         a := matches.get_unsafe(i)
+    //         b := matches.get_unsafe(j)
+            
+    //         if a.end > b.beg && a.beg < b.end {
+    //             if a.beg < b.beg {
+    //                 matches.remove(j)
+    //                 j--
+    //             } else {
+    //                 matches.remove(i)
+    //                 i--
+    //                 j--
+    //                 break
+    //             }
+    //         }
+    //     }
+    // }
+    
+    return matches
+}
+
+
+enum CMDType {
+    CHAR,
+    WORD_BOUNDARY,
+    WHITESPACE,
+    DIGIT,
+    ANY,
+    ZERO_OR_MORE,
+    ONE_OR_MORE,
+}
+struct CMD {
+    type: CMDType;
+    chr: char;
+}
+
+fn parse_pattern(pattern: char[]) -> Array<CMD*> {
+    cmds: Array<CMD*>
+    
+    #macro ADD(T) cmd := create_cmd(T) cmds.add(cmd)
+    
+    head := 0
+    while head < pattern.len {
+        chr := pattern[head]
+        next_chr: char = 0
+        if head+1 < pattern.len
+            next_chr = pattern[head+1]
+        head++
+        
+        if chr == '.' {
+            ADD(ANY)
+            continue
+        }
+        if chr == '*' {
+            ADD(ZERO_OR_MORE)
+            continue
+        }
+        if chr == '+' {
+            ADD(ONE_OR_MORE)
+            continue
+        }
+        if chr == '\\' {
+            head++
+            if next_chr == 'w' {
+                ADD(WORD_BOUNDARY)
+            } else if next_chr == 'd' {
+                ADD(DIGIT)
+            } else if next_chr == 's' {
+                ADD(WHITESPACE)
+            } else {
+                // not implemented
+            }
+            continue
+        }
+        
+        // base case
+        cmd := create_cmd(CHAR)
+        cmd.chr = chr
+        cmds.add(cmd)
+    }
+    return cmds
+}
+fn create_cmd(type: CMDType) -> CMD* {
+    ptr: CMD* = Allocate(sizeof CMD)
+    memzero(ptr, sizeof CMD)
+    ptr.type = type
+    return ptr
+}
+
+fn std_print(type: CMDType) {
+    switch type {
+        case CHAR: std_print("CHAR")
+        case WORD_BOUNDARY: std_print("WORD_BOUNDARY")
+        case DIGIT: std_print("DIGIT")
+        case WHITESPACE: std_print("WHITESPACE")
+        case ANY: std_print("ANY")
+        case ZERO_OR_MORE: std_print("ZERO_OR_MORE")
+        case ONE_OR_MORE: std_print("ONE_OR_MORE")
+        case: std_print("?")
+    }
+}
+fn std_print(cmd: CMD*) {
+    std_print(cmd.type)
+    if cmd.chr != 0 {
+        std_print(" '") std_print(cmd.chr) std_print("'")
+    }
 }

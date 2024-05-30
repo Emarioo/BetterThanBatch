@@ -209,9 +209,15 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     
     bool inQuotes = false;
     bool isSingleQuotes = false;
+    bool isRawString = false;
     bool inComment = false;
     bool inEnclosedComment = false;
     int nested_comment_depth = 0;
+    
+    const char* raw_str_beg = "strbeg";
+    int raw_str_beg_len = strlen(raw_str_beg);
+    const char* raw_str_end = "strend";
+    int raw_str_end_len = strlen(raw_str_end);
     
     bool isNumber = false;
     bool isAlpha = false; // alpha and then alphanumeric
@@ -305,7 +311,65 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             }
             continue;
         } else if(inQuotes) {
-            if((!isSingleQuotes && chr == '"') || 
+            if(isRawString) {
+                int head = index - 1;
+                if(chr == ' ' || chr == '\t' || chr == '\n' || chr == '\r') {
+                    while(head < length) {
+                        char chr = text[head];
+                        head++;
+                        if(chr == ' ' || chr == '\t' || chr == '\n' || chr == '\r') { 
+                            continue;
+                        }
+                        head--;
+                        break;
+                    }
+                }
+                
+                if(text[head] == '@') {
+                    head++;
+                    if(length - head >= raw_str_end_len) {
+                        bool is_end = true;
+                        for(int i=0;i<raw_str_end_len;i++) {
+                            if(raw_str_end[i] != text[head + i]) {
+                                is_end = false;
+                                break;
+                            }
+                        }
+                        if(is_end) {
+                            while(index < length) {
+                                char chr = text[index];
+                                index++;
+                                if(chr == ' ' || chr == '\r') {
+                                    index++;
+                                    column++;
+                                    continue;
+                                }
+                                if (chr == '\t') {
+                                    index++;
+                                    column += 4;
+                                    continue;   
+                                }
+                                if (chr == '\n') { 
+                                    index++;
+                                    column = 1;
+                                    line++;
+                                    continue;
+                                }
+                                break;
+                            }
+                            index += raw_str_end_len;
+                            column += raw_str_end_len;
+                            inQuotes=false;
+                            new_tokens->flags |= TOKEN_FLAG_DOUBLE_QUOTED;
+                            INCREMENT_TOKEN();
+                            str_start = 0;
+                            str_end = 0;
+                            continue;
+                        }
+                    }
+                }
+                APPEND_DATA(&chr,1);
+            } else if((!isSingleQuotes && chr == '"') || 
                 (isSingleQuotes && chr == '\'')){
                 // Stop reading string token
                 inQuotes=false;
@@ -414,6 +478,41 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         bool isQuotes = chr == '"' ||chr == '\'';
         bool isComment = chr=='/' && (nextChr == '/' || nextChr=='*');
         bool isDelim = chr==' ' || chr=='\t' || chr=='\n';
+        if(chr == '@') {
+            if(length - index >= raw_str_beg_len) {
+                bool is_beg = true;
+                for(int i=0;i<raw_str_beg_len;i++) {
+                    if(raw_str_beg[i] != text[index + i]) {
+                        is_beg = false;
+                        break;
+                    }
+                }
+                if(is_beg) {
+                    isQuotes = true;
+                    index  += raw_str_beg_len;
+                    column += raw_str_beg_len;
+                    while(true) { // skip whitespace
+                        char chr = text[index];
+                        index ++;
+                        if(chr == ' ' || chr == '\r') {
+                            column++;
+                            continue;
+                        }
+                        if(chr == '\t') {
+                            column+=4;
+                            continue;
+                        }
+                        if(chr == '\n') {
+                            column=1;
+                            line++;
+                            break;
+                        }
+                        index--;
+                        break;
+                    }
+                }
+            }
+        }
         if(!isDelim && !isComment){
             foundNonSpaceOnLine = true;
         }
@@ -639,6 +738,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         } else if(isQuotes){
             inQuotes = true;
             isSingleQuotes = chr == '\'';
+            isRawString = chr == '@';
             // str_start = index-1+1;
             // str_end = index-1+1; // we haven't parsed a character in the quotes yet
             // token.str = (char*)outStream->tokenData.used;
@@ -1687,8 +1787,8 @@ Token Import::geteof(){
 u32 Lexer::getStringFromToken(Token tok, const char** ptr) {
     return getDataFromToken(tok, (const void**)ptr);
 }
-std::string Lexer::getStdStringFromToken(Token tok) {
     const char* ptr;
+std::string Lexer::getStdStringFromToken(Token tok) {
     u32 len = getStringFromToken(tok, &ptr);
     return std::string((const char*)ptr, len);
 }

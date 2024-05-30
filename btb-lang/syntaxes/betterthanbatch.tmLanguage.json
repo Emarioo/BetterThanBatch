@@ -11,6 +11,9 @@
 		{
 			"include": "#strings1"
 		},
+        {
+			"include": "#big_string"
+		},
 		{
 			"include": "#commentline"
 		},
@@ -92,10 +95,16 @@
 			]
 		},
 		"preproc":{
-			"patterns": [{
-				"name":"entity.name.selector",
-				"match":"#\\w+"
-			}]
+			"patterns": [
+                {
+                    "name":"entity.name.function",
+                    "match":"(?<=#macro)\\s*\\w+"
+                },
+                {
+                    "name":"entity.name.selector",
+                    "match":"#\\w+"
+                }
+            ]
 		},
 		"annotation": {
 			"patterns": [
@@ -133,6 +142,17 @@
 				{
 					"name": "string.quoted.single.betterthanbatch",
 					"match": "'((.)|(\\\\.))'"
+				}
+			]
+		},
+        "big_string": {
+			"name": "string.quoted.double",
+			"begin": "@strbeg",
+			"end": "@strend",
+			"patterns": [
+				{
+					"name": "entity.name.tag",
+					"match": "s"
 				}
 			]
 		},

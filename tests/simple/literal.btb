@@ -1,0 +1,17 @@
+@TEST_CASE(big_string)
+
+#import "Logger"
+
+a := @strbeg
+This is a lot of text supposedly
+You can write all the text yo want here
+
+#import "Logger"
+
+actual code with special characters
+
+backslashes \ without having to double it up \\
+\n won't be converted to newline
+@strend
+
+log(a)

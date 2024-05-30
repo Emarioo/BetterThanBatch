@@ -287,6 +287,18 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             continue;
         }
         if(!envs.last().only_pointer) {
+            // Skip arg names in function pointer, they don't serve a purpose but it's
+            // nice to easily take a function with names and turn it into a func pointer.
+            if(envs.size() > 1) {
+                if(envs[envs.size()-2].func_params) {
+                    auto tok2 = getinfo(1);
+                    if (token->type == lexer::TOKEN_IDENTIFIER && tok2->type == ':') {
+                        info.advance(2);
+                        continue;
+                    }
+                }
+            }
+                
             if (token->type == lexer::TOKEN_FUNCTION && envs.last().may_be_name) {
                 info.advance();
                 envs.last().buffer.append("fn");
@@ -319,6 +331,7 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 continue;
             } else if (token->type == lexer::TOKEN_IDENTIFIER && envs.last().may_be_name) {
                 info.advance();
+                
                 envs.last().buffer += view;
                 envs.last().may_be_name = false;
                 continue;
@@ -2804,6 +2817,23 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
             ASTScope* elseBody=nullptr;
             auto tok = info.gettok();
             if(tok.type == lexer::TOKEN_ELSE){
+                if (0 == (tok.flags & lexer::TOKEN_FLAG_NEWLINE) && info.gettok(1).type != lexer::TOKEN_IF && info.gettok(1).type != '{') {
+                    /* We want to catch the mistake below where 'if' is forgotten after else.
+                        if true
+                            ok
+                        else 1 < 5
+                            ok
+                    However, we still want to allow this:
+                        if true
+                            ok
+                        else Assert(false)
+                    */
+                    // ERR_SECTION(
+                    //     ERR_HEAD2(tok)
+                    //     ERR_MSG("Possible mistake! The else has a statement")
+                    //     ERR_LINE2(tok, "did you mean else if?")
+                    // )
+                }
                 info.advance();
                 signal = parseBody(elseBody, info.currentScopeId);
 
@@ -2884,15 +2914,24 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
                 token = info.getinfo(&view);
             }
 
-            std::string varname = view;
-            // NOTE: assuming array iteration
-            // Token varname = info.gettok();
-            auto tok_colon = info.gettok(1);
-            // Token colon = info.get(info.at()+2);
-            if(tok_colon.type == ':' && token->type == lexer::TOKEN_IDENTIFIER){
+            statement = info.ast->createStatement(ASTStatement::FOR);
+            statement->varnames.reserve(2);
+            statement->varnames.add({""}); // default names it and nr are set in typechecker
+            statement->varnames.add({""}); // varname0 isn't necessarily 'it', with a ranged loop, varname0 is nr
+            
+            StringView view_nr{};
+            
+            auto tok1 = info.gettok(1);
+            auto tok2 = info.gettok(&view_nr, 2);
+            auto tok3 = info.gettok(3);
+            
+            if(token->type == lexer::TOKEN_IDENTIFIER && tok1.type == ':'){
                 info.advance(2);
-            } else {
-                varname = "it";
+                statement->varnames[0].name = view;
+            } else if(token->type == lexer::TOKEN_IDENTIFIER && tok1.type == ',' && tok1.type == lexer::TOKEN_IDENTIFIER && tok3.type == ':'){
+                info.advance(4);
+                statement->varnames[0].name = view;
+                statement->varnames[1].name = view_nr;
             }
             
             ASTExpression* expr=0;
@@ -2905,19 +2944,10 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
             info.functionScopes.last().loopScopes.pop();
             SIGNAL_SWITCH_LAZY()
 
-            statement = info.ast->createStatement(ASTStatement::FOR);
-            statement->varnames.add({varname});
-            
-            // TODO: Allow user specified name for nr same as it
-            statement->varnames.add({"nr"});
             statement->setReverse(reverseAnnotation);
             statement->setPointer(pointerAnnot);
             statement->firstExpression = expr;
             statement->firstBody = body;
-            // statement->tokenRange.firstToken = firstToken;
-            
-            // statement->tokenRange.endIndex = info.at()+1;
-            
             return SIGNAL_SUCCESS;
         } else if(token->type == lexer::TOKEN_RETURN){
             info.advance();
@@ -3323,8 +3353,9 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                         } else {
                             ERR_SECTION(
                                 ERR_HEAD2(tok)
-                                ERR_MSG("Unexpected token in annotation for @import. Identifiers and 'lib = \"string\"' is okay.")
+                                ERR_MSG("Unexpected token in annotation for @import. Library name and 'alias = \"string\"' is okay.")
                                 ERR_LINE2(tok,"here")
+                                ERR_EXAMPLE(1,"@import(yourlib, alias = \"_verbose_func\")")
                             )
                             return SIGNAL_COMPLETE_FAILURE;
                         }

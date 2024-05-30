@@ -123,6 +123,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
 
         // Assert(false); // text offset was broken in rewrite 0.2.1, we use text offset + offset of tiny program
         // u32 real_offset = tinyprogram_offsets[sym.tinyprog_index] + sym.textOffset;
+        
+        Assert(sym.tinyprog_index != -1); // may happen if function wasn't generated before we exported it or something?
         u32 real_offset = tinyprogram_offsets[sym.tinyprog_index];
         objectFile.addSymbol(SYM_FUNCTION, sym.name, section_text, real_offset);
     }
@@ -133,7 +135,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         CHECK
 
         if(program->globalSize > 8000'0000) {
-            engone::log::out << engone::log::RED << "THE COMPILER CANNOT HANDLE GLOBAL DATA OF MORE THAN 2 GB (maybe 4 GB, haven't checked thoroughly)\n";
+            engone::log::out << engone::log::RED << "THE COMPILER CANNOT HANDLE GLOBAL DATA OF MORE THAN 2 GB\n";
         }
     }
 

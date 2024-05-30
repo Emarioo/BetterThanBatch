@@ -388,7 +388,7 @@ struct Bytecode {
 
     DebugInformation* debugInformation = nullptr;
 
-    DynamicArray<std::string> linkDirectives;
+    // DynamicArray<std::string> linkDirectives;
 
     // Assembly or bytecode dump after the compilation is done.
     struct Dump {

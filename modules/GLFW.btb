@@ -2,26 +2,45 @@
     GLFW Wrapper
     (incomplete)
 */
-fn @import glfwInit() -> i32;
-fn @import glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
-fn @import glfwDestroyWindow(window: void*)
 
-fn @import glfwTerminate();
-fn @import glfwMakeContextCurrent(window: void*);
-fn @import glfwWindowShouldClose(window: void*) -> i32;
-fn @import glfwSwapBuffers(window: void*);
-fn @import glfwPollEvents();
-fn @import glfwWindowHint(target: i32, hint: i32);
-fn @import glfwGetWindowSize(window: void*, width: i32*, height: i32*);
-fn @import glfwSwapInterval(interval: i32);
-fn @import glfwGetCursorPos(window: void*, xpos: f64*, ypos: f64*);
+#load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib" as GLFW
+#load "user32.lib" // glfw3 requires these libraries
+#load "gdi32.lib"
 
-fn @import glfwSetKeyCallback(window: void*, callback: fn_ref);
-fn @import glfwSetMouseButtonCallback(window: void*, callback: fn_ref);
-fn @import glfwSetCursorPosCallback(window: void*, callback: fn_ref);
-fn @import glfwSetScrollCallback(window: void*, callback: fn_ref);
+#macro GLFW_API @import(GLFW)
 
-fn @import glfwGetProcAddress(procname: char*) -> fn_ref;
+fn GLFW_API glfwInit() -> i32;
+fn GLFW_API glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
+fn GLFW_API glfwDestroyWindow(window: void*)
+
+fn GLFW_API glfwTerminate();
+fn GLFW_API glfwMakeContextCurrent(window: void*);
+fn GLFW_API glfwWindowShouldClose(window: void*) -> i32;
+fn GLFW_API glfwSwapBuffers(window: void*);
+fn GLFW_API glfwPollEvents();
+fn GLFW_API glfwWindowHint(target: i32, hint: i32);
+fn GLFW_API glfwGetWindowSize(window: void*, width: i32*, height: i32*);
+fn GLFW_API glfwSwapInterval(interval: i32);
+fn GLFW_API glfwGetCursorPos(window: void*, xpos: f64*, ypos: f64*);
+
+
+#macro GLFWkeyfun fn @stdcall(window: void*, key: i32, scancode: i32, action: i32, mods: i32)
+#macro GLFWmousebuttonfun fn @stdcall(window: void*, button: i32, action: i32, mods: i32)
+#macro GLFWcursorposfun fn @stdcall(window: void*, xpos: f64, ypos: f64)
+#macro GLFWscrollfun fn @stdcall(window: void*, xoffset: f64, yoffset: f64)
+
+// #macro GLFWkeyfun fn @stdcall(void*, i32, i32, i32, i32)
+// #macro GLFWmousebuttonfun fn @stdcall(void*, i32, i32, i32)
+// #macro GLFWcursorposfun fn @stdcall(void*, f64, f64)
+// #macro GLFWscrollfun fn @stdcall(void*, f64, f64)
+
+
+fn GLFW_API glfwSetKeyCallback(window: void*, callback: GLFWkeyfun);
+fn GLFW_API glfwSetMouseButtonCallback(window: void*, callback: GLFWmousebuttonfun);
+fn GLFW_API glfwSetCursorPosCallback(window: void*, callback: GLFWcursorposfun);
+fn GLFW_API glfwSetScrollCallback(window: void*, callback: GLFWscrollfun);
+
+fn GLFW_API glfwGetProcAddress(procname: char*) -> fn();
 
 /*
     COPY PASTED TEXT FROM glfw3.h

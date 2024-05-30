@@ -20,7 +20,7 @@ log(final)
 fn @stdcall compute(num: u32*) -> u32 {
     retries := 0
     for 0..100_000 {
-        #ifdef THREAD_SAFE
+        #if THREAD_SAFE
         lastNum := *num;
         if !atomic_compare_swap(cast<void*>num, lastNum, lastNum + 1) {
             it--
@@ -30,7 +30,7 @@ fn @stdcall compute(num: u32*) -> u32 {
         (*num)++;
         #endif
     }
-    #ifdef THREAD_SAFE
+    #if THREAD_SAFE
     log("Retries:", retries);
     #endif
     return 0;
