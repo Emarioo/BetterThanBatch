@@ -3194,8 +3194,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 bool is_arithmetic = operationType == AST_ADD || operationType == AST_SUB || operationType == AST_MUL || operationType == AST_DIV || operationType == AST_MODULO;
                 bool is_comparison = operationType == AST_LESS || operationType == AST_LESS_EQUAL || operationType == AST_GREATER || operationType == AST_GREATER_EQUAL;
                 bool is_equality = operationType == AST_EQUAL || operationType == AST_NOT_EQUAL;
-                bool is_signed = AST::IsSigned(ltype) || AST::IsSigned(rtype);
                 bool is_float = AST::IsDecimal(ltype) || AST::IsDecimal(rtype);
+                bool is_signed = !is_float && (AST::IsSigned(ltype) || AST::IsSigned(rtype));
                 
                 BCRegister left_reg = BC_REG_C; // also out register
                 BCRegister right_reg = BC_REG_D;

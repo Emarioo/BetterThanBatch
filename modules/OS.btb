@@ -39,10 +39,32 @@
 #macro Assert(expression) #endmacro
 
 
-// fn LINK_TYPE StartMeasure() -> u64;
-// fn LINK_TYPE StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
-// fn LINK_TYPE DiffMeasure(endSubStart: u64) -> f32; // TODO: Use f64 (double) when implemented
-// fn LINK_TYPE NativeSleep(seconds: f32);
+fn StartMeasure() -> i64 {
+    #if OS_WINDOWS
+        tp: i64
+        QueryPerformanceCounter(&tp)
+        return tp
+    #else
+    
+    #endif   
+}
+fn StopMeasure(timePoint: i64) -> f64 {
+    #if OS_WINDOWS
+        tp, freq: i64
+        QueryPerformanceCounter(&tp)
+        QueryPerformanceFrequency(&freq)
+        return cast<f64> (tp - casttimePoint) / cast<f64> freq
+    #elif OS_LINUX
+    #endif
+}
+fn DiffMeasure(endSubStart: i64) -> f64 {
+    #if OS_WINDOWS
+        freq: i64
+        QueryPerformanceFrequency(&freq)
+        return cast<f64>endSubStart / cast<f64>freq
+    #elif OS_LINUX
+    #endif
+}
 
 fn ProcessSleep(seconds: f32) {
     #if OS_WINDOWS
@@ -51,6 +73,7 @@ fn ProcessSleep(seconds: f32) {
     todo
     #endif   
 }
+
 
 // fn LINK_TYPE GetClockSpeed() -> u64;
 

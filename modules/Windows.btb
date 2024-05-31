@@ -121,6 +121,13 @@ fn @import(Kernel,alias="Sleep") win32_Sleep(
   dwMilliseconds: u32
 );
 
+fn @import(Kernel) QueryPerformanceCounter(
+  lpPerformanceCount: i64*
+) -> bool;
+fn @import(Kernel) QueryPerformanceFrequency(
+  lpFrequency: i64*
+) -> bool;
+
 struct FILETIME {
     dwLowDateTime:  u32;
     dwHighDateTime: u32;

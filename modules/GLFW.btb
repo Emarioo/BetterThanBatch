@@ -40,17 +40,13 @@ fn GLFW_API glfwGetCursorPos(window: void*, xpos: f64*, ypos: f64*);
 #macro GLFWmousebuttonfun fn @stdcall(window: void*, button: i32, action: i32, mods: i32)
 #macro GLFWcursorposfun fn @stdcall(window: void*, xpos: f64, ypos: f64)
 #macro GLFWscrollfun fn @stdcall(window: void*, xoffset: f64, yoffset: f64)
+#macro GLFWwindowsizefun fn @stdcall(window: void*, width: i32, height: i32)
 
-// #macro GLFWkeyfun fn @stdcall(void*, i32, i32, i32, i32)
-// #macro GLFWmousebuttonfun fn @stdcall(void*, i32, i32, i32)
-// #macro GLFWcursorposfun fn @stdcall(void*, f64, f64)
-// #macro GLFWscrollfun fn @stdcall(void*, f64, f64)
-
-
-fn GLFW_API glfwSetKeyCallback(window: void*, callback: GLFWkeyfun);
-fn GLFW_API glfwSetMouseButtonCallback(window: void*, callback: GLFWmousebuttonfun);
-fn GLFW_API glfwSetCursorPosCallback(window: void*, callback: GLFWcursorposfun);
-fn GLFW_API glfwSetScrollCallback(window: void*, callback: GLFWscrollfun);
+fn GLFW_API glfwSetKeyCallback(window: void*, callback: GLFWkeyfun) -> GLFWkeyfun;
+fn GLFW_API glfwSetMouseButtonCallback(window: void*, callback: GLFWmousebuttonfun) -> GLFWmousebuttonfun;
+fn GLFW_API glfwSetCursorPosCallback(window: void*, callback: GLFWcursorposfun) -> GLFWcursorposfun;
+fn GLFW_API glfwSetScrollCallback(window: void*, callback: GLFWscrollfun) -> GLFWscrollfun;
+fn GLFW_API glfwSetWindowSizeCallback(window: void*, callback: GLFWwindowsizefun) -> GLFWwindowsizefun;
 
 fn GLFW_API glfwGetProcAddress(procname: char*) -> fn();
 

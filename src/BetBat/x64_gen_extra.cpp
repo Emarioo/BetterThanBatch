@@ -157,7 +157,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     int original_recipient_regnr = 0;
 
     #define PRINT_BYTECODE(MSG) \
-        tinycode->print(n->bc_index - 30, n->bc_index+8, bytecode); \
+        tinycode->print(n->bc_index, n->bc_index+8, bytecode); \
         log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR<< MSG; \
         log::out.flush();
 
@@ -1746,17 +1746,18 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                             u16 setType = 0;
                             switch(opcode) {
+                                // COMISS sets the ZF,PF,CF flags so we should use B, BE, A, AE
                                 case BC_LT: {
-                                    setType = is_signed ? OPCODE_2_SETL_RM8 : OPCODE_2_SETB_RM8;
+                                    setType = OPCODE_2_SETB_RM8;
                                 } break;
                                 case BC_LTE: {
-                                    setType = is_signed ? OPCODE_2_SETLE_RM8 : OPCODE_2_SETBE_RM8;
+                                    setType = OPCODE_2_SETBE_RM8;
                                 } break;
                                 case BC_GT: {
-                                    setType = is_signed ? OPCODE_2_SETG_RM8 : OPCODE_2_SETA_RM8;
+                                    setType = OPCODE_2_SETA_RM8;
                                 } break;
                                 case BC_GTE: {
-                                    setType = is_signed ? OPCODE_2_SETGE_RM8 : OPCODE_2_SETAE_RM8;
+                                    setType = OPCODE_2_SETAE_RM8;
                                 } break;
                                 case BC_EQ: {
                                     setType = OPCODE_2_SETE_RM8;

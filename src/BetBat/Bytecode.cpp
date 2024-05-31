@@ -962,6 +962,7 @@ const char* instruction_names[] {
     "ptr_to_params",
     "jmp", // BC_JMP
     "call", // BC_CALL
+    "call_reg", // BC_CALL
     "ret", // BC_RET
     "jnz", // BC_JNZ
     "jz", // BC_JZ

@@ -5,18 +5,33 @@
 
 
 #import "Graphics"
+// #import "Math"
+#import "Logger"
+
+
+fn @intrinsic sqrt(v: f32) -> f32;
 
 fn main() -> i32 {
     window := CreateWindow(800,600)
     blob := CreateTexture("examples/graphics/blob.png")
 
+    y: f32 = 0
+    x: f32 = 0
+    
+    speed := 120.
+
     t := 0
     while window.running {
         t++
-        
         FillColor(window, Color{0.2,0.2,0.2})
         
+        // window.enableUISpace(true)
+        
         text := "This is blob"
+        dist := sqrt(x*x + y*y)
+        if dist > 130
+            text = "Blob went away"
+        
         text_h := 40
         blob_size := 140
         
@@ -25,7 +40,40 @@ fn main() -> i32 {
         
         DrawText(window, window.width/2 - text_w/2, window.height/2 - blob_size, text_h, text)
         
-        DrawTexture(window, window.width/2-blob_size/2, window.height/2-blob_size/2, blob_size, blob_size, blob)
+        real_speed := speed
+        if window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+            real_speed *= 2
+        
+        if window.isKeyDown(GLFW_KEY_W) {
+            y -= real_speed * window.delta
+        }
+        if window.isKeyDown(GLFW_KEY_S) {
+            y += real_speed * window.delta
+        }
+        if window.isKeyDown(GLFW_KEY_A) {
+            x -= real_speed * window.delta
+        }
+        if window.isKeyDown(GLFW_KEY_D) {
+            x += real_speed * window.delta
+        }
+        scroll := window.getScrollY()
+        if scroll > 0 {
+            window.camera_zoom *= 1.04;
+        } else if scroll < 0 {
+            window.camera_zoom *= 0.96;
+        }
+        
+        fps: StringBuilder
+        fps.append(cast<i32>(window.delta*1000))
+        fps.append(".")
+        fps.append((cast<i32>(window.delta*10000)) % 10)
+        fps.append(" ms")
+        
+        DrawText(window, 0, 0, 20, fps.sliced())
+        
+        window.enableUISpace(false)
+        
+        DrawTexture(window, x + window.width/2-blob_size/2, y + window.height/2-blob_size/2, blob_size, blob_size, blob)
         
         // FillRect(window, t, 10, 100., 100., Color{0.5,1,1})
         // FillRect(window, 0.1, 0.1, 0.2, 0.2, Color{1,1,1})

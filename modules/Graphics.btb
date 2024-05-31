@@ -26,11 +26,15 @@ struct WindowContext {
     width: i32; // read only
     height: i32;
     running: bool = true;
+    delta: f32;
+    prev_timestamp: u64;
+    
+    camera_zoom: f32 = 1.0; // modifiable
+    camera_x: f32 = 1.0; // modifiable
+    camera_y: f32 = 1.0; // modifiable
     
     base_shader: u32;
-    
     font: Font*;
-    
     fn defaultFont() -> Font* {
         return font
     }
@@ -38,7 +42,173 @@ struct WindowContext {
     vbo: u32;
     vao: u32;
     ibo: u32;
+    
+    enable_ui_space: bool = true;
+    fn enableUISpace(yes: bool) {
+        enable_ui_space = yes
+    }
+    
+    // ## user input events ##
+    
+    fn getMouseX() -> f32 { return m_mouseX; }
+    fn getMouseY() -> f32 { return m_mouseY; }
+    // raw input from first person
+    // float getRawMouseX() const;
+    // float getRawMouseY() const;
+    fn setMouseX(x: f32) { m_mouseX=x; }
+    fn setMouseY(y: f32) { m_mouseY=y; }
+    fn getScrollX() -> f32 {
+        return m_tickScrollX;
+	}
+    fn getScrollY() -> f32 {
+        return m_tickScrollY;
+    }
+    fn setScrollX(x: f32) { m_frameScrollX += x; m_tickScrollX += x;}
+    fn setScrollY(y: f32) { m_frameScrollY += y; m_tickScrollY += y; }
+
+    fn setInput(code: i32, down: bool) {
+        index: i32 = -1;
+		for @ptr inp: m_inputs.sliced() {
+			if (inp.code == code) {
+				index = nr;
+				break;
+			}
+		}
+        input: KeyInput*;
+		if index==-1 {
+			index = m_inputs.size();
+			m_inputs.add(KeyInput{});
+            input = m_inputs.get_unsafe(index)
+            input.code = code;
+		} else {
+            input = m_inputs.get_unsafe(index)
+        }
+		if (down) {
+			if (!input.down) {
+				// printf("PRESSED %c (%d)\n",(char)code,code);
+				// log::out << "PRESSED "<<(char)code << " ("<<code << ")\n";
+				input.down = true;
+				input.tickPressed++;
+				input.framePressed++;
+			}
+		}else{
+			// log::out << "RELEASED "<<(char)code << " ("<<code << ")\n";
+			// printf("RELEASED %c (%d)\n",(char)code,code);
+			input.down = false;
+			input.tickReleased++;
+			input.frameReleased++;
+		}
+    }
+
+    // std::string pollPathDrop();
+    // u32 pollChar();
+    // void resetPollChar();
+
+    fn isKeyDown(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code)
+				return inp.down;
+		}
+		return false;
+    }
+    fn isKeyPressed(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code) {
+				// log::out << "IS "<<(char)code<<"\n";
+				// if (m_parent->isRenderingWindow()) {
+				// 	if (m_inputs[i].framePressed > 0) {
+				// 		return true;
+				// 	}
+				// } else {
+					if (inp.tickPressed > 0) {
+						// log::out << " Done\n";
+						return true;
+					}
+				// }
+				return false;
+			}
+		}
+		return false;
+    }
+    fn isKeyReleased(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code) {
+				// if (m_parent->isRenderingWindow()) {
+				// 	if (m_inputs[i].frameReleased > 0) {
+				// 		return true;
+				// 	}
+				// }
+				// else {
+					if (inp.tickReleased > 0) {
+						return true;
+					}
+				// }
+				return false;
+			}
+		}
+		return false;
+    }
+    
+    // void enableFirstPerson(bool yes);
+    // bool isFirstPerson() const { return m_enabledFirstPerson; }
+    
+    // std::string pollClipboard();
+    // void setClipboard(const std::string& str);
+
+    // // If true, the cursor will be made visible.
+    // void setCursorVisible(bool visible);
+    // // Whether the cursor is locked to the window.
+    // bool isCursorLocked() const { return m_cursorLocked;}
+    // // If true, the cursor will be made invisible and locked to the window. Use this when you want the player to lock around.
+    // void lockCursor(bool locked);
+
+    fn resetEvents(resetFrameInput: bool) {
+        resetFrameInput = false;
+        if (resetFrameInput) {
+            m_frameScrollX = 0;
+            m_frameScrollY = 0;
+            // m_frameRawMouseX = 0;
+            // m_frameRawMouseY = 0;
+            for @ptr inp: m_inputs.sliced_unsafe() {
+                inp.framePressed = 0;
+                inp.frameReleased = 0;
+            }
+        } else {
+            m_tickScrollX = 0;
+            m_tickScrollY = 0;
+            // m_tickRawMouseX = 0;
+            // m_tickRawMouseY = 0;
+            for @ptr inp: m_inputs.sliced_unsafe() {
+                if(inp.tickPressed!=0){
+                    code := inp.code;
+                    // log::out << "RESET "<<(char)code << " ("<<code << ")\n";
+                    // printf("RESET %c (%d)\n",(char)code,code);
+                }
+                inp.tickPressed = 0;
+                inp.tickReleased = 0;
+            }
+        }
+    }
+    
+    m_inputs: Array<KeyInput>;
+    m_mouseX: f32 = 0;
+    m_mouseY:  f32 = 0;
+    m_lastMouseX: f32 = -1;
+    m_lastMouseY: f32 = -1;
+    // float m_tickRawMouseX = 0, m_tickRawMouseY = 0, m_frameRawMouseX = 0, m_frameRawMouseY = 0;
+    m_tickScrollX: f32 =0;
+    m_tickScrollY: f32 = 0;
+    m_frameScrollX: f32 = 0;
+    m_frameScrollY: f32 = 0;
 }
+struct KeyInput { // also mouse
+    code: i32 = 0;
+    down: bool = false;
+    tickPressed: u8 = 0;
+    framePressed: u8 = 0;
+    tickReleased: u8 = 0;
+    frameReleased: u8 = 0;
+};
 struct Texture {
     id: u32;
     width: i32;
@@ -97,6 +267,8 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
 
     glfwMakeContextCurrent(glfw_window)
 
+   
+
     yes = gladLoadGL()
     // yes = gladLoadGLLoader(glfwGetProcAddress)
     if !yes {
@@ -117,6 +289,21 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
     window.glfw_window = glfw_window
     window.width = width
     window.height = height
+    
+    MapWindowContext(window)
+    
+    glfwSetKeyCallback(glfw_window, KeyCallback);
+    glfwSetMouseButtonCallback(glfw_window, MouseCallback);
+    glfwSetCursorPosCallback(glfw_window, CursorPosCallback);
+    glfwSetScrollCallback(glfw_window, ScrollCallback);
+    
+    glfwSetWindowSizeCallback(glfw_window, ResizeCallback);
+    // glfwSetWindowFocusCallback(window, FocusCallback);
+    // glfwSetWindowCloseCallback(window, CloseCallback);
+    // glfwSetWindowPosCallback(window, PosCallback);
+    // glfwSetCharCallback(window, CharCallback);
+    // glfwSetDropCallback(window, DropCallback);
+
     
     vshader := @strbeg
         #version 330 core
@@ -223,6 +410,17 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
 }
 // refresh screen buffer, poll events
 fn RefreshWindow(window: WindowContext*) {
+    
+    // prev_timestamp 
+    timestamp := StartMeasure()
+    if window.prev_timestamp != 0
+        window.delta = DiffMeasure(timestamp - window.prev_timestamp)
+    else
+        window.delta = 1./60.
+    window.prev_timestamp = timestamp
+    
+    window.resetEvents(false)
+    
     glfwSwapBuffers(window.glfw_window);
     glfwPollEvents();
 
@@ -231,6 +429,8 @@ fn RefreshWindow(window: WindowContext*) {
     // temporary
     ProcessSleep(0.001) // don't use up CPU resources
     // ProcessSleep(0.5) // don't use up CPU resources
+    
+    glViewport(0, 0, window.width, window.height)
     
     // user may not always want this
     // glClearColor(0.2, 0.2, 0.2, 1);
@@ -268,12 +468,25 @@ fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color
     
     glUniform2f(loc,window.width,window.height);
     
+    bx := x              
+    by := y              
+    ox := 0.
+    oy := 0.
+    zoom := 1.
+    if !window.enable_ui_space {
+        zoom = window.camera_zoom
+        bx -= window.width/2
+        by -= window.height/2
+        ox += window.camera_x + window.width/2
+        oy += window.camera_y + window.height/2
+    }
+    
     vertices: f32[] {
         // x ,y, uv.x, uv.y, color.rgba, texture
-        x, y, 0, 0, color.r, color.b, color.g, color.a, -1,
-        x, y + h, 0, 1, color.r, color.b, color.g, color.a, -1,
-        x + w, y + h, 1, 1, color.r, color.b, color.g, color.a, -1,
-        x + w , y, 1, 0, color.r, color.b, color.g, color.a, -1,
+        (bx) *      zoom + ox, (by) *       zoom + oy, 0, 0, color.r, color.b, color.g, color.a, -1,
+        (bx) *      zoom + ox, (by + h) *   zoom + oy, 0, 1, color.r, color.b, color.g, color.a, -1,
+        (bx + w) *  zoom + ox, (by + h) *   zoom + oy, 1, 1, color.r, color.b, color.g, color.a, -1,
+        (bx + w) *  zoom + ox, (by) *       zoom + oy, 1, 0, color.r, color.b, color.g, color.a, -1,
     }
     glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
@@ -307,13 +520,26 @@ fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: 
     glUniform2f(loc,window.width,window.height);
     
     color := Color{1,1,1}
+     
+    bx := x              
+    by := y              
+    ox := 0.
+    oy := 0.
+    zoom := 1.
+    if !window.enable_ui_space {
+        zoom = window.camera_zoom
+        bx -= window.width/2
+        by -= window.height/2
+        ox += window.camera_x + window.width/2
+        oy += window.camera_y + window.height/2
+    }
     
     vertices: f32[] {
         // x ,y, uv.x, uv.y, color.rgba, texture
-        x, y, 0, 0, color.r, color.b, color.g, color.a, texture.id,
-        x, y + h, 0, 1, color.r, color.b, color.g, color.a, texture.id,
-        x + w, y + h, 1, 1, color.r, color.b, color.g, color.a, texture.id,
-        x + w , y, 1, 0, color.r, color.b, color.g, color.a, texture.id,
+        (bx) *     zoom + ox, (by) *     zoom + oy, 0, 0, color.r, color.b, color.g, color.a, texture.id,
+        (bx) *     zoom + ox, (by + h) * zoom + oy, 0, 1, color.r, color.b, color.g, color.a, texture.id,
+        (bx + w) * zoom + ox, (by + h) * zoom + oy, 1, 1, color.r, color.b, color.g, color.a, texture.id,
+        (bx + w) * zoom + ox, (by) *     zoom + oy, 1, 0, color.r, color.b, color.g, color.a, texture.id,
     }
     glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
@@ -349,6 +575,19 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
     
     color := Color{1,1,1}
     
+    bx := x              
+    by := y              
+    ox := 0.
+    oy := 0.
+    zoom := 1.
+    if !window.enable_ui_space {
+        zoom = window.camera_zoom
+        bx -= window.width/2
+        by -= window.height/2
+        ox += window.camera_x + window.width/2
+        oy += window.camera_y + window.height/2
+    }
+    
     // TODO: Batch draw calls
     for text {
         // log(it)
@@ -362,10 +601,10 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
         
         vertices: f32[] {
             // x ,y, uv.x, uv.y, color.rgba, texture
-            x + off,     y,     u,  v, color.r, color.b, color.g, color.a,  font.id,
-            x + off,     y + h, u,  vh, color.r, color.b, color.g, color.a, font.id,
-            x + off + w, y + h, uw, vh, color.r, color.b, color.g, color.a, font.id,
-            x + off + w, y,     uw, v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off) *     zoom + ox, (by) *     zoom + oy,     u,  v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off) *     zoom + ox, (by + h) * zoom + oy, u,  vh, color.r, color.b, color.g, color.a, font.id,
+            (bx + off + w) * zoom + ox, (by + h) * zoom + oy, uw, vh, color.r, color.b, color.g, color.a, font.id,
+            (bx + off + w) * zoom + ox, (by) *     zoom + oy,     uw, v, color.r, color.b, color.g, color.a,  font.id,
         }
         glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
@@ -376,7 +615,73 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
     }
 }
 
+/* ################
+    USER INPUT
+################# */
 
+
+/*###########################
+    INTERNAL (user input)
+###########################*/
+
+#macro GLFW_CALLBACK_API @stdcall
+
+global global_window_context: WindowContext*;
+fn MapWindowContext(window: WindowContext*) {
+    Assert(!global_window_context)
+    // TODO: Do an actual mapping
+    global_window_context = window;
+} 
+fn GetWindowContextByGLFWWindow(glfw_window: void*) -> WindowContext* {
+    // TODO: Do an actual mapping
+    return global_window_context;
+}
+// #macro LOG_GLFW_CALLBACK(...) log(...)
+#macro LOG_GLFW_CALLBACK(...) #endmacro
+
+fn GLFW_CALLBACK_API KeyCallback(window: void*, key: i32, scancode: i32, action: i32, mods: i32) {
+    context := GetWindowContextByGLFWWindow(window);
+    Assert(context)
+
+    context.setInput(key, action != 0); // if not 0 means if pressed or repeating
+    LOG_GLFW_CALLBACK("key ",cast<char>key, " ", scancode, " ", action)
+
+    // if (action != 0 && (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE || key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT)) {
+    //     CharCallback(window, key);
+    // }
+}
+fn GLFW_CALLBACK_API MouseCallback(window: void*, button: i32, action: i32, mods: i32) {
+    context := GetWindowContextByGLFWWindow(window);
+    Assert(context)
+    
+    context.setInput(button, action != 0);
+    LOG_GLFW_CALLBACK("click ", button, " ", action)
+}
+fn GLFW_CALLBACK_API CursorPosCallback(window: void*, mx: f64, my: f64) {
+    context := GetWindowContextByGLFWWindow(window);
+    Assert(context)
+    context.setMouseX(cast<f32>mx);
+    context.setMouseY(cast<f32>my);
+    LOG_GLFW_CALLBACK("cursor ", mx," ", my)
+}
+fn GLFW_CALLBACK_API ScrollCallback(window: void*, xoffset: f64, yoffset: f64) {
+    context := GetWindowContextByGLFWWindow(window);
+    Assert(context)
+    
+    context.setScrollX(cast<f32>xoffset);
+    context.setScrollY(cast<f32>yoffset);
+
+    LOG_GLFW_CALLBACK("scroll ",xoffset, " ", yoffset)
+}
+fn GLFW_CALLBACK_API ResizeCallback(window: void*, width: i32, height: i32) {
+    context := GetWindowContextByGLFWWindow(window);
+    Assert(context)
+    
+    context.width = width
+    context.height = height
+
+    LOG_GLFW_CALLBACK("resize ",width, " ", height)
+}
 /*##############################
     SOME USEFUL FUNCTIONS
 ############################*/
@@ -426,7 +731,6 @@ fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
 
     return window;
 }
-
 // returns program id which can be passes to glUseProgram
 fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
     vertexShader := glCreateShader(GL_VERTEX_SHADER);
@@ -481,7 +785,6 @@ fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
 
     return shaderProgram;
 }
-
 fn CreateTexture(path: char[]) -> Texture* {
     texture: Texture* = Allocate(sizeof Texture);
     *texture = Texture{}

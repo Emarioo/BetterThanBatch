@@ -30,6 +30,9 @@ _test 0; 1.0000009 == -1.0;
 _test 1; 3.2 != 4.02;
 _test 0; 3.2 != 3.2;
 
+
+_test 1; 5. < 6; // conversion problems
+
 // TODO: Binary operations! with various sizes of integers, signed, unsigned, char...
 
 fn @intrinsic round(v: f32) -> f32;

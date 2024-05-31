@@ -72,7 +72,7 @@ struct RandomGenerator {
         return (word >> 43u) ^ word;
     }
 }
-fn create_random_generator(seed: u64 = StartMeasure()) -> RandomGenerator {
+fn create_random_generator(seed: u64 = rdtsc()) -> RandomGenerator {
     return RandomGenerator{seed = seed, _state32 = seed, _state64 = seed};
 }
 
