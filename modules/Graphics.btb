@@ -204,10 +204,10 @@ struct WindowContext {
 struct KeyInput { // also mouse
     code: i32 = 0;
     down: bool = false;
-    tickPressed: u8 = 0;
-    framePressed: u8 = 0;
-    tickReleased: u8 = 0;
-    frameReleased: u8 = 0;
+    tickPressed: i8 = 0;
+    framePressed: i8 = 0;
+    tickReleased: i8 = 0;
+    frameReleased: i8 = 0;
 };
 struct Texture {
     id: u32;
@@ -453,7 +453,20 @@ fn FillColor(window: WindowContext*, color: Color) {
     glClearColor(color.r, color.g, color.b, color.a);
     glClear(GL_COLOR_BUFFER_BIT);
 }
-
+#macro CAM_VALUES
+    bx := x              
+    by := y              
+    ox := 0.
+    oy := 0.
+    zoom := 1.
+    if !window.enable_ui_space {
+        zoom = window.camera_zoom
+        bx -= window.width/2
+        by -= window.height/2
+        ox += -window.camera_x + window.width/2
+        oy += -window.camera_y + window.height/2
+    }
+#endmacro
 fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color) {
     // @dumpbc
     glUseProgram(window.base_shader);
@@ -468,18 +481,7 @@ fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color
     
     glUniform2f(loc,window.width,window.height);
     
-    bx := x              
-    by := y              
-    ox := 0.
-    oy := 0.
-    zoom := 1.
-    if !window.enable_ui_space {
-        zoom = window.camera_zoom
-        bx -= window.width/2
-        by -= window.height/2
-        ox += window.camera_x + window.width/2
-        oy += window.camera_y + window.height/2
-    }
+    CAM_VALUES
     
     vertices: f32[] {
         // x ,y, uv.x, uv.y, color.rgba, texture
@@ -521,18 +523,7 @@ fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: 
     
     color := Color{1,1,1}
      
-    bx := x              
-    by := y              
-    ox := 0.
-    oy := 0.
-    zoom := 1.
-    if !window.enable_ui_space {
-        zoom = window.camera_zoom
-        bx -= window.width/2
-        by -= window.height/2
-        ox += window.camera_x + window.width/2
-        oy += window.camera_y + window.height/2
-    }
+    CAM_VALUES
     
     vertices: f32[] {
         // x ,y, uv.x, uv.y, color.rgba, texture
@@ -575,18 +566,7 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
     
     color := Color{1,1,1}
     
-    bx := x              
-    by := y              
-    ox := 0.
-    oy := 0.
-    zoom := 1.
-    if !window.enable_ui_space {
-        zoom = window.camera_zoom
-        bx -= window.width/2
-        by -= window.height/2
-        ox += window.camera_x + window.width/2
-        oy += window.camera_y + window.height/2
-    }
+    CAM_VALUES
     
     // TODO: Batch draw calls
     for text {
@@ -644,7 +624,7 @@ fn GLFW_CALLBACK_API KeyCallback(window: void*, key: i32, scancode: i32, action:
     Assert(context)
 
     context.setInput(key, action != 0); // if not 0 means if pressed or repeating
-    LOG_GLFW_CALLBACK("key ",cast<char>key, " ", scancode, " ", action)
+    LOG_GLFW_CALLBACK("key ",cast<char>key, ",", key, " ", scancode, " ", mods, " ",action)
 
     // if (action != 0 && (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE || key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT)) {
     //     CharCallback(window, key);

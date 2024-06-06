@@ -333,92 +333,93 @@ fn sub(a: f16, b: f16) -> f16 {
 operator +(a: f16, b: f16) -> f16 { return add(a, b) }
 operator -(a: f16, b: f16) -> f16 { return sub(a, b) }
 
-fn std_print(f: f16) {
-    bits: u32 = cast_unsafe<u16>f;
+// function overloading is broken?
+// fn std_print(f: f16) {
+//     bits: u32 = cast_unsafe<u16>f;
     
-    sign := (bits >> 15u) & 1u;
-    exp := (bits >> 10u) & 0x1Fu;
-    mantissa: u64 = 0x400u | (bits & 0x3FFu)
+//     sign := (bits >> 15u) & 1u;
+//     exp := (bits >> 10u) & 0x1Fu;
+//     mantissa: u64 = 0x400u | (bits & 0x3FFu)
 
-    if sign
-        std_print('-');
+//     if sign
+//         std_print('-');
         
-    intPart: u64 = 0;
-    decimalBits: i32 = 10 - (exp-15);
+//     intPart: u64 = 0;
+//     decimalBits: i32 = 10 - (exp-15);
 
-    if decimalBits < 1 {
-        intPart = (mantissa) << (0-decimalBits);
-        if intPart == 0 {
-            printc('0')
-        } else {
-            str: char[23];
-            used := 22;
-            while intPart > 0u && used > 0 {
-                digit: u8 = intPart % 10u;
-                // log("i",intPart);
-                // log("d",digit);
-                str.ptr[used] = digit + '0';
-                used--;
-                intPart = intPart / 10u;
-            }
-            str.ptr += used + 1;
-            str.len -= used + 1;
-            prints(str);
-        }
-        // std_print(intPart);
-        std_print('.');
-        std_print('0');
-    } else {
-        if exp >= 15u
-            intPart = (mantissa) >> decimalBits;
-        std_print(cast<i64>intPart);
-        std_print('.');
+//     if decimalBits < 1 {
+//         intPart = (mantissa) << (0-decimalBits);
+//         if intPart == 0 {
+//             printc('0')
+//         } else {
+//             str: char[23];
+//             used := 22;
+//             while intPart > 0u && used > 0 {
+//                 digit: u8 = intPart % 10u;
+//                 // log("i",intPart);
+//                 // log("d",digit);
+//                 str.ptr[used] = digit + '0';
+//                 used--;
+//                 intPart = intPart / 10u;
+//             }
+//             str.ptr += used + 1;
+//             str.len -= used + 1;
+//             prints(str);
+//         }
+//         // std_print(intPart);
+//         std_print('.');
+//         std_print('0');
+//     } else {
+//         if exp >= 15u
+//             intPart = (mantissa) >> decimalBits;
+//         std_print(cast<i64>intPart);
+//         std_print('.');
 
-        decimals: char[24];
+//         decimals: char[24];
 
-        acc: u64 = 0;
-        mul: u64 = 1;
-        // std_print(decimalBits); std_print('\n')
-        precision := 19; // digits u64 can contain (18446744073709551615)
-        minBits :i32= decimalBits - precision;
-        if minBits < 0 {
-            minBits = 0;
-        }
-        // log(minBits, decimalBits)
-        for @rev minBits..decimalBits {
-            mul *= 5u;
-            acc = acc*10u
-            // log("nr", nr)
-            if nr < 24 {
-                bit := cast<u64>1 & (mantissa >> nr)
-                if bit {
-                    acc += mul;
-                }
-                // std_print(acc); std_print('\n')
-            }
-        }
-        // std_print(acc);
-        if acc == 0
-            std_print('0');
-        blank := true;
-        lastZero := 0
-        limit := precision;
-        if decimalBits < precision;
-            limit = decimalBits;
-        for @rev 0..limit {
-            digit := acc % 10u;
-            acc = acc / 10u;
-            if !blank || digit != 0 {
-                decimals.ptr[nr] = digit + '0';
-                if blank
-                    lastZero = nr+1
-                blank = false;
-            }
-        }
-        decimals.len = lastZero;
-        std_print(decimals)
-    }
-}
+//         acc: u64 = 0;
+//         mul: u64 = 1;
+//         // std_print(decimalBits); std_print('\n')
+//         precision := 19; // digits u64 can contain (18446744073709551615)
+//         minBits :i32= decimalBits - precision;
+//         if minBits < 0 {
+//             minBits = 0;
+//         }
+//         // log(minBits, decimalBits)
+//         for @rev minBits..decimalBits {
+//             mul *= 5u;
+//             acc = acc*10u
+//             // log("nr", nr)
+//             if nr < 24 {
+//                 bit := cast<u64>1 & (mantissa >> nr)
+//                 if bit {
+//                     acc += mul;
+//                 }
+//                 // std_print(acc); std_print('\n')
+//             }
+//         }
+//         // std_print(acc);
+//         if acc == 0
+//             std_print('0');
+//         blank := true;
+//         lastZero := 0
+//         limit := precision;
+//         if decimalBits < precision;
+//             limit = decimalBits;
+//         for @rev 0..limit {
+//             digit := acc % 10u;
+//             acc = acc / 10u;
+//             if !blank || digit != 0 {
+//                 decimals.ptr[nr] = digit + '0';
+//                 if blank
+//                     lastZero = nr+1
+//                 blank = false;
+//             }
+//         }
+//         decimals.len = lastZero;
+//         std_print(decimals)
+//     }
+// }
 
 // better than O(n) for larger n (y) at least
 fn pow(x: i64, y: i64) -> i64 {
@@ -477,4 +478,44 @@ fn pow(x: i64, y: i64) -> i64 {
     }
 
     return res
+}
+
+struct vec2 {
+    x: f32;
+    y: f32;
+
+    // methods don't work on pushed values
+    // fn length() {}
+}
+struct vec3 {
+    x: f32;
+    y: f32;
+    z: f32;
+}
+struct vec4 {
+    x: f32;
+    y: f32;
+    z: f32;
+    w: f32;
+}
+operator +(a: vec2, b: vec2) -> vec2 {
+    return vec2{a.x + b.x, a.y + b.y}
+}
+operator -(a: vec2, b: vec2) -> vec2 {
+    return vec2{a.x - b.x, a.y - b.y}
+}
+operator *(a: vec2, b: f32) -> vec2 {
+    return vec2{a.x * b, a.y * b}
+}
+operator *(b: f32, a: vec2) -> vec2 {
+    return vec2{a.x * b, a.y * b}
+}
+operator /(a: vec2, b: f32) -> vec2 {
+    return vec2{a.x / b, a.y / b}
+}
+fn length(a: vec2) {
+    return sqrt(a.x*a.x + a.y*a.y)
+}
+fn length2(a: vec2) {
+    return a.x*a.x + a.y*a.y
 }

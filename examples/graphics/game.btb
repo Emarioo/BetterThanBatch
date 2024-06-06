@@ -3,85 +3,626 @@
 
 */
 
-
 #import "Graphics"
-// #import "Math"
+#import "Math"
 #import "Logger"
+#import "Array"
+#import "String"
 
 
-fn @intrinsic sqrt(v: f32) -> f32;
+enum EntityType {
+    BLOB,
+    PLATFORM,
+}
+struct EntityInfo {
+    texture: Texture*;
+    color: Color;
+    is_static: bool;
+}
+struct Entity {
+    pos: vec2;
+    size: vec2;
+    vel: vec2;
+    entity_info: i32; // entity type
+    on_ground: bool;
+}
+global entities: Array<Entity>
+global entity_infos: Array<EntityInfo>
+global window: WindowContext*;
+global textures: Array<Texture*>;
+global pause_update: bool;
+global current_frame: i32
+
+#macro PLAYER_SPEED 120.0
+#macro GRAVITY 17.0
+
+fn AddEntity(x: f32, y: f32, w: f32, h: f32, type: EntityType) {
+    entities.add(Entity{})
+    entities.last().entity_info = cast<i32>type
+    entities.last().pos.x = x
+    entities.last().pos.y = y
+    entities.last().size.x = w
+    entities.last().size.y = h
+}
+// Window (glfw, opengl context) should be initialized before calling this
+fn InitEntityInfos() {
+    blob := CreateTexture("examples/graphics/blob.png")
+    textures.add(blob)
+
+    // blob
+    entity_infos.add(EntityInfo{})
+    entity_infos.last().texture = blob
+
+    // platform
+    entity_infos.add(EntityInfo{})
+    entity_infos.last().color = Color{0.8,0.8,0.8}
+    entity_infos.last().is_static = true
+}
+
+global moving_platform_id: i32
 
 fn main() -> i32 {
-    window := CreateWindow(800,600)
-    blob := CreateTexture("examples/graphics/blob.png")
+    moving_platform_id = -1 // init global here because it's not done automatically yet
 
-    y: f32 = 0
-    x: f32 = 0
-    
-    speed := 120.
+    window = CreateWindow(800,600)
 
-    t := 0
+    InitEntityInfos()
+
+    AddEntity(50, 50, 30, 30, BLOB)
+
+    // AddEntity(200, 50, 50, 40, BLOB)
+
+    AddEntity(20, 350, 140, 20, PLATFORM)
+    entities.last().vel.y = 16.5
+    moving_platform_id = entities.size()-1
+
+    AddEntity(180, 400, 160, 20, PLATFORM)
+
+    SaveFrame(0)
+    SavePermanentFrame(0)
+
     while window.running {
-        t++
         FillColor(window, Color{0.2,0.2,0.2})
         
-        // window.enableUISpace(true)
+        window.enableUISpace(false)
         
-        text := "This is blob"
-        dist := sqrt(x*x + y*y)
-        if dist > 130
-            text = "Blob went away"
+        Update()
+
+        RenderEntities();
+
+        window.enableUISpace(true)
         
-        text_h := 40
-        blob_size := 140
-        
-        font := window.defaultFont()
-        text_w := font.width_of_text(text, text_h)
-        
-        DrawText(window, window.width/2 - text_w/2, window.height/2 - blob_size, text_h, text)
-        
-        real_speed := speed
-        if window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
-            real_speed *= 2
-        
-        if window.isKeyDown(GLFW_KEY_W) {
-            y -= real_speed * window.delta
-        }
-        if window.isKeyDown(GLFW_KEY_S) {
-            y += real_speed * window.delta
-        }
-        if window.isKeyDown(GLFW_KEY_A) {
-            x -= real_speed * window.delta
-        }
-        if window.isKeyDown(GLFW_KEY_D) {
-            x += real_speed * window.delta
-        }
-        scroll := window.getScrollY()
-        if scroll > 0 {
-            window.camera_zoom *= 1.04;
-        } else if scroll < 0 {
-            window.camera_zoom *= 0.96;
-        }
-        
+        layout_y: f32 = 0
+
         fps: StringBuilder
         fps.append(cast<i32>(window.delta*1000))
         fps.append(".")
         fps.append((cast<i32>(window.delta*10000)) % 10)
         fps.append(" ms")
         
-        DrawText(window, 0, 0, 20, fps.sliced())
-        
-        window.enableUISpace(false)
-        
-        DrawTexture(window, x + window.width/2-blob_size/2, y + window.height/2-blob_size/2, blob_size, blob_size, blob)
-        
+        DrawText(window, 0, layout_y, 20, fps.sliced())
+        layout_y += 20
+
+        temp: StringBuilder
+        temp.append("frame: ")
+        temp.append(current_frame)
+        temp.append("(saved ")
+        temp.append(GetSavedFrames())
+        temp.append(")")
+        DrawText(window, 0, layout_y, 20, temp.sliced())
+        layout_y += 20
+        temp.cleanup()
+
+        temp.append("frame_memory: ")
+        temp.append(FrameMemoryUsage())
+        DrawText(window, 0, layout_y, 20, temp.sliced())
+        layout_y += 20
+        temp.cleanup()
+
+        if pause_update {
+            txt: StringBuilder
+            txt.append("paused: ")
+            txt.append(pause_update)
+            
+            DrawText(window, 0, layout_y, 20, txt.sliced())
+        }
+
+        layout_y = window.height - 5
+        text_h: f32 = 18
+        text_w: f32 = 0
+        font := window.defaultFont()
+
+        #macro TEXT(TXT)
+            temp.append(TXT)
+            text_w = font.width_of_text(temp.sliced(), text_h)
+            layout_y -= text_h
+            DrawText(window, window.width - text_w - 5, layout_y, text_h, temp.sliced())
+            temp.cleanup()
+        #endmacro
+
+        // text is rendered bottom-up
+        TEXT("shift + 1/3 to rapidly step frames")
+        TEXT("1/3 to step back/forward a frame")
+        TEXT("2 to pause/unpause")
+        TEXT("R to reset positions")
+        TEXT("WASD and Arrow keys to move")
+
         // FillRect(window, t, 10, 100., 100., Color{0.5,1,1})
         // FillRect(window, 0.1, 0.1, 0.2, 0.2, Color{1,1,1})
         
         RefreshWindow(window)
-    }
+    }   
     
-    DestroyTexture(blob)
+    // DestroyTexture(blob)
     DestroyWindow(window)
     return 0
+}
+
+fn Update() {
+    player_index: i32 = -1
+    player2_index: i32 = -1
+    for @ptr entities.sliced() {
+        if it.entity_info == cast<i32>BLOB {
+            if player_index == -1
+                player_index = nr
+            else if player2_index == -1 {
+                player2_index = nr
+                break
+            }
+        }
+    }
+
+    player, player2: Entity*;
+    if player_index != -1 {
+        player = entities.get_unsafe(player_index)
+    }
+    if player2_index != -1 {
+        player2 = entities.get_unsafe(player2_index)
+    }
+
+    timestep := window.delta // temporary
+
+    speed := PLAYER_SPEED
+    jump_force := 200 * GRAVITY / 9
+
+    if moving_platform_id != -1 {
+        moving_platform := entities.get_unsafe(moving_platform_id)
+        if moving_platform.pos.y < 350 {
+            moving_platform.vel.y *= -1.05
+            moving_platform.pos.y = 350
+        }
+        if moving_platform.pos.y > 450 {
+            moving_platform.vel.y *= -1.05
+            moving_platform.pos.y = 450
+        }
+    }
+
+    real_speed := speed
+    if window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+        real_speed *= 2
+
+    
+    if window.isKeyPressed(GLFW_KEY_R) {
+        RestoreFrame(0)
+        // if player {
+        //     player.pos.x = 50
+        //     player.pos.y = 50
+        //     player.vel.x = 0
+        //     player.vel.y = 0
+        // }
+        // if player2 {
+        //     player2.pos.x = 200
+        //     player2.pos.y = 50
+        //     player2.vel.x = 0
+        //     player2.vel.y = 0
+        // }
+    }
+    
+    if player {
+        // if window.isKeyDown(GLFW_KEY_W) {
+        //     // player.pos.y -= real_speed * window.delta
+        //     player.vel.y = -real_speed
+        // } else if window.isKeyDown(GLFW_KEY_S) {
+        //     player.vel.y = real_speed
+        //     // player.pos.y += real_speed * window.delta
+        // } else {
+        //     player.vel.y = 0
+        // }
+        if window.isKeyDown(GLFW_KEY_SPACE) || window.isKeyDown(GLFW_KEY_W) {
+            if player.on_ground {
+                player.vel.y = -jump_force
+            }
+        }
+        if window.isKeyDown(GLFW_KEY_A) {
+            // player.pos.x -= real_speed * window.delta
+            player.vel.x = -real_speed
+        } else if window.isKeyDown(GLFW_KEY_D) {
+            player.vel.x = real_speed
+            // player.pos.x += real_speed * window.delta
+        } else {
+            player.vel.x = 0
+        }
+    }
+
+    if player2 {
+        // if window.isKeyDown(GLFW_KEY_UP) {
+        //     // player.pos.y -= real_speed * window.delta
+        //     player2.vel.y = -real_speed
+        // } else if window.isKeyDown(GLFW_KEY_DOWN) {
+        //     player2.vel.y = real_speed
+        //     // player.pos.y += real_speed * window.delta
+        // } else {
+        //     player2.vel.y = 0
+        // }
+        if window.isKeyDown(GLFW_KEY_UP) {
+            if player2.on_ground {
+                player2.vel.y = -jump_force
+            }
+        }
+        if window.isKeyDown(GLFW_KEY_LEFT) {
+            // player.pos.x -= real_speed * window.delta
+            player2.vel.x = -real_speed
+        } else if window.isKeyDown(GLFW_KEY_RIGHT) {
+            player2.vel.x = real_speed
+            // player.pos.x += real_speed * window.delta
+        } else {
+            player2.vel.x = 0
+        }
+    } else {
+        speed := 200 * timestep
+        if window.isKeyDown(GLFW_KEY_DOWN) {
+            window.camera_y += speed
+        } else if window.isKeyDown(GLFW_KEY_UP) {
+            window.camera_y -= speed
+        }
+        if window.isKeyDown(GLFW_KEY_LEFT) {
+            window.camera_x -= speed
+        } else if window.isKeyDown(GLFW_KEY_RIGHT) {
+            window.camera_x += speed
+        }
+    }
+
+    scroll := window.getScrollY()
+    if scroll > 0 {
+        window.camera_zoom *= 1.04;
+    } else if scroll < 0 {
+        window.camera_zoom *= 0.96;
+    }
+
+    if window.isKeyPressed(GLFW_KEY_2) {
+        pause_update = !pause_update
+        if !pause_update {
+            // TODO: Fix this feature
+            // EraseFutureFrames(current_frame)
+        }
+    }
+
+    if pause_update {
+        shift := window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+        if window.isKeyPressed(GLFW_KEY_1) || (shift && window.isKeyDown(GLFW_KEY_1))  {
+            // back a frame
+            if HasPreviousFrame(current_frame) {
+                current_frame--
+                RestoreFrame(current_frame)
+            }
+            return;
+        } else if window.isKeyPressed(GLFW_KEY_3) || (shift && window.isKeyDown(GLFW_KEY_3)) {
+            // forward a frame
+            if IsLastFrame(current_frame) {
+                current_frame++
+            } else {
+                current_frame++
+                RestoreFrame(current_frame)
+                return;
+            }
+        } else return;
+    } else {
+        current_frame++
+    }
+
+
+    for @ptr entities.sliced() {
+        // we do velocity first so that the collision
+        // has the previous velocity and not a modified version
+        if it.entity_info == cast<i32> BLOB {
+            it.vel.y += GRAVITY // gravity
+        }
+
+        it.pos.x += it.vel.x * timestep
+        it.pos.y += it.vel.y * timestep
+
+        it.on_ground = false
+    }
+
+    // 
+    // Collision
+    // 
+    for i: 0..entities.size() {
+        it0 := entities.get_unsafe(i)
+        info0 := entity_infos.get_unsafe(it0.entity_info)
+        for j: i+1..entities.size() {
+            it1 := entities.get_unsafe(j)
+            info1 := entity_infos.get_unsafe(it1.entity_info)
+            
+            if info0.is_static && info1.is_static
+                continue // nothing happens if static
+
+            if it0.pos.x + it0.size.x > it1.pos.x &&
+                it0.pos.x < it1.pos.x + it1.size.x && 
+                it0.pos.y + it0.size.y > it1.pos.y && 
+                it0.pos.y < it1.pos.y + it1.size.y
+            {
+                // TODO: Y position
+                was_x := it0.pos.x - it0.vel.x * timestep + it0.size.x >
+                    it1.pos.x - it1.vel.x * timestep && it0.pos.x - it0.vel.x * timestep < it1.pos.x - it1.vel.x * timestep + it1.size.x
+                was_y := it0.pos.y - it0.vel.y * timestep + it0.size.y > 
+                    it1.pos.y - it1.vel.y * timestep && it0.pos.y - it0.vel.y * timestep < it1.pos.y - it1.vel.y * timestep + it1.size.y
+
+                if !was_y {
+                    if !info0.is_static
+                        it0.on_ground = true // set even if we entity hit the "roof"
+                    if !info1.is_static
+                        it1.on_ground = true
+
+                    both_down := it0.vel.y > it1.vel.y && it1.vel.y >= 0
+                    both_down2 := it1.vel.y > it0.vel.y && it0.vel.y >= 0
+                    both_up := it0.vel.y < it1.vel.y && it1.vel.y <= 0
+                    both_up2 := it1.vel.y < it0.vel.y  && it0.vel.y <= 0
+                    // #macro hi(...) log(...)
+                    #macro hi(...) #endmacro
+                    // TODO: Apply force to collided entity
+                    if both_down {
+                        hi("both_down")
+                        // both entities moving down, stick down
+                        if !info0.is_static {
+                            // if 0 isn't static then we want to position that entity
+                            it0.pos.y = it1.pos.y - it0.size.y
+                            it0.vel.y = 0
+                        } else if !info1.is_static {
+                            it1.pos.y = it0.pos.y + it0.size.y
+                            it1.vel.y = 0
+                        }
+                    } else if both_up {
+                        hi("both_up")
+                        // stick up
+                        if !info0.is_static {
+                            it0.pos.y = it1.pos.y + it1.size.y
+                            it0.vel.y = 0
+                        } else !info1.is_static {
+                            it1.pos.y = it0.pos.y + it1.size.y
+                            it1.vel.y = 0
+                        }
+                    } else if it0.vel.y > 0 && it1.vel.y < 0 {
+                        hi("head coll")
+                        // head on collision  it0 >|< it1
+                        if info1.is_static {
+                            it0.pos.y = it1.pos.y - it0.size.y
+                            it0.vel.y = 0
+                        } else if info0.is_static {
+                            // if 0 isn't static then we want to position that entity
+                            it1.pos.y = it0.pos.y + it0.size.y
+                            it1.vel.y = 0
+                        } else {
+                            mid_y := (it0.pos.y + it1.pos.y) / 2
+                            off := it0.size.y/2
+                            if it1.size.y < it0.size.y
+                                off = it1.size.y/2
+                            it0.pos.y = mid_y - off
+                            it1.pos.y = mid_y + off
+
+                            it0.vel.y = 0
+                            it1.vel.y = 0
+                        }
+                    } else if it1.vel.y > it0.vel.y && it0.vel.y >= 0 {
+                        // stick down (for other entity)
+                        hi("both down 2")
+                        if !info1.is_static {
+                            it1.pos.y = it0.pos.y - it1.size.y
+                            it1.vel.y = 0
+                        } else {
+                            it0.pos.y = it1.pos.y - it1.size.y
+                            it0.vel.y = 0
+                        }
+                    } else if it1.vel.y < it0.vel.y  && it0.vel.y <= 0 {
+                        // stick up (for other entity)
+                        hi("both up 2")
+                        if !info1.is_static {
+                            it1.pos.y = it0.pos.y + it0.size.y
+                            it1.vel.y = 0
+                        } else {
+                            it0.pos.y = it1.pos.y + it0.size.y
+                            it0.vel.y = 0
+                        }
+                    } else if it1.vel.y > 0 && it0.vel.y < 0 {
+                        hi("head coll2")
+                        // head on collision  it1 >|< it0 (other way)
+                        if info1.is_static {
+                            it1.pos.y = it0.pos.y - it1.size.y
+                            it1.vel.y = 0
+                        } else if info0.is_static {
+                            it0.pos.y = it1.pos.y - it1.size.y
+                            it0.vel.y = 0
+                        } else {
+                            mid_y := (it0.pos.y + it1.pos.y) / 2
+                            off := it1.size.y/2
+                            if it0.size.y > it1.size.y
+                                off = it0.size.y/2
+                            it1.pos.y = mid_y - off
+                            it0.pos.y = mid_y + off
+
+                            it0.vel.y = 0
+                            it1.vel.y = 0
+                        }
+                    } else {
+                        hi("why")
+                        // entities have zero velocity, should not have collided?
+                    }
+                }
+                // if !was_x {
+                //     // TODO: Apply force to collided entity
+                //     if it0.vel.x > it1.vel.x && it1.vel.x >= 0 {
+                //         // stick left
+                //         it0.pos.x = it1.pos.x - it0.size.x
+                //         it0.vel.x = 0
+                //     } else if it0.vel.x < it1.vel.x  && it1.vel.x <= 0 {
+                //         // stick right
+                //         it0.pos.x = it1.pos.x + it1.size.x
+                //         it0.vel.x = 0
+                //     } else if it0.vel.x > 0 && it1.vel.x < 0 {
+                //         // head on collision
+                //         mid_x := (it0.pos.x + it1.pos.x) / 2
+                //         off := it0.size.x/2
+                //         if it1.size.x < it0.size.x
+                //             off = it1.size.x/2
+                //         it0.pos.x = mid_x - off
+                //         it1.pos.x = mid_x + off
+
+                //         it0.vel.x = 0
+                //         it1.vel.x = 0
+                //     } else if it1.vel.x > it0.vel.x && it0.vel.x >= 0 {
+                //         // stick left (for other entity)
+                //         it1.pos.x = it0.pos.x - it1.size.x
+                //         it1.vel.x = 0
+                //     } else if it1.vel.x < it0.vel.x  && it0.vel.x <= 0 {
+                //         // stick right (for other entity)
+                //         it1.pos.x = it0.pos.x + it0.size.x
+                //         it1.vel.x = 0
+                //     } else if it1.vel.x > 0 && it0.vel.x < 0 {
+                //         // hi("head on other")
+                //         // head on collision (other way)
+                //         mid_x := (it0.pos.x + it1.pos.x) / 2
+                //         off := it1.size.x/2
+                //         if it0.size.x > it1.size.x
+                //             off = it0.size.x/2
+                //         it1.pos.x = mid_x - off
+                //         it0.pos.x = mid_x + off
+
+                //         it0.vel.x = 0
+                //         it1.vel.x = 0
+                //     } else {
+                //         hi("why")
+                //         // entities have zero velocity, should not have collided?
+                //     }
+                // }
+            }
+        }
+    }
+
+    SaveFrame(current_frame)
+}
+fn RenderEntities() {
+    for @ptr entities.sliced() {
+        info := entity_infos.get_unsafe(it.entity_info)
+        if info.texture {
+            DrawTexture(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.texture)
+        } else {
+            FillRect(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.color)
+        }
+        
+        str: StringBuilder
+        str.append("on_ground: ")
+        str.append(it.on_ground)
+
+        DrawText(window, it.pos.x + it.size.x, it.pos.y - 16, 16, str.sliced())
+    }
+}
+
+// #macro MAX_FRAMES (60 * 60*2) // 2 minutes
+#macro MAX_FRAMES (60 * 5) // 5 sec
+struct Frame {
+    changes: Array<Entity>
+}
+global last_frame: i32
+global saved_frames: i32
+global frames: Array<Frame>
+global permanent_frames: Array<Frame>
+global permanent_frames_indices: Array<i32>
+fn SavePermanentFrame(frame_index: i32) {
+    if frame_index < 0
+        frame_index = 0
+
+    permanent_frames.add(Frame{})
+    permanent_frames_indices.add(frame_index)
+    frame := permanent_frames.last()
+
+    // TODO: only store changes
+    frame.changes.resize(entities.size())
+    memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
+}
+fn SaveFrame(frame_index: i32) {
+    if frame_index < 0
+        frame_index = 0
+
+    if frame_index > last_frame {
+        last_frame = frame_index
+        if saved_frames < MAX_FRAMES
+            saved_frames++
+    }
+
+    real_index := frame_index % MAX_FRAMES
+
+    frame: Frame*;
+    if frames.size() <= real_index {
+        frames.add(Frame{})
+        frame = frames.last()
+        // TODO: Erase future frames?
+    } else {
+        frame = frames.get_unsafe(real_index)
+    }
+
+    // TODO: only store changes
+    frame.changes.resize(entities.size())
+    memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
+}
+fn EraseFutureFrames(frame_index: i32) {
+    if frame_index < 0
+        frame_index = 0
+    diff := last_frame - frame_index
+    if diff > MAX_FRAMES
+        saved_frames = 0
+    else
+        saved_frames = diff
+    last_frame = frame_index
+}
+fn GetSavedFrames() -> i32 {
+    return saved_frames
+}
+fn HasPreviousFrame(frame_index: i32) -> bool {
+    // TODO: Check off-by-one error
+    if frame_index-1 <= last_frame - MAX_FRAMES {
+        return false
+    }
+    return true
+}
+fn IsLastFrame(frame_index: i32) -> bool {
+    if frame_index < 0
+        frame_index = 0
+    return last_frame <= frame_index
+}
+fn FrameMemoryUsage() -> i32 {
+    // we do a quick estimation
+    ents := 0
+    if frames.size()
+        ents = frames.last().changes.max
+    sum := frames.max * (sizeof (Frame) + ents * sizeof Entity)
+    return sum
+}
+fn RestoreFrame(frame_index: i32) {
+    if frame_index < 0
+        frame_index = 0
+
+    for permanent_frames_indices.sliced() {
+        if it == frame_index {
+            frame := permanent_frames.get_unsafe(nr)
+            entities.resize(frame.changes.size())
+            memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
+            return;
+        }
+    }
+
+    real_index := frame_index % MAX_FRAMES
+
+    frame := frames.get_unsafe(real_index)
+    entities.resize(frame.changes.size())
+    memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
 }

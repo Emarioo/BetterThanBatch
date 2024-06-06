@@ -317,9 +317,9 @@ void X64Builder::emit2(u16 word) {
 }
 void X64Builder::emit3(u32 word) {
   if (tinyprog->head > 0) {
-    // This is not how you use rex prefix
-    // cvtsi2ss instructions use smashed in between it's other opcode bytes
-    Assert(*(tinyprog->text + tinyprog->head - 1) != PREFIX_REXW);
+    // cvtsi2ss instructions have rex smashed in between the opcode or something like that, this assert will catch it.
+    // TODO: Just because the value of the previous byte is REXW doesn't mean it's meant to be. It could be an immediate or modrm byte that happens to be equal to REXW. We can't assert like this. We should still catch bugs where REXW was specified before cvtsi2ss instead of inside.
+    // Assert(*(tinyprog->text + tinyprog->head - 1) != PREFIX_REXW);
   }
   Assert(0 == (word & 0xFF000000));
   ensure_bytes(3);

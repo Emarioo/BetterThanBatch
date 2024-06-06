@@ -157,7 +157,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     int original_recipient_regnr = 0;
 
     #define PRINT_BYTECODE(MSG) \
-        tinycode->print(n->bc_index, n->bc_index+8, bytecode); \
+        tinycode->print(n->bc_index - 32, n->bc_index+8, bytecode); \
         log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR<< MSG; \
         log::out.flush();
 
@@ -798,7 +798,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         }
         log::out << "\n";
         #endif
-        
+
         switch(n->base->opcode) {
             case BC_HALT: {
                 Assert(("HALT not implemented",false));

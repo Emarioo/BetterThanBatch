@@ -4642,41 +4642,25 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             int stackBeforeLoop = currentFrameOffset;
 
-            // TODO: Save stack moment here?
-
             // body scope is used since the for loop's variables
             // shouldn't collide with the variables in the current scope.
             // not sure how well this works, we shall see.
             ScopeId scopeForVariables = statement->firstBody->scopeId;
 
             Assert(statement->varnames.size()==2);
-            // auto& varnameIt = statement->varnames[0];
-            // auto& varnameNr = statement->varnames[1];
-            // if(!varnameIt.versions_assignType[info.currentPolyVersion].isValid() || !varnameNr.versions_assignType[info.currentPolyVersion].isValid()){
-            //     // error has probably been handled somewhere. no need to print again.
-            //     continue;
-            // }
-            // if(!varnameNr.identifier || !varnameIt.identifier) {
-            //     if(!info.hasForeignErrors()){
-            //         ERR_SECTION(
-            //             ERR_HEAD2(statement->location)
-            //             ERR_MSG("Identifier '"<<(varnameNr.identifier ? (varnameIt.identifier ? StringBuilder{} << varnameIt.name : "") : (varnameIt.identifier ? (StringBuilder{} << varnameNr.name <<" and " << varnameIt.name) : StringBuilder{} << varnameNr.name))<<"' in for loop was null. Bug in compiler?")
-            //             ERR_LINE2(statement->location, "")
-            //         )
-            //     }
-            //     continue;
-            // }
-            // auto varinfo_item = info.ast->getVariableByIdentifier(varnameIt.identifier);
 
             // NOTE: We add debug information last because varinfo does not have the frame offsets yet.
 
             if(statement->rangedForLoop){
                 auto& varnameNr = statement->varnames[0];
+                if(!varnameNr.identifier) {
+                    Assert(hasErrors());
+                    continue;
+                }
                 auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
                 {
                     TypeId typeId = AST_INT32; // you may want to use the type in varname, the reason i don't is because
                     framePush(typeId, &varinfo_index->versions_dataOffset[info.currentPolyVersion],false, false);
-                    // varinfo_item->versions_dataOffset[info.currentPolyVersion] = varinfo_index->versions_dataOffset[info.currentPolyVersion];
 
                     TypeId dtype = {};
                     // Type should be checked in type checker and further down
@@ -4757,6 +4741,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }else{
                 auto& varnameIt = statement->varnames[0];
                 auto& varnameNr = statement->varnames[1];
+                if(!varnameIt.identifier || !varnameNr.identifier) {
+                    Assert(hasForeignErrors());
+                    continue;
+                }
                 auto varinfo_item = info.ast->getVariableByIdentifier(varnameIt.identifier);
                 auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
 

@@ -11,3 +11,10 @@ else nr > m.beg {
 // sometimes you forget 'if' after else and it's valid syntax
 // TODO: Expression after else should not be allowed, tell the user to
 //   put it on another line.
+
+
+na := 0
+ind := 0
+if na
+    ++ind // na++ will may happen and then ind
+          // will be it's own statement

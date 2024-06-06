@@ -138,6 +138,10 @@ struct Array<T> {
         return false;
     }
 }
+// this does not work
+operator []<T>(arr: Array<T>, index: i32) -> T {
+    return arr.get(index)
+}
 
 // Some code to quickly test an array
 // #import "Logger"

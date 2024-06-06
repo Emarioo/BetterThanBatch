@@ -3583,7 +3583,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
                     ERR_SECTION(
                         ERR_HEAD2(now->location)
                         ERR_MSG("'"<<info.ast->getStringFromTypeString(varname.assignString)<<"' is not a type (statement).")
-                        ERR_LINE2(now->location,"bad")
+                        ERR_LINE2(now->location,"here somewhere")
                     )
                 } else {
                     // if(varname.arrayLength != 0){

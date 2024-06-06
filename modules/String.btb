@@ -50,6 +50,13 @@ struct StringBuilder {
         len++
         ptr[len] = '\0'
     }
+    fn append(value: bool) {
+        if value {
+            append("true")
+        } else {
+            append("false")
+        }
+    }
     fn append(value: u64) {
         if len + 20 > max {
             reserve(len + 20);
