@@ -326,7 +326,7 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
                 i++;
                 options->pattern_for_files = commands[i];
             }
-        } else if (arg == "--debug" || arg == "-g") {
+        } else if (arg == "--debug" || arg == "-d") {
             options->useDebugInformation = true;
         } else if (arg == "--silent") {
             options->silent = true;

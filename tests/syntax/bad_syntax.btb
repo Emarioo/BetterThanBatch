@@ -5,7 +5,7 @@ b := 2
 
 if a == b
     _test 1; 1;
-else nr > m.beg {
+else nr > 3 {
     _test 0; 1;
 }
 // sometimes you forget 'if' after else and it's valid syntax

@@ -73,23 +73,18 @@ void print_help(){
     END
 
     USAGE("-ua,--user-args")
-    DESC("Will pass arguments to the executable. Can only be used with '--run'. All arguments after this flag will be sent to the compiled program and NOT the compiler.\n")
+    DESC("Will pass arguments to the executable. Can only be used with '--run'. All arguments after this flag will be sent to the compiled program instead of the compiler.\n")
     END
 
     USAGE("-r,--run")
     DESC("Will run the executable after it's been compiled.\n")
     END
-    
-    USAGE("-ua,--user-args")
-    DESC("Will pass arguments to the executable. Can only be used with '--run'.\n")
-    END
-
 
     HEADER("Debugging")
 
-    USAGE("-g,--debug")
+    USAGE("-d,--debug")
     DESC("Will compile with debug information (DWARF). Note that MSVC linker doesn't work with DWARF. You must use g++ or other linker. PDB for Windows is not implemented yet.\n")
-    log::out << log::GRAY<<"TODO: -g=DWARF, -g=PDB\n";
+    log::out << log::GRAY<<"TODO: -d=DWARF, -d=PDB\n";
     END
 
     USAGE("-p,--preproc <file>")

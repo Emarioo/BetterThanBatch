@@ -22,6 +22,11 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
         )
         return;
     }
+    if(fileSize == 0) {
+        // nothing to test
+        engone::FileClose(file);
+        return;
+    }
     char* buffer = (char*)engone::Allocate(fileSize);
     Assert(buffer);
     bool yes = engone::FileRead(file, buffer, fileSize);

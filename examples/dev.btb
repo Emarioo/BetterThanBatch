@@ -1,5 +1,26 @@
 
 // #import "examples/graphics/quad.btb"
-#import "examples/graphics/game.btb"
+// #import "examples/graphics/game.btb"
 
-// #import "Logger"
+#import "Logger"
+#import "String"
+// #import "Lang"
+
+
+operator cast(a: StringBuilder) -> char[] {
+    return a.sliced()
+    // std_print_any(&a)
+    // return Slice<char>{cast<i64>1,2}
+}
+
+builder: StringBuilder
+builder.append("Hi: ")
+builder.append(923)
+
+okay(s) // builder is converted to slice
+
+fn okay(str: char[]) {
+    // log("'",cast<void*>str.ptr,"' ", str.len)
+    log("'",str.ptr,"' ", str.len)
+}
+

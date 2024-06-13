@@ -282,7 +282,7 @@ struct FnOverloads {
     QuickArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
+    Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
     // Note that this function becomes complex if parentStruct is polymorphic.
     Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
     // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
@@ -513,6 +513,8 @@ struct ASTExpression : ASTNode {
     bool isPostAction() const { return postAction; }
     void setPostAction(bool yes) { postAction = yes; }
     
+    bool uses_cast_operator = false;
+
     union {
         i64 i64Value=0;
         float f32Value;
@@ -618,6 +620,8 @@ struct ASTStatement : ASTNode {
     lexer::SourceLocation location{};
     DynamicArray<VarName> varnames;
     std::string alias;
+
+    bool uses_cast_operator = false;
 
     ASTExpression* testValue = nullptr;
    
@@ -811,6 +815,8 @@ struct ASTFunction : ASTNode {
 
     u32 polyVersionCount=0;
     ASTStruct* parentStruct = nullptr;
+    bool is_operator = false;
+    bool isOperator() const { return is_operator; }
 
     ScopeId scopeId=0;
     ASTScope* body=0;
@@ -872,9 +878,13 @@ struct ASTScope : ASTNode {
 
     void print(AST* ast, int depth);
 };
+struct Compiler;
 struct AST {
+    AST(Compiler* compiler) : compiler(compiler) {}
+    Compiler* compiler = nullptr;
+
     //-- Creation and destruction
-    static AST* Create();
+    static AST* Create(Compiler* compiler);
     static void Destroy(AST* ast);
     void cleanup();
     
@@ -966,6 +976,10 @@ struct AST {
     u32 getTypeAlignedSize(TypeId typeId);
 
     bool castable(TypeId from, TypeId to);
+
+    bool findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, FnOverloads::Overload* overload = nullptr);
+
+    void declareUsageOfOverload(FnOverloads::Overload* overload);
 
     u32 aquireGlobalSpace(int size) {
         u32 offset = globalDataOffset;

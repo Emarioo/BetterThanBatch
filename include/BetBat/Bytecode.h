@@ -488,6 +488,8 @@ struct BytecodeBuilder {
     void emit_free_local(u16 size);
     // allocates space on stack for arguments but ensures 16-byte alignment DURING EXECUTION or final x64 gen
     void emit_alloc_args(BCRegister reg, u16 size);
+    void emit_empty_alloc_args(int* out_size);
+    void fix_alloc_args(int index, u16 size);
     void emit_free_args(u16 size);
 
     void emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float);

@@ -819,19 +819,17 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
         // match args with normal impls
         // FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, expr, fnOverloads->overloads.size()==1 && !operatorOverloadAttempt);
-        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, expr, fnOverloads->overloads.size()==1);
+        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, scopeId, argTypes, expr, fnOverloads->overloads.size()==1);
         if(!overload)
-            overload = fnOverloads->getOverload(info.ast, argTypes, expr, true);
+            overload = fnOverloads->getOverload(info.ast, scopeId, argTypes, expr, true);
         if(operatorOverloadAttempt && !overload)
             return SIGNAL_NO_MATCH;
         if(overload){
-            if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                info.compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
-            }
-            overload->funcImpl->usages++;
+            info.ast->declareUsageOfOverload(overload);
 
             // BREAK(overload->astFunc->name == "create_snapshot")
 
+            // Check default values of function
             for(int i=argTypes.size() + (expr->hasImplicitThis()?1:0); i<overload->astFunc->arguments.size();i++) {
             // for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
                 auto& argImpl = overload->funcImpl->signature.argumentTypes[i];
@@ -842,12 +840,17 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                     continue;
                 tempTypes.resize(0);
                 SignalIO result = CheckExpression(info, scopeId, arg.defaultValue,&tempTypes,false);
-                //  DynamicArray<TypeId> temp{};
-                // info.temp_defaultArgs.resize(0);
-                // CheckExpression(info,func->scopeId, arg.defaultValue, &info.temp_defaultArgs, false);
                 if(tempTypes.size()==0)
                     tempTypes.add(AST_VOID);
-                if(!info.ast->castable(tempTypes.last(),argImpl.typeId)){
+
+                bool is_castable = info.ast->castable(tempTypes.last(),argImpl.typeId);
+                // if(!is_castable){
+                //     // Not castable with normal conversion
+                //     // Check hard conversions
+                //     is_castable = info.ast->findCastOperator(scopeId, tempTypes.last(), argImpl.typeId);
+                // }
+
+                if(!is_castable){
                 // if(temp.last() != argImpl.typeId){
                     std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
                     std::string argtype = info.ast->typeToString(argImpl.typeId);
@@ -1435,11 +1438,8 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                             if(outTypes) outTypes->add(AST_VOID);
                             return SIGNAL_FAILURE;
                         }
-                            
-                        if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                            info.compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
-                        }
-                        overload->funcImpl->usages++;
+                        
+                        info.ast->declareUsageOfOverload(overload);
                         
                         // TODO: Don't create new arrays, restructure funcImpl so that you can just
                         //   pass arrays when finding function type
@@ -2124,34 +2124,11 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
     // log::out << "IMPL " << func->name<<"\n";
 
     Assert(funcImpl->signature.polyArgs.size() == func->polyArgs.size());
-    // for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
-    //     TypeId id = funcImpl->polyArgs[i];
-    //     Assert(id.isValid());
-    //     func->polyArgs[i].virtualType->id = id;
-    // }
-    // if(funcImpl->structImpl){
-    //     Assert(parentStruct);
-    //     // Assert funcImpl->structImpl must come from parentStruct
-    //     for(int i=0;i<(int)funcImpl->structImpl->polyArgs.size();i++){
-    //         TypeId id = funcImpl->structImpl->polyArgs[i];
-    //         Assert(id.isValid());
-    //         parentStruct->polyArgs[i].virtualType->id = id;
-    //     }
-    // }
+    
     Assert(func->parentStruct == parentStruct);
     func->pushPolyState(funcImpl);
     defer {
         func->popPolyState();
-        // for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
-        //     func->polyArgs[i].virtualType->id = {};
-        // }
-        // if(funcImpl->structImpl){
-        //     Assert(parentStruct);
-        //     for(int i=0;i<(int)funcImpl->structImpl->polyArgs.size();i++){
-        //         TypeId id = funcImpl->structImpl->polyArgs[i];
-        //         parentStruct->polyArgs[i].virtualType->id = {};
-        //     }
-        // }
     };
 
     _TCLOG(log::out << "Check func impl "<< funcImpl->astFunction->name<<"\n";)
@@ -2358,12 +2335,6 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
         arg.virtualType = info.ast->createType(arg.name, function->scopeId);
         // _TCLOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
     }
-    // defer {
-    //     for(int i=0;i<(int)function->polyArgs.size();i++){
-    //         auto& arg = function->polyArgs[i];
-    //         arg.virtualType->id = {};
-    //     }
-    // };
     // _TCLOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
     FnOverloads* fnOverloads = nullptr;
     Identifier* iden = nullptr;
@@ -2372,6 +2343,7 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
     } else {
         iden = info.ast->findIdentifier(scope->scopeId, CONTENT_ORDER_MAX, function->name);
         if(!iden){
+            // cast operator won't work
             iden = info.ast->addIdentifier(scope->scopeId, function->name, CONTENT_ORDER_ZERO, nullptr);
             iden->type = Identifier::FUNCTION;
         }
@@ -2384,6 +2356,13 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
         }
         fnOverloads = &iden->funcOverloads;
         function->identifier = iden;
+    }
+    if(function->isOperator() && function->name == "cast") {
+        std::string path;
+        int line,column;
+        info.compiler->lexer.get_source_information(function->location, &path, &line, &column);
+        // TODO: Fix overloads
+        log::out << log::YELLOW << path <<":"<<line<<":"<<column<< " (warning): Type conversions (operator cast) is experimental and incomplete.\n";
     }
     for(int i=0;i<(int)function->arguments.size();i++){
         auto& arg = function->arguments[i];
@@ -2401,9 +2380,6 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
             }
         }
     }
-    // if(function->name == "std_print") {
-    //     int a = 9;
-    // }
     if(function->polyArgs.size()==0 && (!parentStruct || parentStruct->polyArgs.size() == 0)){
         // The code below is used to 
         // Acquire identifiable arguments
@@ -3204,11 +3180,9 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             
             bool reused_index = false;
             bool reused_item = false;
-            // auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier, &reused_index);
-            
-            // bad_var(varinfo_index, varnameNr.name);
             
             auto iterinfo = info.ast->getTypeInfo(typeArray.last());
+
             if(iterinfo&&iterinfo->astStruct){
                 if(iterinfo->astStruct->name == "Slice"){
                     if(now->varnames[0].name.size() == 0)
@@ -3243,7 +3217,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
 
                     SignalIO result = CheckRest(info, now->firstBody);
                     continue;
-                } else if(iterinfo->astStruct->members.size() == 2) {
+                } else if(iterinfo->astStruct->name == "Range") {
                     if(now->varnames[0].name.size() == 0)
                         now->varnames[0].name = "nr";
                     auto& varnameNr = now->varnames[0];
@@ -3563,6 +3537,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
         info.currentContentOrder.pop();
     };
 
+    // Check global declarations
     for(int contentOrder=0;contentOrder<scope->content.size();contentOrder++){
         
         if(scope->content[contentOrder].spotType!=ASTScope::STATEMENT)

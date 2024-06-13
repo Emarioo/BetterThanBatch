@@ -1279,13 +1279,57 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 Assert(hasErrors());
             }
         } else {
+            // TODO: if expr should be casted, then emit space for arguments
+            // we need to know the type in before hand
+            // should we generate emit_alloc_args anyway and then
+            // if it's not needed, delete a bunch of instructions?
+            // builder.emit_alloc_args(0);
+            int off_alloc_args = 0;
+            if(expression->uses_cast_operator) {
+                // only emit if we need to
+                // unecessary bytecode instructions otherwise.
+                // x64_gen does optimize them away though.
+                builder.emit_empty_alloc_args(&off_alloc_args);
+            }
+            // nocheckin TODO: if alloc args isn't used, we may have problems.
+
             DynamicArray<TypeId> tempTypes{};
             result = generateExpression(arg, &tempTypes);
             if(result == SIGNAL_SUCCESS) {
-                if(tempTypes.size()>0) {
+                if(tempTypes.size() == 0) {
+                    Assert(info.hasForeignErrors());
+                } else {
                     TypeId argType = tempTypes[0];
                     // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
                     bool wasSafelyCasted = performSafeCast(argType, signature->argumentTypes[i].typeId);
+                    if(!wasSafelyCasted) {
+                        Assert(expression->uses_cast_operator);
+                        FnOverloads::Overload cast_overload;
+                        wasSafelyCasted = ast->findCastOperator(currentScopeId, argType, signature->argumentTypes[i].typeId, &cast_overload);
+                        Assert(cast_overload.astFunc && cast_overload.funcImpl);
+
+                        int signature=0; // prevent mistakes
+                        auto cast_sig = &cast_overload.funcImpl->signature;
+
+                        int arg_space = cast_overload.funcImpl->signature.argSize;
+                        // we must emit alloc args before we generate pushed values!
+                        // builder.emit_alloc_args(BC_REG_INVALID, arg_space);
+                        builder.fix_alloc_args(off_alloc_args, arg_space);
+                        Assert(cast_sig->argumentTypes.size() == 1);
+                        generatePop_set_arg(cast_sig->argumentTypes[0].offset, cast_sig->argumentTypes[0].typeId);
+
+                        int reloc;
+                        builder.emit_call(cast_overload.astFunc->linkConvention, cast_overload.astFunc->callConvention, &reloc);
+                        info.addCallToResolve(reloc, cast_overload.funcImpl);
+                    
+                        builder.emit_free_args(arg_space);
+
+                        Assert(cast_sig->returnTypes.size() == 1);
+
+                        auto &ret = cast_sig->returnTypes[0];
+                        TypeId typeId = ret.typeId;
+                        generatePush_get_val(ret.offset - cast_sig->returnSize, typeId);
+                    }
                     if(!wasSafelyCasted && !info.hasErrors()){
                         if(!is_function_pointer) {
                             ERR_SECTION(
@@ -1301,8 +1345,6 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                             )
                         }
                     }
-                } else {
-                    Assert(info.hasForeignErrors());
                 }
             }
         }
@@ -3103,7 +3145,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 if (!performSafeCast(rtype, assignType)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
                     // std::string leftstr = info.ast->typeToString(assignType);
                     // std::string rightstr = info.ast->typeToString(rtype);
-                    ERRTYPE1(expression->location, assignType, rtype, ""
+                    ERRTYPE1(expression->location, rtype,assignType, ""
                         // ERR_LINE2(expression->left->location, leftstr.c_str());
                         // ERR_LINE2(expression->right->location,rightstr.c_str());
                     )

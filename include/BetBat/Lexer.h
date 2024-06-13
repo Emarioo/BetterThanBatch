@@ -303,7 +303,8 @@ namespace lexer {
         // const DynamicArray<Import*>& getImports() { return _imports; }
         
         bool get_source_information(SourceLocation loc, std::string* path, int* line, int* column, Import** out_imp = nullptr);
-        
+        std::string get_source_information_string(SourceLocation loc);
+
         Import* getImport_unsafe(SourceLocation location) {
             u32 cindex, tindex;
             decode_origin(location.tok.origin, &cindex,&tindex);

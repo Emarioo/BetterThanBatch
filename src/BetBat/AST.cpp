@@ -1,4 +1,5 @@
 #include "BetBat/AST.h"
+#include "BetBat/Compiler.h"
 
 const char* ToString(CallConvention stuff){
     #define CASE(X,N) case X: return N;
@@ -128,7 +129,7 @@ const char* statement_names[] {
     "test",           // TEST
 };
 
-AST *AST::Create() {
+AST *AST::Create(Compiler* compiler) {
     using namespace engone;
 // Useful when debugging memory leaks
 #ifdef LOG_ALLOC
@@ -163,7 +164,7 @@ AST *AST::Create() {
 #endif
 
     AST *ast = TRACK_ALLOC(AST);
-    new(ast) AST();
+    new(ast) AST(compiler);
 
     ast->initLinear();
 
@@ -263,6 +264,41 @@ VariableInfo* AST::getVariableByIdentifier(Identifier* identifier) {
 //     return variables[identifier->varIndex];
 // }
 // Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
+bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, FnOverloads::Overload* overload) {
+    using namespace engone;
+    auto iter = createScopeIterator(scopeId, CONTENT_ORDER_MAX);
+    while(iterate(iter)) {
+        auto scope = iter.next_scope;
+        auto pair = scope->identifierMap.find("cast");
+        if (pair == scope->identifierMap.end())
+            continue;
+
+        auto iden = &pair->second;
+        if (iden->type != Identifier::FUNCTION)
+            continue;
+        
+        // nocheckin TODO: Find polymorphic overloads
+        for(auto& fn : iden->funcOverloads.overloads) {
+
+            // log::out << compiler->lexer.get_source_information_string(fn.astFunc->location) << " check this overload\n";
+
+            auto& sig = fn.funcImpl->signature;
+            if (sig.argumentTypes.size() != 1
+            || sig.returnTypes.size() != 1)
+                continue;
+            
+            if(sig.argumentTypes[0].typeId != from_type
+            || sig.returnTypes[0].typeId != to_type) {
+                continue;
+            }
+            
+            if(overload)
+                *overload = fn;
+            return true; // found overload
+        }
+    }
+    return false;
+}
 Identifier *AST::addIdentifier(ScopeId scopeId, const StringView &name, ContentOrder contentOrder, bool* out_reused_identical) {
     using namespace engone;
     bool shadowPreviousIdentifiers = false;
@@ -320,7 +356,9 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
                 }
             }
         } else {
-            Assert(false); // namespace broken   
+            log::out << log::RED << "Namespaces are incomplete. Don't type ::\n";
+            return nullptr;
+            // Assert(false); // namespace broken
         }
     } else {
         ScopeInfo* si = getScope(startScopeId);
@@ -532,7 +570,7 @@ bool AST::castable(TypeId from, TypeId to){
 
 }
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -580,7 +618,18 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
             found_uint = false;
             for(int j=0;j<(int)fncall->nonNamedArgs;j++){
                 TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
-                if(!ast->castable(argTypes[j], implArgType)) {
+                bool is_castable = ast->castable(argTypes[j], implArgType);
+                if(!is_castable){
+                    // Not castable with normal conversion
+                    // Check hard conversions
+                    FnOverloads::Overload cast_overload;
+                    is_castable = ast->findCastOperator(scopeOfFncall, argTypes[j], implArgType, &cast_overload);
+                    if(is_castable) {
+                        ast->declareUsageOfOverload(&cast_overload);
+                        fncall->uses_cast_operator = true;
+                    }
+                }
+                if(!is_castable) {
                     found = false;
                     break;
                 }
@@ -651,7 +700,12 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
         return intOverload;
     return nullptr;
 }
-
+void AST::declareUsageOfOverload(FnOverloads::Overload* overload) {
+    if(overload->astFunc->body && overload->funcImpl->usages == 0){
+        compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
+    }
+    overload->funcImpl->usages++;
+}
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
 FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, ASTExpression* fncall, bool implicitPoly, bool canCast){
     using namespace engone;

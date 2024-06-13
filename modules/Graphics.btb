@@ -239,7 +239,29 @@ struct Font {
             cast<f32> cell_h * (cast<i32> chr / 16) / cast<f32> height + cast<f32>cell_h / height;
     }
     fn width_of_text(text: char[], text_height: f32) -> f32 {
-        return text.len * cast<f32> char_width/cast<f32>cell_h * text_height
+        max_len := 0
+        len := 0
+        for text {
+            if it == '\n' {
+                len=0
+                continue
+            }
+            len++
+            if len > max_len
+                max_len = len
+        }
+        return max_len * cast<f32> char_width/cast<f32>cell_h * text_height
+    }
+    fn height_of_text(text: char[], text_height: f32) -> f32 {
+        len := 1
+        for text {
+            if it == '\n'
+                len++
+        }
+        return len * text_height
+    }
+    fn size_of_text(text: char[], text_height: f32) -> f32, f32 {
+        // TODO:
     }
 }
 
@@ -569,11 +591,20 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
     CAM_VALUES
     
     // TODO: Batch draw calls
+    off_x: i32 = 0
+    off_y: f32 = 0
     for text {
         // log(it)
+        if it == '\n' {
+            off_y += h
+            off_x = 0
+            continue
+        }
+
         u, v, uw, vh := font.get_uvwh(it)
         
-        off := nr * cast<f32> (font.char_width) / font.cell_h * h
+        off := off_x * cast<f32> (font.char_width) / font.cell_h * h
+        off_x++
         w := cast<f32> font.char_width / font.cell_w * h
         
         // log(it," ", off," ", w, " ", font.char_width)
@@ -581,10 +612,10 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
         
         vertices: f32[] {
             // x ,y, uv.x, uv.y, color.rgba, texture
-            (bx + off) *     zoom + ox, (by) *     zoom + oy,     u,  v, color.r, color.b, color.g, color.a,  font.id,
-            (bx + off) *     zoom + ox, (by + h) * zoom + oy, u,  vh, color.r, color.b, color.g, color.a, font.id,
-            (bx + off + w) * zoom + ox, (by + h) * zoom + oy, uw, vh, color.r, color.b, color.g, color.a, font.id,
-            (bx + off + w) * zoom + ox, (by) *     zoom + oy,     uw, v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off) *     zoom + ox, (by + off_y) *     zoom + oy,     u,  v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off) *     zoom + ox, (by + off_y + h) * zoom + oy, u,  vh, color.r, color.b, color.g, color.a, font.id,
+            (bx + off + w) * zoom + ox, (by + off_y + h) * zoom + oy, uw, vh, color.r, color.b, color.g, color.a, font.id,
+            (bx + off + w) * zoom + ox, (by + off_y) *     zoom + oy,     uw, v, color.r, color.b, color.g, color.a,  font.id,
         }
         glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);

@@ -218,6 +218,8 @@ struct DynamicArray {
     u32 max = 0;
 
     bool add(const T& t){
+        TRACE_FUNC()
+
         if(used + 1 > max){
             if(!reserve(1 + max * 1.5)){
                 return false;
@@ -233,6 +235,8 @@ struct DynamicArray {
     //     return add(*(const T*)&t);
     // }
     bool pop(){
+        TRACE_FUNC()
+
         if(used==0)
             return false;
         T* ptr = _ptr + --used;
@@ -242,6 +246,8 @@ struct DynamicArray {
     // Shifts all elements to the right one step to the left
     // It isn't recommended to use this function.
     bool removeAt(u32 index){
+        TRACE_FUNC()
+
         Assert(index < used);
         T* ptr = _ptr + index;
         ptr->~T();
@@ -268,6 +274,8 @@ struct DynamicArray {
         return (_ptr + index);
     }
     T& get(u32 index) const {
+        TRACE_FUNC()
+
         Assert(index < used);
         return *(_ptr + index);
     }
@@ -276,6 +284,8 @@ struct DynamicArray {
         return *(_ptr + index);
     }
     T& last() const {
+        TRACE_FUNC()
+        
         Assert(used>0);
         return *(_ptr + used - 1);
     }

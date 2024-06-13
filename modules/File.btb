@@ -268,7 +268,7 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     iter.root.append(root_path)
     iter.remaining_directories.add(iter.root.copy())
     #if OS_WINDOWS
-    iter.handle = -1
+    iter.handle = null
     #elif OS_LINUX
     iter.fd_current_dir = -1
     iter.head = 0

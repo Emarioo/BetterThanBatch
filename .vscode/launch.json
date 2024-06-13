@@ -43,6 +43,7 @@
             "program": "${workspaceFolder}/bin/btb.exe",
             // "args": ["-twe","*switch*"],
             "args": ["-dev"],
+            // "args": ["--test","examples/*"],
             // "args": ["-dev","-nopreload"],
             // "args": ["--test"],
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],

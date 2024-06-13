@@ -933,6 +933,8 @@ SignalIO ParseContext::parseNamespace(ASTScope*& astNamespace){
     _PLOG(FUNC_ENTER)
     int startIndex = info.gethead();
 
+    Assert(("parsing namespace, incomplete", false));
+
     bool hideAnnotation = false;
 
     StringView name_view{};
@@ -3483,6 +3485,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         
         OperationType op = (OperationType)0;
         int extraNext = 0;
+        function->is_operator = true;
         
         // TODO: Improve parsing here. If the token is an operator but not allowed
         //  then you can continue parsing, it's just that the function won't be
@@ -3495,7 +3498,10 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         auto token0 = info.getinfo(&view);
         auto token1 = info.getinfo(nullptr,1);
         // What about +=, -=?
-        if(token0->type == '[' && token1->type == ']') {
+        if(token0->type == lexer::TOKEN_IDENTIFIER && view == "cast") {
+            info.advance();
+            name = "cast";
+        } else if(token0->type == '[' && token1->type == ']') {
             info.advance(2);
             name = "[]";
         } else if(!(op = parser::IsOp(token0, token1, view, extraNext))){
@@ -3513,6 +3519,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         }
         if(op == AST_ASSIGN) {
             ERR_DEFAULT(tok_name, "Assign operator is not allowed for operator overloading", "not allowed")
+            // for now?
         }
 
         function->name = name;
@@ -4283,7 +4290,14 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
             if(tempFunction)
                 bodyLoc->add(info.ast, tempFunction);
             info.nextContentOrder.last()++;
-        } else if(token->type == lexer::TOKEN_ENUM) {
+        } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "conversion") {
+            info.advance();
+            signal = parseFunction(tempFunction, nullptr, true);
+            astNode = (ASTNode*)tempFunction;
+            if(tempFunction)
+                bodyLoc->add(info.ast, tempFunction);
+            info.nextContentOrder.last()++;
+        }  else if(token->type == lexer::TOKEN_ENUM) {
             info.advance();
             signal = parseEnum(tempEnum);
             astNode = (ASTNode*)tempEnum;

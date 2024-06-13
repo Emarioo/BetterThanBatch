@@ -12,6 +12,12 @@
 #include "BetBat/Reformatter.h"
 
 bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode) {
+    TRACE_FUNC()
+
+    CALLBACK_ON_ASSERT(
+        tinycode->print(0,-1, code);
+    )
+
     using namespace engone;
 
     this->bytecode = bytecode;
@@ -765,10 +771,17 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     //   registers are being leaked.
     // #define DEBUG_REGISTER_USAGE
     
+    X64Inst* cur_node = nullptr;
+    CALLBACK_ON_ASSERT(
+        log::out << "Asserted on " << log::GRAY <<  cur_node->bc_index <<" " << *cur_node << "\n";
+        // tinycode->print(0,-1, code);
+    )
+
     #ifdef DEBUG_REGISTER_USAGE
     log::out << log::CYAN << tinycode->name<<"\n";
     #endif
     for(auto n : inst_list) {
+        cur_node = n;
         auto opcode = n->base->opcode;
         map_translation(n->bc_index, code_size());
         last_pc = code_size();
@@ -804,7 +817,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 Assert(("HALT not implemented",false));
             } break;
             case BC_NOP: {
-                emit1(OPCODE_NOP);
+                // don't emit nops? they don't do anything unless the user wants to mark the machine code with nops to more easily navigate the disassembly
+                // for now, we disable it
+                // emit1(OPCODE_NOP);
             } break;
             case BC_MOV_RR: {
                 FIX_PRE_IN_OPERAND(1)
@@ -972,6 +987,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             case BC_ALLOC_ARGS: {
                 auto base = (InstBase_op1_imm16*)n->base;
                 int imm = (i32)base->imm16; // IMPORTANT: immediate is modified, do not used base->imm16 directly!
+                // if (imm == 0) {
+                //     // PRINT_BYTECODE("why");
+                //     break;
+                // }
                 if(opcode == BC_ALLOC_ARGS) {
                     int misalignment = (virtual_stack_pointer + imm) & 0xf;
                     misalignments.add(misalignment);
@@ -996,10 +1015,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     } else {
                         emit_sub_imm32(X64_REG_SP, imm);
                     }
-                } else Assert(base->op0 == BC_REG_INVALID); // we can't get pointer if we didn't allocate anything
-
-                virtual_stack_pointer -= imm;
-                push_offsets.add(0); // needed for SET_ARG
+                    virtual_stack_pointer -= imm;
+                    push_offsets.add(0); // needed for SET_ARG
+                } else {
+                    Assert(base->op0 == BC_REG_INVALID); // we can't get pointer if we didn't allocate anything
+                }
             } break;
             case BC_FREE_LOCAL:
             case BC_FREE_ARGS: {
@@ -3271,6 +3291,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     
                 */
 
+                // FIRST STEP, place the values in the right registers
+
                 FIX_PRE_IN_OPERAND(0)
                 FIX_PRE_IN_OPERAND(1)
 
@@ -3293,6 +3315,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit_movzx(RESERVED_REG1, RESERVED_REG1, base->control);
 
                 push_alignment();
+
+                // SECOND STEP, emit the machine instructions for _test
 
                 #ifdef OS_WINDOWS
                 /*

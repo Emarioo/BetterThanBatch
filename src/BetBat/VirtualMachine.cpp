@@ -349,6 +349,10 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
+
+            // if (imm == 0) // nop
+            //     break;
+
             registers[BC_REG_LOCALS] = base_pointer;
 
             if(opcode == BC_ALLOC_ARGS) {

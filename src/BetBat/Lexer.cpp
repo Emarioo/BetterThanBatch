@@ -2097,5 +2097,11 @@ bool Lexer::get_source_information(SourceLocation loc, std::string* path, int* l
         *column = src->column;
     return true;
 }
+std::string Lexer::get_source_information_string(SourceLocation loc) {
+    std::string path;
+    int line,column;
+    get_source_information(loc, &path, &line, &column);
+    return path + ":"+std::to_string(line)+":"+std::to_string(column);
+}
 }
 

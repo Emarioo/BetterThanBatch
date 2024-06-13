@@ -1,0 +1,25 @@
+
+@TEST_CASE(operator_cast)
+
+#import "String"
+#import "Lang"
+
+fn okay(str: char[]) {
+    // log("'",cast<void*>str.ptr,"' ", str.len)
+    // log("'",str.ptr,"' ", str.len)
+    _test 4; str.len;
+}
+
+operator cast(a: StringBuilder) -> char[] {
+    return a.sliced()
+    // std_print_any(&a)
+    // return Slice<char>{cast<i64>1,2}
+}
+
+{
+    s: StringBuilder
+    s.append("Hi: ")
+    // s.append(923)
+
+    okay(s)
+}

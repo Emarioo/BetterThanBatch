@@ -16,10 +16,10 @@ enum @specified NOM {
     A, // bad
 }
 
-enum @specified NOM {
-    A,
-    B = 0,
-}
+// enum @specified NOM {
+//     A,
+//     B = 0,
+// }
 
 enum @unique Un {
     A,

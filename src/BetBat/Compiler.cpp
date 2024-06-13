@@ -1098,7 +1098,7 @@ void Compiler::run(CompileOptions* options) {
     importDirectories.add(options->modulesDirectory);
     
     preprocessor.init(&lexer, this);
-    ast = AST::Create();
+    ast = AST::Create(this);
     bytecode = Bytecode::Create();
     bytecode->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;

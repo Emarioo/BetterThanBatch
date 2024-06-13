@@ -144,7 +144,7 @@ fn main() -> i32 {
         TEXT("shift + 1/3 to rapidly step frames")
         TEXT("1/3 to step back/forward a frame")
         TEXT("2 to pause/unpause")
-        TEXT("R to reset positions")
+        TEXT("R to reset positions\nlalala")
         TEXT("WASD and Arrow keys to move")
 
         // FillRect(window, t, 10, 100., 100., Color{0.5,1,1})

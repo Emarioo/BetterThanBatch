@@ -312,6 +312,36 @@ void BytecodeBuilder::emit_alloc_args(BCRegister reg, u16 size) {
     // pushed_offset = 0;
     virtual_stack_pointer -= size;
 }
+void BytecodeBuilder::emit_empty_alloc_args(int* out_size_offset) {
+    if(disable_code_gen) return;
+    if(compiler->options->compileStats.errors == 0) {
+
+    }
+    Assert(out_size_offset);
+    // Assert(size > 0); zero size = zero arguments can happen and we can't skip instruction because
+    // we want alignment
+    emit_imm8(BC_NOP);
+    emit_imm8(BC_NOP);
+    // emit_opcode(BC_ALLOC_ARGS);
+    // emit_operand(BC_REG_INVALID);
+    *out_size_offset = get_pc();
+    emit_imm8(BC_NOP);
+    emit_imm8(BC_NOP);
+    // emit_imm16(0);
+
+    has_return_values = false;
+    // pushed_offset = 0;
+    // nocheckin VP needs fixing!
+    // virtual_stack_pointer -= size;
+}
+void BytecodeBuilder::fix_alloc_args(int index, u16 size) {
+    auto ptr = tinycode->instructionSegment.data();
+    *(u8*)(ptr + index - 2) = BC_ALLOC_ARGS;
+    *(u8*)(ptr + index - 1) = BC_REG_INVALID;
+    *(u16*)(ptr + index) = size;
+    
+    virtual_stack_pointer -= size;
+}
 void BytecodeBuilder::emit_free_args(u16 size) {
     if(disable_code_gen) return;
 
@@ -920,6 +950,9 @@ bool TinyBytecode::applyRelocations(Bytecode* code) {
     bool suc = true;
     for(int i=0;i<call_relocations.size();i++) {
         auto& rel = call_relocations[i];
+        // Assert may fire if function wasn't generated.
+        // Perhaps no one declared usage of the function even
+        // though we should have.
         Assert(rel.funcImpl && rel.funcImpl->tinycode_id);
         *(i32*)&instructionSegment[rel.pc] = rel.funcImpl->tinycode_id;
     }
