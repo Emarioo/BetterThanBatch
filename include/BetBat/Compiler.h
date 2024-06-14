@@ -327,7 +327,7 @@ struct Compiler {
     #define VAR_MEMBERS 1
     #define VAR_STRINGS 2
     #define VAR_COUNT 3
-    VariableInfo* varInfos[VAR_COUNT]{nullptr};
+    IdentifierVariable* varInfos[VAR_COUNT]{nullptr};
     int dataOffset_types = -1;
     int dataOffset_members = -1;
     int dataOffset_strings = -1;

@@ -829,10 +829,11 @@ void Compiler::processImports() {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     if(is_initial_import) {
                         // The 
-                        auto iden = ast->findIdentifier(imp->scopeId,0,"main");
-                        if(iden) {
-                            Assert(iden->funcOverloads.overloads.size());
-                            auto overload = iden->funcOverloads.overloads[0];
+                        auto iden = ast->findIdentifier(imp->scopeId,0,"main",nullptr);
+                        if(iden && iden->is_fn()) {
+                            auto fun = iden->cast_fn();
+                            Assert(fun->funcOverloads.overloads.size());
+                            auto overload = fun->funcOverloads.overloads[0];
                             addTask_type_body(overload.astFunc, overload.funcImpl);
                         } else {
                             addTask_type_body(imp->import_id);

@@ -219,51 +219,123 @@ AST *AST::Create(Compiler* compiler) {
 }
 
 // VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, bool shadowPreviousVariables) {
-VariableInfo *AST::addVariable(ScopeId scopeId, const StringView&name, ContentOrder contentOrder, Identifier** identifier, bool* out_reused_identical = nullptr) {
+IdentifierVariable* AST::addVariable(Identifier::Type type, ScopeId scopeId, const StringView&name, ContentOrder contentOrder, bool* out_reused_identical = nullptr) {
     using namespace engone;
-    bool shadowPreviousVariables = false;
-    auto id = addIdentifier(scopeId, name, contentOrder, out_reused_identical);
-    if(!id) {
+
+    ScopeInfo* si = getScope(scopeId);
+    if(!si)
+        return nullptr;
+    std::string sName = std::string(name.ptr,name.len); // string view?
+    
+    auto pair = si->identifierMap.find(sName);
+    if (pair != si->identifierMap.end()){
+        // NOTE: We allow reuse of variable if polymorphic
+        // Otherwise the first polymorphic scope that is evaluated
+        // would be able to add a new local variable while
+        // a second polymorphic scope can't add variable because
+        // it already exists. But with polymorphic scopes we actually
+        // want to reuse the same variable, it's the type of the 
+        // variable that actually vary.
+        if(out_reused_identical) {
+            // However, that requires the exact same scope, order, name, and type.
+            if(scopeId == pair->second->scopeId
+            && contentOrder == pair->second->order
+            && name == pair->second->name
+            && type == pair->second->type) {
+                *out_reused_identical = true;
+                return (IdentifierVariable*)pair->second;
+            }
+        }
         return nullptr;
     }
-    VariableInfo* varinfo = nullptr;
-    if(identifier)
-        *identifier = id;
-    if(out_reused_identical && *out_reused_identical) {
-        varinfo = getVariableByIdentifier(id);
-        Assert(varinfo);
-        // If we reused identifier then it must have been a variable
-        // and it should have varinfo. Probably bug otherwise.
-    } else {
-        varinfo = (VariableInfo*)allocate(sizeof(VariableInfo));
-        new(varinfo)VariableInfo();
-        
-        id->type = Identifier::VARIABLE;
-        id->order = contentOrder;
-        
+
+    auto iden = (IdentifierVariable*)allocate(sizeof(IdentifierVariable));
+    new(iden)IdentifierVariable();
+    si->identifierMap[sName] = iden;
+    iden->type = type;
+    iden->name = name;
+    iden->scopeId = scopeId;
+    iden->order = contentOrder;
+
+    return iden;
+}
+
+IdentifierFunction *AST::addFunction(ScopeId scopeId, const StringView &name, ContentOrder contentOrder) {
+    using namespace engone;
+
+    ScopeInfo* si = getScope(scopeId);
+    if(!si)
+        return nullptr;
+    std::string sName = std::string(name.ptr,name.len); // string view?
+    
+    auto pair = si->identifierMap.find(sName);
+    if (pair != si->identifierMap.end()){
+        return nullptr;
+    }
+    
+    auto iden = (IdentifierFunction*)allocate(sizeof(IdentifierFunction));
+    new(iden)IdentifierFunction();
+    si->identifierMap[sName] = iden;
+    iden->type = Identifier::FUNCTION;
+    iden->name = name;
+    iden->scopeId = scopeId;
+    iden->order = contentOrder;
+
+    return iden;
+}
+Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes){
+    using namespace engone;
+    // Assert(crossed_function_boundary); // crossed function boundary is only valid for local variables, if we search for function identifier then argument will be null so we can't assert it
+
+
+    if(crossed_function_boundary)
+        *crossed_function_boundary = false;
+
+    if(searchParentScopes){
+        StringView ns;
+        StringView real_name;
+        DecomposeNamespace(name, &ns, &real_name);
         lock_variables.lock();
-        id->varIndex = variables.size();
-        variables.add(varinfo);
-        lock_variables.unlock();
+        defer { lock_variables.unlock(); };
+        if(ns.len == 0) {
+            auto iterator = createScopeIterator(startScopeId, contentOrder);
+            while(iterate(iterator)) {
+                auto scope = iterator.next_scope;
+                auto order = iterator.next_order;
+
+                auto pair = scope->identifierMap.find(real_name);
+                if (pair == scope->identifierMap.end())
+                    continue;
+                    
+                // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+                if (pair->second->order <= order) {
+                    if(crossed_function_boundary)
+                        *crossed_function_boundary = iterator.next_crossed_function_boundary;
+                    return pair->second;
+                }
+            }
+        } else {
+            log::out << log::RED << "Namespaces are incomplete. Don't type ::\n";
+            return nullptr;
+            // Assert(false); // namespace broken
+        }
+    } else {
+        ScopeInfo* si = getScope(startScopeId);
+        Assert(si);
+        lock_variables.lock();
+        defer { lock_variables.unlock(); };
+        auto pair = si->identifierMap.find(name);
+        if(pair == si->identifierMap.end()){
+            return nullptr;
+        }
+        // if(pair->second.type == Identifier::VARIABLE && pair->second.order < contentOrder) {
+        if(pair->second->order <= contentOrder) {
+            return pair->second;
+        }
+        return nullptr;
     }
-    return varinfo;
+    return nullptr;
 }
-VariableInfo* AST::getVariableByIdentifier(Identifier* identifier) {
-    Assert(identifier && identifier->type == Identifier::VARIABLE);
-    VariableInfo* ptr = nullptr;
-    lock_variables.lock();
-    if(identifier->varIndex < variables.size()) {
-        ptr = variables[identifier->varIndex];
-    }
-    lock_variables.unlock();
-    return ptr;
-}
-// VariableInfo* AST::identifierToVariable(Identifier* identifier){
-//     Assert(identifier);
-//     Assert(identifier->varIndex < variables.size());
-//     return variables[identifier->varIndex];
-// }
-// Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
 bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, FnOverloads::Overload* overload) {
     using namespace engone;
     auto iter = createScopeIterator(scopeId, CONTENT_ORDER_MAX);
@@ -273,7 +345,7 @@ bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, Fn
         if (pair == scope->identifierMap.end())
             continue;
 
-        auto iden = &pair->second;
+        auto iden = (IdentifierFunction*)pair->second;
         if (iden->type != Identifier::FUNCTION)
             continue;
         
@@ -299,128 +371,56 @@ bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, Fn
     }
     return false;
 }
-Identifier *AST::addIdentifier(ScopeId scopeId, const StringView &name, ContentOrder contentOrder, bool* out_reused_identical) {
-    using namespace engone;
-    bool shadowPreviousIdentifiers = false;
-    ScopeInfo* si = getScope(scopeId);
-    if(!si)
-        return nullptr;
-    std::string sName = std::string(name.ptr,name.len); // string view?
-    lock_variables.lock();
-    auto pair = si->identifierMap.find(sName);
-    if (pair != si->identifierMap.end()){
-        if(out_reused_identical) {
-            if(scopeId == pair->second.scopeId
-            && contentOrder == pair->second.order
-            && name == pair->second.name
-            && pair->second.type == Identifier::VARIABLE) { // we can only reuse variable identifiers, not function identifiers
-                *out_reused_identical = true;
-                lock_variables.unlock();
-                return &pair->second;
-            }
-        }
-        lock_variables.unlock();
-        return nullptr;
-    }
-
-    // TODO: Delete variable info of previous identifier when shadowing
-    si->identifierMap[sName] = {};
-    auto id = &si->identifierMap[sName];
-    id->name = name;
-    id->scopeId = scopeId;
-    id->order = contentOrder;
-    lock_variables.unlock();
-    return id;
-}
-// Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes){
-Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool searchParentScopes){
-    using namespace engone;
-    if(searchParentScopes){
-        StringView ns;
-        StringView real_name;
-        DecomposeNamespace(name, &ns, &real_name);
-        lock_variables.lock();
-        defer { lock_variables.unlock(); };
-        if(ns.len == 0) {
-            auto iterator = createScopeIterator(startScopeId, contentOrder);
-            while(iterate(iterator)) {
-                auto scope = iterator.next_scope;
-                auto order = iterator.next_order;
-
-                auto pair = scope->identifierMap.find(real_name);
-                if (pair == scope->identifierMap.end())
-                    continue;
-                    
-                // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
-                if (pair->second.order <= order) {
-                    return &pair->second;
-                }
-            }
-        } else {
-            log::out << log::RED << "Namespaces are incomplete. Don't type ::\n";
-            return nullptr;
-            // Assert(false); // namespace broken
-        }
-    } else {
-        ScopeInfo* si = getScope(startScopeId);
-        Assert(si);
-        lock_variables.lock();
-        defer { lock_variables.unlock(); };
-        auto pair = si->identifierMap.find(name);
-        if(pair == si->identifierMap.end()){
-            return nullptr;
-        }
-        // if(pair->second.type == Identifier::VARIABLE && pair->second.order < contentOrder) {
-        if(pair->second.order <= contentOrder) {
-            return &pair->second;
-        }
-        return nullptr;
-    }
-    return nullptr;
-}
-
 AST::ScopeIterator AST::createScopeIterator(ScopeId scopeId, ContentOrder order){
     ScopeIterator iter{};
     auto s = getScope(scopeId);
     if(!s)
         return iter;
 
-    iter.search_scopes.add(s);
-    iter.content_orders.add(order);
+    ScopeIterator::Item it{};
+    it.scope = s;
+    it.order = order;
+    it.crossed_function_boundary = false;
+    iter.search_items.add(it);
     return iter;
 }
 ScopeInfo* AST::iterate(ScopeIterator& iterator){
-    auto add = [&](ScopeInfo* s, ContentOrder order) {
+    auto add = [&](ScopeInfo* s, ContentOrder order, bool crossed_boundary) {
         // TODO: Optimize
         for (int i=0;i<iterator.search_index;i++) {
-            if(iterator.search_scopes[i] == s) {
+            if(iterator.search_items[i].scope == s) {
                 return;
             }
         }
-        iterator.search_scopes.add(s);
-        iterator.content_orders.add(order);
+        
+        ScopeIterator::Item it{};
+        it.scope = s;
+        it.order = order;
+        it.crossed_function_boundary = crossed_boundary;
+        iterator.search_items.add(it);
     };
     
-    while(iterator.search_index < iterator.search_scopes.size()) {
-        ScopeInfo* info = iterator.search_scopes[iterator.search_index];
-        auto order = iterator.content_orders[iterator.search_index];
+    while(iterator.search_index < iterator.search_items.size()) {
+        ScopeIterator::Item it = iterator.search_items[iterator.search_index];
         iterator.search_index++;
         
-        for(auto s : info->sharedScopes) {
+        for(auto s : it.scope->sharedScopes) {
             // MAX so that we can see everything in the shared scope
-            add(s, CONTENT_ORDER_MAX);
+            add(s, CONTENT_ORDER_MAX, true);
         }
         
-        if(info->id != info->parent) {
-            if(info->id == info->parent)
+        if(it.scope->id != it.scope->parent) {
+            if(it.scope->id == it.scope->parent)
                 continue;
-            auto s = getScope(info->parent);
-            add(s, info->contentOrder);
+            auto s = getScope(it.scope->parent);
+            add(s, it.scope->contentOrder, it.crossed_function_boundary || it.scope->is_function_scope);
+            // We use  'it.scope->is_function_scope'  NOT  's->is_function_scope'  because we don't want the direct underlying identifiers of a scope to be seen as outside function boundary. Such identifiers are within the scope.
         }
         
-        iterator.next_scope = info;
-        iterator.next_order = order;
-        return info;
+        iterator.next_scope = it.scope;
+        iterator.next_order = it.order;
+        iterator.next_crossed_function_boundary = it.crossed_function_boundary;
+        return it.scope;
     }
     return nullptr;
 }
@@ -1182,18 +1182,14 @@ void AST::cleanup() {
     _constStringMap.clear();
     _constStrings.reserve(0);
 
-
-    // for(auto& str : tempStrings){
-    //     str->~basic_string<char>();
-    //     // engone::Free(str, sizeof(std::string));
-    // }
-    // tempStrings.cleanup();
-
-    for(auto ptr : variables){
-        ptr->~VariableInfo();
-        // engone::Free(ptr, sizeof(VariableInfo));
+    for(auto ptr : identifiers){
+        if (ptr->type == Identifier::FUNCTION) {
+            ((IdentifierFunction*)ptr)->~IdentifierFunction();
+        } else {
+            ((IdentifierVariable*)ptr)->~IdentifierVariable();
+        }
     }
-    variables.cleanup();
+    identifiers.cleanup();
 
     nextTypeId = AST_OPERATION_COUNT;
 

@@ -497,6 +497,16 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
             }
         }
     }
+
+    // checks struct in methods after checking the upper structs in case
+    // lower structs refer to upper structs.
+    for(auto astStruct : scope->structs){
+        for(auto fun : astStruct->functions){
+            if(fun->body) {
+                SignalIO result = CheckStructs(info, fun->body);
+            }
+        }
+    }
     
     // Structs in scopes below cannot be used by the above
     // so if the above is false then there isn't a reason to run the
@@ -704,16 +714,90 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         fnOverloads = ti->astStruct->getMethod(baseName);
 
         if(!fnOverloads) {
-            if(operatorOverloadAttempt || attempt)
-                return SIGNAL_NO_MATCH;
+            auto mem = ti->getMember(baseName);
+            if(mem.index != -1) {
+                auto type = mem.typeId;
+                
+                auto type_info = info.ast->getTypeInfo(type);
+                if(!type_info->funcType) {
+                    if(operatorOverloadAttempt || attempt)
+                        return SIGNAL_NO_MATCH;
 
-            ERR_SECTION(
-                ERR_HEAD2(expr->location) // nocheckin, badly marked token
-                ERR_MSG("Method '"<<baseName <<"' does not exist. Did you mispell the name?")
-                ERR_LINE2(expr->location,"undefined")
-            )
-            FNCALL_FAIL
-            return SIGNAL_NO_MATCH;
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("The identifier '"<<baseName <<"' is a variable but not a function pointer. You can only \"call\" variables if they are a function pointer.")
+                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                    )
+                    FNCALL_FAIL
+                    return SIGNAL_FAILURE;
+                }
+                
+                if(expr->nonNamedArgs != argTypes.size()) {
+                    if(operatorOverloadAttempt || attempt)
+                        return SIGNAL_NO_MATCH;
+
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("Named arguments is not possible when calling a function pointer that does not have parameter names.")
+                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                    )
+                    FNCALL_FAIL
+                    return SIGNAL_FAILURE;
+                }
+                
+                auto f = type_info->funcType;
+                
+                bool matched = true;
+
+                // first type is 'this' but this code should check
+                // members that are function pointers and doesn't have 'this'
+                argTypes.removeAt(0);
+
+                if(f->argumentTypes.size() != argTypes.size()) {
+                    matched = false;   
+                } else {
+                    for(int i=0;i<f->argumentTypes.size();i++) {
+                        if(!info.ast->castable(argTypes[i], f->argumentTypes[i].typeId)) {
+                            matched = false;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!matched) {
+                    if(operatorOverloadAttempt || attempt)
+                        return SIGNAL_NO_MATCH;
+
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("Args don't match with function pointer.")
+                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                    )
+                    FNCALL_FAIL
+                    return SIGNAL_FAILURE;
+                }
+                
+                if(outTypes) {
+                    if(f->returnTypes.size()==0)
+                        outTypes->add(AST_VOID);
+                    else
+                        for(auto& ret : f->returnTypes)
+                            outTypes->add(ret.typeId);
+                }
+                expr->versions_func_type[info.currentPolyVersion] = f;
+                return SIGNAL_SUCCESS;
+            } else {
+                if(operatorOverloadAttempt || attempt)
+                    return SIGNAL_NO_MATCH;
+
+                ERR_SECTION(
+                    ERR_HEAD2(expr->location) // nocheckin, badly marked token
+                    ERR_MSG("Method '"<<baseName <<"' does not exist. Did you mispell the name?")
+                    ERR_LINE2(expr->location,"undefined")
+                )
+                FNCALL_FAIL
+                return SIGNAL_NO_MATCH;
+            }
         }
     } else {
         if(info.currentAstFunc && info.currentAstFunc->parentStruct) {
@@ -727,7 +811,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             }
         }
         if(!fnOverloads) {
-            Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName);
+            Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName, nullptr);
             
             if(!iden) {
                 if(operatorOverloadAttempt || attempt)
@@ -743,9 +827,10 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             }
             expr->identifier = iden;
             if(iden->type == Identifier::FUNCTION) {
-                fnOverloads = &iden->funcOverloads;
-            } else if(iden->type == Identifier::VARIABLE){
-                auto var = info.ast->getVariableByIdentifier(iden);
+                fnOverloads = &iden->cast_fn()->funcOverloads;
+            } else if(iden->is_var()){
+                auto var = expr->identifier->cast_var();
+                // auto var = info.ast->getVariableByIdentifier(iden);
                 auto type = var->versions_typeId[info.currentPolyVersion];
                 
                 auto type_info = info.ast->getTypeInfo(type);
@@ -1406,19 +1491,39 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             // ScopeInfo* sc = info.ast->getScope(scopeId);
             // sc->print(info.ast);
             // TODO: What about enum?
-            // bool crossed_function_boundary = false;
-            auto iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name);
-            if(iden){
-                expr->identifier = iden;
-                if(iden->type == Identifier::VARIABLE){
-                    log::out << "find " << iden->name << "\n";
-                    auto varinfo = info.ast->getVariableByIdentifier(iden);
-                    if(varinfo){
-                        if(outTypes) outTypes->add(varinfo->versions_typeId[info.currentPolyVersion]);
+            bool crossed_function_boundary = false;
+            auto _iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name, &crossed_function_boundary);
+            if(_iden){
+                expr->identifier = _iden;
+                if(_iden->is_var()){
+                    auto iden = _iden->cast_var();
 
-                        // if(varinfo->type == )
+                    if (iden->type != Identifier::GLOBAL_VARIABLE && crossed_function_boundary) {
+                        /* NOTE:
+                            crossed_function_boundary tells us that the variable we found is
+                            within a parent scope outside of the current function. We should not
+                            be able to access such variables, hence the error. See example below.
+
+                            fn outer() {
+                                n := 8
+                                fn inner() {
+                                    n // should not be accessible
+                                }
+                            }
+                        */
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location, ERROR_UNDECLARED)
+                            ERR_MSG("'"<<expr->name<<"' is not a declared variable.")
+                            ERR_LINE2(expr->location,"undeclared")
+                        )
+
+                        if(outTypes) outTypes->add(AST_VOID);
+                        return SIGNAL_FAILURE;
                     }
-                } else if(iden->type == Identifier::FUNCTION) {
+                    
+                    if(outTypes) outTypes->add(iden->versions_typeId[info.currentPolyVersion]);
+                } else if(_iden->is_fn()) {
+                    auto iden = _iden->cast_fn();
                     if(iden->funcOverloads.overloads.size() == 1) {
                         auto overload = &iden->funcOverloads.overloads[0];
                         
@@ -1523,18 +1628,16 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             TypeId finalType = {};
             if(expr->left->typeId == AST_ID){
                 // AST_ID could result in a type or a variable
-                Identifier* iden = nullptr;
                 auto& name = expr->left->name;
                 // TODO: Handle function pointer type
                 // This code may need to update when code for AST_ID does
 
-                // if(IsName(name) && (iden = ...   nocheckin, I REMOVED 'IsName', IN THE 2.1 REWRITE WAS THAT OKAY?
-                if((iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name)) && iden->type==Identifier::VARIABLE){
-                    auto var = info.ast->getVariableByIdentifier(iden);
-                    Assert(var);
-                    if(var){
-                        finalType = var->versions_typeId[info.currentPolyVersion];
-                    }
+                bool crossed_boundary = false;
+                Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
+
+                if(iden && !iden->is_fn() && (iden->type == Identifier::GLOBAL_VARIABLE || !crossed_boundary)){
+                    auto var = iden->cast_var();
+                    finalType = var->versions_typeId[info.currentPolyVersion];
                 } else {
                     // auto sc = info.ast->getScope(scopeId);
                     // sc->print(info.ast);
@@ -2341,15 +2444,14 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
     }
     // _TCLOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
     FnOverloads* fnOverloads = nullptr;
-    Identifier* iden = nullptr;
+    IdentifierFunction* iden = nullptr;
     if(parentStruct){
         fnOverloads = parentStruct->getMethod(function->name, true);
     } else {
-        iden = info.ast->findIdentifier(scope->scopeId, CONTENT_ORDER_MAX, function->name);
+        iden = (IdentifierFunction*)info.ast->findIdentifier(scope->scopeId, CONTENT_ORDER_MAX, function->name, nullptr);
         if(!iden){
             // cast operator won't work
-            iden = info.ast->addIdentifier(scope->scopeId, function->name, CONTENT_ORDER_ZERO, nullptr);
-            iden->type = Identifier::FUNCTION;
+            iden = info.ast->addFunction(scope->scopeId, function->name, CONTENT_ORDER_ZERO);
         }
         if(iden->type != Identifier::FUNCTION){
             ERR_SECTION(
@@ -2370,18 +2472,16 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
     }
     for(int i=0;i<(int)function->arguments.size();i++){
         auto& arg = function->arguments[i];
-        auto var = info.ast->addVariable(function->scopeId, arg.name, CONTENT_ORDER_ZERO, &arg.identifier, nullptr);
-        var->type = VariableInfo::ARGUMENT;
+        auto var = info.ast->addVariable(Identifier::ARGUMENT_VARIABLE, function->scopeId, arg.name, CONTENT_ORDER_ZERO, nullptr);
+        arg.identifier = var;
         var->argument_index = i;
     }
     if(parentStruct) {
         function->memberIdentifiers.resize(parentStruct->members.size());
         for(int i=0;i<(int)parentStruct->members.size();i++){
             auto& mem = parentStruct->members[i];
-            auto varinfo = info.ast->addVariable(function->scopeId, mem.name, CONTENT_ORDER_ZERO, &function->memberIdentifiers[i], nullptr);
-            if(varinfo){
-                varinfo->type = VariableInfo::MEMBER;
-            }
+            auto varinfo = info.ast->addVariable(Identifier::MEMBER_VARIABLE, function->scopeId, mem.name, CONTENT_ORDER_ZERO, nullptr);
+            function->memberIdentifiers[i] = varinfo;
         }
     }
     if(function->polyArgs.size()==0 && (!parentStruct || parentStruct->polyArgs.size() == 0)){
@@ -2668,14 +2768,7 @@ SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcIm
         auto& arg = func->arguments[i];
         auto& argImpl = funcImpl->signature.argumentTypes[i];
         _TCLOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
-        // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
-        auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
-        Assert(varinfo); // nocheckin
-        if(varinfo){
-            varinfo->versions_typeId[info.currentPolyVersion] = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
-            // the same type as the generator.
-            // vars.add(std::string(arg.name));
-        }   
+        arg.identifier->versions_typeId[info.currentPolyVersion] = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate the same type as the generator.
     }
     // _TCLOG(log::out << "ret:\n";)
     // for (int i=0;i<(int)func->returnValues.size();i++) {
@@ -2697,14 +2790,7 @@ SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcIm
             if(!iden) continue; // happens if an argument has the same name as the member. If so the arg is prioritised and the member ignored.
             auto& memImpl = funcImpl->structImpl->members[i];
             _TCLOG(log::out << " " << iden->name<<": "<< info.ast->typeToString(memImpl.typeId) <<"\n";)
-            // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
-            auto varinfo = info.ast->getVariableByIdentifier(iden);
-            Assert(varinfo); // nocheckin
-            if(varinfo){
-                varinfo->versions_typeId[info.currentPolyVersion] = memImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
-                // the same type as the generator.
-                // vars.add(std::string(arg.name));
-            }   
+            iden->versions_typeId[info.currentPolyVersion] = memImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate the same type as the generator.
         }
     }
     _TCLOG(log::out << "\n";)
@@ -2712,9 +2798,6 @@ SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcIm
     // log::out << log::CYAN << "BODY " << log::NO_COLOR << func->body->location<<"\n";
     CheckRest(info, func->body);
     
-    // for(auto& name : vars){
-    //     info.ast->removeIdentifier(func->scopeId, name);
-    // }
     return SIGNAL_SUCCESS;
 }
 // SignalIO CheckGlobals(CheckInfo& info, ASTScope* scope) {
@@ -2778,7 +2861,7 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
             )
         };
 
-        VariableInfo* varinfo = nullptr;
+        IdentifierVariable* varinfo = nullptr;
 
         if(!varname.declaration) {
             // ASSIGN TO EXISTING VARIABLES (find them first)
@@ -2786,7 +2869,7 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
                 // a polymorphic version fixed identifier for us
             } else {
                 // info.ast->getScope(scope->scopeId)->print(info.ast);
-                Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name, nullptr);
                 if(!possible_identifier) {
                     ERR_SECTION(
                         ERR_HEAD2(varname.location)
@@ -2798,15 +2881,15 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
                     )
                     return SIGNAL_FAILURE;
                     // continue;
-                } else if(possible_identifier->type != Identifier::VARIABLE) {
+                } else if(!possible_identifier->is_var()) {
                     err_non_variable();
                     return SIGNAL_FAILURE;
                     // continue;
                 } else {
-                    varname.identifier = possible_identifier;
+                    varname.identifier = possible_identifier->cast_var();
                 }
             }
-            varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+            varinfo = varname.identifier;
         } else {
             // DECLARE NEW VARIABLE(S)
 
@@ -2839,17 +2922,17 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
             // Based on all that, we may use the one we found or create a new variable identifier.
             Identifier* possible_identifier = nullptr;
             if(!varname.identifier) {
-                possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name, nullptr);
                 if(!possible_identifier) {
                     // identifier does not exist, we should create it.
                     if(now->globalDeclaration) {
-                        varinfo = info.ast->addVariable(scope->scopeId, varname.name, CONTENT_ORDER_ZERO, &varname.identifier, nullptr);
+                        varinfo = info.ast->addVariable(Identifier::GLOBAL_VARIABLE, scope->scopeId, varname.name, CONTENT_ORDER_ZERO, nullptr);
                     } else {
-                        varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
+                        varinfo = info.ast->addVariable(Identifier::LOCAL_VARIABLE, scope->scopeId, varname.name, contentOrder, nullptr);
                     }
+                    varname.identifier = varinfo;
                     Assert(varinfo);
-                    varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
-                } else if(possible_identifier->type == Identifier::VARIABLE) {
+                } else if(possible_identifier->is_var()) {
                     // Identifier does exist but we can still declare it if is in a parent scope.
 
                     // An identifier would have to allow multiple variables with different content orders.
@@ -2877,21 +2960,23 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
 
                             // continue;
                         } else {
-                            varname.identifier = possible_identifier;
+                            varname.identifier = possible_identifier->cast_var();
                             // We should only be here if the scope is polymorphic.
-                            varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                            varinfo = varname.identifier;
+                            // varinfo = info.ast->getVariableByIdentifier(varname.identifier);
                             // The 'now' statement was checked to be global and thus made varinfo global. varinfo->type will always be the same as now->globalDeclaration
                             // The assert will fire if we have a bug in the code.
-                            Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
+                            Assert(varinfo->type == (now->globalDeclaration ? Identifier::GLOBAL_VARIABLE : Identifier::LOCAL_VARIABLE));
                         }
                     } else {
-                        varname.identifier = possible_identifier;
+                        // varname.identifier = possible_identifier->cast_var();
                         // variable does not exist in scope, we can therefore create it
-                        varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
+                        varinfo = info.ast->addVariable(now->globalDeclaration ? Identifier::GLOBAL_VARIABLE : Identifier::LOCAL_VARIABLE, scope->scopeId, varname.name, contentOrder, nullptr);
+                        varname.identifier = varinfo;
                         Assert(varinfo);
                         // ACTUALLY! I thought global assignment in local scopes didn't work but I believe it does.
                         //  The code here just handles where the variable is visible. That should be the local scope which is correct.
-                        //  The VariableInfo::GLOBAL type is what puts the data into the global data section. Silly me.
+                        //  The Identifier::GLOBAL_VARIABLE type is what puts the data into the global data section. Silly me.
                         //  - Emarioo, 2024-1-03
                         // if(now->globalDeclaration && scope->scopeId != 0) {
                         //     ERR_SECTION(
@@ -2904,7 +2989,6 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
                         //     //  We also need to check the identifier against the global scope not 'scope->scopeId'
                         //     //  Basically, global assignment could use it's own code path.
                         // }
-                        varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
                     }
                 } else {
                     err_non_variable();
@@ -2914,10 +2998,11 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
                 }
             } else {
                 // We should only be here if we are in a polymorphic scope/check.
-                Assert(varname.identifier->type == Identifier::VARIABLE);
-                varinfo = info.ast->getVariableByIdentifier(varname.identifier);
-                Assert(varinfo);
-                Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
+                Assert(varname.identifier->is_var());
+                varinfo = varname.identifier;
+                // varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                // Assert(varinfo);
+                Assert(varinfo->type == (now->globalDeclaration ? Identifier::GLOBAL_VARIABLE : Identifier::LOCAL_VARIABLE));
             }
             Assert(varinfo);
 
@@ -3172,7 +3257,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
 
             ScopeId varScope = now->firstBody->scopeId;
             
-            auto bad_var = [&](VariableInfo* varinfo, const std::string& name) {
+            auto bad_var = [&](IdentifierVariable* varinfo, const std::string& name) {
                 if(!varinfo) {
                     ERR_SECTION(
                         ERR_HEAD2(now->location)
@@ -3196,11 +3281,13 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                     auto& varnameIt = now->varnames[0];
                     auto& varnameNr = now->varnames[1];
     
-                    auto varinfo_item = info.ast->addVariable(varScope, varnameIt.name, CONTENT_ORDER_ZERO, &varnameIt.identifier, &reused_item);
+                    auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameIt.name, CONTENT_ORDER_ZERO, &reused_item);
+                    varnameIt.identifier = varinfo_item;
                     
                     bad_var(varinfo_item, varnameIt.name);
                     
-                    auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier, &reused_index);
+                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameNr.name, CONTENT_ORDER_ZERO, &reused_index);
+                    varnameNr.identifier = varinfo_index;
             
                     bad_var(varinfo_index, varnameNr.name);
                     
@@ -3225,8 +3312,9 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                     if(now->varnames[0].name.size() == 0)
                         now->varnames[0].name = "nr";
                     auto& varnameNr = now->varnames[0];
-                    auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier, &reused_index);
-            
+                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameNr.name, CONTENT_ORDER_ZERO, &reused_index);
+                    varnameNr.identifier = varinfo_index;
+
                     bad_var(varinfo_index, varnameNr.name);
                     
                     auto mem0 = iterinfo->getMember(0);
@@ -3596,6 +3684,8 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     info.do_not_check_global_globals = true;
     
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
+
+    // log::out << "Check " << ast_func->name<<"\n";
 
     // Check rest will go through scopes and create polymorphic implementations if necessary.
     // This includes structs and functions.

@@ -108,3 +108,17 @@ b: Poly<i64>;
 
 a.first();
 b.first();
+
+@TEST_CASE(nested_struct)
+
+struct Tuf {
+    ad: i32;
+    fn hi() {
+        struct Okay {
+            n: i32
+        }
+        a: Okay
+    }
+}
+t: Tuf
+t.hi()

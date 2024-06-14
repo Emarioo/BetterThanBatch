@@ -3,6 +3,7 @@
 */
 
 #import "Array"
+#import "Memory"
 #import "String"
 #import "Threads"
 
@@ -15,14 +16,14 @@
 enum EventType {
 	EVENT_START,
 	EVENT_CLOSE,
-	EVENT_MESSAGE, // recived message
+	EVENT_RECEIVE, // recived data
 	EVENT_CONNECT, // server only
 	EVENT_DISCONNECT, // server only
 }
 struct Event {
 	type: EventType;
 	who: ConnectionID; // only server
-	message: char[]; // only on receive message
+	bytes: char[]; // only on receive
 }
 enum NetError {
     NET_SUCCESS,
@@ -30,45 +31,290 @@ enum NetError {
     NET_BAD_IP,
     NET_SOCKET_API_ERROR,
 }
-#macro ConnectionID u32
-struct Connection {
+enum NetProtocol {
+    NET_NONE = 0,
+    
+    NET_TCP = 0x0,
+    NET_UDP = 0x1, // not implemented
 
+    // Protocols and behaviour relevant to the networking library. They have nothing to do with tcp/ip.
+    NET_PROTO_STREAM  = 0x0, // library lets you handle the logic for separating messages, use this when implementing HTTP or other protocols
+    NET_PROTO_MESSAGE = 0x1, // library sends distinct messages that are length prefixed, use this when implementing multiplayer for a game
+}
+#macro ConnectionID u32
+#macro EventCallback fn(e: Event, user_data: void*)
+
+struct Connection {
+    receiver_thread: Thread;
+    message_data: char*;
+    message_max: i32;
+    socket: SOCKET;
+    server: Server*;
+    conn_id: ConnectionID;
+}
+struct MessageHeader {
+    length: i32;
 }
 struct Server {
-	fn start(ip: StringBuilder, port: u32) -> NetError {
-
-
-
-        m_ip = ip
-        m_port = port
-    }
-	fn close() {
+    fn cleanup() {
+        close() // make sure connection is closed
 
     }
 
-	fn disconnect(connection_id: ConnectionID) -> NetError {
-    }
-
-	fn pollEvents(blocking: bool) -> Event[] {
-
-    }
-	
-	fn send(connection_id: ConnectionID, bytes: char[]) -> NetError {
-
-    }
-	
-	m_ip: StringBuilder;
-	m_port: u32;
-
-	connections: Array<Connection>;
-	// mutex: Mutex;
-}
-#macro EventCallback fn(e: Event, user_data: void*)
-struct Client {
-	fn start(ip: char[], port: u32) -> NetError {
+	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
         m_ip.clear()
         m_ip.append(ip)
         m_port = port
+        m_protocol = protocol
+        #if OS_WINDOWS
+            EnsureInitializedWSA()
+
+            m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+            if m_socket == INVALID_SOCKET {
+                log("socket failed")
+                return NET_FAILURE
+            }
+            
+            addr: sockaddr_in
+            addr.sin_family = AF_INET
+            addr.sin_port = htons(m_port)
+            addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
+            
+            err := bind(m_socket, cast<sockaddr*>&addr, sizeof addr)
+            if err == SOCKET_ERROR {
+                log("bind failed")   
+                return NET_BAD_IP
+            }
+            
+            err = listen(m_socket, SOMAXCONN) // TODO: Option to specify connection limit
+            if err == SOCKET_ERROR {
+                log("listen failed")
+                return NET_FAILURE
+            }
+
+            m_is_active = true
+
+            m_listener_thread = ThreadCreate(listener_func, this)
+            fn @stdcall listener_func(arg: void*) -> i32 {
+                server: Server* = arg
+
+                while {
+                    log("#waiting")
+                    client_socket := accept(server.m_socket, null, 0)
+                    if client_socket == INVALID_SOCKET {
+                        log("accept failed")
+                        return 0
+                    }
+
+                    connection: Connection* = Allocate(sizeof Connection)
+                    memzero(connection, sizeof Connection)
+                    connection.socket = client_socket
+                    connection.message_max = 0x10000
+                    connection.message_data = Allocate(connection.message_max)
+                    connection.receiver_thread = ThreadCreate(receiver_func2, connection)
+                    connection.server = server
+                    connection.conn_id = server.connections.size()
+
+                    server.connections.add(connection)
+
+                    fn @stdcall receiver_func2(arg: void*) -> i32 {
+                        connection: Connection* = arg
+                        protocol: NetProtocol = connection.server.m_protocol
+                        while {
+                            bytes: i32
+                            if protocol & NET_PROTO_MESSAGE {
+                                header: MessageHeader
+
+                                bytes = recv(connection.socket, cast<void*>&header, sizeof header, MSG_WAITALL)
+
+                                if bytes == 0 {
+                                    break // graceful shutdown
+                                }
+                                if bytes < 0 {
+                                    e: Event
+                                    e.type = EVENT_CLOSE
+                                    e.who = 0
+                                    connection.server.m_event_callback(e, connection.server.m_user_data)
+
+                                    if connection.socket != INVALID_SOCKET
+                                        closesocket(connection.socket)
+                                    connection.socket = INVALID_SOCKET
+
+                                    err := WSAGetLastError()
+                                    if err == WSAECONNRESET
+                                        break
+
+                                    log("recv failed")
+                                    break
+                                }
+                                if bytes != sizeof header {
+                                    log("recv should have read 4 bytes for message length but instead read ", bytes)
+                                    break
+                                }
+
+                                if header.length > 0x1000000 { // more than 1 MB
+                                    log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
+                                    break
+                                }
+
+                                if connection.message_max < header.length {
+                                    new_max := connection.message_max * 1.5 + header.length + 16
+                                    new_data := Reallocate(new_max, connection.message_data)
+                                    // Assert(new_data)
+                                    connection.message_data = new_data
+                                    connection.message_max = new_max
+                                }
+                                bytes = recv(connection.socket, connection.message_data, connection.message_max, MSG_WAITALL)
+                            } else {
+                                bytes = recv(connection.socket, connection.message_data, connection.message_max, 0)
+                            }
+
+                            
+                            // handle error or shutdown
+                            if bytes == 0 {
+                                break
+                            } else if bytes < 0 {
+                                e: Event
+                                e.type = EVENT_CLOSE
+                                e.who = 0
+                                connection.server.m_event_callback(e, connection.server.m_user_data)
+
+                                if connection.socket != INVALID_SOCKET
+                                    closesocket(connection.socket)
+                                connection.socket = INVALID_SOCKET
+                                
+                                err := WSAGetLastError()
+                                if err == WSAECONNRESET
+                                    break
+
+                                log("recv failed")
+                                break
+                            }
+
+                            if connection.server.m_event_callback {
+                                e: Event
+                                e.type = EVENT_RECEIVE
+                                e.who = connection.conn_id
+                                e.bytes = Slice<char>{connection.message_data,bytes}
+                                connection.server.m_event_callback(e, connection.server.m_user_data)
+                            }
+                            // std_prints("[READ ", bytes,"]")
+                            // std_print(buffer.ptr, bytes)
+                        }
+                        return 0
+                    }
+                }
+                closesocket(server.m_socket)
+                server.m_socket = INVALID_SOCKET
+                return 0
+            }
+
+            return NET_SUCCESS
+        #elif OS_LINUX
+
+        #endif
+    }
+	fn close() {
+        // Close listener socket and thread
+        if m_socket != INVALID_SOCKET {
+            closesocket(m_socket)
+            m_socket = INVALID_SOCKET
+            if m_listener_thread.valid() {
+                ThreadJoin(m_listener_thread)
+                m_listener_thread.cleanup();
+            }
+        }
+
+        // Close other connections
+        for connections.sliced() {
+            if it.socket != INVALID_SOCKET {
+                closesocket(it.socket)
+                ThreadJoin(it.receiver_thread)
+                Free(it.message_data)
+                Free(it)
+            }
+        }
+        connections.cleanup()
+
+        m_is_active = false
+    }
+    fn wait() {
+        if m_listener_thread.valid() {
+            ThreadJoin(m_listener_thread)
+            m_listener_thread.cleanup()
+        }
+    }
+    fn is_active() -> bool {
+        return m_socket != INVALID_SOCKET
+    }
+	fn disconnect(connection_id: ConnectionID) -> NetError {
+
+    }
+	fn send(connection_id: ConnectionID, bytes: char[]) -> NetError {
+        if connection_id >= connections.size() {
+            return NET_FAILURE
+        }
+        connection := connections.get(connection_id)
+    
+        if m_protocol & NET_PROTO_MESSAGE {
+            header: MessageHeader
+            header.length = bytes.len
+            err := socket_send(connection.socket, &header, sizeof header, 0)
+            if err < 0 {
+                log("server send msg failed1")
+                return NET_FAILURE
+            }
+            err = socket_send(connection.socket, bytes.ptr, bytes.len, 0)
+            if err < 0 {
+                log("server send msg failed2")
+                return NET_FAILURE
+            }
+        } else {
+            err := socket_send(connection.socket, bytes.ptr, bytes.len, 0)
+            if err < 0 {
+                log("server send failed")
+                return NET_FAILURE
+            }
+        }
+        return NET_SUCCESS
+    }
+    fn set_callback(func: EventCallback, user_data: void*) {
+        m_event_callback = func
+        m_user_data = user_data
+    }
+	// fn pollEvents(blocking: bool) -> Event[] { }
+	
+	m_ip: StringBuilder;
+	m_port: u32;
+    m_protocol: NetProtocol;
+
+    m_is_active: bool;
+    m_socket: SOCKET = INVALID_SOCKET; // TODO: SOCKET is only for Windows, what about Linux?
+    m_listener_thread: Thread;
+
+	connections: Array<Connection*>;
+
+    m_event_callback: EventCallback;
+    m_user_data: void*;
+
+	// mutex: Mutex;
+}
+struct Client {
+    fn cleanup() {
+        close() // make sure connection is closed
+
+        if m_message_data {
+            Free(m_message_data)
+            m_message_data = null
+            m_message_max = 0
+        }
+    }
+
+	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+        m_ip.clear()
+        m_ip.append(ip)
+        m_port = port
+        m_protocol = protocol
         #if OS_WINDOWS
             EnsureInitializedWSA()
 
@@ -94,7 +340,7 @@ struct Client {
                 return NET_BAD_IP
             }
             err = connect(m_socket, result.ai_addr, sizeof *result.ai_addr)
-            
+
             // addr: sockaddr_in
             // addr.sin_family = AF_INET
             // addr.sin_port = htons(8080)
@@ -106,47 +352,103 @@ struct Client {
                 return NET_BAD_IP
             }
 
+            m_message_max = 0x10000 // 10 KB
+            m_message_data = Allocate(m_message_max)
+
+            m_receiver_thread = ThreadCreate(receiver_func, this)
+
+            m_is_active = true // at this point, client should be fully up and running
+
             fn @stdcall receiver_func(arg: void*) -> i32 {
                 client: Client* = arg
-                buffer: char[1024]
+
                 while {
-                    log("before")
-                    bytes := recv(client.m_socket, buffer.ptr, buffer.len, 0)
-                    log("after")
+                    bytes: i32
+                    if client.m_protocol & NET_PROTO_MESSAGE {
+                        header: MessageHeader
+
+                        bytes = recv(client.m_socket, cast<void*>&header, sizeof header, MSG_WAITALL)
+
+                        if bytes == 0 {
+                            break // graceful shutdown
+                        }
+                        if bytes < 0 {
+                            e: Event
+                            e.type = EVENT_CLOSE
+                            e.who = 0
+                            client.m_event_callback(e, client.m_user_data)
+
+                            if client.m_socket != INVALID_SOCKET
+                                closesocket(client.m_socket)
+                            client.m_socket = INVALID_SOCKET
+
+                            err := WSAGetLastError()
+                            if err == WSAECONNRESET
+                                break
+
+                            log("recv failed")
+                            break
+                        }
+                        if bytes != sizeof header {
+                            log("recv should have read 4 bytes for message length but instead read ", bytes)
+                            break
+                        }
+
+                        if header.length > 0x1000000 { // more than 1 MB
+                            log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
+                            break
+                        }
+
+                        if client.m_message_max < header.length {
+                            new_max := client.m_message_max * 1.5 + header.length + 16
+                            new_data := Reallocate(new_max, client.m_message_data)
+                            // Assert(new_data)
+                            client.m_message_data = new_data
+                            client.m_message_max = new_max
+                        }
+                        bytes = recv(client.m_socket, client.m_message_data, client.m_message_max, MSG_WAITALL)
+                    } else {
+                        bytes = recv(client.m_socket, client.m_message_data, client.m_message_max, 0)
+                    }
+
+                    
+                    // handle error or shutdown
                     if bytes == 0 {
                         break
                     } else if bytes < 0 {
                         e: Event
                         e.type = EVENT_CLOSE
                         e.who = 0
-                        e.message = buffer
-                        m_event_callback(e, m_user_data)
+                        client.m_event_callback(e, client.m_user_data)
 
                         if client.m_socket != INVALID_SOCKET
                             closesocket(client.m_socket)
                         client.m_socket = INVALID_SOCKET
+                        
+                        err := WSAGetLastError()
+                        if err == WSAECONNRESET
+                            break
 
                         log("recv failed")
                         break
                     }
-                    if buffer.len == bytes {
-                        // more bytes for same message
-                    }
 
-                    if m_event_callback {
+                    if client.m_event_callback {
                         e: Event
-                        e.type = EVENT_MESSAGE
+                        e.type = EVENT_RECEIVE
                         e.who = 0
-                        e.message = buffer
-                        m_event_callback(e, m_user_data)
+                        e.bytes = Slice<char>{client.m_message_data,bytes}
+                        client.m_event_callback(e, client.m_user_data)
                     }
                     // std_prints("[READ ", bytes,"]")
                     // std_print(buffer.ptr, bytes)
                 }
+
+                closesocket(client.m_socket)
+                client.m_socket = INVALID_SOCKET
+
                 return 0
             }
-
-            m_receiver_thread = ThreadCreate(receiver_func, this)
 
             return NET_SUCCESS
         #else
@@ -160,6 +462,8 @@ struct Client {
 
         ThreadJoin(m_receiver_thread)
         m_receiver_thread.cleanup()
+
+        m_is_active = false // set last when client is truly closed and ready to be started again
     }
     fn wait() {
         if m_receiver_thread.valid() {
@@ -167,12 +471,30 @@ struct Client {
             m_receiver_thread.cleanup()
         }
     }
+    fn is_active() -> bool {
+        return m_socket != INVALID_SOCKET
+    }
 
 	fn send(bytes: char[]) -> NetError {
-        err := socket_send(m_socket, bytes.ptr, bytes.len, 0)
-        if err < 0 {
-            log("send failed")
-            return NET_FAILURE
+        if m_protocol & NET_PROTO_MESSAGE {
+            header: MessageHeader
+            header.length = bytes.len
+            err := socket_send(m_socket, cast<void*>&header, sizeof header, 0)
+            if err < 0 {
+                log("send msg failed1")
+                return NET_FAILURE
+            }
+            err = socket_send(m_socket, bytes.ptr, bytes.len, 0)
+            if err < 0 {
+                log("send msg failed2")
+                return NET_FAILURE
+            }
+        } else {
+            err := socket_send(m_socket, bytes.ptr, bytes.len, 0)
+            if err < 0 {
+                log("send failed")
+                return NET_FAILURE
+            }
         }
         return NET_SUCCESS
     }
@@ -181,6 +503,7 @@ struct Client {
         m_event_callback = func
         m_user_data = user_data
     }
+
     // fn pollEvents(blocking: bool) -> Event[] { }
     
     /*######################
@@ -189,12 +512,17 @@ struct Client {
 
 	m_ip: StringBuilder;
 	m_port: u32;
+    m_protocol: NetProtocol;
 
+    m_is_active: bool;
     m_socket: SOCKET; // TODO: SOCKET is only for Windows, what about Linux?
 
     m_receiver_thread: Thread;
     m_event_callback: EventCallback;
     m_user_data: void*;
+
+    m_message_data: char*;
+    m_message_max: i32;
 
     /*######################
         Internal functions

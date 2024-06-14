@@ -40,8 +40,11 @@ namespace lang {
     };
     struct TypeMember {
         Range name; // refers to lang_strings
-        // TODO: Union for enums
+        
+        // TODO: Union for enums and struct members
         TypeId type; // refers to lang_TypeInfo
         u16 offset;
+
+        i64 value;
     };
 }

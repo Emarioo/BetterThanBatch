@@ -17,6 +17,7 @@
 */
 
 #import "Logger"
+#import "Memory" // we use memcpy
 
 enum @enclosed @specified lang_Primitive : u8 {
     NONE            = 0,
@@ -46,9 +47,12 @@ struct lang_TypeInfo {
 }
 struct lang_TypeMember {
     name: Range; // refers to lang_strings
-    // TODO: Union for enums
+    
+    // TODO: Union for struct member or enum member
     type: lang_TypeId; // refers to lang_TypeInfo
     offset: u16;
+
+    value: i64;
 }
 
 // Generator.cpp refers to these names, don't forget to modify them there.
@@ -169,35 +173,59 @@ fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32
     fn indent(n: i32) { for 0..n  std_print("  ") }
     
     // std_print(lang_typename(id));
-    std_print("{")
-    if pretty  std_print('\n')
-    members := lang_typemembers(type);
-    if members.len > 0 {
-        for @ptr members {
-            if nr != 0 {
-                std_print(", ");
-                if pretty  std_print('\n')
+
+    typeinfo := lang_typeInfos.ptr[type_id]
+
+    a := lang_Primitive.STRUCT
+    b := lang_Primitive.ENUM
+
+    if typeinfo.type == lang_Primitive.STRUCT {
+        std_print("{")
+        if pretty  std_print('\n')
+        members := lang_typemembers(type);
+        if members.len > 0 {
+            for @ptr members {
+                if nr != 0 {
+                    std_print(", ");
+                    if pretty  std_print('\n')
+                }
+                
+                if pretty  indent(depth)
+                
+                name := lang_name_from_range(it.name);
+                std_print(name)
+                std_print(": ")
+                
+                std_print_any(ptr + it.offset, it.type, pretty, depth + 1)
             }
-            
+        }
+        if pretty {
+            std_print('\n')
+            indent(depth-1)
+        }
+        
+        std_print("}");
+    } else if typeinfo.type == lang_Primitive.ENUM {
+        members := lang_typemembers(type);
+        value: i64
+        memcpy(&value, ptr, typeinfo.size)
+        printed := false
+        for @ptr members {
             if pretty  indent(depth)
             
-            name := lang_name_from_range(it.name);
-            std_print(name)
-            std_print(": ")
-            
-            std_print_any(ptr + it.offset, it.type, pretty, depth + 1)
+            // TODO: What about bit field?
+            if it.value == value {
+                name := lang_name_from_range(it.name);
+                std_print(name)
+                printed = true
+                break
+            }
         }
-    } else {
-        std_print("incomplete");
+        if !printed {
+            std_print(value) // print raw value
+        }
     }
-    if pretty {
-        std_print('\n')
-        indent(depth-1)
-    }
-    
-    std_print("}");
 }
-
 
 fn dump_type_info() {
 

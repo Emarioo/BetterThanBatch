@@ -128,9 +128,12 @@ void X64Program::compute_libraries() {
 
 bool GenerateX64(Compiler *compiler, TinyBytecode *tinycode) {
   using namespace engone;
+  TRACE_FUNC()
+  
   ZoneScopedC(tracy::Color::SkyBlue1);
 
   _VLOG(log::out << log::BLUE << "x64 Converter:\n";)
+
 
   // make sure dependencies have been fixed first
   bool yes = tinycode->applyRelocations(compiler->bytecode);

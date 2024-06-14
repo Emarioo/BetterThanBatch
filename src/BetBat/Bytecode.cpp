@@ -947,7 +947,22 @@ void BytecodeBuilder::emit_imm64(i64 imm) {
     *ptr = imm;
 }
 bool TinyBytecode::applyRelocations(Bytecode* code) {
+    using namespace engone;
+    TRACE_FUNC()
+
+    CALLBACK_ON_ASSERT(
+        for(int i=0;i<call_relocations.size();i++) {
+            auto& rel = call_relocations[i];
+            if (!rel.funcImpl) {
+                log::out << "bad reloc " << rel.pc<<"\n";
+            } else if (!rel.funcImpl->tinycode_id) {
+                log::out << "bad reloc pc:" << rel.pc <<", " << rel.funcImpl->astFunction->name << " at ?" <<"\n";
+            }
+        }
+    )
+
     bool suc = true;
+
     for(int i=0;i<call_relocations.size();i++) {
         auto& rel = call_relocations[i];
         // Assert may fire if function wasn't generated.

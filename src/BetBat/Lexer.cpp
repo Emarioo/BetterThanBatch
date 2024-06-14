@@ -2005,8 +2005,8 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
                 Assert(false);
                 return false;
             }
-            num += chr - '0';
             num *= 10;
+            num += chr - '0';
         }
         *value = num;
     } else if(type == TOKEN_LITERAL_BINARY) {
@@ -2018,8 +2018,8 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
                 // Assert(false);
                 return false;
             }
-            num += chr - '0';
             num *= 2;
+            num += chr - '0';
         }
         *value = num;
     } else if(type == TOKEN_LITERAL_OCTAL) {
@@ -2031,8 +2031,8 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
                 // Assert(false);
                 return false;
             }
-            num += chr - '0';
             num *= 8;
+            num += chr - '0';
         }
         *value = num;
     } else if(type == TOKEN_LITERAL_HEXIDECIMAL) {
@@ -2044,11 +2044,11 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
                 // Assert(false);
                 return false;
             }
+            num *= 16;
             if(chr >= '0' && chr <= '9')
                 num += chr - '0';
             else
                 num += (chr|32) - 'a' + 10;
-            num *= 16;
         }
         *value = num;
     } else if (type == TOKEN_LITERAL_STRING) {

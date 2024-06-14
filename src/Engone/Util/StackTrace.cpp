@@ -10,6 +10,7 @@
 struct AssertHandler {
     struct Trace {
         const char* name = nullptr;
+        const char* file = nullptr;
         int line = 0;
         std::vector<std::function<void()>> funcs;
     };
@@ -32,7 +33,7 @@ void AssertHandler::print_trace() {
         log::out << log::RED << "Stack Trace:\n";
 
     for(auto& trace : traces) {
-        std::string name = trace.name;
+        std::string name = trace.file;
         for(int i=0;i<name.size();i++)
             if (name[i] == '\\')
                 *((char*)name.data() + i) = '/';
@@ -50,9 +51,9 @@ void AssertHandler::print_trace() {
 
         log::out << log::RED << " ";
         if (trace.line)
-            log::out << name << ":" << trace.line<<"\n";
+            log::out <<trace.name << " - " << name << ":" << trace.line<<"\n";
         else
-            log::out << name << ":" << trace.line<<"\n";
+            log::out << trace.name << " - " << name << ":" << trace.line<<"\n";
     }
 }
 
@@ -63,10 +64,10 @@ void EnsureInitializedStackTrace() {
     }
 }
 
-void PushStackTrace(const char* name, int line) {
+void PushStackTrace(const char* name, const char* file, int line) {
     EnsureInitializedStackTrace();
 
-    g_assertHandler->traces.push_back({name,line});
+    g_assertHandler->traces.push_back({name, file, line});
 }
 void PopStackTrace() {
     EnsureInitializedStackTrace();
@@ -77,6 +78,11 @@ void SetCallbackOnAssert(std::function<void()> func) {
     EnsureInitializedStackTrace();
 
     g_assertHandler->traces.back().funcs.push_back(func);
+}
+void PopLastCallback() {
+    EnsureInitializedStackTrace();
+
+    g_assertHandler->traces.back().funcs.pop_back();
 }
 void FireAssertHandler() {
     using namespace engone;

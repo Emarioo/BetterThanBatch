@@ -101,6 +101,7 @@ int main(int argc, const char** argv){
         // options.linker = LINKER_MSVC;
         // options.linker = LINKER_GNU;
         options.executeOutput = true;
+        // options.disable_preload = true;
         // options.only_preprocess = true;
         options.useDebugInformation = true;
         Compiler compiler{};

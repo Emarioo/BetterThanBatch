@@ -71,5 +71,6 @@ fn outer(arg: i32) {
     inner()
     fn inner() {
         @TEST_ERROR(E0) a := arg // arg should not be accesible from inner function
+        @TEST_ERROR(E0) a := sizeof arg
     }
 }

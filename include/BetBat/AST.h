@@ -380,47 +380,42 @@ struct FuncImpl {
     StructImpl* structImpl = nullptr;
     void print(AST* ast, ASTFunction* astFunc);
 };
+struct IdentifierVariable;
+struct IdentifierFunction;
 struct Identifier {
     Identifier() {}
     enum Type {
-        VARIABLE, FUNCTION
+        LOCAL_VARIABLE,
+        ARGUMENT_VARIABLE,
+        GLOBAL_VARIABLE,
+        MEMBER_VARIABLE,
+        FUNCTION,
     };
-    Type type=VARIABLE;
+    Type type=LOCAL_VARIABLE;
     std::string name;
-    // StringView name{};
     ScopeId scopeId=0;
-    // struct Pair {
-    //     u32 polyVersion;
-    //     u32 varIndex;
-    // };
-    // PolyVersions<u32> versions_varIndex{};
-    u32 varIndex=0;
-    FnOverloads funcOverloads{};
     ContentOrder order = 0;
 
-    // How to support multiple variables in multiple poly versions
-    // multiple poly versions because of methods inherting members of 'this' argument
-    // multiple variables because of shadowing
-    // Global variables cannot be shadowed? 
-    // 
+    bool is_fn() { return type == FUNCTION; }
+    bool is_var() { return type != FUNCTION; }
 
+    IdentifierVariable* cast_var() { return (IdentifierVariable*)this; }
+    IdentifierFunction* cast_fn() { return (IdentifierFunction*)this; }
 };
-struct VariableInfo {
-    enum Type : u8 {
-        LOCAL, ARGUMENT, GLOBAL, MEMBER
-    };
-    // you could do a union on memberIndex and dataOffset if you want to save space
+struct IdentifierVariable : public Identifier {
     i32 memberIndex = -1; // only used with MEMBER type
     int argument_index = 0;
 
     PolyVersions<i32> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
-    Type type = LOCAL;
 
-    bool isLocal() { return type == LOCAL; }
-    bool isArgument() { return type == ARGUMENT; }
-    bool isGlobal() { return type == GLOBAL; }
-    bool isMember() { return type == MEMBER; }
+    bool isLocal() { return type == LOCAL_VARIABLE; }
+    bool isArgument() { return type == ARGUMENT_VARIABLE; }
+    bool isGlobal() { return type == GLOBAL_VARIABLE; }
+    bool isMember() { return type == MEMBER_VARIABLE; }
+};
+struct IdentifierFunction : public Identifier {
+    FnOverloads funcOverloads{};
 };
 struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}
@@ -433,7 +428,8 @@ struct ScopeInfo {
     std::unordered_map<std::string, ScopeId> nameScopeMap; // namespace map?
     std::unordered_map<std::string, TypeInfo*> nameTypeMap;
 
-    std::unordered_map<std::string, Identifier> identifierMap;
+    // We store pointers to identifiers because it may be a derivative class (variable or function). We refer to identifiers in ASTExpression by pointer and don't want unordered_map to invalidate the pointer by reallocating the memory.
+    std::unordered_map<std::string, Identifier*> identifierMap;
 
     QuickArray<ScopeInfo*> sharedScopes;
 
@@ -616,7 +612,7 @@ struct ASTStatement : ASTNode {
         
         // The corresponding identifier. Set in type checker.
         // Will be null in first polymorphic check, but will be set for later polymorphic checks
-        Identifier* identifier = nullptr;
+        IdentifierVariable* identifier = nullptr;
         lexer::SourceLocation location;
     };
     lexer::SourceLocation location{};
@@ -730,7 +726,7 @@ struct ASTEnum : ASTNode {
         // Token name{};
         std::string name;
         // StringView name;
-        int enumValue=0;
+        i64 enumValue=0;
         bool ignoreRules = false;
         lexer::SourceLocation location;
     };
@@ -762,7 +758,7 @@ struct ASTEnum : ASTNode {
 struct ASTFunction : ASTNode {
     lexer::SourceLocation location;
     std::string name{};
-    Identifier* identifier = nullptr;
+    IdentifierFunction* identifier = nullptr;
     
     struct PolyArg {
         std::string name{};
@@ -774,7 +770,7 @@ struct ASTFunction : ASTNode {
         std::string name{};
         ASTExpression* defaultValue=0;
         TypeId stringType={};
-        Identifier* identifier = nullptr;
+        IdentifierVariable* identifier = nullptr;
     };
     struct Ret {
         lexer::SourceLocation location{};
@@ -787,7 +783,7 @@ struct ASTFunction : ASTNode {
         return lexer->getImport_unsafe(location)->file_id;
     }
 
-    QuickArray<Identifier*> memberIdentifiers; // only relevant with parent structs
+    QuickArray<IdentifierVariable*> memberIdentifiers; // only relevant with parent structs
 
     DynamicArray<PolyArg> polyArgs;
     DynamicArray<Arg> arguments; // you could rename to parameters
@@ -938,24 +934,15 @@ struct AST {
 
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
-    // Identifier* findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes = true);
-    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool searchParentScopes = true);
-    // Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes = true);
+    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes = true);
+    // Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool searchParentScopes = true);
     // VariableInfo* identifierToVariable(Identifier* identifier);
 
     // Returns nullptr if variable already exists or if scopeId is invalid
     // If out_reused_identical isn't null then an identical variable can be returned it if exists. This can happen in polymorphic scopes.
-    VariableInfo* addVariable(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, Identifier** identifier, bool* out_reused_identical);
-    // We don't overload addVariable because we may want to change the name or 
-    // behaviour of this function and it's very useful to have descriptive name
-    // when we do.
-    VariableInfo* getVariableByIdentifier(Identifier* identifier);
-    // VariableInfo* addVariable(ScopeId scopeId, const Token& name, bool shadowPreviousVariables=false, Identifier** identifier = nullptr);
-    // Returns nullptr if variable already exists or if scopeId is invalid
-    // If out_reused_identical isn't null then an identical identifier can be returned it if exists. This can happen in polymorphic scopes.
-    Identifier* addIdentifier(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, bool* out_reused_identical);
-    // Identifier* addIdentifier(ScopeId scopeId, const Token& name, bool shadowPreviousIdentifier=false);
-
+    IdentifierVariable* addVariable(Identifier::Type type, ScopeId scopeId, const StringView& name, ContentOrder contentOrder, bool* out_reused_identical);
+    IdentifierFunction* addFunction(ScopeId scopeId, const StringView& name, ContentOrder contentOrder);
+    
     // returns true if successful, out_enum/member contains what was found.
     // returns false if not found. This could also mean that the enum was enclosed, if so the out parameters may tell you the enum that would have matched if it wasn't enclosed (it allows you to be more specific with error messages).
     bool findEnumMember(ScopeId scopeId, const StringView& name, ASTEnum** out_enum, int* out_member);
@@ -966,9 +953,14 @@ struct AST {
     struct ScopeIterator {
         ContentOrder next_order = 0;
         ScopeInfo* next_scope = 0;
+        bool next_crossed_function_boundary = 0;
     private:
-        QuickArray<ScopeInfo*> search_scopes;
-        QuickArray<ContentOrder> content_orders;
+        struct Item {
+            ScopeInfo* scope;
+            ContentOrder order;
+            bool crossed_function_boundary;
+        };
+        QuickArray<Item> search_items;
         int search_index = 0;
         friend class AST;
     };
@@ -1101,17 +1093,17 @@ private:
     u32 linearAllocationMax = 0;
     volatile u32 linearAllocationUsed = 0;
 
-    DynamicArray<ASTExpression*> expressions;
-    DynamicArray<ASTStruct*> structures;
-    DynamicArray<ASTEnum*> enums;
-    DynamicArray<ASTStatement*> statements;
-    DynamicArray<ASTFunction*> functions;
-    DynamicArray<ASTScope*> bodies;
+    QuickArray<ASTExpression*> expressions;
+    QuickArray<ASTStruct*> structures;
+    QuickArray<ASTEnum*> enums;
+    QuickArray<ASTStatement*> statements;
+    QuickArray<ASTFunction*> functions;
+    QuickArray<ASTScope*> bodies;
+    QuickArray<Identifier*> identifiers;
 
     u32 globalDataOffset = 0;
 
     MUTEX(lock_variables);
-    QuickArray<VariableInfo*> variables;
 
     MUTEX(lock_typeTokens);
     DynamicArray<std::string> _typeTokens;

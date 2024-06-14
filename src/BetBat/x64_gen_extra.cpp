@@ -167,9 +167,20 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR<< MSG; \
         log::out.flush();
 
+    X64Inst* last_inst = nullptr;
+    CALLBACK_ON_ASSERT(
+        log::out << "Crash at " <<last_inst->bc_index << " "<< *last_inst << "\n";
+        if (last_inst->base->opcode == BC_JMP && bc_push_list.size() != 0) {
+            for (int i=0;i<bc_push_list.size();i++) {
+                log::out << "pop without push " <<bc_push_list[i].used_by->bc_index << " " << *bc_push_list[i].used_by<<"\n";
+            }
+        }
+    )
+
     DynamicArray<int> insts_to_delete{};
     for(int i=inst_list.size()-1;i>=0;i--) {
         auto n = inst_list[i];
+        last_inst = n;
         // log::out <<log::GOLD<< n->base->opcode<<"\n";
 
         if(n->base->opcode == BC_POP) {
@@ -456,6 +467,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             }
         }
     }
+    POP_LAST_CALLBACK()
 
     for(auto i : insts_to_delete) {
         auto n = inst_list[i];
@@ -3031,7 +3043,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                     int offset_loop = code_size();
 
-                    emit_prefix(PREFIX_REXW, fin, dst);
+                    emit_prefix(PREFIX_REXW, dst, fin);
                     emit1(OPCODE_CMP_REG_RM);
                     emit_modrm(MODE_REG, CLAMP_EXT_REG(dst), CLAMP_EXT_REG(fin));
 

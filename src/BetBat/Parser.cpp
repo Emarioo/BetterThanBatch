@@ -1334,17 +1334,6 @@ SignalIO ParseContext::parseEnum(ASTEnum*& astEnum){
     //     log::out << mem.name << " = " << mem.enumValue<<"\n";
     // }
 
-    // auto typeInfo = info.ast->getTypeInfo(info.currentScopeId, name, false, true);
-    // int strId = info.ast->getTypeString(name);
-    // if(!typeInfo){
-        // ERR_SECTION(
-        // ERR_HEAD2(name, name << " is taken\n";
-        // info.ast->destroy(astEnum);
-        // astEnum = 0;
-        // return PARSE_ERROR;
-    // }
-    // typeInfo->astEnum = astEnum;
-    // typeInfo->_size = 4; // i32
     _PLOG(log::out << "Parsed enum "<<log::LIME<< view_name <<log::NO_COLOR <<" with "<<astEnum->members.size()<<" members\n";)
     return error;
 }

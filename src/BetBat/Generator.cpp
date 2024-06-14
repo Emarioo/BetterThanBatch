@@ -697,7 +697,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             // end point
             // auto id = info.ast->findIdentifier(idScope, now->name);
             auto id = now->identifier;
-            if (!id || id->type != Identifier::VARIABLE) {
+            if (!id || !id->is_var()) {
                 if(!info.hasForeignErrors()){
                     ERR_SECTION(
                         ERR_HEAD2(now->location)
@@ -707,8 +707,9 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 }
                 return SIGNAL_FAILURE;
             }
-        
-            auto varinfo = info.ast->getVariableByIdentifier(id);
+
+            auto varinfo = id->cast_var();
+            // auto varinfo = info.ast->getVariableByIdentifier(id);
             _GLOG(log::out << " expr var push " << now->name << "\n";)
             // TOKENINFO(now->location)
             // char buf[100];
@@ -721,14 +722,14 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             TypeId typeId = varinfo->versions_typeId[info.currentPolyVersion];
             
             switch(varinfo->type) {
-                case VariableInfo::GLOBAL: {
+                case Identifier::GLOBAL_VARIABLE: {
                     builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                 } break; 
-                case VariableInfo::LOCAL: {
+                case Identifier::LOCAL_VARIABLE: {
                     builder.emit_ptr_to_locals(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     // builder.emit_add(BC_REG_B, BC_REG_BP, false, 8);
                 } break; 
-                case VariableInfo::MEMBER: {
+                case Identifier::MEMBER_VARIABLE: {
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
                     Assert(info.currentFunction->callConvention == BETCALL);
                     builder.emit_get_param(BC_REG_B, 0, 8, false);
@@ -737,7 +738,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
                 } break;
-                case VariableInfo::ARGUMENT: {
+                case Identifier::ARGUMENT_VARIABLE: {
                     builder.emit_ptr_to_params(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
 
                     // Crazy idea:
@@ -1104,6 +1105,8 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         funcImpl = overload.funcImpl;
         if(funcImpl)
             signature = &overload.funcImpl->signature;
+    } else {
+        int hi = 0;
     }
     if(!info.hasForeignErrors()) {
         // not ok, type checker should have generated the right overload.
@@ -1127,8 +1130,10 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         all_arguments[0] = expression->left;
         all_arguments[1] = expression->right;
     } else {
-        for (int i = 0; i < (int)expression->args.size();i++) {
-            ASTExpression* arg = expression->args.get(i);
+        int extra = expression->isMemberCall() && is_function_pointer ? 1 : 0;
+
+        for (int i = 0; i < (int)expression->args.size() - extra;i++) {
+            ASTExpression* arg = expression->args.get(i + extra);
             Assert(arg);
             if(!arg->namedValue.len){
                 if(expression->hasImplicitThis()) {
@@ -1257,7 +1262,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         
         TypeId argType = {};
         SignalIO result = SIGNAL_FAILURE;
-        if(expression->isMemberCall() && i == 0) {
+        if(expression->isMemberCall() && !is_function_pointer && i == 0) {
             // method call and first argument which is 'this'
             bool nonReference = false;
             result = generateReference(arg, &argType, -1, &nonReference);
@@ -1450,35 +1455,58 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
     if(is_function_pointer) {
         BCRegister reg = BC_REG_B;
         
-        auto varinfo = ast->getVariableByIdentifier(expression->identifier);
-        
-        auto type_id = varinfo->versions_typeId[info.currentPolyVersion];
-        auto typeinfo = ast->getTypeInfo(type_id);
-        Assert(typeinfo->funcType);
-        
-        switch(varinfo->type) {
-            case VariableInfo::GLOBAL: {
-                builder.emit_dataptr(reg, varinfo->versions_dataOffset[info.currentPolyVersion]);
-            } break; 
-            case VariableInfo::LOCAL: {
-                builder.emit_mov_rm_disp(reg, BC_REG_LOCALS, 8, varinfo->versions_dataOffset[info.currentPolyVersion]);
-            } break;
-            case VariableInfo::ARGUMENT: {
-                builder.emit_get_param(reg, varinfo->versions_dataOffset[info.currentPolyVersion], 8, false);
-            } break;
-            case VariableInfo::MEMBER: {
-                // NOTE: Is member variable/argument always at this offset with all calling conventions?
-                auto type = varinfo->versions_typeId[info.currentPolyVersion];
+
+        if (expression->isMemberCall()) {
+            TypeId type{};
+            bool was_reference = false;
+            auto result = generateReference(expression->args[0], &type, currentScopeId, &was_reference);
+            if(result == SIGNAL_SUCCESS) {
+            } else {
+                Assert(info.hasForeignErrors());
+            }
+
+            auto typeinfo = ast->getTypeInfo(type.baseType());
+            auto mem = typeinfo->getMember(expression->name);
+
+            builder.emit_pop(reg);
+            if(type.getPointerLevel() > 0) {
+                builder.emit_mov_rm(reg, reg, 8);
+            }
+            builder.emit_mov_rm_disp(reg, reg, 8, mem.offset);
+
+            // log::out << log::CYAN << "PC: " << builder.get_pc() << "\n";
+            // tinycode->print(0,-1, bytecode);
+        } else {
+            auto varinfo = expression->identifier->cast_var();
             
-                builder.emit_get_param(reg, 0, 8, false);
-                builder.emit_mov_rm_disp(reg, reg, 8, varinfo->versions_dataOffset[info.currentPolyVersion]);
+            auto type_id = varinfo->versions_typeId[info.currentPolyVersion];
+            auto typeinfo = ast->getTypeInfo(type_id);
+            Assert(typeinfo->funcType);
+            
+            switch(varinfo->type) {
+                case Identifier::GLOBAL_VARIABLE: {
+                    builder.emit_dataptr(reg, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                } break; 
+                case Identifier::LOCAL_VARIABLE: {
+                    builder.emit_mov_rm_disp(reg, BC_REG_LOCALS, 8, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                } break;
+                case Identifier::ARGUMENT_VARIABLE: {
+                    builder.emit_get_param(reg, varinfo->versions_dataOffset[info.currentPolyVersion], 8, false);
+                } break;
+                case Identifier::MEMBER_VARIABLE: {
+                    // NOTE: Is member variable/argument always at this offset with all calling conventions?
+                    auto type = varinfo->versions_typeId[info.currentPolyVersion];
                 
-                // builder.emit_get_param(BC_REG_B, 0, 8, false);
-                // generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
-                    // varinfo->versions_typeId[info.currentPolyVersion]);
-            } break;
-            default: {
-                Assert(false);
+                    builder.emit_get_param(reg, 0, 8, false);
+                    builder.emit_mov_rm_disp(reg, reg, 8, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    
+                    // builder.emit_get_param(BC_REG_B, 0, 8, false);
+                    // generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
+                        // varinfo->versions_typeId[info.currentPolyVersion]);
+                } break;
+                default: {
+                    Assert(false);
+                }
             }
         }
         
@@ -1578,6 +1606,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, TypeId *outTy
 }
 SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope) {
     using namespace engone;
+    TRACE_FUNC()
+
     ZoneScopedC(tracy::Color::Blue2);
     if(idScope==(ScopeId)-1)
         idScope = info.currentScopeId;
@@ -1748,8 +1778,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             // auto id = info.ast->findIdentifier(idScope, , expression->name);
             auto id = expression->identifier;
             if (id) {
-                if (id->type == Identifier::VARIABLE) {
-                    auto varinfo = info.ast->getVariableByIdentifier(id);
+                if (id->is_var()) {
+                    auto varinfo = id->cast_var();
                     if(!varinfo->versions_typeId[info.currentPolyVersion].isValid()){
                         return SIGNAL_FAILURE;
                     }
@@ -1765,21 +1795,21 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     // log::out << "AST_VAR: "<<id->name<<", "<<id->varIndex<<", "<<var->frameOffset<<"\n";
                       
                     switch(varinfo->type) {
-                        case VariableInfo::GLOBAL: {
+                        case Identifier::GLOBAL_VARIABLE: {
                             builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             generatePush(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
                         } break; 
-                        case VariableInfo::LOCAL: {
+                        case Identifier::LOCAL_VARIABLE: {
                             // generatePush(BC_REG_LP, varinfo->versions_dataOffset[info.currentPolyVersion],
                             //     varinfo->versions_typeId[info.currentPolyVersion]);
                             generatePush(BC_REG_LOCALS, varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
                         } break;
-                        case VariableInfo::ARGUMENT: {
+                        case Identifier::ARGUMENT_VARIABLE: {
                             generatePush_get_param(varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
                         } break;
-                        case VariableInfo::MEMBER: {
+                        case Identifier::MEMBER_VARIABLE: {
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
                             auto type = varinfo->versions_typeId[info.currentPolyVersion];
                             builder.emit_get_param(BC_REG_B, 0, 8, false); // pointer
@@ -1799,25 +1829,26 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 } else if (id->type == Identifier::FUNCTION) {
                     _GLOG(log::out << " expr func push " << expression->name << "\n";)
 
+                    auto fun = id->cast_fn();
                     // TODO: Feature to take function pointers of imported functions
-                    if(id->funcOverloads.overloads.size()==1){
+                    if(fun->funcOverloads.overloads.size()==1){
                         // Assert(false); // nocheckin
                         
                         int reloc = builder.get_pc() + 2;
                         builder.emit_codeptr(BC_REG_A, 0);
                         
-                        info.addCallToResolve(reloc, id->funcOverloads.overloads[0].funcImpl);
+                        info.addCallToResolve(reloc, fun->funcOverloads.overloads[0].funcImpl);
 
                         // export function when debugging, nice to see if objdump refer to the function we expect
                         // TODO: only add if unique
                         // TODO: Can't add if function wasn't generated, how do we fix that?
-                        if(id->funcOverloads.overloads[0].funcImpl->tinycode_id-1 != -1) {
-                            bytecode->addExportedFunction(expression->name, id->funcOverloads.overloads[0].funcImpl->tinycode_id-1);
+                        if(fun->funcOverloads.overloads[0].funcImpl->tinycode_id-1 != -1) {
+                            bytecode->addExportedFunction(expression->name, fun->funcOverloads.overloads[0].funcImpl->tinycode_id-1);
                         }
                     } else {
                         ERR_SECTION(
                             ERR_HEAD2(expression->location)
-                            ERR_MSG("You can only refer to functions with one overload. '"<<expression->name<<"' has "<<id->funcOverloads.overloads.size()<<".")
+                            ERR_MSG("You can only refer to functions with one overload. '"<<expression->name<<"' has "<<fun->funcOverloads.overloads.size()<<".")
                             ERR_LINE2(expression->location,"cannot refer to function")
                         )
                     }
@@ -1826,7 +1857,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
                     DynamicArray<TypeId> args{};
                     DynamicArray<TypeId> rets{};
-                    auto f = id->funcOverloads.overloads[0].funcImpl;
+                    auto f = fun->funcOverloads.overloads[0].funcImpl;
                     args.reserve(f->signature.argumentTypes.size());
                     rets.reserve(f->signature.returnTypes.size());
                     for(auto& t : f->signature.argumentTypes)
@@ -2079,14 +2110,22 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                     log::out << "Var " << name<<"\n";
                                     
                                     ContentOrder order = CONTENT_ORDER_MAX; // TODO: Fix content order
-                                    auto iden = ast->findIdentifier(idScope, order, name);
+                                    bool crossed_function = false;
+                                    auto iden = ast->findIdentifier(idScope, order, name, &crossed_function);
                                     if(iden){
-                                        if(iden->type == Identifier::VARIABLE){
-                                            auto varinfo = info.ast->getVariableByIdentifier(iden);
-                                            Assert(varinfo);
+                                        if(iden->is_var()){
+                                            auto varinfo = iden->cast_var();
+
+                                            if(crossed_function && varinfo->type != Identifier::GLOBAL_VARIABLE) {
+                                                ERR_SECTION(
+                                                    ERR_HEAD2(expression->location)
+                                                    ERR_MSG("Undefined variable '"<<name<<"' in inline assembly.")
+                                                    ERR_LINE2(expression->location, "somewhere in here")
+                                                )
+                                            }
                                             
                                             switch(varinfo->type) {
-                                                case VariableInfo::MEMBER: {
+                                                case Identifier::MEMBER_VARIABLE: {
                                                      ERR_SECTION(
                                                         ERR_HEAD2(expression->location)
                                                         ERR_MSG("Inline assembly cannot access members of methods (not implemented yet).")
@@ -2102,18 +2141,18 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                                     // and now were adding extra instructions.
                                                     // Referencing variables like this is optional so I guess it's fine.
                                                 } break;
-                                                case VariableInfo::ARGUMENT: {
+                                                case Identifier::ARGUMENT_VARIABLE: {
                                                     // TODO: User may write [num + 8] which we want to allow.
                                                     new_assembly += "rbp+"+std::to_string(varinfo->versions_dataOffset[currentPolyVersion]);
                                                 } break;
-                                                case VariableInfo::GLOBAL: {
+                                                case Identifier::GLOBAL_VARIABLE: {
                                                     ERR_SECTION(
                                                         ERR_HEAD2(expression->location)
                                                         ERR_MSG("Inline assembly cannot access global variables (not implemented yet).")
                                                         ERR_LINE2(expression->location, "somewhere in here")
                                                     )
                                                 } break; 
-                                                case VariableInfo::LOCAL: {
+                                                case Identifier::LOCAL_VARIABLE: {
                                                      ERR_SECTION(
                                                         ERR_HEAD2(expression->location)
                                                         ERR_MSG("Inline assembly cannot access local variables (not implemented yet).")
@@ -3502,6 +3541,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
     
     MAKE_NODE_SCOPE(function);
 
+    // log::out << "may gen "<<function->name << "\n";
+
     if(!hasForeignErrors()) {
         Assert(!function->body == !function->needsBody());
     }
@@ -3510,30 +3551,31 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
     
     // NOTE: This is the only difference between how methods and functions
     //  are generated.
-    Identifier* identifier = nullptr;
+    IdentifierFunction* identifier = nullptr;
     if(!astStruct){
-        // TODO: Store function identifier in AST
-        identifier = info.ast->findIdentifier(info.currentScopeId, CONTENT_ORDER_MAX, function->name);
-        if (!identifier) {
-            // NOTE: function may not have been added in the type checker stage for some reason.
-            // THANK YOU, past me for writing this note. I was wondering what I broke and reading the
-            // note made instantly realise that I broke something in the type checker.
-            ERR_SECTION(
-                ERR_HEAD2(function->location)
-                ERR_MSG("'"<<function->name << "' was null (compiler bug).")
-                ERR_LINE2(function->location, "bad")
-            )
-            // if (function->tokenRange.firstToken.str) {
-            //     ERRTOKENS(function->location)
-            // }
-            // 
-            return SIGNAL_FAILURE;
-        }
-        if (identifier->type != Identifier::FUNCTION) {
-            // I have a feeling some error has been printed if we end up here.
-            // Double check that though.
-            return SIGNAL_FAILURE;
-        }
+        identifier = function->identifier;
+        // // NOTE: We used this code when identifier wasn't stored in AST, but now it is so delete code below.
+        // identifier = (IdentifierFunction*)info.ast->findIdentifier(info.currentScopeId, CONTENT_ORDER_MAX, function->name, nullptr);
+        // if (!identifier) {
+        //     // NOTE: function may not have been added in the type checker stage for some reason.
+        //     // THANK YOU, past me for writing this note. I was wondering what I broke and reading the
+        //     // note made instantly realise that I broke something in the type checker.
+        //     ERR_SECTION(
+        //         ERR_HEAD2(function->location)
+        //         ERR_MSG("'"<<function->name << "' was null (compiler bug).")
+        //         ERR_LINE2(function->location, "bad")
+        //     )
+        //     // if (function->tokenRange.firstToken.str) {
+        //     //     ERRTOKENS(function->location)
+        //     // }
+        //     // 
+        //     return SIGNAL_FAILURE;
+        // }
+        // if (identifier->type != Identifier::FUNCTION) {
+        //     // I have a feeling some error has been printed if we end up here.
+        //     // Double check that though.
+        //     return SIGNAL_FAILURE;
+        // }
         // ASTFunction* tempFunc = info.ast->getFunction(fid);
         // // Assert(tempFunc==function);
         // if(tempFunc!=function){
@@ -3658,6 +3700,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
         }
 
+        // log::out << "do gen "<<function->name << "\n";
+
         tinycode = bytecode->createTiny(function->name, function->callConvention);
         out_codes->add(tinycode);
         builder.init(bytecode, tinycode, compiler);
@@ -3731,7 +3775,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 // for(int i = function->arguments.size()-1;i>=0;i--){
                 auto &arg = function->arguments[i];
                 auto &argImpl = funcImpl->signature.argumentTypes[i];
-                auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
+                auto varinfo = arg.identifier;
                 if (!varinfo) {
                     ERR_SECTION(
                         ERR_HEAD2(arg.location)
@@ -3756,8 +3800,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 if(!identifier) continue; // see type checker as to why this may happen
                 auto& memImpl = funcImpl->structImpl->members[i];
 
-                auto varinfo = info.ast->getVariableByIdentifier(identifier);
-                varinfo->versions_dataOffset[info.currentPolyVersion] = memImpl.offset;
+                identifier->versions_dataOffset[info.currentPolyVersion] = memImpl.offset;
             }
         }
         
@@ -3899,6 +3942,14 @@ SignalIO GenContext::generateFunctions(ASTScope* body){
             generateFunctions(it->body);
         }
         generateFunction(it);
+    }
+    for(auto it : body->statements) {
+        if(it->firstBody) {
+            generateFunctions(it->firstBody);
+        }
+        if(it->secondBody) {
+            generateFunctions(it->secondBody);
+        }
     }
     for(auto it : body->structs) {
         for (auto function : it->functions) {
@@ -4062,13 +4113,13 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 //  collide since the variables exist within a scope. Global variables accessed within
                 //  a polymorphic function is also fine since the variable's type will stay the same.
 
-                Identifier* varIdentifier = varname.identifier;
+                IdentifierVariable* varIdentifier = varname.identifier;
                 if(!varIdentifier){
                     Assert(info.hasForeignErrors());
                     // Assert(info.errors!=0); // there should have been errors
                     continue;
                 }
-                VariableInfo* varinfo = info.ast->getVariableByIdentifier(varIdentifier);
+                auto varinfo = varIdentifier;
                 if(!varinfo){
                     Assert(info.hasForeignErrors());
                     // Assert(info.errors!=0); // there should have been errors
@@ -4237,8 +4288,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     }
 
                     // TypeId stateTypeId = varname.versions_assignType[info.currentPolyVersion];
-                    Identifier* id = varname.identifier;
-                    VariableInfo* varinfo = info.ast->getVariableByIdentifier(id);
+                    IdentifierVariable* varinfo = varname.identifier;
                     if(!varinfo){
                         Assert(info.errors!=0); // there should have been errors
                         continue;
@@ -4249,21 +4299,21 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         continue;
                     }
                     switch(varinfo->type) {
-                        case VariableInfo::GLOBAL: {
+                        case Identifier::GLOBAL_VARIABLE: {
                             Assert(false); // broken with arrays
                             // builder.emit_dataptr(BC_REG_B, );
                             // info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // GeneratePop(info, BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
                             break; 
                         }
-                        case VariableInfo::LOCAL: {
+                        case Identifier::LOCAL_VARIABLE: {
                             // builder.emit_li32(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // builder.emit_({BC_ADDI, BC_REG_BP, BC_REG_B, BC_REG_B});
                             generatePop(BC_REG_LOCALS, frameOffsetOfLastVarname + j * elementSize, elementType);
                             // generatePop(BC_REG_BP, frameOffsetOfLastVarname + j * elementSize, elementType);
                             break;
                         }
-                        case VariableInfo::MEMBER: {
+                        case Identifier::MEMBER_VARIABLE: {
                             Assert(false); // broken with arrays, this should probably not be allowed
                             // Assert(info.currentFunction && info.currentFunction->parentStruct);
                             // // TODO: Verify that  you
@@ -4299,12 +4349,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     std::string a1 = info.ast->typeToString(rightTypes[i]);
                     // Assert(typesFromExpr[i] == rightTypes[i]);
                     if(typesFromExpr[i] != rightTypes[i]) {
-                        ERR_SECTION(
-                            ERR_HEAD2(statement->firstExpression->location)
-                            ERR_MSG("Compiler bug sorry! Type checker and generator produced different types '"<<a0<<"' != '"<<a1<<"' (type checker != generator).")
-                            ERR_LINE2(statement->firstExpression->location, "here")
-                        )
                         Assert(info.hasForeignErrors());
+                        if(!info.hasForeignErrors()) {
+                            ERR_SECTION(
+                                ERR_HEAD2(statement->firstExpression->location)
+                                ERR_MSG("Compiler bug sorry! Type checker and generator produced different types '"<<a0<<"' != '"<<a1<<"' (type checker != generator).")
+                                ERR_LINE2(statement->firstExpression->location, "here")
+                            )
+                        }
                         cont=true;
                         continue;
                     }
@@ -4324,23 +4376,12 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     _GLOG(log::out << log::LIME <<"assign pop "<<info.ast->typeToString(typeFromExpr)<<"\n";)
                     
                     TypeId stateTypeId = varname.versions_assignType[info.currentPolyVersion];
-                    Identifier* id = varname.identifier;
+                    IdentifierVariable* varinfo = varname.identifier;
 
-                    // Token* name = &statement->varnames[i].name;
-                    // auto id = info.ast->findIdentifier(info.currentScopeId, *name);
-                    if(!id){
-                        // there should have been errors
+                    if(!varinfo){
                         Assert(info.hasForeignErrors());
                         continue;
                     }
-                    VariableInfo* varinfo = info.ast->getVariableByIdentifier(id);
-                    if(!varinfo){
-                        Assert(info.errors!=0); // there should have been errors
-                        continue;
-                    }
-                    // if(varinfo->versions_typeId[info.currentPolyVersion] == AST_VOID) {
-                        
-                    // }
 
                     if(!performSafeCast(typeFromExpr, varinfo->versions_typeId[info.currentPolyVersion])){
                         if(!info.hasForeignErrors()){
@@ -4352,17 +4393,17 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     }
                     // Assert(!var->globalData || info.currentScopeId == info.ast->globalScopeId);
                     switch(varinfo->type) {
-                        case VariableInfo::GLOBAL: {
+                        case Identifier::GLOBAL_VARIABLE: {
                             builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             generatePop(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
                         } break; 
-                        case VariableInfo::LOCAL: {
+                        case Identifier::LOCAL_VARIABLE: {
                             // builder.emit_li32(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // builder.emit_({BC_ADDI, BC_REG_BP, BC_REG_B, BC_REG_B});
                             generatePop(BC_REG_LOCALS, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                             // generatePop(BC_REG_BP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                         } break;
-                        case VariableInfo::MEMBER: {
+                        case Identifier::MEMBER_VARIABLE: {
                             Assert(info.currentFunction && info.currentFunction->parentStruct);
                             // TODO: Verify that  you
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
@@ -4374,7 +4415,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                             // builder.emit_({BC_ADDI, BC_REG_B, BC_REG_A, BC_REG_B});
                             generatePop(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                         } break;
-                        case VariableInfo::ARGUMENT: {
+                        case Identifier::ARGUMENT_VARIABLE: {
                             Assert(false);
                         } break;
                         default: {
@@ -4703,7 +4744,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     Assert(hasErrors());
                     continue;
                 }
-                auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
+                auto varinfo_index = varnameNr.identifier;
                 {
                     TypeId typeId = AST_INT32; // you may want to use the type in varname, the reason i don't is because
                     framePush(typeId, &varinfo_index->versions_dataOffset[info.currentPolyVersion],false, false);
@@ -4791,8 +4832,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     Assert(hasForeignErrors());
                     continue;
                 }
-                auto varinfo_item = info.ast->getVariableByIdentifier(varnameIt.identifier);
-                auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
+                auto varinfo_item  = varnameIt.identifier;
+                auto varinfo_index = varnameNr.identifier;
 
                 {
                     SignalIO result = framePush(varinfo_index->versions_typeId[info.currentPolyVersion], &varinfo_index->versions_dataOffset[info.currentPolyVersion], false, false);
@@ -5221,15 +5262,15 @@ SignalIO GenContext::generateData() {
         //   If it's a bug we want to message the user. How do we know that though?
         //   We shouldn't spam the user about type information not being imported unless they wanted it.
     } else {
-        Identifier* identifiers[VAR_COUNT]{nullptr,nullptr,nullptr};
+        IdentifierVariable* identifiers[VAR_COUNT]{nullptr,nullptr,nullptr};
         // compiler->lock_imports.lock();
         auto imp = compiler->imports.get(compiler->typeinfo_import_id-1);
         ScopeId typeinfo_scope = imp->scopeId;
         // compiler->lock_imports.unlock();
 
-        identifiers[VAR_INFOS] = info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_typeInfos", true);
-        identifiers[VAR_MEMBERS] = info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_members", true);
-        identifiers[VAR_STRINGS] = info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_strings", true);
+        identifiers[VAR_INFOS]   = (IdentifierVariable*)info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_typeInfos", nullptr);
+        identifiers[VAR_MEMBERS] = (IdentifierVariable*)info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_members", nullptr);
+        identifiers[VAR_STRINGS] = (IdentifierVariable*)info.ast->findIdentifier(typeinfo_scope, CONTENT_ORDER_MAX, "lang_strings", nullptr);
 
         if(!(identifiers[0] && identifiers[1] && identifiers[2])) {
             // This only happens if there is a bug in the compiler or if Lang.bt
@@ -5240,8 +5281,8 @@ SignalIO GenContext::generateData() {
             info.errors++;
         } else {
             FORAN(identifiers) {
-                Assert(identifiers[nr]->type == Identifier::VARIABLE);
-                compiler->varInfos[nr] = info.ast->getVariableByIdentifier(identifiers[nr]);
+                Assert(identifiers[nr]->is_var());
+                compiler->varInfos[nr] = identifiers[nr];
                 Assert(compiler->varInfos[nr] && compiler->varInfos[nr]->isGlobal());
                 Assert(compiler->varInfos[nr]->versions_dataOffset._array.size() == 1);
             }
@@ -5262,6 +5303,13 @@ SignalIO GenContext::generateData() {
                     count_members += ti->astStruct->members.size();
                     for(int mi=0;mi<ti->astStruct->members.size();mi++){
                         auto& mem = ti->astStruct->members[mi];
+                        count_stringdata += mem.name.length() + 1; // +1 for null termination
+                    }
+                }
+                if(ti->astEnum) {
+                    count_members += ti->astEnum->members.size();
+                    for(int mi=0;mi<ti->astEnum->members.size();mi++){
+                        auto& mem = ti->astEnum->members[mi];
                         count_stringdata += mem.name.length() + 1; // +1 for null termination
                     }
                 }
@@ -5335,6 +5383,25 @@ SignalIO GenContext::generateData() {
                         member_count++;
                     }
                     typedata[i].members.end = member_count;
+                } else if(ti->astEnum) {
+                    typedata[i].members.beg = member_count;
+
+                    for(int mi=0;mi<ti->astEnum->members.size();mi++){
+                        auto& ast_mem = ti->astEnum->members[mi];
+
+                        memberdata[member_count].name.beg = string_offset;
+
+                        memcpy(stringdata + string_offset, ast_mem.name.c_str(), ast_mem.name.length());
+                        stringdata[string_offset + ast_mem.name.length()] = '\0';
+                        string_offset += ast_mem.name.length() + 1;
+
+                        memberdata[member_count].name.end = string_offset - 1; // -1 won't include null termination
+
+                        memberdata[member_count].value = ast_mem.enumValue;
+
+                        member_count++;
+                    }
+                    typedata[i].members.end = member_count;
                 }
             }
             Assert(string_offset == count_stringdata && count_members == member_count);
@@ -5391,7 +5458,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     
     Identifier* iden = nullptr;
     if(is_initial_import) {
-        iden = compiler->ast->findIdentifier(scope->scopeId,0,"main");
+        iden = compiler->ast->findIdentifier(scope->scopeId,0,"main", nullptr);
         if(!iden) {
             // If no main function exists then the code in global scope of
             // initial import will be the main function.
