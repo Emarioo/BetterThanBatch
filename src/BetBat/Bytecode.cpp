@@ -1187,6 +1187,7 @@ engone::Logger& operator<<(engone::Logger& l, BCRegister r){
 
 void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicArray<std::string>* dll_functions, bool force_newline) {
     using namespace engone;
+    bool print_one_inst = high_index - low_index == 1;
     if(high_index == -1 || high_index > instructionSegment.size())
         high_index = instructionSegment.size();
     
@@ -1217,16 +1218,20 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
 
                 if(line.line_number != prev_line || tiny_index != prev_tinyindex) {
                     if(tiny_index != prev_tinyindex) {
-                        log::out << log::GOLD  << tinycode->name <<"\n";
-                        prev_tinyindex = tiny_index;
+                        if(!print_one_inst) {
+                            log::out << log::GOLD  << tinycode->name <<"\n";
+                            prev_tinyindex = tiny_index;
+                        }
                     }
                     prev_tinyindex = tiny_index;
                     log::out << log::CYAN << line.line_number << "| " << line.text<<"\n";
                     prev_line = line.line_number;
                 }
             } else if(tiny_index != prev_tinyindex) {
-                log::out << log::GOLD  << tinycode->name <<"\n";
-                prev_tinyindex = tiny_index;
+                if(!print_one_inst) {
+                    log::out << log::GOLD  << tinycode->name <<"\n";
+                    prev_tinyindex = tiny_index;
+                }
             }
         }
         

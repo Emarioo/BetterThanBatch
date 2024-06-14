@@ -28,6 +28,7 @@ struct VirtualMachine {
     bool expectValuesOnStack = false;
     bool silent = false;
     
+    void init_stack(int stack_size = 0x10000);
     void execute(Bytecode* bytecode, const std::string& tinycode_name);
 
     // resets registers and other things but keeps the alloctions.

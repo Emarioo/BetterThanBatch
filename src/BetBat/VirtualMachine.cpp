@@ -70,6 +70,11 @@ void PrintPointer(volatile void* ptr){
 // void VirtualMachine::execute(Bytecode* bytecode){
 //     executePart(bytecode, 0, bytecode->length());
 // }
+void VirtualMachine::init_stack(int stack_size) {
+    stack.resize(stack_size);
+    memset(stack.data(), 0, stack.max);
+    memset((void*)registers, 0, sizeof(registers));
+}
 void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name){
     using namespace engone; 
 
@@ -168,7 +173,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     //         log::out <<log::BLUE<< "##   VirtualMachine ("<<startInstruction<<" - "<<endInstruction<<")  ##\n";
     //     }
     // )
-    log::out << log::GOLD << "VirtualMachine:\n";
+    // log::out << log::GOLD << "VirtualMachine:\n";
 
     TinyBytecode* tinycode = nullptr;
     int tiny_index = -1;
@@ -184,13 +189,16 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         return;
     }
 
-    stack.resize(0x10'0000);
-    memset(stack.data(), 0, stack.max);
-    memset((void*)registers, 0, sizeof(registers));
-
     // TODO: Setup argc, argv on the stack with betcall convention
     
     push_offsets.add(0);
+
+    if(stack.max == 0) {
+        // only init stack if we haven't already
+        // caller to VM may want to init there own stack with a
+        // large size with some pre-initialized content.
+        init_stack();
+    }
 
     i64 pc = 0;
     stack_pointer = (i64)(stack.data() + stack.max);
@@ -232,10 +240,10 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     // TODO: x64 had a bug with push_offsets, ALLOC_ARGS and SET_ARG
     //   I applied the same here but didn't test it.
 
-    // bool logging = false;
-    bool logging = true;
+    bool logging = false;
     bool interactive = false;
-    // bool interactive = true;
+    // logging = true;
+    // interactive = true;
     while(running) {
         if(interactive) {
             printf("> ");
@@ -1048,7 +1056,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         //     log::out << log::YELLOW<<"fp was "<<(i64)(fp - ((u64)stack.data+stack.max))<<", should be 0\n";
         // }
     // }
-    silent = false;
+    // silent = false;
     auto time = StopMeasure(tp);
     if(!silent){
         log::out << "\n";

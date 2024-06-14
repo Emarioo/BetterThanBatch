@@ -3055,6 +3055,12 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
             u32 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
             u32 offset = info.ast->aquireGlobalSpace(size);
             varinfo->versions_dataOffset[info.currentPolyVersion] = offset;
+
+            if (now->firstExpression) {
+                info.ast->globals_to_evaluate.add({now, scope->scopeId});
+                // log::out << "global " << log::CYAN << varname.name << "\n";
+            }
+
         }
         // Array initializer list
         if(now->arrayValues.size()!=0) {

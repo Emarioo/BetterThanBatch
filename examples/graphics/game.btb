@@ -65,11 +65,9 @@ fn InitEntityInfos() {
     entity_infos.last().is_static = true
 }
 
-global moving_platform_id: i32
+global moving_platform_id: i32 = -1
 
 fn main() -> i32 {
-    moving_platform_id = -1 // init global here because it's not done automatically yet
-
     window = CreateWindow(800,600)
 
     InitEntityInfos()

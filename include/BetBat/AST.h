@@ -1087,6 +1087,12 @@ struct AST {
     MUTEX(lock_strings);
     std::unordered_map<std::string, u32> _constStringMap; // used in generator
     QuickArray<ConstString> _constStrings;
+
+    struct GlobalItem {
+        ASTStatement* stmt;
+        ScopeId scope;
+    };
+    QuickArray<GlobalItem> globals_to_evaluate;
 private:
     MUTEX(lock_linearAllocation);
     char* linearAllocation = nullptr;
@@ -1100,6 +1106,7 @@ private:
     QuickArray<ASTFunction*> functions;
     QuickArray<ASTScope*> bodies;
     QuickArray<Identifier*> identifiers;
+
 
     u32 globalDataOffset = 0;
 

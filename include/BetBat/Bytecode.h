@@ -349,6 +349,16 @@ struct TinyBytecode {
     
     // high_index is exclusive
     void print(int low_index, int high_index, Bytecode* code = nullptr, DynamicArray<std::string>* dll_functions = nullptr, bool force_newline = false);
+
+    void restore_to_empty() {
+        // When I add a new list to tinycode I will forget to reset it in this function.
+        // restore_to_empty is only used with compile time execution so as long as the instructions are reset we may be fine.
+        instructionSegment.resize(0);
+        index_of_lines.resize(0);
+        lines.resize(0);
+        required_asm_instances.resize(0);
+        call_relocations.resize(0);
+    }
 };
 struct BytecodeLocation {
     TinyBytecodeID id; // id-1 to get index

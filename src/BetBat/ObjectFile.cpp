@@ -58,6 +58,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
                 continue;
 
             auto tinyprog = program->tinyPrograms[i];
+            if(!tinyprog)
+                continue; // the index (i) may have been a temporary tinycode for compile time, that is why no tinyprogram was created
 
             tinyprogram_offsets[i] = text_stream->getWriteHead();
             text_stream->write(tinyprog->text, tinyprog->head);
