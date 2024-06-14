@@ -155,11 +155,34 @@ fn @import(Kernel) CreateThread(
   /* [in, optional]  __drv_aliasesMem LPVOID */ lpParameter: void*,
   /* [in]            DWORD                   */ dwCreationFlags: void*,
   /* [out, optional] LPDWORD                 */ lpThreadId: u32*
-) -> void* /* HANDLE */;
-// fn @import(Kernel) CloseHandle(handle: void*) -> bool;
-fn @import(Kernel) WaitForSingleObject(handle: void*, ms: u32) -> u32;
+) -> HANDLE;
+fn @import(Kernel) WaitForSingleObject(handle: HANDLE, ms: u32) -> u32;
 fn @import(Kernel) GetCurrentThreadId() -> u32;
-// fn @import(Kernel) GetLastError() -> u32;
+fn @import(Kernel) GetLastError() -> u32;
+
+fn @import(Kernel) CreateMutexA(
+  /* [in, optional] LPSECURITY_ATTRIBUTES*/ lpMutexAttributes: void*,
+  /* [in]           BOOL                 */ bInitialOwner: bool,
+  /* [in, optional] LPCSTR               */ lpName: char*
+) -> HANDLE;
+fn @import(Kernel) ReleaseMutex(
+  /* [in] HANDLE */ hMutex : HANDLE
+) -> bool;
+fn @import(Kernel) CreateSemaphoreA(
+  /* [in, optional] LPSECURITY_ATTRIBUTES */ lpSemaphoreAttributes: void*,
+  /* [in]           LONG                  */ lInitialCount: i32,
+  /* [in]           LONG                  */ lMaximumCount: i32,
+  /* [in, optional] LPCSTR                */ lpName: char*
+) -> HANDLE;
+fn @import(Kernel) ReleaseSemaphore(
+  /* [in]            HANDLE */ hSemaphore: HANDLE,
+  /* [in]            LONG   */ lReleaseCount: i32,
+  /* [out, optional] LPLONG */ lpPreviousCount: i32*
+) -> bool;
+
+#macro INFINITE            0xFFFFFFFFu  // Infinite timeout
+#macro WAIT_FAILED         0xFFFFFFFFu
+
 
 /*#############
     SOCKETS

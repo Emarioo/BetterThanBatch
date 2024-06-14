@@ -4,6 +4,8 @@
     IMPORTANT: THREADS ARE NOT SUPPORTED IN THE VirtualMachine! yet?
 */
 
+#import "Logger"
+
 #if OS_WINDOWS
     #import "Windows"
 #elif OS_LINUX
@@ -80,10 +82,135 @@ fn ThreadJoin(thread: Thread) {
 }
 fn ThreadSelfId() -> ThreadId {
     #if OS_WINDOWS
-        return cast_unsafe<u64>pthread_self();
-    #else
         return GetCurrentThreadId();
+    #else
+        return cast_unsafe<u64>pthread_self();
     #endif
 }
 
-// TODO: Mutex
+#macro INTERNAL_TO_OS_HANDLE(N) (cast<u64>(N) + 1)
+#macro OS_HANDLE_TO_INTERNAL(N) (cast<void*>((N) - 1))
+
+struct Mutex {
+    os_handle: u64;
+    _owner_thread: ThreadId; // implementation may change, keep member private for now
+
+    fn cleanup() {
+        if os_handle != 0 {
+            yes := CloseHandle(os_handle - 1)
+            if !yes {
+                err := GetLastError();
+                log("[WinError ",err,"] CloseHandle");
+            }
+            os_handle = 0
+        }
+    }
+    fn lock() {
+        // log("LOCKING")
+        if os_handle == 0 {
+            handle := CreateMutexA(null, false, null);
+            if handle == INVALID_HANDLE_VALUE {
+                err := GetLastError();
+                log("[WinError ",err,"] CreateMutex");
+            } else
+                os_handle = INTERNAL_TO_OS_HANDLE(handle)
+        }
+        if os_handle != 0 {
+            res := WaitForSingleObject(OS_HANDLE_TO_INTERNAL(os_handle), INFINITE)
+            newId := ThreadSelfId()
+            owner := _owner_thread
+            // log("Lock ",newId," ",os_handle);
+            if (owner != 0) {
+                log("Mutex : Locking twice, old owner: ",owner,", new owner: ",newId)
+            }
+            _owner_thread = newId;
+            if res == WAIT_FAILED {
+                // TODO: What happened do the old thread who locked the mutex. Was it okay to ownerThread = newId
+                err := GetLastError();
+                log("[WinError ",err,"] WaitForSingleObject");
+            }
+        }
+    }
+    fn unlock() {
+        if os_handle != 0 {
+            // log("Unlock ",_owner_thread," ", os_handle);
+            _owner_thread = 0;
+            yes := ReleaseMutex(OS_HANDLE_TO_INTERNAL(os_handle))
+            if !yes {
+                err := GetLastError();
+                log("[WinError ",err,"] ReleaseMutex");
+            }
+        }
+    }
+    fn getOwner() {
+        return _owner_thread
+    }
+}
+
+struct Semaphore {
+    fn init(initial: u32, maxLocks: u32) {
+        m_initial = initial
+        m_max = maxLocks
+
+        handle := CreateSemaphoreA(null, m_initial, m_max, null);
+		if (handle == INVALID_HANDLE_VALUE) {
+			err := GetLastError();
+			log("[WinError ",err,"] CreateSemaphore");
+		} else {
+			os_handle = INTERNAL_TO_OS_HANDLE(handle);
+		}
+    }
+    fn cleanup() {
+        if (os_handle != 0){
+            yes := CloseHandle(OS_HANDLE_TO_INTERNAL(os_handle));
+            if(!yes){
+                err := GetLastError();
+                log("[WinError ",err,"] CloseHandle");
+            }
+            os_handle = 0
+        }
+    }
+
+    fn wait() {
+        if (os_handle == 0) {
+			handle := CreateSemaphoreA(null, m_initial, m_max, null);
+			if (handle == INVALID_HANDLE_VALUE) {
+				err := GetLastError();
+                log("[WinError ",err,"] CreateSemaphore");
+			} else {
+                os_handle = INTERNAL_TO_OS_HANDLE(handle);
+			}
+		}
+		if (os_handle != 0) {
+			res := WaitForSingleObject(OS_HANDLE_TO_INTERNAL(os_handle), INFINITE);
+			if (res == WAIT_FAILED) {
+				err := GetLastError();
+				log("[WinError ",err,"] WaitForSingleObject");
+			}
+		}
+    }
+    // count is how much to increase the semaphore's count by.
+    fn signal(count: i32 = 1) {
+        // MEASURE
+		if (os_handle != 0) {
+			yes := ReleaseSemaphore(INTERNAL_TO_OS_HANDLE(os_handle), count, null);
+			if (!yes) {
+				err := GetLastError();
+				// if(err == ERROR_TOO_MANY_POSTS)
+				// 	PL_PRINTF("[WinError %lu] ReleaseSemaphore, to many posts\n",err);
+				// else
+					log("[WinError ",err,"] ReleaseSemaphore");
+			}
+		}
+    }
+
+    m_initial: u32 = 1;
+    m_max: u32 = 1;
+
+    os_handle: u64; // Windows
+
+    // TODO: Linux
+    // static const int SEM_SIZE = 32;
+    // u8 m_data[SEM_SIZE]; // sem_t
+    // bool m_initialized;
+}

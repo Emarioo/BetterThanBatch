@@ -82,7 +82,7 @@ struct Server {
             
             err := bind(m_socket, cast<sockaddr*>&addr, sizeof addr)
             if err == SOCKET_ERROR {
-                log("bind failed")   
+                log("bind failed")
                 return NET_BAD_IP
             }
             
@@ -168,7 +168,6 @@ struct Server {
                             } else {
                                 bytes = recv(connection.socket, connection.message_data, connection.message_max, 0)
                             }
-
                             
                             // handle error or shutdown
                             if bytes == 0 {

@@ -237,8 +237,15 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     bc_register_map[base->op0].used_by = original_recipient;
                     bc_register_map[base->op0].reg_nr = original_recipient_regnr;
                 } else {
-                    n->reg0 = alloc_artifical_reg(n->bc_index);
-                    map_reg(n,0);
+                    if (bc_register_map[base->op0].used_by) {
+                        // reuse artifical register, can happen due to this:
+                        //      a := i++
+                        // a temporary copy is pushed
+                        n->reg0 = bc_register_map[base->op0].used_by->regs[bc_register_map[base->op0].reg_nr];
+                    } else {
+                        n->reg0 = alloc_artifical_reg(n->bc_index);
+                        map_reg(n,0);
+                    }
                 }
             } else {
                 insts_to_delete.add(i);
@@ -784,7 +791,12 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     // #define DEBUG_REGISTER_USAGE
     
     X64Inst* cur_node = nullptr;
+    
     CALLBACK_ON_ASSERT(
+        log::out << tinycode->name<<"\n";
+        for(auto n : inst_list) {
+            log::out << n->bc_index<< " "<< *n << "\n";
+        }
         log::out << "Asserted on " << log::GRAY <<  cur_node->bc_index <<" " << *cur_node << "\n";
         // tinycode->print(0,-1, code);
     )

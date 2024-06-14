@@ -175,3 +175,12 @@ _test 60000; T(u32, u32, 10000, *, 6);
 _test 49000; T(u16, u8, 7000, *, 7);
 // }
 _test 1; cast<u8>301 % cast<u8>258;
+
+
+@TEST_CASE(plusplus)
+
+a := 2332;
+b := a++ // x64 gen asserted here at one point
+
+// okay(a++) // and this
+// fn okay(n: i32) { }

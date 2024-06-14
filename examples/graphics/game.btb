@@ -1,14 +1,20 @@
 /*
-    An example of a game, not sure what it will be yet.
+    An example of a game
 
+    Goals:
+        2d box collision physics
+        multiplayer
+        players can move, jump, and collide with each other
 */
 
 #import "Graphics"
+#import "Net"
 #import "Math"
 #import "Logger"
 #import "Array"
 #import "String"
 
+#macro DEFAULT_PORT 4097
 
 enum EntityType {
     BLOB,
