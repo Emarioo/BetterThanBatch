@@ -63,7 +63,7 @@ fn main(argc: i32, argv: char**) -> i32 {
         msg.append("Host: ")
         msg.append(argv[1])
         msg.append("\r\nConnection: close\r\n\r\n")
-        err = send(client, msg.ptr, msg.len, 0)
+        err = socket_send(client, msg.ptr, msg.len, 0)
         if err < 0 {
             log("send failed")
             return 1
@@ -83,7 +83,7 @@ fn main(argc: i32, argv: char**) -> i32 {
         }
         // for 1..argc {
         //     len := strlen(argv[nr])
-        //     err := send(client, argv[nr], len, 0)   
+        //     err := socket_send(client, argv[nr], len, 0)   
         //     if err == SOCKET_ERROR {
         //         log("send failed")
         //         return 1   

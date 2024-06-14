@@ -139,7 +139,7 @@ fn main(argc: i32, argv: char**) -> i32 {
                 log("send: ",real_path)
             }
             
-            err = send(client, response.ptr, response.len, 0)
+            err = socket_send(client, response.ptr, response.len, 0)
             if err == SOCKET_ERROR {
                 log("send failed")
                 break

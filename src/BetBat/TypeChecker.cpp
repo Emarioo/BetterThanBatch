@@ -1396,7 +1396,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
 
     TINY_ARRAY(TypeId, typeArray, 1);
 
-    // switch 
+    // switch
     if(expr->isValue) {
         if(expr->typeId == AST_ID){
             // NOTE: When changing this code, don't forget to do the same with AST_SIZEOF. It also has code for AST_ID.
@@ -1406,13 +1406,17 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             // ScopeInfo* sc = info.ast->getScope(scopeId);
             // sc->print(info.ast);
             // TODO: What about enum?
+            // bool crossed_function_boundary = false;
             auto iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name);
             if(iden){
                 expr->identifier = iden;
                 if(iden->type == Identifier::VARIABLE){
+                    log::out << "find " << iden->name << "\n";
                     auto varinfo = info.ast->getVariableByIdentifier(iden);
                     if(varinfo){
                         if(outTypes) outTypes->add(varinfo->versions_typeId[info.currentPolyVersion]);
+
+                        // if(varinfo->type == )
                     }
                 } else if(iden->type == Identifier::FUNCTION) {
                     if(iden->funcOverloads.overloads.size() == 1) {

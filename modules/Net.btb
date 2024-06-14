@@ -1,0 +1,248 @@
+/*
+    Networking with server and client
+*/
+
+#import "Array"
+#import "String"
+#import "Threads"
+
+#if OS_WINDOWS
+    #import "Windows"
+#elif OS_LINUX
+    #import "Linux"
+#endif
+
+enum EventType {
+	EVENT_START,
+	EVENT_CLOSE,
+	EVENT_MESSAGE, // recived message
+	EVENT_CONNECT, // server only
+	EVENT_DISCONNECT, // server only
+}
+struct Event {
+	type: EventType;
+	who: ConnectionID; // only server
+	message: char[]; // only on receive message
+}
+enum NetError {
+    NET_SUCCESS,
+    NET_FAILURE, // general failure
+    NET_BAD_IP,
+    NET_SOCKET_API_ERROR,
+}
+#macro ConnectionID u32
+struct Connection {
+
+}
+struct Server {
+	fn start(ip: StringBuilder, port: u32) -> NetError {
+
+
+
+        m_ip = ip
+        m_port = port
+    }
+	fn close() {
+
+    }
+
+	fn disconnect(connection_id: ConnectionID) -> NetError {
+    }
+
+	fn pollEvents(blocking: bool) -> Event[] {
+
+    }
+	
+	fn send(connection_id: ConnectionID, bytes: char[]) -> NetError {
+
+    }
+	
+	m_ip: StringBuilder;
+	m_port: u32;
+
+	connections: Array<Connection>;
+	// mutex: Mutex;
+}
+#macro EventCallback fn(e: Event, user_data: void*)
+struct Client {
+	fn start(ip: char[], port: u32) -> NetError {
+        m_ip.clear()
+        m_ip.append(ip)
+        m_port = port
+        #if OS_WINDOWS
+            EnsureInitializedWSA()
+
+            m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+            if m_socket == INVALID_SOCKET {
+                log("socket failed")
+                return NET_SOCKET_API_ERROR
+            }
+            // defer closesocket(client)
+            
+            result: addrinfo*;
+            hints: addrinfo
+            hints.ai_family = AF_INET
+            hints.ai_socktype = SOCK_STREAM
+            hints.ai_protocol  = IPPROTO_TCP
+
+            string_port: StringBuilder
+            string_port.append(port)
+            
+            err := getaddrinfo(ip.ptr, string_port.ptr, &hints, &result)
+            if err != 0 {
+                log("getaddrinfo failed")
+                return NET_BAD_IP
+            }
+            err = connect(m_socket, result.ai_addr, sizeof *result.ai_addr)
+            
+            // addr: sockaddr_in
+            // addr.sin_family = AF_INET
+            // addr.sin_port = htons(8080)
+            // addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
+            // err := connect(client, cast<sockaddr*>&addr, sizeof addr)
+            
+            if err == SOCKET_ERROR {
+                log("connect failed")
+                return NET_BAD_IP
+            }
+
+            fn @stdcall receiver_func(arg: void*) -> i32 {
+                client: Client* = arg
+                buffer: char[1024]
+                while {
+                    log("before")
+                    bytes := recv(client.m_socket, buffer.ptr, buffer.len, 0)
+                    log("after")
+                    if bytes == 0 {
+                        break
+                    } else if bytes < 0 {
+                        e: Event
+                        e.type = EVENT_CLOSE
+                        e.who = 0
+                        e.message = buffer
+                        m_event_callback(e, m_user_data)
+
+                        if client.m_socket != INVALID_SOCKET
+                            closesocket(client.m_socket)
+                        client.m_socket = INVALID_SOCKET
+
+                        log("recv failed")
+                        break
+                    }
+                    if buffer.len == bytes {
+                        // more bytes for same message
+                    }
+
+                    if m_event_callback {
+                        e: Event
+                        e.type = EVENT_MESSAGE
+                        e.who = 0
+                        e.message = buffer
+                        m_event_callback(e, m_user_data)
+                    }
+                    // std_prints("[READ ", bytes,"]")
+                    // std_print(buffer.ptr, bytes)
+                }
+                return 0
+            }
+
+            m_receiver_thread = ThreadCreate(receiver_func, this)
+
+            return NET_SUCCESS
+        #else
+        // TODO: Linux
+        #endif
+    }
+	fn close() {
+        if m_socket != INVALID_SOCKET
+            closesocket(m_socket)
+        m_socket = INVALID_SOCKET
+
+        ThreadJoin(m_receiver_thread)
+        m_receiver_thread.cleanup()
+    }
+    fn wait() {
+        if m_receiver_thread.valid() {
+            ThreadJoin(m_receiver_thread)
+            m_receiver_thread.cleanup()
+        }
+    }
+
+	fn send(bytes: char[]) -> NetError {
+        err := socket_send(m_socket, bytes.ptr, bytes.len, 0)
+        if err < 0 {
+            log("send failed")
+            return NET_FAILURE
+        }
+        return NET_SUCCESS
+    }
+
+    fn set_callback(func: EventCallback, user_data: void*) {
+        m_event_callback = func
+        m_user_data = user_data
+    }
+    // fn pollEvents(blocking: bool) -> Event[] { }
+    
+    /*######################
+        Members
+    #####################*/
+
+	m_ip: StringBuilder;
+	m_port: u32;
+
+    m_socket: SOCKET; // TODO: SOCKET is only for Windows, what about Linux?
+
+    m_receiver_thread: Thread;
+    m_event_callback: EventCallback;
+    m_user_data: void*;
+
+    /*######################
+        Internal functions
+    #####################*/
+}
+
+
+global g_wsaData: WSADATA;
+global inited_wsaData: bool;
+
+fn EnsureInitializedWSA() {
+    if !inited_wsaData {
+        err := WSAStartup(0x0202, &g_wsaData)
+        if err != 0 {
+            log("WSA failed")
+            return
+        }
+        inited_wsaData = true
+    }
+}
+
+/*#######################
+    CODE FOR TESTING
+######################*/
+
+// #import "Threads"
+// #import "Logger"
+// #macro DEFAULT_IP 0x01_00_00_7F
+// #macro DEFAULT_PORT 4000
+// fn TestServerAndClient() {
+
+//     server_thread := ThreadCreate(TestServer, null)
+
+//     client: Client
+//     err := client.start(DEFAULT_IP,DEFAULT_PORT)
+
+//     ThreadJoin(server_thread)
+
+//     log("Running")
+// }
+// fn TestServer() {
+//     server: Server
+//     err := server.start(DEFAULT_IP,DEFAULT_PORT)
+
+//     // while {
+//     //     events := server.pollEvents(true)
+//     //     for events {
+//     //         if it.type == Start
+//     //     }
+//     // }
+// }

@@ -70,6 +70,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
         return false;
     if (from == to)
         return true;
+    
     if(from.isPointer()) {
         if (to == AST_BOOL)
             return true;
@@ -169,6 +170,9 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
             // builder.emit_push(reg);
             return true;
         }
+    }
+    if (from_typeInfo && from_typeInfo->funcType && to == AST_BOOL) {
+        return true;
     }
     // Asserts when we have missed a conversion
     if(!hasForeignErrors()){

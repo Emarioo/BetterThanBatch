@@ -4,6 +4,12 @@
     IMPORTANT: THREADS ARE NOT SUPPORTED IN THE VirtualMachine! yet?
 */
 
+#if OS_WINDOWS
+    #import "Windows"
+#elif OS_LINUX
+    #import "Linux"
+#endif
+
 /* Logic of compare and swap
 if *ptr == old
     *ptr = new
@@ -18,10 +24,27 @@ fn @intrinsic atomic_add(ptr: i32*, value: i32) -> i32;
 struct Thread {
     os_handle: u64 = 0;
     id: u64 = 0;
+    
+    fn cleanup() {
+        os_handle = 0
+        id = 0
+    }
+    fn valid() -> bool {
+        return id != 0
+    }
 }
+
+// TODO: Implement @oscall which chooses convention based on targeted system.
+// TODO: Windows threads returns integer while Linux threads return void*. Writing a program that works on both could be troublesome because of the different return value. How do deal with it?
+#if OS_WINDOWS
+#macro FnThread fn @stdcall (void*)->i32
+#else
+#macro FnThread fn @unixcall (void*)->void*
+#endif
+
 #macro ThreadId u64
 // func should be fn @unixcall/@stdcall (void*) -> void*
-fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
+fn ThreadCreate(func: FnThread, param: void*) -> Thread {
     // TODO: Handle error
     thread: Thread;
     #if OS_WINDOWS
@@ -37,18 +60,19 @@ fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
     #endif
     return thread;
 }
-fn ThreadDestroy(thread: Thread) {
-    // TODO: Handle error
-    #if OS_WINDOWS
-        CloseHandle(thread.os_handle);
-    #else
-        ThreadJoin(thread); // temporary
-    #endif
-}
+// fn ThreadDestroy(thread: Thread) {
+//     // TODO: Handle error
+//     #if OS_WINDOWS
+//         CloseHandle(thread.os_handle);
+//     #else
+//         ThreadJoin(thread); // nocheckin TODO: temporary
+//     #endif
+// }
 fn ThreadJoin(thread: Thread) {
     // TODO: Handle error
     #if OS_WINDOWS
         WaitForSingleObject(thread.os_handle, 0xFFFFFFFF); // 0xFFFFFFFF wait indefinitely
+        CloseHandle(thread.os_handle);
     #else
         // Assert(sizeof(pthread) == sizeof(thread.os_handle));
         err = pthread_join(cast_unsafe<pthread_t>thread.os_handle, cast_unsafe<void**>null);
@@ -62,27 +86,4 @@ fn ThreadSelfId() -> ThreadId {
     #endif
 }
 
-/*
-    OS SPECIFIC
-*/
-#if OS_WINDOWS
-    fn @dllimport CreateThread(
-    /* [in, optional]  LPSECURITY_ATTRIBUTES   */ lpThreadAttributes: void*,
-    /* [in]            SIZE_T                  */ dwStackSize: u64,
-    /* [in]            LPTHREAD_START_ROUTINE  */ lpStartAddress: fn_ref, // fn (void*) -> i32
-    /* [in, optional]  __drv_aliasesMem LPVOID */ lpParameter: void*,
-    /* [in]            DWORD                   */ dwCreationFlags: void*,
-    /* [out, optional] LPDWORD                 */ lpThreadId: u32*
-    ) -> void* /* HANDLE */;
-    fn @dllimport CloseHandle(handle: void*) -> bool;
-    fn @dllimport WaitForSingleObject(handle: void*, ms: u32) -> u32;
-    fn @dllimport GetCurrentThreadId() -> u32;
-    fn @dllimport GetLastError() -> u32;
-#else
-    struct pthread_t {
-        _data: u64;
-    }
-    fn @import @unixcall pthread_create(thread: pthread_t*, attr: void*, start_routine: fn_ref, arg: void*) -> i32;
-    fn @import @unixcall pthread_join(thread: pthread_t, retval: void**) -> i32;
-    fn @import @unixcall pthread_self() -> pthread_t;
-#endif
+// TODO: Mutex

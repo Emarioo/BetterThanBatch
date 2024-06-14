@@ -332,6 +332,7 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const StringView &name, ContentO
     lock_variables.unlock();
     return id;
 }
+// Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes){
 Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool searchParentScopes){
     using namespace engone;
     if(searchParentScopes){
@@ -565,7 +566,9 @@ bool AST::castable(TypeId from, TypeId to){
         if(to_size >= from_typeInfo->getSize())
             return true;
     }
-
+    if (from_typeInfo && from_typeInfo->funcType && to == AST_BOOL) {
+        return true;
+    }
     return false;
 
 }

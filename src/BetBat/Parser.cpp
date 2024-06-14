@@ -382,6 +382,16 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
+            if(envs[envs.size()-2].func_returns) {
+                // we break here because
+                //  func: fn ()->i32, param: i32
+                // should be treated as
+                //  a function pointer type with one return value
+                // and not two return values (i32 and param where ": i32" is left out)
+                // User should enclose return values in parenthesis if they need multiple return values
+                break;
+            }
+
             info.advance();
             envs[envs.size()-2].buffer += envs.last().buffer;
             envs[envs.size()-2].buffer += ",";
@@ -3530,6 +3540,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
     function->location = info.srcloc(tok_name);
 
     ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder(), nullptr);
+    funcScope->is_function_scope = true;
     function->scopeId = funcScope->id;
 
     // ensure we leave this parse function with the same scope we entered with

@@ -1,26 +1,79 @@
 
-// #import "examples/graphics/quad.btb"
-// #import "examples/graphics/game.btb"
+struct A {
+    n: i32 = 3;
+    fn fun() {
+        fn okay() {
+            _test 3; n;
+        }
+        okay()
+    }
+}
+a: A
+a.fun()
 
-#import "Logger"
-#import "String"
+outer(9)
+
+fn outer(arg: i32) {
+    inner()
+    fn inner() {
+        a := arg
+    }
+}
+
+// #import "Net"
+
+// #import "Threads"
+// #import "Logger"
 // #import "Lang"
 
 
-operator cast(a: StringBuilder) -> char[] {
-    return a.sliced()
-    // std_print_any(&a)
-    // return Slice<char>{cast<i64>1,2}
-}
+// #macro DEFAULT_IP "127.0.0.1"
+// #macro DEFAULT_PORT 4000
 
-builder: StringBuilder
-builder.append("Hi: ")
-builder.append(923)
+// fn TestServerAndClient() {
 
-okay(s) // builder is converted to slice
+//     // server_thread := ThreadCreate(TestServer, null)
 
-fn okay(str: char[]) {
-    // log("'",cast<void*>str.ptr,"' ", str.len)
-    log("'",str.ptr,"' ", str.len)
-}
 
+//     client: Client
+//     client.set_callback(handle_event, null)
+//     // err := client.start(DEFAULT_IP,DEFAULT_PORT)
+//     err := client.start("www.example.com",80)
+
+//     msg: StringBuilder
+//     msg.append("GET /index.html HTTP/1.1\r\n")
+//     msg.append("Host: ")
+//     msg.append("www.example.com")
+//     msg.append("\r\nConnection: close\r\n\r\n")
+//     client.send(msg.sliced())
+    
+//     fn handle_event(e: Event, ud: void*) {
+//         std_print_any(&e)
+//         log()
+//         log("Data:")
+//         std_print(e.message)
+//     }
+
+//     client.wait()
+
+//     client.close()
+// }
+// fn TestServer() {
+//     server: Server
+//     err := server.start(DEFAULT_IP,DEFAULT_PORT)
+
+//     // while {
+//     //     events := server.pollEvents(true)
+//     //     for events {
+//     //         if it.type == Start
+//     //     }
+//     // }
+// }
+
+
+
+
+// fn main() -> i32 {
+//     TestServerAndClient()
+//     return 0
+// }

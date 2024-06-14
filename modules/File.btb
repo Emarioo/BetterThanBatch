@@ -11,9 +11,9 @@
 #import "Lang" // temporary
 
 #if OS_WINDOWS
-#import "Windows"
+    #import "Windows"
 #elif OS_LINUX
-#import "Linux"
+    #import "Linux"
 #endif
 
 enum @enclosed FileHandle : i64 { INVALID }

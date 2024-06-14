@@ -439,6 +439,8 @@ struct ScopeInfo {
 
     ASTScope* astScope = nullptr; // may be null, some scopes don't belong to ASTScope
 
+    bool is_function_scope = false;
+
     // TODO: Move these elsewhere?
     u32 bc_start = 0; // we need tinycode id too
     u32 bc_end = 0;
@@ -938,6 +940,7 @@ struct AST {
     // Searches for identifier with some name. It does so recursively
     // Identifier* findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes = true);
     Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool searchParentScopes = true);
+    // Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes = true);
     // VariableInfo* identifierToVariable(Identifier* identifier);
 
     // Returns nullptr if variable already exists or if scopeId is invalid

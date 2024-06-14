@@ -148,6 +148,19 @@ struct WIN32_FIND_DATAA {
 //   wFinderFlags: i16; // Obsolete. Do not use
 }
 
+fn @import(Kernel) CreateThread(
+  /* [in, optional]  LPSECURITY_ATTRIBUTES   */ lpThreadAttributes: void*,
+  /* [in]            SIZE_T                  */ dwStackSize: u64,
+  /* [in]            LPTHREAD_START_ROUTINE  */ lpStartAddress: fn @stdcall (void*)->i32,
+  /* [in, optional]  __drv_aliasesMem LPVOID */ lpParameter: void*,
+  /* [in]            DWORD                   */ dwCreationFlags: void*,
+  /* [out, optional] LPDWORD                 */ lpThreadId: u32*
+) -> void* /* HANDLE */;
+// fn @import(Kernel) CloseHandle(handle: void*) -> bool;
+fn @import(Kernel) WaitForSingleObject(handle: void*, ms: u32) -> u32;
+fn @import(Kernel) GetCurrentThreadId() -> u32;
+// fn @import(Kernel) GetLastError() -> u32;
+
 /*#############
     SOCKETS
 ###############*/
@@ -199,7 +212,9 @@ fn @import(Winsock) recv(
   len: i32,
   flags: i32 // MSG_OOB, MSG_PEEK, MSG_WAITALL
 ) -> i32;
-fn @import(Winsock) send(
+// We use an alias for send because user may name a function or method "send".
+// If we had namespaces then we wouldn't need to but they are incomplete.
+fn @import(Winsock,alias="send") socket_send(
   s: SOCKET,
   buf: char*,
   len: i32,

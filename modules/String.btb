@@ -34,7 +34,12 @@ struct StringBuilder {
         // TODO: Bounds check
         return ptr[index]
     }
-    fn clear() { len = 0; }
+    fn clear() {
+        len = 0;
+        if ptr {
+            *ptr = '\0'
+        }
+    }
     fn append(value: i64) {
         if len + 20 > max {
             reserve(len + 20);

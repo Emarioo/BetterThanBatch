@@ -51,3 +51,25 @@ fn get() -> i32, i32 {
 
 x,y := get()
 
+@TEST_CASE(variable_accessibility)
+
+struct A {
+    n: i32 = 3;
+    fn fun() {
+        fn okay() {
+            @TEST_ERROR(E0) _test 3; n; // okay is not a method, n is not available
+        }
+        okay()
+    }
+}
+a: A
+a.fun()
+
+outer(9)
+
+fn outer(arg: i32) {
+    inner()
+    fn inner() {
+        @TEST_ERROR(E0) a := arg // arg should not be accesible from inner function
+    }
+}
