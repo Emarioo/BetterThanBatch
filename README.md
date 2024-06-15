@@ -35,13 +35,15 @@ Example of errors with named arguments
 |Namespaces|No, incomplete|
 |Linking with external functions|Yes, with #load and @import but could be better|
 |Type information|Yes, but needs a refactor/redesign|
-|Compile time execution|Not started|
+|Compile time execution|Global variables are computed at compile time, nothing else yet|
 |x64 backend|Yes|
 |Debug information|Only DWARF|
 |x64 inline assembly|Yes|
 
 # How to get started
 **Option 1:** Download a release of `BTB Compiler` at https://github.com/Emarioo/BetterThanBatch/releases. Then unzip it in a folder of your choice and edit your environment variable `PATH` with the path to the compiler executable (for convenience). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
+
+**NOTE**: There may not be an up to date release.
 
 **Option 2:** Clone the repo and build the compiler executable yourself, see [Building](#building). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
 

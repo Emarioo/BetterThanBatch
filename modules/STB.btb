@@ -7,7 +7,7 @@
     You must compile stb into a static library.
 */
 
-#load "bin/stb_image.lib" as STB_IMAGE
+#load "libs/stb/lib-mingw-w64/stb_image.lib" as STB_IMAGE
 
 #macro STB_IMPORT @import(STB_IMAGE)
 

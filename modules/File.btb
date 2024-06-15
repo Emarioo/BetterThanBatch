@@ -161,6 +161,65 @@ fn FileClose(file: FileHandle) {
     CloseHandle(HandleToInternal(file))
 }
 
+fn DirectoryCreate(path: char[]) -> bool {
+    #if OS_WINDOWS
+        success := CreateDirectoryA(path.ptr, null);
+		if(!success){
+			err := GetLastError();
+            if err == ERROR_ALREADY_EXISTS
+                return true // we want the directory to exist so the intention of the function succeded
+
+			log("[WinError ",err,"] CreateDirectoryA '",path,"'");
+            return false;
+		}
+		return true;
+    #elif OS_LINUX
+
+    #endif
+}
+fn FileCopy(src: char[], dst: char[]) -> bool {
+    #if OS_WINDOWS
+        yes := CopyFileA(src.ptr,dst.ptr,false);
+		if(!yes){
+			err := GetLastError();
+            log("[WinError ",err,"] CopyFile '",src,"' '",dst,"'");
+            return false;
+		}
+		return true;
+    #elif OS_LINUX
+
+    #endif
+}
+fn FileMove(src: char[], dst: char[]) -> bool {
+    #if OS_WINDOWS
+        yes := MoveFileA(src.ptr,dst.ptr);
+		if(!yes){
+			DWORD err = GetLastError();
+            log("[WinError ",err,"] MoveFile '",src,"' '",dst,"'");
+            return false;
+		}
+		return true;
+    #elif OS_LINUX
+
+    #endif
+}
+fn FileDelete(path: char[]) -> bool {
+    #if OS_WINDOWS
+        yes := DeleteFileA(path.c_str());
+		if(!yes){
+			DWORD err = GetLastError();
+			if(err == ERROR_FILE_NOT_FOUND) {
+				return true;
+			}
+            log("[WinError ",err,"] DeleteFile '",path,"'");
+            return false;
+		}
+		return true;
+    #elif OS_LINUX
+
+    #endif
+}
+
 // // The returned string is heap allocated in the interpreter.
 // // This allocation is freed when the interpreter finishes.
 // // TODO: You may want to change this so that you give the function a

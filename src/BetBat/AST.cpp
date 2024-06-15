@@ -257,6 +257,8 @@ IdentifierVariable* AST::addVariable(Identifier::Type type, ScopeId scopeId, con
     iden->scopeId = scopeId;
     iden->order = contentOrder;
 
+    identifiers.add(iden);
+
     return iden;
 }
 
@@ -280,6 +282,8 @@ IdentifierFunction *AST::addFunction(ScopeId scopeId, const StringView &name, Co
     iden->name = name;
     iden->scopeId = scopeId;
     iden->order = contentOrder;
+
+    identifiers.add(iden);
 
     return iden;
 }

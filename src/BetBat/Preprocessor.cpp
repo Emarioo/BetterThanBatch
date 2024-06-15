@@ -861,7 +861,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             auto tok = lexer->getTokenFromImport(new_import_id, token_count-1);
             auto prev_src = lexer->getTokenSource_unsafe({tok});
             if((tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_STRING || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
-            (token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
+            (token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY || token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || token.type == lexer::TOKEN_LITERAL_STRING || token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
                 if(tok.type == lexer::TOKEN_LITERAL_STRING)
                     layer->quote_next_token = true;
                 
@@ -1560,7 +1560,7 @@ SignalIO PreprocContext::parseInformational(lexer::Token hashtag_tok, lexer::Tok
         
         std::string temp{};
         temp.resize(200); // TODO: Use a static buffer somewhere instead of allocating on the heap.
-        int len = snprintf((char*)temp.data(), temp.size(), "%d-%d-%d",1900+date->tm_year, 1 + date->tm_mon, date->tm_mday);
+        int len = snprintf((char*)temp.data(), temp.size(), "%04d-%02d-%02d",1900+date->tm_year, 1 + date->tm_mon, date->tm_mday);
         Assert(len != 0);
         temp.resize(len);
 

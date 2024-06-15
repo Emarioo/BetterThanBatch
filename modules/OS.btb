@@ -118,13 +118,119 @@ fn DumpEnvironment(envp: char** = null) {
     }
 }
 
+// Only works on windows
+fn ExecuteCommand(cmd: char[], exit_code: i32*, asynchronous: bool = false) -> bool {
+    return ExecuteCommand(cmd, null, exit_code, asynchronous)
+}
+
 // Returns false if anything failed, NOT if the program you called
 // failed. Check 'exit_code' for that.
 // 'asynchronous' will run the command without waiting for status code
 fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool = false) -> bool {
+    // TODO: This function doesn't mix well with Windows and Linux. cmd can contain executable path
+    // and arguments on Windows but on Linux you must separate them where cmd has executable and 'args'
+    // has arguments.
 #if OS_WINDOWS
-    // TODO:
-    // return true
+    if(!cmd.ptr || cmd.len == 0){
+        return false;
+    }
+    
+    // additional information
+    si: STARTUPINFOA;
+    pi: PROCESS_INFORMATION;
+    // set the size of the structures
+    memzero(&si, sizeof(si));
+    si.cb = sizeof(si);
+    memzero(&pi, sizeof(pi));
+    
+    // This commented code comes from Win32.cpp (PlatformLayer in Engone)
+    // 
+    // if(fStdin){
+    //     // auto& info = pipes[fStdin];
+    //     // si.hStdInput = info.readH;
+    //     si.hStdInput = TO_HANDLE(fStdin.internal);
+    // }
+    // if(fStdout){
+    //     // auto& info = pipes[fStdout];
+    //     // si.hStdOutput = info.writeH;
+    //     // si.hStdError = info.writeH;
+    //     si.hStdOutput = TO_HANDLE(fStdout.internal);
+    // }
+    // if(fStderr){
+    //     // auto& info = pipes[fStderr];
+    //     // si.hStdError = info.writeH;
+    //     si.hStdError = TO_HANDLE(fStderr.internal);
+    // }
+    inheritHandles := true;
+    // if(fStdin||fStdout||fStderr){
+    //     si.dwFlags |= STARTF_USESTDHANDLES;
+    //     inheritHandles = true;
+    // }
+    // inheritHandles = false;
+        
+    // int slashIndex = path.find_last_of("\\");
+
+    // std::string workingDir{};
+    dir: char* = null;
+    // if(slashIndex!=-1)
+    // 	workingDir = path.substr(0, slashIndex);
+    // else
+    // 	workingDir = GetWorkingDirectory();
+    
+    // if(!workingDir.empty())
+    // 	dir = workingDir.c_str();
+        
+    createFlags: i32= 0;
+    // if(flags&PROGRAM_NEW_CONSOLE)
+    //     createFlags |= CREATE_NEW_CONSOLE;
+
+    tmp: StringBuilder // I believe CreateProcessA may modify the string we give it so we create a little temporary string here so the caller of ExecuteCommand isn't affected
+    tmp.append(cmd)
+        
+    yes := CreateProcessA(null,   // the path
+                    tmp.ptr,        // Command line
+                    null,           // Process handle not inheritable
+                    null,           // Thread handle not inheritable
+                    inheritHandles,          // Set handle inheritance
+                    createFlags,              // creation flags
+                    null,           // Use parent's environment block
+                    dir,   // starting directory 
+                    &si,            // Pointer to STARTUPINFO structure
+                    &pi             // Pointer to PROCESS_INFORMATION structure (removed extra parentheses)
+                    );
+    if(!yes){
+        err := GetLastError();
+        if(err == ERROR_BAD_EXE_FORMAT){
+            log("[WinError ",err,"] StartProgram, bad_exe_format ",cmd);
+        }else{
+            log("[WinError ",err,"] StartProgram, could not start ",cmd);
+            // TODO: does the handles need to be closed? probably not since CreateProcess failed. double check.	
+        }
+        return false;
+    }
+    if(asynchronous){
+        WaitForSingleObject(pi.hProcess,INFINITE);
+        if(exit_code){
+            success := GetExitCodeProcess(pi.hProcess, cast<i32*>exit_code);
+            if(!success){
+                err := GetLastError();
+                log("[WinError ",err,"] StartProgram, failed acquring exit code (path: ",cmd,")");	
+            }else{
+                if(success==STILL_ACTIVE){
+                    log("[WinWarning] StartProgram, cannot get exit code, process is active (path: ",cmd,")");	
+                }else{
+                    
+                }
+            }
+        }
+    }else{
+        // TODO: what happens with return value when we don't wait for the process?	
+    }
+    
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    
+    return true;
 #elif OS_LINUX
 
 

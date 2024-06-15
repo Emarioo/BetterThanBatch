@@ -88,6 +88,73 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     //     // bytecode->nativeRegistry->initNativeContent();
     // }
 
+    TinyBytecode* tinycode = nullptr;
+    int tiny_index = -1;
+    for(int i=0;i<bytecode->tinyBytecodes.size();i++) {
+        if(bytecode->tinyBytecodes[i]->name == tinycode_name) {
+            tinycode = bytecode->tinyBytecodes[i];
+            tiny_index = i;
+            break;
+        }
+    }
+    if(!tinycode) {
+        log::out << log::RED << "Tinycode " << tinycode_name << " not found\n";
+        return;
+    }
+    DynamicArray<TinyBytecode*> checked_codes{};
+    bool compute_related_codes = true; // we compute so that we only load relevant libraries
+
+    if (apply_related_relocations || compute_related_codes) {
+        // TODO: Appling partial relocations and checking for dependencies (other tinycodes)
+        //   may be expensive. Avoiding partial relocation might be best.
+        //   Also, if relocations have been applied once, we don't need to do so again.
+        DynamicArray<TinyBytecode*> codes_to_check{};
+        codes_to_check.add(tinycode);
+        checked_codes.add(tinycode);
+        while(codes_to_check.size()) {
+            auto t = codes_to_check[0];
+            codes_to_check.removeAt(0);
+
+            // log::out << "apply " << t->name<<"\n";
+
+            for (int i=0;i<t->call_relocations.size();i++) {
+                auto& rel = t->call_relocations[i];
+                if (!rel.funcImpl || rel.funcImpl->tinycode_id == 0)
+                    continue;
+
+                auto tcode = bytecode->tinyBytecodes[rel.funcImpl->tinycode_id-1];
+                bool found = false;
+                for(int j=0;j<checked_codes.size();j++) {
+                    if (tcode == checked_codes[j]) {
+                        found = true;
+                        break;
+                    }
+                }
+                if(!found) {
+                    checked_codes.add(tcode);
+                    codes_to_check.add(tcode);
+                }
+            }
+        }
+        if(apply_related_relocations) {
+            for(auto& t : checked_codes) {
+                bool yes = t->applyRelocations(bytecode);
+                if(!yes) {
+                    log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
+                    return;
+                }
+            }
+        }
+    } else {
+        for(auto& t : bytecode->tinyBytecodes) {
+            bool yes = t->applyRelocations(bytecode);
+            if(!yes) {
+                log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
+                return;
+            }
+        }
+    }
+
     struct LibFunc {
         DynamicArray<ExternalRelocation*> relocs;
         VoidFunction func_ptr;
@@ -110,6 +177,22 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             any_failure = true;
             continue;
         }
+
+        // Check if the VM encounters the external relocation, if not then
+        // we don't need to load the dynamic library and function pointer.
+        bool load_lib = true;
+        if(checked_codes.size() != 0) {
+            load_lib = false;
+            for (auto t : checked_codes) {
+                if(t->index == bytecode->externalRelocations.last().tinycode_index) {
+                    load_lib = true;
+                    break;
+                }
+            }
+        }
+        if(!load_lib)
+            continue;
+
         auto pair_lib = libs.find(r.library_path);
         Lib* lib = nullptr;
         if(pair_lib == libs.end()) {
@@ -135,7 +218,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             int at = pair_lib.first.find_last_of(".");
             std::string alt_path = pair_lib.first.substr(0, at);
             alt_path += ".dll";
-            pair_lib.second->dll = LoadDynamicLibrary(alt_path);
+            pair_lib.second->dll = LoadDynamicLibrary(alt_path, false);
         }
         if(!pair_lib.second->dll) {
             any_failure = true;
@@ -164,79 +247,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         return;
     }
     
-    // if(bytecode->externalRelocations.size()>0){
-    //     log::out << log::RED << "VirtualMachine does not support symbol relocations! Don't use function with @import annotation.\n";
-    //     return;
-    // }
-    // _VLOG(
-    //     if(!silent){
-    //     if(startInstruction==0 && endInstruction == bytecode->length())
-    //         log::out <<log::BLUE<< "##   VirtualMachine  ##\n";
-    //     else
-    //         log::out <<log::BLUE<< "##   VirtualMachine ("<<startInstruction<<" - "<<endInstruction<<")  ##\n";
-    //     }
-    // )
     // log::out << log::GOLD << "VirtualMachine:\n";
-
-    TinyBytecode* tinycode = nullptr;
-    int tiny_index = -1;
-    for(int i=0;i<bytecode->tinyBytecodes.size();i++) {
-        if(bytecode->tinyBytecodes[i]->name == tinycode_name) {
-            tinycode = bytecode->tinyBytecodes[i];
-            tiny_index = i;
-            break;
-        }
-    }
-    if(!tinycode) {
-        log::out << log::RED << "Tinycode " << tinycode_name << " not found\n";
-        return;
-    }
-    if (apply_related_relocations) {
-        // TODO: Appling partial relocations and checking for dependencies (other tinycodes)
-        //   may be expensive. Avoiding partial relocation might be best.
-        //   Also, if relocations have been applied once, we don't need to do so again.
-        DynamicArray<TinyBytecode*> checked_codes{};
-        DynamicArray<TinyBytecode*> codes_to_check{};
-        codes_to_check.add(tinycode);
-        while(codes_to_check.size()) {
-            auto t = codes_to_check[0];
-            codes_to_check.removeAt(0);
-
-            // log::out << "apply " << t->name<<"\n";
-            bool yes = t->applyRelocations(bytecode);
-            if(!yes) {
-                log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
-                return;
-            }
-
-            for (int i=0;i<t->call_relocations.size();i++) {
-                auto& rel = t->call_relocations[i];
-                if (!rel.funcImpl || rel.funcImpl->tinycode_id == 0)
-                    continue;
-
-                auto tcode = bytecode->tinyBytecodes[rel.funcImpl->tinycode_id-1];
-                bool found = false;
-                for(int j=0;j<checked_codes.size();j++) {
-                    if (tcode == checked_codes[j]) {
-                        found = true;
-                        break;
-                    }
-                }
-                if(!found) {
-                    checked_codes.add(tcode);
-                    codes_to_check.add(tcode);
-                }
-            }
-        }
-    } else {
-        for(auto& t : bytecode->tinyBytecodes) {
-            bool yes = t->applyRelocations(bytecode);
-            if(!yes) {
-                log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
-                return;
-            }
-        }
-    }
 
     // TODO: Setup argc, argv on the stack with betcall convention
     

@@ -6,13 +6,13 @@
 @REM  Make sure you have MinGW for g++.
 @REM #####################################
 
-SET arg=%1
-if !arg!==run (
+if "%1"=="run" (
     @REM Run compiler with compiling it
     @REM btb -dev
 
     goto RUN_COMPILER
 )
+
 
 @REM #########################
 @REM    CONFIGURATIONS
@@ -20,12 +20,27 @@ if !arg!==run (
 
 @REM SET USE_GCC=1
 SET USE_MSVC=1
-
 SET USE_DEBUG=1
-SET USE_MSVC=1
 @REM SET USE_TRACY=1
 @REM SET USE_OPENGL=1
 @REM SET USE_OPTIMIZATIONS=1
+SET RUN_AT_END=1
+
+SET OUTPUT=bin\btb.exe
+
+if "%1"=="release" (
+    SET USE_GCC=0
+    SET USE_MSVC=1
+    SET USE_DEBUG=0
+    SET USE_TRACY=0
+    SET USE_OPENGL=0
+    SET USE_OPTIMIZATIONS=1
+    SET RUN_AT_END=0
+
+    if not "%2"=="" (
+        SET OUTPUT=%2
+    )
+)
 
 @REM Advapi is used for winreg which accesses the windows registry
 @REM to get cpu clock frequency which is used with rdtsc.
@@ -62,7 +77,6 @@ if !USE_DEBUG!==1 (
 mkdir bin 2> nul
 SET srcfile=bin\all.cpp
 SET srcfiles=
-SET output=bin\btb.exe
 type nul > !srcfile!
 
 for /r %%i in (*.cpp) do (
@@ -130,7 +144,7 @@ if !USE_MSVC!==1 (
         SET MSVC_DEFINITIONS=!MSVC_DEFINITIONS! /DTRACY_ENABLE
         SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! bin\tracy.obj
         if not exist bin/tracy.obj (
-                cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! libs\tracy-0.10\public\TracyClient.cpp /Fobin/tracy.obj
+            cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! libs\tracy-0.10\public\TracyClient.cpp /Fobin/tracy.obj
         )
     )
         SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! bin\tracy.obj 
@@ -143,7 +157,7 @@ if !USE_MSVC!==1 (
         ml64 /nologo /Fobin/hacky_stdcall.o /c src/BetBat/hacky_stdcall.asm > nul
     )
 
-    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! bin/hacky_stdcall.o shell32.lib /OUT:!output!
+    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! bin/hacky_stdcall.o shell32.lib /OUT:!OUTPUT!
     SET compileSuccess=!errorlevel!
 
     @REM Precompiled header, disabled for now
@@ -179,7 +193,7 @@ if !USE_GCC!==1 (
     @REM pch.h after tracy
     SET GCC_COMPILE_OPTIONS=!GCC_COMPILE_OPTIONS! -include pch.h
 
-    g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o !output! !GCC_LINK_OPTIONS!
+    g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o !OUTPUT! !GCC_LINK_OPTIONS!
     SET compileSuccess=!errorlevel!
 )
 
@@ -215,17 +229,17 @@ SET GCC_WARN=!GCC_WARN! -Wno-sign-compare
 SET GCC_PATHS=-Llibs\glfw-3.3.9\lib-mingw-w64 -Ilibs\glfw-3.3.9\include -Ilibs\glad\include -Lbin -Ilibs/stb/include
 
 @REM NOTE: If a function is undefined then it may be a good idea to recompile these libraries.
-if not exist bin/libglad.a (
+if not exist libs/glad/lib-mingw-w64/libglad.a (
     gcc -c !GCC_PATHS! libs/glad/src/glad.c -o bin/glad.o
-    ar rcs bin/libglad.a bin/glad.o
+    ar rcs libs/glad/lib-mingw-w64/libglad.a bin/glad.o
 )
-if not exist bin/glad.lib (
+if not exist libs/glad/lib-mingw-w64/glad.lib (
     gcc -c !GCC_PATHS! libs/glad/src/glad.c -o bin/glad.o
-    ar rcs bin/glad.lib bin/glad.o
+    ar rcs libs/glad/lib-mingw-w64/glad.lib bin/glad.o
 )
-if not exist bin/stb_image.lib (
+if not exist libs/stb/lib-mingw-w64/stb_image.lib (
     gcc -c !GCC_PATHS! libs/stb/src/stb_image.c -o bin/stb_image.o
-    ar rcs bin/stb_image.lib bin/stb_image.o
+    ar rcs libs/stb/lib-mingw-w64/stb_image.lib bin/stb_image.o
 )
 
 @REM @REM glfw, glew, opengl is not linked with here, it should be
@@ -237,7 +251,7 @@ if not exist bin/NativeLayer_gcc.o (
     ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o
 )
 
-if !compileSuccess! == 0 (
+if !compileSuccess! == 0 if !RUN_AT_END!==1 (
     echo f | XCOPY /y /q !output! btb.exe > nul
 :RUN_COMPILER
     rem

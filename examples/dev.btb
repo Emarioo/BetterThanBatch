@@ -1,50 +1,27 @@
 
-// #import "examples/graphics/game.btb"
+// #macro ok(a,b) "//" ## b
+
+
+// ok("aea","eab") k
+
+#import "examples/graphics/game.btb"
 // #import "examples/net/serverclient.btb"
-
-/*
-    Today's quest: Initialization of global data
-
-    Should globals be initialized at compile time or at runtime?
-
-    Compile time of course. That way we don't have to spend time
-    setting up global data at the start of every process.
-
-    We may need to init at runtime if global opens a file but allowing globals to do
-    that will lead to a confusing program. You have no idea which global will be initialized first so
-    it is better to open files manually. Hence, global initialized at compile time is totally fine.
-    
-    We can still allow opening of files at compile time.
-
-    What are the next steps.
-    Get compile time execution up and running for globals.
-
-    Steps:
-        - We go through each global
-            in generator, we find global declaration statements of all scopes
-        - We generate bytecode for the globals with expressions
-            generate bytecode to a temporary tinycode
-        - We execute the bytecode and put values into global data
-            setup the VM, add some extra instructions to pop evaluated values into global data
-
-    Extra:
-        - Error if expression can't be evaluated at compile time
-*/
+// #import "prepare_release"
 
 // TODO: global structs, default members
 
-#import "Logger"
-#import "File"
+// #import "Logger"
+// #import "File"
 
-global file_size: i32 = size_of_file("Makefile")
+// global file_size: i32 = size_of_file("Makefile")
 
-fn size_of_file(path: char[]) -> i32 {
-    size: i64 
-    f := FileOpen(path, FILE_READ_ONLY, &size)
-    FileClose(f)
-    return size;
-}
+// fn size_of_file(path: char[]) -> i32 {
+//     size: i64 
+//     f := FileOpen(path, FILE_READ_ONLY, &size)
+//     FileClose(f)
+//     return size;
+// }
 
-fn main() {
-    log("size of Makefile: ", file_size)
-}
+// fn main() {
+//     log("size of Makefile: ", file_size)
+// }

@@ -805,6 +805,11 @@ fn CreateTexture(path: char[]) -> Texture* {
     texture.data = stbi_load(path.ptr,&texture.width,&texture.height,&channels,4); // 4 = rgba
     texture.data_len = 4 * texture.width * texture.height
     
+    if !texture.data {
+        log("Cannot find ",path)
+        return null
+    }
+
     glGenTextures(1, &texture.id);
     glBindTexture(GL_TEXTURE_2D,texture.id);
     // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -830,6 +835,11 @@ fn CreateFont(path: char[]) -> Font* {
     font.data = stbi_load(path.ptr,&font.width,&font.height,&channels,4); // 4 = rgba
     font.data_len = 4 * font.width * font.height
     
+    if !font.data {
+        log("Cannot find ",path)
+        return null
+    }
+
     glGenTextures(1, &font.id);
     glBindTexture(GL_TEXTURE_2D,font.id);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);

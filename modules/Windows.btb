@@ -14,10 +14,67 @@ fn @import(Kernel) CloseHandle(
   hObject: HANDLE
 ) -> bool;
 
+// https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessa
+fn @import(Kernel) CreateProcessA(
+  /* [in, optional]      LPCSTR                */ lpApplicationName: char*,
+  /* [in, out, optional] LPSTR                 */ lpCommandLine: char*,
+  /* [in, optional]      LPSECURITY_ATTRIBUTES */ lpProcessAttributes: SECURITY_ATTRIBUTES*,
+  /* [in, optional]      LPSECURITY_ATTRIBUTES */ lpThreadAttributes: SECURITY_ATTRIBUTES*,
+  /* [in]                BOOL                  */ bInheritHandles: bool,
+  /* [in]                DWORD                 */ dwCreationFlags: i32,
+  /* [in, optional]      LPVOID                */ lpEnvironment: void*,
+  /* [in, optional]      LPCSTR                */ lpCurrentDirectory: char*,
+  /* [in]                LPSTARTUPINFOA        */ lpStartupInfo: STARTUPINFOA*,
+  /* [out]               LPPROCESS_INFORMATION */ lpProcessInformation: PROCESS_INFORMATION*
+) -> bool;
+
+fn @import(Kernel) GetExitCodeProcess(
+  hProcess: HANDLE,
+  lpExitCode: i32*
+) -> bool;
+
+struct SECURITY_ATTRIBUTES {
+  nLength:              i32;
+  lpSecurityDescriptor: void*;
+  bInheritHandle:       bool;
+}
+struct STARTUPINFOA {
+  cb:               i32;
+  lpReserved:       char*;
+  lpDesktop:        char*;
+  lpTitle:          char*;
+  dwX:              i32;
+  dwY:              i32;
+  dwXSize:          i32;
+  dwYSize:          i32;
+  dwXCountChars:    i32;
+  dwYCountChars:    i32;
+  dwFillAttribute:  i32;
+  dwFlags:          i32;
+  wShowWindow:      i16;
+  cbReserved2:      i16;
+  lpReserved2:      u8*;
+  hStdInput:        HANDLE;
+  hStdOutput:       HANDLE;
+  hStdError:        HANDLE;
+}
+struct PROCESS_INFORMATION {
+  hProcess:     HANDLE;
+  hThread:      HANDLE;
+  dwProcessId:  i32;
+  dwThreadId:   i32;
+}
+
+#macro ERROR_BAD_EXE_FORMAT             193
+#macro ERROR_ALREADY_EXISTS             183
+
+#macro STILL_ACTIVE    STATUS_PENDING
+
 /*########################
     MEMORY, ALLOCATIONS
 #########################*/
 
+#macro STATUS_PENDING 0x00000103
 #macro STATUS_NO_MEMORY cast<void*>cast<i64>0xC0000017
 #macro STATUS_ACCESS_VIOLATION cast<void*>cast<i64>0xC0000005
 
@@ -65,6 +122,9 @@ fn @import(Kernel) HeapFree(
 
 #macro MAX_PATH          260
 
+#macro ERROR_FILE_NOT_FOUND             2
+
+
 // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
 fn @import(Kernel) CreateFileA(
   lpFileName: char*,
@@ -75,6 +135,24 @@ fn @import(Kernel) CreateFileA(
   dwFlagsAndAttributes: i32,
   hTemplateFile: HANDLE // optional
 ) -> HANDLE;
+
+fn @import(Kernel) CreateDirectoryA(
+  /* [in]           LPCSTR                */ lpPathName: char*,
+  /* [in, optional] LPSECURITY_ATTRIBUTES */ lpSecurityAttributes: void*
+) -> bool;
+
+fn @import(Kernel) MoveFileA(
+  /* [in] LPCTSTR*/ lpExistingFileName: char*,
+  /* [in] LPCTSTR*/ lpNewFileName: char*
+) -> bool;
+fn @import(Kernel) CopyFileA(
+  /* [in] LPCTSTR*/ lpExistingFileName: char*,
+  /* [in] LPCTSTR*/ lpNewFileName: char*,
+  /* [in] BOOL   */ bFailIfExists: bool
+) -> bool;
+fn @import(Kernel) DeleteFileA(
+  /* [in] LPCTSTR*/ lpFileName: char*
+) -> bool;
 
 // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesizeex
 fn @import(Kernel) GetFileSizeEx(

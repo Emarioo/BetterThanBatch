@@ -28,7 +28,7 @@
 Try to edit Config.cpp instead of this file because you will have to compile all headers and translation units otherwise.
 */
 
-#define COMPILER_VERSION "0.2.1/linux_fixes-2024.05.19"
+#define COMPILER_VERSION "0.2.0/mini_game-2024.06.15"
 
 // DEV_FILE defaults to dev.btb if none is specified
 // #define DEV_FILE "examples/debug_test.btb"

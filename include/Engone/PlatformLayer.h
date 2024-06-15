@@ -136,7 +136,7 @@ namespace engone {
 	bool SetWorkingDirectory(const std::string& path);
 
 	std::string EnvironmentVariable(const std::string& name);
-	
+
 	bool FileCopy(const std::string& src, const std::string& dst);
 	bool FileMove(const std::string& src, const std::string& dst);
 	bool FileDelete(const std::string& path);

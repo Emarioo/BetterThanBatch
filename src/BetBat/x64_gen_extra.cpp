@@ -3603,7 +3603,10 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
     
     #define SEND_ERROR() compiler->options->compileStats.errors++;
     
-    // TODO: Make this thread safe
+    // TODO: Use one inline assembly file per thread and reuse them.
+    //   bin path gets full of assembly files otherwise.
+    //   The only downside is that if there was a problem, the user can't take a look at
+    //   the assembly because it might have been overwritten so spamming assembly files will do for the time being.
     std::string asm_file = "bin/inline_asm"+std::to_string(tinycode->index)+".asm";
     std::string obj_file = "bin/inline_asm"+std::to_string(tinycode->index)+".o";
     auto file = engone::FileOpen(asm_file,FILE_CLEAR_AND_WRITE);

@@ -155,9 +155,9 @@ The preprocessor which is the name of the system that is in charge of macros als
 // These directives are replaced with number and string literals
 line: i32    = #line
 column: i32  = #column
-file: char[] = #file       //  /usr/home/you/main.btb
-file: char[] = #filename   //  main.btb
-file: char[] = #date       //  YY.MM.DD
+file: char[] = #file      // /usr/home/you/main.btb
+file: char[] = #filename  // main.btb
+file: char[] = #date      // YYYY.MM.DD (month and day will be prefixed with zero when necessary)
 
 // Turns the following token into a quote (mostly inside macros)
 str := #quote i_am_a_string
