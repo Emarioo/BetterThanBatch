@@ -298,7 +298,7 @@ namespace engone {
 	typedef void* DynamicLibrary;
 	typedef void(*VoidFunction)();
 	// @return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 
-	DynamicLibrary LoadDynamicLibrary(const std::string& path);
+	DynamicLibrary LoadDynamicLibrary(const std::string& path, bool log_error = true);
 	void UnloadDynamicLibrary(DynamicLibrary library);
 	// You may need to cast the function pointer to the appropriate function
 	// Also used for global variables

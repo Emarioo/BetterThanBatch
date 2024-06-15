@@ -75,16 +75,10 @@ void VirtualMachine::init_stack(int stack_size) {
     memset(stack.data(), 0, stack.max);
     memset((void*)registers, 0, sizeof(registers));
 }
-void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name){
-    using namespace engone; 
+void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations){
+    using namespace engone;
 
-    for(auto& t : bytecode->tinyBytecodes) {
-        bool yes = t->applyRelocations(bytecode);
-        if(!yes) {
-            log::out << "Incomplete call relocation\n";
-            return;
-        }
-    }
+    TRACE_FUNC()
 
     Assert(bytecode);
     auto nativeRegistry = NativeRegistry::GetGlobal();
@@ -103,6 +97,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         DynamicLibrary dll;
     };
     
+    // TODO: Reuse loaded dlls and function pointers because we
+    //   may run VM again. Mapping function pointers multiple times is unnecessary.
     bool any_failure = false;
     std::unordered_map<std::string, Lib*> libs;
     DynamicArray<VoidFunction> dll_functions{};
@@ -133,7 +129,14 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         fn->relocs.add(&r);
     }
     for(auto& pair_lib : libs) {
-        pair_lib.second->dll = LoadDynamicLibrary(pair_lib.first);
+        pair_lib.second->dll = LoadDynamicLibrary(pair_lib.first, false); // false = don't log error
+        if(!pair_lib.second->dll) {
+            // TODO: This solution is cheeky.
+            int at = pair_lib.first.find_last_of(".");
+            std::string alt_path = pair_lib.first.substr(0, at);
+            alt_path += ".dll";
+            pair_lib.second->dll = LoadDynamicLibrary(alt_path);
+        }
         if(!pair_lib.second->dll) {
             any_failure = true;
             log::out << log::RED << "Could not load library "<<pair_lib.first<<"\n";
@@ -188,6 +191,52 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         log::out << log::RED << "Tinycode " << tinycode_name << " not found\n";
         return;
     }
+    if (apply_related_relocations) {
+        // TODO: Appling partial relocations and checking for dependencies (other tinycodes)
+        //   may be expensive. Avoiding partial relocation might be best.
+        //   Also, if relocations have been applied once, we don't need to do so again.
+        DynamicArray<TinyBytecode*> checked_codes{};
+        DynamicArray<TinyBytecode*> codes_to_check{};
+        codes_to_check.add(tinycode);
+        while(codes_to_check.size()) {
+            auto t = codes_to_check[0];
+            codes_to_check.removeAt(0);
+
+            // log::out << "apply " << t->name<<"\n";
+            bool yes = t->applyRelocations(bytecode);
+            if(!yes) {
+                log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
+                return;
+            }
+
+            for (int i=0;i<t->call_relocations.size();i++) {
+                auto& rel = t->call_relocations[i];
+                if (!rel.funcImpl || rel.funcImpl->tinycode_id == 0)
+                    continue;
+
+                auto tcode = bytecode->tinyBytecodes[rel.funcImpl->tinycode_id-1];
+                bool found = false;
+                for(int j=0;j<checked_codes.size();j++) {
+                    if (tcode == checked_codes[j]) {
+                        found = true;
+                        break;
+                    }
+                }
+                if(!found) {
+                    checked_codes.add(tcode);
+                    codes_to_check.add(tcode);
+                }
+            }
+        }
+    } else {
+        for(auto& t : bytecode->tinyBytecodes) {
+            bool yes = t->applyRelocations(bytecode);
+            if(!yes) {
+                log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
+                return;
+            }
+        }
+    }
 
     // TODO: Setup argc, argv on the stack with betcall convention
     
@@ -240,11 +289,42 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     // TODO: x64 had a bug with push_offsets, ALLOC_ARGS and SET_ARG
     //   I applied the same here but didn't test it.
 
+    
+
+    i64 prev_pc;
+    InstructionOpcode opcode;
+    BCRegister op0=BC_REG_INVALID, op1, op2;
+    InstructionControl control;
+    i64 imm;
+
+    CALLBACK_ON_ASSERT(
+        tinycode->print(0,-1, bytecode);
+        log::out << "Asserted at " << log::CYAN << prev_pc << "\n";
+    )
+
+    struct Breakpoint {
+        int pc;
+        // TODO: break on tinycode name
+    };
+    DynamicArray<Breakpoint> breakpoints{};
+
+    // hardcoded breakpoints when debugging
+    // breakpoints.add({945});
+
     bool logging = false;
     bool interactive = false;
     // logging = true;
     // interactive = true;
     while(running) {
+        for(int i=0;i<breakpoints.size();i++) {
+            if (breakpoints[i].pc == pc) {
+                log::out << log::GOLD << "Breakpoint " << log::GREEN << breakpoints[i].pc << " "<< log::CYAN << tinycode->name << "\n";
+                tinycode->print(pc, pc + 2, bytecode);
+                interactive = true;
+                break;
+            }
+        }
+
         if(interactive) {
             printf("> ");
             std::string line;
@@ -280,19 +360,22 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 interactive = false;
             } else if(line == "help") {
                 // printf("log registers\n");
+            } else if(line == "p") {
+                tinycode->print(pc, pc + 2, bytecode);
+                continue;
             }
         }
 
-        i64 prev_pc = pc;
+        prev_pc = pc;
         if(pc>=(u64)tinycode->instructionSegment.used)
             break;
 
-        InstructionOpcode opcode = (InstructionOpcode)instructions[pc++];
+        opcode = (InstructionOpcode)instructions[pc++];
         executedInstructions++;
         
-        BCRegister op0=BC_REG_INVALID, op1, op2;
-        InstructionControl control;
-        i64 imm;
+        // BCRegister op0=BC_REG_INVALID, op1, op2;
+        // InstructionControl control;
+        // i64 imm;
         
         // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
         
@@ -924,7 +1007,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 case BC_BRSHIFT: OP(>>)
                 case BC_LAND: OP(&&)
                 case BC_LOR: OP(||)
-                case BC_LNOT: registers[op0] = !registers[op1];
+                case BC_LNOT: registers[op0] = !registers[op1]; break;
                 default: Assert(false);
                 #undef OP
             }
@@ -1005,6 +1088,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         default: {
             log::out << log::RED << "Implement "<< log::PURPLE<< opcode << "\n";
+            Assert(false);
             return;
         }
         } // switch

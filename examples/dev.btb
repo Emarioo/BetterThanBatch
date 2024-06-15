@@ -31,16 +31,20 @@
         - Error if expression can't be evaluated at compile time
 */
 
+// TODO: global structs, default members
+
 #import "Logger"
+#import "File"
 
-// global yeet: i32 = 23 + 82 * hmmm() // crashes, functions can't be evaluated yet
-global yeet: i32 = 23 + 82
-global hoho: i32 = yeet
+global file_size: i32 = size_of_file("Makefile")
 
-fn hmmm() -> i32 {
-    return 2;
+fn size_of_file(path: char[]) -> i32 {
+    size: i64 
+    f := FileOpen(path, FILE_READ_ONLY, &size)
+    FileClose(f)
+    return size;
 }
 
 fn main() {
-    log(hoho)
+    log("size of Makefile: ", file_size)
 }

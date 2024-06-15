@@ -29,7 +29,7 @@ struct VirtualMachine {
     bool silent = false;
     
     void init_stack(int stack_size = 0x10000);
-    void execute(Bytecode* bytecode, const std::string& tinycode_name);
+    void execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations = false);
 
     // resets registers and other things but keeps the alloctions.
     void reset();

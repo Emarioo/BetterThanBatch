@@ -600,6 +600,11 @@ void Compiler::processImports() {
                 // You could designate tinycodes to functions in type checker.
                 // Then we know that all funcimpls have tinycode_ids.
                 
+                // When generating global data, we need to make sure the calls to functions 
+                // in global expressions have been generated. Otherwise we would crash in applyRelocations
+                // We could ensure all functions have been generated OR we could just ensure
+                // the dependencies while applying partial relocations for the relevant tinycode (_comp_time_).
+
                 CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
                     CompilerImport* dep = imports.get(im->dependencies[j].id-1);
@@ -609,6 +614,20 @@ void Compiler::processImports() {
                         break;
                     }
                 }
+
+                // for(int i=0;i<tasks.size();i++) {
+                //     CompilerTask& t = tasks[i];
+                //     // TODO: We may only have tasks to generate bytecodes but a thread
+                //     //   may have taken out a task and be working on it right now.
+                //     //   Redesign this
+                //     if(t.type < TASK_GEN_MACHINE_CODE) {
+                //         LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
+                //         missing_dependency = true;
+                //         // we miss a dependency in that all other imports have
+                //         // not been type checked yet
+                //         break;
+                //     }
+                // }
             }
             if(missing_dependency) {
                 finished=false;
@@ -884,16 +903,16 @@ void Compiler::processImports() {
                 auto my_scope = ast->getScope(imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Gen bytecode: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
 
-                if(!have_generated_global_data) { // cheap quick check, will the compiler optimize it away?
+                if(!have_prepared_global_data) { // cheap quick check, will the compiler optimize it away?
                     lock_miscellaneous.lock();
-                    if(!have_generated_global_data) { // thread safe check
+                    if(!have_prepared_global_data) { // thread safe check
                         GenContext c{};
                         c.ast = ast;
                         c.bytecode = bytecode;
                         c.reporter = &reporter;
                         c.compiler = this;
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
-                        have_generated_global_data = true;
+                        have_prepared_global_data = true;
                     }
                     lock_miscellaneous.unlock();
                 }
@@ -966,6 +985,20 @@ void Compiler::processImports() {
                 auto imp = imports.get(picked_task.import_id-1);
                 // auto my_scope = ast->getScope(imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Gen machine code: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
+
+                 if(!have_generated_comp_time_global_data) { // cheap quick check, will the compiler optimize it away?
+                    lock_miscellaneous.lock();
+                    if(!have_generated_comp_time_global_data) { // thread safe check
+                        GenContext c{};
+                        c.ast = ast;
+                        c.bytecode = bytecode;
+                        c.reporter = &reporter;
+                        c.compiler = this;
+                        c.generateGlobalData(); // make sure this function doesn't call lock_miscellaneous
+                        have_generated_comp_time_global_data = true;
+                    }
+                    lock_miscellaneous.unlock();
+                }
 
                 if(options->compileStats.errors == 0) {
                     // can't generate if bytecode is messed up.

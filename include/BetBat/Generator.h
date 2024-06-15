@@ -99,6 +99,7 @@ struct GenContext : public PhaseContext {
     
     SignalIO generatePreload();
     SignalIO generateData();
+    SignalIO generateGlobalData(); // runs after all functions have been generated, that way we know that applyRelocations won't fail because of missing tinycodes.
     
     bool performSafeCast(TypeId from, TypeId to);
 };

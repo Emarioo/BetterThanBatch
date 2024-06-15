@@ -548,9 +548,9 @@ struct BytecodeBuilder {
     void emit_gt    (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     void emit_gte   (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     
-    void emit_land(BCRegister to, BCRegister from);
-    void emit_lor(BCRegister to, BCRegister from);
-    void emit_lnot(BCRegister to, BCRegister from);
+    void emit_land(BCRegister to, BCRegister from, int size);
+    void emit_lor (BCRegister to, BCRegister from, int size);
+    void emit_lnot(BCRegister to, BCRegister from, int size);
     
     void emit_dataptr(BCRegister reg, i32 imm);
     void emit_codeptr(BCRegister reg, i32 imm);

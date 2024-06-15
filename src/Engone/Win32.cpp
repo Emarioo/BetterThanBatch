@@ -1307,11 +1307,13 @@ namespace engone {
 		}
 		return out;
 	}
-	DynamicLibrary LoadDynamicLibrary(const std::string& path){
+	DynamicLibrary LoadDynamicLibrary(const std::string& path, bool log_error){
 		HMODULE module = LoadLibraryA(path.c_str());
 		if (module == NULL) {
 			DWORD err = GetLastError();
-			printf("[WinError %lu] LoadDynamicLibrary: %s\n",err,path.c_str());
+			if(log_error) {
+				printf("[WinError %lu] LoadDynamicLibrary: %s\n",err,path.c_str());
+			}
 		}
 		return module;
 	}

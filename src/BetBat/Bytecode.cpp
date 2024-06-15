@@ -792,20 +792,41 @@ void BytecodeBuilder::emit_gte(BCRegister to, BCRegister from, bool is_float,int
     emit_control(control);
 }
  
-void BytecodeBuilder::emit_land(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_land(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_LAND);
     emit_operand(to);
     emit_operand(from);
+    
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
-void BytecodeBuilder::emit_lor(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_lor(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_LOR);
     emit_operand(to);
     emit_operand(from);
+    
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
-void BytecodeBuilder::emit_lnot(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_lnot(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_LNOT);
     emit_operand(to);
     emit_operand(from);
+    
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
 void BytecodeBuilder::emit_dataptr(BCRegister reg, i32 imm) {
     emit_opcode(BC_DATAPTR);
@@ -1104,9 +1125,9 @@ InstBaseType instruction_contents[256] {
     BASE_op2 | BASE_ctrl,   // BC_GT,
     BASE_op2 | BASE_ctrl,   // BC_GTE,
 
-    BASE_op2,   // BC_LAND,
-    BASE_op2,   // BC_LOR,
-    BASE_op2,   // BC_LNOT,
+    BASE_op2 | BASE_ctrl,   // BC_LAND,
+    BASE_op2 | BASE_ctrl,   // BC_LOR,
+    BASE_op2 | BASE_ctrl,   // BC_LNOT,
 
     BASE_op2 | BASE_ctrl,   // BC_BAND,
     BASE_op2 | BASE_ctrl,   // BC_BOR,

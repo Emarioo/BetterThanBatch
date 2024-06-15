@@ -2409,7 +2409,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             // u8 reg2 = RegBySize(BC_BX, size);
 
             builder.emit_pop(reg);
-            builder.emit_lnot(reg, reg);
+            builder.emit_lnot(reg, reg, size);
             builder.emit_push(reg);
 
             outTypeIds->add(AST_BOOL);
@@ -3490,8 +3490,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 case AST_LESS_EQUAL:    builder.emit_lte(    left_reg, right_reg, is_float, operand_size, is_signed); break;
                 case AST_GREATER:       builder.emit_gt(     left_reg, right_reg, is_float, operand_size, is_signed); break;
                 case AST_GREATER_EQUAL: builder.emit_gte(    left_reg, right_reg, is_float, operand_size, is_signed); break;
-                case AST_AND:           builder.emit_land(   left_reg, right_reg); break;
-                case AST_OR:            builder.emit_lor(    left_reg, right_reg); break;
+                case AST_AND:           builder.emit_land(   left_reg, right_reg, operand_size); break;
+                case AST_OR:            builder.emit_lor(    left_reg, right_reg, operand_size); break;
                 case AST_BAND:          builder.emit_band(   left_reg, right_reg, outSize); break;
                 case AST_BOR:           builder.emit_bor(    left_reg, right_reg, outSize); break;
                 case AST_BXOR:          builder.emit_bxor(   left_reg, right_reg, outSize); break;
@@ -5248,100 +5248,6 @@ SignalIO GenContext::generateData() {
     if(info.ast->preallocatedGlobalSpace())
         bytecode->appendData(nullptr, info.ast->preallocatedGlobalSpace());
 
-    // TODO: Polymorphism is not considered for globals inside functions, we need to set poly version for that
-    const char* const TEMP_TINYCODE_NAME = "_comp_time_";
-    TinyBytecode* temp_tinycode = nullptr;
-    if(ast->globals_to_evaluate.size()) {
-        temp_tinycode = bytecode->createTiny(TEMP_TINYCODE_NAME, BETCALL);
-    }
-
-    ASTStatement* last_stmt = nullptr;
-    CALLBACK_ON_ASSERT(
-        ERR_SECTION(
-            ERR_HEAD2(last_stmt->location)
-            ERR_MSG("Cannot evaluate expression for global variable at compile time. Compile time evaluation is experimental and a lot of things does not work. Perhaps you called a function in the expression?")
-            ERR_LINE2(last_stmt->location, "here")
-        )
-    )
-
-    for (int i=0;i<ast->globals_to_evaluate.size();i++) {
-        ASTStatement* stmt = ast->globals_to_evaluate[i].stmt;
-        last_stmt = stmt;
-        ScopeId scopeId = ast->globals_to_evaluate[i].scope;
-        Assert(stmt->firstExpression); // statement should not have been added if there was no expression
-        Assert(stmt->arrayValues.size() == 0); // we don't handle initializer lists
-        Assert(stmt->varnames.size() == 1); // multiple varnames means that the expression produces multiple values which is annoying to handle so skip it for now
-
-        
-
-        // TODO: Code below should be the same as the one in generateFunction.
-        //   If we change the code in generateFunction but forget to here then
-        //   we will be in trouble. So, how do we combine the code?
-
-        temp_tinycode->restore_to_empty();
-
-        tinycode = temp_tinycode;
-        builder.init(bytecode, tinycode, compiler);
-        currentScopeId = ast->globalScopeId;
-        currentFrameOffset = 0;
-        currentScopeDepth = -1;
-        currentPolyVersion = 0;
-
-        BCRegister data_ptr = BC_REG_B;
-
-        // we allocate space for pointer to global data here
-        // VM will manually put the pointer at this memory location
-        // we do 16 because of 16-byte alignment rule in calling conventions
-        builder.emit_alloc_local(BC_REG_INVALID, 16);
-
-        DynamicArray<TypeId> types{};
-        auto result = generateExpression(stmt->firstExpression, &types, 0);
-        // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
-        if (result != SIGNAL_SUCCESS) {
-            if (!info.hasForeignErrors()) {
-                ERR_SECTION(
-                    ERR_HEAD2(stmt->location)
-                    ERR_MSG("Cannot evaluate expression for global variable at compile time. TODO: Provide better error message.")
-                    ERR_LINE2(stmt->location, "here")
-                )
-            }
-            continue;
-        }
-        if (types.size() == 0 || !types[0].isValid()) {
-            if (!info.hasForeignErrors()) {
-                ERR_SECTION(
-                    ERR_HEAD2(stmt->location)
-                    ERR_MSG("Bad type.")
-                    ERR_LINE2(stmt->location, "here")
-                )
-            }
-            continue;
-        }
-
-        // nocheckin TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
-
-        // get pointer to global data from stack
-        builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, 8, -8);
-
-        result = generatePop(data_ptr, 0, types[0]);
-        Assert(result == SIGNAL_SUCCESS);
-
-        // log::out << log::GOLD <<"global: " <<stmt->varnames[0].name << "\n";
-        // tinycode->print(0,-1,bytecode);
-
-        // setup VM with stack and global pointer
-        VirtualMachine vm{};
-        vm.silent = true;
-        vm.init_stack();
-        void* ptr_to_global_data = bytecode->dataSegment.data() + stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
-        *((void**)(vm.stack.data() + vm.stack.max - 8)) = ptr_to_global_data;
-
-        // let VM evaluate expression and put into global data
-        vm.execute(bytecode, TEMP_TINYCODE_NAME);
-    }
-
-    POP_LAST_CALLBACK()
-
     // IMPORTANT: TODO: Some data like 64-bit integers needs alignment.
     //   Strings don's so it's fine for now but don't forget about fixing this.
     for(auto& pair : info.ast->_constStringMap) {
@@ -5540,6 +5446,108 @@ SignalIO GenContext::generateData() {
     return SIGNAL_SUCCESS;
 }
 
+// Generate data from the type checker
+SignalIO GenContext::generateGlobalData() {
+    using namespace engone;
+
+    TRACE_FUNC()
+
+    // TODO: Polymorphism is not considered for globals inside functions, we need to set poly version for that
+    const char* const TEMP_TINYCODE_NAME = "_comp_time_";
+    TinyBytecode* temp_tinycode = nullptr;
+    if(ast->globals_to_evaluate.size()) {
+        temp_tinycode = bytecode->createTiny(TEMP_TINYCODE_NAME, BETCALL);
+    }
+
+    ASTStatement* last_stmt = nullptr;
+    CALLBACK_ON_ASSERT(
+        ERR_SECTION(
+            ERR_HEAD2(last_stmt->location)
+            ERR_MSG("Cannot evaluate expression for global variable at compile time. Compile time evaluation is experimental and a lot of things does not work. Perhaps you called a function in the expression?")
+            ERR_LINE2(last_stmt->location, "here")
+        )
+    )
+
+    for (int i=0;i<ast->globals_to_evaluate.size();i++) {
+        ASTStatement* stmt = ast->globals_to_evaluate[i].stmt;
+        last_stmt = stmt;
+        ScopeId scopeId = ast->globals_to_evaluate[i].scope;
+        Assert(stmt->firstExpression); // statement should not have been added if there was no expression
+        Assert(stmt->arrayValues.size() == 0); // we don't handle initializer lists
+        Assert(stmt->varnames.size() == 1); // multiple varnames means that the expression produces multiple values which is annoying to handle so skip it for now
+
+        
+
+        // TODO: Code below should be the same as the one in generateFunction.
+        //   If we change the code in generateFunction but forget to here then
+        //   we will be in trouble. So, how do we combine the code?
+
+        temp_tinycode->restore_to_empty();
+
+        tinycode = temp_tinycode;
+        builder.init(bytecode, tinycode, compiler);
+        currentScopeId = ast->globalScopeId;
+        currentFrameOffset = 0;
+        currentScopeDepth = -1;
+        currentPolyVersion = 0;
+
+        BCRegister data_ptr = BC_REG_B;
+
+        // we allocate space for pointer to global data here
+        // VM will manually put the pointer at this memory location
+        // we do 16 because of 16-byte alignment rule in calling conventions
+        builder.emit_alloc_local(BC_REG_INVALID, 16);
+
+        DynamicArray<TypeId> types{};
+        auto result = generateExpression(stmt->firstExpression, &types, 0);
+        // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
+        if (result != SIGNAL_SUCCESS) {
+            if (!info.hasForeignErrors()) {
+                ERR_SECTION(
+                    ERR_HEAD2(stmt->location)
+                    ERR_MSG("Cannot evaluate expression for global variable at compile time. TODO: Provide better error message.")
+                    ERR_LINE2(stmt->location, "here")
+                )
+            }
+            continue;
+        }
+        if (types.size() == 0 || !types[0].isValid()) {
+            if (!info.hasForeignErrors()) {
+                ERR_SECTION(
+                    ERR_HEAD2(stmt->location)
+                    ERR_MSG("Bad type.")
+                    ERR_LINE2(stmt->location, "here")
+                )
+            }
+            continue;
+        }
+
+        // nocheckin TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
+
+        // get pointer to global data from stack
+        builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, 8, -8);
+
+        result = generatePop(data_ptr, 0, types[0]);
+        Assert(result == SIGNAL_SUCCESS);
+
+        // log::out << log::GOLD <<"global: " <<stmt->varnames[0].name << "\n";
+        // tinycode->print(0,-1,bytecode);
+
+        // setup VM with stack and global pointer
+        VirtualMachine vm{};
+        vm.silent = true;
+        vm.init_stack();
+        void* ptr_to_global_data = bytecode->dataSegment.data() + stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
+        *((void**)(vm.stack.data() + vm.stack.max - 8)) = ptr_to_global_data;
+
+        // let VM evaluate expression and put into global data
+        vm.execute(bytecode, TEMP_TINYCODE_NAME, true);
+    }
+
+    POP_LAST_CALLBACK()
+
+    return SIGNAL_SUCCESS;
+}
 void TestGenerate(BytecodeBuilder& b);
 
 bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import) {

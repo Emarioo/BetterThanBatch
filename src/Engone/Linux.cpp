@@ -1254,9 +1254,11 @@ namespace engone {
 		}
 		Free(argv, totalSize);
 	}
-		DynamicLibrary LoadDynamicLibrary(const std::string& path) {
+	DynamicLibrary LoadDynamicLibrary(const std::string& path, bool log_error) {
 		auto ptr = dlopen(path.c_str(), 0);
-		// print error?
+		if (log_error) {
+			// TODO: Print error
+		}
 		return ptr;
 	}
 	void UnloadDynamicLibrary(DynamicLibrary library) {

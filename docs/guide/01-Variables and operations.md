@@ -36,7 +36,10 @@ These are the (current) primitive types:
 
 **Decimal/floating point numbers**: f32, f64 (4 and 8 bytes respectively)
 
-**Pointers**: void*, i32*, char* (8 bytes on a 64-bit computer, the compiler only supports 64-bit)
+**Pointers**: void*, i32*, char* (8 bytes on a 64-bit computer)
+
+**Function pointers**: fn(), fn(i32*)->i32 (8 bytes on a 64-bit computer)
+(function pointers is covered in the chapter about functions)
 
 The type of a variable can be specified between the colon and equal sign. Otherwise, the type is infered from the expression.
 ```c++
@@ -100,8 +103,6 @@ arr: i32[10];
 *(arr.ptr + (arr.len-1) * sizeof(i32)) = 92  // set the value of the last element
 // Note that you would use the index operator for things like this.
 arr.ptr[arr.len-1] = 92
-
-
 ```
 
 **NOTE**: In the future, not having the automatic scaling may be a nuisance and thus could change. The reason we don't is because we want pointer arithmetic on `void*` but since it is 0 in size, it doesn't make since to scale it by 0 bytes. You could of course see void* as an edge case and use a 1-byte scaling. In C/C++ you are required to do quite a few casts and it would be nice if you didn't need to. Sometimes you can feel as though you are fighting the pointer arithmetic which isn't good.

@@ -63,6 +63,9 @@ int main(int argc, const char** argv){
 
     ProfilerInitialize();
     
+    // auto lib = LoadDynamicLibrary("Kernel32.dll");
+    // UnloadDynamicLibrary(lib);
+    // return 0;
 
     // int n = 020;
 

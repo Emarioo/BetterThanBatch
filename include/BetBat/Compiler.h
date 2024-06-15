@@ -257,7 +257,8 @@ struct Compiler {
     u32 preload_import_id = 0;
     u32 typeinfo_import_id = 0;
 
-    bool have_generated_global_data = false; // move elsewhere?
+    bool have_prepared_global_data = false;
+    bool have_generated_comp_time_global_data = false;
     bool compiler_got_stuck = false;
     
     CompilerImport* getImport(u32 import_id);

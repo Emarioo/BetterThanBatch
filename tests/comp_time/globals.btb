@@ -10,3 +10,21 @@ fn main() {
 
     log(yas)
 }
+
+@TEST_CASE(global_file_io)
+
+#import "Logger"
+#import "File"
+
+global file_size: i32 = size_of_file("Makefile")
+
+fn size_of_file(path: char[]) -> i32 {
+    size: i64 
+    f := FileOpen(path, FILE_READ_ONLY, &size)
+    FileClose(f)
+    return size;
+}
+
+fn main() {
+    log("size of Makefile: ", file_size)
+}
