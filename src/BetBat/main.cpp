@@ -24,7 +24,7 @@
 
 // #include "fcntl.h"
 
-#include "Engone/Win32Includes.h"
+// #include "Engone/Win32Includes.h"
 #undef FILE_READ_ONLY // bye bye Windows defined flag
 #undef IMAGE_REL_AMD64_REL32
 #undef coff
@@ -40,6 +40,8 @@ int main(int argc, const char** argv){
     using namespace engone;
     #define EXIT_CODE_SUCCESS 0
     #define EXIT_CODE_FAILURE 1
+
+    // log::out << sizeof(pthread_mutex_t) << "\n";
 
     // // auto cmd = GetCommandLineA();
     // // int cmd_len = 0;
@@ -159,50 +161,8 @@ int main(int argc, const char** argv){
         // compilerExitCode = options.compileStats.errors;
         #endif
 
-        return EXIT_CODE_SUCCESS;
-    }
-
-    // if(options.only_preprocess) {
-    //     Assert(options.source_file.size() != 0);
-    //     Assert(("Solely running preprocessor is incomplete",false));
-    //     #ifdef gone
-    //     auto stream = TokenStream::Tokenize(options.sourceFile.text);
-        
-    //     if(!stream) {
-    //         log::out << log::RED << "Cannot read file '"<< options.sourceFile.text<<"'\n";
-    //     } else {
-    //         // TODO: Don't skip imports.
-    //         if(stream->importList.size() > 0) {
-    //             log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
-    //             log::out << log::GRAY << "Imports: ";
-    //             for(int i=0;i<stream->importList.size();i++) {
-    //                 if(i!=0) log::out << ", ";
-    //                 log::out << stream->importList[i].name;
-    //             }
-    //             log::out<<"\n";
-    //         }
-    //         Assert(false);
-    //         // CompileInfo compileInfo{};
-    //         // compileInfo.options = &options;
-    //         // auto stream2 = Preprocess(&compileInfo, stream);
-    //         // Assert(stream2);
-    //         // if(options.outputFile.text.size() == 0) {
-    //         //     log::out << log::AQUA << "## "<<options.sourceFile.text<<" ##\n";
-    //         //     stream2->print();
-    //         //     // TODO: Output to a default file like preproc.btb
-    //         //     // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
-    //         //     compilerExitCode = options.compileStats.errors;
-    //         // } else{
-    //         //     log::out << "Preprocessor output written to '"<<options.outputFile.text<<"'\n";
-    //         //     stream2->writeToFile(options.outputFile.text);
-    //         //     compilerExitCode = options.compileStats.errors;
-    //         // }
-    //         // TokenStream::Destroy(stream);
-    //         // TokenStream::Destroy(stream2);
-    //     }
-    //     #endif
-    // } else 
-    if(options.performTests) {
+        // return EXIT_CODE_SUCCESS;
+    } else if(options.performTests) {
         if(options.pattern_for_files.length() != 0) {
             DynamicArray<std::string> tests;
             int matches = PatternMatchFiles(options.pattern_for_files, &tests);
@@ -220,9 +180,7 @@ int main(int argc, const char** argv){
             // int failures = VerifyTests(tests);
             return failures != 0;
         }
-    }
-
-    {
+    } else {
         Compiler compiler{};
         compiler.run(&options);
 

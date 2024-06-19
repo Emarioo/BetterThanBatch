@@ -131,6 +131,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         || t == BC_PTR_TO_LOCALS
         || t == BC_PTR_TO_PARAMS
         || t == BC_DATAPTR
+        || t == BC_EXT_DATAPTR
         || t == BC_CODEPTR
         || t == BC_RDTSC
         ;
@@ -678,6 +679,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         virtual_stack_pointer += imm;
     };
 
+    int size_of_saved_args = 0;
+
     // TODO: If the function (tinycode) has parameters and is stdcall or unixcall
     //   then we need the args will be passed through registers and we must
     //   move them to the stack space.
@@ -761,6 +764,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             for(int i=0;i<accessed_params.size() && i < 6; i++) {
                 auto& param = accessed_params[i];
                 auto control = param.control;
+
+                size_of_saved_args += 8;
 
                 int off = -unixcall_args_offset - (1+i) * 8;
                 param.offset_from_rbp = off;
@@ -1537,9 +1542,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             case BC_RET: {
                 // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
                 
+                int total = 0;
                 if(callee_saved_space - callee_saved_regs_len*8  - unixcall_args_offset > 0) {
-                    emit_add_imm32(X64_REG_SP, (i32)(callee_saved_space - callee_saved_regs_len*8 - unixcall_args_offset));
+                    total += callee_saved_space - callee_saved_regs_len*8 - unixcall_args_offset;
                 }
+                total += size_of_saved_args;
+                if(total != 0)
+                    emit_add_imm32(X64_REG_SP, (i32)(total));
 
                 if(is_blank) {
                     // user handles the rest
@@ -1633,6 +1642,22 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
                 i32 disp32_offset = code_size() - 4; // -4 to refer to the 32-bit immediate in modrm_rip
                 prog->addDataRelocation(base->imm32, disp32_offset, current_tinyprog_index);
+
+                FIX_POST_OUT_OPERAND(0)
+            } break;
+            case BC_EXT_DATAPTR: {
+                auto base = (InstBase_op1_link*)n->base;
+                FIX_PRE_OUT_OPERAND(0)
+                
+                Assert(!IS_REG_XMM(reg0->reg)); // loading pointer into xmm makes no sense, it's a compiler bug
+
+                emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
+                emit1(OPCODE_LEA_REG_M);
+                emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
+
+                int offset = code_size() - 4;
+
+                map_strict_translation(n->bc_index + 3, offset);
 
                 FIX_POST_OUT_OPERAND(0)
             } break;
@@ -3521,12 +3546,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         auto& rel = bytecode->externalRelocations[i];
         if(tinycode->index == rel.tinycode_index) {
             int off = get_map_translation(rel.pc);
-            prog->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path);
+            prog->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.is_global_var);
             // found = true;
             // break;
         }
     }
-    // Assert(found);
 
     // TODO: Don't iterate like this
     auto di = bytecode->debugInformation;

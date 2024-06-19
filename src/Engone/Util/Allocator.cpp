@@ -29,6 +29,8 @@ namespace engone {
         // @DEBUG
         int alloc_ids[]{
             0,
+            // 60657,
+            // 47941,
             // 13265,
             // 42476,
             // 42
@@ -138,7 +140,13 @@ namespace engone {
                 log::out <<" "<<log::LIME<< (trackType->name.c_str()+strlen("struct "))<<log::NO_COLOR <<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
             else
                 log::out <<" "<<log::LIME<< trackType->name <<log::NO_COLOR<<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
+            int limit = 10;
+            int cur_locs = 0;
             for(auto pair : trackType->locations){
+                if (cur_locs > limit)
+                    break;
+                cur_locs++;
+
                 auto& loc = pair.second;
                 int len = strlen(loc.file);
                 int cutoff = len-1;

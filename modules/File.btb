@@ -122,13 +122,14 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
     if flags & FILE_READ_AND_WRITE
         open_flags = O_RDWR
     if flags & FILE_CLEAR_AND_WRITE {
-        fileFlags = O_CREAT | O_TRUNC | O_RDWR;
+        open_flags = O_CREAT | O_TRUNC | O_RDWR;
+        // open_flags = O_CREAT | O_RDWR;
         mode = S_IRUSR | S_IWUSR;
     }
-
+    // log(c_path)
     fd := open(c_path, open_flags, mode)
-    if fd == -1
-        return InternalToHandle(-1)
+    if fd < 0
+        return InternalToHandle(fd)
 
     if outFileSize {
         info: stat
@@ -143,22 +144,40 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
 }
 // returns read bytes
 fn FileRead(file: FileHandle, buffer: void*, size: i32) -> i32 {
-    read: i32
-    yes := ReadFile(HandleToInternal(file), buffer, size, &read, null)
-    if !yes
-        return 0 // TODO: Handle error
-    return read
+    #if OS_WINDOWS
+        read: i32
+        yes := ReadFile(HandleToInternal(file), buffer, size, &read, null)
+        if !yes
+            return 0 // TODO: Handle error
+        return read
+    #else
+        bytes := read(HandleToInternal(file), buffer, size)
+        if bytes < 0
+            return bytes // TODO: Handle error?
+        return bytes
+    #endif
 }
 // returns written bytes
 fn FileWrite(file: FileHandle, buffer: void*, size: i32) -> i32 {
-    written: i32
-    yes := WriteFile(HandleToInternal(file), buffer, size, &written, null)
-    if !yes
-        return 0 // TODO: Handle error
-    return written
+    #if OS_WINDOWS
+        written: i32
+        yes := WriteFile(HandleToInternal(file), buffer, size, &written, null)
+        if !yes
+            return 0 // TODO: Handle error
+        return written
+    #else
+        bytes := write(HandleToInternal(file), buffer, size)
+        if bytes < 0
+            return bytes // TODO: Handle error
+        return bytes
+    #endif
 }
 fn FileClose(file: FileHandle) {
-    CloseHandle(HandleToInternal(file))
+    #if OS_WINDOWS
+        CloseHandle(HandleToInternal(file))
+    #else
+        close(HandleToInternal(file))
+    #endif
 }
 
 fn DirectoryCreate(path: char[]) -> bool {
@@ -174,7 +193,22 @@ fn DirectoryCreate(path: char[]) -> bool {
 		}
 		return true;
     #elif OS_LINUX
-
+        err := mkdir(path.ptr,0o700)
+        return err == 0
+    #endif
+}
+fn DirectoryDelete(path: char[]) -> bool {
+    #if OS_WINDOWS
+         success := RemoveDirectoryA(path.ptr);
+		if(!success){
+			err := GetLastError();
+			log("[WinError ",err,"] RemoveDirectoryA '",path,"'");
+            return false;
+		}
+		return true;
+    #elif OS_LINUX
+        err := rmdir(path.ptr)
+        return err == 0
     #endif
 }
 fn FileCopy(src: char[], dst: char[]) -> bool {
@@ -187,7 +221,21 @@ fn FileCopy(src: char[], dst: char[]) -> bool {
 		}
 		return true;
     #elif OS_LINUX
-
+    open_flags, mode: i32
+    
+    if flags & FILE_READ_ONLY
+        open_flags = O_RDONLY
+    if flags & FILE_READ_AND_WRITE
+        open_flags = O_RDWR
+    if flags & FILE_CLEAR_AND_WRITE {
+        fileFlags = O_CREAT | O_TRUNC | O_RDWR;
+        mode = S_IRUSR | S_IWUSR;
+    }
+        in := open(src.ptr, O_RDONLY, S_IRUSR);
+        info: stat
+        fstat(in, &info);
+        int out = open(dst.ptr, O_WRONLY | O_TRUNC, S_IWUSR);
+        sendfile(in, out, null, info.st_size);
     #endif
 }
 fn FileMove(src: char[], dst: char[]) -> bool {
@@ -200,7 +248,8 @@ fn FileMove(src: char[], dst: char[]) -> bool {
 		}
 		return true;
     #elif OS_LINUX
-
+        err := rename(src.ptr,dst.ptr)
+        return err == 0
     #endif
 }
 fn FileDelete(path: char[]) -> bool {
@@ -216,36 +265,68 @@ fn FileDelete(path: char[]) -> bool {
 		}
 		return true;
     #elif OS_LINUX
-
+        err := unlink(path.ptr)
+        return err == 0
     #endif
 }
 
-// // The returned string is heap allocated in the interpreter.
-// // This allocation is freed when the interpreter finishes.
-// // TODO: You may want to change this so that you give the function a
-// //   StringBuffer or StringBuilder and it puts the CWD in there while
-// //   still returning a slice. Perhaps the StringBuilder defaults to null
-// //   and if not provided it is heap allocated, otherwise allocated in StringBuilder.
-// fn CurrentWorkingDirectory() -> char[]; // should it be const?
+fn DirectoryCopy(src: char[], dst: char[]) {
+    #if OS_WINDOWS
+        cmd: StringBuilder
+        // Y = don't prompt when overwiting files
+        // Q = don't display copied files
+        // S = recursive copy
+        // D = only copy newer files
+        cmd.append("xcopy /Y /Q /S /D ")
+        start_index := cmd.len
 
-// struct DirectoryIteratorData {
-//     name: char[]; // Allocated by interpreter; can't be String because of that. The ptr should be const (char* const NOT const char*)
-//     fileSize: u64;
-//     lastWriteSeconds: f32;
-//     isDirectory: bool;
-// }
-// struct DirectoryIterator {
-//     _handle: u64;
-//     rootPath: char[]; // allocated by interpreter, should be char* const
-//     result: DirectoryIteratorData;
+        cmd.append(src)
+        if src[src.len-1] != '/'
+            cmd.append("/") // path should have a trailing slash to indicate that it's a directory and not a file, xcopy will prompt the user otherwise
+        cmd.append(" ")
+        cmd.append(dst)
+        if dst[dst.len-1] != '/'
+            cmd.append("/")
 
-//     fn next() -> DirectoryIteratorData* {
-//         return DirectoryIteratorNext(this);
-//     }
-//     fn skip() {
-//         DirectoryIteratorSkip(this);
-//     }
-// }
+        // xcopy requires backslash in file name
+        for start_index..cmd.len
+            if cmd.ptr[nr] == '/'
+                cmd.ptr[nr] = '\\'
+        
+        // log(cmd)
+
+        // TODO: redirect stdout to nul
+        ExecuteCommand(cmd.sliced(), null, true)
+    #else
+        cmd: StringBuilder
+        // r = recursive copy
+        // u = only copy new files
+        // T = copy files in SRC into DST, don't copy the directory itself into DST
+        cmd.append("cp -r -u -T ")
+        start_index := cmd.len
+
+        cmd.append(src)
+        if src[src.len-1] != '/'
+            cmd.append("/") // path should have a trailing slash to indicate that it's a directory and not a file, xcopy will prompt the user otherwise
+        cmd.append(" ")
+        cmd.append(dst)
+        if dst[dst.len-1] != '/'
+            cmd.append("/")
+
+        cmd_mkdir: StringBuilder
+        cmd_mkdir.append("mkdir -p ")
+        cmd_mkdir.append(dst)
+        cmd_mkdir.append("/")
+
+        // log(cmd_mkdir)
+        ExecuteCommand(cmd_mkdir.sliced(), null, false)
+
+        // log(cmd)
+
+        // TODO: redirect stdout to nul
+        ExecuteCommand(cmd.sliced(), null, false)
+    #endif
+}
 
 struct DirIteratorItem {
     name: StringBuilder;

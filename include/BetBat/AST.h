@@ -282,14 +282,9 @@ struct FnOverloads {
     QuickArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
+    Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false);
     // Note that this function becomes complex if parentStruct is polymorphic.
-    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
-    // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
-    // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
-    // Get base polymorphic overload which can match with the typeIds.
-    // You want to generate the real overload afterwards.
-    // ASTFunction* getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes);
+    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this,ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
     
     // FuncImpl can be null and probably will be most of the time
     // when you call this.
@@ -402,12 +397,15 @@ struct Identifier {
     IdentifierVariable* cast_var() { return (IdentifierVariable*)this; }
     IdentifierFunction* cast_fn() { return (IdentifierFunction*)this; }
 };
+struct ASTStatement;
 struct IdentifierVariable : public Identifier {
     i32 memberIndex = -1; // only used with MEMBER type
     int argument_index = 0;
 
     PolyVersions<i32> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
+
+    ASTStatement* declaration = nullptr; // needed for linked_library for imported variables
 
     bool isLocal() { return type == LOCAL_VARIABLE; }
     bool isArgument() { return type == ARGUMENT_VARIABLE; }
@@ -622,6 +620,10 @@ struct ASTStatement : ASTNode {
     bool uses_cast_operator = false;
 
     ASTExpression* testValue = nullptr;
+
+    std::string linked_alias;
+    std::string linked_library;
+    bool isImported() { return linked_library.size() != 0; }
    
     // with a union you have to use hasNodes before using the expressions.
     // this is annoying so I am not using a union but you might want to
@@ -1093,6 +1095,7 @@ struct AST {
         ScopeId scope;
     };
     QuickArray<GlobalItem> globals_to_evaluate;
+
 private:
     MUTEX(lock_linearAllocation);
     char* linearAllocation = nullptr;

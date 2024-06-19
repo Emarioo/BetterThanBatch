@@ -195,7 +195,7 @@ namespace lexer {
         }
     };
     struct Import {
-        u32 file_id;
+        u32 file_id; // 0 is null, 1 is the first index
         std::string path;
         DynamicArray<u32> chunk_indices;
         DynamicArray<Chunk*> chunks; // chunk pointers are stored here so we don't have to lock the chunks bucket array everytime we need a chunk.
@@ -282,7 +282,11 @@ namespace lexer {
 
         std::string getline(SourceLocation location);
 
-        bool isIntegerLiteral(Token token, i64* value = nullptr);
+        static const int NO_SUFFIX = 1;
+        static const int SIGNED_SUFFIX = 1;
+        static const int UNSIGNED_SUFFIX = 2;
+        // signedness_suffix, 0 = no suffix, 1 = signed, 2 = unsigned
+        bool isIntegerLiteral(Token token, i64* value = nullptr, int* significant_digits = nullptr, int* signedness_suffix = nullptr);
 
         std::string tostring(Token token);
         std::string tostring(SourceLocation token) { return tostring(token.tok); }

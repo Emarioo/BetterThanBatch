@@ -1,7 +1,3 @@
-/*
-    Not finished!
-*/
-
 #import "Net"
 
 #import "Threads"
@@ -35,11 +31,11 @@ fn TestClient(user: char*) {
     }
     
     fn handle_event(e: Event, ud: void*) {
-        log_mutex.lock()
+        // log_mutex.lock()
         log("#CLIENT#")
         // std_print_any(&e) log()
         std_print(e.bytes)
-        log_mutex.unlock()
+        // log_mutex.unlock()
     }
 
     client.wait()
@@ -52,20 +48,20 @@ fn TestServer() {
     err := server.start(DEFAULT_IP,DEFAULT_PORT)
 
     fn handle_event(e: Event, ud: void*) {
-        // log_mutex.lock()
+        log_mutex.lock()
         // sem.wait()
         log("#SERVER#")
         // std_print_any(&e) log()
         std_print(e.bytes)
         // sem.signal()
-        // log_mutex.unlock()
+        log_mutex.unlock()
     }
 
     ThreadCreate(lamb, "Yikes".ptr)
     ThreadCreate(lamb, "noes".ptr)
     ThreadCreate(lamb, "Wine".ptr)
     // Lambda would be nice wouldn't it...
-    fn @stdcall lamb(n: void*) -> i32 { TestClient(n) return 0 }
+    fn @oscall lamb(n: void*) -> i32 { TestClient(n) return 0 }
 
 
     server.wait()

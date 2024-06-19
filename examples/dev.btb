@@ -1,14 +1,39 @@
 
-// #macro ok(a,b) "//" ## b
+// #import "Logger"
+// #import "Linux.btb"
+// args: char*[]{
+//     "/usr/bin/mkdir".ptr,
+//     "-p".ptr,
+//     "bin/btb-linux_x64-2024-06".ptr,
+//     null
+// }
 
+// err := execve(args[0], args.ptr, environ)
 
-// ok("aea","eab") k
+// log("err ",name_of_error(err))
 
-#import "examples/graphics/game.btb"
+// #import "Linux"
+// #import "Logger"
+
+// info: stat
+
+// err := stat("bin/btb".ptr, &info)
+
+// log(name_of_error(err), " ", info.st_size)
+
+#import "prepare_release"
+
+// #import "examples/graphics/game.btb"
 // #import "examples/net/serverclient.btb"
 // #import "prepare_release"
 
 // TODO: global structs, default members
+
+
+// #macro OK 0o123
+
+// a := 0o1
+
 
 // #import "Logger"
 // #import "File"

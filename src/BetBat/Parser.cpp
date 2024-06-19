@@ -239,7 +239,8 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
     lexer::TokenInfo* token = nullptr;
     lexer::SourceLocation loc{};
     StringView view{};
-    #define CURTOK() { token = info.getinfo(&view); loc = info.getloc(); if(token->type == lexer::TOKEN_EOF) break; }
+    #define CURTOK() { token = info.getinfo(&view); loc = info.getloc(); }
+    // if(token->type == lexer::TOKEN_EOF) break; 
     
     // TODO: Cleanup and simplify this code.
     //   It's also not complete, correct syntax will be fine but invalid syntax could get through the parser and
@@ -347,20 +348,6 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().may_be_name = false;
                 envs.add({});
                 continue;
-            } else if (token->type == '[') {
-                auto token = info.getinfo(&view, 1);
-                // char[] { 1, 3 }  could be an array on stack
-                // or the end of a function (char[] as return value)
-                // auto token2 = info.getinfo(2);
-                // if(token->type == ']' && token2->type != '{') {
-                if(token->type == ']') {
-                    info.advance(2);
-                    std::string tmp = envs.last().buffer;
-                    envs.last().buffer = "Slice<" + tmp + ">";
-                    continue;
-                } else {
-                    break;
-                }
             } else if (token->type == '(' && envs.last().may_be_name) {
                 if(envs.size() == 1) {
                     break;
@@ -378,6 +365,20 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             info.advance();
             envs.last().buffer += "*";
             envs.last().only_pointer = true;
+        } else if (token->type == '[') {
+            auto token = info.getinfo(&view, 1);
+            // char[] { 1, 3 }  could be an array on stack
+            // or the end of a function (char[] as return value)
+            // auto token2 = info.getinfo(2);
+            // if(token->type == ']' && token2->type != '{') {
+            if(token->type == ']') {
+                info.advance(2);
+                std::string tmp = envs.last().buffer;
+                envs.last().buffer = "Slice<" + tmp + ">";
+                continue;
+            } else {
+                break;
+            }
         } else if (token->type == ',') {
             if(envs.size() == 1) {
                 break;
@@ -402,6 +403,9 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
+            if(envs[envs.size()-2].func_returns) {
+                break; // in function pointers, we have 2 envs, not just one so we check function pointer too.
+            }
             info.advance();
             envs[envs.size()-2].buffer += envs.last().buffer;
             envs[envs.size()-2].buffer += ">";
@@ -409,6 +413,9 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
         } else if (token->type == ')') {
             if(envs.size() == 1) {
                 break;
+            }
+            if(envs[envs.size()-2].func_returns) {
+                break; // in function pointers, we have 2 envs, not just one so we check function pointer too.
             }
             // if(envs.last().expect_closing_paren) {
                 envs[envs.size()-2].buffer += envs.last().buffer;
@@ -2019,50 +2026,28 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 tmp->location = loc;
                 values.add(tmp);
                 // tmp->constantValue = true;// nocheckin
-            } else if(token->type == lexer::TOKEN_LITERAL_HEXIDECIMAL){
+            } else if(token->type == lexer::TOKEN_LITERAL_HEXIDECIMAL || token->type == lexer::TOKEN_LITERAL_BINARY || token->type == lexer::TOKEN_LITERAL_OCTAL) {
                 auto token_tiny = info.gettok();
                 info.advance();
                 
+                int significant_digits = 0;
+                int signedness_suffix = 0;
+
+                i64 num = 0;
+                bool yes = lexer->isIntegerLiteral(token_tiny, &num, &significant_digits, &signedness_suffix);
+                Assert(yes);
+
+                bool unsignedSuffix = signedness_suffix == lexer::Lexer::UNSIGNED_SUFFIX;
+                bool signedSuffix = signedness_suffix == lexer::Lexer::SIGNED_SUFFIX;
+
                 bool negativeNumber = false;
                 if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                     ops.pop();
                     saved_locations.pop();
                     negativeNumber = true;
                 }
-                // if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
-                //     ops.pop();
-                //     ERR_SECTION(
-                //         ERR_HEAD2(token)
-                //         ERR_MSG("Negative hexidecimals is not okay.")
-                //         ERR_LINE2(token,"bad");
-                //     )
-                // }
-                // 0x000000001 will be treated as 64 bit value and
-                // it probably should because you added those 
-                // zero for that exact reason.
+
                 ASTExpression* tmp = nullptr;
-                int hex_prefix = 0;
-                if(view.len>=2 && *(u16*)view.ptr == 0x7830) // 0x7830 represents '0x' (backwards because little endian)
-                    hex_prefix = 2;
-                    
-                int significant_digits = 0;
-                bool unsignedSuffix = false;
-                bool signedSuffix = false;
-                for(int i=hex_prefix;i<view.len;i++) {
-                    char c = view.ptr[i];
-                    if(c == 'u') {
-                        unsignedSuffix = true;
-                        continue;
-                    } else if(c == 's') {
-                        signedSuffix = true;
-                        continue;
-                    } else if(c == '_') {
-                        continue;
-                    }
-                    significant_digits++;
-                }
-                // NOTE: We use signed integers, not unsigned integers. We don't have to cast to signed which we
-                //   often want. Later we will infer the type for literals but that's future stuff.
                 if(significant_digits<=8) {
                     if(unsignedSuffix)
                         tmp = info.ast->createExpression(TypeId(AST_UINT32));
@@ -2085,11 +2070,74 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     )
                 }
                 tmp->location = info.srcloc(token_tiny);
-                tmp->i64Value = lexer::ConvertHexadecimal(view);
+                tmp->i64Value = num;
                 if(negativeNumber)
                     tmp->i64Value = -tmp->i64Value;
                 values.add(tmp);
-                // tmp->constantValue = true;// nocheckin
+
+            // } else if(token->type == lexer::TOKEN_LITERAL_HEXIDECIMAL){
+            //     auto token_tiny = info.gettok();
+            //     info.advance();
+                
+            //     bool negativeNumber = false;
+            //     if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
+            //         ops.pop();
+            //         saved_locations.pop();
+            //         negativeNumber = true;
+            //     }
+            //     // 0x000000001 will be treated as 64 bit value and
+            //     // it probably should because you added those 
+            //     // zero for that exact reason.
+            //     ASTExpression* tmp = nullptr;
+            //     int hex_prefix = 0;
+            //     if(view.len>=2 && *(u16*)view.ptr == 0x7830) // 0x7830 represents '0x' (backwards because little endian)
+            //         hex_prefix = 2;
+                    
+            //     int significant_digits = 0;
+            //     bool unsignedSuffix = false;
+            //     bool signedSuffix = false;
+            //     for(int i=hex_prefix;i<view.len;i++) {
+            //         char c = view.ptr[i];
+            //         if(c == 'u') {
+            //             unsignedSuffix = true;
+            //             continue;
+            //         } else if(c == 's') {
+            //             signedSuffix = true;
+            //             continue;
+            //         } else if(c == '_') {
+            //             continue;
+            //         }
+            //         significant_digits++;
+            //     }
+            //     // NOTE: We use signed integers, not unsigned integers. We don't have to cast to signed which we
+            //     //   often want. Later we will infer the type for literals but that's future stuff.
+            //     if(significant_digits<=8) {
+            //         if(unsignedSuffix)
+            //             tmp = info.ast->createExpression(TypeId(AST_UINT32));
+            //         else
+            //             tmp = info.ast->createExpression(TypeId(AST_INT32));
+            //     } else if(significant_digits<=16) {
+            //         if(unsignedSuffix)
+            //             tmp = info.ast->createExpression(TypeId(AST_UINT64));
+            //         else
+            //             tmp = info.ast->createExpression(TypeId(AST_INT64));
+            //     } else {
+            //         if(unsignedSuffix)
+            //             tmp = info.ast->createExpression(TypeId(AST_UINT64));
+            //         else
+            //             tmp = info.ast->createExpression(TypeId(AST_INT64));
+            //         ERR_SECTION(
+            //             ERR_HEAD2(token_tiny)
+            //             ERR_MSG("Hexidecimal overflow! '"<<info.lexer->tostring(token_tiny)<<"' is to large for 64-bit integers!")
+            //             ERR_LINE2(token_tiny,"to large!");
+            //         )
+            //     }
+            //     tmp->location = info.srcloc(token_tiny);
+            //     tmp->i64Value = lexer::ConvertHexadecimal(view);
+            //     if(negativeNumber)
+            //         tmp->i64Value = -tmp->i64Value;
+            //     values.add(tmp);
+            //     // tmp->constantValue = true;// nocheckin
             } else if(token->type == lexer::TOKEN_LITERAL_STRING) {
                 auto loc = info.getloc();
                 info.advance();
@@ -3281,9 +3329,6 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         auto token_name = info.getinfo(&view_fn_name);
         tok_name = info.gettok();
         while (token_name->type == lexer::TOKEN_ANNOTATION){
-            // NOTE: The reason that @extern-stdcall is used instead of @extern @stdcall is to prevent
-            //   the programmer from making mistakes. With two annotations, they may forget to specify the calling convention.
-            //   Calling convention is very important. If extern and call convention is combined then they won't forget.
             if(view_fn_name == "hide"){
                 function->setHidden(true);
             } else if (view_fn_name == "dllimport" || view_fn_name == "varimport" || view_fn_name == "import"){
@@ -3410,6 +3455,13 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
             } else if (view_fn_name == "unixcall"){
                 function->callConvention = CallConvention::UNIXCALL;
+                specifiedConvention = true;
+            } else if (view_fn_name == "oscall"){
+                if (compiler->options->target == TARGET_WINDOWS_x64) {
+                    function->callConvention = CallConvention::STDCALL;
+                } else if (compiler->options->target == TARGET_LINUX_x64) {
+                    function->callConvention = CallConvention::UNIXCALL;
+                }
                 specifiedConvention = true;
             } else if (view_fn_name == "native"){
                 function->linkConvention = NATIVE;
@@ -3876,6 +3928,105 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
         info.advance();
     }
 
+    statement = info.ast->createStatement(ASTStatement::DECLARATION);
+    statement->firstExpression = nullptr;
+    statement->globalDeclaration = globalDeclaration;
+
+    auto token_name = info.getinfo(&view);
+    // tok_name = info.gettok();
+    while (token_name->type == lexer::TOKEN_ANNOTATION){
+        if (view == "import"){
+            info.advance();
+            
+            StringView token_str{};
+            auto token = info.getinfo(&token_str);
+            if(token->type == '(') {
+                info.advance();
+                while(true) {
+                    token = info.getinfo(&token_str);
+                    auto tok = info.gettok();
+                    if(token->type == lexer::TOKEN_EOF) {
+                        ERR_SECTION(
+                            ERR_HEAD2(tok)
+                            ERR_MSG("Sudden end of file.")
+                            ERR_LINE2(tok,"here")
+                        )
+                        return SIGNAL_COMPLETE_FAILURE;
+                    }
+                    if(token->type == ')') {
+                        info.advance();
+                        break;
+                    }
+                    auto token2 = info.getinfo(1);
+                    if(token->type == lexer::TOKEN_IDENTIFIER && token2->type == '=') {
+                        if(token_str == "alias") {
+                            info.advance(2);
+                            token = info.getinfo(&token_str);
+                            
+                            if(token->type == lexer::TOKEN_LITERAL_STRING) {
+                                info.advance();
+                                statement->linked_alias = token_str;
+                            } else {
+                                ERR_SECTION(
+                                    ERR_HEAD2(tok)
+                                    ERR_MSG("Expected a string.")
+                                    ERR_LINE2(tok,"here")
+                                )
+                                return SIGNAL_COMPLETE_FAILURE;
+                            }
+                        } else {
+                            ERR_SECTION(
+                                ERR_HEAD2(tok)
+                                ERR_MSG("Annotation for import can be supplied with a named library and optionally an alias. '"<<token_str<<"' is not an attribute that can be set.")
+                                ERR_LINE2(tok,"here")
+                                ERR_EXAMPLE(1,"@import(yourlib, alias = \"_verbose_func\")")
+                            )
+                            return SIGNAL_COMPLETE_FAILURE;
+                        }
+                    } else if(token->type == lexer::TOKEN_IDENTIFIER) {
+                        info.advance();
+                        statement->linked_library = token_str;
+                    } else {
+                        ERR_SECTION(
+                            ERR_HEAD2(tok)
+                            ERR_MSG("Unexpected token in annotation for @import. Library name and 'alias = \"string\"' is okay.")
+                            ERR_LINE2(tok,"here")
+                            ERR_EXAMPLE(1,"@import(yourlib, alias = \"_verbose_func\")")
+                        )
+                        return SIGNAL_COMPLETE_FAILURE;
+                    }
+
+                    token = info.getinfo();
+                    if(token->type == ',') {
+                        info.advance();
+                        continue;
+                    } else if(token->type == ')') {
+                        info.advance();
+                        break;
+                    } else{
+                        ERR_SECTION(
+                            ERR_HEAD2(tok)
+                            ERR_MSG("Unexpected token.")
+                            ERR_LINE2(tok,"here")
+                        )
+                        info.advance();
+                        continue;
+                    }
+                }
+            }
+        } else {
+            auto tok = info.gettok();
+            ERR_SECTION(
+                ERR_HEAD2(tok)
+                ERR_MSG("Unknown annotation for variables.")
+                ERR_LINE2(tok,"unknown")
+            )
+        }
+        // info.advance();
+        token_name = info.getinfo(&view);
+        continue;
+    }
+
     token0 = info.getinfo(&view);
     auto token1 = info.getinfo(1);
     if(token0->type != lexer::TOKEN_IDENTIFIER) {
@@ -3890,10 +4041,6 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
     }
     // at this point we can't 100% sure it's a declaration in case ',' represents a list of some sort.
     // It doesn't right now but maybe in the future. - Emarioo, 2024-04-20
-
-    statement = info.ast->createStatement(ASTStatement::DECLARATION);
-    statement->firstExpression = nullptr;
-    statement->globalDeclaration = globalDeclaration;
 
     lexer::Token lengthTokenOfLastVar{};
 

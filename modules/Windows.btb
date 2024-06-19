@@ -140,6 +140,9 @@ fn @import(Kernel) CreateDirectoryA(
   /* [in]           LPCSTR                */ lpPathName: char*,
   /* [in, optional] LPSECURITY_ATTRIBUTES */ lpSecurityAttributes: void*
 ) -> bool;
+fn @import(Kernel) RemoveDirectoryA(
+  lpPathName: char*
+) -> bool;
 
 fn @import(Kernel) MoveFileA(
   /* [in] LPCTSTR*/ lpExistingFileName: char*,
@@ -276,39 +279,41 @@ fn @import(Winsock) WSAStartup(
 fn @import(Winsock) WSACleanup() -> i32;
 fn @import(Winsock) WSAGetLastError() -> i32;
 
+#macro FN_WINSOCK(NAME) fn @import(Winsock,alias= #quoted NAME) win_ ## NAME
+
 #macro SOCKET u64
-fn @import(Winsock) socket(
+FN_WINSOCK(socket)(
   af: i32,
   type: i32,
   protocol: i32
 ) -> SOCKET;
-fn @import(Winsock) closesocket(
+FN_WINSOCK(closesocket)(
   s: SOCKET
 ) -> i32;
-fn @import(Winsock) bind(
+FN_WINSOCK(bind)(
   s: SOCKET,
   addr: sockaddr*,
   namelen: i32
 ) -> i32;
-fn @import(Winsock) listen(
+FN_WINSOCK(listen)(
   s: SOCKET,
   backlog: i32 // use SOMAXCONN for a reasonably sized backlog
 ) -> i32;
 #macro SOMAXCONN 0x7fffffff
 
-fn @import(Winsock) accept(
+FN_WINSOCK(accept)(
   s: SOCKET,
   addr: sockaddr*,
-  addrlen: i32
+  addrlen: i32*
 ) -> SOCKET;
-fn @import(Winsock) connect(
+FN_WINSOCK(connect)(
   s: SOCKET,
   name: sockaddr*,
   namelen: i32
 ) -> i32;
 // TODO: select, WSAPoll
 
-fn @import(Winsock) recv(
+FN_WINSOCK(recv)(
   s: SOCKET,
   buf: char*,
   len: i32,
@@ -316,7 +321,7 @@ fn @import(Winsock) recv(
 ) -> i32;
 // We use an alias for send because user may name a function or method "send".
 // If we had namespaces then we wouldn't need to but they are incomplete.
-fn @import(Winsock,alias="send") socket_send(
+FN_WINSOCK(send)(
   s: SOCKET,
   buf: char*,
   len: i32,
@@ -369,14 +374,14 @@ struct addrinfo {
 struct sockaddr {
     sa_family: u16;
     sa_data: char[14];
-};
+}
 
 struct sockaddr_in {
     sin_family: u16;
     sin_port: u16;
     sin_addr: u32;
     sin_zero: char[8];
-};
+}
 
 #macro AF_UNSPEC 0
 #macro AF_INET 2

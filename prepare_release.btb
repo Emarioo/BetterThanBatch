@@ -28,10 +28,15 @@ fn main() {
 
     path_release: StringBuilder
     path_release.append("bin/")
-    path_release.append("btb-win_x64-")
+    #if OS_WINDOWS
+        path_release.append("btb-win_x64-")
+        path_exe        := "bin/btb.exe"
+    #else
+        path_release.append("btb-linux_x64-")
+        path_exe        := "bin/btb"
+    #endif
     path_release.append(substring(#date, 0,7))
 
-    path_exe        := "bin/btb.exe"
     path_docs       := "docs"
     path_examples   := "examples"
     path_libs       := "libs"
@@ -49,39 +54,17 @@ fn main() {
     DirectoryCreate(path_release.sliced())
 
     cmd: StringBuilder
-    cmd.append("build.bat release ")
-    cmd.append(path_release)
-    cmd.append("/btb.exe")
+    #if OS_WINDOWS
+        cmd.append("build.bat release ")
+        cmd.append(path_release)
+        cmd.append("/btb.exe")
+    #else
+        cmd.append("build.sh release ")
+        cmd.append(path_release)
+        cmd.append("/btb")
+    #endif
     // log(cmd)
-    // ExecuteCommand(cmd.sliced(), null, true)
-
-    fn DirectoryCopy(src: char[], dst: char[]) {
-        cmd: StringBuilder
-        // Y = don't prompt when overwiting files
-        // Q = don't display copied files
-        // S = recursive copy
-        // D = only copy newer files
-        cmd.append("xcopy /Y /Q /S /D ")
-        start_index := cmd.len
-
-        cmd.append(src)
-        if src[src.len-1] != '/'
-            cmd.append("/") // path should have a trailing slash to indicate that it's a directory and not a file, xcopy will prompt the user otherwise
-        cmd.append(" ")
-        cmd.append(dst)
-        if dst[dst.len-1] != '/'
-            cmd.append("/")
-
-        // xcopy requires backslash in file name
-        for start_index..cmd.len
-            if cmd.ptr[nr] == '/'
-                cmd.ptr[nr] = '\\'
-        
-        // log(cmd)
-
-        // TODO: redirect stdout to nul
-        ExecuteCommand(cmd.sliced(), null, true)
-    }
+    ExecuteCommand(cmd.sliced(), null, true)
 
     #macro COPY_DIR(path)
     {
@@ -96,4 +79,30 @@ fn main() {
     COPY_DIR("modules")
     COPY_DIR("libs")
     COPY_DIR("assets") // not strictly necessary but there are some examples that rely on fonts
+
+    readme := @strbeg
+Hello!
+
+This is the 0.2.0 version of the compiler.
+Read guide and examples provided with the release to begin
+using the language and compiler!
+
+**DISCLAIMER**: This version is not very stable. You will most likely run in to bugs and problems.
+You can report any bugs you find on the github repository
+`www.github.com/Emarioo/BetterThanBatch`
+
+The standard library is very experimental, functions interacting with the operating system does not
+handle errors very well and so on.
+    @strend
+
+    {
+        tmp := path_release.copy()
+        tmp.append("/README.md")
+        // log(tmp)
+        file := FileOpen(tmp.sliced(), FILE_CLEAR_AND_WRITE, null)
+        // log(name_of_error(HandleToInternal(file)))
+        err := FileWrite(file, readme.ptr, readme.len)
+        // log(name_of_error(err))
+        FileClose(file)
+    }
 }

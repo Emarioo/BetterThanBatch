@@ -27,6 +27,9 @@ _test 12; h(4, 3)
 var3: fn (i32, mo[]) -> i32, i32
 var3: fn (i32, i64<i64>*, mo[]) -> i32, i32
 
+
+fun: fn @unixcall (Slice<i32>) -> void*
+
 @TEST_CASE(func_ptr_callback)
 
 fn map(arr: i32[], callback: fn(i32,i32)) {

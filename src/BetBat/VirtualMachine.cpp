@@ -787,6 +787,15 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             Assert(bytecode->dataSegment.size() > imm);
             registers[op0] = (u64)(bytecode->dataSegment.data() + imm);
         } break;
+        case BC_EXT_DATAPTR: {
+            // Assert(false);
+            op0 = (BCRegister)instructions[pc++];
+            LinkConvention l = (LinkConvention)instructions[pc++];
+
+            log::out << log::RED << "Cannot access imported variable in virtual machine (not implemented)\n";
+            // Assert(bytecode->dataSegment.size() > imm);
+            // registers[op0] = (u64)(bytecode->dataSegment.data() + imm);
+        } break;
         case BC_CODEPTR: {
             Assert(false);
             op0 = (BCRegister)instructions[pc++];

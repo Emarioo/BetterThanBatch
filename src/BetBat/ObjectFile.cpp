@@ -104,11 +104,20 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         auto& namedRelocation = program->namedUndefinedRelocations[i];
 
         int sym = objectFile.findSymbol(namedRelocation.name);
-        if(sym == -1)
-            sym = objectFile.addSymbol(SYM_FUNCTION, namedRelocation.name, 0, 0);
+        if(sym == -1) {
+            if(namedRelocation.is_global_var) {
+                // IS ZERO AS SYMBOL TYPE FINE?
+                sym = objectFile.addSymbol((ObjectFile::SymbolType)SYM_EMPTY, namedRelocation.name, 0, 0);
+            } else {
+                sym = objectFile.addSymbol(SYM_FUNCTION, namedRelocation.name, 0, 0);
+            }
+        }
 
         u32 real_offset = tinyprogram_offsets[namedRelocation.tinyprog_index] + namedRelocation.textOffset;
-        objectFile.addRelocation(section_text, RELOCA_REL32, real_offset, sym, 0);
+        if(namedRelocation.is_global_var)
+            objectFile.addRelocation(section_text, RELOCA_PC32, real_offset, sym, 0);
+        else
+            objectFile.addRelocation(section_text, RELOCA_REL32, real_offset, sym, 0);
     }
 
     for(int i=0;i<program->internalFuncRelocations.size();i++){
@@ -620,8 +629,9 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
 
                 if(myrel.type == RELOCA_PC32) {
                     rel->r_offset = myrel.offset;
-                    int symindex = getSectionSymbol(myrel.sectionNr);
-                    rel->r_info = ELF64_R_INFO(symindex, R_X86_64_PC32);
+                    // int symindex = getSectionSymbol(myrel.sectionNr);
+                    // rel->r_info = ELF64_R_INFO(symindex, R_X86_64_PC32);
+                    rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_PC32);
                     rel->r_addend = myrel.offsetIntoSection;
                     rel->r_addend += -4;
                 } else if (myrel.type == RELOCA_PLT32) {
@@ -697,8 +707,15 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
             CHECK
             memset(sym, 0, sizeof(*sym));
             
+            // engone::log::out << "sym " << mysym.name << "\n";
             if(mysym.type == SYM_EMPTY) {
-                // memset(sym, 0, sizeof(*sym));
+                sym->st_name = addString(mysym.name);
+                sym->st_other = 0; // always zero
+                sym->st_size = 0;
+                sym->st_shndx = mysym.sectionNr;
+                sym->st_value = mysym.offset;
+
+                sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_NOTYPE);
             } else {
                 sym->st_name = addString(mysym.name);
                 sym->st_other = 0; // always zero
@@ -720,6 +737,8 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
                         // use PC32 relocation if possible
                         // addRelocation(section, off, section2, off2)
                         // sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT);
+                    } else {
+                        sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_NOTYPE);
                     }
                 }
             }

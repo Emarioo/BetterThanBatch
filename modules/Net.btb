@@ -6,6 +6,7 @@
 #import "Memory"
 #import "String"
 #import "Threads"
+#import "Sockets"
 
 #if OS_WINDOWS
     #import "Windows"
@@ -48,7 +49,7 @@ struct Connection {
     receiver_thread: Thread;
     message_data: char*;
     message_max: i32;
-    socket: SOCKET;
+    socket: Socket;
     server: Server*;
     conn_id: ConnectionID;
 }
@@ -66,158 +67,157 @@ struct Server {
         m_ip.append(ip)
         m_port = port
         m_protocol = protocol
-        #if OS_WINDOWS
-            EnsureInitializedWSA()
 
-            m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
-            if m_socket == INVALID_SOCKET {
-                log("socket failed")
-                return NET_FAILURE
-            }
-            
-            addr: sockaddr_in
-            addr.sin_family = AF_INET
-            addr.sin_port = htons(m_port)
-            addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
-            
-            err := bind(m_socket, cast<sockaddr*>&addr, sizeof addr)
-            if err == SOCKET_ERROR {
-                log("bind failed")
-                return NET_BAD_IP
-            }
-            
-            err = listen(m_socket, SOMAXCONN) // TODO: Option to specify connection limit
-            if err == SOCKET_ERROR {
-                log("listen failed")
-                return NET_FAILURE
-            }
+        m_socket = create_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+        if !m_socket.valid() {
+            log("socket failed")
+            return NET_FAILURE
+        }
+        
+        addr: sockaddr_in
+        addr.sin_family = AF_INET
+        addr.sin_port = htons(m_port)
+        addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
+        
+        err := m_socket.bind(cast<sockaddr*>&addr, sizeof addr)
+        if err != SOCKET_SUCCESS {
+            log("bind failed")
+            return NET_BAD_IP
+        }
+        
+        err = m_socket.listen(SOMAXCONN) // TODO: Option to specify connection limit
+        if err != SOCKET_SUCCESS {
+            log("listen failed")
+            return NET_FAILURE
+        }
 
-            m_is_active = true
+        m_is_active = true
 
-            m_listener_thread = ThreadCreate(listener_func, this)
-            fn @stdcall listener_func(arg: void*) -> i32 {
-                server: Server* = arg
+        m_listener_thread = ThreadCreate(listener_func, this)
+        fn @oscall listener_func(arg: void*) -> i32 {
+            server: Server* = arg
 
-                while {
-                    log("#waiting")
-                    client_socket := accept(server.m_socket, null, 0)
-                    if client_socket == INVALID_SOCKET {
-                        log("accept failed")
-                        return 0
-                    }
+            while {
+                log("#waiting")
+                client_socket := server.m_socket.accept(null, null)
+                if !client_socket.valid() {
+                    log("accept failed")
+                    return 0
+                }
 
-                    connection: Connection* = Allocate(sizeof Connection)
-                    memzero(connection, sizeof Connection)
-                    connection.socket = client_socket
-                    connection.message_max = 0x10000
-                    connection.message_data = Allocate(connection.message_max)
-                    connection.receiver_thread = ThreadCreate(receiver_func2, connection)
-                    connection.server = server
-                    connection.conn_id = server.connections.size()
+                connection: Connection* = Allocate(sizeof Connection)
+                memzero(connection, sizeof Connection)
+                connection.socket = client_socket
+                connection.message_max = 0x10000
+                connection.message_data = Allocate(connection.message_max)
+                connection.receiver_thread = ThreadCreate(receiver_func2, connection)
+                connection.server = server
+                connection.conn_id = server.connections.size()
 
-                    server.connections.add(connection)
+                server.connections.add(connection)
 
-                    fn @stdcall receiver_func2(arg: void*) -> i32 {
-                        connection: Connection* = arg
-                        protocol: NetProtocol = connection.server.m_protocol
-                        while {
-                            bytes: i32
-                            if protocol & NET_PROTO_MESSAGE {
-                                header: MessageHeader
+                fn @oscall receiver_func2(arg: void*) -> i32 {
+                    connection: Connection* = arg
+                    protocol: NetProtocol = connection.server.m_protocol
+                    while {
+                        bytes: i32
+                        if protocol & NET_PROTO_MESSAGE {
+                            header: MessageHeader
 
-                                bytes = recv(connection.socket, cast<void*>&header, sizeof header, MSG_WAITALL)
+                            bytes = connection.socket.recv(cast<void*>&header, sizeof header, 0)
 
-                                if bytes == 0 {
-                                    break // graceful shutdown
-                                }
-                                if bytes < 0 {
-                                    e: Event
-                                    e.type = EVENT_CLOSE
-                                    e.who = 0
-                                    connection.server.m_event_callback(e, connection.server.m_user_data)
-
-                                    if connection.socket != INVALID_SOCKET
-                                        closesocket(connection.socket)
-                                    connection.socket = INVALID_SOCKET
-
-                                    err := WSAGetLastError()
-                                    if err == WSAECONNRESET
-                                        break
-
-                                    log("recv failed")
-                                    break
-                                }
-                                if bytes != sizeof header {
-                                    log("recv should have read 4 bytes for message length but instead read ", bytes)
-                                    break
-                                }
-
-                                if header.length > 0x1000000 { // more than 1 MB
-                                    log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
-                                    break
-                                }
-
-                                if connection.message_max < header.length {
-                                    new_max := connection.message_max * 1.5 + header.length + 16
-                                    new_data := Reallocate(new_max, connection.message_data)
-                                    // Assert(new_data)
-                                    connection.message_data = new_data
-                                    connection.message_max = new_max
-                                }
-                                bytes = recv(connection.socket, connection.message_data, connection.message_max, MSG_WAITALL)
-                            } else {
-                                bytes = recv(connection.socket, connection.message_data, connection.message_max, 0)
-                            }
-                            
-                            // handle error or shutdown
                             if bytes == 0 {
-                                break
-                            } else if bytes < 0 {
+                                break // graceful shutdown
+                            }
+                            if bytes < 0 {
                                 e: Event
                                 e.type = EVENT_CLOSE
                                 e.who = 0
                                 connection.server.m_event_callback(e, connection.server.m_user_data)
 
-                                if connection.socket != INVALID_SOCKET
-                                    closesocket(connection.socket)
-                                connection.socket = INVALID_SOCKET
-                                
-                                err := WSAGetLastError()
-                                if err == WSAECONNRESET
-                                    break
+                                if connection.socket.valid()
+                                    connection.socket.close()
+
+                                #if OS_WINDOWS
+                                    err := WSAGetLastError()
+                                    if err == WSAECONNRESET
+                                        break
+                                #endif
 
                                 log("recv failed")
                                 break
                             }
-
-                            if connection.server.m_event_callback {
-                                e: Event
-                                e.type = EVENT_RECEIVE
-                                e.who = connection.conn_id
-                                e.bytes = Slice<char>{connection.message_data,bytes}
-                                connection.server.m_event_callback(e, connection.server.m_user_data)
+                            if bytes != sizeof header {
+                                log("recv should have read 4 bytes for message length but instead read ", bytes)
+                                break
                             }
-                            // std_prints("[READ ", bytes,"]")
-                            // std_print(buffer.ptr, bytes)
+
+                            if header.length > 0x1000000 { // more than 1 MB
+                                log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
+                                break
+                            }
+
+                            if connection.message_max < header.length {
+                                new_max := connection.message_max * 1.5 + header.length + 16
+                                new_data := Reallocate(new_max, connection.message_data)
+                                // Assert(new_data)
+                                connection.message_data = new_data
+                                connection.message_max = new_max
+                            }
+                            total_bytes := 0
+                            while total_bytes != header.length {
+                                bytes = connection.socket.recv(connection.message_data + total_bytes, header.length - total_bytes, 0)
+                                total_bytes += bytes
+                            }
+                        } else {
+                            bytes = connection.socket.recv(connection.message_data, connection.message_max, 0)
                         }
-                        return 0
+                        
+                        // handle error or shutdown
+                        if bytes == 0 {
+                            break
+                        } else if bytes < 0 {
+                            e: Event
+                            e.type = EVENT_CLOSE
+                            e.who = 0
+                            connection.server.m_event_callback(e, connection.server.m_user_data)
+
+                            if connection.socket.valid()
+                                connection.socket.close()
+                            
+                            #if OS_WINDOWS
+                                err := WSAGetLastError()
+                                if err == WSAECONNRESET
+                                    break
+                            #endif
+
+                            log("recv failed")
+                            break
+                        }
+
+                        if connection.server.m_event_callback {
+                            e: Event
+                            e.type = EVENT_RECEIVE
+                            e.who = connection.conn_id
+                            e.bytes = Slice<char>{connection.message_data,bytes}
+                            connection.server.m_event_callback(e, connection.server.m_user_data)
+                        }
+                        // std_prints("[READ ", bytes,"]")
+                        // std_print(buffer.ptr, bytes)
                     }
+                    return 0
                 }
-                closesocket(server.m_socket)
-                server.m_socket = INVALID_SOCKET
-                return 0
             }
+            server.m_socket.close()
+            return 0
+        }
 
-            return NET_SUCCESS
-        #elif OS_LINUX
-
-        #endif
+        return NET_SUCCESS
     }
 	fn close() {
         // Close listener socket and thread
-        if m_socket != INVALID_SOCKET {
-            closesocket(m_socket)
-            m_socket = INVALID_SOCKET
+        if m_socket.valid() {
+            m_socket.close()
             if m_listener_thread.valid() {
                 ThreadJoin(m_listener_thread)
                 m_listener_thread.cleanup();
@@ -226,8 +226,8 @@ struct Server {
 
         // Close other connections
         for connections.sliced() {
-            if it.socket != INVALID_SOCKET {
-                closesocket(it.socket)
+            if it.socket.valid() {
+                it.socket.close()
                 ThreadJoin(it.receiver_thread)
                 Free(it.message_data)
                 Free(it)
@@ -288,7 +288,7 @@ struct Server {
     m_protocol: NetProtocol;
 
     m_is_active: bool;
-    m_socket: SOCKET = INVALID_SOCKET; // TODO: SOCKET is only for Windows, what about Linux?
+    m_socket: Socket;
     m_listener_thread: Thread;
 
 	connections: Array<Connection*>;
@@ -314,150 +314,148 @@ struct Client {
         m_ip.append(ip)
         m_port = port
         m_protocol = protocol
-        #if OS_WINDOWS
-            EnsureInitializedWSA()
 
-            m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
-            if m_socket == INVALID_SOCKET {
-                log("socket failed")
-                return NET_SOCKET_API_ERROR
-            }
-            // defer closesocket(client)
-            
-            result: addrinfo*;
-            hints: addrinfo
-            hints.ai_family = AF_INET
-            hints.ai_socktype = SOCK_STREAM
-            hints.ai_protocol  = IPPROTO_TCP
+        m_socket = create_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+        if !m_socket.valid() {
+            log("socket failed")
+            return NET_SOCKET_API_ERROR
+        }
+        // defer closesocket(client)
+        
+        result: addrinfo*;
+        hints: addrinfo
+        hints.ai_family = AF_INET
+        hints.ai_socktype = SOCK_STREAM
+        hints.ai_protocol  = IPPROTO_TCP
 
-            string_port: StringBuilder
-            string_port.append(port)
-            
-            err := getaddrinfo(ip.ptr, string_port.ptr, &hints, &result)
-            if err != 0 {
-                log("getaddrinfo failed")
-                return NET_BAD_IP
-            }
-            err = connect(m_socket, result.ai_addr, sizeof *result.ai_addr)
+        string_port: StringBuilder
+        string_port.append(port)
+        
+        addr_err := getaddrinfo(ip.ptr, string_port.ptr, &hints, &result)
+        if addr_err != 0 {
+            log("getaddrinfo failed")
+            return NET_BAD_IP
+        }
+        err := m_socket.connect(result.ai_addr, sizeof *result.ai_addr)
 
-            // addr: sockaddr_in
-            // addr.sin_family = AF_INET
-            // addr.sin_port = htons(8080)
-            // addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
-            // err := connect(client, cast<sockaddr*>&addr, sizeof addr)
-            
-            if err == SOCKET_ERROR {
-                log("connect failed")
-                return NET_BAD_IP
-            }
+        // addr: sockaddr_in
+        // addr.sin_family = AF_INET
+        // addr.sin_port = htons(8080)
+        // addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
+        // err := connect(client, cast<sockaddr*>&addr, sizeof addr)
+        
+        if err == SOCKET_FAILURE {
+            log("connect failed")
+            return NET_BAD_IP
+        }
 
-            m_message_max = 0x10000 // 10 KB
-            m_message_data = Allocate(m_message_max)
+        m_message_max = 0x10000 // 10 KB
+        m_message_data = Allocate(m_message_max)
 
-            m_receiver_thread = ThreadCreate(receiver_func, this)
+        m_receiver_thread = ThreadCreate(receiver_func, this)
 
-            m_is_active = true // at this point, client should be fully up and running
+        m_is_active = true // at this point, client should be fully up and running
 
-            fn @stdcall receiver_func(arg: void*) -> i32 {
-                client: Client* = arg
+        fn @oscall receiver_func(arg: void*) -> i32 {
+            client: Client* = arg
 
-                while {
-                    bytes: i32
-                    if client.m_protocol & NET_PROTO_MESSAGE {
-                        header: MessageHeader
+            while {
+                bytes: i32
+                if client.m_protocol & NET_PROTO_MESSAGE {
+                    header: MessageHeader
 
-                        bytes = recv(client.m_socket, cast<void*>&header, sizeof header, MSG_WAITALL)
+                    bytes = client.m_socket.recv(cast<void*>&header, sizeof header, 0)
 
-                        if bytes == 0 {
-                            break // graceful shutdown
-                        }
-                        if bytes < 0 {
-                            e: Event
-                            e.type = EVENT_CLOSE
-                            e.who = 0
-                            client.m_event_callback(e, client.m_user_data)
-
-                            if client.m_socket != INVALID_SOCKET
-                                closesocket(client.m_socket)
-                            client.m_socket = INVALID_SOCKET
-
-                            err := WSAGetLastError()
-                            if err == WSAECONNRESET
-                                break
-
-                            log("recv failed")
-                            break
-                        }
-                        if bytes != sizeof header {
-                            log("recv should have read 4 bytes for message length but instead read ", bytes)
-                            break
-                        }
-
-                        if header.length > 0x1000000 { // more than 1 MB
-                            log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
-                            break
-                        }
-
-                        if client.m_message_max < header.length {
-                            new_max := client.m_message_max * 1.5 + header.length + 16
-                            new_data := Reallocate(new_max, client.m_message_data)
-                            // Assert(new_data)
-                            client.m_message_data = new_data
-                            client.m_message_max = new_max
-                        }
-                        bytes = recv(client.m_socket, client.m_message_data, client.m_message_max, MSG_WAITALL)
-                    } else {
-                        bytes = recv(client.m_socket, client.m_message_data, client.m_message_max, 0)
-                    }
-
-                    
-                    // handle error or shutdown
                     if bytes == 0 {
-                        break
-                    } else if bytes < 0 {
+                        break // graceful shutdown
+                    }
+                    if bytes < 0 {
                         e: Event
                         e.type = EVENT_CLOSE
                         e.who = 0
                         client.m_event_callback(e, client.m_user_data)
 
-                        if client.m_socket != INVALID_SOCKET
-                            closesocket(client.m_socket)
-                        client.m_socket = INVALID_SOCKET
-                        
-                        err := WSAGetLastError()
-                        if err == WSAECONNRESET
-                            break
+                        if client.m_socket.valid()
+                            client.m_socket.close()
+
+                        #if OS_WINDOWS
+                            err := WSAGetLastError()
+                            if err == WSAECONNRESET
+                                break
+                        #endif
 
                         log("recv failed")
                         break
                     }
-
-                    if client.m_event_callback {
-                        e: Event
-                        e.type = EVENT_RECEIVE
-                        e.who = 0
-                        e.bytes = Slice<char>{client.m_message_data,bytes}
-                        client.m_event_callback(e, client.m_user_data)
+                    if bytes != sizeof header {
+                        log("recv should have read 4 bytes for message length but instead read ", bytes)
+                        break
                     }
-                    // std_prints("[READ ", bytes,"]")
-                    // std_print(buffer.ptr, bytes)
+
+                    if header.length > 0x1000000 { // more than 1 MB
+                        log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
+                        break
+                    }
+
+                    if client.m_message_max < header.length {
+                        new_max := client.m_message_max * 1.5 + header.length + 16
+                        new_data := Reallocate(new_max, client.m_message_data)
+                        // Assert(new_data)
+                        client.m_message_data = new_data
+                        client.m_message_max = new_max
+                    }
+                    total_bytes := 0
+                    while header.length != total_bytes {
+                        bytes = client.m_socket.recv(client.m_message_data + total_bytes, header.length - total_bytes, 0)
+                        total_bytes += bytes
+                    }
+                } else {
+                    bytes = client.m_socket.recv(client.m_message_data, client.m_message_max, 0)
+                }
+                
+                // handle error or shutdown
+                if bytes == 0 {
+                    break
+                } else if bytes < 0 {
+                    e: Event
+                    e.type = EVENT_CLOSE
+                    e.who = 0
+                    client.m_event_callback(e, client.m_user_data)
+
+                    if client.m_socket.valid()
+                        client.m_socket.close()
+                    
+                    #if OS_WINDOWS
+                        err := WSAGetLastError()
+                        if err == WSAECONNRESET
+                            break
+                    #endif
+
+                    log("recv failed")
+                    break
                 }
 
-                closesocket(client.m_socket)
-                client.m_socket = INVALID_SOCKET
-
-                return 0
+                if client.m_event_callback {
+                    e: Event
+                    e.type = EVENT_RECEIVE
+                    e.who = 0
+                    e.bytes = Slice<char>{client.m_message_data,bytes}
+                    client.m_event_callback(e, client.m_user_data)
+                }
+                // std_prints("[READ ", bytes,"]")
+                // std_print(buffer.ptr, bytes)
             }
 
-            return NET_SUCCESS
-        #else
-        // TODO: Linux
-        #endif
+            client.m_socket.close()
+
+            return 0
+        }
+
+        return NET_SUCCESS
     }
 	fn close() {
-        if m_socket != INVALID_SOCKET
-            closesocket(m_socket)
-        m_socket = INVALID_SOCKET
+        if m_socket.valid()
+            m_socket.close()
 
         ThreadJoin(m_receiver_thread)
         m_receiver_thread.cleanup()
@@ -471,25 +469,25 @@ struct Client {
         }
     }
     fn is_active() -> bool {
-        return m_socket != INVALID_SOCKET
+        return m_socket.valid()
     }
 
 	fn send(bytes: char[]) -> NetError {
         if m_protocol & NET_PROTO_MESSAGE {
             header: MessageHeader
             header.length = bytes.len
-            err := socket_send(m_socket, cast<void*>&header, sizeof header, 0)
+            err := m_socket.send(cast<void*>&header, sizeof header, 0)
             if err < 0 {
                 log("send msg failed1")
                 return NET_FAILURE
             }
-            err = socket_send(m_socket, bytes.ptr, bytes.len, 0)
+            err = m_socket.send(bytes.ptr, bytes.len, 0)
             if err < 0 {
                 log("send msg failed2")
                 return NET_FAILURE
             }
         } else {
-            err := socket_send(m_socket, bytes.ptr, bytes.len, 0)
+            err := m_socket.send(bytes.ptr, bytes.len, 0)
             if err < 0 {
                 log("send failed")
                 return NET_FAILURE
@@ -514,7 +512,7 @@ struct Client {
     m_protocol: NetProtocol;
 
     m_is_active: bool;
-    m_socket: SOCKET; // TODO: SOCKET is only for Windows, what about Linux?
+    m_socket: Socket;
 
     m_receiver_thread: Thread;
     m_event_callback: EventCallback;
@@ -526,21 +524,6 @@ struct Client {
     /*######################
         Internal functions
     #####################*/
-}
-
-
-global g_wsaData: WSADATA;
-global inited_wsaData: bool;
-
-fn EnsureInitializedWSA() {
-    if !inited_wsaData {
-        err := WSAStartup(0x0202, &g_wsaData)
-        if err != 0 {
-            log("WSA failed")
-            return
-        }
-        inited_wsaData = true
-    }
 }
 
 /*#######################

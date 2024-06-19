@@ -189,8 +189,11 @@ struct DynamicArray {
         // if(arr.used>0){
             // engone::log::out << "copy "<<arr.used<<"\n";
         // }
+        // _ptr = arr._ptr;
+        // used = arr.used;
+        // max = arr.max;
+
         // bool yes = reserve(arr.max);
-        // Assert(yes);
         bool yes = resize(arr.used);
         Assert(yes);
         for(u32 i=0;i<used;i++){
@@ -204,8 +207,11 @@ struct DynamicArray {
         // if(arr.used>0){
             // engone::log::out << "copy "<<arr.used<<"\n";
         // }
+        // _ptr = arr._ptr;
+        // used = arr.used;
+        // max = arr.max;
+
         // bool yes = reserve(arr.max);
-        // Assert(yes);
         bool yes = resize(arr.used);
         Assert(yes);
         for(u32 i=0;i<used;i++){
@@ -335,6 +341,9 @@ struct DynamicArray {
             
             Assert(newPtr);
             
+            // TODO: Optimize, this operation is expensive (copying each element, 
+            // possible allocating and deallocating stuff for no reason depending 
+            // on the allocations owned by each element)
             for(u32 i = 0; i < used; i++){
                 new(newPtr + i)T();
                 *(newPtr + i) = std::move(*(_ptr + i));

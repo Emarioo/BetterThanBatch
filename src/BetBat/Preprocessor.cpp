@@ -557,7 +557,7 @@ SignalIO PreprocContext::parseIf(){
                 }
                 // log::out << log::GRAY<< "   endif - new depth "<<depth<<"\n";
                 depth--;
-                continue;
+                // continue;
             } else if(token.type == lexer::TOKEN_ELSE){ 
                 if(depth==0){
                     advance();
@@ -742,20 +742,23 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             // Assert(eval_content);
             specific = nullptr;
             root = nullptr;
-            if(eval_content) {
-                new(&input_arguments)DynamicArray<TokenList>();
-            } else {
+            // if(eval_content) {
+                // new(&input_arguments)DynamicArray<TokenList>();
+            // } else {
                 import_id = 0;
                 top_caller = nullptr;
                 paren_depth = 0;
-            }
+            // }
         }
         ~Layer() {
-            if(eval_content) {
-                input_arguments.~DynamicArray();
-            } else {
+            // if(eval_content) {
+                for(auto& l : input_arguments) {
+                    l.cleanup();
+                }
+                input_arguments.cleanup();
+            // } else {
                 
-            }
+            // }
         }
         u32 _head = 0;
         u32 start_head = 0;
@@ -820,6 +823,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     };
     auto deleteLayer = [&](Layer* layer) {
         layer->~Layer();
+        // memset(layer, 0, sizeof (Layer));
         TRACK_FREE(layer,Layer);
     };
     DynamicArray<Layer*> layers{};

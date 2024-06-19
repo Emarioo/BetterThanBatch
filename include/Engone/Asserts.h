@@ -2,6 +2,10 @@
 
 #include "Engone/Util/StackTrace.h"
 
+#ifdef OS_LINUX
+#include "signal.h"
+#endif
+
 #define COMBINE1(X,Y) X##Y
 #define COMBINE(X,Y) COMBINE1(X,Y)
 
@@ -25,5 +29,5 @@
 #define BREAK(COND) if(COND) __debugbreak();
 #else
 // does linux have debugbreak?
-#define BREAK(COND)
+#define BREAK(COND) if(COND) raise(SIGTRAP)
 #endif

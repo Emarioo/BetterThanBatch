@@ -27,12 +27,13 @@ bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index) 
     exportedFunctions.last().tinycode_index = tinycode_index;
     return true;
 }
-void Bytecode::addExternalRelocation(const std::string& name, const std::string& library_path, int tinycode_index, int pc){
+void Bytecode::addExternalRelocation(const std::string& name, const std::string& library_path, int tinycode_index, int pc, bool is_var){
     ExternalRelocation tmp{};
     tmp.name = name;
     tmp.library_path = library_path;
     tmp.tinycode_index = tinycode_index;
     tmp.pc = pc;
+    tmp.is_global_var = is_var;
     externalRelocations.add(tmp);
 }
 void Bytecode::cleanup(){
@@ -833,6 +834,11 @@ void BytecodeBuilder::emit_dataptr(BCRegister reg, i32 imm) {
     emit_operand(reg);
     emit_imm32(imm);
 }
+void BytecodeBuilder::emit_ext_dataptr(BCRegister reg, LinkConvention link) {
+    emit_opcode(BC_EXT_DATAPTR);
+    emit_operand(reg);
+    emit_imm8(link);
+}
 void BytecodeBuilder::emit_codeptr(BCRegister reg, i32 imm) {
     emit_opcode(BC_CODEPTR);
     emit_operand(reg);
@@ -1036,6 +1042,7 @@ const char* instruction_names[] {
     "jnz", // BC_JNZ
     "jz", // BC_JZ
     "dataptr", // BC_DATAPTR
+    "ext_dataptr", // BC_EXT_DATAPTR
     "codeptr", // BC_CODEPTR
     "add", // BC_ADD
     "sub", // BC_SUB
@@ -1110,6 +1117,7 @@ InstBaseType instruction_contents[256] {
     BASE_op1 | BASE_imm32,              // BC_JZ,
 
     BASE_op1 | BASE_imm32,  // BC_DATAPTR,
+    BASE_op1 | BASE_link,   // BC_EXT_DATAPTR,
     BASE_op1 | BASE_imm32,  // BC_CODEPTR,
 
     BASE_op2 | BASE_ctrl,   // BC_ADD,

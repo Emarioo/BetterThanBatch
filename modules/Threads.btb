@@ -5,6 +5,7 @@
 */
 
 #import "Logger"
+#import "Memory"
 
 #if OS_WINDOWS
     #import "Windows"
@@ -45,7 +46,12 @@ struct Thread {
 #endif
 
 #macro ThreadId u64
-// func should be fn @unixcall/@stdcall (void*) -> void*
+
+// sneaky overload
+fn ThreadCreate(func: fn @unixcall (void*)->i32, param: void*) -> Thread {
+    return ThreadCreate(cast_unsafe<fn @unixcall (void*)->void* > func, param)
+}
+
 fn ThreadCreate(func: FnThread, param: void*) -> Thread {
     // TODO: Handle error
     thread: Thread;
@@ -56,20 +62,12 @@ fn ThreadCreate(func: FnThread, param: void*) -> Thread {
     #else
         threadId: u32 = 0;
         temp: pthread_t;
-        err = pthread_create(&temp, null, func, param);
-        thread.os_handle = cast_unsafe<u64>temp;
-        thread.id = cast_unsafe<u64>temp;
+        err := pthread_create(&temp, null, func, param);
+        thread.os_handle = cast<u64>temp;
+        thread.id = cast<u64>temp;
     #endif
     return thread;
 }
-// fn ThreadDestroy(thread: Thread) {
-//     // TODO: Handle error
-//     #if OS_WINDOWS
-//         CloseHandle(thread.os_handle);
-//     #else
-//         ThreadJoin(thread); // nocheckin TODO: temporary
-//     #endif
-// }
 fn ThreadJoin(thread: Thread) {
     // TODO: Handle error
     #if OS_WINDOWS
@@ -77,14 +75,14 @@ fn ThreadJoin(thread: Thread) {
         CloseHandle(thread.os_handle);
     #else
         // Assert(sizeof(pthread) == sizeof(thread.os_handle));
-        err = pthread_join(cast_unsafe<pthread_t>thread.os_handle, cast_unsafe<void**>null);
+        err := pthread_join(cast<pthread_t>thread.os_handle, cast<void**>null);
     #endif
 }
 fn ThreadSelfId() -> ThreadId {
     #if OS_WINDOWS
         return GetCurrentThreadId();
     #else
-        return cast_unsafe<u64>pthread_self();
+        return cast<u64>pthread_self();
     #endif
 }
 
@@ -97,50 +95,101 @@ struct Mutex {
 
     fn cleanup() {
         if os_handle != 0 {
-            yes := CloseHandle(os_handle - 1)
-            if !yes {
-                err := GetLastError();
-                log("[WinError ",err,"] CloseHandle");
-            }
+            #if OS_WINDOWS
+                yes := CloseHandle(os_handle - 1)
+                if !yes {
+                    err := GetLastError();
+                    log("[WinError ",err,"] CloseHandle");
+                }
+            #else
+
+            #endif
             os_handle = 0
         }
     }
     fn lock() {
         // log("LOCKING")
-        if os_handle == 0 {
-            handle := CreateMutexA(null, false, null);
-            if handle == INVALID_HANDLE_VALUE {
-                err := GetLastError();
-                log("[WinError ",err,"] CreateMutex");
-            } else
-                os_handle = INTERNAL_TO_OS_HANDLE(handle)
-        }
-        if os_handle != 0 {
-            res := WaitForSingleObject(OS_HANDLE_TO_INTERNAL(os_handle), INFINITE)
-            newId := ThreadSelfId()
-            owner := _owner_thread
-            // log("Lock ",newId," ",os_handle);
-            if (owner != 0) {
-                log("Mutex : Locking twice, old owner: ",owner,", new owner: ",newId)
+        #if OS_WINDOWS
+            if os_handle == 0 {
+                handle := CreateMutexA(null, false, null);
+                if handle == INVALID_HANDLE_VALUE {
+                    err := GetLastError();
+                    log("[WinError ",err,"] CreateMutex");
+                } else
+                    os_handle = INTERNAL_TO_OS_HANDLE(handle)
             }
-            _owner_thread = newId;
-            if res == WAIT_FAILED {
-                // TODO: What happened do the old thread who locked the mutex. Was it okay to ownerThread = newId
-                err := GetLastError();
-                log("[WinError ",err,"] WaitForSingleObject");
+            if os_handle != 0 {
+                res := WaitForSingleObject(OS_HANDLE_TO_INTERNAL(os_handle), INFINITE)
+                newId := ThreadSelfId()
+                owner := _owner_thread
+                // log("Lock ",newId," ",os_handle);
+                if (owner != 0) {
+                    log("Mutex : Locking twice, old owner: ",owner,", new owner: ",newId)
+                }
+                _owner_thread = newId;
+                if res == WAIT_FAILED {
+                    // TODO: What happened do the old thread who locked the mutex. Was it okay to ownerThread = newId
+                    err := GetLastError();
+                    log("[WinError ",err,"] WaitForSingleObject");
+                }
             }
-        }
+        #else
+            if(os_handle == 0) {
+                // TODO: We are in trouble if two threads initializes the mutex
+                ptr := cast<pthread_mutex_t*>Allocate(sizeof (pthread_mutex_t));
+                os_handle = cast<u64>ptr;
+                res := pthread_mutex_init(ptr, null);
+                if(res != 0) {
+                    // Assert(false);
+                    return;
+                }
+                // printf("init %p\n", ptr);
+            }
+            if(os_handle != 0) {
+                ptr := cast<pthread_mutex_t*>os_handle;
+                newId := ThreadSelfId();
+                // printf("lock %p\n", ptr);
+                res: i32 = pthread_mutex_lock(ptr);
+                if(res != 0) {
+                    // Assert(false);
+                    return;
+                }
+                if (_owner_thread != 0) {
+                    log("Mutex : Locking twice, old owner: ",_owner_thread,", new owner: ",newId,"\n");
+                    // Assert(false);
+                }
+                _owner_thread = newId;
+            }
+        #endif
     }
     fn unlock() {
-        if os_handle != 0 {
-            // log("Unlock ",_owner_thread," ", os_handle);
-            _owner_thread = 0;
-            yes := ReleaseMutex(OS_HANDLE_TO_INTERNAL(os_handle))
-            if !yes {
-                err := GetLastError();
-                log("[WinError ",err,"] ReleaseMutex");
+        #if OS_WINDOWS
+            if os_handle != 0 {
+                // log("Unlock ",_owner_thread," ", os_handle);
+                _owner_thread = 0;
+                yes := ReleaseMutex(OS_HANDLE_TO_INTERNAL(os_handle))
+                if !yes {
+                    err := GetLastError();
+                    log("[WinError ",err,"] ReleaseMutex");
+                }
             }
-        }
+        #else
+            if (os_handle != 0) {
+                if (_owner_thread == 0) {
+                    newId := ThreadSelfId();
+                    log("Mutex : Unlocking twice, culprit: ",newId,"");
+                    // Assert(false);
+                }
+                _owner_thread = 0;
+                ptr := cast<pthread_mutex_t*>os_handle;
+                // printf("unlock %p\n", ptr);
+                res := pthread_mutex_unlock(ptr);
+                if(res != 0) {
+                    // Assert(false);
+                    return;
+                }
+            }
+        #endif
     }
     fn getOwner() {
         return _owner_thread

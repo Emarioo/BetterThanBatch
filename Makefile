@@ -4,7 +4,7 @@
 .SILENT:
 all: build
 
-verbose := 1
+verbose := 0
 
 GCC_COMPILE_OPTIONS := -std=c++14 -g
 # GCC_COMPILE_OPTIONS="-std=c++14 -O3"
@@ -18,7 +18,11 @@ GCC_WARN := $(GCC_WARN) -Wno-sign-compare
 CC := g++
 
 # compiler executable
-OUTPUT := bin/btb
+ifdef path
+	OUTPUT := $(path)
+else
+	OUTPUT := bin/btb
+endif
 
 # NOTE: bin/int <- stands for intermediates which mostly consists object files
 

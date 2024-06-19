@@ -300,28 +300,28 @@ namespace engone {
 		}
         // Assert(("Not implemented for linux",0 == (flags&FILE_CLEAR_AND_WRITE)));
         
-		// if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){
-		// 	std::string temp;
-		// 	uint i=0;
-		// 	int at = path.find_first_of(':');
-		// 	if(at!=-1){
-		// 		i = at+1;
-		// 		temp+=path.substr(0,i);
-		// 	}
-		// 	for(;i<path.length();i++){
-		// 		char chr = path[i];
-		// 		if(chr=='/'||chr=='\\'){
-		// 			// printf("exist %s\n",temp.c_str());
-		// 			if(!DirectoryExist(temp)){
-		// 				// printf(" create\n");
-		// 				bool success = DirectoryCreate(temp);
-		// 				if(!success)
-		// 					break;
-		// 			}
-		// 		}
-		// 		temp+=chr;
-		// 	}
-		// }
+		if(flags&FILE_CLEAR_AND_WRITE){
+			std::string temp;
+			uint i=0;
+			int at = path.find_first_of(':');
+			if(at!=-1){
+				i = at+1;
+				temp+=path.substr(0,i);
+			}
+			for(;i<path.length();i++){
+				char chr = path[i];
+				if(chr=='/'||chr=='\\'){
+					// printf("exist %s\n",temp.c_str());
+					if(!DirectoryExist(temp)){
+						// printf(" create\n");
+						bool success = DirectoryCreate(temp);
+						if(!success)
+							break;
+					}
+				}
+				temp+=chr;
+			}
+		}
         // printf("OPENING\n");
         int fd = open(path.c_str(), fileFlags, mode);
 		if (fd == -1) {
@@ -391,8 +391,15 @@ namespace engone {
 	}
     bool FileExist(const std::string& path){
         struct stat buffer;   
-        return (stat(path.c_str(), &buffer) == 0);
+        return (stat(path.c_str(), &buffer) == 0) && (buffer.st_mode & S_IFDIR) == 0;
     }
+	bool DirectoryExist(const std::string& path){
+        struct stat buffer;   
+        return (stat(path.c_str(), &buffer) == 0) && (buffer.st_mode & S_IFDIR);
+    }
+	bool DirectoryCreate(const std::string& path) {
+		return 0 == mkdir(path.c_str(), 0700); // 0700 = read, write, execute permissions
+	}
 	u64 FileGetHead(APIFile file){
 		off_t position = lseek(TO_HANDLE(file.internal), 0, SEEK_CUR);
 		if(position == -1) {
@@ -778,7 +785,7 @@ namespace engone {
 			m_internalHandle = (u64)ptr;
 			int res = pthread_mutex_init(ptr, nullptr);
 			if(res != 0) {
-				Assert(false);
+				Assert(false);	
 				return;
 			}
 			// printf("init %p\n", ptr);
@@ -800,6 +807,7 @@ namespace engone {
 		}
 	}
 	void Mutex::unlock() {
+		// O_CREAT
 		if (m_internalHandle != 0) {
 			if (m_ownerThread == 0) {
 				u32 newId = Thread::GetThisThreadId();

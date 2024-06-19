@@ -212,6 +212,37 @@ InstructionOpcode ASTOpToBytecode(TypeId astOp, bool floatVersion){
 #undef CASE
     return (InstructionOpcode)0;
 }
+void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo) {
+    if(compiler->options->target == TARGET_WINDOWS_x64) {
+        ERR_SECTION(
+            ERR_HEAD2(varinfo->declaration->location)
+            ERR_MSG("Windows target does not handle imported global variables. (not implemented yet)")
+            ERR_LINE2(varinfo->declaration->location, "here")
+        )
+    }
+
+
+    builder.emit_ext_dataptr(reg, LinkConvention::VARIMPORT);
+    int reloc = builder.get_pc(); // ext_dataptr doesn't have an immediate,
+    // reloc therefore points to the next instruction which may seem wierd BUT,
+    // the x64 generator knows this and generates an instruction with an immediate
+    // that is relocated. It's just that the bytecode doesn't need an immediate so we skip it.
+
+    std::string alias = varinfo->declaration->linked_alias.size() == 0 ? varinfo->declaration->varnames[0].name : varinfo->declaration->linked_alias;
+    std::string lib_path = "";
+    auto imp = info.compiler->lexer.getImport_unsafe(varinfo->declaration->location);
+    
+    auto func_imp = info.compiler->getImport(imp->file_id);
+    Assert(func_imp);
+
+    for(auto& lib : func_imp->libraries) {
+        if(varinfo->declaration->linked_library == lib.named_as) {
+            lib_path = lib.path;
+            break;
+        }
+    }
+    addExternalRelocation(alias, lib_path, reloc, true);
+}
 SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
     using namespace engone;
     
@@ -723,7 +754,11 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             
             switch(varinfo->type) {
                 case Identifier::GLOBAL_VARIABLE: {
-                    builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    if(varinfo->declaration && varinfo->declaration->isImported()) {
+                        generate_ext_dataptr(BC_REG_B, varinfo);
+                    } else {
+                        builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    }
                 } break; 
                 case Identifier::LOCAL_VARIABLE: {
                     builder.emit_ptr_to_locals(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
@@ -1485,7 +1520,11 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             
             switch(varinfo->type) {
                 case Identifier::GLOBAL_VARIABLE: {
-                    builder.emit_dataptr(reg, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    if(varinfo->declaration && varinfo->declaration->isImported()) {
+                        generate_ext_dataptr(BC_REG_B, varinfo);
+                    } else {
+                        builder.emit_dataptr(reg, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    }
                 } break; 
                 case Identifier::LOCAL_VARIABLE: {
                     builder.emit_mov_rm_disp(reg, BC_REG_LOCALS, 8, varinfo->versions_dataOffset[info.currentPolyVersion]);
@@ -1796,7 +1835,11 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                       
                     switch(varinfo->type) {
                         case Identifier::GLOBAL_VARIABLE: {
-                            builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            if(varinfo->declaration && varinfo->declaration->isImported()) {
+                                generate_ext_dataptr(BC_REG_B, varinfo);
+                            } else {
+                                builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            }
                             generatePush(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
                         } break; 
                         case Identifier::LOCAL_VARIABLE: {
@@ -4063,6 +4106,12 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
         if (statement->type == ASTStatement::DECLARATION) {
             _GLOG(SCOPE_LOG("ASSIGN"))
+
+            if (statement->globalDeclaration) {
+                // global variables should not generate any local code.
+                // expressions in globals are generated and evaluated once.
+                continue;
+            }
             
             auto& typesFromExpr = statement->versions_expressionTypes[info.currentPolyVersion];
             if(statement->firstExpression && typesFromExpr.size() < statement->varnames.size()) {
@@ -4401,7 +4450,11 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         // Assert(!var->globalData || info.currentScopeId == info.ast->globalScopeId);
                         switch(varinfo->type) {
                             case Identifier::GLOBAL_VARIABLE: {
-                                builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                                Assert(false);
+                                if(varinfo->declaration && varinfo->declaration->isImported()) {
+                                } else {
+                                    builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                                }
                                 generatePop(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
                             } break; 
                             case Identifier::LOCAL_VARIABLE: {
@@ -5463,7 +5516,7 @@ SignalIO GenContext::generateGlobalData() {
     CALLBACK_ON_ASSERT(
         ERR_SECTION(
             ERR_HEAD2(last_stmt->location)
-            ERR_MSG("Cannot evaluate expression for global variable at compile time. Compile time evaluation is experimental and a lot of things does not work. Perhaps you called a function in the expression?")
+            ERR_MSG("Cannot evaluate expression for global variable at compile time. Compile time evaluation is experimental and a lot of things does not work. Perhaps you called a function in the expression? Or took a reference?")
             ERR_LINE2(last_stmt->location, "here")
         )
     )

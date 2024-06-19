@@ -93,6 +93,7 @@ enum InstructionOpcode : u8 {
     BC_JZ,
 
     BC_DATAPTR,
+    BC_EXT_DATAPTR,
     BC_CODEPTR,
 
     // arithmetic operations
@@ -216,6 +217,11 @@ struct InstBase_op1 {
     InstructionOpcode opcode;
     BCRegister op0;
 };
+struct InstBase_op1_link {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    LinkConvention link;
+};
 struct InstBase_op1_imm16 {
     InstructionOpcode opcode;
     BCRegister op0;
@@ -307,6 +313,8 @@ struct ExternalRelocation {
     std::string library_path;
     int tinycode_index=0;
     int pc=0;
+
+    bool is_global_var = false;
 };
 struct Bytecode;
 typedef u32 TinyBytecodeID;
@@ -447,7 +455,7 @@ struct Bytecode {
     
     // Relocation for external functions
     DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,const std::string& library_path,  int tinycode_index, int pc);
+    void addExternalRelocation(const std::string& name,const std::string& library_path, int tinycode_index, int pc, bool is_var = false);
 
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;
@@ -553,6 +561,7 @@ struct BytecodeBuilder {
     void emit_lnot(BCRegister to, BCRegister from, int size);
     
     void emit_dataptr(BCRegister reg, i32 imm);
+    void emit_ext_dataptr(BCRegister reg, LinkConvention link);
     void emit_codeptr(BCRegister reg, i32 imm);
     
     void emit_cast(BCRegister to, BCRegister from, InstructionControl control, u8 from_size, u8 to_size);

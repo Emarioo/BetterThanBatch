@@ -9,3 +9,21 @@ fn main() -> i32{
 
     return I_AM_GLOBAL + num;
 }
+
+@TEST_CASE(imported_global)
+
+#if OS_WINDOWS
+    // what about windows
+#elif OS_LINUX
+    #load "c" as libc
+
+    #import "Logger"
+
+    global @import(libc) environ: char**;
+
+    fn main() {
+        a := environ
+        // log(cast<i64>cast<void*>environ)
+        log(*environ)
+    }
+#endif

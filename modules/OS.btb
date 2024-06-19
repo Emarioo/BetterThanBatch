@@ -70,7 +70,12 @@ fn ProcessSleep(seconds: f32) {
     #if OS_WINDOWS
     win32_Sleep(seconds * 1000)
     #elif OS_LINUX
-    todo
+    time: timespec
+    if seconds >= 1. {
+        time.tv_sec = cast<i64>seconds
+    }
+    time.tv_sec = cast<i64>( 1000000000.0 * (seconds - cast<f32>cast<i64>seconds) )
+    nanosleep(&time,null)
     #endif   
 }
 
@@ -120,7 +125,78 @@ fn DumpEnvironment(envp: char** = null) {
 
 // Only works on windows
 fn ExecuteCommand(cmd: char[], exit_code: i32*, asynchronous: bool = false) -> bool {
-    return ExecuteCommand(cmd, null, exit_code, asynchronous)
+    // Parsing command line is more complicated than this.
+    // Use the other ExecuteCommand overload separate cmd and arguments.
+    command: StringBuilder
+    raw_args: StringBuilder
+    args: Array<char*>
+
+    word_start := 0
+
+    parsed_command := false
+
+    inside_quote := false
+
+    head := 0
+    while head < cmd.len {
+        chr := cmd[head]
+        head++;
+
+        if chr == '"' {
+            if inside_quote {
+                // submit word
+                word_end := head - 1
+                if !parsed_command {
+                    command.append(substring(cmd, word_start, word_end))
+                    args.add(cast<char*>cast<i64>raw_args.size())
+                    // command is added to args too
+                }
+                args.add(cast<char*>cast<i64>raw_args.size())
+                raw_args.append(substring(cmd, word_start, word_end))
+                raw_args.append('\0')
+            } else {
+                // start word
+                // word_start = head
+            }
+            word_start = head // new word may start at next character
+            inside_quote = !inside_quote
+            continue
+        }
+
+        if inside_quote
+            continue
+
+        if chr == ' ' || chr == '\n' || chr == '\t' || chr == '\r' || head == cmd.len {
+            word_end := head - 1
+            if head == cmd.len
+                word_end = head
+            if word_end - word_start > 0 {
+                if !parsed_command {
+                    command.append(substring(cmd, word_start, word_end))
+                    parsed_command =  true
+                    // command is added to args too
+                }
+                args.add(cast<char*>cast<i64>raw_args.size())
+                raw_args.append(substring(cmd, word_start, word_end))
+                raw_args.append('\0')
+            }
+            word_start = head
+        }
+    }
+
+    // fix arg pointers later because raw_args may be reallocated and invalidate pointers
+    for @ptr args.sliced() {
+        *it = cast<i64>*it + raw_args.ptr
+    }
+
+    args.add(null) // null marks the end of arguments
+
+    // log("Args:")
+    // log(command)
+    // for args.sliced()
+    //     log(it)
+
+    return ExecuteCommand(command.sliced(), args.ptr, exit_code, asynchronous)
 }
 
 // Returns false if anything failed, NOT if the program you called
@@ -186,6 +262,15 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
 
     tmp: StringBuilder // I believe CreateProcessA may modify the string we give it so we create a little temporary string here so the caller of ExecuteCommand isn't affected
     tmp.append(cmd)
+    if args {
+        ind := 0
+        while args[index] {
+            tmp.append(" \"")
+            tmp.append(args[index])
+            tmp.append("\"")
+            index++
+        }
+    }
         
     yes := CreateProcessA(null,   // the path
                     tmp.ptr,        // Command line
@@ -233,8 +318,6 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
     return true;
 #elif OS_LINUX
 
-
-
     // We might be able to get away with vfork, it's just that we must copy cmd
     // because it might point to invalid memory if asynchronous was specified
     pid := fork()
@@ -246,8 +329,12 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
 
     if pid == 0 {
         // child process
-        if !global_environment
-            log("Warning in 'ExecuteCommand': global_environment is null, see SetEnvironment.")
+        
+        if !global_environment {
+
+            global_environment = environ
+            // log("Warning in 'ExecuteCommand': global_environment is null, see SetEnvironment.")
+        }
 
         real_path := FindFile(cmd, true)
         // real_path: StringBuilder
@@ -256,6 +343,7 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
         defer {
             real_path.cleanup();
         }
+        // log(real_path)
         temp_args: char*[]{
             cmd.ptr,
             null
@@ -274,38 +362,34 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
             // log("cmd: ", real_path)
             res := execve(real_path.ptr, real_args, global_environment)
             if res < 0 {
-                log("Error in 'ExecuteCommand': execve, ", name_of_error(res))
-                exit(0)
+                log("Error in 'ExecuteCommand': execve, ", name_of_error(res), " cmd: '",cmd,"'")
             }
         } else {
             res := execve(cmd.ptr, real_args, global_environment)
             if res < 0 {
-                log("Error in 'ExecuteCommand': execve, ", name_of_error(res))
-                exit(0)
+                log("Error in 'ExecuteCommand': execve, ", name_of_error(res), " cmd: '",cmd,"'")
             }
         }
-        log("OHH NOOOO THIS SHOULD BE UNREACHABLE!!")
+        // log("OHH NOOOO THIS SHOULD BE UNREACHABLE!!")
+        exit(0)
     }
     // parent process
 
-    info: siginfo
-    flags: i32 = WEXITED
-    if asynchronous
-        flags = WNOHANG
-    res := waitid(P_PID, pid, &info, flags)
-    if res < 0 {
-        std_print_any(&info)
-        if info.si_code != CLD_EXITED {
-            // log error
-            log("Error in 'ExecuteCommand': waitid, ", name_of_error(res))
-            return false
+    if !asynchronous {
+        info: siginfo
+        flags: i32 = WEXITED
+        res := waitid(P_PID, pid, &info, flags)
+        if res < 0 {
+            std_print_any(&info) std_print('\n')
+            if info.si_code != CLD_EXITED {
+                // log error
+                log("Error in 'ExecuteCommand': waitid, ", name_of_error(res), " cmd: '", cmd, "'")
+                return false
+            }
         }
-    }
-    // #import "Lang"
-
-    // std_print_any(&info, true)
-    if exit_code {
-        *exit_code = info.status
+        if exit_code {
+            *exit_code = info.status
+        }
     }
 
     return true

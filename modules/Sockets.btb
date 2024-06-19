@@ -1,0 +1,163 @@
+/*
+    Wrapper over sockets (WIP)
+
+    
+*/
+
+
+#if OS_WINDOWS
+    #import "Windows"
+#elif OS_LINUX
+    #import "Linux"
+#endif
+
+#macro TO_INTERNAL(X) (X - 1)
+#macro TO_HANDLE(X) (X + 1)
+
+enum SocketError {
+    SOCKET_SUCCESS,
+    SOCKET_FAILURE,
+}
+
+struct Socket {
+    os_handle: u64
+    fn valid() -> bool {
+        #if OS_WINDOWS
+            return TO_INTERNAL(os_handle) != INVALID_SOCKET && os_handle != 0
+        #else
+            return os_handle != 0
+        #endif
+    }
+
+    fn bind(addr: sockaddr*, namelen: i32) -> SocketError {
+        #if OS_WINDOWS
+            err := win_bind(TO_INTERNAL(os_handle), addr, namelen)
+            if err == SOCKET_ERROR
+                return SOCKET_FAILURE
+            return SOCKET_SUCCESS
+        #else
+            err := bind(TO_INTERNAL(os_handle), addr, namelen)
+            if err == -1
+                return SOCKET_FAILURE
+            return SOCKET_SUCCESS
+        #endif
+    }
+    // #macro SOMAXCONN 0x7fffffff // windows
+    // #macro SOMAXCONN 4096 // linux
+    // use SOMAXCONN for a reasonably sized backlog
+    fn listen(backlog: i32) -> SocketError {
+        #if OS_WINDOWS
+            err := win_listen(TO_INTERNAL(os_handle), backlog)
+            if err == SOCKET_ERROR
+                return SOCKET_FAILURE
+            return SOCKET_SUCCESS
+        #else
+            err := listen(TO_INTERNAL(os_handle), backlog)
+            if err == -1
+                return SOCKET_FAILURE
+            return SOCKET_SUCCESS
+        #endif
+    }
+    fn accept(addr: sockaddr*, addrlen: i32*) -> Socket, SocketError {
+        #if OS_WINDOWS
+            sock := win_accept(TO_INTERNAL(os_handle), addr, addrlen)
+            if sock = INVALID_SOCKET
+                return Socket{0}, SOCKET_FAILURE
+            return Socket{TO_HANDLE(sock)}, SOCKET_SUCCESS
+        #else
+            sock := accept(TO_INTERNAL(os_handle), addr, addrlen)
+            if sock == -1
+                return Socket{0}, SOCKET_FAILURE
+            return Socket{TO_HANDLE(sock)}, SOCKET_SUCCESS
+        #endif
+    }
+    fn connect(addr: sockaddr*, addrlen: i32) -> SocketError {
+        #if OS_WINDOWS
+            err := win_connect(TO_INTERNAL(os_handle), addr, addrlen)
+            if err == SOCKET_ERROR
+                return SOCKET_FAILURE
+            return SOCKET_SUCCESS
+        #else
+            err := connect(TO_INTERNAL(os_handle), addr, addrlen)
+            if err == -1
+                return SOCKET_FAILURE
+            return SOCKET_SUCCESS
+        #endif
+    }
+    // #macro MSG_OOB         0x1      /* process out-of-band data */
+    // #macro MSG_PEEK        0x2      /* peek at incoming message */
+    // #macro MSG_DONTROUTE   0x4      /* send without using routing tables */
+    // #macro MSG_WAITALL     0x8      /* do not complete until packet is completely filled */
+    fn recv(buf: char*, len: i32, flags: i32 // MSG_OOB, MSG_PEEK, MSG_WAITALL
+    ) -> i32, SocketError {
+        #if OS_WINDOWS
+            err := win_recv(TO_INTERNAL(os_handle), buf, len, flags)
+            if err == SOCKET_ERROR
+                return -1, SOCKET_FAILURE
+            return err, SOCKET_SUCCESS
+        #else
+            err := read(TO_INTERNAL(os_handle), buf, len)
+            if err < 0
+                return err, SOCKET_FAILURE
+            return err, SOCKET_SUCCESS
+        #endif
+    }
+    fn send(buf: char*, len: i32, flags: i32 //  MSG_OOB, MSG_DONTROUTE
+    ) -> i32, SocketError {
+         #if OS_WINDOWS
+            err := win_send(TO_INTERNAL(os_handle), buf, len, flags)
+            if err == SOCKET_ERROR
+                return -1, SOCKET_FAILURE
+            return err, SOCKET_SUCCESS
+        #else
+            err := write(TO_INTERNAL(os_handle), buf, len)
+            if err == -1
+                return -1, SOCKET_FAILURE
+            return err, SOCKET_SUCCESS
+        #endif
+    }
+    fn close() -> SocketError {
+        #if OS_WINDOWS
+            win_closesocket(TO_INTERNAL(os_handle))
+        #else
+            close(cast<i32>TO_INTERNAL(os_handle))
+            // close(TO_INTERNAL(os_handle))
+        #endif
+        os_handle = 0
+        return SOCKET_SUCCESS
+    }
+}
+fn create_socket(af: i32, type: i32, protocol: i32) -> Socket {
+    #if OS_WINDOWS
+        EnsureInitializedWSA()
+        return Socket{TO_HANDLE(cast<u64>win_socket(af, type, protocol))}
+    #else
+        return Socket{TO_HANDLE(cast<u64>socket(af, type, protocol))}
+    #endif
+}
+
+#if OS_WINDOWS
+    global g_wsaData: WSADATA;
+    global inited_wsaData: bool;
+
+    fn EnsureInitializedWSA() {
+        if !inited_wsaData {
+            err := WSAStartup(0x0202, &g_wsaData)
+            if err != 0 {
+                log("WSA failed")
+                return
+            }
+            inited_wsaData = true
+        }
+    }
+#endif
+
+// fn @import(Winsock) getaddrinfo(
+//   pNodeName: char*,
+//   pServiceName: char*,
+//   pHints: addrinfo*,
+//   ppResult: addrinfo**
+// ) -> i32;
+// fn @import(Winsock) freeaddrinfo(
+//   pAddrInfo: addrinfo*
+// );

@@ -11,3 +11,12 @@ check()
 #import "Math"
 
 random64(); // BCryptGenRandom crashes without 16-byte alignment
+
+
+// This caused issues were we put arg on the stack since
+// sys V abi passes args in registers, but we forgot to
+// remove arg from stack causing a crash.
+fn @unixcall fun(arg: void*) {
+    arg
+}
+fun(null)

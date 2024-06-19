@@ -4,22 +4,18 @@
 #import "String"
 #import "Lang"
 
-fn okay(str: char[]) {
+struct Number {
+    x: i32;
+    y: i32 = 5;
+}
+operator cast(a: Number) -> i32 {
+    return a.x
+}
+
+do(Number{4})
+
+fn do(x: i32) {
     // log("'",cast<void*>str.ptr,"' ", str.len)
     // log("'",str.ptr,"' ", str.len)
-    _test 4; str.len;
-}
-
-operator cast(a: StringBuilder) -> char[] {
-    return a.sliced()
-    // std_print_any(&a)
-    // return Slice<char>{cast<i64>1,2}
-}
-
-{
-    s: StringBuilder
-    s.append("Hi: ")
-    // s.append(923)
-
-    okay(s)
+    _test 4; x;
 }

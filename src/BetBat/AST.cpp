@@ -577,7 +577,7 @@ bool AST::castable(TypeId from, TypeId to){
 
 }
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -608,7 +608,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall,
         //   unnecessary.
         
         int startOfRealArguments = 0;
-        if (fncall->hasImplicitThis()) {
+        if (implicit_this) {
             startOfRealArguments = 1;   
         }
         // NOTE: I refactored here to have less duplicated code. 'this' require special behaviour which is no done cleanly.
@@ -714,7 +714,7 @@ void AST::declareUsageOfOverload(FnOverloads::Overload* overload) {
     overload->funcImpl->usages++;
 }
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, ASTExpression* fncall, bool implicitPoly, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast){
     using namespace engone;
     // nocheckin IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
     // That means that we match if two parent structs have different args.
@@ -760,7 +760,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                 continue;
         }
 
-        if (fncall->hasImplicitThis()) {
+        if (implicit_this) {
             // Implicit this means that the arguments the function call has won't have the this argument (this = the object the method is called from)
             // But the function implementation uses a this argument so we do -1 and +1 in some places in the code below
             // to account for this.
@@ -1561,7 +1561,13 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
                             convention = UNIXCALL;
                         else if(inner_type == "betcall")
                             convention = BETCALL;
-                        else {
+                        else if(inner_type == "oscall") {
+                            if(compiler->options->target == TARGET_WINDOWS_x64) {
+                                convention = STDCALL;
+                            } else if(compiler->options->target == TARGET_WINDOWS_x64) {
+                                convention = UNIXCALL;
+                            }
+                        } else {
                             // do we just ignore?
                         }
                         str_start = 0;
@@ -1584,6 +1590,9 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
                 // log::out << "type "<<inner_type << "\n";
                 auto type = convertToTypeId(inner_type, scopeId, false); // transformVirtual is false because we don't handle it correctly
                 // type may not be converted if polymorphic version wasn't created?
+                if(!type.isValid()) {
+                    return {};
+                }
                 if(process_args) {
                     args.add(type);
                 } else {

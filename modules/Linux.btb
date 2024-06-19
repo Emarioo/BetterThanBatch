@@ -4,12 +4,11 @@
     
     Note that this module is just for convenience.
     The headers for Linux are complex with many #ifdefs (struct_stat.h for example)
-    so this file assumes a lot of things. It should be fine on a modern 64-bit Linux machine.
+    so this file assumes x86_64 and other things. It should be fine on a modern 64-bit x86 Linux machine.
 
     Most macros are copied from /usr/include/x86_64-linux-gnu/bits/...
 
-    TODO: getaddrinfo (it's not a syscall, what do we do? force user to link with libc?)
-    TODO: This file is dependent on macros and inline assembly. If those break then this file will not compile. Should we make some sort of backup wrapper?
+    TODO: getaddrinfo is not a syscall and exists in libc so we must link with it if the user uses it.
 */
 
 #if OS_LINUX // wraps everything in this file
@@ -19,26 +18,26 @@
 #macro STDERR_FILENO 2
 
 /* open/fcntl.  */
-#macro O_RDONLY     00
-#macro O_WRONLY      01
-#macro O_RDWR       02
-#macro O_CREAT    0x80 /* Not fcntl.  */
-#macro O_EXCL     0x100 /* Not fcntl.  */
-#macro O_NOCTTY    0x200 /* Not fcntl.  */
-#macro O_TRUNC   0x800 /* Not fcntl.  */
-#macro O_APPEND   0x1000
-#macro O_NONBLOCK   0x2000
-#macro O_SYNC        0x2008000
-#macro O_ASYNC  0x10000
-#macro O_LARGEFILE 0x80000
-#macro O_DIRECTORY 0x100000
-#macro O_NOFOLLOW 0x200000
-#macro O_CLOEXEC   0x1000000
-#macro O_DIRECT  0x20000
-#macro O_NOATIME   0x800000
-#macro O_PATH     0x8000000
-#macro O_DSYNC  0x8000
-#macro O_TMPFILE   (0x10000000 | O_DIRECTORY)
+#macro O_RDONLY     0o0
+#macro O_WRONLY     0o1
+#macro O_RDWR       0o2
+#macro O_CREAT    0o100 /* Not fcntl.  */
+#macro O_EXCL     0o200 /* Not fcntl.  */
+#macro O_NOCTTY    0o400 /* Not fcntl.  */
+#macro O_TRUNC   0o1000 /* Not fcntl.  */
+#macro O_APPEND   0o2000
+#macro O_NONBLOCK   0o4000
+#macro O_SYNC        0o4010000
+#macro O_ASYNC  0o20000
+#macro O_LARGEFILE 0o100000
+#macro O_DIRECTORY 0o200000
+#macro O_NOFOLLOW 0o400000
+#macro O_CLOEXEC   0o2000000
+#macro O_DIRECT  0o40000
+#macro O_NOATIME   0o1000000
+#macro O_PATH     0o10000000
+#macro O_DSYNC  0o10000
+#macro O_TMPFILE   (0o20000000 | O_DIRECTORY)
 
 #macro SEEK_SET 0 // seeks from start
 #macro SEEK_CUR 1 // seeks from current
@@ -96,6 +95,14 @@
 #macro S_IFDIR  0o040000 // directory
 #macro S_IFCHR  0o020000 // character device
 #macro S_IFIFO  0o010000 // FIFO
+
+#macro S_ISUID  0o4000 /* Set user ID on execution.  */
+#macro S_ISGID  0o2000 /* Set group ID on execution.  */
+#macro S_ISVTX  0o1000 /* Save swapped text after use (sticky).  */
+#macro S_IRUSR  0o400 /* Read by owner.  */
+#macro S_IWUSR  0o200 /* Write by owner.  */
+#macro S_IXUSR  0o100 /* Execute by owner.  */
+
 
 #macro P_ALL  0 /* Wait for any child.  */
 #macro P_PID  1 /* Wait for specified process.  */
@@ -202,6 +209,8 @@
 
 #macro SYS_nanosleep 35
 
+#macro SYS_sendfile 40
+
 #macro SYS_socket 41
 #macro SYS_connect 42
 #macro SYS_accept 43
@@ -226,6 +235,13 @@
 
 // #macro SYS_getdents 78
 #macro SYS_getcwd     79
+
+#macro SYS_rename 82
+#macro SYS_mkdir 83
+#macro SYS_rmdir 84
+
+#macro SYS_unlink 87
+
 #macro SYS_getdents64 217
 
 #macro SYS_waitid 247
@@ -289,6 +305,8 @@ SYSCALL(dup2, i32, oldfd: i32, newfd: i32)
 
 SYSCALL(nanosleep, i32, rqtp: timespec*, rmtp: timespec*)
 
+SYSCALL(sendfile, i64, out_fd: i32, in_fd: i32, offset: i64*, count: i64)
+
 SYSCALL(socket, i32, domain: i32, type: i32, protocol: i32)
 SYSCALL(connect, i32, sockfd: i32, addr: sockaddr*, addrlen: i32)
 SYSCALL(accept, i32, sockfd: i32, addr: sockaddr*, addrlen: i32*)
@@ -298,6 +316,7 @@ SYSCALL(accept, i32, sockfd: i32, addr: sockaddr*, addrlen: i32*)
 // SYSCALL(recvmsg, i32, )
 SYSCALL(shutdown, i32, sockfd: i32, how: i32)
 SYSCALL(bind, i32, sockfd: i32, addr: sockaddr*, addrlen: i32)
+#macro SOMAXCONN 4096
 SYSCALL(listen, i32, sockfd: i32, backlog: i32)
 SYSCALL(getsockname, i32, sockfd: i32, addr: sockaddr*, addrlen: i32*)
 
@@ -311,6 +330,10 @@ SYSCALL(execve, i32, pathname: char*, argv: char**, envp: char**)
 SYSCALL_VOID(exit,   status: i32)
 
 SYSCALL(getcwd, char*, buf: char*, size: i32)
+
+SYSCALL(rename, i32, oldpath: char*, newpath: char*)
+SYSCALL(mkdir, i32, pathname: char*, mode: i32)
+SYSCALL(rmdir, i32, pathname: char*)
 
 // SYSCALL(getdents, i32, fd: i32, dirp: linux_dirent*, count: u32);
 SYSCALL(getdents64, i32, fd: i32, dirp: void*, count: u32);
@@ -348,9 +371,56 @@ fn ntohs(netshort: u16) -> u16 {
     // return (netshort << 8) | (netshort >> 8)
 }
 
+#load "c" as LibC
+// We rely on libc for these, implementing them myself would be a little rough
+fn @import(LibC) getaddrinfo(node: char*,
+    service: char*,
+    hints: addrinfo*,
+    res: addrinfo**) -> i32;
+fn @import(LibC) freeaddrinfo(res: addrinfo*);
+
+
+#load "c" as libc
+// environ is used by ExecuteCommand when global_environment doesn't exist
+global @import(libc) environ: char**;
+
+
+#load "pthread" as pthreads
+
+#macro pthread_t u64
+
+fn @import(pthreads) pthread_create(thread: pthread_t*,
+    attr: pthread_attr_t*,
+    start_routine: fn @unixcall (void*)->void*,
+    arg: void*) -> i32;
+fn @import(pthreads) pthread_join(thread: pthread_t, retval: void**) -> i32;
+fn @import(pthreads) pthread_exit(retval: void*);
+fn @import(pthreads) pthread_self() -> pthread_t;
+
+fn @import(pthreads) pthread_mutex_destroy(mutex: pthread_mutex_t*) -> i32;
+fn @import(pthreads) pthread_mutex_init(mutex: pthread_mutex_t*, attr: pthread_mutexattr_t*) -> i32;
+fn @import(pthreads) pthread_mutex_trylock(mutex: pthread_mutex_t*) -> i32
+fn @import(pthreads) pthread_mutex_lock(mutex: pthread_mutex_t*) -> i32
+fn @import(pthreads) pthread_mutex_unlock(mutex: pthread_mutex_t*) -> i32
+
 /*###############
     STRUCTS
 ##############*/
+
+// changes based on arch, arch is x86_64
+#macro __SIZEOF_PTHREAD_ATTR_T 56
+#macro __SIZEOF_PTHREAD_MUTEX_T 40
+#macro __SIZEOF_PTHREAD_MUTEXATTR_T 4
+
+struct pthread_attr_t {
+    _: u8[__SIZEOF_PTHREAD_ATTR_T]
+}
+struct pthread_mutex_t {
+    _: u8[__SIZEOF_PTHREAD_MUTEX_T]
+}
+struct pthread_mutexattr_t {
+    _: u8[__SIZEOF_PTHREAD_MUTEXATTR_T]
+}
 
 // I could not find the correct stat structure anywhere but
 // this structure seems to be correct.
@@ -419,6 +489,10 @@ struct timespec {
     tv_nsec: i64;
 }
 
+// from netinet/in.h
+#macro IPPROTO_TCP 6
+#macro IPPROTO_UDP 17
+
 // base sockaddr
 struct sockaddr {
     sa_family: i16;
@@ -431,6 +505,17 @@ struct sockaddr_in {
     sin_addr: u32;
     padding: u8[8]; // sockaddr_in should be padded to 16 bytes
 }
+struct addrinfo {
+    ai_flags: i32;
+    ai_family: i32;
+    ai_socktype: i32;
+    ai_protocol: i32;
+    ai_addrlen: i64;
+    ai_addr: sockaddr*;
+    ai_canonname: char*;
+    ai_next: addrinfo*;
+}
+
 
 #macro EPERM    1 /* Operation not permitted */
 #macro ENOENT   2 /* No such file or directory */

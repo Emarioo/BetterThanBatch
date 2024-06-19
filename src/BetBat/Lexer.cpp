@@ -589,7 +589,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             // if(!isNumber || chr!='_') {
             // if(!isNumber) {
                 // outStream->addData(chr);
-                str_end++;
+            str_end++;
                 // token.length++;
             // }
         }
@@ -1747,7 +1747,7 @@ bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
             u8 len = getStringFromToken(tok,&str);
             
             APPENDS(str,len)
-        } else if(tok.type == TOKEN_IDENTIFIER || tok.type == TOKEN_LITERAL_INTEGER || tok.type == TOKEN_LITERAL_HEXIDECIMAL || tok.type == TOKEN_LITERAL_DECIMAL) {
+        } else if(tok.type == TOKEN_IDENTIFIER || tok.type == TOKEN_LITERAL_INTEGER || tok.type == TOKEN_LITERAL_HEXIDECIMAL || tok.type == TOKEN_LITERAL_BINARY ||tok.type == TOKEN_LITERAL_OCTAL || tok.type == TOKEN_LITERAL_DECIMAL) {
             const char* str;
             u8 len = getStringFromToken(tok,&str);
             APPENDS(str,len)
@@ -1984,7 +1984,7 @@ Lexer::VirtualFile* Lexer::findVirtualFile(const std::string& virtual_path) {
     }
     return nullptr;
 }
-bool Lexer::isIntegerLiteral(Token token, i64* value) {
+bool Lexer::isIntegerLiteral(Token token, i64* value, int* significant_digits, int* signedness_suffix) {
     auto& type = token.type;
 
     if(!(type == TOKEN_LITERAL_OCTAL || type == TOKEN_LITERAL_BINARY || type == TOKEN_LITERAL_INTEGER || type == TOKEN_LITERAL_HEXIDECIMAL || (type == TOKEN_LITERAL_STRING && (token.flags & TOKEN_FLAG_SINGLE_QUOTED)))) {
@@ -2001,12 +2001,24 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
         for(int i=0;i<len;i++) {
             char chr = data[i];
             if(chr == '_') continue;
+            if(chr == 'u') {
+                if(signedness_suffix)
+                    *signedness_suffix = UNSIGNED_SUFFIX;
+                continue;
+            }
+            if(chr == 's') {
+                if(signedness_suffix)
+                    *signedness_suffix = SIGNED_SUFFIX;
+                continue;
+            }
             if(!(chr >= '0' && chr <= '9')) {
                 Assert(false);
                 return false;
             }
             num *= 10;
             num += chr - '0';
+            if(significant_digits)
+                (*significant_digits)++;
         }
         *value = num;
     } else if(type == TOKEN_LITERAL_BINARY) {
@@ -2014,12 +2026,24 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
         for(int i=2;i<len;i++) { // i=2 -> skip '0b'
             char chr = data[i];
             if(chr == '_') continue;
+            if(chr == 'u') {
+                if(signedness_suffix)
+                    *signedness_suffix = UNSIGNED_SUFFIX;
+                continue;
+            }
+            if(chr == 's') {
+                if(signedness_suffix)
+                    *signedness_suffix = SIGNED_SUFFIX;
+                continue;
+            }
             if(!(chr >= '0' && chr <= '1')) {
                 // Assert(false);
                 return false;
             }
             num *= 2;
             num += chr - '0';
+            if(significant_digits)
+                (*significant_digits)++;
         }
         *value = num;
     } else if(type == TOKEN_LITERAL_OCTAL) {
@@ -2027,12 +2051,24 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
         for(int i=2;i<len;i++) { // i=2 -> skip '0o'
             char chr = data[i];
             if(chr == '_') continue;
+            if(chr == 'u') {
+                if(signedness_suffix)
+                    *signedness_suffix = UNSIGNED_SUFFIX;
+                continue;
+            }
+            if(chr == 's') {
+                if(signedness_suffix)
+                    *signedness_suffix = SIGNED_SUFFIX;
+                continue;
+            }
             if(!(chr >= '0' && chr <= '7')) {
                 // Assert(false);
                 return false;
             }
             num *= 8;
             num += chr - '0';
+            if(significant_digits)
+                (*significant_digits)++;
         }
         *value = num;
     } else if(type == TOKEN_LITERAL_HEXIDECIMAL) {
@@ -2040,6 +2076,16 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
         for(int i=2;i<len;i++) { // i=2 -> skip '0x'
             char chr = data[i];
             if(chr == '_') continue;
+            if(chr == 'u') {
+                if(signedness_suffix)
+                    *signedness_suffix = UNSIGNED_SUFFIX;
+                continue;
+            }
+            if(chr == 's') {
+                if(signedness_suffix)
+                    *signedness_suffix = SIGNED_SUFFIX;
+                continue;
+            }
             if(!((chr >= '0' && chr <= '9') || ((chr|32) >= 'a' && (chr|32)<='f'))) {
                 // Assert(false);
                 return false;
@@ -2049,11 +2095,15 @@ bool Lexer::isIntegerLiteral(Token token, i64* value) {
                 num += chr - '0';
             else
                 num += (chr|32) - 'a' + 10;
+            if(significant_digits)
+                (*significant_digits)++;
         }
         *value = num;
     } else if (type == TOKEN_LITERAL_STRING) {
         Assert(len == 1);
         *value = *data;
+        if(significant_digits)
+            (*significant_digits)++;
     } else Assert(false);
 
     return true;

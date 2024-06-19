@@ -179,6 +179,9 @@ struct StringBuilder {
         return s
     }
 }
+operator cast(b: StringBuilder) -> Slice<char> {
+    return b.sliced()
+}
 operator [](b: StringBuilder, index: i32) -> char {
     return b.get(index)
 }
