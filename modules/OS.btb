@@ -191,6 +191,7 @@ fn ExecuteCommand(cmd: char[], exit_code: i32*, asynchronous: bool = false) -> b
 
     args.add(null) // null marks the end of arguments
 
+    // debugging
     // log("Args:")
     // log(command)
     // for args.sliced()
@@ -263,14 +264,28 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
     tmp: StringBuilder // I believe CreateProcessA may modify the string we give it so we create a little temporary string here so the caller of ExecuteCommand isn't affected
     tmp.append(cmd)
     if args {
-        ind := 0
-        while args[index] {
-            tmp.append(" \"")
-            tmp.append(args[index])
-            tmp.append("\"")
-            index++
+        ind := 1 // skip first, since first is executable name
+        while args[ind] {
+            has_whitespace := false
+            len := strlen(args[ind])
+            for 0..len {
+                if args[ind][nr] == ' ' {
+                    has_whitespace = true
+                    break
+                }
+            }
+            if has_whitespace
+                tmp.append(" \"")
+            else
+                tmp.append(" ")
+            tmp.append(args[ind])
+            if has_whitespace
+                tmp.append("\"")
+            ind++
         }
     }
+
+    // log("tmp: ",tmp)
         
     yes := CreateProcessA(null,   // the path
                     tmp.ptr,        // Command line

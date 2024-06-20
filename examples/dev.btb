@@ -1,27 +1,5 @@
 
-// #import "Logger"
-// #import "Linux.btb"
-// args: char*[]{
-//     "/usr/bin/mkdir".ptr,
-//     "-p".ptr,
-//     "bin/btb-linux_x64-2024-06".ptr,
-//     null
-// }
-
-// err := execve(args[0], args.ptr, environ)
-
-// log("err ",name_of_error(err))
-
-// #import "Linux"
-// #import "Logger"
-
-// info: stat
-
-// err := stat("bin/btb".ptr, &info)
-
-// log(name_of_error(err), " ", info.st_size)
-
-#import "prepare_release"
+// #import "prepare_release"
 
 // #import "examples/graphics/game.btb"
 // #import "examples/net/serverclient.btb"
@@ -30,23 +8,22 @@
 // TODO: global structs, default members
 
 
-// #macro OK 0o123
 
-// a := 0o1
+#import "Logger"
+#import "Lang"
+#import "File"
 
+struct Okay {
+    x: i32 = 5;
+    b: NUm;
+}
+struct NUm {
+    x: i32 = 3
+}
 
-// #import "Logger"
-// #import "File"
+global ok: Okay
+// global ok: Okay = Okay{}
 
-// global file_size: i32 = size_of_file("Makefile")
-
-// fn size_of_file(path: char[]) -> i32 {
-//     size: i64 
-//     f := FileOpen(path, FILE_READ_ONLY, &size)
-//     FileClose(f)
-//     return size;
-// }
-
-// fn main() {
-//     log("size of Makefile: ", file_size)
-// }
+fn main() {
+    std_print_any(&ok)
+}

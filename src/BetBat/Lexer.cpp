@@ -2147,6 +2147,23 @@ bool Lexer::get_source_information(SourceLocation loc, std::string* path, int* l
         *column = src->column;
     return true;
 }
+Import* Lexer::getImportFromTokenPointer(TokenInfo* info, int* out_token_index) {
+    lock_chunks.lock();
+    auto iter = _chunks.iterator();
+    Chunk* chunk = nullptr;
+    // TODO: Optimize with a hash map?
+    while(_chunks.iterate(iter)) {
+        if (info > iter.ptr->tokens.data() && info < iter.ptr->tokens.data() + iter.ptr->tokens.size()) {
+            chunk = iter.ptr;
+            break;
+        }
+    }
+    if(out_token_index)
+        *out_token_index = ((u64)info - (u64)iter.ptr->tokens.data()) / sizeof (*info);
+    auto imp = imports.get(chunk->import_id-1);
+    lock_chunks.unlock();
+    return imp;
+}
 std::string Lexer::get_source_information_string(SourceLocation loc) {
     std::string path;
     int line,column;

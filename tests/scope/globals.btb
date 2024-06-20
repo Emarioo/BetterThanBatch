@@ -10,6 +10,28 @@ fn main() -> i32{
     return I_AM_GLOBAL + num;
 }
 
+@TEST_CASE(initialized_globals)
+
+#import "Logger"
+#import "File"
+
+struct Okay {
+    x: i32 = 5;
+    b: NUm;
+}
+struct NUm {
+    n: i32 = 3 * 2
+}
+
+global nom: i32 = 23 + 923  // comp-time evaluation of global
+global ok: Okay             // initialized with default values
+
+fn main() {
+    _test 23 + 923; nom
+    _test 5; ok.x
+    _test 3 * 2; ok.b.n
+}
+
 @TEST_CASE(imported_global)
 
 #if OS_WINDOWS
@@ -27,3 +49,4 @@ fn main() -> i32{
         log(*environ)
     }
 #endif
+

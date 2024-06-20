@@ -6,7 +6,7 @@
 @REM  Make sure you have MinGW for g++.
 @REM #####################################
 
-if "%1"=="run" (
+if "%~1"=="run" (
     @REM Run compiler with compiling it
     @REM btb -dev
 
@@ -28,7 +28,9 @@ SET RUN_AT_END=1
 
 SET OUTPUT=bin\btb.exe
 
-if "%1"=="release" (
+@REM echo Args: %~1 %~2
+
+if "%~1"=="release" (
     SET USE_GCC=0
     SET USE_MSVC=1
     SET USE_DEBUG=0
@@ -37,10 +39,14 @@ if "%1"=="release" (
     SET USE_OPTIMIZATIONS=1
     SET RUN_AT_END=0
 
-    if not "%2"=="" (
+    @REM echo rel "%2"
+
+    if not "%~2"=="" (
         SET OUTPUT=%2
     )
 )
+
+@REM echo !OUTPUT!
 
 @REM Advapi is used for winreg which accesses the windows registry
 @REM to get cpu clock frequency which is used with rdtsc.
@@ -213,10 +219,10 @@ echo Compiled in %finS%.%finS2% seconds
 @REM lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.9/lib-vc2022/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
 
 @REM #### GLEW ########
-if not exist bin/NativeLayer.lib (
-    cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
-    lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
-)
+@REM if not exist bin/NativeLayer.lib (
+@REM     cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
+@REM     lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
+@REM )
 
 @REM We need to compiler NativeLayer with MVSC and GCC linker because the user may use GCC on Windows and not just MSVC.
 SET GCC_COMPILE_OPTIONS=-std=c++14 -g

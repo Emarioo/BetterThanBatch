@@ -541,7 +541,6 @@ struct BytecodeBuilder {
     void emit_div(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     void emit_mod(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     
-    // nocheckin TODO: These should have size arguments too!
     void emit_band(BCRegister to, BCRegister from, int size);
     void emit_bor(BCRegister to, BCRegister from, int size);
     void emit_bxor(BCRegister to, BCRegister from, int size);

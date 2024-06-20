@@ -1875,7 +1875,6 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     auto fun = id->cast_fn();
                     // TODO: Feature to take function pointers of imported functions
                     if(fun->funcOverloads.overloads.size()==1){
-                        // Assert(false); // nocheckin
                         
                         int reloc = builder.get_pc() + 2;
                         builder.emit_codeptr(BC_REG_A, 0);
@@ -5525,7 +5524,7 @@ SignalIO GenContext::generateGlobalData() {
         ASTStatement* stmt = ast->globals_to_evaluate[i].stmt;
         last_stmt = stmt;
         ScopeId scopeId = ast->globals_to_evaluate[i].scope;
-        Assert(stmt->firstExpression); // statement should not have been added if there was no expression
+        // Assert(stmt->firstExpression); // statement should not have been added if there was no expression
         Assert(stmt->arrayValues.size() == 0); // we don't handle initializer lists
         Assert(stmt->varnames.size() == 1); // multiple varnames means that the expression produces multiple values which is annoying to handle so skip it for now
 
@@ -5551,28 +5550,45 @@ SignalIO GenContext::generateGlobalData() {
         // we do 16 because of 16-byte alignment rule in calling conventions
         builder.emit_alloc_local(BC_REG_INVALID, 16);
 
-        DynamicArray<TypeId> types{};
-        auto result = generateExpression(stmt->firstExpression, &types, 0);
-        // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
-        if (result != SIGNAL_SUCCESS) {
-            if (!info.hasForeignErrors()) {
-                ERR_SECTION(
-                    ERR_HEAD2(stmt->location)
-                    ERR_MSG("Cannot evaluate expression for global variable at compile time. TODO: Provide better error message.")
-                    ERR_LINE2(stmt->location, "here")
-                )
+        TypeId type{};
+        if(!stmt->firstExpression) {
+            type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
+
+            if(!type.isValid()) {
+                continue;
             }
-            continue;
-        }
-        if (types.size() == 0 || !types[0].isValid()) {
-            if (!info.hasForeignErrors()) {
-                ERR_SECTION(
-                    ERR_HEAD2(stmt->location)
-                    ERR_MSG("Bad type.")
-                    ERR_LINE2(stmt->location, "here")
-                )
+            
+            auto info = ast->getTypeInfo(type);
+            if(!info || !info->astStruct) {
+                continue;
             }
-            continue;
+
+            generateDefaultValue(BC_REG_INVALID, 0, type, &stmt->location);
+        } else {
+            DynamicArray<TypeId> types{};
+            auto result = generateExpression(stmt->firstExpression, &types, 0);
+            // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
+            if (result != SIGNAL_SUCCESS) {
+                if (!info.hasForeignErrors()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(stmt->location)
+                        ERR_MSG("Cannot evaluate expression for global variable at compile time. TODO: Provide better error message.")
+                        ERR_LINE2(stmt->location, "here")
+                    )
+                }
+                continue;
+            }
+            if (types.size() == 0 || !types[0].isValid()) {
+                if (!info.hasForeignErrors()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(stmt->location)
+                        ERR_MSG("Bad type.")
+                        ERR_LINE2(stmt->location, "here")
+                    )
+                }
+                continue;
+            }
+            type = types[0];
         }
 
         // nocheckin TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
@@ -5580,7 +5596,7 @@ SignalIO GenContext::generateGlobalData() {
         // get pointer to global data from stack
         builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, 8, -8);
 
-        result = generatePop(data_ptr, 0, types[0]);
+        auto result = generatePop(data_ptr, 0, type);
         Assert(result == SIGNAL_SUCCESS);
 
         // log::out << log::GOLD <<"global: " <<stmt->varnames[0].name << "\n";

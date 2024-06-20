@@ -342,9 +342,9 @@ void CompileStats::printSuccess(CompileOptions* opts){
     
     log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " lines, "<<log::AQUA<<FormatBytes(readBytes)<<log::NO_COLOR<<"\n";
     
-    log::out << " time: "<<log::AQUA<< FormatTime(time_compile)<<log::NO_COLOR;
+    log::out << " total time: "<<log::AQUA<< FormatTime(time_compile)<<log::NO_COLOR;
     if(time_linker != 0) {
-        log::out << ", link: "<<log::AQUA<<FormatTime(time_linker)<<"\n";
+        log::out << ", link time: "<<log::AQUA<<FormatTime(time_linker)<<"\n";
     } else {
         log::out << "\n";
     }
@@ -361,12 +361,9 @@ void CompileStats::printSuccess(CompileOptions* opts){
             log::out << "\n";
         }
     }
-    
-    
 }
 void CompileStats::printFailed(){
     using namespace engone;
-    
     log::out << log::RED<<"Compiler failed with "<<errors<<" error(s)\n";
 }
 void CompileStats::printWarnings(){
@@ -1423,7 +1420,6 @@ void Compiler::run(CompileOptions* options) {
                 if(pair == dirs.end())
                     dirs[dir] = true;
             }
-            // nocheckin, uncomment
             for(auto& pair : dirs) {
                 if(pair.first == "/") {
                     // TODO: This will always happen when linking with

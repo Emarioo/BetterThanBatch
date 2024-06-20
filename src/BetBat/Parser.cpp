@@ -1495,23 +1495,6 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     
-    // info.advance(); // nocheckin
-    // return SIGNAL_SUCCESS;
-
-    // if(info.end()){
-    //     if(attempt)
-    //         return SignalAttempt::BAD_ATTEMPT;
-    //     return SignalAttempt::FAILURE;
-    // }
-
-    // std::vector<ASTExpression*> values;
-    // std::vector<Token> extraTokens; // ops, assignOps and castTypes doesn't store the token so you know where it came from. We therefore use this array.
-    // std::vector<OperationType> ops;
-    // std::vector<OperationType> assignOps;
-    // std::vector<TypeId> castTypes;
-    // std::vector<Token> namespaceNames;
-    
-    // TODO: This is bad, improved somehow
     TINY_ARRAY(ASTExpression*, values, 5);
     TINY_ARRAY(lexer::Token, extraTokens, 5); // ops, assignOps and castTypes doesn't store the token so you know where it came from. We therefore use this array.
     TINY_ARRAY(OperationType, ops, 5);

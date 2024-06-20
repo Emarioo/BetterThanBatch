@@ -49,13 +49,13 @@ fn main() {
 
     // compile compiler
 
-    log(path_release)
+    // log(path_release)
 
     DirectoryCreate(path_release.sliced())
 
     cmd: StringBuilder
     #if OS_WINDOWS
-        cmd.append("build.bat release ")
+        cmd.append("build.bat \"release\" ")
         cmd.append(path_release)
         cmd.append("/btb.exe")
     #else
@@ -81,18 +81,13 @@ fn main() {
     COPY_DIR("assets") // not strictly necessary but there are some examples that rely on fonts
 
     readme := @strbeg
-Hello!
+Hello curious programmer!
 
-This is the 0.2.0 version of the compiler.
-Read guide and examples provided with the release to begin
-using the language and compiler!
+This is the 0.2.0 version of the compiler. Read guide and examples provided with the release to begin using the language and compiler!
 
-**DISCLAIMER**: This version is not very stable. You will most likely run in to bugs and problems.
-You can report any bugs you find on the github repository
-`www.github.com/Emarioo/BetterThanBatch`
+**DISCLAIMER**: This version is not very stable. You will most likely run in to bugs and problems. You can report any bugs you find on the github repository `www.github.com/Emarioo/BetterThanBatch`
 
-The standard library is very experimental, functions interacting with the operating system does not
-handle errors very well and so on.
+The standard library is very experimental, functions interacting with the operating system does not handle errors very well and so on.
     @strend
 
     {

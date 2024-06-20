@@ -168,6 +168,17 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     //   may run VM again. Mapping function pointers multiple times is unnecessary.
     bool any_failure = false;
     std::unordered_map<std::string, Lib*> libs;
+    defer {
+        for(auto& pair : libs) {
+            for (auto& pair2 : pair.second->functions) {
+                // libfunc does not own relocs
+                // we don't free the relocs memory
+                delete pair2.second;
+            }
+            delete pair.second;
+        }
+        libs.clear();
+    };
     DynamicArray<VoidFunction> dll_functions{};
     DynamicArray<std::string> dll_function_names{};
     for(int i=0;i<bytecode->externalRelocations.size();i++) {

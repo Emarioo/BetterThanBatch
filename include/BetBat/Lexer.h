@@ -216,6 +216,7 @@ namespace lexer {
         int comment_lines;
         int blank_lines;
     };
+    static const int yo = sizeof Import;
     /*
         The lexer class is responsible for managing memory and extra information about all tokens.
         
@@ -349,6 +350,8 @@ namespace lexer {
         static u32 encode_import_token_index(u32 file_chunk_index, u32 tiny_token_index);
         static void decode_origin(TokenOrigin origin, u32* chunk_index, u32* tiny_token_index);
         static void decode_import_token_index(u32 token_index_into_file, u32* file_chunk_index, u32* tiny_token_index);
+
+        Import* getImportFromTokenPointer(TokenInfo* info, int* out_token_index);
     private:
         BucketArray<Import> imports{256};
         BucketArray<Chunk> _chunks{256};
