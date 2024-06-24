@@ -683,6 +683,7 @@ struct ASTStruct : ASTNode {
         TypeInfo* virtualType = nullptr;
     };
     DynamicArray<PolyArg> polyArgs;
+    TypeId base_typeId; // base type as in, type without any specified polymorphic arguments
 
     State state=TYPE_EMPTY;
 

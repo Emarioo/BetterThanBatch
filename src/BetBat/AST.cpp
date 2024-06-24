@@ -2442,12 +2442,21 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
 }
 void ASTExpression::printArgTypes(AST* ast, QuickArray<TypeId>& argTypes){
     using namespace engone;
-    Assert(args.size() == argTypes.size());
-    for(int i=0;i<(int)args.size();i++){
-        if(i!=0) log::out << ", ";
-        if(args.get(i)->namedValue.size()!=0)
-            log::out << args.get(i)->namedValue <<"=";
-        log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
+    if(args.size() == 0) {
+        // operators stores arguments in expr.left and expr.right, not expr.args, so if we have zero args we assume it's an operator expression and print argTypes.
+        for(int i=0;i<(int)argTypes.size();i++){
+            if(i!=0) log::out << ", ";
+            log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
+        }
+    } else {
+        // if it's a function call then we check if we have namedValues and print them if so because it's useful information.
+        Assert(args.size() == argTypes.size());
+        for(int i=0;i<(int)args.size();i++){
+            if(i!=0) log::out << ", ";
+            if(args.get(i)->namedValue.size()!=0)
+                log::out << args.get(i)->namedValue <<"=";
+            log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
+        }
     }
     
     // Assert(args);

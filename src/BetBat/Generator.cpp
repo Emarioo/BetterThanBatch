@@ -537,7 +537,7 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
     int size = ast->getTypeSize(typeId);
-    if(baseReg != 0 && zeroInitialize) {
+    if(baseReg != BC_REG_INVALID && zeroInitialize) {
         #ifndef DISABLE_ZERO_INITIALIZATION
         
         builder.emit_li32(BC_REG_T1, offset);
@@ -563,10 +563,15 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
             // }
             
             if(member.array_length) {
-                builder.emit_li32(BC_REG_T1, offset + memdata.offset);
-                builder.emit_add(BC_REG_T1, baseReg, false, 8);
-                int size = ast->getTypeSize(memdata.typeId);
-                genMemzero(BC_REG_T1, BC_REG_T0, size * member.array_length);
+                if(baseReg != BC_REG_INVALID) {
+                    builder.emit_li32(BC_REG_T1, offset + memdata.offset);
+                    builder.emit_add(BC_REG_T1, baseReg, false, 8);
+                    int size = ast->getTypeSize(memdata.typeId);
+                    genMemzero(BC_REG_T1, BC_REG_T0, size * member.array_length);
+                } else {
+                    // default value of array is zero even if struct has defaults because going through each element in the array is expensive
+                    // SignalIO result = generateDefaultValue(baseReg, offset + memdata.offset, memdata.typeId, location, false);
+                }
             } else if (member.defaultValue) {
                 // TypeId tempTypeId = {};
                 DynamicArray<TypeId> tempTypes{};
@@ -3023,7 +3028,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             if (err != SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
 
-            if(!AST::IsInteger(rtype)){
+            if(!performSafeCast(rtype, AST_INT32)){
                 std::string strtype = info.ast->typeToString(rtype);
                 ERR_SECTION(
                     ERR_HEAD2(expression->right->location)
@@ -3551,7 +3556,17 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     Assert(assignType == ltype);
                     Assert(BC_REG_B != left_reg);
                     builder.emit_pop(BC_REG_B);
-                    builder.emit_pop(left_reg);
+                    // builder.emit_pop(left_reg); // performSafeCast pops value
+
+                    if(!performSafeCast(outType, assignType)) {
+                        ERR_SECTION(
+                            ERR_HEAD2(expression->location)
+                            ERR_MSG("Cannot cast '" << ast->typeToString(outType) << "' to '"<< ast->typeToString(assignType)<<"'.")
+                            ERR_LINE2(expression->location, "here")
+                        )
+                    }
+                    builder.emit_pop(left_reg); // performSafeCast, popped and pushed value so we pop it again
+
                     int assignedSize = info.ast->getTypeSize(ltype);
                     builder.emit_mov_mr(BC_REG_B, left_reg, assignedSize);
                 }

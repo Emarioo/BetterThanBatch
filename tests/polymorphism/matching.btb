@@ -1,0 +1,32 @@
+@TEST_CASE(poly_overload_matching)
+
+textures: Array<i32>;
+yes(textures) // matching Array<i32> with Array<T> is difficult, easy for a bug to slip in
+
+fn yes<T>(a: Array<T>) {}
+
+
+// #import "Logger"
+#import "Array"
+
+arr: Array<i32>;
+arr.add(5)
+arr.add(9)
+arr.add(23)
+
+struct tmp {
+    a: char[]
+}
+arr2: Array<Slice<char>>;
+arr2.add("Hi")
+arr2.add("there")
+arr2.add("user")
+
+// NOTE: If poly overload matching is broken, then we should have an error here, that is what we test. If we could throw in some _test, that would be nice, better testing.
+print(arr)
+print(arr2)
+
+fn print<T>(a: Array<T>) {
+    // for a.sliced()
+    //     log(it)
+}

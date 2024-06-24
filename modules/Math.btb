@@ -15,6 +15,22 @@
 
 fn @intrinsic sqrt(v: f32) -> f32;
 fn @intrinsic round(v: f32) -> f32;
+fn floor(v: f32) -> f32 { // TODO: Intrinsic
+    return cast<f32>cast<i64>v
+}
+fn ceil(v: f32) -> f32 { // TODO: Intrinsic
+    num := cast<f32>cast<i64>v
+    if v < 0 {
+        if v < num && v > num - 1 {
+            return num - 1
+        }
+    } else {
+        if v > num && v < num + 1 {
+            return num + 1
+        }
+    }
+    return v
+}
 // TODO: Intrinsics for pow, min, and max
 //   There is pow in inline assembly but is the implementation good?
 

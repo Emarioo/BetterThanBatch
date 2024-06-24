@@ -1,29 +1,6 @@
 
 // #import "prepare_release"
 
-// #import "examples/graphics/game.btb"
+#import "examples/graphics/game.btb"
 // #import "examples/net/serverclient.btb"
 // #import "prepare_release"
-
-// TODO: global structs, default members
-
-
-
-#import "Logger"
-#import "Lang"
-#import "File"
-
-struct Okay {
-    x: i32 = 5;
-    b: NUm;
-}
-struct NUm {
-    x: i32 = 3
-}
-
-global ok: Okay
-// global ok: Okay = Okay{}
-
-fn main() {
-    std_print_any(&ok)
-}

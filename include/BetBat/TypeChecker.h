@@ -23,10 +23,13 @@ struct TypeChecker {
 };
 
 struct CompileInfo;
-struct CheckInfo : public PhaseContext {
+struct TyperContext : public PhaseContext {
     AST* ast = nullptr;
     Reporter* reporter = nullptr;
     TypeChecker* typeChecker = nullptr;
+
+    TyperContext() : info(*this) { } // well this is dumb
+    TyperContext& info;
 
     // u32 current_import_id;
     
@@ -51,6 +54,25 @@ struct CheckInfo : public PhaseContext {
 
     // DynamicArray<TypeId> prevVirtuals{};
     QuickArray<TypeId> temp_defaultArgs{};
+    
+    TypeId checkType(ScopeId scopeId, TypeId typeString, lexer::SourceLocation location, bool* printedError);
+    TypeId checkType(ScopeId scopeId, StringView typeString, lexer::SourceLocation location, bool* printedError);
+
+    SignalIO checkEnums(ASTScope* scope);
+
+    SignalIO checkStructs(ASTScope* scope);
+    SignalIO checkStructImpl(ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl);
+
+    SignalIO checkFunctions(ASTScope* scope);
+    SignalIO checkFunction(ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope);
+    SignalIO checkFunctionImpl(ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl = nullptr);
+    SignalIO checkFuncImplScope(ASTFunction* func, FuncImpl* funcImpl);
+
+    SignalIO checkDeclaration(ASTStatement* now, ContentOrder contentOrder, ASTScope* scope);
+    SignalIO checkRest(ASTScope* scope);
+    SignalIO checkExpression(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length = nullptr);
+    SignalIO checkFncall(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs = nullptr);
+
 };
 
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);

@@ -47,6 +47,9 @@ struct WindowContext {
     fn enableUISpace(yes: bool) {
         enable_ui_space = yes
     }
+    fn toggleUISpace() {
+        enable_ui_space = !enable_ui_space
+    }
     
     // ## user input events ##
     

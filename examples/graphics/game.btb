@@ -39,6 +39,13 @@ global textures: Array<Texture*>;
 global pause_update: bool;
 global current_frame: i32
 
+enum TextureNames {
+    IMG_BLOB,
+    IMG_BACK_LEVEL0,
+    // IMG_BACK_LEVEL1,
+    IMG_BACK_LEVEL2,
+}
+
 #macro PLAYER_SPEED 120.0
 #macro GRAVITY 17.0
 
@@ -54,6 +61,15 @@ fn AddEntity(x: f32, y: f32, w: f32, h: f32, type: EntityType) {
 fn InitEntityInfos() {
     blob := CreateTexture("examples/graphics/blob.png")
     textures.add(blob)
+    tmp := CreateTexture("examples/graphics/sky.png")
+    textures.add(tmp)
+    // tmp = CreateTexture("examples/graphics/ground.png")
+    // textures.add(tmp)
+    tmp = CreateTexture("examples/graphics/mountains.png")
+    textures.add(tmp)
+
+    // blob := CreateTexture("examples/graphics/blob.png")
+    // textures.add(blob)
 
     // blob
     entity_infos.add(EntityInfo{})
@@ -68,7 +84,7 @@ fn InitEntityInfos() {
 global moving_platform_id: i32 = -1
 
 fn main() -> i32 {
-    window = CreateWindow(800,600)
+    window = CreateWindow(1400,600)
 
     InitEntityInfos()
 
@@ -92,6 +108,8 @@ fn main() -> i32 {
         
         Update()
 
+        RenderBackground();
+
         RenderEntities();
 
         window.enableUISpace(true)
@@ -104,7 +122,7 @@ fn main() -> i32 {
         fps.append((cast<i32>(window.delta*10000)) % 10)
         fps.append(" ms")
         
-        DrawText(window, 0, layout_y, 20, fps.sliced())
+        DrawText(window, 0, layout_y, 20, fps)
         layout_y += 20
 
         temp: StringBuilder
@@ -529,6 +547,83 @@ fn RenderEntities() {
 
         DrawText(window, it.pos.x + it.size.x, it.pos.y - 16, 16, str.sliced())
     }
+}
+
+fn DrawSquare(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color) {
+    thickness := 5
+    window.toggleUISpace()
+    FillRect(window, x, y - thickness, w, thickness, color) // top
+    FillRect(window, x, y + h, w, thickness, color) // down
+    
+    FillRect(window, x - thickness, y, thickness, h, color) // left
+    FillRect(window, x + w, y, thickness, h, color) // right
+    window.toggleUISpace()
+}
+fn RenderBackground() {
+    // draw based on camera
+    sky := textures.ptr[cast<i32>IMG_BACK_LEVEL0]
+    // ground := textures[IMG_BACK_LEVEL1]
+    mountains := textures.ptr[cast<i32>IMG_BACK_LEVEL2]
+
+    tile_size := sky.width * 1.0 // image scaling
+
+    // screen_width := 300
+    // screen_height := 300
+    // screen_x := 300
+    // screen_y := 100
+    screen_width := window.width
+    screen_height := window.height
+    screen_x := 0
+    screen_y := 0
+
+    { // apply camera transformation
+        // This code would change the screen to fill with tiles so that zooming
+        // out would increase the screen and amount of tiles to draw.
+        // screen_width = screen_width / window.camera_zoom
+        // screen_height = screen_height / window.camera_zoom
+        // screen_x = screen_width/2 - (screen_width / window.camera_zoom) / 2
+        // screen_y = screen_height/2 - (screen_height / window.camera_zoom) / 2
+    }
+
+    tiles_per_width := 1 + ceil((cast<f32>screen_width) / tile_size)
+    tiles_per_height := 1 + ceil((cast<f32>screen_height) / tile_size)
+
+    if tiles_per_width > 100 || tiles_per_height > 100 {
+        log("CHILL dude ", screen_width, " ", screen_height)
+        return
+    }
+
+    // for x: 0..tiles_per_width {
+    //     for y: 0..tiles_per_height {
+    //         offset_x := (floor((window.camera_x / window.camera_zoom) / tile_size) ) * tile_size + screen_x
+    //         if window.camera_x < 0
+    //             offset_x -= tile_size
+    //         offset_y := (floor((window.camera_y / window.camera_zoom) / tile_size) ) * tile_size + screen_y
+    //         if window.camera_y < 0
+    //             offset_y -= tile_size
+    //         DrawTexture(window, offset_x + x * tile_size, offset_y + y * tile_size, tile_size, tile_size, sky)
+    //     }
+    // }
+    // color := Color{1,0,0}
+    // DrawSquare(window, screen_x, screen_y, screen_width, screen_height, color)
+
+    scalings: f32[] {
+        0.5,
+        0.2,
+    }
+
+    for 0..scalings.len {
+        scale := scalings[nr]
+        w := mountains.width
+
+        #macro MOUNT(X,...)
+        DrawTexture(window, X * scale + window.camera_x * scale, w * (1 - scale) - 200, w * scale, w * scale, mountains)
+        MOUNT(...)
+        #endmacro
+        MOUNT(-900,-350,0,400,850, 1400, 1900)
+    }
+
+    
 }
 
 // #macro MAX_FRAMES (60 * 60*2) // 2 minutes

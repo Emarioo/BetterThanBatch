@@ -114,4 +114,16 @@ fn main() {
 }
 ```
 
-TODO: Structs with default variables are not zeroed
+<!-- Sometimes you may want uninitialized global memory. You rarely do and the compiler will initialize the global data section to zero no matter what before globals are evaluated during compilation. However, thereif you have many global structs you can speed up the compiler by not performing unecessary compile time evaluations (compiler should be smart enough to not do unnecessary computations thouh).
+```
+global hi: Slice<char> = ---
+``` -->
+
+Members of global structs are initialized to zero unless they have default values in which case the default values are evaluated at compile time.
+```c++
+struct Config {
+    ok: i32 = 23 + 23
+    nom: i32 = 2 * 3
+}
+global config: Config // initialized with default values in struct
+```

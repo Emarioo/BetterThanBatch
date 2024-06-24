@@ -96,7 +96,9 @@ fn lang_typesize(id: lang_TypeId) -> u16 {
 
 fn std_print(type: lang_TypeInfo*) {
     std_prints("{ size: ",type.size,
-        ", type: ",type.type,
+        ", type: ")
+    std_print_any(&type.type)
+    std_prints(
         ", name: ",type.name.beg,"-",type.name.end,
         ", members: ",type.members.beg,"-",type.members.end,
     " }")
@@ -112,7 +114,7 @@ fn std_print(type: lang_TypeId) {
     std_print(", size: ")
     std_print(lang_typesize(type));
     members := lang_typemembers(type);
-    if members.len > 0u {
+    if members.len > 0 {
         std_print(", members: ");
         for @ptr members {
             if nr != 0
@@ -127,6 +129,10 @@ fn std_print_any<T>(value: T*, pretty: bool = false) {
     id := typeid(T);
     std_print_any(value, id, pretty);
 }
+// fn std_print<T>(value: T*) {
+//     id := typeid(T);
+//     std_print_any(value, id, pretty);
+// }
 // Overloading needs fixing
 // fn std_print_any<T>(value: T, pretty: bool = false) {
 //     id := typeid(T);

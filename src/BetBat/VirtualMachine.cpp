@@ -320,8 +320,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     i64 imm;
 
     CALLBACK_ON_ASSERT(
+        log::out << log::RED << "Dump of bytecode\n";
         tinycode->print(0,-1, bytecode);
-        log::out << "Asserted at " << log::CYAN << prev_pc << "\n";
+        log::out << "Asserted at instruction " << log::CYAN << prev_pc << "\n";
     )
 
     struct Breakpoint {
@@ -889,6 +890,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             u8 batchsize = (u8)instructions[pc++];
+
+            Assert(registers[op0] > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
             memset((void*)registers[op0],0, registers[op1]);
         } break;
         case BC_MEMCPY: {

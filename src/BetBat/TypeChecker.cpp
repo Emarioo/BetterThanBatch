@@ -12,24 +12,7 @@
 // #define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
 // #define _TCLOG_ENTER(X)
 
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, lexer::SourceLocation location, bool* printedError);
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer::SourceLocation location, bool* printedError);
-
-SignalIO CheckEnums(CheckInfo& info, ASTScope* scope);
-
-SignalIO CheckStructs(CheckInfo& info, ASTScope* scope);
-SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl);
-
-SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope);
-SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope);
-SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl = nullptr);
-SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl);
-
-SignalIO CheckRest(CheckInfo& info, ASTScope* scope);
-SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length = nullptr);
-SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs = nullptr);
-
-SignalIO CheckEnums(CheckInfo& info, ASTScope* scope){
+SignalIO TyperContext::checkEnums(ASTScope* scope){
     using namespace engone;
     Assert(scope);
     ZoneScopedC(tracy::Color::Purple4);
@@ -45,7 +28,7 @@ SignalIO CheckEnums(CheckInfo& info, ASTScope* scope){
         if(aenum->colonType.isString()) {
             auto typeString = info.ast->getStringFromTypeString(aenum->colonType);
             bool printedError = false;
-            TypeId colonType = CheckType(info, scope->scopeId, typeString, aenum->location, &printedError);
+            TypeId colonType = checkType(scope->scopeId, typeString, aenum->location, &printedError);
             if(!colonType.isValid()) {
                 // if(!printedError) {
                     ERR_SECTION(
@@ -79,19 +62,19 @@ SignalIO CheckEnums(CheckInfo& info, ASTScope* scope){
     }
     
     for(auto it : scope->namespaces){
-        SignalIO result = CheckEnums(info,it);
+        SignalIO result = checkEnums(it);
         if(result != SIGNAL_SUCCESS)
             error = SIGNAL_FAILURE;
     }
     
     for(auto astate : scope->statements) {
         if(astate->firstBody){
-            SignalIO result = CheckEnums(info, astate->firstBody);   
+            SignalIO result = checkEnums(astate->firstBody);   
             if(result != SIGNAL_SUCCESS)
                 error = SIGNAL_FAILURE;
         }
         if(astate->secondBody){
-            SignalIO result = CheckEnums(info, astate->secondBody);
+            SignalIO result = checkEnums(astate->secondBody);
             if(result != SIGNAL_SUCCESS)
                 error = SIGNAL_FAILURE;
         }
@@ -99,14 +82,14 @@ SignalIO CheckEnums(CheckInfo& info, ASTScope* scope){
     
     for(auto afunc : scope->functions) {
         if(afunc->body){
-            SignalIO result = CheckEnums(info, afunc->body);
+            SignalIO result = checkEnums(afunc->body);
             if(result != SIGNAL_SUCCESS)
                 error = SIGNAL_FAILURE;
         }
     }
     return error;
 }
-SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
+SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER)
     int offset=0;
@@ -131,7 +114,7 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
 
         Assert(member.stringType.isString());
         bool printedError = false;
-        TypeId tid = CheckType(info, astStruct->scopeId, member.stringType, astStruct->location, &printedError);
+        TypeId tid = checkType(astStruct->scopeId, member.stringType, astStruct->location, &printedError);
         if(!tid.isValid() && !printedError){
             if(info.showErrors) {
                 ERR_SECTION(
@@ -148,7 +131,7 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
         if(member.defaultValue){
             // TODO: Don't check default expression every time. Do check once and store type in AST.
             tempTypes.resize(0);
-            CheckExpression(info,structInfo->scopeId, member.defaultValue,&tempTypes, false);
+            checkExpression(structInfo->scopeId, member.defaultValue,&tempTypes, false);
             if(tempTypes.size()==0)
                 tempTypes.add(AST_VOID);
             if(!info.ast->castable(implMem.typeId, tempTypes.last())){
@@ -283,7 +266,7 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
         return SIGNAL_SUCCESS;
     return SIGNAL_FAILURE;
 }
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, lexer::SourceLocation err_location, bool* printedError){
+TypeId TyperContext::checkType(ScopeId scopeId, TypeId typeString, lexer::SourceLocation err_location, bool* printedError){
     using namespace engone;
     Assert(typeString.isString());
     // if(!typeString.isString()) {
@@ -291,9 +274,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, lexer::Sou
     //     return typeString;
     // }
     auto token = info.ast->getStringFromTypeString(typeString);
-    return CheckType(info, scopeId, token, err_location, printedError);
+    return checkType(scopeId, token, err_location, printedError);
 }
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer::SourceLocation err_location, bool* printedError){
+TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::SourceLocation err_location, bool* printedError){
     using namespace engone;
 
     /*
@@ -397,7 +380,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer:
                     str_end = head;
                 std::string inner_type = std::string(tmp.data() + str_start, str_end - str_start);
                 bool printedError = false;
-                auto type = CheckType(info, scopeId, inner_type, err_location, &printedError); // transformVirtual is false because we don't handle it correctly
+                auto type = checkType(scopeId, inner_type, err_location, &printedError); // transformVirtual is false because we don't handle it correctly
                 
                 // type may not be converted if polymorphic version wasn't created?
                 if(!type.isValid()) {
@@ -449,7 +432,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer:
                 // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTokens[i], scopeId);
                 // TypeId id = info.ast->convertToTypeId(polyTokens[i], scopeId);
                 bool printedError = false;
-                TypeId id = CheckType(info, scopeId, polyTokens[i], err_location, &printedError);
+                TypeId id = checkType(scopeId, polyTokens[i], err_location, &printedError);
                 if(i!=0)
                     realTypeName += ",";
                 realTypeName += info.ast->typeToString(id);
@@ -543,7 +526,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer:
         typeInfo->structImpl->polyArgs[i] = id;
     }
 
-    SignalIO hm = CheckStructImpl(info, typeInfo->astStruct, baseInfo, typeInfo->structImpl);
+    SignalIO hm = checkStructImpl(typeInfo->astStruct, baseInfo, typeInfo->structImpl);
     if(hm != SIGNAL_SUCCESS) {
         ERR_SECTION(
             ERR_HEAD2(err_location)
@@ -556,14 +539,14 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer:
     outId.setPointerLevel(plevel);
     return outId;
 }
-SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
+SignalIO TyperContext::checkStructs(ASTScope* scope) {
     using namespace engone;
     ZoneScopedC(tracy::Color::X11Purple);
     _TCLOG_ENTER(FUNC_ENTER)
     //-- complete structs
 
     for(auto it : scope->namespaces) {
-        CheckStructs(info, it);
+        checkStructs(it);
     }
    
     // TODO: @Optimize The code below doesn't need to run if the structs are complete.
@@ -576,6 +559,7 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
         if(astStruct->state==ASTStruct::TYPE_EMPTY){
             // structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name,false,true);
             structInfo = info.ast->createType(astStruct->name, scope->scopeId);
+            astStruct->base_typeId = structInfo->id;
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
                 ERR_SECTION(
@@ -609,7 +593,7 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
                     structInfo->structImpl = info.ast->createStructImpl(structInfo->id);
                     astStruct->nonPolyStruct = structInfo->structImpl;
                 }
-                yes = CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl) == SIGNAL_SUCCESS;
+                yes = checkStructImpl(astStruct, structInfo, structInfo->structImpl) == SIGNAL_SUCCESS;
                 if(!yes){
                     astStruct->state = ASTStruct::TYPE_CREATED;
                     info.incompleteStruct = true;
@@ -629,7 +613,7 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
     for(auto astStruct : scope->structs){
         for(auto fun : astStruct->functions){
             if(fun->body) {
-                SignalIO result = CheckStructs(info, fun->body);
+                SignalIO result = checkStructs(fun->body);
             }
         }
     }
@@ -644,12 +628,12 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
         for(auto astate : scope->statements) {
             
             if(astate->firstBody){
-                SignalIO result = CheckStructs(info, astate->firstBody);   
+                SignalIO result = checkStructs(astate->firstBody);   
                 // if(!result)
                 //     error = false;
             }
             if(astate->secondBody){
-                SignalIO result = CheckStructs(info, astate->secondBody);
+                SignalIO result = checkStructs(astate->secondBody);
                 // if(!result)
                 //     error = false;
             }
@@ -657,7 +641,7 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
         
         for(auto afunc : scope->functions) {
             if(afunc->body){
-                SignalIO result = CheckStructs(info, afunc->body);
+                SignalIO result = checkStructs(afunc->body);
                 // if(!result)
                 //     error = false;
             }
@@ -665,10 +649,14 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
     // }
     return SIGNAL_SUCCESS;
 }
-SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs) {
+SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs) {
     using namespace engone;
 
     TRACE_FUNC()
+
+    CALLBACK_ON_ASSERT(
+        ERR_LINE2(expr->location, "crash why?")
+    )
 
     Assert(!outTypes || outTypes->size()==0);
     #define FNCALL_SUCCESS \
@@ -704,7 +692,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         AST::DecomposePolyTypes(expr->name, &baseName, &polyTypes);
         for(int i=0;i<(int)polyTypes.size();i++){
             bool printedError = false;
-            TypeId id = CheckType(info, scopeId, polyTypes[i], expr->location, &printedError);
+            TypeId id = checkType(scopeId, polyTypes[i], expr->location, &printedError);
             fnPolyArgs.add(id);
             // TODO: What about void?
             if(id.isValid()){
@@ -765,14 +753,14 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         //   we want to separate how many types we get from each expression.
         //   If an expression gives us more than one type then we throw away the other ones.
         //   We might throw an error instead haven't decided yet.
-        // SignalIO resultLeft = CheckExpression(info,scopeId,expr->left,&tempTypes, true);
+        // SignalIO resultLeft = checkExpression(scopeId,expr->left,&tempTypes, true);
         // if(tempTypes.size()==0){
         //     argTypes.add(AST_VOID);
         // } else {
         //     argTypes.add(tempTypes[0]);
         // }
         // tempTypes.resize(0);
-        // SignalIO resultRight = CheckExpression(info,scopeId,expr->right,&tempTypes, true);
+        // SignalIO resultRight = checkExpression(scopeId,expr->right,&tempTypes, true);
         // if(tempTypes.size()==0){
         //     argTypes.add(AST_VOID);
         // } else {
@@ -793,7 +781,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             Assert(argExpr);
 
             tempTypes.resize(0);
-            CheckExpression(info,scopeId,argExpr,&tempTypes, false);
+            checkExpression(scopeId,argExpr,&tempTypes, false);
             Assert(tempTypes.size()==1); // should be void at least
             if(expr->isMemberCall() && i==0){
                 /* You can do this
@@ -834,7 +822,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         ASTExpression* thisArg = expr->args.get(0);
         TypeId structType = argTypes[0];
         this_type = structType;
-        // CheckExpression(info,scope, thisArg, &structType);
+        // checkExpression(scope, thisArg, &structType);
         // if(structType.getPointerLevel()>1){
         //     ERR_SECTION(
         //         ERR_HEAD2(thisArg->location) // nocheckin, badly marked token
@@ -1118,8 +1106,9 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
 
 
             if(operatorOverloadAttempt && !overload) {
-                FIX_NO_SPECIAL_ACTIONS
-                return SIGNAL_NO_MATCH;
+                // FIX_NO_SPECIAL_ACTIONS
+                // return SIGNAL_NO_MATCH;
+                continue; // current overload group doesn't match, perhaps another one will or perhaps a polymorphic one exists. either way don't return here.
             }
             if(overload){
                 info.ast->declareUsageOfOverload(overload);
@@ -1136,7 +1125,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                     if(!arg.defaultValue)
                         continue;
                     tempTypes.resize(0);
-                    SignalIO result = CheckExpression(info, scopeId, arg.defaultValue,&tempTypes,false);
+                    SignalIO result = checkExpression(scopeId, arg.defaultValue,&tempTypes,false);
                     if(tempTypes.size()==0)
                         tempTypes.add(AST_VOID);
 
@@ -1173,6 +1162,9 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     // if match then return that impl
     // if not then try to generate a implementation
     
+    // log::out << "Poly overloads ("<<possible_overload_groups.size()<<"):\n";
+    // ERR_LINE2(expr->location,"here");
+
     for(auto& ent : possible_overload_groups) {
         auto fnOverloads = ent.fn_overloads;
 
@@ -1206,6 +1198,9 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
 
         ASTFunction* polyFunc = nullptr;
         if(implicitPoly) {
+            // log::out << "Poly overloads ("<<ent.iden->name<<"):\n";
+            // ERR_LINE2(expr->location,"here");
+
             // IMPORTANT: Parent structs may not be handled properly.
             // Assert(!parentStructImpl);
 
@@ -1261,6 +1256,8 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                 //     }
                 // }
 
+                choosenTypes.resize(0); // clear types from previous check that didn't work out
+
                 // IMPORTANT TODO: NAMESPACES ARE IGNORED AT THE MOMENT. HANDLE THEM!
                 // TODO: Fix this code it does not work properly. Some behaviour is missing.
                 bool found = true;
@@ -1281,6 +1278,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                     u32 plevel=0;
                     polyTypes.resize(0);
                     StringView typeName, baseToken;
+                    // TODO: We need to decompose function pointers too.
                     AST::DecomposePointer(typeString, &typeName, &plevel);
                     AST::DecomposePolyTypes(typeName, &baseToken, &polyTypes);
                     // namespace?
@@ -1289,24 +1287,41 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                     TypeId baseType = typeInfo->id;
                     // TypeInfo* typeInfo = info.ast->getTypeInfo(baseType);
                     // if(typeInfo->id != baseType) {
-                    bool isVirtual = false;
+                    bool is_base_virtual = false;
+                    bool is_poly_virtual = false;
                     for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
                         if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
-                            isVirtual = true;
+                            is_base_virtual = true;
                             break;
                         }
-                    }
-                    if(isVirtual) {
-                        if(polyTypes.size() != 0){
-                            // This code should allow implicit calculation of incomplete polymorphic types.
-                            // This sould be allowed: fn add<T>(a: T<i32>).
-                            // But it's not so we get this: fn add<T>(a: T), no polymorphic types
-                            INCOMPLETE
+                        for (int pi=0;pi<polyTypes.size();pi++) {
+                            auto ptype = polyTypes[pi];
+                            
+                            // WARNING, we assume no pointer
+                            TypeInfo* typeInfo = info.ast->convertToTypeInfo(ptype, argScope, false);
+                            // TypeId baseType = typeInfo->id;
+
+                            if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
+                                is_poly_virtual = true;
+                                break;
+                            }
                         }
-                        // polymorphic type! we must decide!
-                        // check if type exists in choosen types
-                        // if so then reuse, if not then use up a time
+                    }
+                    // TODO: This code only matches certain types. Complicated ones like T<K,T<K,V>> is not handled (T<K,V> is handled though)
+
+                    if(!is_base_virtual && !is_poly_virtual) {
+                        // no virtual/polymorphic type
+                        TypeId real_type = info.ast->convertToTypeId(typeString, scopeId, true);
+                        if(real_type == typeToMatch){
+                            continue;
+                        }
+                        found = false;
+                        break;
+                    } else if (is_base_virtual && polyTypes.size() == 0) {
+                        // Basic type matching with T, not anything complicated like T<K,V>
+
                         int typeIndex = -1;
+                        // get base of typetomatch
                         for(int k=0;k<choosenTypes.size();k++){
                             // NOTE: The choosen poly type must match in full.
                             if(choosenTypes[k].baseType() == typeToMatch.baseType() &&
@@ -1338,24 +1353,154 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                             // size(u32**)
                         }
                     } else {
-                        // baseType isn't one of the polymorphic arguments
-                        // we can't choose a polymorphic argument so things match
-                        if(baseType.baseType() == typeToMatch.baseType()){
-                            if(typeToMatch.getPointerLevel() != plevel || polyTypes.size() != 0) {
-                                found = false; // pointers don't match or our baseType has some polyTokens which typeToMatch doesn't have.
-                                break;
-                            }
-                            continue; // sweet, a simple match no polymorphic arguments to worry about
-                        }
-                        if(polyTypes.size() == 0){
-                            found = false; // alright, types can't possibly ever match no matter what polymorphic arguments we choose.
+                        // Assert(is_base_virtual && is_poly_virtual);
+                        // log::out << "Check "<<expr->name<< "\n";
+                        // log::out << " match " << ast->typeToString(typeToMatch)<<"\n";
+                        // log::out << " arg " << typeName<<"\n";
+
+                        // Matching polymorphic parameter and argument is a little complex.
+                        // A paramater may be of type T<K,V> while argument is Map<String,i32>
+                        // The polymorphic argument T,K,V should then be matched with Map, String and i32
+
+                        // We need to match it with the argument type of the caller
+                        // first we check if base type matches (T)
+                        // Then the individual ones
+
+                        TypeInfo* match_typeInfo = info.ast->getTypeInfo(typeToMatch.baseType());
+                        if(!match_typeInfo->astStruct) {
+                            found = false;
                             break;
                         }
-                        // crap, no match, more code
+                        TypeId match_baseType = match_typeInfo->astStruct->base_typeId;
 
-                        INCOMPLETE
+                        if(is_base_virtual) {
+                            // polymorphic type! we must decide!
+                            // check if type exists in choosen types
+                            // if so then reuse, if not then use up a time
+                            int typeIndex = -1;
+                            // get base of typetomatch
+                            for(int k=0;k<choosenTypes.size();k++){
+                                // NOTE: The choosen poly type must match in full.
+                                if(choosenTypes[k].baseType() == match_baseType.baseType() &&
+                                    choosenTypes[k].getPointerLevel() + plevel == typeToMatch.getPointerLevel()
+                                ) {
+                                    typeIndex = k;
+                                    break;
+                                }
+                            }
+                            if(typeIndex !=-1){
+                                // one of the choosen types fulfill the type to match
+                                // no need to do anything
+                                continue;
+                            } else {
+                                if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
+                                    // no types remaining
+                                    found = false;
+                                    break;
+                                }
+                                TypeId newChoosen = match_baseType;
+                                if(typeToMatch.getPointerLevel() < plevel) {
+                                    found = false;
+                                    break;
+                                }
+                                newChoosen.setPointerLevel(typeToMatch.getPointerLevel() - plevel);
+                                choosenTypes.add(newChoosen);
+
+                                // size<T,K>(T* <K>*)
+                                // size(u32**)
+                            }
+                        } else {
+                            TypeId real_type = info.ast->convertToTypeId(baseToken, scopeId, true);
+                            if(real_type != match_baseType){
+                                found = false;
+                                break;
+                            }
+                        }
+
+                        if(is_poly_virtual){
+                            // This code should allow implicit calculation of incomplete polymorphic types.
+                            // This sould be allowed: fn add<T>(a: T<i32>).
+                            // But it's not so we get this: fn add<T>(a: T), no polymorphic types
+                            // Also this: fn add<T>(a: Array<T>).
+                            // Also this: fn add<T>(a: T<T>).
+
+                            if(!match_typeInfo->structImpl || match_typeInfo->structImpl->polyArgs.size() != polyTypes.size()) {
+                                found = false;
+                                break;
+                            }
+
+                            for(int pti = 0; pti < polyTypes.size(); pti++){
+                                auto typeName = polyTypes[pti];
+                                TypeId arg_type = info.ast->convertToTypeId(typeName, argScope, false);
+                                TypeInfo* typeInfo = info.ast->getTypeInfo(arg_type.baseType());
+
+                                auto polyarg = match_typeInfo->structImpl->polyArgs[pti];
+
+                                bool is_poly = false;
+                                for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
+                                    if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
+                                        is_poly = true;
+                                        break;
+                                    }
+                                }
+                                if (!is_poly) {
+                                    if (arg_type != polyarg) {
+                                        found = false;
+                                        break;
+                                    }
+                                    continue; // type match, check next poly argument
+                                }
+
+                                // auto polytype = typeInfo->id;
+
+                                int typeIndex = -1;
+                                for(int k=0;k<choosenTypes.size();k++){
+                                    // NOTE: The choosen poly type must match in full.
+                                    if(choosenTypes[k].baseType() == polyarg.baseType() &&
+                                        choosenTypes[k].getPointerLevel() == polyarg.getPointerLevel()
+                                    ) {
+                                        typeIndex = k;
+                                        break;
+                                    }
+                                }
+                                if(typeIndex !=-1){
+                                    // one of the choosen types fulfill the type to match
+                                    // no need to do anything
+                                    continue;
+                                } else {
+                                    if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
+                                        // no types remaining
+                                        found = false;
+                                        break;
+                                    }
+                                    TypeId newChoosen = polyarg;
+                                    if(polyarg.getPointerLevel() < plevel) {
+                                        found = false;
+                                        break;
+                                    }
+                                    newChoosen.setPointerLevel(polyarg.getPointerLevel() - plevel);
+                                    choosenTypes.add(newChoosen);
+                                }
+                            }
+                        } else {
+                            for(int pti = 0; pti < polyTypes.size(); pti++){
+                                auto typeName = polyTypes[pti];
+                                TypeId arg_type = info.ast->convertToTypeId(typeName, argScope, false);
+                                TypeInfo* typeInfo = info.ast->getTypeInfo(arg_type.baseType());
+
+                                auto polyarg = match_typeInfo->structImpl->polyArgs[pti];
+
+                                if(arg_type == polyarg)
+                                    continue;
+                                
+                                found = false;
+                                break;
+                            }
+                        }
                     }
                 }
+                // Now we have gone through all arguments, found indicates whether all types matched
+                // and whether we are good.
                 if(found){
                     // NOTE: You can break here because there should only be one matching overload.
                     // But we keep going in case we find more matches which would indicate
@@ -1384,33 +1529,18 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                 }
                 //-- Double check so that the types we choose actually works.
                 // Just in case the code for implicit types has bugs.
-                // IMPORTANT: We also run CheckType in case types needs to be created.
-                // if(parentAstStruct){
-                //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                //         parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
-                //     }
-                // }
-                // for(int j=0;j<(int)polyOverload->astFunc->polyArgs.size();j++){
-                //     polyOverload->astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
-                // }
+                
                 polyOverload->astFunc->pushPolyState(&fnPolyArgs, parentStructImpl);
                 defer {
                     polyOverload->astFunc->popPolyState();
-                    // for(int j=0;j<(int)polyOverload->astFunc->polyArgs.size();j++){
-                    //     polyOverload->astFunc->polyArgs[j].virtualType->id = {};
-                    // }
-                    // if(parentAstStruct){
-                    //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                    //         parentAstStruct->polyArgs[j].virtualType->id = {};
-                    //     }
-                    // }
                 };
                 bool found = true;
                 for (u32 j=0;j<expr->nonNamedArgs;j++){
+                    // IMPORTANT: We also run CheckType in case types needs to be created.
                     // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
-                    TypeId argType = CheckType(info, polyOverload->astFunc->scopeId,polyOverload->astFunc->arguments[j].stringType,
+                    TypeId argType = checkType(polyOverload->astFunc->scopeId,polyOverload->astFunc->arguments[j].stringType,
                         polyOverload->astFunc->arguments[j].location,nullptr);
-                    // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
+                    // TypeId argType = checkType(scope->scopeId,overload.astFunc->arguments[j].stringType,
                     // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
                     if(argType != argTypes[j]){
                         found = false;
@@ -1454,9 +1584,9 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
                         // bad token
                         loc = expr->location;
                     }
-                    TypeId argType = CheckType(info, overload.astFunc->scopeId,overload.astFunc->arguments[j+lessArguments].stringType,
+                    TypeId argType = checkType(overload.astFunc->scopeId,overload.astFunc->arguments[j+lessArguments].stringType,
                         loc,nullptr);
-                    // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
+                    // TypeId argType = checkType(scope->scopeId,overload.astFunc->arguments[j].stringType,
                     // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
                     if(!info.ast->castable(argTypes[j], argType)){
                         found = false;
@@ -1484,6 +1614,11 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
         }
         // TODO: We should not quit early as we are doing here.
         if(!polyFunc){
+            if(operatorOverloadAttempt || attempt) {
+                FIX_NO_SPECIAL_ACTIONS
+                return SIGNAL_NO_MATCH;
+            }
+
             ERR_SECTION(
                 ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
                 ERR_MSG_LOG(
@@ -1517,7 +1652,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             funcImpl->signature.polyArgs[i] = id;
         }
         // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-        SignalIO result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
+        SignalIO result = checkFunctionImpl(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
         // outTypes->used = 0; // FNCALL_SUCCESS will fix the types later, we don't want to add them twice
 
         FnOverloads::Overload* newOverload = fnOverloads->addPolyImplOverload(polyFunc, funcImpl);
@@ -1649,7 +1784,7 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
     FNCALL_FAIL
     return SIGNAL_FAILURE;
 }
-SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length){
+SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple);
     Assert(expr);
@@ -1791,7 +1926,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                 return SIGNAL_FAILURE;
             }
         } else if(expr->typeId == AST_FNCALL){
-            CheckFncall(info,scopeId,expr, outTypes, attempt, false);
+            checkFncall(scopeId,expr, outTypes, attempt, false);
         } else if(expr->typeId == AST_STRING){
             u32 index=0;
             
@@ -1801,10 +1936,10 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
             if(expr->flags & ASTNode::NULL_TERMINATED) {
-                TypeId theType = CheckType(info, scopeId, "char*", expr->location, nullptr);
+                TypeId theType = checkType(scopeId, "char*", expr->location, nullptr);
                 Assert(theType.isValid()); if(outTypes) outTypes->add(theType);
             } else {
-                TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->location, nullptr);
+                TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
                 Assert(theType.isValid());
                 if(outTypes) outTypes->add(theType);
             } 
@@ -1826,13 +1961,13 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                 } else {
                     // auto sc = info.ast->getScope(scopeId);
                     // sc->print(info.ast);
-                    finalType = CheckType(info, scopeId, name, expr->location, nullptr);
+                    finalType = checkType(scopeId, name, expr->location, nullptr);
                 }
             }
             if(!finalType.isValid()) {
                 // DynamicArray<TypeId> temps{};
                 typeArray.resize(0);
-                SignalIO result = CheckExpression(info, scopeId, expr->left, &typeArray, attempt);
+                SignalIO result = checkExpression(scopeId, expr->left, &typeArray, attempt);
                 finalType = typeArray.size()==0 ? AST_VOID : typeArray.last();
             }
             if(finalType.isValid()) {
@@ -1847,14 +1982,14 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     expr->versions_constStrIndex[info.currentPolyVersion] = index;
                     // expr->constStrIndex = index;
 
-                    TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->location, nullptr);
+                    TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
                     if(outTypes)  outTypes->add(theType);
                 } else if(expr->typeId == AST_TYPEID) {
                     
                     expr->versions_outTypeTypeid[info.currentPolyVersion] = finalType;
                     
                     const char* tname = "lang_TypeId";
-                    TypeId theType = CheckType(info, scopeId, tname, expr->location, nullptr);
+                    TypeId theType = checkType(scopeId, tname, expr->location, nullptr);
                     if(!theType.isValid()) {
                         // TODO: Don't hardcode "Lang" import. It may change in the future.
                         ERR_SECTION(
@@ -1871,7 +2006,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
         } else if(expr->typeId == AST_ASM){
             for(auto a : expr->args) {
                 QuickArray<TypeId> types{};
-                auto signal = CheckExpression(info, scopeId, a, &types, false, nullptr);
+                auto signal = checkExpression(scopeId, a, &types, false, nullptr);
             }
             
             if(!expr->asmTypeString.isString()) {
@@ -1881,7 +2016,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     outTypes->add(AST_VOID);   
             } else {
                 bool printedError = false;
-                auto ti = CheckType(info, scopeId, expr->asmTypeString, expr->location, &printedError);
+                auto ti = checkType(scopeId, expr->asmTypeString, expr->location, &printedError);
                 if (ti.isValid()) {
                     if(outTypes)
                         outTypes->add(ti);
@@ -1904,7 +2039,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             // // Assert(constString);
             // expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
-            // TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->location, nullptr);
+            // TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
             TypeId theType = AST_VOID;
             theType.setPointerLevel(1);
             if(outTypes)
@@ -1921,7 +2056,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             TINY_ARRAY(TypeId, operatorArgs, 2);
             if(expr->left) {
                 typeArray.resize(0);
-                CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+                checkExpression(scopeId, expr->left, &typeArray, attempt);
                 if(typeArray.size() > 1) {
                     // Error message for right expr is the same as below, DON'T
                     // forget to modify both when changing stuff!
@@ -1940,7 +2075,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             if(expr->right) {
                 typeArray.resize(0);
                 // BREAK(expr->nodeId == 291)
-                CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
+                checkExpression(scopeId, expr->right, &typeArray, attempt);
                 if(expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0) {
                     // TODO: Skipping values with assignment is okay.
                     //   But user may want to specify that you can't skip
@@ -1977,22 +2112,26 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             // TODO: You should not be allowed to overload all operators.
             //  Fix some sort of way to limit which ones you can.
             const char* str = OP_NAME(expr->typeId.getId());
+            // log::out << "Check " << str << "\n";
             if(str && operatorArgs.size() == 2) {
                 
+                int prev = expr->nonNamedArgs;
                 expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
-                SignalIO result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
+                SignalIO result = checkFncall(scopeId,expr, outTypes, attempt, true, &operatorArgs);
                 
                 if(result == SIGNAL_SUCCESS)
                     return SIGNAL_SUCCESS;
 
                 if(result != SIGNAL_NO_MATCH)
                     return result;
+
+                expr->nonNamedArgs = prev;
             }
         }
         switch(expr->typeId.getId()) {
         case AST_REFER: {
             if(expr->left) {
-                CheckExpression(info,scopeId, expr->left, outTypes, attempt);
+                checkExpression(scopeId, expr->left, outTypes, attempt);
                 if(outTypes) {
                     if(outTypes->size()>0)
                         outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()+1);
@@ -2001,7 +2140,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
         } break;
         case AST_DEREF: {
             if(expr->left) {
-                CheckExpression(info,scopeId, expr->left, outTypes, attempt);
+                checkExpression(scopeId, expr->left, outTypes, attempt);
                 if(outTypes) {
                     if(outTypes->last().getPointerLevel()==0){
                         ERR_SECTION(
@@ -2045,7 +2184,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                 // Operator overload checking does not run on AST_MEMBER since it can't be overloaded
                 // leftType has therefore note been set and expression not checked.
                 // We must check it here.
-                CheckExpression(info,scopeId, expr->left, &typeArray, attempt, &expr_array_length);
+                checkExpression(scopeId, expr->left, &typeArray, attempt, &expr_array_length);
                 if(typeArray.size()>0)
                     leftType = typeArray.last();
             }
@@ -2092,7 +2231,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                             *array_length = mem.array_length;
                         } else {
                             std::string slice_name = "Slice<" + info.ast->typeToString(memdata.typeId) + ">";
-                            TypeId id = CheckType(info, scopeId, slice_name, expr->location, nullptr);
+                            TypeId id = checkType(scopeId, slice_name, expr->location, nullptr);
                             // if(!slice_info) {
                             //     ERR_SECTION(
                             //         ERR_HEAD2(expr->location)
@@ -2151,7 +2290,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             // TypeId leftType = {}, rightType = {};
             // if(expr->left) {
             //     typeArray.resize(0);
-            //     CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+            //     checkExpression(scopeId, expr->left, &typeArray, attempt);
             //     Assert(typeArray.size()<2); // error message
             //     if(typeArray.size()>0) {
             //         leftType = typeArray.last();
@@ -2160,7 +2299,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             // }
             // if(expr->right) {
             //     typeArray.resize(0);
-            //     CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
+            //     checkExpression(scopeId, expr->right, &typeArray, attempt);
             //     Assert(typeArray.size()<2); // error message
             //     if(typeArray.size()>0) {
             //         rightType = typeArray.last();
@@ -2168,14 +2307,14 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             //     }
             // }
             // if(expr->left) {
-            //     CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+            //     checkExpression(scopeId, expr->left, &typeArray, attempt);
             //     if(typeArray.)
             //     // if(typeArray.size()==0){
             //     //     typeArray.add(AST_VOID);
             //     // }
             // }
             // if(expr->right) {
-            //     CheckExpression(info,scopeId, expr->right, nullptr, attempt);
+            //     checkExpression(scopeId, expr->right, nullptr, attempt);
             // }
             // if(expr->left && expr->right) {
             //     expr->nonNamedArgs = 2; // unless operator overloading
@@ -2222,12 +2361,12 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
         case AST_RANGE: {
             // DynamicArray<TypeId> temp={};
             // if(expr->left) {
-            //     CheckExpression(info,scopeId, expr->left, nullptr, attempt);
+            //     checkExpression(scopeId, expr->left, nullptr, attempt);
             // }
             // if(expr->right) {
-            //     CheckExpression(info,scopeId, expr->right, nullptr, attempt);
+            //     checkExpression(scopeId, expr->right, nullptr, attempt);
             // }
-            TypeId theType = CheckType(info, scopeId, "Range", expr->location, nullptr);
+            TypeId theType = checkType(scopeId, "Range", expr->location, nullptr);
             if(outTypes) outTypes->add(theType);
         } break;
         case AST_INITIALIZER: {
@@ -2235,9 +2374,9 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             // for(auto now : *expr->args){
             for(auto arg_expr : expr->args){
                 // DynamicArray<TypeId> temp={};
-                CheckExpression(info, scopeId, arg_expr, nullptr, attempt);
+                checkExpression(scopeId, arg_expr, nullptr, attempt);
             }
-            auto ti = CheckType(info, scopeId, expr->castType, expr->location, nullptr);
+            auto ti = checkType(scopeId, expr->castType, expr->location, nullptr);
             if(!ti.isValid()) {
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
@@ -2253,12 +2392,12 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
         case AST_CAST: {
             // DynamicArray<TypeId> temp{};
             Assert(expr->left);
-            CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+            checkExpression(scopeId, expr->left, &typeArray, attempt);
             Assert(typeArray.size()==1);
 
             Assert(expr->castType.isString());
             bool printedError = false;
-            auto ti = CheckType(info, scopeId, expr->castType, expr->location, &printedError);
+            auto ti = checkType(scopeId, expr->castType, expr->location, &printedError);
             if (ti.isValid()) {
 
             } else if(!printedError){
@@ -2406,7 +2545,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
 
 // Evaluates types and offset for the given function implementation
 // It does not modify ast func
-SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl){
+SignalIO TyperContext::checkFunctionImpl(ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -2448,7 +2587,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
                 ti = parentStructImpl->typeId;
                 ti.setPointerLevel(1);
             } else
-                ti = CheckType(info, func->scopeId, arg.stringType, func->location, &printedError);
+                ti = checkType(func->scopeId, arg.stringType, func->location, &printedError);
             
             if(ti == AST_VOID){
                 if(!info.hasErrors()) { 
@@ -2483,7 +2622,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
         // if(arg.defaultValue){
         //      DynamicArray<TypeId> temp{};
         //     info.temp_defaultArgs.resize(0);
-        //     CheckExpression(info,func->scopeId, arg.defaultValue, &info.temp_defaultArgs, false);
+        //     checkExpression(func->scopeId, arg.defaultValue, &info.temp_defaultArgs, false);
         //     if(info.temp_defaultArgs.size()==0)
         //         info.temp_defaultArgs.add(AST_VOID);
         //     if(!info.ast->castable(info.temp_defaultArgs.last(),argImpl.typeId)){
@@ -2543,7 +2682,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
         auto& retStringType = func->returnValues[i].stringType;
         if(retStringType.isString()){
             bool printedError = false;
-            auto ti = CheckType(info, func->scopeId, retStringType, func->location, &printedError);
+            auto ti = checkType(func->scopeId, retStringType, func->location, &printedError);
             if(ti.isValid()){
             }else if(!printedError) {
                 ERR_SECTION(
@@ -2601,7 +2740,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
 // Ensures that the function identifier exists.
 // Adds the overload for the function.
 // Checks if an existing overload would collide with the new overload.
-SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope){
+SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope){
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER)
     
@@ -2685,7 +2824,7 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
         for(int i=0;i<(int)function->arguments.size();i++){
             // info.ast->printTypesFromScope(function->scopeId);
 
-            TypeId typeId = CheckType(info, function->scopeId, function->arguments[i].stringType, function->location, nullptr);
+            TypeId typeId = checkType(function->scopeId, function->arguments[i].stringType, function->location, nullptr);
             // Assert(typeId.isValid());
             if(!typeId.isValid()){
                 // TODO: Don't print this? CheckType already did?
@@ -2790,7 +2929,7 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
                 if(parentStruct)
                     funcImpl->structImpl = parentStruct->nonPolyStruct;
                 // DynamicArray<TypeId> retTypes{}; // @unused
-                SignalIO yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, nullptr);
+                SignalIO yes = checkFunctionImpl( function, funcImpl, parentStruct, nullptr);
 
                 if(function->name == "main") {
                     funcImpl->usages = 1;
@@ -2826,7 +2965,7 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
     }
     return SIGNAL_SUCCESS;
 }
-SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope){
+SignalIO TyperContext::checkFunctions(ASTScope* scope){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -2840,30 +2979,30 @@ SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope){
     //             auto it = scope->statements[spot.index];
     //             if(it->hasNodes()){
     //                 if(it->firstBody){
-    //                     SignalIO result = CheckFunctions(info, it->firstBody);   
+    //                     SignalIO result = checkFunctions(it->firstBody);   
     //                 }
     //                 if(it->secondBody){
-    //                     SignalIO result = CheckFunctions(info, it->secondBody);
+    //                     SignalIO result = checkFunctions(it->secondBody);
     //                 }
     //             }
     //         }
     //         break; case ASTScope::NAMESPACE: {
     //             auto it = scope->namespaces[spot.index];
-    //             CheckFunctions(info, it);
+    //             checkFunctions(it);
     //         }
     //         break; case ASTScope::FUNCTION: {
     //             auto it = scope->functions[spot.index];
-    //             CheckFunction(info, it, nullptr, scope);
+    //             checkFunction(it, nullptr, scope);
     //             if(it->body){
-    //                 SignalIO result = CheckFunctions(info, it->body);
+    //                 SignalIO result = checkFunctions(it->body);
     //             }
     //         }
     //         break; case ASTScope::STRUCT: {
     //             auto it = scope->structs[spot.index];
     //             for(auto fn : it->functions){
-    //                 CheckFunction(info, fn , it, scope);
+    //                 checkFunction(fn , it, scope);
     //                 if(fn->body){ // external/native function do not have bodies
-    //                     SignalIO result = CheckFunctions(info, fn->body);
+    //                     SignalIO result = checkFunctions(fn->body);
     //                 }
     //             }
     //         }
@@ -2876,23 +3015,23 @@ SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope){
     // }
 
     for(auto now : scope->namespaces) {
-        CheckFunctions(info, now);
+        checkFunctions(now);
     }
     
     for(auto fn : scope->functions){
-        CheckFunction(info, fn, nullptr, scope);
+        checkFunction(fn, nullptr, scope);
         if(fn->body){ // external/native function do not have bodies
-            SignalIO result = CheckFunctions(info, fn->body);
+            SignalIO result = checkFunctions(fn->body);
         }
     }
     for(auto it : scope->structs){
         for(auto fn : it->functions){
-            SignalIO result = CheckFunction(info, fn , it, scope);
+            SignalIO result = checkFunction(fn , it, scope);
             if(result != SIGNAL_SUCCESS) {
                 log::out << log::RED <<  "Bad\n";
             }
             if(fn->body){ // external/native function do not have bodies
-                SignalIO result = CheckFunctions(info, fn->body);
+                SignalIO result = checkFunctions(fn->body);
             }
         }
     }
@@ -2900,10 +3039,10 @@ SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope){
     for(auto astate : scope->statements) {
         // if(astate->hasNodes()){
             if(astate->firstBody){
-                SignalIO result = CheckFunctions(info, astate->firstBody);   
+                SignalIO result = checkFunctions(astate->firstBody);   
             }
             if(astate->secondBody){
-                SignalIO result = CheckFunctions(info, astate->secondBody);
+                SignalIO result = checkFunctions(astate->secondBody);
             }
         // }
     }
@@ -2911,7 +3050,7 @@ SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope){
     return SIGNAL_SUCCESS;
 }
 
-SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
+SignalIO TyperContext::checkFuncImplScope(ASTFunction* func, FuncImpl* funcImpl){
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER) // if(func->body->nativeCode)
     //     return true;
@@ -2990,15 +3129,15 @@ SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcIm
     _TCLOG(log::out << "\n";)
 
     // log::out << log::CYAN << "BODY " << log::NO_COLOR << func->body->location<<"\n";
-    CheckRest(info, func->body);
+    checkRest(func->body);
     
     return SIGNAL_SUCCESS;
 }
-// SignalIO CheckGlobals(CheckInfo& info, ASTScope* scope) {
+// SignalIO CheckGlobals(ASTScope* scope) {
 
 //     return SIGNAL_SUCCESS;
 // }
-SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder contentOrder, ASTScope* scope) {
+SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentOrder, ASTScope* scope) {
     using namespace engone;
     // log::out << now->varnames[0].name << " checked\n";
 
@@ -3031,7 +3170,7 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
             // __debugbreak();
             // log::out << "okay\n";
         // }
-        SignalIO result = CheckExpression(info, scope->scopeId,now->firstExpression, &poly_typeArray, false);
+        SignalIO result = checkExpression(scope->scopeId,now->firstExpression, &poly_typeArray, false);
         for(int i=0;i<poly_typeArray.size();i++){
             if(poly_typeArray[i].isValid() && poly_typeArray[i] != AST_VOID)
                 continue;
@@ -3271,8 +3410,6 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
                 u32 offset = info.ast->aquireGlobalSpace(size);
                 varinfo->versions_dataOffset[info.currentPolyVersion] = offset;
 
-
-
                 if (now->firstExpression) {
                     info.ast->globals_to_evaluate.add({now, scope->scopeId});
                     // log::out << "global " << log::CYAN << varname.name << "\n";
@@ -3281,7 +3418,48 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
                     if(type.isNormalType()) {
                         auto typeinfo = info.ast->getTypeInfo(type);
                         if(typeinfo && typeinfo->astStruct) {
-                            info.ast->globals_to_evaluate.add({now, scope->scopeId});
+                            // TODO: Optimize by having a flag on each struct that
+                            //   indicates whether any member has default values.
+                            //   This gets difficult to keep track of with nested
+                            //   structs. As long as we only need to know about default values here,
+                            //   we don't really need to optimize, probably.
+                            bool has_default_values = false;
+                            
+                            DynamicArray<TypeInfo*> stack{};
+                            stack.add(typeinfo);
+                            int head = 0;
+                            while(head < stack.size()) {
+                                auto now = stack[head];
+                                head++;
+                                
+                                Assert(now->astStruct);
+                                for(int mi = 0; mi < now->astStruct->members.size(); mi++) {
+                                    auto& mem = now->astStruct->members[mi];
+                                    if(mem.defaultValue) {
+                                        stack.resize(0);
+                                        has_default_values = true;
+                                        break;
+                                    }
+                                    auto memtype = now->structImpl->members[mi].typeId;
+                                    if(!memtype.isNormalType())
+                                        continue;
+                                    auto new_info = ast->getTypeInfo(memtype);
+                                    if(new_info->astStruct) {
+                                        bool found = false;
+                                        for(auto& t : stack) {
+                                            if(new_info == t) {
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                        if(!found)
+                                            stack.add(new_info);
+                                    }
+                                }
+                            }
+
+                            if(has_default_values)
+                                info.ast->globals_to_evaluate.add({now, scope->scopeId});
                         }
                     }
                 }
@@ -3306,7 +3484,7 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
                 for(int j=0;j<now->arrayValues.size();j++){
                     ASTExpression* value = now->arrayValues[j];
                     typeArray.resize(0);
-                    SignalIO result = CheckExpression(info, scope->scopeId, value, &typeArray, false);
+                    SignalIO result = checkExpression(scope->scopeId, value, &typeArray, false);
                     if(result != SIGNAL_SUCCESS){
                         // continue;
                         return SIGNAL_FAILURE;
@@ -3344,7 +3522,7 @@ SignalIO CheckDeclaration(CheckInfo& info, ASTStatement* now, ContentOrder conte
     }
     return SIGNAL_SUCCESS;
 }
-SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
+SignalIO TyperContext::checkRest(ASTScope* scope){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -3424,7 +3602,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                 // log::out << "Check assign "<<varname.name<<"\n";
                 // info.ast->getScope(scope->scopeId)->print(info.ast);
                 bool printedError = false;
-                auto ti = CheckType(info, scope->scopeId, varname.assignString, now->location, &printedError);
+                auto ti = checkType(scope->scopeId, varname.assignString, now->location, &printedError);
                 // NOTE: We don't care whether it's a pointer just that the type exists.
                 if (!ti.isValid() && !printedError) {
                     ERR_SECTION(
@@ -3434,7 +3612,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                     )
                 } else {
                     // if(varname.arrayLength != 0){
-                    //     auto ti = CheckType(info, scope->scopeId, varname.assignString, now->location, &printedError);
+                    //     auto ti = checkType(scope->scopeId, varname.assignString, now->location, &printedError);
                     // } else {
                         // If typeid is invalid we don't want to replace the invalid one with the type
                         // with the string. The generator won't see the names of the invalid types.
@@ -3448,21 +3626,21 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
         if(now->type == ASTStatement::CONTINUE || now->type == ASTStatement::BREAK){
             // nothing
         } else if(now->type == ASTStatement::BODY || now->type == ASTStatement::DEFER){
-            SignalIO result = CheckRest(info, now->firstBody);
+            SignalIO result = checkRest(now->firstBody);
         } else if(now->type == ASTStatement::EXPRESSION){
-            CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
             // if(typeArray.size()==0)
             //     typeArray.add(AST_VOID);
         } else if(now->type == ASTStatement::RETURN){
             for(auto ret : now->arrayValues){
                 typeArray.resize(0);
-                SignalIO result = CheckExpression(info, scope->scopeId, ret, &typeArray, false);
+                SignalIO result = checkExpression(scope->scopeId, ret, &typeArray, false);
             }
         } else if(now->type == ASTStatement::IF){
-            SignalIO result1 = CheckExpression(info, scope->scopeId,now->firstExpression,&typeArray, false);
-            SignalIO result = CheckRest(info, now->firstBody);
+            SignalIO result1 = checkExpression(scope->scopeId,now->firstExpression,&typeArray, false);
+            SignalIO result = checkRest(now->firstBody);
             if(now->secondBody){
-                result = CheckRest(info, now->secondBody);
+                result = checkRest(now->secondBody);
             }
         } else if(now->type == ASTStatement::DECLARATION){
             if(!perform_global_check && now->globalDeclaration)
@@ -3470,7 +3648,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
 
             // log::out << " " << now->varnames[0].name<<"\n";
 
-            auto result = CheckDeclaration(info, now, contentOrder, scope);
+            auto result = checkDeclaration(now, contentOrder, scope);
             if(result != SIGNAL_SUCCESS)
                 continue;
             
@@ -3478,12 +3656,12 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
         } else if(now->type == ASTStatement::WHILE){
             if(now->firstExpression) {
                 // no expresion represents infinite loop
-                SignalIO result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+                SignalIO result1 = checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
             }
-            SignalIO result = CheckRest(info, now->firstBody);
+            SignalIO result = checkRest(now->firstBody);
         } else if(now->type == ASTStatement::FOR){
             // DynamicArray<TypeId> temp{};
-            SignalIO result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            SignalIO result1 = checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
             SignalIO result=SIGNAL_FAILURE;
 
             Assert(now->varnames.size()==2);
@@ -3541,7 +3719,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                     }
                     varinfo_item->versions_typeId[info.currentPolyVersion] = vartype;
 
-                    SignalIO result = CheckRest(info, now->firstBody);
+                    SignalIO result = checkRest(now->firstBody);
                     continue;
                 } else if(iterinfo->astStruct->name == "Range") {
                     if(now->varnames[0].name.size() == 0)
@@ -3567,7 +3745,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                         varnameNr.versions_assignType[info.currentPolyVersion] = inttype;
                         varinfo_index->versions_typeId[info.currentPolyVersion] = inttype;
 
-                        SignalIO result = CheckRest(info, now->firstBody);
+                        SignalIO result = checkRest(now->firstBody);
                         continue;
                     }
                 }
@@ -3590,7 +3768,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             #ifdef gone
             if(now->varnames.size()==1 && now->alias.size()){
                 auto& name = now->varnames[0].name;
-                TypeId originType = CheckType(info, scope->scopeId, name, now->location, nullptr);
+                TypeId originType = checkType(scope->scopeId, name, now->location, nullptr);
                 TypeId aliasType = info.ast->convertToTypeId(now->alias, scope->scopeId, true);
                 if(originType.isValid() && !aliasType.isValid()){
                     TypeInfo* aliasInfo = info.ast->createType(now->alias, scope->scopeId);
@@ -3673,13 +3851,13 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             }
             #endif
         } else if(now->type == ASTStatement::TEST) {
-            CheckExpression(info, scope->scopeId, now->testValue, &typeArray, false);
+            checkExpression(scope->scopeId, now->testValue, &typeArray, false);
             typeArray.resize(0);
-            CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
             typeArray.resize(0);
         } else if(now->type == ASTStatement::SWITCH) {
             // check switch expression
-            CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
             
             ASTEnum* astEnum = nullptr;
             Assert(typeArray.size() == 1);
@@ -3733,16 +3911,16 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                     allCasesUseEnumType = false;   
                 }
                 if(!wasMember){
-                    CheckExpression(info, scope->scopeId, it.caseExpr, &typeArray, false);
+                    checkExpression(scope->scopeId, it.caseExpr, &typeArray, false);
                     typeArray.resize(0);
                 }
                 
-                CheckRest(info, it.caseBody);
+                checkRest(it.caseBody);
             }
             
             if(now->firstBody) {
                 // default case
-                CheckRest(info, now->firstBody);
+                checkRest(now->firstBody);
             } else {
                 // not default case
                 if(usedMemberCount != (int)usedMembers.size() && !astEnum->hasRule(ASTEnum::LENIENT_SWITCH)) {
@@ -3777,7 +3955,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
     //     info.ast->removeIdentifier(scope->scopeId, name);
     // }
     for(auto now : scope->namespaces){
-        SignalIO result = CheckRest(info, now);
+        SignalIO result = checkRest(now);
     }
     return SIGNAL_SUCCESS;
 }
@@ -3785,7 +3963,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
 void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
-    CheckInfo info = {};
+    TyperContext info = {};
     info.ast = ast;
     info.compiler = compiler;
     info.reporter = &compiler->reporter;
@@ -3793,13 +3971,13 @@ void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
 
     _VLOG(log::out << log::BLUE << "Type check enums:\n";)
     // Check enums first since they don't depend on anything.
-    SignalIO result = CheckEnums(info, scope); // nocheckin
+    SignalIO result = info.checkEnums(scope); // nocheckin
     info.compiler->options->compileStats.errors += info.errors;
 }
 SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ignore_errors, bool* changed) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
-    CheckInfo info = {};
+    TyperContext info = {};
     info.ast = ast;
     info.compiler = compiler;
     info.reporter = &compiler->reporter;
@@ -3817,7 +3995,7 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     info.completedStruct = false;
     info.showErrors = !ignore_errors;
     info.ignoreErrors = !info.showErrors;
-    CheckStructs(info, scope);
+    info.checkStructs(scope);
     
     // if(!info.showErrors)
     if(info.showErrors)
@@ -3835,7 +4013,7 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
 void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_initial_import) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
-    CheckInfo info = {};
+    TyperContext info = {};
     info.ast = ast;
     info.compiler = compiler;
     info.reporter = &compiler->reporter;
@@ -3848,7 +4026,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     // a referenced function may not exist yet (this is certain if the body of two functions reference each other).
     // If so we would have to stop checking that body and continue later until that reference have been cleared up.
     // So instead of that mess, we check headers first to ensure that all references will work.
-    SignalIO result = CheckFunctions(info, scope);
+    SignalIO result = info.checkFunctions(scope);
 
     // TODO: Delete code below, we don't need it anymore, i think.
     // if(is_initial_import) {
@@ -3879,7 +4057,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
         for(auto& varname : now->varnames) {
             if(varname.assignString.isString()){
                 bool printedError = false;
-                auto ti = CheckType(info, scope->scopeId, varname.assignString, now->location, &printedError);
+                auto ti = info.checkType(scope->scopeId, varname.assignString, now->location, &printedError);
                 // NOTE: We don't care whether it's a pointer just that the type exists.
                 if (!ti.isValid() && !printedError) {
                     ERR_SECTION(
@@ -3889,7 +4067,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
                     )
                 } else {
                     // if(varname.arrayLength != 0){
-                    //     auto ti = CheckType(info, scope->scopeId, varname.assignString, now->location, &printedError);
+                    //     auto ti = checkType(scope->scopeId, varname.assignString, now->location, &printedError);
                     // } else {
                         // If typeid is invalid we don't want to replace the invalid one with the type
                         // with the string. The generator won't see the names of the invalid types.
@@ -3900,7 +4078,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
             }
         }
 
-        auto result = CheckDeclaration(info, now, contentOrder, scope);
+        auto result = info.checkDeclaration(now, contentOrder, scope);
         if(result != SIGNAL_SUCCESS)
             continue;
     }
@@ -3911,7 +4089,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
 void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
-    CheckInfo info = {};
+    TyperContext info = {};
     info.compiler = compiler;
     info.ast = compiler->ast;
     info.reporter = &compiler->reporter;
@@ -3925,7 +4103,7 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     // Check rest will go through scopes and create polymorphic implementations if necessary.
     // This includes structs and functions.
     if(import_scope) {
-        auto result = CheckRest(info, import_scope);
+        auto result = info.checkRest(import_scope);
     }
 
     info.do_not_check_global_globals = false;
@@ -3933,7 +4111,7 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     if(ast_func && ast_func->body) {
         // 1. ast_func may be nullptr if no main function was specified, the global scope is the main function if so.
         // 2. Native, imported or intrinsic functions does not have bodies and we cannot and should not check them.
-        auto result = CheckFuncImplScope(info, ast_func, func_impl);
+        auto result = info.checkFuncImplScope(ast_func, func_impl);
     }
 
     info.compiler->options->compileStats.errors += info.errors;
@@ -3952,7 +4130,7 @@ void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
 
     // Check rest will go through scopes and create polymorphic implementations if necessary.
     // This includes structs and functions.
-    SignalIO result = CheckRest(info, scope); // nocheckin
+    SignalIO result = checkRest(scope); // nocheckin
 
     // NOTE: We didn't used to check all functions. We only checked the ones
     //   that were used in the code. The problem with that is that any task

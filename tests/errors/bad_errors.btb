@@ -1,0 +1,18 @@
+
+// TODO: Errors messages for this code are confusing, fix them
+
+#import "Array"
+
+enum TextureNames {
+    IMG_BLOB,
+    IMG_BACK_LEVEL0,
+    // IMG_BACK_LEVEL1,
+    IMG_BACK_LEVEL2,
+}
+
+textures: Array<Texture*>;
+textures.add(cast<Texture*>null)
+
+textures.ptr[IMG_BACK_LEVEL2]
+
+// log(b[TWO])

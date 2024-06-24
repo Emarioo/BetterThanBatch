@@ -163,6 +163,10 @@ _test 1; cast<f64>cast<u64>0x8100_0000_0000_0011 > 0.0;
 t: f32 = 0;
 t == 0;
 
+na := 23
+na /= 1.0 // <- at one point, resulting float was put into na which is wrong, it should be converted to integer first
+_test 23; na
+
 @TEST_CASE(overflow)
 /*
     Overflow cases with multiplication, addition, subtraction, and division needs to be tested.
