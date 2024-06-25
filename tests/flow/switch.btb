@@ -47,6 +47,20 @@ switch msg {
 }
 _test 7; out;
 
+// TODO: This tests multiple cases for one body and implicit curly braces.
+//   We should improve it a little by making sure cases that should fall through does.
+switch 5 {
+    case 1:
+    case 5:
+        a := 23
+        a += 23
+    case 7:
+        @TEST_ERROR(ERROR_UNDECLARED) b := a // each case has it's own scope, 'a' should not be accesible
+    case:
+        a := 2
+        a += 2
+}
+
 @TEST_CASE(switch_enums)
 
 enum Mouthful { Batter, Bitter, Butter }

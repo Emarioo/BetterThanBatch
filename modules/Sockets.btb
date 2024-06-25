@@ -4,6 +4,7 @@
     
 */
 
+#import "Logger"
 
 #if OS_WINDOWS
     #import "Windows"
@@ -61,7 +62,7 @@ struct Socket {
     fn accept(addr: sockaddr*, addrlen: i32*) -> Socket, SocketError {
         #if OS_WINDOWS
             sock := win_accept(TO_INTERNAL(os_handle), addr, addrlen)
-            if sock = INVALID_SOCKET
+            if sock == INVALID_SOCKET
                 return Socket{0}, SOCKET_FAILURE
             return Socket{TO_HANDLE(sock)}, SOCKET_SUCCESS
         #else

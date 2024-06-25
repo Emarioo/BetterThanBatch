@@ -1504,7 +1504,13 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
 
     DynamicArray<lexer::SourceLocation> saved_locations;
 
-    defer { for(auto e : values) info.ast->destroy(e); };
+    bool prev_assign = allow_assignments;
+
+    defer {
+        for(auto e : values)
+            info.ast->destroy(e);
+        allow_assignments = prev_assign;
+    };
 
     bool shouldComputeExpression = false;
 
@@ -1615,8 +1621,20 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 values.add(tmp);
                 continue;
             } else if (token->type == '=') {
+                auto loc = info.getloc();
                 saved_locations.add(info.getloc());
                 info.advance();
+
+                if(!allow_assignments) {
+                    // This error will save the programmer from making many mistakes
+                    ERR_SECTION(
+                        ERR_HEAD2(loc)
+                        ERR_MSG("WOW, slow down there. Did you want an equals operator or assignment here? Use @iknow annotation to remove this error.")
+                        ERR_LINE2(loc, "= or ==")
+                        ERR_EXAMPLE(1, "if @iknow a = 5 { ... }")
+                    )
+                    // we can keep parsing, this is just a semantic error
+                }
 
                 ops.add(AST_ASSIGN);
                 assignOps.add((OperationType)0);
@@ -1770,6 +1788,11 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
 
                     token = info.getinfo(&view);
                     cstring = true;
+                    continue;
+                } else if(view == "iknow") {
+                    info.advance();
+                    allow_assignments = true;
+                    continue;
                 }
             } else if(token->type == '&') {
                 saved_locations.add(info.getloc());
@@ -2233,9 +2256,6 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 tmp->location = info.getloc();
 
                 info.advance();
-                // Token token = {}; 
-                // int result = ParseTypeId(info,token);
-                // tmp->name = token;
 
                 bool hasParentheses = false;
                 auto tok = info.gettok();
@@ -2246,9 +2266,36 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     hasParentheses=true;
                 }
 
+                int head_before_error = info.gethead();
+
+                bool prev_ignore = ignoreErrors;
+                bool prev_show = showErrors;
+                ignoreErrors = true;
+                showErrors = false;
+
                 ASTExpression* left=nullptr;
                 auto signal = parseExpression(left);
-                tmp->left = left;
+
+                ignoreErrors = prev_ignore;
+                showErrors   = prev_show;
+
+                if (signal == SIGNAL_SUCCESS) {
+                    tmp->left = left;
+                    Assert(left);
+                } else {
+                    info.sethead(head_before_error);
+                    auto signal = parseTypeId(tmp->name);
+                    if (signal != SIGNAL_SUCCESS) {
+                        // TODO: Save error messages from parseExpression and print them here.
+                        ERR_SECTION(
+                            ERR_HEAD2(tmp->location)
+                            ERR_MSG("Cannot parse type. Or was it an expression, if so somethings wrong.")
+                            ERR_LINE2(tmp->location, "here")
+                        )
+                    }
+                    // log::out << "parsed " << tmp->name << "\n";
+                }
+
                 // tmp->constantValue = true;// nocheckin
 
                 if(hasParentheses) {
@@ -2837,6 +2884,7 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
         if(token->type == lexer::TOKEN_IF){
             auto tok_if = info.gettok();
             info.advance();
+
             ASTExpression* expr=nullptr;
             auto signal = parseExpression(expr);
 
@@ -4450,6 +4498,14 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
         if(signal==SIGNAL_NO_MATCH){
             // bad name of function? it parses an expression
             // prop assignment or function call
+
+            
+            bool prev_assign = allow_assignments;
+            allow_assignments = true;
+            defer {
+                allow_assignments = prev_assign;
+            };
+            
             ASTExpression* expr=nullptr;
             signal = parseExpression(expr);
             if(expr){

@@ -1,5 +1,13 @@
 /*
     Networking with server and client
+
+
+    TODO: It would be convenient if Server and Client was one struct.
+      A game that can be a client or server could call the same functions on one struct without
+      having to switch between calling server.send and client.send depending whether the game started
+      as a server or client.
+      The reason this is troublesome is because when a server sends a message, we have to specify which connection
+      while the client only has one connection. So we kind of need a switch even if we have one struct.
 */
 
 #import "Array"
@@ -56,6 +64,7 @@ struct Connection {
 struct MessageHeader {
     length: i32;
 }
+
 struct Server {
     fn cleanup() {
         close() // make sure connection is closed
@@ -112,12 +121,13 @@ struct Server {
                 connection.message_data = Allocate(connection.message_max)
                 connection.receiver_thread = ThreadCreate(receiver_func2, connection)
                 connection.server = server
-                connection.conn_id = server.connections.size()
+                connection.conn_id = server.m_connections.size()
 
-                server.connections.add(connection)
+                server.m_connections.add(connection)
 
                 fn @oscall receiver_func2(arg: void*) -> i32 {
                     connection: Connection* = arg
+                    server := connection.server
                     protocol: NetProtocol = connection.server.m_protocol
                     while {
                         bytes: i32
@@ -133,7 +143,7 @@ struct Server {
                                 e: Event
                                 e.type = EVENT_CLOSE
                                 e.who = 0
-                                connection.server.m_event_callback(e, connection.server.m_user_data)
+                                server.m_event_callback(e, connection.server.m_user_data)
 
                                 if connection.socket.valid()
                                     connection.socket.close()
@@ -147,6 +157,7 @@ struct Server {
                                 log("recv failed")
                                 break
                             }
+                            server.m_received_bytes += sizeof header
                             if bytes != sizeof header {
                                 log("recv should have read 4 bytes for message length but instead read ", bytes)
                                 break
@@ -167,10 +178,16 @@ struct Server {
                             total_bytes := 0
                             while total_bytes != header.length {
                                 bytes = connection.socket.recv(connection.message_data + total_bytes, header.length - total_bytes, 0)
+                                if bytes <= 0
+                                    break
                                 total_bytes += bytes
+                                server.m_received_bytes += bytes
                             }
                         } else {
                             bytes = connection.socket.recv(connection.message_data, connection.message_max, 0)
+
+                            if bytes > 0
+                                server.m_received_bytes += bytes
                         }
                         
                         // handle error or shutdown
@@ -180,7 +197,7 @@ struct Server {
                             e: Event
                             e.type = EVENT_CLOSE
                             e.who = 0
-                            connection.server.m_event_callback(e, connection.server.m_user_data)
+                            server.m_event_callback(e, server.m_user_data)
 
                             if connection.socket.valid()
                                 connection.socket.close()
@@ -195,12 +212,13 @@ struct Server {
                             break
                         }
 
+
                         if connection.server.m_event_callback {
                             e: Event
                             e.type = EVENT_RECEIVE
                             e.who = connection.conn_id
                             e.bytes = Slice<char>{connection.message_data,bytes}
-                            connection.server.m_event_callback(e, connection.server.m_user_data)
+                            server.m_event_callback(e, server.m_user_data)
                         }
                         // std_prints("[READ ", bytes,"]")
                         // std_print(buffer.ptr, bytes)
@@ -225,7 +243,7 @@ struct Server {
         }
 
         // Close other connections
-        for connections.sliced() {
+        for m_connections.sliced() {
             if it.socket.valid() {
                 it.socket.close()
                 ThreadJoin(it.receiver_thread)
@@ -233,7 +251,7 @@ struct Server {
                 Free(it)
             }
         }
-        connections.cleanup()
+        m_connections.cleanup()
 
         m_is_active = false
     }
@@ -249,31 +267,41 @@ struct Server {
 	fn disconnect(connection_id: ConnectionID) -> NetError {
 
     }
-	fn send(connection_id: ConnectionID, bytes: char[]) -> NetError {
-        if connection_id >= connections.size() {
+    // -1 as connection id to send to all connections
+	fn send(bytes: char[], connection_id: ConnectionID = -1) -> NetError {
+        if connection_id == -1 {
+            for connection: m_connections.sliced() {
+                send(bytes, connection.conn_id)
+            }
+            return NET_SUCCESS
+        }
+        if connection_id >= m_connections.size() {
             return NET_FAILURE
         }
-        connection := connections.get(connection_id)
+        connection := m_connections.get(connection_id)
     
         if m_protocol & NET_PROTO_MESSAGE {
             header: MessageHeader
             header.length = bytes.len
             err := socket_send(connection.socket, &header, sizeof header, 0)
             if err < 0 {
-                log("server send msg failed1")
+                log("server send header failed")
                 return NET_FAILURE
             }
+            m_sent_bytes += sizeof header
             err = socket_send(connection.socket, bytes.ptr, bytes.len, 0)
             if err < 0 {
-                log("server send msg failed2")
+                log("server send body failed")
                 return NET_FAILURE
             }
+            m_sent_bytes += bytes.len
         } else {
             err := socket_send(connection.socket, bytes.ptr, bytes.len, 0)
             if err < 0 {
-                log("server send failed")
+                log("server send stream failed")
                 return NET_FAILURE
             }
+            m_sent_bytes += bytes.len
         }
         return NET_SUCCESS
     }
@@ -291,10 +319,13 @@ struct Server {
     m_socket: Socket;
     m_listener_thread: Thread;
 
-	connections: Array<Connection*>;
+	m_connections: Array<Connection*>;
 
     m_event_callback: EventCallback;
     m_user_data: void*;
+
+    m_received_bytes: i32;
+    m_sent_bytes: i32;
 
 	// mutex: Mutex;
 }
@@ -387,6 +418,8 @@ struct Client {
                         log("recv failed")
                         break
                     }
+                    client.m_received_bytes += sizeof header
+                    
                     if bytes != sizeof header {
                         log("recv should have read 4 bytes for message length but instead read ", bytes)
                         break
@@ -407,10 +440,15 @@ struct Client {
                     total_bytes := 0
                     while header.length != total_bytes {
                         bytes = client.m_socket.recv(client.m_message_data + total_bytes, header.length - total_bytes, 0)
+                        if bytes <= 0
+                            break
                         total_bytes += bytes
+                        client.m_received_bytes += bytes
                     }
                 } else {
                     bytes = client.m_socket.recv(client.m_message_data, client.m_message_max, 0)
+                    if bytes > 0
+                        client.m_received_bytes += bytes
                 }
                 
                 // handle error or shutdown
@@ -481,17 +519,20 @@ struct Client {
                 log("send msg failed1")
                 return NET_FAILURE
             }
+            m_sent_bytes += sizeof header
             err = m_socket.send(bytes.ptr, bytes.len, 0)
             if err < 0 {
                 log("send msg failed2")
                 return NET_FAILURE
             }
+            m_sent_bytes += bytes.len
         } else {
             err := m_socket.send(bytes.ptr, bytes.len, 0)
             if err < 0 {
                 log("send failed")
                 return NET_FAILURE
             }
+            m_sent_bytes += bytes.len
         }
         return NET_SUCCESS
     }
@@ -520,6 +561,9 @@ struct Client {
 
     m_message_data: char*;
     m_message_max: i32;
+    
+    m_received_bytes: i32;
+    m_sent_bytes: i32;
 
     /*######################
         Internal functions

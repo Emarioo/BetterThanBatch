@@ -1944,25 +1944,33 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 if(outTypes) outTypes->add(theType);
             } 
         } else if(expr->typeId == AST_SIZEOF || expr->typeId == AST_NAMEOF || expr->typeId == AST_TYPEID) {
-            Assert(expr->left);
             TypeId finalType = {};
-            if(expr->left->typeId == AST_ID){
-                // AST_ID could result in a type or a variable
-                auto& name = expr->left->name;
-                // TODO: Handle function pointer type
-                // This code may need to update when code for AST_ID does
+            if(expr->left) {
+                if(expr->left->typeId == AST_ID){
+                    // AST_ID could result in a type or a variable
+                    auto& name = expr->left->name;
+                    // TODO: Handle function pointer type
+                    // This code may need to update when code for AST_ID does
 
-                bool crossed_boundary = false;
-                Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
+                    bool crossed_boundary = false;
+                    Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
 
-                if(iden && !iden->is_fn() && (iden->type == Identifier::GLOBAL_VARIABLE || !crossed_boundary)){
-                    auto var = iden->cast_var();
-                    finalType = var->versions_typeId[info.currentPolyVersion];
-                } else {
-                    // auto sc = info.ast->getScope(scopeId);
-                    // sc->print(info.ast);
-                    finalType = checkType(scopeId, name, expr->location, nullptr);
+                    if(iden && !iden->is_fn() && (iden->type == Identifier::GLOBAL_VARIABLE || !crossed_boundary)){
+                        auto var = iden->cast_var();
+                        finalType = var->versions_typeId[info.currentPolyVersion];
+                    } else {
+                        // auto sc = info.ast->getScope(scopeId);
+                        // sc->print(info.ast);
+                        finalType = checkType(scopeId, name, expr->location, nullptr);
+                    }
                 }
+            } else {
+                if(!hasForeignErrors()) {
+                    Assert(expr->name.size()); // error, if we didn't have any
+                } else {
+                    return SIGNAL_FAILURE;
+                }
+                finalType = checkType(scopeId, expr->name, expr->location, nullptr);
             }
             if(!finalType.isValid()) {
                 // DynamicArray<TypeId> temps{};
@@ -2953,13 +2961,16 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
             }
         }
     } else {
-        if(fnOverloads->polyOverloads.size()!=0){
-            std::string path;
-            int line, column;
-            info.compiler->lexer.get_source_information(function->location, &path, &line, &column);
-            // log::out << 
-            log::out << log::YELLOW << path <<":"<<line<<":"<<column<< " (warning): Ambiguity for polymorphic overloads is not checked! (implementation incomplete) '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n";
-        }
+        // TODO: Is the ambiguity solved? I did some changes to overload matching and it seems to work fine.
+
+        // if(fnOverloads->polyOverloads.size()!=0){
+        //     std::string path;
+        //     int line, column;
+        //     info.compiler->lexer.get_source_information(function->location, &path, &line, &column);
+        //     MSG_CODE_LOCATION;
+        //     log::out << log::YELLOW << path <<":"<<line<<":"<<column<< " (warning): Ambiguity for polymorphic overloads is not checked! (implementation incomplete) '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n";
+        // }
+
         // Base poly overload is added without regard for ambiguity. It's hard to check ambiguity so to it later.
         fnOverloads->addPolyOverload(function);
     }

@@ -200,8 +200,6 @@ namespace engone {
 		static void* GetTLSValue(TLSIndex index);
 		static bool SetTLSValue(TLSIndex index, void* ptr);
 
-        
-
 	private:
 		static const int THREAD_SIZE = 8;
 		union {

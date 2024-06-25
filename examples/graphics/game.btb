@@ -38,6 +38,9 @@ global window: WindowContext*;
 global textures: Array<Texture*>;
 global pause_update: bool;
 global current_frame: i32
+global server: Server
+global client: Client
+global is_server: bool = false
 
 enum TextureNames {
     IMG_BLOB,
@@ -83,8 +86,80 @@ fn InitEntityInfos() {
 
 global moving_platform_id: i32 = -1
 
-fn main() -> i32 {
-    window = CreateWindow(1400,600)
+enum NetType {
+    MSGTYPE_POSITION,
+    MSGTYPE_SPAWN,
+}
+struct NetHeader {
+    type: NetType
+}
+struct NetPosition {
+    header: NetHeader = NetHeader{MSGTYPE_POSITION};
+    pos: vec2;
+}
+struct NetSpawn {
+    header: NetHeader = NetHeader{MSGTYPE_SPAWN};
+    pos: vec2;
+    size: vec2;
+    vel: vec2;
+    entity_info: i32; // entity type
+}
+
+#macro LOG_NET(X) X
+// #macro LOG_NET(X) #endmacro
+
+
+fn net_callback(e: Event, user_data: void*) {
+    LOG_NET(
+        std_print("EVENT ") std_print_any(&e.type) log()
+    )
+    switch e.type {
+    case EVENT_START:
+        if is_server {
+            msg: NetSpawn
+            msg.entity_info = 
+            server.send()
+        } else {
+
+            client.send()
+        }
+    case EVENT_RECEIVE:
+
+        LOG_NET( log("msglen ", e.bytes.len) )
+
+        Assert(e.bytes.len == sizeof NetMessage)
+        header := cast<NetHeader*>e.bytes.ptr
+        switch header.type {
+            case MSGTYPE_SPAWN:
+                body := cast<NetSpawn*>e.bytes.ptr
+                LOG_NET( std_print_any(body,true) )
+            case MSGTYPE_POSITION:
+                body := cast<NetPosition*>e.bytes.ptr
+                LOG_NET( std_print_any(body,true) )
+            case:
+                std_prints("ERROR, bad message header ") std_print_any(header) log()
+    
+    }
+}
+
+fn main(argc: i32, argv: char**) -> i32 {
+    // log(argc)
+    if argc > 1 {
+        is_server = true
+        server.set_callback(net_callback, null)
+        server.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    } else {
+        client.set_callback(net_callback, null)
+        client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    }
+    start_game()
+    return 0
+}
+
+fn start_game() {
+
+    // window = CreateWindow(1400,600)
+    window = CreateWindow(800,600)
 
     InitEntityInfos()
 
@@ -177,7 +252,6 @@ fn main() -> i32 {
     
     // DestroyTexture(blob)
     DestroyWindow(window)
-    return 0
 }
 
 fn Update() {
@@ -561,9 +635,9 @@ fn DrawSquare(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Col
 }
 fn RenderBackground() {
     // draw based on camera
-    sky := textures.ptr[cast<i32>IMG_BACK_LEVEL0]
+    sky := textures[cast<i32>IMG_BACK_LEVEL0]
     // ground := textures[IMG_BACK_LEVEL1]
-    mountains := textures.ptr[cast<i32>IMG_BACK_LEVEL2]
+    mountains := textures[IMG_BACK_LEVEL2]
 
     tile_size := sky.width * 1.0 // image scaling
 

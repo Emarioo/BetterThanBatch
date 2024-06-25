@@ -40,6 +40,8 @@ struct ParseContext : public PhaseContext {
     std::string currentNamespace = "";
     bool ignoreErrors = false;
     bool showErrors = true;
+    
+    bool allow_assignments = false; // THIS SHOULD BE FALSE BY DEFAULT in while, if, for... EVERYWHERE okay!! if you set it to true then remember to switch it back after the scope, see usages of allow_assignments to see what I mean.
 
     struct LoopScope {
         DynamicArray<ASTStatement*> defers; // apply these when continue, break or return is encountered
@@ -255,6 +257,7 @@ struct ParseContext : public PhaseContext {
     // returns token index into import of the next token to read
     // The token gettok will read.
     u32 gethead() { return head; }
+    void sethead(int n) { head = n; }
 
     SignalIO parseTypeId(std::string& outTypeId, int* tokensParsed = nullptr);
     SignalIO parseStruct(ASTStruct*& astStruct);

@@ -1504,7 +1504,13 @@ void Compiler::run(CompileOptions* options) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS
                 int exitCode;
-                engone::StartProgram(exe_file.c_str(),PROGRAM_WAIT, &exitCode);
+
+                std::string cmd = exe_file;
+                for (auto& a : options->userArguments) {
+                    cmd += " " + a;
+                }
+
+                engone::StartProgram(cmd.c_str(),PROGRAM_WAIT, &exitCode);
                 log::out << log::LIME <<"Exit code: " << exitCode << "\n";
 
                 // Some user friendly information about crashes
@@ -1520,8 +1526,13 @@ void Compiler::run(CompileOptions* options) {
                 #ifdef OS_LINUX
                 int exitCode;
                 bool some_crash = false;
-                std::string f = "./"+exe_file; // TODO: won't work if exe_file is absolute
-                engone::StartProgram(f.c_str(),PROGRAM_WAIT, &exitCode, &some_crash);
+                std::string cmd = "./"+exe_file; // TODO: Assumes exe path is relative, not good
+
+                for (auto& a : options->userArguments) {
+                    cmd += " " + a;
+                }
+
+                engone::StartProgram(cmd.c_str(),PROGRAM_WAIT, &exitCode, &some_crash);
                 if(some_crash) {
                     log::out << log::RED <<"Crash, exit code: " << exitCode << "\n";
                 } else {

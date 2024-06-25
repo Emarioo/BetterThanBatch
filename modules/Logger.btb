@@ -190,8 +190,8 @@ fn std_print(tt: f64){
     // TODO: Print 64-bit float without casting it to 32-bit and loosing information.
     std_print(cast<f32>tt);
 }
-// fn std_print(p: void*) {
-fn std_print<T>(p: T*) {
+fn std_print(p: void*) {
+// fn std_print<T>(p: T*) {
     // std_print(cast<u64>p)
     prints("0x")
     zeros: bool = true;

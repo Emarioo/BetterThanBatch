@@ -1,0 +1,428 @@
+/*
+    Elements in the bucket array will not be reallocated once allocated.
+    All pointers to elements will be valid until the element at it's index is removed.
+*/
+
+#import "Logger"
+#import "Memory"
+
+#macro LOG_BUCKET(X) X
+#macro LOG_BUCKET(X) #endmacro
+// #macro BUCKET_ERROR #file, ":", #line // preprocessor is flawed and can't handle #file and #line like this
+#macro BUCKET_ERROR "BucketArray: "
+
+// #macro LOG_DEBUG(...) log(...)
+#macro LOG_DEBUG(...) #endmacro
+
+
+struct BucketArray_Bucket {
+    m_data: u8*;
+    m_amountOfUsedSpots: i32;
+    m_max: i32; // the max is the same for every bucket, removing this field won't save memory. Bucket will still be 16 bytes. So we might as well store the max
+				// m_max is not the same as valuesPerBucket, valuesPerBucket is an amount while m_max is size in bytes
+    fn getValue(index: i32, elementSize: i32, valuesPerBucket: i32) -> void* {
+    //return (Value*)(memory.data+ vpf/8+index*sizeof(Value));
+        return (m_data + valuesPerBucket + index * elementSize);
+    }
+    fn getBool(index: i32) -> bool {
+        //u32 i = index / 8;
+        //u32 j = index % 8;
+        //char byte = memory.data[i];
+        //char bit = byte&(1<<j);
+        return *(m_data + index);
+    }
+    fn setBool(index: i32, yes: bool) {
+        //u32 i = index / 8;
+        //u32 j = index % 8;
+        //if (yes) {
+        //	memory.data[i] = memory.data[i] | (1 << j);
+        //} else {
+        //	memory.data[i] = memory.data[i] & (~(1 << j));
+        //}
+        *(m_data + index) = yes;
+    }
+};
+struct BucketArrayIterator<T> {
+    index: i32 = -1;
+    ptr: T* = null;
+    fn reset() { index = -1; ptr = null; }
+};
+struct BucketArray<T> {
+    // constructor does nothing except remember the variable
+    // valuesPerBucket is forced to be divisible by 8. (data alignment * bits as bools)
+    fn init(valuesPerBucket: i32) {
+        // TODO: Assert(m_valuesPerBucket == 0)
+        m_valuesPerBucket = (valuesPerBucket+7)&~7 // ensure 8-byte alignment
+    }
+    // Does not call free on the items.
+    fn cleanup() {
+        for i: 0..m_buckets_max {
+			bucket := &m_buckets[i];
+			if (bucket.m_max != 0) {
+				for j: 0..m_valuesPerBucket {
+					yes := bucket.getBool(j);
+					if (yes) {
+						ptr: T* = bucket.getValue(j, sizeof(T), m_valuesPerBucket);
+                        // ptr.cleanup()
+                        // TODO: call cleanup on pointer?
+						// ptr->~T();
+					}
+				}
+			}
+            Free(bucket.m_data, bucket.m_max);
+		}
+        Free(m_buckets, m_buckets_max * sizeof(BucketArray_Bucket));
+        m_buckets = null;
+        m_buckets_max = 0;
+		m_valueCount = 0;
+    }
+    
+    // @return Index where element is. -1 if something failed.
+    // @param value A pointer to the value of the new element. Note that a memcpy occurs. Value can be null for zero initialized data.
+    // @param outElement A pointer to the newly added element. Optional.
+    fn add(value: T*) -> i32, T* {
+		if (m_valuesPerBucket == 0) {
+            LOG_BUCKET( log(BUCKET_ERROR," valuesPerBucket is 0") )
+            
+			return -1, null;
+		}
+
+		//engone::log::out << "BucketArray: ADD "<<m_valuesPerBucket<<"\n";
+		// Find available frame
+		bucketIndex := -1;
+		for i: 0..m_buckets_max {
+			bucket := m_buckets[i];
+			LOG_DEBUG("BucketArray: Check bucket ", i ," (", bucket.m_amountOfUsedSpots , " != " , m_valuesPerBucket,")");
+			if (bucket.m_amountOfUsedSpots != m_valuesPerBucket) {
+				bucketIndex = i;
+				LOG_DEBUG("BucketArray: found bucket ",bucketIndex," with ", bucket.m_amountOfUsedSpots , " objects");
+				break;
+			}
+		}
+		// Create new frame if non found
+		if (bucketIndex == -1) {
+			newMax: i32 = m_buckets_max * 1.5 + 1;
+            newBuckets: BucketArray_Bucket* = Reallocate(newMax * sizeof(BucketArray_Bucket), m_buckets, m_buckets_max * sizeof(BucketArray_Bucket));
+			if (!newBuckets) {
+				//engone::log::out >> engone::log::Disable;
+                log(BUCKET_ERROR," failed resize buckets")
+				return -1, null;
+			}
+            m_buckets = newBuckets;
+            
+			memzero((m_buckets + m_buckets_max * sizeof BucketArray_Bucket), (newMax - m_buckets_max) * sizeof(BucketArray_Bucket));
+			// for (int i = m_buckets_max; i < newMax; i++) {
+                
+			// 	*((Frame*)m_frames.data + i) = Frame(m_frames.getAllocType()); // char
+			// }
+			bucketIndex = m_buckets_max;
+            m_buckets_max = newMax;
+			LOG_DEBUG("BucketArray: Create bucket ", bucketIndex);
+		}
+
+		// Insert value into bucket
+		bucket := &m_buckets[bucketIndex];
+		if (bucket.m_max == 0) {
+            newSize := m_valuesPerBucket /* /8 */ + m_valuesPerBucket * sizeof(T);
+            bucket.m_data = Allocate(newSize);
+			if (!bucket.m_data) {
+                log(BUCKET_ERROR," failed resize bucket")
+				//engone::log::out >> engone::log::Disable; 
+				return -1, null;
+			}
+            bucket.m_max = newSize;
+
+            // Assert(newSize % alignof(T) == 8);
+
+			//memzero(bucket.m_data,0,bucket.m_max/8);
+			memzero(bucket.m_data, bucket.m_max);
+			LOG_DEBUG("BucketArray : Reserve values for bucket ",  bucketIndex);
+		}
+
+		// Find empty slot
+		valueIndex := -1;
+		for i: 0..m_valuesPerBucket {
+			yes := bucket.getBool(i);
+			if (!yes) {
+				valueIndex = i;
+				LOG_DEBUG("BucketArray: Found spot " , i )
+				break;
+			} else {
+				LOG_DEBUG("BucketArray: Checked spot " , i)
+			}
+		}
+
+		if (valueIndex == -1) {
+            log(BUCKET_ERROR, "Impossible error adding value in bucket ", bucketIndex)
+			//engone::log::out >> engone::log::Disable;
+			return -1, null;
+		}
+		bucket.m_amountOfUsedSpots++;
+		//engone::log::out << "Frame : New object count " << frame.count << "\n";
+		m_valueCount++;
+		bucket.setBool(valueIndex, true);
+		LOG_DEBUG("set ",valueIndex," = ", bucket.getBool(valueIndex));
+		ptr := cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+		if (value) {
+			*ptr = *value
+            // new(ptr)T(*value);
+        } else
+			// new(ptr)T();
+			*ptr = T{}
+		//engone::log::out >> engone::log::Disable;
+		// if (outElement) {
+		// 	*outElement = ptr;
+        // }
+		// log("BucketArray: Add at ",bucketIndex, "*", m_valuesPerBucket, "+", valueIndex)
+		return bucketIndex * m_valuesPerBucket + valueIndex, ptr;
+	}
+    /*
+	@return Pointer to the newly added element. null if spot wasn't available.
+    @param requestedIndex The index where you want your new element to be. Note that the index isn't available if there already is an element there.
+    @param value A pointer to the value of the new element. Value can be null for default initialization 'new T()'.
+    */
+    fn requestSpot(requestedIndex: i32, value: T*) -> T* {
+		if (m_valuesPerBucket == 0) {
+			log(BUCKET_ERROR, " valuesPerBucket is 0");
+			return null;
+		}
+
+		bucketIndex: i32 = requestedIndex / m_valuesPerBucket;
+		valueIndex: i32 = requestedIndex % m_valuesPerBucket;
+
+		if (bucketIndex >= m_buckets_max) {
+			newMax: i32 = m_buckets_max * 1.5 + 1;
+            newBuckets: BucketArray_Bucket* = Reallocate(newMax * sizeof(BucketArray_Bucket), m_buckets, m_buckets_max * sizeof(BucketArray_Bucket));
+			if (!newBuckets) {
+				//engone::log::out >> engone::log::Disable;
+                log(BUCKET_ERROR, " failed resize buckets");
+				return null;
+			}
+            m_buckets = newBuckets;
+            
+			memzero((m_buckets + m_buckets_max * sizeof BucketArray_Bucket), (newMax - m_buckets_max) * sizeof(BucketArray_Bucket));
+			bucketIndex = m_buckets_max;
+            m_buckets_max = newMax;
+		}
+
+		bucket := &m_buckets[bucketIndex];
+
+		if (bucket.m_max == 0) {
+			newSize: i32 = m_valuesPerBucket /* /8 */ + m_valuesPerBucket * sizeof(T);
+            bucket.m_data = Allocate(newSize);
+			if (!bucket.m_data) {
+                log(BUCKET_ERROR, " failed resize bucket");
+                return null;
+			}
+            bucket.m_max = newSize;
+
+			//memzero(bucket.m_data,0,bucket.m_max/8);
+			memzero(bucket.m_data, bucket.m_max);
+		}
+
+		yes := bucket.getBool(valueIndex);
+		if (yes)
+			return null; // spot is not empty, element is there, request failed
+
+		bucket.m_amountOfUsedSpots++;
+		m_valueCount++;
+		bucket.setBool(valueIndex,true);
+
+		ptr: T* = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+		if (value) {
+            *ptr = *value
+            // new(ptr)T(*value);
+        } else {
+            *ptr = T{}
+			// new(ptr)T();
+        }
+			// memzero(ptr, 0, sizeof(T));
+		//engone::log::out >> engone::log::Disable;
+		//engone::log::out << "FA:Add " << valueIndex << "\n";
+		return ptr;
+	}
+    fn get(index: i32) -> T* {
+		bucketIndex: i32 = index / m_valuesPerBucket;
+		valueIndex:  i32 = index % m_valuesPerBucket;
+
+		if (bucketIndex >= m_buckets_max)
+			return null;
+
+		bucket := &m_buckets[bucketIndex];
+
+		if (valueIndex >= bucket.m_max)
+			return null;
+
+		yes := bucket.getBool(valueIndex);
+		if (!yes) // Check if slot is empty
+			return null;
+
+		ptr: T* = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+		return ptr;
+	}
+    fn removeAt(index: i32) {
+		bucketIndex: i32 = index / m_valuesPerBucket;
+		valueIndex:  i32 = index % m_valuesPerBucket;
+
+		if (bucketIndex >= m_buckets_max)
+			return;
+
+		bucket := &m_buckets[bucketIndex];
+
+		if (bucket.m_max == 0)
+			return;
+
+		yes := bucket.getBool(valueIndex);
+		if (!yes)
+			return;
+
+		bucket.m_amountOfUsedSpots--;
+		m_valueCount--;
+		ptr: T* = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+
+        // ptr.cleanup() // TODO: Fix
+		
+		bucket.setBool(valueIndex,false);
+
+		//if (frame.count==0) {
+		//	frame.resize(0);
+		//}
+	}
+    
+    // in bytes
+    fn getMemoryUsage() -> i32 {
+		bytes := m_buckets_max * sizeof(BucketArray_Bucket);
+		for @rev i: 0..m_buckets_max {
+			if !m_buckets[i].m_data
+				continue
+			bytes += (i+1) * m_buckets[i].m_max
+			// bytes += (i+1) * m_valuesPerBucket * (1 + sizeof T) // +1 for boolean, TODO: If we switch to 1 bit per element instead of 1 byte then computation will have to change. HOWEVER, we can just look at m_buckets[i].m_max instead of computing the allocation size manually
+			break // NOTE: All buckets have the same size, all buckets except the last few will be initialized (since we never free buckets that were needed). We can therefore break early and multiplying with (i+1)
+		}
+		return bytes;
+	}
+
+    // YOU CANNOT USE THIS VALUE TO ITERATE THROUGH THE ELEMENTS!
+	// That's why we don't name it size()
+    fn getCount() -> i32 {
+        return m_valueCount;
+    }
+	// Returns an arbitrary current max value. It doesn't represent the allocated uninitialized elements since some buckets may be empty without an allocation.
+	fn getMax() -> i32 {
+        return m_buckets_max * m_valuesPerBucket;
+    }
+	
+    fn create_iterator() -> BucketArrayIterator<T> {
+        return BucketArrayIterator<T>{}
+    }
+    // Returns false if nothing more to iterate. Values in iterator are reset
+    fn iterate(iterator: BucketArrayIterator<T>*) -> bool {
+		while  {
+            iterator.index++;
+			bucketIndex: i32 = iterator.index / m_valuesPerBucket;
+			valueIndex:  i32 = iterator.index % m_valuesPerBucket;
+
+			if (bucketIndex >= m_buckets_max) {
+				// happens when we reach end of bucket
+				break;
+			}
+			bucket := &m_buckets[bucketIndex];
+			if (valueIndex >= bucket.m_max) {
+				// only happens if bucket is uninitialized
+				// because m_max would be zero
+				// valueIndex will otherwise loop around because of modulus
+				break;
+			}
+
+			yes := bucket.getBool(valueIndex);
+			if (!yes)
+				continue;
+
+			iterator.ptr = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+			return true;
+		}
+		iterator.index = -1;
+		iterator.ptr = null;
+		return false;
+	}
+	fn iterate_reverse(iterator: BucketArrayIterator<T>*) -> bool {
+		// NOTE: Reverse iteration has some important details compared to forward iteration, don't mix them up.
+		if(iterator.index == -1) {
+			iterator.index = m_buckets_max * m_valuesPerBucket;
+		}
+		while (true) {
+            iterator.index--;
+			if iterator.index < 0
+				break
+
+			bucketIndex: i32 = iterator.index / m_valuesPerBucket;
+			valueIndex:  i32 = iterator.index % m_valuesPerBucket;
+
+			if (bucketIndex >= m_buckets_max) {
+				// Assert(false); // shouldn't happen because we start at the last bucket, we don't start and never will move beyond the last bucket
+				continue; // we don't break since we are going in reverse
+			}
+			bucket := &m_buckets[bucketIndex];
+			if (valueIndex >= bucket.m_max) {
+				// happens if m_max is 0, meaning bucket was allocated but not initialized
+				iterator.index = bucketIndex * m_valuesPerBucket + bucket.m_max - 1
+				continue; // we don't break since we are going in reverse, we don't see the end and stop
+			}
+
+			yes := bucket.getBool(valueIndex);
+			if (!yes)
+				continue;
+
+			iterator.ptr = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+			return true;
+		}
+		iterator.index = -1;
+		iterator.ptr = null;
+		return false;
+	}
+
+    // max = x/8+x*C
+    // max = x*(1/8+C)
+    // max/(1/8+C)
+    // 8*max / (1+8*C)
+
+    m_buckets: BucketArray_Bucket*;
+    m_buckets_max: i32;
+    m_valueCount: i32;
+    m_valuesPerBucket: i32;
+};
+
+
+// void FrameArrayTest() {
+// 	struct Apple {
+// 		float x, y, size;
+// 		void print() {
+// 			printf("{%f, %f, %f}\n", x,y,size);
+// 		}
+// 	};
+// 	FrameArray arr(sizeof(Apple),80,ALLOC_TYPE_HEAP);
+// 	Apple tmp{ 25,15,92 };
+// 	u32 id_a = arr.add(&tmp);
+// 	tmp = { 25,15,92 };
+// 	u32 id_b = arr.add(&tmp);
+    
+// 	arr.remove(id_a);//
+
+// 	Apple* first = (Apple*)arr.get(0);
+
+// 	printf("%p\n", first);
+// 	tmp = { 92,61,22 };
+// 	int id_c = arr.add(&tmp);
+
+// 	//printf("%d\n", id_c);
+// 	//a->print();
+// 	//b->print();
+    
+// 	FrameArray::Iterator iterator;
+// 	while (arr.iterate(iterator)) {
+// 		((Apple*)iterator.ptr)->print();
+// 	}
+
+
+// 	std::cin.get();
+// }

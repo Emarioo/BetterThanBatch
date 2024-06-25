@@ -27,6 +27,8 @@ struct Map<Key,Val> {
     #macro MAP_CHAIN_INDEX_NULL 0
     // #macro MAP_CHAIN_INDEX_BEGIN 1
     
+    // Some programmers say that the maximum amount of key/value pairs you will have should
+    // be 70% of the max table size.
     fn init(tableSize: i32, reserved_chains: i32 = 0) {
         // TODO: Assert(chains.len == 0)
         //   We could call remap but that has overhead and init is supposed to be called
@@ -100,7 +102,7 @@ struct Map<Key,Val> {
         if table.size() == 0
             return 0;
         // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
-        fnv_prime: i32 = 0x01000193; // TODO: Make these constants?
+        fnv_prime: i32 = 0x01000193; // TODO: Make these compile time constants?
         fn_offset_basis: i32 = 0x811c9dc5u;
         
         final_hash: i32 = fn_offset_basis;
@@ -110,6 +112,7 @@ struct Map<Key,Val> {
         }
         return final_hash % table.size();
     }
+    // TODO: Implement i64 hash
     fn hash(num: i32) -> i32 {
         if table.size() == 0
             return 0;
@@ -153,8 +156,11 @@ struct Map<Key,Val> {
         //     log("Dude, you got to map.init before map.set-ing it") // TODO: Use assert instead
         // }
         slot := hash(key);
-        if slot >= table.len
+        if slot >= table.len {
+            if table.len == 0
+                log("Dude, you forgot to initialize the hash map (Map.btb)")
             return false;
+        }
         index := table.get(slot);
         
         if index == 0 {
@@ -279,6 +285,9 @@ struct Map<Key,Val> {
         //     }
         //     return true;
         // }
+    }
+    fn create_iterator() -> MapIterator<Key,Val> {
+        return MapIterator<Key,Val>{}
     }
     fn clear() {
         // TODO: Clear map

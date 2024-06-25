@@ -262,8 +262,10 @@ if !compileSuccess! == 0 if !RUN_AT_END!==1 (
 :RUN_COMPILER
     rem
 
-    @REM bin\btb -dev
     bin\btb -dev
+    @REM bin\btb examples/graphics/game -ua server
+    @REM start test server
+    @REM start test
     @REM bin\btb examples/dev.btb -g
     @REM bin\btb --test
 )

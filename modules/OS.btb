@@ -35,6 +35,7 @@
 #endif
 
 
+// TODO: Where should we define Assert? not in OS.btb, maybe in preload?
 // #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 #macro Assert(expression) #endmacro
 

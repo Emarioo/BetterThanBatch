@@ -46,6 +46,9 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
     return new_ptr
 #elif OS_LINUX
 
+    // TODO: We might implement a custom heap allocator for Linux, or maybe not but
+    //   we shall use libc's heap for now.
+
     #load "c" as libc
     fn @import(libc) malloc(size: i32) -> void*;
     fn @import(libc) realloc(ptr: void*, size: i32) -> void*;

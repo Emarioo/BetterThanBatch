@@ -17,6 +17,7 @@
 */
 
 #import "Logger"
+#import "Array"
 #import "Memory" // we use memcpy
 
 enum @enclosed @specified lang_Primitive : u8 {
@@ -35,6 +36,9 @@ struct lang_TypeId {
     ptr_level: u8;
 
     fn index() -> u32 { return cast<u32>index0 | (cast<u32>index1 << 16); }
+}
+operator ==(a: lang_TypeId, b: lang_TypeId) -> bool {
+    return a.index0 == b.index0 && a.index1 == b.index1 && a.ptr_level == b.ptr_level
 }
 struct lang_TypeInfo {
     type: lang_Primitive;
@@ -129,19 +133,63 @@ fn std_print_any<T>(value: T*, pretty: bool = false) {
     id := typeid(T);
     std_print_any(value, id, pretty);
 }
-// fn std_print<T>(value: T*) {
-//     id := typeid(T);
-//     std_print_any(value, id, pretty);
-// }
+fn std_print<T>(value: T*) {
+    id := typeid(T);
+    // TODO: Function to enable/disable pretty print? thread local setting
+    std_print_any(value, id, false);
+    // std_print_any(value, id, true);
+}
 // Overloading needs fixing
 // fn std_print_any<T>(value: T, pretty: bool = false) {
 //     id := typeid(T);
 //     std_print_any(&value, id, pretty);
 // }
 fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32 = 1) {
+    // NOTE: NOT THREAD SAFE!!!!!!
+    global printed_pointers: Array<void*>
+
+    if ptr == null {
+        std_print("null")
+        return;
+    }
     
+    if depth == 1 {
+        printed_pointers.resize(0) // reset before use
+    }
+
+    if type == typeid Slice<char> {
+        ptr := cast<Slice<char>*>ptr
+        std_print('"')
+        std_print(ptr.ptr, ptr.len)
+        std_print('"')
+        return;
+    }
+
     if type.ptr_level != 0 {
-        std_print(*cast<void**>(ptr))
+        found := false
+        for printed_pointers.sliced() {
+            if it == ptr {
+                found = true
+                break
+            }
+        }
+        if found {
+            std_print(*cast<void**>(ptr))
+        } else {
+            printed_pointers.add(ptr)
+            // log(new_type)
+            if type == typeid (char*) {
+                std_print('"')
+                str := *cast<char**>(ptr)
+                len := strlen(str)
+                std_print(str, len)
+                std_print('"')
+            } else {
+                new_type := type
+                new_type.ptr_level--
+                std_print_any(*cast<void**>(ptr), new_type, pretty, depth + 1)
+            }
+        }
         return;   
     }
     enum ASTPrimitives {

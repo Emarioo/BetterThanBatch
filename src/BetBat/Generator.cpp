@@ -345,7 +345,7 @@ SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
         typeInfo = ast->getTypeInfo(typeId);
     int size = ast->getTypeSize(typeId);
     if(size == 0) {
-        Assert(hasForeignErrors());
+        Assert(hasForeignErrors() || hasErrors());
         return SIGNAL_FAILURE;
     }
     if (!typeInfo || !typeInfo->astStruct) {
