@@ -1,0 +1,49 @@
+@TEST_CASE(constructors)
+
+#import "Memory"
+#import "Logger"
+#import "Lang"
+
+struct Box<T> {
+    ptr: T*;
+    fn init() {
+        ptr = Allocate(sizeof T);
+        construct(ptr)
+    }
+    fn cleanup() {
+        destruct(ptr)
+        Free(ptr)
+        ptr = null
+    }
+}
+
+struct Item {
+    x: i32 = 923;
+    y: i32 = 12;
+
+    fn init() {
+        *this = Item{}
+        y = 33
+        log("init")
+    }
+    fn cleanup() {
+        hits++
+        log("cleanup")
+    }
+}
+
+global hits: i32
+
+box: Box<Item>
+// log(&box)
+
+box.init();
+_test 923; box.ptr.x;
+_test 33; box.ptr.y;
+// log(&box)
+
+box.cleanup();
+_test null; box.ptr;
+// log(&box)
+
+_test 1; hits;

@@ -964,6 +964,129 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
     member_did_not_match:
         ;
     } else {
+        // special functions
+        if(expr->name == "destruct" || expr->name == "construct") {
+
+             if(expr->args.size() != 1){
+                ERR_SECTION(
+                    ERR_HEAD2(expr->location)
+                    ERR_MSG("'"<<expr->name<<"' takes one argument, not "<<expr->args.size()<<".")
+                    ERR_LINE2(expr->location, "here")
+                )
+                return SIGNAL_FAILURE;
+            }
+
+            TypeId arg_type = argTypes[0];
+
+            if(expr->name == "construct") {
+                if(arg_type.getPointerLevel() == 0) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("'"<<expr->name<<"' expects a pointer to a \"data object\" where initialization should occur.")
+                        ERR_LINE2(expr->location, "here")
+                    )
+                    return SIGNAL_FAILURE;
+                }
+
+                arg_type.setPointerLevel(arg_type.getPointerLevel()-1);
+
+                TypeInfo* typeinfo = ast->getTypeInfo(arg_type.baseType());
+                Assert(typeinfo); // shouldn't be possible
+
+                if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
+
+                    FnOverloads::Overload* overload = nullptr;
+                    auto overloads = typeinfo->astStruct->getMethod("init");
+                    if (overloads) {
+                        for(auto& o : overloads->overloads) {
+                            // TODO: Matching functions with default values for all arguments would be fine.
+                            //   And I guess return values would be fine, we just throw them away.
+                            
+                            // NOTE: 'this' is the first argument
+                            if (o.funcImpl->signature.argumentTypes.size() == 1 && o.funcImpl->signature.returnTypes.size() == 0) {
+                                overload = &o;
+                                break;
+                            }
+                            // bool all_defaults = true;
+                            // for(int i=0;i<o.funcImpl->signature.argumentTypes.size();i++) {
+                            //     auto& arg = o.astFunc->arguments[i];
+                            //     if(!arg.defaultValue) {
+                            //         all_defaults = false;
+                            //         break;
+                            //     }
+                            // }
+                            // if(all_defaults) {
+                            //    overload = &o;
+                                // break;
+                            // }
+                        }
+                    }
+                    if(!overload) {
+                        
+                    } else {
+                        ast->declareUsageOfOverload(overload);
+                    }
+                } else {
+                    
+                }
+            } else if(expr->name == "destruct") {
+                if(arg_type.getPointerLevel() == 0) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("'"<<expr->name<<"' expects a pointer to a \"data object\" where destruction should occur.")
+                        ERR_LINE2(expr->location, "here")
+                    )
+                    return SIGNAL_FAILURE;
+                }
+
+                arg_type.setPointerLevel(arg_type.getPointerLevel()-1);
+
+                TypeInfo* typeinfo = ast->getTypeInfo(arg_type.baseType());
+                Assert(typeinfo); // shouldn't be possible
+
+                if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
+
+                    FnOverloads::Overload* overload = nullptr;
+                    auto overloads = typeinfo->astStruct->getMethod("cleanup");
+                    if (overloads) {
+                        for(auto& o : overloads->overloads) {
+                            // TODO: Matching functions with default values for all arguments would be fine.
+                            //   And I guess return values would be fine, we just throw them away.
+                            
+                            // NOTE: 'this' is the first argument
+                            if (o.funcImpl->signature.argumentTypes.size() == 1 && o.funcImpl->signature.returnTypes.size() == 0) {
+                                overload = &o;
+                                break;
+                            }
+                            // bool all_defaults = true;
+                            // for(int i=0;i<o.funcImpl->signature.argumentTypes.size();i++) {
+                            //     auto& arg = o.astFunc->arguments[i];
+                            //     if(!arg.defaultValue) {
+                            //         all_defaults = false;
+                            //         break;
+                            //     }
+                            // }
+                            // if(all_defaults) {
+                            //    overload = &o;
+                                // break;
+                            // }
+                        }
+                    }
+                    if(!overload) {
+                        
+                    } else {
+                        ast->declareUsageOfOverload(overload);
+                    }
+                } else {
+                    
+                }
+            }
+
+            if(outTypes)
+                outTypes->add(AST_VOID);
+            return SIGNAL_SUCCESS;
+        }
+
         if(info.currentAstFunc && info.currentAstFunc->parentStruct) {
             // TODO: Check if function name exists in parent struct
             //   If so, an implicit this argument should be taken into account.
@@ -978,8 +1101,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             }
         }
 
+        // We add method as potential overload but we also need to find identifier since method might not match.   
         Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName, nullptr);
-            
+
         if(iden) {
             // if(!iden) {
             //     if(operatorOverloadAttempt || attempt)
@@ -1926,7 +2050,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 return SIGNAL_FAILURE;
             }
         } else if(expr->typeId == AST_FNCALL){
-            checkFncall(scopeId,expr, outTypes, attempt, false);
+            return checkFncall(scopeId,expr, outTypes, attempt, false);
         } else if(expr->typeId == AST_STRING){
             u32 index=0;
             
@@ -1968,7 +2092,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 if(!hasForeignErrors()) {
                     Assert(expr->name.size()); // error, if we didn't have any
                 } else {
-                    return SIGNAL_FAILURE;
+                    // return SIGNAL_FAILURE; // OI, WE DO NOTHING HERE, OK!
                 }
                 finalType = checkType(scopeId, expr->name, expr->location, nullptr);
             }
@@ -2062,6 +2186,8 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         TypeId rightType{};
         if(expr->typeId != AST_REFER && expr->typeId != AST_DEREF && expr->typeId != AST_MEMBER&& expr->typeId != AST_CAST && expr->typeId != AST_INITIALIZER) {
             TINY_ARRAY(TypeId, operatorArgs, 2);
+            // BREAK(expr->nodeId == 2606)
+            
             if(expr->left) {
                 typeArray.resize(0);
                 checkExpression(scopeId, expr->left, &typeArray, attempt);
@@ -2083,7 +2209,13 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             if(expr->right) {
                 typeArray.resize(0);
                 // BREAK(expr->nodeId == 291)
-                checkExpression(scopeId, expr->right, &typeArray, attempt);
+                auto signal = checkExpression(scopeId, expr->right, &typeArray, attempt);
+                
+                if(typeArray.size() > 0 && typeArray[0] == AST_VOID) {
+                    log::out << log::RED << "WHY WAS TYPE VOID\n";
+                    Assert(false);
+                }
+
                 if(expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0) {
                     // TODO: Skipping values with assignment is okay.
                     //   But user may want to specify that you can't skip
@@ -2127,12 +2259,17 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
                 SignalIO result = checkFncall(scopeId,expr, outTypes, attempt, true, &operatorArgs);
                 
-                if(result == SIGNAL_SUCCESS)
+                // log::out << "Check, " << expr->nodeId<<"\n";
+                if(result == SIGNAL_SUCCESS) {
+                    // log::out << "Yes, " << expr->nodeId<<"\n";
                     return SIGNAL_SUCCESS;
+                }
 
-                if(result != SIGNAL_NO_MATCH)
-                    return result;
-
+                if(result != SIGNAL_NO_MATCH) {
+                    // log::out << "Error, " << expr->nodeId<<"\n";
+                    return result; // error bad
+                }
+                // no match, try normal operator
                 expr->nonNamedArgs = prev;
             }
         }
@@ -2497,6 +2634,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         case AST_AND:
         case AST_OR:
         case AST_NOT: {
+            // TODO: Verify valid types on left and right.
+            //   A structure type is not allowed (unless overloaded operator which is handled earlier)
+            //   The generator catches does bugs but it would be nice to do so here.
+
             if(outTypes) {
                 outTypes->add(TypeId(AST_BOOL));
             }

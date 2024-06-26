@@ -1,55 +1,98 @@
+/*
+    Today's quest: destructors
+*/
 
-#import "BucketArray"
-
-// #import "examples/graphics/game.btb"
-// #import "examples/net/serverclient.btb"
-
+#import "Memory"
 #import "Logger"
 #import "Lang"
-#import "String"
 
-struct Tree {
-    name: char[];
-    age: i32;
+struct Box<T> {
+    ptr: T*;
+    fn init() {
+        ptr = Allocate(sizeof T);
+        construct(ptr)
+    }
+    fn cleanup() {
+        destruct(ptr)
+        Free(ptr)
+        ptr = null
+    }
 }
 
-arr: BucketArray<Tree>
+struct Item {
+    x: i32 = 923;
+    y: i32 = 12;
 
-arr.init(3)
-
-req_elem := arr.requestSpot(5, null)
-req_elem.name = "Requested"
-req_elem.age = -5
-
-for 0..100 {
-    pos, elem := arr.add(null)
-    name: StringBuilder
-    name.append("oak ")
-    name.append(nr)
-    elem.name = name.sliced()
-    elem.age = nr * 3
+    fn init() {
+        *this = Item{}
+        y = 33
+        log("init")
+    }
+    fn cleanup() {
+        log("cleanup")
+    }
 }
 
-elem := arr.get(5)
-log(elem)
+box: Box<Item>
+log(&box)
 
-for 0..90 {
-    pos := (nr * 120124 + 2131) % arr.getMax()
-    // log("del ", pos)
-    arr.removeAt(pos)
-}
+box.init();
+log(&box)
+
+box.cleanup();
+log(&box)
 
 
-log("items left: ", arr.getCount())
+// #import "examples/graphics/game.btb"
 
-log(&arr)
+// #import "BucketArray"
 
-log("memory: ", arr.getMemoryUsage())
+// #import "Logger"
+// #import "Lang"
+// #import "String"
 
-iter := arr.create_iterator()
-while arr.iterate(&iter) {
-// while arr.iterate_reverse(&iter) {
-    log(iter.index," = ",iter.ptr)
-}
+// struct Tree {
+//     name: char[];
+//     age: i32;
+// }
 
-arr.cleanup()
+// arr: BucketArray<Tree>
+
+// arr.init(3)
+
+// req_elem := arr.requestSpot(5, null)
+// req_elem.name = "Requested"
+// req_elem.age = -5
+
+// for 0..100 {
+//     pos, elem := arr.add(null)
+//     name: StringBuilder
+//     name.append("oak ")
+//     name.append(nr)
+//     elem.name = name.sliced()
+//     elem.age = nr * 3
+// }
+
+// elem := arr.get(5)
+// log(elem)
+
+// for 0..90 {
+//     pos := (nr * 120124 + 2131) % arr.getMax()
+//     // log("del ", pos)
+//     arr.removeAt(pos)
+// }
+
+
+// log("items left: ", arr.getCount())
+
+// log(&arr)
+
+// log("memory: ", arr.getMemoryUsage())
+
+// iter := arr.create_iterator()
+// while arr.iterate(&iter) {
+// // while arr.iterate_reverse(&iter) {
+//     log(iter.index," = ",iter.ptr)
+// }
+
+// arr.cleanup()

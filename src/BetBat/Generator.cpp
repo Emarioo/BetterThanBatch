@@ -1132,8 +1132,305 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
     *outTypeId = endType;
     return SIGNAL_SUCCESS;
 }
+SignalIO GenContext::generateSpecialFnCall(ASTExpression* expression){
+    if(expression->args.size() != 1){
+        Assert(hasForeignErrors()); // type checker checks error
+        // ERR_SECTION(
+        //     ERR_HEAD2(expression->location)
+        //     ERR_MSG("'"<<expression->name<<"' takes one argument, not "<<expression->args.size()<<".")
+        //     ERR_LINE2(expression->location, "here")
+        // )
+        return SIGNAL_FAILURE;
+    }
+    DynamicArray<TypeId> types{};
+    types.reserve(1);
+    auto signal = generateExpression(expression->args[0], &types, currentScopeId);
+
+    if(signal != SIGNAL_SUCCESS)
+        return SIGNAL_FAILURE;
+
+    if(types.size() != 1) {
+        Assert(hasForeignErrors()); // type checker checks error
+        // ERR_SECTION(
+        //     ERR_HEAD2(expression->location)
+        //     ERR_MSG("Expression returns "<<types.size()<<" types while 1 is expected.")
+        //     ERR_LINE2(expression->location, "here")
+        // )
+        return SIGNAL_FAILURE;
+    }
+
+    TypeId arg_type = types[0];
+
+    if(expression->name == "construct") {
+        if(arg_type.getPointerLevel() == 0) {
+            Assert(hasForeignErrors()); // type checker checks error
+            // ERR_SECTION(
+            //     ERR_HEAD2(expression->location)
+            //     ERR_MSG("'"<<expression->name<<"' expects a pointer to a \"data object\" where initialization should occur.")
+            //     ERR_LINE2(expression->location, "here")
+            // )
+            return SIGNAL_FAILURE;
+        }
+
+        arg_type.setPointerLevel(arg_type.getPointerLevel()-1);
+
+        TypeInfo* typeinfo = ast->getTypeInfo(arg_type.baseType());
+        Assert(typeinfo); // shouldn't be possible
+
+        if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
+            builder.emit_pop(BC_REG_B); // pop pointer to data object
+
+            FnOverloads::Overload* overload = nullptr;
+            auto overloads = typeinfo->astStruct->getMethod("init");
+            if (overloads) {
+                for(auto& o : overloads->overloads) {
+                    // TODO: Matching functions with default values for all arguments would be fine.
+                    //   And I guess return values would be fine, we just throw them away.
+                    
+                    // NOTE: 'this' is the first argument
+                    if (o.funcImpl->signature.argumentTypes.size() == 1 && o.funcImpl->signature.returnTypes.size() == 0) {
+                        overload = &o;
+                        break;
+                    }
+                    // bool all_defaults = true;
+                    // for(int i=0;i<o.funcImpl->signature.argumentTypes.size();i++) {
+                    //     auto& arg = o.astFunc->arguments[i];
+                    //     if(!arg.defaultValue) {
+                    //         all_defaults = false;
+                    //         break;
+                    //     }
+                    // }
+                    // if(all_defaults) {
+                    //    overload = &o;
+                        // break;
+                    // }
+                }
+            }
+            if(!overload) {
+                generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
+            } else {
+                // Code is partly copied from generateFnCall
+
+                int allocated_stack_space = 0;
+
+                // NOTE: Ensuring 16-byte aligned stack pointer on function calls is done here in the generator
+                //   because both x64_gen and the VirtualMachine requires it when calling external functions.
+                //   BCryptGenRandom will crash if stack isn't aligned so yes, alignment is necessary.
+
+                auto signature = &overload->funcImpl->signature;
+
+                CallConvention call_convention = signature->convention;
+
+                switch(call_convention){
+                    case BETCALL: {
+                        int stackSpace = signature->argSize;
+                        allocated_stack_space = stackSpace;
+                    } break;
+                    case STDCALL:
+                    case UNIXCALL: {
+                        for(int i=0;i<signature->argumentTypes.size();i++){
+                            int size = info.ast->getTypeSize(signature->argumentTypes[i].typeId);
+                            if(size>8){
+                                // TODO: This should be moved to the type checker.
+                                ERR_SECTION(
+                                    ERR_HEAD2(expression->location)
+                                    ERR_MSG("Argument types cannot be larger than 8 bytes when using stdcall.")
+                                    ERR_LINE2(expression->location, "bad")
+                                )
+                                return SIGNAL_FAILURE;
+                            }
+                        }
+
+                        if(call_convention == STDCALL) {
+                            int stackSpace = signature->argumentTypes.size() * 8;
+                            if(stackSpace<32)
+                                stackSpace = 32;
+                            
+                            allocated_stack_space = stackSpace;
+                        } else {
+                            // How does unixcall deal with stack?
+                            // I guess we just allocate some for now.
+                            int stackSpace = signature->argumentTypes.size()* 8;
+                            allocated_stack_space = stackSpace;
+                        }
+                    } break;
+                    // case CDECL_CONVENTION: {
+                    //     Assert(false); // INCOMPLETE
+                    // } break;
+                    case INTRINSIC: {
+                        // do nothing
+                    } break;
+                    default: Assert(false);
+                }
+                
+                if(call_convention != INTRINSIC) {
+                    // The x64 generator and VirtualMachine handles 16-byte alignment
+                    // int alignment = (allocated_stack_space + builder.get_virtual_sp()) % 16;
+                    // if(alignment != 0) {
+                    //     allocated_stack_space = allocated_stack_space + (16 - alignment);
+                    // }
+
+                    // we should always emit alloc_args to ensure 16-byte alignment
+                    builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
+                }
+
+                int size_of_pointer = 8;
+                builder.emit_set_arg(BC_REG_B, 0, size_of_pointer, false);
+
+                int reloc = 0;
+                builder.emit_call(overload->astFunc->linkConvention, overload->astFunc->callConvention, &reloc);
+                info.addCallToResolve(reloc, overload->funcImpl);
+    
+                builder.emit_free_args(allocated_stack_space);
+            }
+        } else {
+            builder.emit_pop(BC_REG_B); // pop pointer to data object
+
+            int size = ast->getTypeSize(arg_type);
+            Assert(size <= 8); // only structs can be bigger than 8
+            genMemzero(BC_REG_B, BC_REG_A, size);
+        }
+    } else if(expression->name == "destruct") {
+        if(arg_type.getPointerLevel() == 0) {
+            Assert(hasForeignErrors()); // type checker checks error
+            // ERR_SECTION(
+            //     ERR_HEAD2(expression->location)
+            //     ERR_MSG("'"<<expression->name<<"' expects a pointer to a \"data object\" where destruction should occur.")
+            //     ERR_LINE2(expression->location, "here")
+            // )
+            return SIGNAL_FAILURE;
+        }
+
+        arg_type.setPointerLevel(arg_type.getPointerLevel()-1);
+
+        TypeInfo* typeinfo = ast->getTypeInfo(arg_type.baseType());
+        Assert(typeinfo); // shouldn't be possible
+
+        if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
+            builder.emit_pop(BC_REG_B); // pop pointer to data object
+
+            FnOverloads::Overload* overload = nullptr;
+            auto overloads = typeinfo->astStruct->getMethod("cleanup");
+            if (overloads) {
+                for(auto& o : overloads->overloads) {
+                    // TODO: Matching functions with default values for all arguments would be fine.
+                    //   And I guess return values would be fine, we just throw them away.
+                    
+                    // NOTE: 'this' is the first argument
+                    if (o.funcImpl->signature.argumentTypes.size() == 1 && o.funcImpl->signature.returnTypes.size() == 0) {
+                        overload = &o;
+                        break;
+                    }
+                    // bool all_defaults = true;
+                    // for(int i=0;i<o.funcImpl->signature.argumentTypes.size();i++) {
+                    //     auto& arg = o.astFunc->arguments[i];
+                    //     if(!arg.defaultValue) {
+                    //         all_defaults = false;
+                    //         break;
+                    //     }
+                    // }
+                    // if(all_defaults) {
+                    //    overload = &o;
+                        // break;
+                    // }
+                }
+            }
+            if(!overload) {
+                generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
+            } else {
+                // Code is partly copied from generateFnCall
+
+                int allocated_stack_space = 0;
+
+                // NOTE: Ensuring 16-byte aligned stack pointer on function calls is done here in the generator
+                //   because both x64_gen and the VirtualMachine requires it when calling external functions.
+                //   BCryptGenRandom will crash if stack isn't aligned so yes, alignment is necessary.
+
+                auto signature = &overload->funcImpl->signature;
+
+                CallConvention call_convention = signature->convention;
+
+                switch(call_convention){
+                    case BETCALL: {
+                        int stackSpace = signature->argSize;
+                        allocated_stack_space = stackSpace;
+                    } break;
+                    case STDCALL:
+                    case UNIXCALL: {
+                        for(int i=0;i<signature->argumentTypes.size();i++){
+                            int size = info.ast->getTypeSize(signature->argumentTypes[i].typeId);
+                            if(size>8){
+                                // TODO: This should be moved to the type checker.
+                                ERR_SECTION(
+                                    ERR_HEAD2(expression->location)
+                                    ERR_MSG("Argument types cannot be larger than 8 bytes when using stdcall.")
+                                    ERR_LINE2(expression->location, "bad")
+                                )
+                                return SIGNAL_FAILURE;
+                            }
+                        }
+
+                        if(call_convention == STDCALL) {
+                            int stackSpace = signature->argumentTypes.size() * 8;
+                            if(stackSpace<32)
+                                stackSpace = 32;
+                            
+                            allocated_stack_space = stackSpace;
+                        } else {
+                            // How does unixcall deal with stack?
+                            // I guess we just allocate some for now.
+                            int stackSpace = signature->argumentTypes.size()* 8;
+                            allocated_stack_space = stackSpace;
+                        }
+                    } break;
+                    // case CDECL_CONVENTION: {
+                    //     Assert(false); // INCOMPLETE
+                    // } break;
+                    case INTRINSIC: {
+                        // do nothing
+                    } break;
+                    default: Assert(false);
+                }
+                
+                if(call_convention != INTRINSIC) {
+                    // The x64 generator and VirtualMachine handles 16-byte alignment
+                    // int alignment = (allocated_stack_space + builder.get_virtual_sp()) % 16;
+                    // if(alignment != 0) {
+                    //     allocated_stack_space = allocated_stack_space + (16 - alignment);
+                    // }
+
+                    // we should always emit alloc_args to ensure 16-byte alignment
+                    builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
+                }
+
+                int size_of_pointer = 8;
+                builder.emit_set_arg(BC_REG_B, 0, size_of_pointer, false);
+
+                int reloc = 0;
+                builder.emit_call(overload->astFunc->linkConvention, overload->astFunc->callConvention, &reloc);
+                info.addCallToResolve(reloc, overload->funcImpl);
+    
+                builder.emit_free_args(allocated_stack_space);
+            }
+        } else {
+            builder.emit_pop(BC_REG_B); // pop pointer to data object
+
+            int size = ast->getTypeSize(arg_type);
+            Assert(size <= 8); // only structs can be bigger than 8
+            genMemzero(BC_REG_B, BC_REG_A, size);
+        }
+    } else {
+        Assert(false);
+    }
+
+    return SIGNAL_SUCCESS;
+}
 SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator){
     using namespace engone;
+
+    if(expression->name == "construct" || expression->name == "destruct") {
+        return generateSpecialFnCall(expression);
+    }
     
     ASTFunction* astFunc = nullptr;
     FuncImpl* funcImpl = nullptr;
@@ -1494,7 +1791,6 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
     i32 reloc = 0;
     if(is_function_pointer) {
         BCRegister reg = BC_REG_B;
-        
 
         if (expression->isMemberCall()) {
             TypeId type{};
@@ -3287,6 +3583,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     // okay
                 } else {
                     if(left_info->astStruct || right_info->astStruct) {
+                        // log::out << "Fail, " << expression->nodeId<<"\n";
                         std::string lmsg = info.ast->typeToString(ltype);
                         std::string rmsg = info.ast->typeToString(rtype);
                         ERR_SECTION(
