@@ -1,46 +1,41 @@
+
 /*
-    Today's quest: destructors
+    Today's quest: destructors (part 2)
 */
 
 #import "Memory"
 #import "Logger"
+#import "Array"
 #import "Lang"
 
-struct Box<T> {
-    ptr: T*;
-    fn init() {
-        ptr = Allocate(sizeof T);
-        construct(ptr)
-    }
-    fn cleanup() {
-        destruct(ptr)
-        Free(ptr)
-        ptr = null
-    }
-}
-
+global counter: i32
 struct Item {
-    x: i32 = 923;
-    y: i32 = 12;
-
+    x: i32
     fn init() {
-        *this = Item{}
-        y = 33
-        log("init")
+        x = counter++
+        log("init ",x)
     }
     fn cleanup() {
-        log("cleanup")
+        log("cleanup ",x)
     }
 }
 
-box: Box<Item>
-log(&box)
+// operator cast(x: i32) -> Item { return Item{x} }
 
-box.init();
-log(&box)
+memory_tracker.init()
 
-box.cleanup();
-log(&box)
+arr: Array<Item>;
+arr.add(Item{4})
+arr.add(Item{23})
+arr.pop()
+arr.add(Item{92})
+arr.add(Item{96})
+arr.add(Item{98})
+for arr.sliced() {
+    log(&it)
+}
+log(arr.len, " ", arr.max)
+arr.reserve(0);
 
 
 // #import "examples/graphics/game.btb"
@@ -55,6 +50,8 @@ log(&box)
 //     name: char[];
 //     age: i32;
 // }
+
+// // memory_tracker.init()
 
 // arr: BucketArray<Tree>
 

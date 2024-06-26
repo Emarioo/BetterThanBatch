@@ -30,15 +30,20 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
 #if OS_WINDOWS
     heap := GetProcessHeap()
     if !size {
-        if ptr
+        if ptr {
             HeapFree(heap, 0, ptr)
+            memory_tracker.remove(ptr, old_size)
+        }
         return null
     }
     new_ptr: void*
     if !ptr {
         new_ptr = HeapAlloc(heap, 0, size)
+        memory_tracker.add(new_ptr, size)
     } else {
         new_ptr = HeapReAlloc(heap, 0, ptr, size)
+        memory_tracker.add(new_ptr, size)
+        memory_tracker.remove(ptr, old_size)
     }
     if !new_ptr || new_ptr == STATUS_NO_MEMORY || new_ptr == STATUS_ACCESS_VIOLATION {
         return null
@@ -55,18 +60,63 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
     fn @import(libc) free(ptr: void*);
 
     if !size {
-        if ptr
+        if ptr {
             free(ptr)
+            memory_tracker.remove(ptr, old_size)
+        }
         return null
     }
     new_ptr: void*
     if !ptr {
         // malloc may crash if sp isn't aligned, bug in x64_gen if so
         new_ptr = malloc(size)
+        memory_tracker.add(new_ptr, size)
     } else {
         new_ptr = realloc(ptr, size)
+        memory_tracker.add(new_ptr, size)
+        memory_tracker.remove(ptr, old_size)
     }
     return new_ptr
 #endif
 }
 
+#import "Map"
+
+#macro LOG_TRACKER(...) log("Tracker: ",...)
+// #macro LOG_TRACKER(...) #endmacro
+
+// TODO: Debug locations
+struct MemoryTracker {
+    map: Map<void*, i32>;
+    initialized: bool;
+    fn init() {
+        map.init(10000)
+        initialized = true
+    }
+    fn add(ptr: void*, size: i32) {
+        if !initialized
+            return;
+        value_ptr := map.find(ptr)
+        if value_ptr {
+            LOG_TRACKER("Cannot add allocation ", ptr, ", pointer already exists.")
+            return;
+        }
+        map.set(ptr, size)
+    }
+    // you may not know the allocated size so you don't have to specifify it, however, if you do specify and the sizes don't match, more bugs may be caught.
+    fn remove(ptr: void*, size: i32 = 0) {
+        if !initialized
+            return;
+        value_ptr := map.find(ptr)
+        if !value_ptr {
+            LOG_TRACKER("Cannot remove allocation ", ptr, ", it doesn't exist.")
+            return;
+        }
+        if size != 0 && *value_ptr != size {
+            LOG_TRACKER("When removing allocation ", ptr, ", expected size of allocation didn't match (",size,"!=",*value_ptr,").")
+        }
+        map.remove(ptr)
+    }
+}
+
+global memory_tracker: MemoryTracker

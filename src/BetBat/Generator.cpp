@@ -1209,6 +1209,9 @@ SignalIO GenContext::generateSpecialFnCall(ASTExpression* expression){
             if(!overload) {
                 generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
             } else {
+                // In 'init' functions, the user will expect the struct to be initialized to default values or at least zeroes. So  we do that. It's not performant but if the user performance they'll probable not construct or initialize things this way anyway.
+                // construct on non-zero memory such as memory from heap would have been problematic.
+                generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
                 // Code is partly copied from generateFnCall
 
                 int allocated_stack_space = 0;

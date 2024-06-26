@@ -5,11 +5,9 @@
 #macro ARRAY_CLEANUP(ARR) for @ptr ARR.sliced_unsafe() it.cleanup(); ARR.cleanup();
 
 // TODO: Asserts
-// Note that memory is uninitialized
 struct Array<T> {
-    // zero initialized by default
     ptr: T*;
-    max: i32; // allocated bytes
+    max: i32; // allocated elements (not bytes)
     len: i32; // elements in allocation
 
     fn cleanup(free_stuff: bool = true) {
@@ -23,24 +21,37 @@ struct Array<T> {
     }
 
     // returns index where element was inserted
-    // fn add(newElement: T) -> i32 {
+    fn add() -> T* {
+        if len + 1 > max {
+            res := reserve(7 + max * 2);
+            // res := reserve(1 + max); // nocheckin, small growth when debugging
+            if !res {
+                return null;
+            }
+        }
+        construct(&ptr[len])
+        ptr_elem := ptr + len * sizeof T;
+        len++;
+        return ptr_elem;
+    }
     fn add(newElement: T) -> T* {
         if len + 1 > max {
-            res: bool = reserve(7 + max * 2);
-            // res: bool = reserve(1 + max); // nocheckin, small growth when debugging
+            res := reserve(7 + max * 2);
+            // res := reserve(1 + max); // nocheckin, small growth when debugging
             if !res {
                 return null;
             }
         }
         ptr[len] = newElement;
         ptr_elem := ptr + len * sizeof T;
-        // ind = len;
         len++;
         return ptr_elem;
-        // return ind;
     }
     // DOES NOT CALL CLEANUP ON ITEMS
     fn clear() {
+        for 0..len {
+            destruct(&ptr[nr])
+        }
         len = 0
     }
     fn data() -> T* { return ptr }
@@ -61,8 +72,7 @@ struct Array<T> {
         for index..len-1 {
             ptr[nr] = ptr[nr+1];
         }
-        // TODO: Cleanup?
-        ptr[len-1] = T{};
+        destruct(&ptr[len-1])
         len--;
     }
     fn get(index: i32) -> T {
@@ -81,9 +91,15 @@ struct Array<T> {
         return ptr + index * sizeof T;
     }
     fn resize(newLen: i32) -> bool {
+        // TODO: destruct elements if shrinking
         if newLen > max {
             if !reserve(newLen)
                 return false;
+        }
+        if newLen < len {
+            for newLen..len {
+                destruct(&ptr[nr])
+            }
         }
         len = newLen;
         return true;
@@ -96,6 +112,9 @@ struct Array<T> {
             // log("{",cast<u64>ptr, max, len,"}",newMax);
             if max!=0 {
                 // log("oh")
+                for 0..len {
+                    destruct(&ptr[nr])
+                }
                 Free(ptr, max * sizeof T);
                 // log("nah")
             }
@@ -120,6 +139,12 @@ struct Array<T> {
             max = newMax;
             return true;
         } else {
+            if newMax < len {
+                for newMax..len {
+                    destruct(&ptr[nr])
+                }
+            }
+
             ns := newMax * sizeof T;
             os := max * sizeof T;
             newPtr: T* = Reallocate(ns, ptr, os);
@@ -146,15 +171,29 @@ operator []<T>(arr: Array<T>, index: i32) -> T {
 // Some code to quickly test an array
 // #import "Logger"
 // #import "Array"
-// arr: Array<i32>;
-// arr.add(4)
-// arr.add(23)
-// arr.pop()
-// arr.add(92)
-// arr.add(92)
-// arr.add(92)
-// for arr.sliced() {
-//     log(it)
+// #import "Lang"
+
+// global counter: i32
+// struct Item {
+//     x: i32
+//     fn init() {
+//         x = counter++
+//         log("init ",x)
+//     }
+//     fn cleanup() {
+//         log("cleanup ",x)
+//     }
 // }
-// log(arr.len, arr.max)
-// arr._reserve(0);
+
+// arr: Array<Item>;
+// arr.add(Item{4})
+// arr.add(Item{23})
+// arr.pop()
+// arr.add(Item{92})
+// arr.add(Item{96})
+// arr.add(Item{98})
+// for arr.sliced() {
+//     log(&it)
+// }
+// log(arr.len, " ", arr.max)
+// arr.reserve(0);

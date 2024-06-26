@@ -112,6 +112,21 @@ struct Map<Key,Val> {
         }
         return final_hash % table.size();
     }
+    // NOTE: Should this be the same or different from i64 hash
+    fn hash(num: void*) -> i32 {
+        if table.size() == 0
+            return 0;
+        // https://www.shadertoy.com/view/WttXWX
+        x: u32 = cast<u64>num & cast<u64>0xFFFF_FFFF;
+        x ^= x >> 17;
+        x *= 0xed5ad4bbu;
+        x ^= x >> 11;
+        x *= 0xac4c1b51u;
+        x ^= x >> 15;
+        x *= 0x31848babu;
+        x ^= x >> 14;
+        return x % cast<u32>table.size();
+    }
     // TODO: Implement i64 hash
     fn hash(num: i32) -> i32 {
         if table.size() == 0
@@ -130,6 +145,7 @@ struct Map<Key,Val> {
     fn size() -> i32 {
         return count;
     }
+    // internal function
     fn find_chain_unsafe(key: Key) -> MapChain<Key,Val>* {
         slot := hash(key);
         if slot >= table.len
@@ -195,26 +211,36 @@ struct Map<Key,Val> {
         }
         return true;
     }
+    // Why not always return a pointer?¨
+    // Why not just use get_unsafe or find which returns a pointer because the value might not exist and returning Val can't represent NOT_FOUND, unless we return an extra bool
     fn get(key: Key) -> Val {
         chain := find_chain_unsafe(key);
         if chain
             return chain.val;
         return Val{};
     }
+    fn find(key: Key) -> Val* {
+        chain := find_chain_unsafe(key);
+        if chain
+            return &chain.val;
+        return null;
+    }
+    // TODO: Remove get_unsafe, we have 'find'
     fn get_unsafe(key: Key) -> Val* {
         chain := find_chain_unsafe(key);
         if chain
             return &chain.val;
         return null;
     }
-    fn remove(key: Key) {
+    fn remove(key: Key) -> bool {
         chain := find_chain_unsafe(key);
         if !chain
-            return;
+            return false;
         
         // TODO: Cleanup value
         chain.unused = true;
         count--;
+        return true
         // We need to represent an unused chain because otherwise
         // we would need to delete the chain from chains and unlink
         // the chain from it's parent. Sometimes we won't be able to pop the chain

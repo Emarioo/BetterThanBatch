@@ -6,3 +6,12 @@ c := 3
 str := "ABCDEFG";
 
 test 'F'; str.ptr[b - c + a];
+
+@TEST_CASE(chained_import)
+
+// Array imports memory, the current import should therefore inherit that
+// and see types, functions and globals from that import.
+#import "Array"
+// #import "Memory"
+
+memory_tracker.init() // however, memory_tracker isn't seen

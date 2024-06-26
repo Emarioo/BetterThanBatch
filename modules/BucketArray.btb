@@ -63,9 +63,7 @@ struct BucketArray<T> {
 					yes := bucket.getBool(j);
 					if (yes) {
 						ptr: T* = bucket.getValue(j, sizeof(T), m_valuesPerBucket);
-                        // ptr.cleanup()
-                        // TODO: call cleanup on pointer?
-						// ptr->~T();
+						destruct(ptr)
 					}
 				}
 			}
@@ -165,10 +163,9 @@ struct BucketArray<T> {
 		ptr := cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
 		if (value) {
 			*ptr = *value
-            // new(ptr)T(*value);
-        } else
-			// new(ptr)T();
-			*ptr = T{}
+        } else {
+			construct(ptr)
+		}
 		//engone::log::out >> engone::log::Disable;
 		// if (outElement) {
 		// 	*outElement = ptr;
@@ -231,10 +228,8 @@ struct BucketArray<T> {
 		ptr: T* = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
 		if (value) {
             *ptr = *value
-            // new(ptr)T(*value);
         } else {
-            *ptr = T{}
-			// new(ptr)T();
+			construct(ptr)
         }
 			// memzero(ptr, 0, sizeof(T));
 		//engone::log::out >> engone::log::Disable;
@@ -280,7 +275,7 @@ struct BucketArray<T> {
 		m_valueCount--;
 		ptr: T* = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
 
-        // ptr.cleanup() // TODO: Fix
+		destruct(ptr)
 		
 		bucket.setBool(valueIndex,false);
 
