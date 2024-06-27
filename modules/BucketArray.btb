@@ -68,8 +68,10 @@ struct BucketArray<T> {
 				}
 			}
             Free(bucket.m_data, bucket.m_max);
+			memory_tracker.remove(bucket.m_data, bucket.m_max, typeid u8)
 		}
         Free(m_buckets, m_buckets_max * sizeof(BucketArray_Bucket));
+		memory_tracker.remove(m_buckets, m_buckets_max, typeid BucketArray_Bucket)
         m_buckets = null;
         m_buckets_max = 0;
 		m_valueCount = 0;
@@ -101,6 +103,8 @@ struct BucketArray<T> {
 		if (bucketIndex == -1) {
 			newMax: i32 = m_buckets_max * 1.5 + 1;
             newBuckets: BucketArray_Bucket* = Reallocate(newMax * sizeof(BucketArray_Bucket), m_buckets, m_buckets_max * sizeof(BucketArray_Bucket));
+			memory_tracker.remove(m_buckets, m_buckets_max * sizeof(BucketArray_Bucket), typeid BucketArray_Bucket)
+			memory_tracker.add(newBuckets, newMax * sizeof(BucketArray_Bucket), typeid BucketArray_Bucket)
 			if (!newBuckets) {
 				//engone::log::out >> engone::log::Disable;
                 log(BUCKET_ERROR," failed resize buckets")
@@ -123,6 +127,7 @@ struct BucketArray<T> {
 		if (bucket.m_max == 0) {
             newSize := m_valuesPerBucket /* /8 */ + m_valuesPerBucket * sizeof(T);
             bucket.m_data = Allocate(newSize);
+			memory_tracker.add(bucket.m_data, newSize, typeid u8)
 			if (!bucket.m_data) {
                 log(BUCKET_ERROR," failed resize bucket")
 				//engone::log::out >> engone::log::Disable; 
@@ -190,6 +195,8 @@ struct BucketArray<T> {
 		if (bucketIndex >= m_buckets_max) {
 			newMax: i32 = m_buckets_max * 1.5 + 1;
             newBuckets: BucketArray_Bucket* = Reallocate(newMax * sizeof(BucketArray_Bucket), m_buckets, m_buckets_max * sizeof(BucketArray_Bucket));
+			memory_tracker.remove(m_buckets, m_buckets_max * sizeof(BucketArray_Bucket), typeid BucketArray_Bucket)
+			memory_tracker.add(newBuckets, newMax * sizeof(BucketArray_Bucket), typeid BucketArray_Bucket)
 			if (!newBuckets) {
 				//engone::log::out >> engone::log::Disable;
                 log(BUCKET_ERROR, " failed resize buckets");
@@ -207,6 +214,7 @@ struct BucketArray<T> {
 		if (bucket.m_max == 0) {
 			newSize: i32 = m_valuesPerBucket /* /8 */ + m_valuesPerBucket * sizeof(T);
             bucket.m_data = Allocate(newSize);
+			memory_tracker.add(bucket.m_data, newSize, typeid u8)
 			if (!bucket.m_data) {
                 log(BUCKET_ERROR, " failed resize bucket");
                 return null;

@@ -67,7 +67,7 @@ fn CheckValues(map: Map<i32,i32>*, entries: Array<Entry>*) -> u32 {
 fn CheckIterator(map: Map<i32,i32>*, entries: Array<Entry>*) -> u32 {
     failures := 0;
     iter: MapIterator<i32,i32>;
-    while map.iterate_unsafe(&iter) {
+    while map.iterate(&iter) {
         // log(*iter.key,":",*iter.val);
         
         found := false;

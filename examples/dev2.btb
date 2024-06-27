@@ -1,24 +1,5 @@
+#import "./dev"
 
-// #import "File"
-// #import "Memory"
-// #import "Logger"
-
-
-#if OS_LINUX
-
-#macro CONST 92
-
-#endif
-
-
-// iter := DirectoryIteratorCreate("src")
-
-// item: DirIteratorItem*
-// while DirectoryIteratorNext(iter, &item) {
-//     log(item.name.sliced())
-// }
-
-// DirectoryIteratorDestroy(iter)
-
-
-
+struct A {
+    b: B*;
+}

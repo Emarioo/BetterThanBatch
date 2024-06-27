@@ -5,9 +5,14 @@
 
 struct MapChain<Key,Val> {
     key: Key;
-    next: i32; // -1 can't be seen as unused because the chain may link to other chains which we would sever. We could use a bitmask but that's annoying
+    next: i32; // -1 can't be seen as unused because the chain may link to other chains which we would sever. We need a separate variable for unused while keeping the chain intact.
     unused: bool;
     val: Val;
+
+    fn cleanup() {
+        destruct(&key) // this might cause problems
+        destruct(&val)
+    }
 }
 struct MapIterator<Key,Val> {
     key: Key*;
@@ -142,7 +147,8 @@ struct Map<Key,Val> {
         x ^= x >> 14;
         return x % cast<u32>table.size();
     }
-    fn size() -> i32 {
+    // not named size() because memory isn't contiguous like an array
+    fn getCount() -> i32 {
         return count;
     }
     // internal function
@@ -167,7 +173,7 @@ struct Map<Key,Val> {
         }
         return null;
     }
-    fn set(key: Key, val: Val) -> bool {
+    fn set(key: Key, val: Val) -> Val* {
         // if table.size() == 0 {
         //     log("Dude, you got to map.init before map.set-ing it") // TODO: Use assert instead
         // }
@@ -175,41 +181,43 @@ struct Map<Key,Val> {
         if slot >= table.len {
             if table.len == 0
                 log("Dude, you forgot to initialize the hash map (Map.btb)")
-            return false;
+            return null;
         }
         index := table.get(slot);
         
         if index == 0 {
-            chains.add(MapChain<Key,Val>{key = key, next = 0, unused = false, val = val});
+            chain := chains.add(MapChain<Key,Val>{key = key, next = 0, unused = false, val = val});
             table.ptr[slot] = chains.size(); // not size-1 because 0 is seen as null
             count++;
-            return true;   
+            return &chain.val;
         }
         while {
             chain := chains.get_unsafe(index-1); // -1 because 0 is null
             if !chain
-                return false; // TODO: Bug, assert instead
+                return null; // TODO: Bug, assert instead
             if chain.unused {
                 chain.key = key;
                 chain.val = val;
                 count++;
-                return true;
+                return &chain.val;
             }
             if chain.key == key {
+                destruct(&chain.val)
                 chain.val = val;
-                return true;
+                return &chain.val;
             }
             if chain.next == MAP_CHAIN_INDEX_NULL {
                 chain.next = chains.size()+1; // not size because 0 is seen as null
-                chains.add(MapChain<Key,Val>{
+                chain2 := chains.add(MapChain<Key,Val>{
                     key = key, next = 0, unused = false, val = val
                 });
                 count++;
-                return true;
+                return &chain2.val;
             }
             index = chain.next;
         }
-        return true;
+        // UNREACHABLE
+        return null;
     }
     // Why not always return a pointer?¨
     // Why not just use get_unsafe or find which returns a pointer because the value might not exist and returning Val can't represent NOT_FOUND, unless we return an extra bool
@@ -237,8 +245,8 @@ struct Map<Key,Val> {
         if !chain
             return false;
         
-        // TODO: Cleanup value
         chain.unused = true;
+        destruct(&chain.val)
         count--;
         return true
         // We need to represent an unused chain because otherwise
@@ -250,7 +258,7 @@ struct Map<Key,Val> {
     // DO NOT perform a write operation such as add/remove when using this function. That's why the function is marked unsafe.
     // The iterator should be initialized with default values (zeros)
     // returns true when iterator contains a new value, false when there are no more values
-    fn iterate_unsafe(iterator: MapIterator<Key,Val>*) -> bool {
+    fn iterate(iterator: MapIterator<Key,Val>*) -> bool {
         // NOTE: _table_pos and _next_chain points to the next position of where we should read NOT the current we have read.
         //  It is more efficient since we don't need to check an old chain to get the new chain, we can get the new chain right away.
         
@@ -316,8 +324,7 @@ struct Map<Key,Val> {
         return MapIterator<Key,Val>{}
     }
     fn clear() {
-        // TODO: Clear map
-        chains.len = 0;
+        chains.clear()
         memzero(table.ptr, table.max * sizeof(*table.ptr));
     }
     fn print() {

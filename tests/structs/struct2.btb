@@ -1,0 +1,11 @@
+#import "./struct3"
+
+struct A {
+    b: B*;
+}
+
+global glob_a: i32
+
+fn fun_a() {
+    glob_b = 3
+}

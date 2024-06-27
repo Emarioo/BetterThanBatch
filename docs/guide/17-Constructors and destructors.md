@@ -115,8 +115,32 @@ fn destruct<T>(data: T*) // <- signature of 'destruct'
 
 The semantics of construction and destruction is very important in data structures where you can add and remove elements. You want an array of arrays to correctly free memory without memory leaks. You also don't want to have different data structures for correctly destructing structures and primitive types, hence `construct` and `destruct`.
 
+# Extra details
+`construct` and `destruct` will call the first method of a struct that matches the conditions. The conditions are the following:
+
+- The function itself cannot be polymorphic, the parent struct can be however.
+- The function cannot have any arguments without default values.
+
+```c++
+fn Box<T> {
+    // Will be called because the parent structure Box can be polymorphic
+    fn init() { }
+
+    // Will NOT be called because the function itself cannot be polymorphic
+    fn init<T>() { }
+
+    // Will be called because all arguments have default values
+    fn init(a: i32 = 23, b: char[] = "yay") { }
+
+    // Will NOT be called because some arguments do not have default values.
+    fn init(a: i32, b: char[] = "yay") { }
+}
+```
+
+**NOTE**: Methods always have at least one argument, `this`. That argument is excluded from the conditions.
+
 # Future features
-- Some way to automatically destructing members of a struct. Remembering to destruct new members you add is difficult.
+- Some way to automatically destruct members of a struct. Remembering to destruct new members you add is difficult.
 ```c++
 // something like this? adding this to every new struct you create is
 // kind of annoying too no?
@@ -124,8 +148,10 @@ for @ptr this.members
     destruct(it)
 ```
 
+- We could allow polymorphic `init` and `cleanup` but it would require complicated code. If it's worth than we can implement it. Otherwise we won't.
+
 
 # Implementation details
+Code for construct and destruct can be found in `Generator.cpp - GenContext::generateSpecialFnCall` and `TypeChecker.cpp - TyperContext::checkFncall` (search for `"construct"`).
 
-Some code for construct, destruct can be found in `Generator.cpp`, function `GenContext::generateSpecialFnCall`.
-At the time of writing this is true, may change in the future.
+**NOTE**: The code may change and this document could be out of date.

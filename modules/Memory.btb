@@ -10,6 +10,8 @@
 
 // temporary
 #import "Logger"
+#import "Map" // used for tracker
+#import "Lang" // used for tracker
 
 fn @intrinsic memcpy(dst: void*, src: void*, len: i64);
 fn @intrinsic memzero(dst: void*, len: i64);
@@ -32,18 +34,29 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
     if !size {
         if ptr {
             HeapFree(heap, 0, ptr)
-            memory_tracker.remove(ptr, old_size)
+            // if type.index() == 0
+                memory_tracker.remove(ptr, old_size)
+            // else
+            //     memory_tracker.remove(ptr, old_size, type)
         }
         return null
     }
     new_ptr: void*
     if !ptr {
         new_ptr = HeapAlloc(heap, 0, size)
-        memory_tracker.add(new_ptr, size)
+        // if type.index() == 0
+            memory_tracker.add(new_ptr, size)
+        // else
+        //     memory_tracker.add(new_ptr, size, type)
     } else {
         new_ptr = HeapReAlloc(heap, 0, ptr, size)
-        memory_tracker.add(new_ptr, size)
-        memory_tracker.remove(ptr, old_size)
+        // if type.index() == 0 {
+            memory_tracker.remove(ptr, old_size) // we must remove first incase HeapReAlloc returns the same pointer
+            memory_tracker.add(new_ptr, size)
+        // } else {
+        //     memory_tracker.remove(ptr, old_size, type)
+        //     memory_tracker.add(new_ptr, size, type)
+        // }
     }
     if !new_ptr || new_ptr == STATUS_NO_MEMORY || new_ptr == STATUS_ACCESS_VIOLATION {
         return null
@@ -73,49 +86,178 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
         memory_tracker.add(new_ptr, size)
     } else {
         new_ptr = realloc(ptr, size)
-        memory_tracker.add(new_ptr, size)
         memory_tracker.remove(ptr, old_size)
+        memory_tracker.add(new_ptr, size)
     }
     return new_ptr
 #endif
 }
 
-#import "Map"
 
 #macro LOG_TRACKER(...) log("Tracker: ",...)
 // #macro LOG_TRACKER(...) #endmacro
 
 // TODO: Debug locations
+struct MemoryTracker_Item {
+    type: lang_TypeId;
+    count: i32;
+    allocations: Map<void*, i32>;
+}
+fn hash(v: lang_TypeId) -> u32 {
+    // Assert(4 == sizeof lang_TypeId)
+    return *cast<u32*>&v
+}
 struct MemoryTracker {
-    map: Map<void*, i32>;
+    allocations: Map<void*, i32>;
+    map_types: Map<u32, MemoryTracker_Item>; // u32 is a hashed lang_TypeId
     initialized: bool;
+    disabled: bool;
     fn init() {
-        map.init(10000)
+        allocations.init(10000)
+        map_types.init(200)
         initialized = true
     }
     fn add(ptr: void*, size: i32) {
-        if !initialized
-            return;
-        value_ptr := map.find(ptr)
+        if !initialized || disabled
+            return; 
+        disabled = true
+        defer disabled = false
+        value_ptr := allocations.find(ptr)
         if value_ptr {
-            LOG_TRACKER("Cannot add allocation ", ptr, ", pointer already exists.")
-            return;
+            if *value_ptr != 0 {
+                LOG_TRACKER("Cannot add allocation ", ptr, ", pointer already exists.")
+                return;
+            }
         }
-        map.set(ptr, size)
+        allocations.set(ptr, size)
+    }
+    fn add(ptr: void*, size: i32, type: lang_TypeId) {
+        if !initialized || disabled
+            return;
+        disabled = true
+        defer disabled = false
+
+        hashed_type := hash(type)
+        item := map_types.find(hashed_type)
+        if !item {
+            item = map_types.set(hashed_type, MemoryTracker_Item{})
+            if !item {
+                log("Tracker: map_types.set() returned null")
+                return;
+            }
+            item.type = type
+            item.allocations.init(400)
+        }
+
+        value_ptr := item.allocations.find(ptr)
+
+        if value_ptr {
+            if *value_ptr != 0 {
+                LOG_TRACKER("Cannot add allocation ", ptr, ", pointer already exists.")
+                return;
+            }
+        }
+        item.count += size / cast<i32>lang_typesize(type)
+        item.allocations.set(ptr, size)
     }
     // you may not know the allocated size so you don't have to specifify it, however, if you do specify and the sizes don't match, more bugs may be caught.
     fn remove(ptr: void*, size: i32 = 0) {
-        if !initialized
+        if !initialized || disabled
             return;
-        value_ptr := map.find(ptr)
+        disabled = true
+        defer disabled = false
+        value_ptr := allocations.find(ptr)
         if !value_ptr {
             LOG_TRACKER("Cannot remove allocation ", ptr, ", it doesn't exist.")
+            return;
+        }
+        if *value_ptr == 0 {
+            LOG_TRACKER("Cannot remove allocation ", ptr, ", it existed at one point but not anymore.")
             return;
         }
         if size != 0 && *value_ptr != size {
             LOG_TRACKER("When removing allocation ", ptr, ", expected size of allocation didn't match (",size,"!=",*value_ptr,").")
         }
-        map.remove(ptr)
+        allocations.set(ptr, 0) // we set to 0 instead of removing because it's useful to know if pointer existed at one point in time
+        // allocations.remove(ptr)
+    }
+   
+    // you may not know the allocated size so you don't have to specifify it, however, if you do specify and the sizes don't match, more bugs may be caught.
+    fn remove(ptr: void*, size: i32, type: lang_TypeId) {
+        if !initialized || disabled
+            return;
+        disabled = true
+        defer disabled = false
+
+        hashed_type := hash(type)
+        item := map_types.find(hashed_type)
+        if !item {
+            item = map_types.set(hashed_type, MemoryTracker_Item{})
+            if !item {
+                log("Tracker: map_types.set() returned null")
+                return;
+            }
+            item.type = type
+            item.allocations.init(400)
+        }
+
+        value_ptr := item.allocations.find(ptr)
+        if !value_ptr {
+            LOG_TRACKER("Cannot remove allocation ", ptr, ", it doesn't exist.")
+            return;
+        }
+        if *value_ptr == 0 {
+            LOG_TRACKER("Cannot remove allocation ", ptr, ", it existed at one point but not anymore.")
+            return;
+        }
+        if size != 0 && *value_ptr != size {
+            LOG_TRACKER("When removing allocation ", ptr, ", expected size of allocation didn't match (",size,"!=",*value_ptr,").")
+        }
+        item.count -= size / cast<i32>lang_typesize(type)
+        item.allocations.set(ptr, 0) // we set to 0 instead of removing because it's useful to know if pointer existed at one point in time
+        // allocations.remove(ptr)
+    }
+
+    fn print_memory() {
+        {
+            log("Allocations:")
+            iter := allocations.create_iterator()
+            logged := false
+            while allocations.iterate(&iter) {
+                if *iter.val == 0
+                    continue
+
+                log(" ",*iter.key," size: ", *iter.val)
+                logged = true
+            }
+            if !logged   log(" none")
+        }
+        {
+            log("Allocated types:")
+            iter := map_types.create_iterator()
+            logged := false
+            // TODO: Colored printing
+            while map_types.iterate(&iter) {
+                item := iter.val
+                if item.count == 0
+                    continue
+
+                log(" '",lang_typename(item.type), "' count: ", item.count)
+                logged = true
+
+                typesize := lang_typesize(item.type)
+
+                iter := item.allocations.create_iterator()
+                while item.allocations.iterate(&iter) {
+                    count := *iter.val / cast<i32>typesize
+                    if count == 0
+                        continue
+
+                    log("  ",*iter.key, " count: ", count)
+                }
+            }
+            if !logged   log(" none")
+        }
     }
 }
 

@@ -47,6 +47,7 @@ struct TyperContext : public PhaseContext {
     bool showErrors = true;
 
     bool do_not_check_global_globals = false;
+    bool inside_import_scope = false;
 
     u32 currentPolyVersion=0;
     QuickArray<ContentOrder> currentContentOrder;

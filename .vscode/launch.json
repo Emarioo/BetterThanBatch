@@ -46,7 +46,7 @@
             "args": ["-dev"],
             // "args": ["prepare_release","--run"],
             // "args": ["-dev","-nopreload"],
-            // "args": ["--test","examples/*"],
+            // "args": ["--test","*struct.*"],
             // "args": ["-dev","-nopreload"],
             // "args": ["--test"],
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],

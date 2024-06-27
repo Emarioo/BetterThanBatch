@@ -47,3 +47,20 @@ _test null; box.ptr;
 // log(&box)
 
 _test 1; hits;
+
+
+struct Ok {
+    x: i32;
+    fn init(a: i32 = 5, b: i32 = 9) {
+        _test 5; a;
+        _test 9; b;
+    }
+    fn cleanup(b: bool = 3, ya: i32 = 2) {
+        _test 3; b;
+        _test 2; ya;
+    }
+}
+
+ok: Ok
+construct(&ok)
+destruct(&ok)

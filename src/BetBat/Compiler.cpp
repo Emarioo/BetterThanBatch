@@ -562,13 +562,21 @@ void Compiler::processImports() {
                         break;
                     }
                 }
-            } else if (task.type == TASK_TYPE_BODY) {// when we should check bodies, functions must be available
-                CompilerImport* im = imports.get(task.import_id-1);
-                for(int j=0;j<im->dependencies.size();j++) {
-                    CompilerImport* dep = imports.get(im->dependencies[j].id-1);
-                    if(!dep || !(dep->state & TASK_TYPE_FUNCTIONS)) {
-                        LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+            } else if (task.type == TASK_TYPE_BODY) {
+                // when we check bodies, functions and globals from other imports must be available
+
+                // TODO: Optimize, store an integer of how many non-type checked tasks
+                //   we have left instead of iterating all tasks every time.
+                for(int i=0;i<tasks.size();i++) {
+                    CompilerTask& t = tasks[i];
+                    // TODO: We may only have tasks to generate bytecodes but a thread
+                    //   may have taken out a task and be working on it right now.
+                    //   Redesign this
+                    if(t.type < TASK_TYPE_BODY) {
+                        LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
                         missing_dependency = true;
+                        // we miss a dependency in that all other imports have
+                        // not been type checked yet
                         break;
                     }
                 }
@@ -823,8 +831,15 @@ void Compiler::processImports() {
                         }
                     }
                     picked_task.no_change = !changed;
-                    if(ignore_errors)
-                        tasks.add(picked_task); // nocheckin, lock tasks
+                    if(ignore_errors) {
+                        lock_imports.lock();
+                        // When tasks are processed backwards, 
+                        // we must put task first so that we
+                        // process the other struct check tasks first
+                        tasks.insert(0, picked_task);
+                        // tasks.add(picked_task);
+                        lock_imports.unlock();
+                    }
                 }
             } else if(picked_task.type == TASK_TYPE_FUNCTIONS) {
                 CompilerImport* imp = imports.get(picked_task.import_id-1);

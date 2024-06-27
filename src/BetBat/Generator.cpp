@@ -752,17 +752,48 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             // int len = sprintf(buf,"  expr push %s",now->name->c_str());
             // bytecode->addDebugText(buf,len);
 
+            // TODO: Fix bug where local polyVersion is used for globals at import scope.
+
+            /* NOTE: Thoughts on polyVersion and globals
+
+                Each global variable has a list of types, each type used by a different polymorphic scope.
+                When referencing a variable, we need to know which type in the list to use.
+                That's where polyVersion comes in. The currentPolyVersion indicates the type to use
+                in local scopes.
+
+                A problem occurs when accessing variables outside the same polymorphic scope.
+                A different polyVersion must be used.
+
+                How do we know if a variable is inside or outside a polymorphic scope?
+
+                Also, the code below is very problematic. The function bottom refers to a polymorphic global which exists in a different polymorphic scope than it's own function scope. The correct way of handling this would be to let bottom be a polymorphic function. Each generate top function would require it's own bottom function. Maybe we can change the polymorphic system to be per scope instead of per function and parent struct?
+                
+                    fn top<T>() {
+                        global local_data: T
+
+                        fn bottom() {
+                            local_data++
+                        }
+                        bottom()
+                    }
+            
+            */
+
+            auto version = currentPolyVersion; // globals do not share polyVersion with current scope, they can come from a different scope
+            if(varinfo->is_import_global)
+                version = 0;
+
             TypeInfo *typeInfo = 0;
-            if(varinfo->versions_typeId[info.currentPolyVersion].isNormalType())
-                typeInfo = info.ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
-            TypeId typeId = varinfo->versions_typeId[info.currentPolyVersion];
+            TypeId typeId = varinfo->versions_typeId[version];
+            if(typeId.isNormalType())
+                typeInfo = info.ast->getTypeInfo(typeId);
             
             switch(varinfo->type) {
                 case Identifier::GLOBAL_VARIABLE: {
                     if(varinfo->declaration && varinfo->declaration->isImported()) {
                         generate_ext_dataptr(BC_REG_B, varinfo);
                     } else {
-                        builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                        builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[version]);
                     }
                 } break; 
                 case Identifier::LOCAL_VARIABLE: {
@@ -1132,7 +1163,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
     *outTypeId = endType;
     return SIGNAL_SUCCESS;
 }
-SignalIO GenContext::generateSpecialFnCall(ASTExpression* expression){
+SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
     if(expression->args.size() != 1){
         Assert(hasForeignErrors()); // type checker checks error
         // ERR_SECTION(
@@ -1160,8 +1191,9 @@ SignalIO GenContext::generateSpecialFnCall(ASTExpression* expression){
     }
 
     TypeId arg_type = types[0];
-
-    if(expression->name == "construct") {
+    bool is_destruct = expression->name == "destruct";
+    if(expression->name == "construct" || expression->name == "destruct") { 
+        // NOTE: construct and destruct are very similar, they can share code, search for is_destruct to find the differences
         if(arg_type.getPointerLevel() == 0) {
             Assert(hasForeignErrors()); // type checker checks error
             // ERR_SECTION(
@@ -1180,48 +1212,20 @@ SignalIO GenContext::generateSpecialFnCall(ASTExpression* expression){
         if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
             builder.emit_pop(BC_REG_B); // pop pointer to data object
 
-            FnOverloads::Overload* overload = nullptr;
-            auto overloads = typeinfo->astStruct->getMethod("init");
-            if (overloads) {
-                for(auto& o : overloads->overloads) {
-                    // TODO: Matching functions with default values for all arguments would be fine.
-                    //   And I guess return values would be fine, we just throw them away.
-                    
-                    // NOTE: 'this' is the first argument
-                    if (o.funcImpl->signature.argumentTypes.size() == 1 && o.funcImpl->signature.returnTypes.size() == 0) {
-                        overload = &o;
-                        break;
-                    }
-                    // bool all_defaults = true;
-                    // for(int i=0;i<o.funcImpl->signature.argumentTypes.size();i++) {
-                    //     auto& arg = o.astFunc->arguments[i];
-                    //     if(!arg.defaultValue) {
-                    //         all_defaults = false;
-                    //         break;
-                    //     }
-                    // }
-                    // if(all_defaults) {
-                    //    overload = &o;
-                        // break;
-                    // }
-                }
-            }
-            if(!overload) {
+            FnOverloads::Overload* overload = &expression->versions_overload[currentPolyVersion];
+
+            if(!overload || !overload->astFunc || !overload->funcImpl) {
                 generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
             } else {
-                // In 'init' functions, the user will expect the struct to be initialized to default values or at least zeroes. So  we do that. It's not performant but if the user performance they'll probable not construct or initialize things this way anyway.
-                // construct on non-zero memory such as memory from heap would have been problematic.
-                generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
-                // Code is partly copied from generateFnCall
-
+                if(!is_destruct) {
+                    // In 'init' functions, the user will expect the struct to be initialized to default values or at least zeroes. So  we do that. It's not performant but if the user performance they'll probable not construct or initialize things this way anyway.
+                    // construct on non-zero memory such as memory from heap would have been problematic.
+                    generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
+                    // Code is partly copied from generateFncall
+                }
+                // Code is partly copied from generateFncall
                 int allocated_stack_space = 0;
-
-                // NOTE: Ensuring 16-byte aligned stack pointer on function calls is done here in the generator
-                //   because both x64_gen and the VirtualMachine requires it when calling external functions.
-                //   BCryptGenRandom will crash if stack isn't aligned so yes, alignment is necessary.
-
                 auto signature = &overload->funcImpl->signature;
-
                 CallConvention call_convention = signature->convention;
 
                 switch(call_convention){
@@ -1267,147 +1271,43 @@ SignalIO GenContext::generateSpecialFnCall(ASTExpression* expression){
                 }
                 
                 if(call_convention != INTRINSIC) {
-                    // The x64 generator and VirtualMachine handles 16-byte alignment
-                    // int alignment = (allocated_stack_space + builder.get_virtual_sp()) % 16;
-                    // if(alignment != 0) {
-                    //     allocated_stack_space = allocated_stack_space + (16 - alignment);
-                    // }
-
-                    // we should always emit alloc_args to ensure 16-byte alignment
                     builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
                 }
 
                 int size_of_pointer = 8;
-                builder.emit_set_arg(BC_REG_B, 0, size_of_pointer, false);
+                builder.emit_set_arg(BC_REG_B, signature->argumentTypes[0].offset, size_of_pointer, false);
 
-                int reloc = 0;
-                builder.emit_call(overload->astFunc->linkConvention, overload->astFunc->callConvention, &reloc);
-                info.addCallToResolve(reloc, overload->funcImpl);
-    
-                builder.emit_free_args(allocated_stack_space);
-            }
-        } else {
-            builder.emit_pop(BC_REG_B); // pop pointer to data object
+                // Code copied from generateFncall
+                for(int i=1;i<overload->astFunc->arguments.size();i++) {
+                    auto arg = overload->astFunc->arguments[i].defaultValue;
+                    Assert(arg);
+                    DynamicArray<TypeId> tempTypes{};
+                    auto result = generateExpression(arg, &tempTypes);
+                    if(result == SIGNAL_SUCCESS) {
+                        if(tempTypes.size() == 0) {
+                            Assert(info.hasForeignErrors());
+                        } else {
+                            TypeId argType = tempTypes[0];
+                            // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
+                            bool wasSafelyCasted = performSafeCast(argType, signature->argumentTypes[i].typeId);
 
-            int size = ast->getTypeSize(arg_type);
-            Assert(size <= 8); // only structs can be bigger than 8
-            genMemzero(BC_REG_B, BC_REG_A, size);
-        }
-    } else if(expression->name == "destruct") {
-        if(arg_type.getPointerLevel() == 0) {
-            Assert(hasForeignErrors()); // type checker checks error
-            // ERR_SECTION(
-            //     ERR_HEAD2(expression->location)
-            //     ERR_MSG("'"<<expression->name<<"' expects a pointer to a \"data object\" where destruction should occur.")
-            //     ERR_LINE2(expression->location, "here")
-            // )
-            return SIGNAL_FAILURE;
-        }
-
-        arg_type.setPointerLevel(arg_type.getPointerLevel()-1);
-
-        TypeInfo* typeinfo = ast->getTypeInfo(arg_type.baseType());
-        Assert(typeinfo); // shouldn't be possible
-
-        if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
-            builder.emit_pop(BC_REG_B); // pop pointer to data object
-
-            FnOverloads::Overload* overload = nullptr;
-            auto overloads = typeinfo->astStruct->getMethod("cleanup");
-            if (overloads) {
-                for(auto& o : overloads->overloads) {
-                    // TODO: Matching functions with default values for all arguments would be fine.
-                    //   And I guess return values would be fine, we just throw them away.
-                    
-                    // NOTE: 'this' is the first argument
-                    if (o.funcImpl->signature.argumentTypes.size() == 1 && o.funcImpl->signature.returnTypes.size() == 0) {
-                        overload = &o;
-                        break;
-                    }
-                    // bool all_defaults = true;
-                    // for(int i=0;i<o.funcImpl->signature.argumentTypes.size();i++) {
-                    //     auto& arg = o.astFunc->arguments[i];
-                    //     if(!arg.defaultValue) {
-                    //         all_defaults = false;
-                    //         break;
-                    //     }
-                    // }
-                    // if(all_defaults) {
-                    //    overload = &o;
-                        // break;
-                    // }
-                }
-            }
-            if(!overload) {
-                generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
-            } else {
-                // Code is partly copied from generateFnCall
-
-                int allocated_stack_space = 0;
-
-                // NOTE: Ensuring 16-byte aligned stack pointer on function calls is done here in the generator
-                //   because both x64_gen and the VirtualMachine requires it when calling external functions.
-                //   BCryptGenRandom will crash if stack isn't aligned so yes, alignment is necessary.
-
-                auto signature = &overload->funcImpl->signature;
-
-                CallConvention call_convention = signature->convention;
-
-                switch(call_convention){
-                    case BETCALL: {
-                        int stackSpace = signature->argSize;
-                        allocated_stack_space = stackSpace;
-                    } break;
-                    case STDCALL:
-                    case UNIXCALL: {
-                        for(int i=0;i<signature->argumentTypes.size();i++){
-                            int size = info.ast->getTypeSize(signature->argumentTypes[i].typeId);
-                            if(size>8){
-                                // TODO: This should be moved to the type checker.
+                            // NOTE: We don't allow cast operators here because i'd rather have less and simpler code.
+                            if(!wasSafelyCasted && !info.hasErrors()){
                                 ERR_SECTION(
-                                    ERR_HEAD2(expression->location)
-                                    ERR_MSG("Argument types cannot be larger than 8 bytes when using stdcall.")
-                                    ERR_LINE2(expression->location, "bad")
+                                    ERR_HEAD2(arg->location)
+                                    ERR_MSG("Cannot cast argument of type " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(signature->argumentTypes[i].typeId) << ". The function in question was called by destruct/construct.")
+                                    ERR_LINE2(arg->location,"bad argument")
+                                    ERR_LINE2(expression->location,"the caller expression")
                                 )
-                                return SIGNAL_FAILURE;
                             }
                         }
-
-                        if(call_convention == STDCALL) {
-                            int stackSpace = signature->argumentTypes.size() * 8;
-                            if(stackSpace<32)
-                                stackSpace = 32;
-                            
-                            allocated_stack_space = stackSpace;
-                        } else {
-                            // How does unixcall deal with stack?
-                            // I guess we just allocate some for now.
-                            int stackSpace = signature->argumentTypes.size()* 8;
-                            allocated_stack_space = stackSpace;
-                        }
-                    } break;
-                    // case CDECL_CONVENTION: {
-                    //     Assert(false); // INCOMPLETE
-                    // } break;
-                    case INTRINSIC: {
-                        // do nothing
-                    } break;
-                    default: Assert(false);
-                }
-                
-                if(call_convention != INTRINSIC) {
-                    // The x64 generator and VirtualMachine handles 16-byte alignment
-                    // int alignment = (allocated_stack_space + builder.get_virtual_sp()) % 16;
-                    // if(alignment != 0) {
-                    //     allocated_stack_space = allocated_stack_space + (16 - alignment);
-                    // }
-
-                    // we should always emit alloc_args to ensure 16-byte alignment
-                    builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
+                    }
                 }
 
-                int size_of_pointer = 8;
-                builder.emit_set_arg(BC_REG_B, 0, size_of_pointer, false);
+                for(int i=overload->astFunc->arguments.size()-1;i >= 1;i--) {
+                    auto arg = overload->astFunc->arguments[i].defaultValue;
+                    generatePop_set_arg(signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
+                }
 
                 int reloc = 0;
                 builder.emit_call(overload->astFunc->linkConvention, overload->astFunc->callConvention, &reloc);
@@ -1428,11 +1328,11 @@ SignalIO GenContext::generateSpecialFnCall(ASTExpression* expression){
 
     return SIGNAL_SUCCESS;
 }
-SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator){
+SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator){
     using namespace engone;
 
     if(expression->name == "construct" || expression->name == "destruct") {
-        return generateSpecialFnCall(expression);
+        return generateSpecialFncall(expression);
     }
     
     ASTFunction* astFunc = nullptr;
@@ -1463,7 +1363,6 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         _GLOG(log::out << "Overload: ";funcImpl->print(info.ast,nullptr);log::out << "\n";)
     }
     TINY_ARRAY(ASTExpression*,all_arguments,5);
-    // std::vector<ASTExpression*> fullArgs;
     all_arguments.resize(signature->argumentTypes.size());
     
     if(isOperator) {
@@ -1520,13 +1419,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             }
     }
 
-    // NOTE: alloc_local allocates memory for local variable
-    //   It should have been done when we did alloc_local
     int allocated_stack_space = 0;
-
-    // NOTE: Ensuring 16-byte aligned stack pointer on function calls is done here in the generator
-    //   because both x64_gen and the VirtualMachine requires it when calling external functions.
-    //   BCryptGenRandom will crash if stack isn't aligned so yes, alignment is necessary.
 
     CallConvention call_convention = signature->convention;
 
@@ -1573,13 +1466,8 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
     }
     
     if(call_convention != INTRINSIC) {
-        // The x64 generator and VirtualMachine handles 16-byte alignment
-        // int alignment = (allocated_stack_space + builder.get_virtual_sp()) % 16;
-        // if(alignment != 0) {
-        //     allocated_stack_space = allocated_stack_space + (16 - alignment);
-        // }
-
-        // we should always emit alloc_args to ensure 16-byte alignment
+        // we should always emit alloc_args even if we don't have any arguments to ensure 16-byte alignment
+        // The x64 generator (and virtual machine) ensures 16-byte alignment on alloc_args instructions
         builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
     }
 
@@ -1817,8 +1705,12 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             // tinycode->print(0,-1, bytecode);
         } else {
             auto varinfo = expression->identifier->cast_var();
+
+            auto version = currentPolyVersion;
+            if(varinfo->is_import_global)
+                version = 0;
             
-            auto type_id = varinfo->versions_typeId[info.currentPolyVersion];
+            auto type_id = varinfo->versions_typeId[version];
             auto typeinfo = ast->getTypeInfo(type_id);
             Assert(typeinfo->funcType);
             
@@ -1827,7 +1719,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                     if(varinfo->declaration && varinfo->declaration->isImported()) {
                         generate_ext_dataptr(BC_REG_B, varinfo);
                     } else {
-                        builder.emit_dataptr(reg, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                        builder.emit_dataptr(reg, varinfo->versions_dataOffset[version]);
                     }
                 } break; 
                 case Identifier::LOCAL_VARIABLE: {
@@ -2123,7 +2015,11 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             if (id) {
                 if (id->is_var()) {
                     auto varinfo = id->cast_var();
-                    if(!varinfo->versions_typeId[info.currentPolyVersion].isValid()){
+                    auto version = currentPolyVersion;
+                    if (varinfo->is_import_global)
+                        version = 0;
+                    auto type = varinfo->versions_typeId[version];
+                    if(!type.isValid()){
                         return SIGNAL_FAILURE;
                     }
                     // auto var = info.ast->getVariableByIdentifier(id);
@@ -2142,9 +2038,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             if(varinfo->declaration && varinfo->declaration->isImported()) {
                                 generate_ext_dataptr(BC_REG_B, varinfo);
                             } else {
-                                builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                                builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[version]);
                             }
-                            generatePush(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
+                            generatePush(BC_REG_B, 0, type);
                         } break; 
                         case Identifier::LOCAL_VARIABLE: {
                             // generatePush(BC_REG_LP, varinfo->versions_dataOffset[info.currentPolyVersion],
@@ -2169,7 +2065,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                         }
                     }
 
-                    outTypeIds->add(varinfo->versions_typeId[info.currentPolyVersion]);
+                    outTypeIds->add(type);
                     if(outTypeIds->last() == AST_VOID)
                         return SIGNAL_FAILURE;
                     return SIGNAL_SUCCESS;
@@ -2233,7 +2129,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 return SIGNAL_FAILURE;
             }
         } else if (expression->typeId == AST_FNCALL) {
-            return generateFnCall(expression, outTypeIds, false);
+            return generateFncall(expression, outTypeIds, false);
         } else if(expression->typeId==AST_STRING){
             // Assert(expression->constStrIndex!=-1);
             int& constIndex = expression->versions_constStrIndex[info.currentPolyVersion];
@@ -2665,7 +2561,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
         TypeId ltype = AST_VOID;
         DynamicArray<TypeId> tmp_types{};
         if(operatorImpl){
-            return generateFnCall(expression, outTypeIds, true);
+            return generateFncall(expression, outTypeIds, true);
         } else if (expression->typeId == AST_REFER) {
 
             SignalIO result = generateReference(expression->left,&ltype,idScope);
@@ -3314,7 +3210,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
             TypeId ltype = AST_VOID;
             if(operatorImpl){
-                return generateFnCall(expression, outTypeIds, true);
+                return generateFncall(expression, outTypeIds, true);
             }
             SignalIO err = generateExpression(expression->left, &tmp_types);
             if(tmp_types.size()) ltype = tmp_types.last();
@@ -4764,8 +4660,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         // Assert(!var->globalData || info.currentScopeId == info.ast->globalScopeId);
                         switch(varinfo->type) {
                             case Identifier::GLOBAL_VARIABLE: {
-                                Assert(false);
+                                Assert(false); 
+                                // possible bug with polyversions and globals?
                                 if(varinfo->declaration && varinfo->declaration->isImported()) {
+
                                 } else {
                                     builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                                 }

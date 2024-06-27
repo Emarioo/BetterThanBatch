@@ -405,6 +405,8 @@ struct IdentifierVariable : public Identifier {
     PolyVersions<i32> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
 
+    bool is_import_global = false;
+
     ASTStatement* declaration = nullptr; // needed for linked_library for imported variables
 
     bool isLocal() { return type == LOCAL_VARIABLE; }

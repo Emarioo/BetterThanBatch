@@ -8,9 +8,9 @@
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION2(CONTENT)
 
-#define _TCLOG_ENTER(...) FUNC_ENTER_IF(global_loggingSection & LOG_TYPECHECKER)
+// #define _TCLOG_ENTER(...) FUNC_ENTER_IF(global_loggingSection & LOG_TYPECHECKER)
 // #define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
-// #define _TCLOG_ENTER(X)
+#define _TCLOG_ENTER(X)
 
 SignalIO TyperContext::checkEnums(ASTScope* scope){
     using namespace engone;
@@ -304,8 +304,6 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
     std::string realTypeName{};
     TINY_ARRAY(TypeId, polyArgs, 4);
 
-    // log::out << "check '"<<typeString<<"'\n";
-
     std::string tmp = typeString;
     if (tmp.substr(0,3) == "fn(" || tmp.substr(0,3) == "fn@") {
         // This code is better
@@ -559,7 +557,6 @@ SignalIO TyperContext::checkStructs(ASTScope* scope) {
         if(astStruct->state==ASTStruct::TYPE_EMPTY){
             // structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name,false,true);
             structInfo = info.ast->createType(astStruct->name, scope->scopeId);
-            astStruct->base_typeId = structInfo->id;
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
                 ERR_SECTION(
@@ -570,6 +567,8 @@ SignalIO TyperContext::checkStructs(ASTScope* scope) {
                 // We don't care about another turn. We failed but we don't set
                 // completedStructs to false since this will always fail.
             } else {
+                astStruct->base_typeId = structInfo->id;
+
                 _TCLOG(log::out << log::LIME << "struct '"<<info.ast->typeToString(structInfo->id)<<"'"<< log::NO_COLOR <<" in scope "<<scope->scopeId<<"\n";)
                 astStruct->state = ASTStruct::TYPE_CREATED;
                 structInfo->astStruct = astStruct;
@@ -775,13 +774,14 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         bool thisFailed=false;
         // for(int i = 0; i<(int)expr->args->size();i++){
         //     auto argExpr = expr->args->get(i);
-            
+        // BREAK(expr->args.size() == 4 && expr->args[0]->name == "memory_tracker")
         for(int i = 0; i<(int)expr->args.size();i++){
             auto argExpr = expr->args.get(i);
             Assert(argExpr);
 
             tempTypes.resize(0);
-            checkExpression(scopeId,argExpr,&tempTypes, false);
+            auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
+            // log::out << "signal " << signal<<"\n";
             Assert(tempTypes.size()==1); // should be void at least
             if(expr->isMemberCall() && i==0){
                 /* You can do this
@@ -978,13 +978,23 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
             TypeId arg_type = argTypes[0];
 
-            if(expr->name == "construct") {
+            bool is_destruct = expr->name == "destruct";
+
+            if(expr->name == "construct" || expr->name == "destruct") {
                 if(arg_type.getPointerLevel() == 0) {
-                    ERR_SECTION(
-                        ERR_HEAD2(expr->location)
-                        ERR_MSG("'"<<expr->name<<"' expects a pointer to a \"data object\" where initialization should occur.")
-                        ERR_LINE2(expr->location, "here")
-                    )
+                    if(!is_destruct) {
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("'"<<expr->name<<"' expects a pointer to a \"data object\" where initialization should occur.")
+                            ERR_LINE2(expr->location, "here")
+                        )
+                    } else {
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("'"<<expr->name<<"' expects a pointer to a \"data object\" where destruction should occur.")
+                            ERR_LINE2(expr->location, "here")
+                        )
+                    }
                     return SIGNAL_FAILURE;
                 }
 
@@ -996,86 +1006,116 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
 
                     FnOverloads::Overload* overload = nullptr;
-                    auto overloads = typeinfo->astStruct->getMethod("init");
+                    FnOverloads* overloads = nullptr;
+                    if(!is_destruct)
+                        overloads = typeinfo->astStruct->getMethod("init");
+                    else
+                        overloads = typeinfo->astStruct->getMethod("cleanup");
+
                     if (overloads) {
                         for(auto& o : overloads->overloads) {
-                            // TODO: Matching functions with default values for all arguments would be fine.
-                            //   And I guess return values would be fine, we just throw them away.
+                            // TODO: Should we allow return types? If it's an integer or something we
+                            //   just throw it away but if it's a struct with an allocation we kind of
+                            //   have to deal with it properly.
                             
-                            // NOTE: 'this' is the first argument
-                            if (o.funcImpl->signature.argumentTypes.size() == 1 && o.funcImpl->signature.returnTypes.size() == 0) {
+                            if(o.funcImpl->signature.returnTypes.size() != 0)
+                                continue;
+
+                            // First argument 'this' should not be default
+                            bool all_defaults = true;
+                            for(int i=1;i<o.funcImpl->signature.argumentTypes.size();i++) {
+                                auto& arg = o.astFunc->arguments[i];
+                                if(!arg.defaultValue) {
+                                    all_defaults = false;
+                                    break;
+                                }
+                            }
+                            if(all_defaults) {
                                 overload = &o;
                                 break;
                             }
-                            // bool all_defaults = true;
-                            // for(int i=0;i<o.funcImpl->signature.argumentTypes.size();i++) {
-                            //     auto& arg = o.astFunc->arguments[i];
-                            //     if(!arg.defaultValue) {
-                            //         all_defaults = false;
-                            //         break;
-                            //     }
-                            // }
-                            // if(all_defaults) {
-                            //    overload = &o;
-                                // break;
-                            // }
+                        }
+                        if(!overload) {
+                            // Check polymorphic functions
+                            for(auto& o : overloads->polyImplOverloads) {
+                                // TODO: Should we allow return types? If it's an integer or something we
+                                //   just throw it away but if it's a struct with an allocation we kind of
+                                //   have to deal with it properly.
+                                
+                                if(o.funcImpl->signature.returnTypes.size() != 0)
+                                    continue;
+
+                                // First argument 'this' should not be default
+                                bool all_defaults = true;
+                                for(int i=1;i<o.funcImpl->signature.argumentTypes.size();i++) {
+                                    auto& arg = o.astFunc->arguments[i];
+                                    if(!arg.defaultValue) {
+                                        all_defaults = false;
+                                        break;
+                                    }
+                                }
+                                if(all_defaults) {
+                                    overload = &o;
+                                    break;
+                                }
+                            }
+                        }
+                        if(!overload) {
+                            for(auto& o : overloads->polyOverloads) {
+                                // TODO: Should we allow return types? If it's an integer or something we
+                                //   just throw it away but if it's a struct with an allocation we kind of
+                                //   have to deal with it properly.
+                                
+                                if(o.astFunc->returnValues.size() != 0)
+                                    continue;
+                                if(o.astFunc->polyArgs.size() != 0)
+                                    continue;
+
+                                // First argument is 'this' and should not have a default value
+                                bool all_defaults = true;
+                                for(int i=1;i<o.astFunc->arguments.size();i++) {
+                                    auto& arg = o.astFunc->arguments[i];
+                                    if(!arg.defaultValue) {
+                                        all_defaults = false;
+                                        break;
+                                    }
+                                }
+                                if(all_defaults) {
+                                    auto polyFunc = o.astFunc;
+                                    auto parentStructImpl = typeinfo->structImpl;
+                                    auto parentAstStruct = typeinfo->astStruct;
+
+                                    ScopeInfo* funcScope = info.ast->getScope(polyFunc->scopeId);
+                                    FuncImpl* funcImpl = info.ast->createFuncImpl(polyFunc);
+                                    funcImpl->structImpl = parentStructImpl;
+
+                                    // We don't match with polymorphic function, we do match polymorphic struct
+                                    // funcImpl->signature.polyArgs.resize(fnPolyArgs.size());
+                                    // for(int i=0;i<(int)fnPolyArgs.size();i++){
+                                    //     TypeId id = fnPolyArgs[i];
+                                    //     funcImpl->signature.polyArgs[i] = id;
+                                    // }
+
+                                    // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
+                                    SignalIO result = checkFunctionImpl(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
+
+                                    overload = overloads->addPolyImplOverload(polyFunc, funcImpl);
+                                    
+                                    info.compiler->addTask_type_body(polyFunc, funcImpl);
+
+                                    funcImpl->usages++;
+
+                                    break;
+                                }
+                            }
+                            
                         }
                     }
                     if(!overload) {
                         
                     } else {
                         ast->declareUsageOfOverload(overload);
-                    }
-                } else {
-                    
-                }
-            } else if(expr->name == "destruct") {
-                if(arg_type.getPointerLevel() == 0) {
-                    ERR_SECTION(
-                        ERR_HEAD2(expr->location)
-                        ERR_MSG("'"<<expr->name<<"' expects a pointer to a \"data object\" where destruction should occur.")
-                        ERR_LINE2(expr->location, "here")
-                    )
-                    return SIGNAL_FAILURE;
-                }
-
-                arg_type.setPointerLevel(arg_type.getPointerLevel()-1);
-
-                TypeInfo* typeinfo = ast->getTypeInfo(arg_type.baseType());
-                Assert(typeinfo); // shouldn't be possible
-
-                if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
-
-                    FnOverloads::Overload* overload = nullptr;
-                    auto overloads = typeinfo->astStruct->getMethod("cleanup");
-                    if (overloads) {
-                        for(auto& o : overloads->overloads) {
-                            // TODO: Matching functions with default values for all arguments would be fine.
-                            //   And I guess return values would be fine, we just throw them away.
-                            
-                            // NOTE: 'this' is the first argument
-                            if (o.funcImpl->signature.argumentTypes.size() == 1 && o.funcImpl->signature.returnTypes.size() == 0) {
-                                overload = &o;
-                                break;
-                            }
-                            // bool all_defaults = true;
-                            // for(int i=0;i<o.funcImpl->signature.argumentTypes.size();i++) {
-                            //     auto& arg = o.astFunc->arguments[i];
-                            //     if(!arg.defaultValue) {
-                            //         all_defaults = false;
-                            //         break;
-                            //     }
-                            // }
-                            // if(all_defaults) {
-                            //    overload = &o;
-                                // break;
-                            // }
-                        }
-                    }
-                    if(!overload) {
-                        
-                    } else {
-                        ast->declareUsageOfOverload(overload);
+                        expr->versions_overload[currentPolyVersion] = *overload;
                     }
                 } else {
                     
@@ -1243,9 +1283,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 for(int i=argTypes.size() + (ent.set_implicit_this?1:0); i<overload->astFunc->arguments.size();i++) {
                 // for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
                     auto& argImpl = overload->funcImpl->signature.argumentTypes[i];
-                    auto& arg = overload->astFunc->arguments[i];;
-                    if(!arg.defaultValue)
-                        continue;
+                    auto& arg = overload->astFunc->arguments[i];
                     if(!arg.defaultValue)
                         continue;
                     tempTypes.resize(0);
@@ -1262,7 +1300,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
                     if(!is_castable){
                     // if(temp.last() != argImpl.typeId){
-                        std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
+                        // std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
+                        std::string deftype = info.ast->typeToString(tempTypes.last());
                         std::string argtype = info.ast->typeToString(argImpl.typeId);
                         ERR_SECTION(
                             ERR_HEAD2(arg.defaultValue->location)
@@ -1936,6 +1975,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             // sc->print(info.ast);
             // TODO: What about enum?
             bool crossed_function_boundary = false;
+            // BREAK(expr->name == "memory_tracker")
             auto _iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name, &crossed_function_boundary);
             if(_iden){
                 expr->identifier = _iden;
@@ -1965,7 +2005,23 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                         return SIGNAL_FAILURE;
                     }
                     
-                    if(outTypes) outTypes->add(iden->versions_typeId[info.currentPolyVersion]);
+                    if(outTypes) {
+                        // NOTE: NASTY FUTURE BUG! Accessing a global at the
+                        //   import scope should use 0 as poly version
+                        //   BUT when writing code you may copy some code
+                        //   and forget this and assume that currentPolyVersion
+                        //   is correct which it isn't, currentPolyVersion
+                        //   specifies the version for the current polymorphic
+                        //   scope that is evaluated, the global variable doesn't
+                        //   have a polymorphic scope and should therefore not
+                        //   use a poly version. This would get crazier if we
+                        //   allow polymorphic namespace...
+                        //   Ohh goodness me, imagine the madness we would have to deal with.
+                        if(iden->is_import_global) {
+                            outTypes->add(iden->versions_typeId[0]);
+                        } else
+                            outTypes->add(iden->versions_typeId[info.currentPolyVersion]);
+                    }
                 } else if(_iden->is_fn()) {
                     auto iden = _iden->cast_fn();
                     if(iden->funcOverloads.overloads.size() == 1) {
@@ -2212,8 +2268,12 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 auto signal = checkExpression(scopeId, expr->right, &typeArray, attempt);
                 
                 if(typeArray.size() > 0 && typeArray[0] == AST_VOID) {
-                    log::out << log::RED << "WHY WAS TYPE VOID\n";
-                    Assert(false);
+                    if(hasForeignErrors()) {
+                        return SIGNAL_FAILURE;
+                    } else {
+                        log::out << log::RED << "WHY WAS TYPE VOID\n";
+                        Assert(false);
+                    }
                 }
 
                 if(expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0) {
@@ -3511,6 +3571,9 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             }
             Assert(varinfo);
 
+            if(now->globalDeclaration)
+                varinfo->is_import_global = inside_import_scope;
+
             // I don't think the Assert will ever fire. But just in case.
             // HAHA, IT DID FIRE! Globals were checked twice! - Emarioo, 2024-01-06
             // Yes, it happens no and then with new bugs. We now throw an error
@@ -4229,7 +4292,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
                 }
             }
         }
-
+        info.inside_import_scope = true;
         auto result = info.checkDeclaration(now, contentOrder, scope);
         if(result != SIGNAL_SUCCESS)
             continue;
@@ -4269,52 +4332,3 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     info.compiler->options->compileStats.errors += info.errors;
     // return info.errors;
 }
-#ifdef gone
-void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
-    using namespace engone;
-    ZoneScopedC(tracy::Color::Purple4);
-    CheckInfo info = {};
-    info.ast = ast;
-    info.compiler = compiler;
-    info.reporter = &compiler->reporter;
-    info.typeChecker = &compiler->typeChecker;
-    _VLOG(log::out << log::BLUE << "Type check functions:\n";)
-
-    // Check rest will go through scopes and create polymorphic implementations if necessary.
-    // This includes structs and functions.
-    SignalIO result = checkRest(scope); // nocheckin
-
-    // NOTE: We didn't used to check all functions. We only checked the ones
-    //   that were used in the code. The problem with that is that any task
-    //   could check functions from any import. That is not okay since
-    //   some global variables in imports of those functions weren't checked.
-    //   It is possible to have an array of func impl to check per import
-    //   but since any import may request any func impl at any time we
-    //   would need to type check bodies of imports multiple times which
-    //   is slow.
-    //  To summarize: we need to rethink a couple of things.
-
-    for(int i=0;i<scope->functions.size();i++) {
-        auto f = scope->functions[i];
-        for(int j=0;j<f->_impls.size();j++) {
-            auto impl = f->_impls[j];
-            if(!f->body)
-                continue; // native, imported or intrinsic functions does not have bodies, no need to check those
-            auto result = CheckFuncImplScope(info, f, impl);
-
-        }
-    }
-
-    // nocheckin TODO: NOT THREAD SAFE
-    // while(info.typeChecker->checkImpls.size()!=0){
-    //     auto checkImpl = info.typeChecker->checkImpls[info.typeChecker->checkImpls.size()-1];
-    //     info.typeChecker->checkImpls.pop();
-    //     Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
-        
-    //     CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
-    // }
-    
-    info.compiler->options->compileStats.errors += info.errors;
-    // return info.errors;
-}
-#endif

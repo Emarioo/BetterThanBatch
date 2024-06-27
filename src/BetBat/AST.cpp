@@ -391,7 +391,7 @@ AST::ScopeIterator AST::createScopeIterator(ScopeId scopeId, ContentOrder order)
 ScopeInfo* AST::iterate(ScopeIterator& iterator){
     auto add = [&](ScopeInfo* s, ContentOrder order, bool crossed_boundary) {
         // TODO: Optimize
-        for (int i=0;i<iterator.search_index;i++) {
+        for (int i=0;i<iterator.search_items.size();i++) {
             if(iterator.search_items[i].scope == s) {
                 return;
             }
@@ -838,6 +838,8 @@ void ASTFunction::pushPolyState(FuncImpl* funcImpl) {
     pushPolyState(&funcImpl->signature.polyArgs, funcImpl->structImpl);
 }
 void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* structParent) {
+    if(polyArgs.size() == 0 && (!parentStruct || parentStruct->polyArgs.size() == 0))
+        return;
     Assert((parentStruct == nullptr) == (structParent == nullptr));
     polyStates.add({});
     auto& state = polyStates.last();
@@ -857,6 +859,8 @@ void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* st
     }
 }
 void ASTFunction::popPolyState(){
+    if(polyArgs.size() == 0 && (!parentStruct || parentStruct->polyArgs.size() == 0))
+        return;
     Assert(polyStates.size()>0);
     auto& state = polyStates.last();
     for(int j=0;j<(int)polyArgs.size();j++){

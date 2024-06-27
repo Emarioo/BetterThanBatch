@@ -11,6 +11,7 @@ struct Array<T> {
     len: i32; // elements in allocation
 
     fn cleanup(free_stuff: bool = true) {
+        log("clean array ", free_stuff)
         if !free_stuff {
             ptr = null
             len = 0
@@ -63,8 +64,10 @@ struct Array<T> {
         return Slice<T>{ptr, len};
     }
     fn pop() {
-        if len > 0
+        if len > 0 {
+            destruct(&ptr[len-1])
             len--
+        }
     }
     fn remove(index: i32) {
         if index >= len
@@ -115,7 +118,9 @@ struct Array<T> {
                 for 0..len {
                     destruct(&ptr[nr])
                 }
-                Free(ptr, max * sizeof T);
+                bytes := max * sizeof T
+                Free(ptr, bytes);
+                memory_tracker.remove(ptr, bytes, typeid T)
                 // log("nah")
             }
             ptr = null;
@@ -127,8 +132,10 @@ struct Array<T> {
         if !ptr {
             // log("huh")
             // log("Try reserve, sizeof T =",sizeof T)
-            ptr = Allocate(newMax * sizeof T);
-            memzero(ptr, newMax * sizeof T)
+            bytes := newMax * sizeof T
+            ptr = Allocate(bytes);
+            memory_tracker.add(ptr, bytes, typeid T)
+            memzero(ptr, bytes)
             // log("allocSize",newMax * sizeof T)
             // log("ptr",ptr)
             // Assert(ptr);
@@ -145,9 +152,11 @@ struct Array<T> {
                 }
             }
 
-            ns := newMax * sizeof T;
-            os := max * sizeof T;
-            newPtr: T* = Reallocate(ns, ptr, os);
+            new_size := newMax * sizeof T;
+            old_size := max * sizeof T;
+            newPtr: T* = Reallocate(new_size, ptr, old_size);
+            memory_tracker.remove(ptr, old_size, typeid T)
+            memory_tracker.add(newPtr, new_size, typeid T)
             // Assert(newPtr);
             if !newPtr
                 return false;

@@ -237,6 +237,35 @@ struct DynamicArray {
 
         return true;
     }
+    bool insert(int index, const T& t){
+        TRACE_FUNC()
+
+        if(used + 1 > max){
+            // TODO: Optimize when we reallocate memory, when we copy memory we should copy it one step to the right because then we don't have to do it manually later
+            if(!reserve(1 + max * 1.5)){
+                return false;
+            }
+        }
+
+        Assert(index <= used);
+        T* ptr = _ptr + index;
+        if(index != used){ 
+            for(u32 i = used; i >= index + 1; i--){
+                T* a = _ptr + i;
+                T* b = _ptr + i - 1;
+                *(a) = std::move(*(b));
+            }
+
+            // doesn't work with std::string
+            // memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
+        }
+
+        used++;
+        Assert(((u64)ptr % alignof(T)) == 0); // TODO: alignment for placement new?
+        new(ptr)T(t);
+
+        return true;
+    }
     // bool add(T t){
     //     return add(*(const T*)&t);
     // }
@@ -547,6 +576,7 @@ struct QuickArray {
     T* data() const {
         return _ptr;
     }
+
     bool reserve(u32 newMax){
         // MEASURE
         if(newMax==0){

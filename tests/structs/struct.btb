@@ -122,3 +122,10 @@ struct Tuf {
 }
 t: Tuf
 t.hi()
+
+@TEST_CASE(circular_structs)
+
+#import "./struct2"
+
+fun_a()
+fun_b()
