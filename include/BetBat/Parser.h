@@ -11,8 +11,10 @@ namespace parser {
 enum ParseFlags : u32 {
     PARSE_NO_FLAGS = 0x0,
     // INPUT
-    PARSE_INSIDE_SWITCH = 0x1,
-    PARSE_TRULY_GLOBAL = 0x2,
+    PARSE_INSIDE_SWITCH     = 0x1,
+    PARSE_TRULY_GLOBAL      = 0x2,
+    PARSE_SKIP_ENTRY_BRACES = 0x10, // Treat first found brace in parseBody as a statement
+                                    // instead of the start and end of the body
     // OUTPUT
     PARSE_HAS_CURLIES = 0x4,
     PARSE_HAS_CASE_FALL = 0x8, // annotation @fall for switch cases
@@ -50,6 +52,7 @@ struct ParseContext : public PhaseContext {
     struct FunctionScope {
         DynamicArray<ASTStatement*> defers; // apply these when return is encountered
         DynamicArray<LoopScope> loopScopes;
+        ASTFunction* function;
     };
     DynamicArray<FunctionScope> functionScopes;
 

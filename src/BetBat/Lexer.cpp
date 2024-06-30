@@ -1665,6 +1665,8 @@ bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
     Assert(iterator.file_id != 0);
     iterator.clear();
 
+    int tokens_to_parse = iterator.end_file_token_index - iterator.file_token_index;
+
     // macros in case the implementation changes
     #define APPEND(C) iterator.append(C);
     #define APPENDS(SRC,N) iterator.append(SRC,N);
@@ -1760,14 +1762,18 @@ bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
         }
         // TODO: Don't do suffix if we processed the last token or if suffix should be skipped (skipSuffix)
         
-        if((tok.flags & TOKEN_FLAG_NEWLINE) && (!skipSuffix || iterator.file_token_index+1 != iterator.end_file_token_index)) {
-            APPEND('\n')
-            prev_column = 1;
-        } else {
-            if((tok.flags & TOKEN_FLAG_SPACE)) {
-                APPEND(' ')
+        // if(!(skipSuffix && tokens_to_parse == 1)) {
+        if(!(skipSuffix && iterator.file_token_index+1 == iterator.end_file_token_index)) {
+            if((tok.flags & TOKEN_FLAG_NEWLINE)) {
+            // if((tok.flags & TOKEN_FLAG_NEWLINE) && (!skipSuffix || iterator.file_token_index+1 != iterator.end_file_token_index)) {
+                APPEND('\n')
+                prev_column = 1;
+            } else {
+                if((tok.flags & TOKEN_FLAG_SPACE)) {
+                    APPEND(' ')
+                }
+                prev_column += iterator.len() - prev_written;
             }
-            prev_column += iterator.len() - prev_written;
         }
         iterator.file_token_index++;
     }

@@ -46,7 +46,7 @@
             "args": ["-dev"],
             // "args": ["prepare_release","--run"],
             // "args": ["-dev","-nopreload"],
-            // "args": ["--test","*struct.*"],
+            // "args": ["--test","*switch.*"],
             // "args": ["-dev","-nopreload"],
             // "args": ["--test"],
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],
@@ -85,6 +85,33 @@
             "program": "${workspaceFolder}/test.exe",
             // "program": "${workspaceFolder}/main.exe",
             "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "setupCommands": [
+                // {
+                //     "description": "Enable pretty-printing for gdb",
+                //     "text": "-enable-pretty-printing",
+                //     "ignoreFailures": true
+                // },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "BTB debug (client)",
+            "type": "cppdbg",
+            "request": "launch",
+            // "program": "${workspaceFolder}/bin/temp.exe",
+            "program": "${workspaceFolder}/test.exe",
+            // "program": "${workspaceFolder}/main.exe",
+            "args": ["hi"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

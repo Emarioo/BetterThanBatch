@@ -206,3 +206,47 @@ operator []<T>(arr: Array<T>, index: i32) -> T {
 // }
 // log(arr.len, " ", arr.max)
 // arr.reserve(0);
+
+
+// ######
+// MORE CODE FOR TESTING
+// ##########
+
+
+// #import "Logger"
+// #import "Array"
+// #import "Lang"
+
+// global counter: i32
+// struct Item {
+//     x: i32
+//     fn init() {
+//         x = counter++
+//         log("init ",x)
+//     }
+//     fn cleanup() {
+//         log("cleanup ",x)
+//     }
+// }
+
+// // operator cast(x: i32) -> Item { return Item{x} }
+
+// memory_tracker.init()
+
+// arr: Array<Item>;
+// arr.add(Item{4})
+// arr.add(Item{23})
+// arr.pop()
+// arr.add(Item{92})
+// arr.add(Item{96})
+// arr.add(Item{98})
+// for arr.sliced() {
+//     log(&it)
+// }
+// log(arr.len, " ", arr.max)
+
+// memory_tracker.print_memory()
+
+// arr.reserve(0);
+
+// memory_tracker.print_memory()

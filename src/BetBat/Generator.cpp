@@ -4860,6 +4860,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 builder.emit_jnz(caseValueReg, &caseData[nr].caseJumpAddress);
             }
 
+            int pc_of_default_case = builder.get_pc();
+
             // Generate default cause if we have one
             if(statement->firstBody) {
                 result = generateBody(statement->firstBody);
@@ -4898,7 +4900,13 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // implicit break
                     builder.emit_jmp(&caseData[nr].caseBreakAddress);
                 } else {
-                    caseData[nr].caseBreakAddress = 0;
+                    if (nr == statement->switchCases.size()-1) {
+                        // last case should fall through to the default case
+                        builder.emit_jmp(pc_of_default_case);
+                        // caseData[nr].caseBreakAddress = pc_of_default_case;
+                    } else {
+                        caseData[nr].caseBreakAddress = 0;
+                    }
                 }
             }
             builder.fix_jump_imm32_here(noCaseJumpAddress);

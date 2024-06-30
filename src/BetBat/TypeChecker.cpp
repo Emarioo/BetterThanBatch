@@ -106,7 +106,7 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
 
     TINY_ARRAY(TypeId, tempTypes, 4)
     bool success = true;
-    _TCLOG(log::out << "Check struct impl "<<info.ast->typeToString(structInfo->id)<<"\n";)
+    _TCLOG(log::out << "Check struct impl '"<<info.ast->typeToString(structInfo->id)<<"'\n";)
     //-- Check members
     for (int i = 0;i<(int)astStruct->members.size();i++) {
         auto& member = astStruct->members[i];
@@ -146,7 +146,7 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
                 continue; // continue when failing
             }
         }
-        _TCLOG(log::out << " checked member["<<i<<"] "<<info.ast->typeToString(tid)<<"\n";)
+        _TCLOG(log::out << " checked member["<<i<<"] '"<<info.ast->typeToString(tid)<<"'\n";)
     }
     if(!success){
         return SIGNAL_FAILURE;
@@ -294,7 +294,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
 
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
-    _TCLOG(log::out << "check "<<typeString<<"\n";)
+    // _TCLOG(log::out << "check "<<typeString<<"\n";)
 
     // TODO: Log what type we thought it was
     TypeId typeId = {};
@@ -479,6 +479,17 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
                 *printedError = true;
             return {};
         }
+        if(ti->getSize() == 0) {
+            if(ti->astStruct) {
+                // Struct needs to be evaluated again
+                if(!ti->structImpl->is_evaluating) {
+                    // TODO: Not thread safe, mutex on is_evaluating
+                    ti->structImpl->is_evaluating = true;
+                    SignalIO hm = checkStructImpl(ti->astStruct, ti, ti->structImpl);
+                    ti->structImpl->is_evaluating = false;
+                }
+            }
+        }
         typeId.setPointerLevel(typeId.getPointerLevel() + plevel);
         return typeId;
     }
@@ -525,13 +536,15 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
     }
 
     SignalIO hm = checkStructImpl(typeInfo->astStruct, baseInfo, typeInfo->structImpl);
+    // log::out << "create structimpl " << realTypeName<<", size: "<<typeInfo->structImpl->size<<"\n";
+
     if(hm != SIGNAL_SUCCESS) {
         ERR_SECTION(
             ERR_HEAD2(err_location)
             ERR_MSG(__FUNCTION__ <<": structImpl for type "<<typeString << " failed.")
         )
     } else {
-        _TCLOG(log::out << typeString << " was evaluated to "<<typeInfo->structImpl->size<<" bytes\n";)
+        _TCLOG(log::out <<"'"<< typeString << "' was evaluated to "<<typeInfo->structImpl->size<<" bytes\n";)
     }
     TypeId outId = typeInfo->id;
     outId.setPointerLevel(plevel);
@@ -1142,9 +1155,13 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
 
         // We add method as potential overload but we also need to find identifier since method might not match.   
-        Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName, nullptr);
+        // Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName, nullptr);
 
-        if(iden) {
+        DynamicArray<Identifier*> identifiers{};
+        info.ast->findIdentifiers(scopeId, info.getCurrentOrder(), baseName, identifiers, nullptr);
+
+        // if(iden) {
+        for (auto iden : identifiers) {
             // if(!iden) {
             //     if(operatorOverloadAttempt || attempt)
             //         return SIGNAL_NO_MATCH;
@@ -1777,32 +1794,34 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
         // TODO: We should not quit early as we are doing here.
         if(!polyFunc){
-            if(operatorOverloadAttempt || attempt) {
-                FIX_NO_SPECIAL_ACTIONS
-                return SIGNAL_NO_MATCH;
-            }
+            continue;
+            // if(operatorOverloadAttempt || attempt) {
+            //     FIX_NO_SPECIAL_ACTIONS
+            //     return SIGNAL_NO_MATCH;
+            // }
 
-            ERR_SECTION(
-                ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
-                ERR_MSG_LOG(
-                    "Overloads for function '"<< log::LIME<< baseName << log::NO_COLOR <<"' does not match these argument(s): ";
-                    if(argTypes.size()==0){
-                        log::out << "zero arguments";
-                    } else {
-                        log::out << "(";
-                        expr->printArgTypes(info.ast, argTypes);
-                        log::out << ")";
-                    }
+            // ERR_SECTION(
+            //     ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
+            //     ERR_MSG_LOG(
+            //         "Overloads for function '"<< log::LIME<< baseName << log::NO_COLOR <<"' does not match these argument(s): ";
+            //         if(argTypes.size()==0){
+            //             log::out << "zero arguments";
+            //         } else {
+            //             log::out << "(";
+            //             expr->printArgTypes(info.ast, argTypes);
+            //             log::out << ")";
+            //         }
                     
-                    log::out << "\n";
-                    log::out << log::YELLOW<<"(polymorphic functions could not be generated if there are any)\nTODO: Show list of available functions.\n";
-                    log::out << "\n"
-                )
-                ERR_LINE2(expr->location, "bad");
-                // TODO: show list of available overloaded function args
-            )
-            FNCALL_FAIL
-            return SIGNAL_FAILURE;
+            //         log::out << "\n";
+            //         log::out << log::YELLOW<<"(polymorphic functions could not be generated if there are any)\nTODO: Show list of available functions.\n";
+            //         log::out << "\n"
+            //     )
+            //     ERR_LINE2(expr->location, "bad");
+            //     // TODO: show list of available overloaded function args
+            // )
+            // FNCALL_FAIL
+            // return SIGNAL_FAILURE;
+            // goto error_on_fncall;
         }
         ScopeInfo* funcScope = info.ast->getScope(polyFunc->scopeId);
         FuncImpl* funcImpl = info.ast->createFuncImpl(polyFunc);
@@ -1866,6 +1885,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         FNCALL_SUCCESS
         return SIGNAL_SUCCESS;
     }
+
+    error_on_fncall:
 
     if(operatorOverloadAttempt || attempt) {
         FIX_NO_SPECIAL_ACTIONS
@@ -1975,7 +1996,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             // sc->print(info.ast);
             // TODO: What about enum?
             bool crossed_function_boundary = false;
-            // BREAK(expr->name == "memory_tracker")
+            // BREAK(expr->name == "argc")
             auto _iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name, &crossed_function_boundary);
             if(_iden){
                 expr->identifier = _iden;
@@ -2268,7 +2289,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 auto signal = checkExpression(scopeId, expr->right, &typeArray, attempt);
                 
                 if(typeArray.size() > 0 && typeArray[0] == AST_VOID) {
-                    if(hasForeignErrors()) {
+                    if(hasErrors()) {
                         return SIGNAL_FAILURE;
                     } else {
                         log::out << log::RED << "WHY WAS TYPE VOID\n";
@@ -3386,16 +3407,19 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
         for(int i=0;i<poly_typeArray.size();i++){
             if(poly_typeArray[i].isValid() && poly_typeArray[i] != AST_VOID)
                 continue;
-            ERR_SECTION(
-                ERR_HEAD2(now->firstExpression->location, ERROR_INVALID_TYPE)
-                ERR_MSG("Expression must produce valid types for the assignment.")
-                ERR_LINE2(now->location, "this assignment")
-                if(poly_typeArray[i].isValid()) {
-                ERR_LINE2(now->firstExpression->location, info.ast->typeToString(poly_typeArray[i]))
-                } else {
-                ERR_LINE2(now->firstExpression->location, "no type?")
-                }
-            )
+
+            if(result == SIGNAL_SUCCESS) { // expressions said we were successful but that's not actually true
+                ERR_SECTION(
+                    ERR_HEAD2(now->firstExpression->location, ERROR_INVALID_TYPE)
+                    ERR_MSG("Expression must produce valid types for the assignment.")
+                    ERR_LINE2(now->location, "this assignment")
+                    if(poly_typeArray[i].isValid()) {
+                    ERR_LINE2(now->firstExpression->location, info.ast->typeToString(poly_typeArray[i]))
+                    } else {
+                    ERR_LINE2(now->firstExpression->location, "no type?")
+                    }
+                )
+            }
         }
     }
 
@@ -4156,7 +4180,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                         if(!allCasesUseEnumType) {
                             log::out << "Note that some cases use a non-enum member\n";
                         }
-                        log::out << "\n\n";
+                        log::out << "\n";
                         
                         ERR_LINE2(now->location, "this switch")
                     )
@@ -4206,11 +4230,16 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     // If a type isn't a pointer then we might fail if the struct hasn't been created yet.
     // You could implement some dependency or priority queue.
         
+    // Content order for default values in struct members
+    // Will this cause problems somehow?
+    info.currentContentOrder.add(CONTENT_ORDER_MAX);
+    
     info.incompleteStruct = false;
     info.completedStruct = false;
     info.showErrors = !ignore_errors;
     info.ignoreErrors = !info.showErrors;
     info.checkStructs(scope);
+
     
     // if(!info.showErrors)
     if(info.showErrors)
@@ -4326,6 +4355,7 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     if(ast_func && ast_func->body) {
         // 1. ast_func may be nullptr if no main function was specified, the global scope is the main function if so.
         // 2. Native, imported or intrinsic functions does not have bodies and we cannot and should not check them.
+        // log::out << "check "<<ast_func->name<<"\n";
         auto result = info.checkFuncImplScope(ast_func, func_impl);
     }
 

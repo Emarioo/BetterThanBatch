@@ -14,9 +14,12 @@ Inspiration from:
 Example of errors with named arguments
 ![](/docs/img/err-named-arg.png)
 
+Example of unfinished multiplayer game
+![](/docs/img/game_blobs_0.png)
+
 **DISCLAIMER**: The compiler is not ready for serious projects. Both because the bug list isn't empty but also because the language isn't complete. New features will be added and old features will be removed.
 
-## Status of features/things
+## State of the compiler/language
 |Project|Status|
 |-|-|
 |Windows build|Yes|
@@ -41,11 +44,13 @@ Example of errors with named arguments
 |x64 inline assembly|Yes|
 
 # How to get started
-**Option 1:** Download a release of `BTB Compiler` at https://github.com/Emarioo/BetterThanBatch/releases. Then unzip it in a folder of your choice and edit your environment variable `PATH` with the path to the compiler executable (for convenience). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
+**NOTE**: There are no releases yet so you have to compile it yourself. The compiler is just not stable enough yet.
 
-**NOTE**: There may not be an up to date release.
+**Option 1:** Clone the repo and build the compiler executable yourself, see [Building](#building). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
 
-**Option 2:** Clone the repo and build the compiler executable yourself, see [Building](#building). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
+**Option 2 (coming soon):** Download a release of `BTB Compiler` at https://github.com/Emarioo/BetterThanBatch/releases. Then unzip it in a folder of your choice and edit your environment variable `PATH` with the path to the compiler executable (for convenience). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
+
+<!-- TODO: Swap option 1 and 2 so that download release is first option, the recommended option. Compiling project is first option right now because there are no releases -->
 
 # Building
 
@@ -66,9 +71,11 @@ Once built, the executable can be found in `bin/btb.exe`. I recommend editing en
 # Examples
 **NOTE:** These have been tested on my computer with my environment which means that it might not work on your computer. You may need to clone the repo, build the compiler with MSVC, and run `compiler.exe --run examples/graphics/quad.btb` to make it work. You have to build the repo because there is no release yet.
 
-[Rendering test](/examples/graphics/quad.btb) rendering with GLEW, GLFW, and OpenGL
+[Rendering test](/examples/graphics/quad.btb) - Rendering with GLEW, GLFW, and OpenGL
 
-[Line counter](/examples/linecounter.btb) reading files, multiple threads
+[Multiplayer game](/examples/graphics/game.btb) - Rendering textures and text, simple collision and player movement, sockets and networking.
+
+[Line counter](/examples/linecounter.btb) - Reading files using multiple threads. (probably broken)
 
 <!-- incomplete [Binary viewer](/examples/binary_viewer/main.btb) parsing/reading binary files, lexing -->
 

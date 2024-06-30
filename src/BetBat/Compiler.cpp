@@ -540,7 +540,21 @@ void Compiler::processImports() {
                         }
                     }
                 }
-            } else if (task.type == TASK_TYPE_ENUMS) { // when we are about to check functions
+            } else if (task.type == TASK_TYPE_ENUMS) {
+                
+                // for(int i=0;i<tasks.size();i++) {
+                //     CompilerTask& t = tasks[i];
+                //     // TODO: We may only have tasks to generate bytecodes but a thread
+                //     //   may have taken out a task and be working on it right now.
+                //     //   Redesign this
+                //     if(t.type < TASK_TYPE_BODY) {
+                //         LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
+                //         missing_dependency = true;
+                //         // we miss a dependency in that all other imports have
+                //         // not been type checked yet
+                //         break;
+                //     }
+                // }
                 CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
                     CompilerImport* dep = imports.get(im->dependencies[j].id-1);
@@ -552,6 +566,7 @@ void Compiler::processImports() {
                     }
                 }
             } else if (task.type == TASK_TYPE_STRUCTS) { // when we are about to check functions
+                
                 CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
                     CompilerImport* dep = imports.get(im->dependencies[j].id-1);
@@ -559,6 +574,24 @@ void Compiler::processImports() {
                     if(!dep || !(dep->state & TASK_TYPE_ENUMS)) {
                         LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
+                        break;
+                    }
+                }
+            } else if (task.type == TASK_TYPE_FUNCTIONS) {
+                // when checking signatures... all structs should be generated, almost.
+
+                // TODO: Optimize, store an integer of how many non-type checked tasks
+                //   we have left instead of iterating all tasks every time.
+                for(int i=0;i<tasks.size();i++) {
+                    CompilerTask& t = tasks[i];
+                    // TODO: We may only have tasks to generate bytecodes but a thread
+                    //   may have taken out a task and be working on it right now.
+                    //   Redesign this
+                    if(t.type < TASK_TYPE_FUNCTIONS) {
+                        LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
+                        missing_dependency = true;
+                        // we miss a dependency in that all other imports have
+                        // not been type checked yet
                         break;
                     }
                 }
@@ -588,6 +621,7 @@ void Compiler::processImports() {
                 //   we have left instead of iterating all tasks every time.
                 for(int i=0;i<tasks.size();i++) {
                     CompilerTask& t = tasks[i];
+                    // log::out << "type " << t.type << "\n";
                     // TODO: We may only have tasks to generate bytecodes but a thread
                     //   may have taken out a task and be working on it right now.
                     //   Redesign this
@@ -610,29 +644,33 @@ void Compiler::processImports() {
                 // We could ensure all functions have been generated OR we could just ensure
                 // the dependencies while applying partial relocations for the relevant tinycode (_comp_time_).
 
-                CompilerImport* im = imports.get(task.import_id-1);
-                for(int j=0;j<im->dependencies.size();j++) {
-                    CompilerImport* dep = imports.get(im->dependencies[j].id-1);
-                    if(!dep || !(dep->state & TASK_GEN_BYTECODE)) {
-                        LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
-                        missing_dependency = true;
-                        break;
-                    }
-                }
-
-                // for(int i=0;i<tasks.size();i++) {
-                //     CompilerTask& t = tasks[i];
-                //     // TODO: We may only have tasks to generate bytecodes but a thread
-                //     //   may have taken out a task and be working on it right now.
-                //     //   Redesign this
-                //     if(t.type < TASK_GEN_MACHINE_CODE) {
-                //         LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
+                // NOTE: I have been messing around with dependencies and task types.
+                //   I have found lots of issues were circular dependencies of structs across imports doesn't, applying relocations triggers an assert, and more problems.
+                //   Right now, most task types require all task types/compiler phases to be processed in waves (we make sure all tasks have been processed by the earlier step)
+                //    INSTEAD OF, checking for import dependencies.
+                // CompilerImport* im = imports.get(task.import_id-1);
+                // for(int j=0;j<im->dependencies.size();j++) {
+                //     CompilerImport* dep = imports.get(im->dependencies[j].id-1);
+                //     if(!dep || !(dep->state & TASK_GEN_BYTECODE)) {
+                //         LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                 //         missing_dependency = true;
-                //         // we miss a dependency in that all other imports have
-                //         // not been type checked yet
                 //         break;
                 //     }
                 // }
+
+                for(int i=0;i<tasks.size();i++) {
+                    CompilerTask& t = tasks[i];
+                    // TODO: We may only have tasks to generate bytecodes but a thread
+                    //   may have taken out a task and be working on it right now.
+                    //   Redesign this
+                    if(t.type < TASK_GEN_MACHINE_CODE) {
+                        LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
+                        missing_dependency = true;
+                        // we miss a dependency in that all other imports have
+                        // not been type checked yet
+                        break;
+                    }
+                }
             }
             if(missing_dependency) {
                 finished=false;
@@ -808,6 +846,13 @@ void Compiler::processImports() {
                 auto my_scope = ast->getScope(imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Type structs: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 
+                // Checking structs is hard.
+                // We keep checking until it's done or
+                // no more progress is made.
+
+                // how do we know when we have done a full loop?
+                // How do we know we have with multiple threads?
+
                 bool ignore_errors = true;
                 bool changed = false;
                 bool yes = SIGNAL_SUCCESS == TypeCheckStructs(ast, my_scope->astScope, this, ignore_errors, &changed);
@@ -817,6 +862,10 @@ void Compiler::processImports() {
                 //     << " tokens: "<<tokens
                 //     << "\n")
                 // TODO: Print whether we are done with structs or if some remain unchecked.
+                if(changed)
+                    struct_tasks_since_last_change=0;
+                else
+                    struct_tasks_since_last_change++;
 
                 if(yes) {
                     imp->state = (TaskType)(imp->state | picked_task.type);
@@ -824,12 +873,17 @@ void Compiler::processImports() {
                     picked_task.import_id = imp->import_id;
                     tasks.add(picked_task); // nocheckin, lock tasks
                 } else {
-                    if(!changed) {
-                        if(picked_task.no_change) {
-                            ignore_errors = false;
-                            TypeCheckStructs(ast, my_scope->astScope, this, ignore_errors, &changed);
-                        }
+                    // log::out << "fail, "<<struct_tasks_since_last_change << ", tasks: " << tasks.size() << " " << BriefString(imp->path)<<"\n";
+                    if(struct_tasks_since_last_change > tasks.size() * 2) {
+                        ignore_errors = false;
+                        TypeCheckStructs(ast, my_scope->astScope, this, ignore_errors, &changed);
                     }
+                    // if(!changed) {
+                    //     if(picked_task.no_change) {
+                    //         ignore_errors = false;
+                    //         TypeCheckStructs(ast, my_scope->astScope, this, ignore_errors, &changed);
+                    //     }
+                    // }
                     picked_task.no_change = !changed;
                     if(ignore_errors) {
                         lock_imports.lock();
@@ -858,15 +912,15 @@ void Compiler::processImports() {
 
                 if(!had_errors) {
                     imp->state = (TaskType)(imp->state | picked_task.type);
-                    if(is_initial_import) {
-                        // The 
-                        auto iden = ast->findIdentifier(imp->scopeId,0,"main",nullptr);
-                        if(iden && iden->is_fn()) {
-                            auto fun = iden->cast_fn();
-                            Assert(fun->funcOverloads.overloads.size());
-                            auto overload = fun->funcOverloads.overloads[0];
-                            addTask_type_body(overload.astFunc, overload.funcImpl);
-                        } else {
+                    // The 
+                    auto iden = ast->findIdentifier(imp->scopeId,0,"main",nullptr);
+                    if(iden && iden->is_fn()) {
+                        auto fun = iden->cast_fn();
+                        Assert(fun->funcOverloads.overloads.size());
+                        auto overload = fun->funcOverloads.overloads[0];
+                        addTask_type_body(overload.astFunc, overload.funcImpl);
+                    } else {
+                        if(is_initial_import) {
                             addTask_type_body(imp->import_id);
                         }
                     }
@@ -1632,6 +1686,8 @@ void Compiler::addDependency(u32 import_id, u32 dep_import_id, const std::string
     // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add depend: "<<import_id<<"->"<<dep_import_id<<" ("<<TrimCWD(imp->path)<<")\n")
 }
 void Compiler::addTask_type_body(ASTFunction* ast_func, FuncImpl* func_impl) {
+    using namespace engone;
+    // log::out << "add "<<ast_func->name<<"\n";
     lock_imports.lock();
     defer { lock_imports.unlock(); };
     CompilerTask picked_task{};

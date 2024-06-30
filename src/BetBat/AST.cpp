@@ -340,6 +340,62 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
     }
     return nullptr;
 }
+void AST::findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, DynamicArray<Identifier*>& out_identifiers, bool* crossed_function_boundary, bool searchParentScopes) {
+    using namespace engone;
+    // Assert(crossed_function_boundary); // crossed function boundary is only valid for local variables, if we search for function identifier then argument will be null so we can't assert it
+
+    if(crossed_function_boundary)
+        *crossed_function_boundary = false;
+
+    Assert(!crossed_function_boundary); // Not handled, we need to return boundary for each identifier
+
+    if(searchParentScopes){
+        StringView ns;
+        StringView real_name;
+        DecomposeNamespace(name, &ns, &real_name);
+        lock_variables.lock();
+        defer { lock_variables.unlock(); };
+        if(ns.len == 0) {
+            auto iterator = createScopeIterator(startScopeId, contentOrder);
+            while(iterate(iterator)) {
+                auto scope = iterator.next_scope;
+                auto order = iterator.next_order;
+
+                auto pair = scope->identifierMap.find(real_name);
+                if (pair == scope->identifierMap.end())
+                    continue;
+                    
+                // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+                if (pair->second->order <= order) {
+                    if(crossed_function_boundary)
+                        *crossed_function_boundary = iterator.next_crossed_function_boundary;
+                    out_identifiers.add(pair->second);
+                    // return pair->second;
+                }
+            }
+        } else {
+            log::out << log::RED << "Namespaces are incomplete. Don't type ::\n";
+            // return nullptr;
+            // Assert(false); // namespace broken
+        }
+    } else {
+        ScopeInfo* si = getScope(startScopeId);
+        Assert(si);
+        lock_variables.lock();
+        defer { lock_variables.unlock(); };
+        auto pair = si->identifierMap.find(name);
+        if(pair == si->identifierMap.end()){
+            return;
+        }
+        // if(pair->second.type == Identifier::VARIABLE && pair->second.order < contentOrder) {
+        if(pair->second->order <= contentOrder) {
+            out_identifiers.add(pair->second);
+            return;
+        }
+        return;
+    }
+    return;
+}
 bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, FnOverloads::Overload* overload) {
     using namespace engone;
     auto iter = createScopeIterator(scopeId, CONTENT_ORDER_MAX);

@@ -268,7 +268,6 @@ u32 TestSuite(CompileOptions* options){
     tests.add("tests/flow/loops.btb");
     tests.add("tests/flow/switch.btb");
     tests.add("tests/flow/defer.btb");
-    tests.add("tests/funcs/overloading.btb");
     tests.add("tests/inline-asm/simple.btb");
     tests.add("tests/polymorphism/structs.btb");
         
@@ -277,6 +276,10 @@ u32 TestSuite(CompileOptions* options){
     tests.add("tests/lang/typeinfo.btb");
     tests.add("tests/modules/test_maps.btb");
     tests.add("tests/modules/test_maps.btb");
+
+    tests.add("tests/funcs/overloading.btb");
+    tests.add("tests/funcs/constructor.btb");
+    tests.add("tests/funcs/conventions.btb");
     
     return VerifyTests(options, tests);
 }

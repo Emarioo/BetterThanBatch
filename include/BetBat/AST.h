@@ -307,6 +307,8 @@ struct StructImpl {
     QuickArray<Member> members{};
     
     QuickArray<TypeId> polyArgs;
+
+    bool is_evaluating = false;
 };
 struct FunctionSignature {
     struct Spot {
@@ -939,7 +941,8 @@ struct AST {
 
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
-    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes = true);
+    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes = true);
+    void findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, DynamicArray<Identifier*>& out_identifiers, bool* crossed_function_boundary, bool searchParentScopes = true);
     // Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool searchParentScopes = true);
     // VariableInfo* identifierToVariable(Identifier* identifier);
 

@@ -50,7 +50,7 @@ enum NetProtocol {
     NET_PROTO_STREAM  = 0x0, // library lets you handle the logic for separating messages, use this when implementing HTTP or other protocols
     NET_PROTO_MESSAGE = 0x1, // library sends distinct messages that are length prefixed, use this when implementing multiplayer for a game
 }
-#macro ConnectionID u32
+#macro ConnectionID i32
 #macro EventCallback fn(e: Event, user_data: void*)
 
 struct Connection {
@@ -106,6 +106,13 @@ struct Server {
         fn @oscall listener_func(arg: void*) -> i32 {
             server: Server* = arg
 
+            if server.m_event_callback {
+                e: Event
+                e.type = EVENT_START
+                e.who = 0
+                server.m_event_callback(e, server.m_user_data)
+            }
+
             while {
                 log("#waiting")
                 client_socket := server.m_socket.accept(null, null)
@@ -129,6 +136,14 @@ struct Server {
                     connection: Connection* = arg
                     server := connection.server
                     protocol: NetProtocol = connection.server.m_protocol
+
+                    if server.m_event_callback {
+                        e: Event
+                        e.type = EVENT_CONNECT
+                        e.who = connection.conn_id
+                        server.m_event_callback(e, server.m_user_data)
+                    }
+
                     while {
                         bytes: i32
                         if protocol & NET_PROTO_MESSAGE {
@@ -140,10 +155,12 @@ struct Server {
                                 break // graceful shutdown
                             }
                             if bytes < 0 {
-                                e: Event
-                                e.type = EVENT_CLOSE
-                                e.who = 0
-                                server.m_event_callback(e, connection.server.m_user_data)
+                                if server.m_event_callback {
+                                    e: Event
+                                    e.type = EVENT_DISCONNECT
+                                    e.who = connection.conn_id
+                                    server.m_event_callback(e, connection.server.m_user_data)
+                                }
 
                                 if connection.socket.valid()
                                     connection.socket.close()
@@ -194,11 +211,12 @@ struct Server {
                         if bytes == 0 {
                             break
                         } else if bytes < 0 {
-                            e: Event
-                            e.type = EVENT_CLOSE
-                            e.who = 0
-                            server.m_event_callback(e, server.m_user_data)
-
+                            if server.m_event_callback {
+                                e: Event
+                                e.type = EVENT_DISCONNECT
+                                e.who = connection.conn_id
+                                server.m_event_callback(e, connection.server.m_user_data)
+                            }
                             if connection.socket.valid()
                                 connection.socket.close()
                             
@@ -262,7 +280,7 @@ struct Server {
         }
     }
     fn is_active() -> bool {
-        return m_socket != INVALID_SOCKET
+        return m_socket.valid()
     }
 	fn disconnect(connection_id: ConnectionID) -> NetError {
 
@@ -283,20 +301,20 @@ struct Server {
         if m_protocol & NET_PROTO_MESSAGE {
             header: MessageHeader
             header.length = bytes.len
-            err := socket_send(connection.socket, &header, sizeof header, 0)
+            err := connection.socket.send(cast<void*>&header, sizeof header, 0)
             if err < 0 {
                 log("server send header failed")
                 return NET_FAILURE
             }
             m_sent_bytes += sizeof header
-            err = socket_send(connection.socket, bytes.ptr, bytes.len, 0)
+            err = connection.socket.send(bytes.ptr, bytes.len, 0)
             if err < 0 {
                 log("server send body failed")
                 return NET_FAILURE
             }
             m_sent_bytes += bytes.len
         } else {
-            err := socket_send(connection.socket, bytes.ptr, bytes.len, 0)
+            err := connection.socket.send(bytes.ptr, bytes.len, 0)
             if err < 0 {
                 log("server send stream failed")
                 return NET_FAILURE
@@ -390,6 +408,13 @@ struct Client {
         fn @oscall receiver_func(arg: void*) -> i32 {
             client: Client* = arg
 
+            if client.m_event_callback {
+                e: Event
+                e.type = EVENT_START
+                e.who = 0
+                client.m_event_callback(e, client.m_user_data)
+            }
+
             while {
                 bytes: i32
                 if client.m_protocol & NET_PROTO_MESSAGE {
@@ -401,10 +426,12 @@ struct Client {
                         break // graceful shutdown
                     }
                     if bytes < 0 {
-                        e: Event
-                        e.type = EVENT_CLOSE
-                        e.who = 0
-                        client.m_event_callback(e, client.m_user_data)
+                        if client.m_event_callback {
+                            e: Event
+                            e.type = EVENT_CLOSE
+                            e.who = 0
+                            client.m_event_callback(e, client.m_user_data)
+                        }
 
                         if client.m_socket.valid()
                             client.m_socket.close()
@@ -455,10 +482,12 @@ struct Client {
                 if bytes == 0 {
                     break
                 } else if bytes < 0 {
-                    e: Event
-                    e.type = EVENT_CLOSE
-                    e.who = 0
-                    client.m_event_callback(e, client.m_user_data)
+                    if client.m_event_callback {
+                        e: Event
+                        e.type = EVENT_CLOSE
+                        e.who = 0
+                        client.m_event_callback(e, client.m_user_data)
+                    }
 
                     if client.m_socket.valid()
                         client.m_socket.close()

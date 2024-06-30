@@ -1,3 +1,4 @@
+
 # Variables, operations and expressions
 Words: declaration, assignment, unary operator, binary operator, primitive types
 

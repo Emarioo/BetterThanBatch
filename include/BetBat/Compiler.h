@@ -260,6 +260,8 @@ struct Compiler {
     bool have_prepared_global_data = false;
     bool have_generated_comp_time_global_data = false;
     bool compiler_got_stuck = false;
+
+    int struct_tasks_since_last_change = 0;
     
     CompilerImport* getImport(u32 import_id);
     BucketArray<CompilerImport> imports{256};

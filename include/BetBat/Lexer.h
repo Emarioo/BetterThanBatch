@@ -36,9 +36,8 @@ namespace lexer {
     enum TokenType : u16 {
         TOKEN_NONE = 0,
         // 0-255, ascii
-        TOKEN_TYPE_BEGIN = 256,
+        TOKEN_EOF = 256, TOKEN_TYPE_BEGIN = TOKEN_EOF,
 
-        TOKEN_EOF = TOKEN_TYPE_BEGIN,
         TOKEN_IDENTIFIER,
         TOKEN_ANNOTATION,
         TOKEN_LITERAL_STRING,
@@ -48,8 +47,7 @@ namespace lexer {
         TOKEN_LITERAL_BINARY,
         TOKEN_LITERAL_OCTAL,
 
-        TOKEN_KEYWORD_BEGIN,
-        TOKEN_NULL = TOKEN_KEYWORD_BEGIN,
+        TOKEN_NULL, TOKEN_KEYWORD_BEGIN = TOKEN_NULL,
         TOKEN_TRUE,
         TOKEN_FALSE,
 
@@ -57,8 +55,7 @@ namespace lexer {
         TOKEN_NAMEOF,
         TOKEN_TYPEID,
 
-        TOKEN_KEYWORD_FLOW_BEGIN, // Parser can quickly check if token is a flow type keyword
-        TOKEN_IF = TOKEN_KEYWORD_FLOW_BEGIN,
+        TOKEN_IF, TOKEN_KEYWORD_FLOW_BEGIN = TOKEN_IF, // Parser can quickly check if token is a flow type keyword
         TOKEN_ELSE,
         TOKEN_WHILE,
         TOKEN_FOR,
@@ -66,8 +63,7 @@ namespace lexer {
         TOKEN_DEFER,
         TOKEN_RETURN,
         TOKEN_BREAK,
-        TOKEN_CONTINUE,
-        TOKEN_KEYWORD_FLOW_END = TOKEN_CONTINUE, // inclusive
+        TOKEN_CONTINUE, TOKEN_KEYWORD_FLOW_END = TOKEN_CONTINUE, // inclusive
 
         TOKEN_USING,
         TOKEN_STRUCT,
@@ -77,8 +73,7 @@ namespace lexer {
         TOKEN_NAMESPACE,
         TOKEN_UNION,
         TOKEN_ASM,
-        TOKEN_TEST,
-        TOKEN_KEYWORD_END = TOKEN_TEST, // inclusive
+        TOKEN_TEST, TOKEN_KEYWORD_END = TOKEN_TEST, // inclusive
 
         TOKEN_NAMESPACE_DELIM,
 

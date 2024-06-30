@@ -3139,7 +3139,7 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
                     mayRevertError = info.ignoreErrors == 0;
                     ERR_SECTION(
                         ERR_HEAD2(tok,ERROR_C_STYLED_DEFAULT_CASE)
-                        ERR_MSG("Write 'case: { ... }' to specify default case. 'default' is the C/C++ way.")
+                        ERR_MSG("Write 'case: { ... }' to specify default case. Do not use the word 'default'.")
                         ERR_LINE2(tok,"bad")
                     )
                     // info.advance();
@@ -3192,11 +3192,6 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
                     info.advance(); // :
                 }
                 
-                ParseFlags parsed_flags = PARSE_NO_FLAGS;
-                ASTScope* caseBody=nullptr;
-                auto signal = parseBody(caseBody, info.currentScopeId, PARSE_INSIDE_SWITCH, &parsed_flags);
-                SIGNAL_SWITCH_LAZY()
-                
                 auto token2 = info.getinfo(&view);
                 if(token2->type == lexer::TOKEN_ANNOTATION) {
                     if(view == "TEST_ERROR") {
@@ -3216,6 +3211,18 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
                     //     info.advance();
                     // }
                 }
+
+                auto tok = gettok(&view);
+
+                ParseFlags parsed_flags = PARSE_NO_FLAGS;
+                ASTScope* caseBody=nullptr;
+                // if (tok.type == '}' || (tok.type == lexer::TOKEN_IDENTIFIER && view == "case")) {
+                //     // no body
+                // } else {
+                    auto signal = parseBody(caseBody, info.currentScopeId, (ParseFlags)(PARSE_INSIDE_SWITCH | PARSE_SKIP_ENTRY_BRACES), &parsed_flags);
+                    SIGNAL_SWITCH_LAZY()
+                // }
+                
                 if(defaultCase) {
                     if(statement->firstBody || badDefault) {
                         // Assert(info.errors);
@@ -3917,6 +3924,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         }
         
         info.functionScopes.add({});
+        info.functionScopes.last().function = function;
         ASTScope* body = 0;
         auto signal = parseBody(body, function->scopeId);
         function->body = body;
@@ -4118,7 +4126,7 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
                     }       <- only this line will be seen
                 */
 
-
+                
                 SIGNAL_INVALID_DATATYPE(typeToken)
 
                 // Assert(result==SIGNAL_SUCCESS);
@@ -4306,13 +4314,15 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
     } else {
         bodyLoc = info.ast->createBody();
 
-        auto token = info.getinfo();
-        if(token->type == '{') {
-            info.advance();
-            expectEndingCurlyBrace = true;
-            if(out_flags)
-                *out_flags = (ParseFlags)(*out_flags|PARSE_HAS_CURLIES);
-            inheritScope = false;
+        if ((in_flags & PARSE_SKIP_ENTRY_BRACES) == 0) {
+            auto token = info.getinfo();
+            if(token->type == '{') {
+                info.advance();
+                expectEndingCurlyBrace = true;
+                if(out_flags)
+                    *out_flags = (ParseFlags)(*out_flags|PARSE_HAS_CURLIES);
+                inheritScope = false;
+            }
         }
         // NOTE: Always creating scope even with "if true  print("hey")" with no curly brace
         //  because it makes things more consistent and easier to deal with. If a scope wasn't created
@@ -4374,7 +4384,18 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
         auto token = info.getinfo(&view);
         if(token->type == lexer::TOKEN_EOF) {
             if(expectEndingCurlyBrace) {
-                ERR_DEFAULT(info.gettok(), "Sudden end of body. You are missing an ending curly brace '}'.", "here")
+                if (functionScopes.size()) {
+                    auto func = functionScopes.last().function;
+                    auto loc = getloc();
+                    ERR_SECTION(
+                        ERR_HEAD2(loc)
+                        ERR_MSG("Sudden end of file. A curly brace was expected to end the scope. The scope here belongs to function '"<<func->name<<"'. Did you forget a curly brace in this function?")
+                        ERR_LINE2(loc, "sudden end here")
+                        ERR_LINE2(func->location, "this function")
+                    )
+                }else {
+                    ERR_DEFAULT(info.gettok(), "Sudden end of body. You are missing an ending curly brace '}'.", "here")
+                }
                 return SIGNAL_COMPLETE_FAILURE;
             }
             break;
@@ -4386,8 +4407,10 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
             break;
         }
         if((in_flags & PARSE_INSIDE_SWITCH)) {
-            if(token->type == lexer::TOKEN_IDENTIFIER && view == "case")
+            if(token->type == lexer::TOKEN_IDENTIFIER && (view == "case" || view == "default")) {
+                Assert(in_flags & PARSE_SKIP_ENTRY_BRACES);
                 break;
+            }
             if(token->type == lexer::TOKEN_ANNOTATION && view == "fall") {
                 info.advance();
                 if(out_flags)

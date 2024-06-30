@@ -265,8 +265,6 @@ fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32
         memcpy(&value, ptr, typeinfo.size)
         printed := false
         for @ptr members {
-            if pretty  indent(depth)
-            
             // TODO: What about bit field?
             if it.value == value {
                 name := lang_name_from_range(it.name);

@@ -12,10 +12,33 @@
 #import "Math"
 #import "Logger"
 #import "Array"
+#import "BucketArray"
 #import "String"
 
 #macro DEFAULT_PORT 4097
+#macro PLAYER_SPEED 120.0
+#macro GRAVITY 17.0
 
+struct UUID {
+    data: u64; // zero means invalid, none, empty UUID
+    fn valid() -> bool { return data != 0 }
+}
+operator ==(a: UUID, b: UUID) -> bool {
+    return a.data == b.data
+}
+operator !=(a: UUID, b: UUID) -> bool {
+    return a.data != b.data
+}
+fn gen_uuid() -> UUID {
+    return UUID{random64()}
+}
+
+enum TextureNames {
+    IMG_BLOB,
+    IMG_BACK_LEVEL0,
+    // IMG_BACK_LEVEL1,
+    IMG_BACK_LEVEL2,
+}
 enum EntityType {
     BLOB,
     PLATFORM,
@@ -26,13 +49,16 @@ struct EntityInfo {
     is_static: bool;
 }
 struct Entity {
+    id: UUID;
     pos: vec2;
     size: vec2;
     vel: vec2;
     entity_info: i32; // entity type
     on_ground: bool;
 }
-global entities: Array<Entity>
+
+global entities: BucketArray<Entity>
+// global entities: Array<Entity>
 global entity_infos: Array<EntityInfo>
 global window: WindowContext*;
 global textures: Array<Texture*>;
@@ -42,24 +68,41 @@ global server: Server
 global client: Client
 global is_server: bool = false
 
-enum TextureNames {
-    IMG_BLOB,
-    IMG_BACK_LEVEL0,
-    // IMG_BACK_LEVEL1,
-    IMG_BACK_LEVEL2,
+global moving_platform: Entity*;
+global player: Entity*;
+
+fn add_entity(x: f32, y: f32, w: f32, h: f32, type: EntityType) -> Entity* {
+    id, e := entities.add(null)
+    e.entity_info = cast<i32>type
+    e.pos.x = x
+    e.pos.y = y
+    e.size.x = w
+    e.size.y = h
+    e.id = gen_uuid()
+
+    return e
+}
+fn add_entitity_with_uuid(x: f32, y: f32, w: f32, h: f32, type: EntityType, uuid: UUID) -> Entity* {
+    id, e := entities.add(null)
+    e.entity_info = cast<i32>type
+    e.pos.x = x
+    e.pos.y = y
+    e.size.x = w
+    e.size.y = h
+    e.id = uuid
+
+    return e
+}
+fn get_entity(id: UUID) -> Entity* {
+    iter := entities.create_iterator()
+    while entities.iterate(&iter) {
+        if iter.ptr.id == id {
+            return iter.ptr
+        }
+    }
+    return null
 }
 
-#macro PLAYER_SPEED 120.0
-#macro GRAVITY 17.0
-
-fn AddEntity(x: f32, y: f32, w: f32, h: f32, type: EntityType) {
-    entities.add(Entity{})
-    entities.last().entity_info = cast<i32>type
-    entities.last().pos.x = x
-    entities.last().pos.y = y
-    entities.last().size.x = w
-    entities.last().size.y = h
-}
 // Window (glfw, opengl context) should be initialized before calling this
 fn InitEntityInfos() {
     blob := CreateTexture("examples/graphics/blob.png")
@@ -84,7 +127,6 @@ fn InitEntityInfos() {
     entity_infos.last().is_static = true
 }
 
-global moving_platform_id: i32 = -1
 
 enum NetType {
     MSGTYPE_POSITION,
@@ -96,6 +138,8 @@ struct NetHeader {
 struct NetPosition {
     header: NetHeader = NetHeader{MSGTYPE_POSITION};
     pos: vec2;
+    vel: vec2;
+    id: UUID;
 }
 struct NetSpawn {
     header: NetHeader = NetHeader{MSGTYPE_SPAWN};
@@ -103,11 +147,11 @@ struct NetSpawn {
     size: vec2;
     vel: vec2;
     entity_info: i32; // entity type
+    id: UUID;
 }
 
-#macro LOG_NET(X) X
-// #macro LOG_NET(X) #endmacro
-
+// #macro LOG_NET(X) X
+#macro LOG_NET(X) #endmacro
 
 fn net_callback(e: Event, user_data: void*) {
     LOG_NET(
@@ -116,13 +160,40 @@ fn net_callback(e: Event, user_data: void*) {
     switch e.type {
     case EVENT_START:
         if is_server {
-            msg: NetSpawn
-            msg.entity_info = 
-            server.send()
+            // msg: NetSpawn
+            // msg.pos = player.pos
+            // msg.size = player.size
+            // msg.entity_info = BLOB
+            // msg.id = player.id
+            // data := Slice<char>{cast<char*>&msg, sizeof msg}
+            // if is_server {
+            //     server.send(data)
+            // } else {
+            //     client.send(data)
+            // }
+            // msg: NetSpawn
+        //     msg.pos = vec2{50,50}
+        //     msg.size = vec2{30,30}
+        //     msg.entity_info = BLOB
+        //     data := Slice<char>(cast<char*>&msg, sizeof msg)
+        //     server.send(data)
         } else {
-
-            client.send()
+            // msg: NetSpawn
+            // msg.pos = player.pos
+            // msg.size = player.size
+            // msg.entity_info = BLOB
+            // msg.id = player.id
+            // data := Slice<char>{cast<char*>&msg, sizeof msg}
+            // client.send(data)
         }
+    case EVENT_CONNECT:
+        msg: NetSpawn
+        msg.pos = player.pos
+        msg.size = player.size
+        msg.entity_info = BLOB
+        msg.id = player.id
+        data := Slice<char>{cast<char*>&msg, sizeof msg}
+        server.send(data, e.who)
     case EVENT_RECEIVE:
 
         LOG_NET( log("msglen ", e.bytes.len) )
@@ -133,52 +204,99 @@ fn net_callback(e: Event, user_data: void*) {
             case MSGTYPE_SPAWN:
                 body := cast<NetSpawn*>e.bytes.ptr
                 LOG_NET( std_print_any(body,true) )
+
+                entity := add_entitity_with_uuid(body.pos.x,body.pos.y, body.size.x,body.size.y, cast_unsafe<EntityType>body.entity_info, body.id)
+
             case MSGTYPE_POSITION:
                 body := cast<NetPosition*>e.bytes.ptr
-                LOG_NET( std_print_any(body,true) )
+                // LOG_NET( std_print_any(body,true) )
+
+                entity := get_entity(body.id)
+                if entity {
+                    entity.pos = body.pos
+                    entity.vel = body.vel
+                }
+
             case:
                 std_prints("ERROR, bad message header ") std_print_any(header) log()
-    
+        }
+    case: // nothing
     }
 }
 
 fn main(argc: i32, argv: char**) -> i32 {
     // log(argc)
     if argc > 1 {
+        client.set_callback(net_callback, null)
+        client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    } else {
         is_server = true
         server.set_callback(net_callback, null)
         server.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
-    } else {
-        client.set_callback(net_callback, null)
-        client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
     }
     start_game()
     return 0
 }
 
 fn start_game() {
+    entities.init(64)
 
     // window = CreateWindow(1400,600)
     window = CreateWindow(800,600)
 
     InitEntityInfos()
 
-    AddEntity(50, 50, 30, 30, BLOB)
+    if is_server {
+        player = add_entity(50, 50, 30, 30, BLOB)
+        
+    } else {
+        player = add_entity(200, 50, 30, 30, BLOB)
+    }
+    {
+        msg: NetSpawn
+        msg.pos = player.pos
+        msg.size = player.size
+        msg.entity_info = BLOB
+        msg.id = player.id
+        data := Slice<char>{cast<char*>&msg, sizeof msg}
+        if is_server {
+            server.send(data)
+        } else {
+            client.send(data)
+        }
+    }
 
-    // AddEntity(200, 50, 50, 40, BLOB)
+    // add_entity(200, 50, 50, 40, BLOB)
 
-    AddEntity(20, 350, 140, 20, PLATFORM)
-    entities.last().vel.y = 16.5
-    moving_platform_id = entities.size()-1
+    moving_platform = add_entity(20, 350, 140, 20, PLATFORM)
+    moving_platform.vel.y = 16.5
 
-    AddEntity(180, 400, 160, 20, PLATFORM)
+    add_entity(180, 400, 160, 20, PLATFORM)
 
     SaveFrame(0)
     SavePermanentFrame(0)
 
+    step := 0
+
     while window.running {
         FillColor(window, Color{0.2,0.2,0.2})
         
+        // Send updated positions
+        step++
+        if step > 1 && (server.is_active() || client.is_active()){
+            msg: NetPosition
+            msg.pos = player.pos
+            msg.vel = player.vel
+            msg.id = player.id
+            data := Slice<char>{cast<void*>&msg, sizeof msg}
+            if is_server {
+                server.send(data)
+            } else {
+                client.send(data)
+            }
+            step = 0
+        }
+
         window.enableUISpace(false)
         
         Update()
@@ -255,34 +373,34 @@ fn start_game() {
 }
 
 fn Update() {
-    player_index: i32 = -1
-    player2_index: i32 = -1
-    for @ptr entities.sliced() {
-        if it.entity_info == cast<i32>BLOB {
-            if player_index == -1
-                player_index = nr
-            else if player2_index == -1 {
-                player2_index = nr
-                break
-            }
-        }
-    }
+    // player_index: i32 = -1
+    // player2_index: i32 = -1
+    // for @ptr entities.sliced() {
+    //     if it.entity_info == cast<i32>BLOB {
+    //         if player_index == -1
+    //             player_index = nr
+    //         else if player2_index == -1 {
+    //             player2_index = nr
+    //             break
+    //         }
+    //     }
+    // }
 
-    player, player2: Entity*;
-    if player_index != -1 {
-        player = entities.get_unsafe(player_index)
-    }
-    if player2_index != -1 {
-        player2 = entities.get_unsafe(player2_index)
-    }
+    // player, player2: Entity*;
+    // if player_index != -1 {
+    //     player = entities.get_unsafe(player_index)
+    // }
+    // if player2_index != -1 {
+    //     player2 = entities.get_unsafe(player2_index)
+    // }
 
     timestep := window.delta // temporary
 
     speed := PLAYER_SPEED
     jump_force := 200 * GRAVITY / 9
 
-    if moving_platform_id != -1 {
-        moving_platform := entities.get_unsafe(moving_platform_id)
+    if moving_platform {
+        // moving_platform := entities.get_unsafe(moving_platform_id)
         if moving_platform.pos.y < 350 {
             moving_platform.vel.y *= -1.05
             moving_platform.pos.y = 350
@@ -299,13 +417,13 @@ fn Update() {
 
     
     if window.isKeyPressed(GLFW_KEY_R) {
-        RestoreFrame(0)
-        // if player {
-        //     player.pos.x = 50
-        //     player.pos.y = 50
-        //     player.vel.x = 0
-        //     player.vel.y = 0
-        // }
+        // RestoreFrame(0) // broken
+        if player {
+            player.pos.x = 250
+            player.pos.y = 50
+            player.vel.x = 0
+            player.vel.y = 0
+        }
         // if player2 {
         //     player2.pos.x = 200
         //     player2.pos.y = 50
@@ -340,31 +458,32 @@ fn Update() {
         }
     }
 
-    if player2 {
-        // if window.isKeyDown(GLFW_KEY_UP) {
-        //     // player.pos.y -= real_speed * window.delta
-        //     player2.vel.y = -real_speed
-        // } else if window.isKeyDown(GLFW_KEY_DOWN) {
-        //     player2.vel.y = real_speed
-        //     // player.pos.y += real_speed * window.delta
-        // } else {
-        //     player2.vel.y = 0
-        // }
-        if window.isKeyDown(GLFW_KEY_UP) {
-            if player2.on_ground {
-                player2.vel.y = -jump_force
-            }
-        }
-        if window.isKeyDown(GLFW_KEY_LEFT) {
-            // player.pos.x -= real_speed * window.delta
-            player2.vel.x = -real_speed
-        } else if window.isKeyDown(GLFW_KEY_RIGHT) {
-            player2.vel.x = real_speed
-            // player.pos.x += real_speed * window.delta
-        } else {
-            player2.vel.x = 0
-        }
-    } else {
+    // if player2 {
+    //     // if window.isKeyDown(GLFW_KEY_UP) {
+    //     //     // player.pos.y -= real_speed * window.delta
+    //     //     player2.vel.y = -real_speed
+    //     // } else if window.isKeyDown(GLFW_KEY_DOWN) {
+    //     //     player2.vel.y = real_speed
+    //     //     // player.pos.y += real_speed * window.delta
+    //     // } else {
+    //     //     player2.vel.y = 0
+    //     // }
+    //     if window.isKeyDown(GLFW_KEY_UP) {
+    //         if player2.on_ground {
+    //             player2.vel.y = -jump_force
+    //         }
+    //     }
+    //     if window.isKeyDown(GLFW_KEY_LEFT) {
+    //         // player.pos.x -= real_speed * window.delta
+    //         player2.vel.x = -real_speed
+    //     } else if window.isKeyDown(GLFW_KEY_RIGHT) {
+    //         player2.vel.x = real_speed
+    //         // player.pos.x += real_speed * window.delta
+    //     } else {
+    //         player2.vel.x = 0
+    //     }
+    // } else 
+    {
         speed := 200 * timestep
         if window.isKeyDown(GLFW_KEY_DOWN) {
             window.camera_y += speed
@@ -416,8 +535,9 @@ fn Update() {
         current_frame++
     }
 
-
-    for @ptr entities.sliced() {
+    iter := entities.create_iterator()
+    while entities.iterate(&iter) {
+        it := iter.ptr
         // we do velocity first so that the collision
         // has the previous velocity and not a modified version
         if it.entity_info == cast<i32> BLOB {
@@ -433,11 +553,20 @@ fn Update() {
     // 
     // Collision
     // 
-    for i: 0..entities.size() {
-        it0 := entities.get_unsafe(i)
+    iter0 := entities.create_iterator()
+    while entities.iterate(&iter0) {
+        it0 := iter0.ptr
+    // for i: 0..entities.size() {
+    //     it0 := entities.get_unsafe(i)
+
         info0 := entity_infos.get_unsafe(it0.entity_info)
-        for j: i+1..entities.size() {
-            it1 := entities.get_unsafe(j)
+
+        iter1 := entities.create_iterator(iter0.index + 1) // don't loop over the same entities multiple times
+        while entities.iterate(&iter1) {
+            it1 := iter1.ptr
+        // for j: i+1..entities.size() {
+        //     it1 := entities.get_unsafe(j)
+
             info1 := entity_infos.get_unsafe(it1.entity_info)
             
             if info0.is_static && info1.is_static
@@ -607,7 +736,10 @@ fn Update() {
     SaveFrame(current_frame)
 }
 fn RenderEntities() {
-    for @ptr entities.sliced() {
+    iter := entities.create_iterator()
+    while entities.iterate(&iter) {
+        it := iter.ptr
+
         info := entity_infos.get_unsafe(it.entity_info)
         if info.texture {
             DrawTexture(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.texture)
@@ -711,41 +843,43 @@ global frames: Array<Frame>
 global permanent_frames: Array<Frame>
 global permanent_frames_indices: Array<i32>
 fn SavePermanentFrame(frame_index: i32) {
-    if frame_index < 0
-        frame_index = 0
+    // NOTE: This broke, entities is now bucket array
+    // if frame_index < 0
+    //     frame_index = 0
 
-    permanent_frames.add(Frame{})
-    permanent_frames_indices.add(frame_index)
-    frame := permanent_frames.last()
+    // permanent_frames.add(Frame{})
+    // permanent_frames_indices.add(frame_index)
+    // frame := permanent_frames.last()
 
-    // TODO: only store changes
-    frame.changes.resize(entities.size())
-    memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
+    // // TODO: only store changes
+    // frame.changes.resize(entities.size())
+    // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
 }
 fn SaveFrame(frame_index: i32) {
-    if frame_index < 0
-        frame_index = 0
+    // NOTE: This broke, entities is now bucket array
+    // if frame_index < 0
+    //     frame_index = 0
 
-    if frame_index > last_frame {
-        last_frame = frame_index
-        if saved_frames < MAX_FRAMES
-            saved_frames++
-    }
+    // if frame_index > last_frame {
+    //     last_frame = frame_index
+    //     if saved_frames < MAX_FRAMES
+    //         saved_frames++
+    // }
 
-    real_index := frame_index % MAX_FRAMES
+    // real_index := frame_index % MAX_FRAMES
 
-    frame: Frame*;
-    if frames.size() <= real_index {
-        frames.add(Frame{})
-        frame = frames.last()
-        // TODO: Erase future frames?
-    } else {
-        frame = frames.get_unsafe(real_index)
-    }
+    // frame: Frame*;
+    // if frames.size() <= real_index {
+    //     frames.add(Frame{})
+    //     frame = frames.last()
+    //     // TODO: Erase future frames?
+    // } else {
+    //     frame = frames.get_unsafe(real_index)
+    // }
 
-    // TODO: only store changes
-    frame.changes.resize(entities.size())
-    memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
+    // // TODO: only store changes
+    // frame.changes.resize(entities.size())
+    // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
 }
 fn EraseFutureFrames(frame_index: i32) {
     if frame_index < 0
@@ -781,21 +915,22 @@ fn FrameMemoryUsage() -> i32 {
     return sum
 }
 fn RestoreFrame(frame_index: i32) {
-    if frame_index < 0
-        frame_index = 0
+    // NOTE: This broke when entities became a bucket array, we can't just resize it
+    // if frame_index < 0
+    //     frame_index = 0
 
-    for permanent_frames_indices.sliced() {
-        if it == frame_index {
-            frame := permanent_frames.get_unsafe(nr)
-            entities.resize(frame.changes.size())
-            memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
-            return;
-        }
-    }
+    // for permanent_frames_indices.sliced() {
+    //     if it == frame_index {
+    //         frame := permanent_frames.get_unsafe(nr)
+    //         entities.resize(frame.changes.size())
+    //         memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
+    //         return;
+    //     }
+    // }
 
-    real_index := frame_index % MAX_FRAMES
+    // real_index := frame_index % MAX_FRAMES
 
-    frame := frames.get_unsafe(real_index)
-    entities.resize(frame.changes.size())
-    memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
+    // frame := frames.get_unsafe(real_index)
+    // entities.resize(frame.changes.size())
+    // memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
 }
