@@ -30,3 +30,17 @@ fn print<T>(a: Array<T>) {
     // for a.sliced()
     //     log(it)
 }
+
+struct Manager {
+    x: i32;
+    fn poly<T>(t: T[]) {
+        // log(nameof t.ptr)
+    }
+    fn hum() {
+        poly("ok") // compiler crashed here
+    }
+}
+
+m: Manager
+m.hum()
+m.poly("ok") // at one point, matching failed here

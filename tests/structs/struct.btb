@@ -34,6 +34,22 @@ _test 23; a.n;
 // base2: Base = .{3}
 // base2 = .{7}
 
+struct Num {
+    x: i32
+}
+struct Ore {
+    n: Num;
+    fn nump() -> Num* {
+        return &n
+    }
+    fn num() -> Num {
+        return Num{4}
+    }
+}
+o: Ore
+o.nump().x // should be allowed
+@TEST_ERROR(E1) o.num().x  // we expect error for now but in the future we will allow this
+
 @TEST_CASE(slice_method)
 
 fn sl() -> char[] { return "ok" }
@@ -66,6 +82,27 @@ _test 3; *(box.items.ptr + 9 * sizeof i32)
 
 _test 16; sizeof box.items
 _test 80; sizeof box
+
+
+struct A {
+    x: i32[5];
+
+    fn ok() {
+        n := x
+        a := x[2]
+        _test 3; *n;
+
+
+        _test 9; a;
+        // log(n," ",a)
+    }
+}
+a: A
+a.x[0] = 3
+a.x[2] = 9
+a.ok()
+
+// TODO: Test arrays in structs more thoroughly.
 
 @TEST_CASE(indexing_slice)
 

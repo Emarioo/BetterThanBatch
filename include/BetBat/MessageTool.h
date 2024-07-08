@@ -102,7 +102,7 @@ void PrintExample(int line, const StringBuilder& stringBuilder);
 // IMPORTANT: DO NOT, UNDER ANY CIRCUMSTANCES, CHANGE THE ID/NUMBER OF THE ERRORS. THEY MAY BE USED IN TEST CASES.
 enum CompileError : u32 {
     ERROR_NONE = 0,
-    ERROR_UNSPECIFIED = 1, // This is used for old errors which didn't have error types. New errors should not use this.
+    ERROR_UNSPECIFIED = 1, // This is used for old errors which didn't have error types. New errors should not use this. Or if you are lazy i guess?
     ERROR_CASTING_TYPES = 1001,
     ERROR_UNDECLARED = 1002,
     ERROR_TYPE_MISMATCH = 1003, // generic type mismatch
@@ -148,8 +148,8 @@ struct Reporter {
     lexer::Import* prev_import=nullptr; // err_head resets this
     int base_column = -1; // err_head resets this too
 
-    void err_head(lexer::Token token, CompileError errcode = ERROR_NONE);
-    void err_head(lexer::SourceLocation loc, CompileError errcode = ERROR_NONE) {
+    void err_head(lexer::Token token, CompileError errcode = ERROR_UNSPECIFIED);
+    void err_head(lexer::SourceLocation loc, CompileError errcode = ERROR_UNSPECIFIED) {
         err_head(loc.tok,errcode);
     }
     // void err_desc(const StringBuilder& text);

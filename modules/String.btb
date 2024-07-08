@@ -102,10 +102,10 @@ struct StringBuilder {
     fn append(str: StringBuilder) {
         append(str.sliced())
     }
-    fn append_hex<T>(ptr: T*) {
-        bytes: u8* = cast<u8*>cast<void*>ptr
-        len: u32 = sizeof T
-        for 0..len {
+    fn append_hex<T>(p: T*) {
+        bytes: u8* = cast<u8*>cast<void*>p
+        l: u32 = sizeof T
+        for 0..l {
             hex0 := bytes[nr] & cast<u8>0x0F
             hex1 := bytes[nr] >> cast<u8>4
             if hex1 < 10u   append(cast<char>('0' + hex1))
@@ -114,8 +114,9 @@ struct StringBuilder {
             else            append(cast<char>('a' + hex0 - 10))
         }
     }
-    fn append_hex(ptr: void*, len: u32) {
-        for 0..len {
+    fn append_hex(p: void*, l: u32) {
+        bytes: u8* = cast<u8*>cast<void*>p
+        for 0..l {
             hex0 := bytes[nr] & cast<u8>0x0F
             hex1 := bytes[nr] >> cast<u8>4
             if hex1 < 10u   append('0' + hex1)
@@ -123,6 +124,25 @@ struct StringBuilder {
             if hex0 < 10u   append('0' + hex0)
             else            append('a' + hex0 - 10)
         }
+    }
+
+    fn insert(pos: i32, chr: char) {
+        if len + 1 > max {
+            if !reserve(1 + max * 2) {
+                return;
+            }
+        }
+        memcpy(ptr + pos + 1, ptr + pos, len - pos);
+        len += 1;
+        ptr[pos] = chr
+        ptr[len] = '\0';
+    }
+    fn removeAt(pos: i32) {
+        if len-pos < 0 {
+            memcpy(ptr + pos, ptr + pos + 1, len - (pos + 1));
+        }
+        len -= 1;
+        ptr[len] = '\0';
     }
     
     fn resize(newLen: i32) -> bool {

@@ -1385,7 +1385,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             // Assert(!parentStructImpl);
 
             int lessArguments = 0;
-            if(ent.set_implicit_this || expr->isMemberCall())
+            // if(ent.set_implicit_this || expr->isMemberCall()) 
+            if(ent.set_implicit_this)
                 lessArguments = 1;
             // if(parentAstStruct) {
             //     // ignoring methods for the time being
@@ -1715,11 +1716,12 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     polyOverload->astFunc->popPolyState();
                 };
                 bool found = true;
+                int extra = ent.set_implicit_this ? 1 : 0;
                 for (u32 j=0;j<expr->nonNamedArgs;j++){
                     // IMPORTANT: We also run CheckType in case types needs to be created.
                     // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
-                    TypeId argType = checkType(polyOverload->astFunc->scopeId,polyOverload->astFunc->arguments[j].stringType,
-                        polyOverload->astFunc->arguments[j].location,nullptr);
+                    TypeId argType = checkType(polyOverload->astFunc->scopeId,polyOverload->astFunc->arguments[j + extra].stringType,
+                        polyOverload->astFunc->arguments[j + extra].location,nullptr);
                     // TypeId argType = checkType(scope->scopeId,overload.astFunc->arguments[j].stringType,
                     // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
                     if(argType != argTypes[j]){
@@ -1949,7 +1951,20 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 log::out << "), ";
                 // log::out << ")\n";
             }
-            if(fnOverloads->overloads.size())
+            for (int i = 0; i < fnOverloads->polyOverloads.size();i++) {
+                auto& overload = fnOverloads->polyOverloads[i];
+                amount_of_overloads++;
+                log::out << "(";
+                for(int j=0;j<overload.astFunc->arguments.size();j++){
+                    auto& arg = overload.astFunc->arguments[j];
+                    if(j!=0)
+                        log::out << ", ";
+                    log::out << log::LIME << info.ast->typeToString(arg.stringType) << log::NO_COLOR;
+                }
+                log::out << "), ";
+            }
+           
+            if(fnOverloads->overloads.size() || fnOverloads->polyOverloads.size())
                 log::out << "\n";
 
             // if(fnOverloads->polyOverloads.size()!=0){
@@ -2024,6 +2039,25 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
 
                         if(outTypes) outTypes->add(AST_VOID);
                         return SIGNAL_FAILURE;
+                    }
+                    
+                    if(iden->type == Identifier::MEMBER_VARIABLE) {
+                        auto& mem = currentAstFunc->parentStruct->members[iden->memberIndex];
+                        if (mem.array_length) {
+                            TypeId type = iden->versions_typeId[info.currentPolyVersion];
+
+                            Assert(type.getPointerLevel() < 3);
+                            type.setPointerLevel(type.getPointerLevel() + 1);
+                            if(array_length)
+                                *array_length = mem.array_length;
+
+                            // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
+                            // bool printed = false;
+                            // TypeId type = checkType(scopeId, real_type, expr->location, &printed);
+                            
+                            outTypes->add(type);
+                            return SIGNAL_SUCCESS;
+                        }
                     }
                     
                     if(outTypes) {
@@ -2261,6 +2295,12 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
     } else {
         TypeId leftType{};
         TypeId rightType{};
+        
+        // const char* str = OP_NAME(expr->typeId.getId());
+        // bool is_operator_func = false;
+        // log::out << "Check " << str << "\n";
+        // if(str) {
+
         if(expr->typeId != AST_REFER && expr->typeId != AST_DEREF && expr->typeId != AST_MEMBER&& expr->typeId != AST_CAST && expr->typeId != AST_INITIALIZER) {
             TINY_ARRAY(TypeId, operatorArgs, 2);
             // BREAK(expr->nodeId == 2606)
@@ -2411,7 +2451,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 // leftType has therefore note been set and expression not checked.
                 // We must check it here.
                 checkExpression(scopeId, expr->left, &typeArray, attempt, &expr_array_length);
-                if(typeArray.size()>0)
+                if(typeArray.size()>0)  
                     leftType = typeArray.last();
             }
 
@@ -3033,19 +3073,32 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
         )
         return SIGNAL_FAILURE;
     }
-    for(int i=0;i<(int)function->arguments.size();i++){
-        auto& arg = function->arguments[i];
-        auto var = info.ast->addVariable(Identifier::ARGUMENT_VARIABLE, function->scopeId, arg.name, CONTENT_ORDER_ZERO, nullptr);
-        arg.identifier = var;
-        var->argument_index = i;
-    }
     if(parentStruct) {
         function->memberIdentifiers.resize(parentStruct->members.size());
         for(int i=0;i<(int)parentStruct->members.size();i++){
             auto& mem = parentStruct->members[i];
-            auto varinfo = info.ast->addVariable(Identifier::MEMBER_VARIABLE, function->scopeId, mem.name, CONTENT_ORDER_ZERO, nullptr);
+            bool reused = false;
+            auto varinfo = info.ast->addVariable(Identifier::MEMBER_VARIABLE, function->scopeId, mem.name, CONTENT_ORDER_ZERO, &reused);
             function->memberIdentifiers[i] = varinfo;
+            varinfo->memberIndex = i;
         }
+    }
+    for(int i=0;i<(int)function->arguments.size();i++){
+        auto& arg = function->arguments[i];
+        bool reused = false;
+        auto var = info.ast->addVariable(Identifier::ARGUMENT_VARIABLE, function->scopeId, arg.name, CONTENT_ORDER_ZERO, &reused);
+        if(!var) {
+            // TODO: Specify exactly which member or argument has the same name.
+            //   Also show where it is.
+            ERR_SECTION(
+                ERR_HEAD2(arg.location)
+                ERR_MSG("The argument cannot be named '"<<arg.name<<"' because it already exists. Either a previous argument or a member of the parent struct uses the same name.")
+                ERR_LINE2(arg.location,"rename to something else")
+            )
+            continue;
+        }
+        arg.identifier = var;
+        var->argument_index = i;
     }
     if(function->polyArgs.size()==0 && (!parentStruct || parentStruct->polyArgs.size() == 0)){
         // The code below is used to 

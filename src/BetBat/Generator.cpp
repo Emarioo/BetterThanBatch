@@ -709,6 +709,13 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
 // wasNonReference is used to allow pointers as well as actual references (pointer to variable)
 SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope, bool* wasNonReference, int* array_length){
     using namespace engone;
+
+    TRACE_FUNC()
+
+    CALLBACK_ON_ASSERT(
+        ERR_LINE2(_expression->location,"bug")
+    )
+
     ZoneScopedC(tracy::Color::Blue2);
     _GLOG(FUNC_ENTER)
     Assert(_expression);
@@ -724,6 +731,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
     DynamicArray<TypeId> tempTypes;
     TypeId endType = {};
     bool pointerType=false; // if the value on the stack is a direct pointer, false means a pointer to a pointer
+    int arrayLength = 0;
     ASTExpression* next=_expression;
     while(next){
         ASTExpression* now = next;
@@ -804,10 +812,23 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
                     Assert(info.currentFunction->callConvention == BETCALL);
                     builder.emit_get_param(BC_REG_B, 0, 8, false);
-                    // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, 8, GenContext::FRAME_SIZE);
                     
-                    builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                    builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
+                    auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                    if (mem.array_length) {
+                        arrayLength = mem.array_length;
+                        // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
+                        // bool printed = false;
+                        // typeId = ast->convertToTypeId(real_type, currentScopeId, true);
+
+                        typeId.setPointerLevel(typeId.getPointerLevel() + 1);
+                        
+                        builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                        builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
+                        pointerType = true;
+                    } else {
+                        builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                        builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
+                    }
                 } break;
                 case Identifier::ARGUMENT_VARIABLE: {
                     builder.emit_ptr_to_params(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
@@ -864,9 +885,20 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
 
     for(int i=exprs.size()-1;i>=0;i--){
         ASTExpression* now = exprs[i];
-        if(array_length)
-            *array_length = 0;
+        
         if(now->typeId == AST_MEMBER){
+            if(arrayLength) {
+                if(now->name == "len") {
+                    Assert(false);
+                    // What do we do here. We can't exactly push a constant since generateReference
+                    // is for actual references and pointers.
+                    builder.emit_li32(BC_REG_T0, arrayLength);
+                    builder.emit_push(BC_REG_T0);
+                } else if(now->name == "ptr") {
+                    Assert(false);
+                }
+                arrayLength = 0;
+            }
             if(pointerType){
                 pointerType=false;
                 if(!endType.isPointer()) {
@@ -892,7 +924,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             }
             TypeInfo* typeInfo = nullptr;
             typeInfo = info.ast->getTypeInfo(endType.baseType());
-            if(!typeInfo || !typeInfo->astStruct){ // one level of pointer is okay.
+            if(!typeInfo || !typeInfo->astStruct){
                 ERR_SECTION(
                     ERR_HEAD2(now->location)
                     ERR_MSG("'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.")
@@ -909,8 +941,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             auto& mem = typeInfo->astStruct->members[memberData.index];
             if(mem.array_length > 0) {
                 pointerType = true;
-                if(array_length)
-                    *array_length = mem.array_length;
+                arrayLength = mem.array_length;
                 
                 bool popped = false;
                 BCRegister reg = BC_REG_B;
@@ -973,6 +1004,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 endType = memberData.typeId;
             }
         } else if(now->typeId == AST_DEREF) {
+            arrayLength = 0;
             if(pointerType){
                 // PROTECTIVE BARRIER took a hit
                 pointerType=false;
@@ -1008,6 +1040,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             }
             endType.setPointerLevel(endType.getPointerLevel()-1);
         } else if(now->typeId == AST_INDEX) {
+            arrayLength = 0;
             FuncImpl* operatorImpl = nullptr;
             if(now->versions_overload._array.size()>0)
                 operatorImpl = now->versions_overload[info.currentPolyVersion].funcImpl;
@@ -1034,7 +1067,11 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             }
             bool is_slice = linfo && linfo->astStruct && linfo->astStruct->name == "Slice";
             if(is_slice) {
-
+                // NOTE: You may think that operator overload for index operator is implemented and
+                //   we therefore don't need is_slice BUT we operator overloading works like a
+                //   function with two inputs and one output. Since the output is a discrete value,
+                //   generateReference doesn't work since you can't take a pointer to a value that 
+                //   that is being pushed and popped on the stack.
             } else if(!endType.isPointer()){
                 if(!info.hasForeignErrors()){
                     std::string strtype = info.ast->typeToString(endType);
@@ -1158,6 +1195,8 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
         )
         return SIGNAL_FAILURE;
     }
+    if(array_length)
+        *array_length = arrayLength;
     if(wasNonReference)
         *wasNonReference = pointerType;
     *outTypeId = endType;
@@ -1733,8 +1772,19 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                     auto type = varinfo->versions_typeId[info.currentPolyVersion];
                 
                     builder.emit_get_param(reg, 0, 8, false);
-                    builder.emit_mov_rm_disp(reg, reg, 8, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                    
+
+                    auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                    if (mem.array_length) {
+                        ERR_SECTION(
+                            ERR_HEAD2(expression->location)
+                            ERR_MSG_COLORED("The identifier '"<<log::LIME << varinfo->name<<log::NO_COLOR<<"' is a member of the parent struct of a non-function pointer type. While it is an array of function pointers, it still an array and you must dereference or index into the array.")
+                            ERR_LINE2(expression->location, "here")
+                        )
+                        // builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                        // builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
+                    } else {
+                        builder.emit_mov_rm_disp(reg, reg, 8, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    }
                     // builder.emit_get_param(BC_REG_B, 0, 8, false);
                     // generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
                         // varinfo->versions_typeId[info.currentPolyVersion]);
@@ -2053,12 +2103,20 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                 varinfo->versions_typeId[info.currentPolyVersion]);
                         } break;
                         case Identifier::MEMBER_VARIABLE: {
-                            // NOTE: Is member variable/argument always at this offset with all calling conventions?
-                            auto type = varinfo->versions_typeId[info.currentPolyVersion];
+                            // NOTE: Is member variable/argument 'this' always at this offset with all calling conventions?
+                            // type = varinfo->versions_typeId[info.currentPolyVersion];
                             builder.emit_get_param(BC_REG_B, 0, 8, false); // pointer
-                        
-                            generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
-                                varinfo->versions_typeId[info.currentPolyVersion]);
+
+                            auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                            if (mem.array_length) {
+                                type.setPointerLevel(type.getPointerLevel()+1);
+                                builder.emit_li32(BC_REG_T0, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                                builder.emit_add(BC_REG_B, BC_REG_T0, false, 8);
+                                builder.emit_push(BC_REG_B);
+                            } else {
+                                generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
+                                type);
+                            }
                         } break;
                         default: {
                             Assert(false);
@@ -2563,8 +2621,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
         if(operatorImpl){
             return generateFncall(expression, outTypeIds, true);
         } else if (expression->typeId == AST_REFER) {
-
-            SignalIO result = generateReference(expression->left,&ltype,idScope);
+            bool wasNonReference = false;
+            SignalIO result = generateReference(expression->left,&ltype,idScope, &wasNonReference);
             if(result!=SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
             if(ltype.getPointerLevel()==3){
@@ -2574,8 +2632,13 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 )
                 return SIGNAL_FAILURE;
             }
-            ltype.setPointerLevel(ltype.getPointerLevel()+1);
-            outTypeIds->add( ltype); 
+            if (wasNonReference) {
+                // non reference means that the pointer pushed to the stack (by generateReference) has the type that was returned (ltype).
+            } else {
+                // if not non reference then generateReference returned the type that the pointer on the refers to.
+                ltype.setPointerLevel(ltype.getPointerLevel()+1);
+            }
+            outTypeIds->add(ltype); 
         } else if (expression->typeId == AST_DEREF) {
             DynamicArray<TypeId> ltypes{};
             
@@ -2901,7 +2964,19 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             
                             outTypeIds->add(exprId);
                         } else {
-                            Assert(exprId.getPointerLevel() == 1);
+                            if(exprId.getPointerLevel() == 0) {
+                                ERR_SECTION(
+                                    ERR_HEAD2(expression->location)
+                                    ERR_MSG("Accessing a member of a returned struct or a struct that is considered a value and not a reference is not possible. (with exception to slices for convenience)")
+                                    ERR_LINE2(expression->location,"here")
+                                )
+                            } else if(exprId.getPointerLevel() > 1) {
+                                ERR_SECTION(
+                                    ERR_HEAD2(expression->location)
+                                    ERR_MSG("You cannot access members if the type is a 2-level pointer Accessing members is only allowed if the expression evaluates to a 1-level pointer or a reference to a variable.")
+                                    ERR_LINE2(expression->location,"here")
+                                )
+                            }
                             BCRegister reg = BC_REG_B;
                             builder.emit_pop(reg);
                             
@@ -4679,6 +4754,18 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                                 Assert(info.currentFunction && info.currentFunction->parentStruct);
                                 // TODO: Verify that  you
                                 // NOTE: Is member variable/argument always at this offset with all calling conventions?
+                                
+                            // type = varinfo->versions_typeId[info.currentPolyVersion];
+                                builder.emit_get_param(BC_REG_B, 0, 8, false); // pointer
+
+                                auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                                if (mem.array_length) {
+                                    ERR_SECTION(
+                                        ERR_HEAD2(statement->location)
+                                        ERR_MSG("You cannot assing values to a struct member that is an array.")
+                                        ERR_LINE2(statement->location,"here")
+                                    )
+                                }
                                 auto type = varinfo->versions_typeId[info.currentPolyVersion];
                                 builder.emit_get_param(BC_REG_B, 0, 8, AST::IsDecimal(type));
                                 // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, 8, GenContext::FRAME_SIZE);

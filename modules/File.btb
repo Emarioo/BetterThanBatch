@@ -179,6 +179,20 @@ fn FileClose(file: FileHandle) {
         close(HandleToInternal(file))
     #endif
 }
+// Convenient function
+fn FileWrite(path: char[], buffer: void*, size: i32) -> i32 {
+    f := FileOpen(path, FILE_CLEAR_AND_WRITE)
+    bytes := FileWrite(f,buffer,size)
+    FileClose(f)
+    return bytes
+}
+// Convenient function
+fn FileWrite<T>(path: char[], buffer: T[]) -> i32 {
+    f := FileOpen(path, FILE_CLEAR_AND_WRITE)
+    bytes := FileWrite(f, buffer.ptr, buffer.len * sizeof *buffer.ptr)
+    FileClose(f)
+    return bytes
+}
 
 fn DirectoryCreate(path: char[]) -> bool {
     #if OS_WINDOWS

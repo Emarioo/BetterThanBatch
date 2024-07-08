@@ -1,0 +1,188 @@
+/*
+    A chat client/server
+*/
+
+#import "Graphics"
+#import "Net"
+#import "Math"
+#import "Logger"
+#import "Array"
+#import "String"
+#import "Stream"
+
+#import "File"
+
+#macro DEFAULT_PORT 5231
+
+global window: WindowContext*;
+global server: Server
+global client: Client
+global is_server: bool = false
+global chat_widget: ChatWidget*
+
+enum NetType {
+    MSGTYPE_MESSAGE,
+}
+struct NetHeader {
+    type: NetType
+}
+struct NetMessage {
+    header: NetHeader = NetHeader{MSGTYPE_MESSAGE};
+    sender_len: i32;
+    text_len: i32;
+}
+// #macro LOG_NET(X) X
+#macro LOG_NET(X) #endmacro
+
+fn net_callback(e: Event, user_data: void*) {
+    LOG_NET(
+        std_print("EVENT ") std_print_any(&e.type) log()
+    )
+    switch e.type {
+    case EVENT_START:
+        
+    case EVENT_CONNECT:
+        
+    case EVENT_RECEIVE:
+
+        LOG_NET( log("msglen ", e.bytes.len) )
+
+        header := cast<NetHeader*>e.bytes.ptr
+        switch header.type {
+            case MSGTYPE_MESSAGE:
+                body := cast<NetMessage*>e.bytes.ptr
+                LOG_NET( std_print_any(body,true) )
+
+                tmp: StringBuilder
+                // Make sure you get this right
+                tmp.append(Slice<char>{cast<void*>body + sizeof (NetMessage),body.sender_len})
+                tmp.append(": ")
+                tmp.append(Slice<char>{cast<void*>body + sizeof (NetMessage) + body.sender_len,body.text_len})
+                chat_widget.messages.add(tmp);
+
+            case:
+                std_prints("ERROR, bad message header ") std_print_any(header) log()
+        }
+    case: // nothing
+    }
+}
+
+struct ChatWidget {
+    x: f32;
+    y: f32;
+    w: f32;
+    h: f32;
+
+    text_size: f32;
+
+    messages: Array<StringBuilder>;
+    input_message: StringBuilder;
+
+    fn init(_x: f32, _y: f32, _w: f32, _h: f32) {
+        x = _x;
+        y = _y;
+        w = _w;
+        h = _h;
+        text_size = 20.0
+    }
+
+    fn render(window: WindowContext*) {
+        layout_y := y
+        padding := 5
+        for @ptr messages.sliced() {
+            DrawText(window, x + padding, padding + layout_y, text_size, it.sliced())
+            layout_y += text_size
+        }
+        DrawText(window, padding + x, padding + y + h - text_size - 2*padding, text_size, input_message.sliced())
+    }
+
+    fn update() {
+        if window.isKeyPressed(GLFW_KEY_ENTER) {
+            // log("Pressed enter")
+            sender: StringBuilder
+            defer sender.cleanup()
+            if is_server {
+                sender.append("Server")
+            } else {
+                sender.append("Client")
+            }
+
+            header: NetMessage
+            header.header.type = MSGTYPE_MESSAGE
+            header.sender_len = sender.size()
+            header.text_len = input_message.size()
+
+            stream: ByteStream
+            defer stream.cleanup()
+            stream.reserve(sizeof (NetMessage) + sender.size() + input_message.size() + 20)
+
+            stream.write(&header, sizeof header)
+            stream.write(sender.data(), header.sender_len)
+            stream.write(input_message.data(), header.text_len)
+
+            // FileWrite("bin.txt", stream.sliced_unsafe())
+
+            if is_server {
+                server.send(stream.sliced_unsafe())
+            } else {
+                client.send(stream.sliced_unsafe())
+            }
+            input_message.clear()
+        }
+    }
+}
+
+fn main(argc: i32, argv: char**) -> i32 {
+    // log(argc)
+    if argc > 1 {
+        client.set_callback(net_callback, null)
+        client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    } else {
+        is_server = true
+        server.set_callback(net_callback, null)
+        server.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    }
+    start_chat()
+    return 0
+}
+
+fn start_chat() {
+    // window = CreateWindow(1400,600)
+    window = CreateWindow(800,600)
+
+    step := 0
+
+    chat: ChatWidget
+    chat.init(0,0,window.width, window.height)
+    chat_widget = &chat
+
+    chat.input_message.append("Hello, this is some text")
+
+    if is_server {
+        tmp: StringBuilder
+        tmp.append("You are Server")
+        chat.messages.add(tmp)
+    } else {
+        tmp: StringBuilder
+        tmp.append("You are Client")
+        chat.messages.add(tmp.copy())
+    }
+
+    while window.running {
+        FillColor(window, Color{0.2,0.2,0.2})
+        
+        window.enableUISpace(true)
+        
+        chat.update()
+        chat.render(window)
+
+        c: i32
+        while @iknow c = window.pollChar() {
+            log(c)
+        }
+
+        RefreshWindow(window)
+    }   
+    
+    DestroyWindow(window)
+}

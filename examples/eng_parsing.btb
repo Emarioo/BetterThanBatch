@@ -1,0 +1,182 @@
+#import "Logger"
+#import "Array"
+#import "Memory"
+#import "Lang"
+
+fn main() {
+    // log("Hi")
+
+    text := @strbeg
+Can you remember the following sentence. I like cats.
+    @strend
+        // Do you remember the sentence.
+        // What sentence?
+        // Can you tell me all the sentences you remember.
+        // I remember this: I like cats
+
+    ast := Lex(text)
+    ast.print()
+
+    ir: IR* = Allocate(sizeof IR)
+    construct(ir)
+
+    // TODO: Parse sentence structure.
+    //  Welp, I guess we need to parse the english language now...
+    // This is helpful: https://academicguides.waldenu.edu/writingcenter/grammar/sentencestructure
+
+    // These are word classes: nouns, adjectives, verbs, and adverbs
+    
+    // Pronouns are he, she... when you've already established the noun/subject
+
+    // In sentence structure there is subjects, verbs, objects, and prepositional phrases
+    // subject and object are nouns
+
+    // There is also past, present, future. When something happened.
+
+    // You will ...  (when?)
+    // Can you ...  (now)
+    // You should ... (when)
+    // You shall ... (when)
+    // ... should be ... by you
+
+    for @ptr ast.sentences.sliced() {
+        first := it.list.get_unsafe(0)
+        if WordEqual(first.string, "can") {
+            // parse who
+            who := it.list.get_unsafe(1)
+            // parse verb
+            verb := it.list.get_unsafe(2)
+            // parse object
+            obj := it.list.get_unsafe(3) // object may be multiple words
+
+            action: Action
+            if WordEqual(verb.string, "remember") {
+                action.type = REMEMBER
+                action.subject = who.string.copy()
+                for 3..it.list.size() {
+                    if nr != 3
+                        action.object.append(" ")
+                    action.object.append(it.list.get(nr).string.copy())
+                }
+            }
+        }
+    }
+
+    ir.print()
+}
+
+fn WordEqual(s: StringBuilder, b: char[]) -> bool {
+    if s.len != b.len  return false
+    for s.sliced() {
+        if (it | cast<char>32) != (b[nr] | cast<char>32) // all caps
+            return false
+    }
+    return true
+}
+
+fn Lex(text: char[]) -> AST* {
+    ast: AST* = Allocate(sizeof AST)
+    construct(ast)
+
+    ast.source.append(text)
+
+    head := 0
+    word_start := 0
+    word_end := 0
+
+    needs_new_sentence := true
+
+    while {
+        if head >= text.len {
+            break
+        }
+
+        chr := text[head]
+        head++
+
+        if chr == ' ' || chr == '.' || head == text.len {
+            if word_end - word_start > 0 {
+                // do something
+                if head == text.len && chr != '.' && chr != ' ' {
+                    word_end++
+                }
+                word := Slice<char>{text.ptr + word_start, word_end - word_start}
+
+                expr: Expression
+                expr.type = WORD
+                expr.string.append(word)
+
+                if needs_new_sentence {
+                    s := ast.sentences.add()
+                    s.type = SENTENCE
+                    needs_new_sentence = false
+                }
+
+                sent := ast.sentences.last()
+
+                sent.list.add(expr)
+            }
+            word_start = 0
+            word_end = 0;
+            if chr == '.' {
+                needs_new_sentence = true
+            }
+            continue
+        } else {
+            if word_end == 0 {
+                word_start = head - 1
+                word_end = head - 1
+            }
+        }
+        word_end++
+    }
+
+    return ast
+}
+enum ActionType {
+    REMEMBER,
+    QUERY, // query/question for information
+}
+struct Action {
+    type: ActionType;
+    subject: StringBuilder; // who should remember
+    object: StringBuilder; // what to remember
+}
+struct IR {
+    list: Array<Action>;
+    fn print() {
+        for @ptr list.sliced() {
+            std_print_any(it) log()
+        }
+    }
+}
+
+enum Type {
+    WORD,
+    SENTENCE,
+}
+struct Expression {
+    type: Type;
+
+    string: StringBuilder;
+    list: Array<Expression>; // NOTE: We could use an array of strings, not expressions but we might need to store extra info in the future.
+}
+struct AST {
+    source: StringBuilder;
+
+    sentences: Array<Expression>;
+
+    fn print() {
+        for @ptr sentences.sliced() {
+            sent := it
+            // std_print_any(sent, true) log()
+            for @ptr sent.list.sliced() {
+                // std_print_any(it, true) log()
+                if nr != 0
+                    std_print(" ")
+                std_prints(it.string)
+            }
+            std_print(". ")
+        }
+    }
+}

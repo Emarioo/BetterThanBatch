@@ -116,9 +116,9 @@ struct ByteStream {
 /*
     Any pointers retrieved from the stream will not be invalidated by resizes.
 */
-struct StableStream {
+// struct StableStream {
     
-}
+// }
 
 
 fn print_bytes(stream: ByteStream*) {

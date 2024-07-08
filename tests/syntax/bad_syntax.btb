@@ -5,7 +5,7 @@ b := 2
 
 if a == b
     _test 1; 1;
-else nr > 3 {
+else b > 3 {
     _test 0; 1;
 }
 // sometimes you forget 'if' after else and it's valid syntax
@@ -18,3 +18,23 @@ ind := 0
 if na
     ++ind // na++ will may happen and then ind
           // will be it's own statement
+
+
+// This is when I realized the syntax of the language is terrible
+never := 0
+if never == ' ' || never '.' || never == '0' { @TEST_ERROR(ERROR_UNSPECIFIED) // TODO: What kind of error should we have here?
+    // _test 0; 1;
+}   
+/* because I missed == between never and '.', the code executes
+   like this instead which is confusing because it doesn't give
+   you an error.
+
+never := 0
+if never == ' ' || never
+    '.' || never == '0' // treated as the statement of the if
+                        // because == was missing
+
+{ // unrelated scope to the if which will always execute
+    _test 0; 1;
+}
+*/

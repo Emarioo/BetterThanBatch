@@ -2672,15 +2672,15 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 SIGNAL_SWITCH_LAZY()
                 
                 auto tok = info.gettok();
-                if(tok.type != ')'){
+                if(tok.type != ')') {
                     ERR_SECTION(
                         ERR_HEAD2(tok)
                         ERR_MSG("Expected ) not "<<info.lexer->tostring(tok)<<".")
                         ERR_LINE2(tok,"bad")
                     )
-                }else
+                } else
                     info.advance();
-                values.add(tmp);  
+                values.add(tmp);
             } else {
                 auto token_tiny = info.gettok();
                 // if(attempt){
@@ -2922,6 +2922,8 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
                 signal = parseBody(elseBody, info.currentScopeId);
 
                 SIGNAL_SWITCH_LAZY()
+            } else {
+                // ERR_LINE2(expr->location, "")
             }
 
             statement = info.ast->createStatement(ASTStatement::IF);

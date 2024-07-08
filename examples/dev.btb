@@ -1,5 +1,42 @@
-
 // TODO: Fix Net.btb, disconnect, make sure disconnect, close events work, mutexes
-// TODO: Improve game 
+//   Testing Net.btb will be easier with a chat client than a game, probably.
+// #import "examples/graphics/chat.btb"
 
-#import "examples/graphics/game.btb"
+// TODO: Improve game 
+// #import "examples/graphics/game.btb"
+
+
+#import "Logger"
+// #import "Array"
+
+// // BUG
+struct A {
+    x: i32[5];
+
+    fn ok() {
+        n := x
+        a := x[2]
+        log(*n," ",a)
+    }
+}
+a: A
+a.x[0] = 3
+a.x[2] = 9
+a.ok()
+log(a.x.ptr[0])
+
+// struct Num {
+//     x: i32
+// }
+// struct Ore {
+//     n: Num;
+//     fn nump() -> Num* {
+//         return &n
+//     }
+//     fn num() -> Num {
+//         return Num{4}
+//     }
+// }
+// o: Ore
+// o.nump().x // should be allowed
+// o.num().x  // should be allowed

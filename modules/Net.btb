@@ -121,6 +121,8 @@ struct Server {
                     return 0
                 }
 
+                log("Connection")
+
                 connection: Connection* = Allocate(sizeof Connection)
                 memzero(connection, sizeof Connection)
                 connection.socket = client_socket
@@ -286,7 +288,8 @@ struct Server {
 
     }
     // -1 as connection id to send to all connections
-	fn send(bytes: char[], connection_id: ConnectionID = -1) -> NetError {
+	// fn send(bytes: char[], connection_id: ConnectionID = -1) -> NetError {
+	fn send<T>(bytes: T[], connection_id: ConnectionID = -1) -> NetError {
         if connection_id == -1 {
             for connection: m_connections.sliced() {
                 send(bytes, connection.conn_id)
@@ -297,29 +300,29 @@ struct Server {
             return NET_FAILURE
         }
         connection := m_connections.get(connection_id)
-    
+        size := bytes.len * sizeof *bytes.ptr
         if m_protocol & NET_PROTO_MESSAGE {
             header: MessageHeader
-            header.length = bytes.len
+            header.length = bytes.len * sizeof *bytes.ptr
             err := connection.socket.send(cast<void*>&header, sizeof header, 0)
             if err < 0 {
                 log("server send header failed")
                 return NET_FAILURE
             }
             m_sent_bytes += sizeof header
-            err = connection.socket.send(bytes.ptr, bytes.len, 0)
+            err = connection.socket.send(cast<void*>bytes.ptr, header.length, 0)
             if err < 0 {
                 log("server send body failed")
                 return NET_FAILURE
             }
-            m_sent_bytes += bytes.len
+            m_sent_bytes += header.length
         } else {
-            err := connection.socket.send(bytes.ptr, bytes.len, 0)
+            err := connection.socket.send(cast<void*>bytes.ptr, size, 0)
             if err < 0 {
                 log("server send stream failed")
                 return NET_FAILURE
             }
-            m_sent_bytes += bytes.len
+            m_sent_bytes += size
         }
         return NET_SUCCESS
     }
@@ -539,29 +542,31 @@ struct Client {
         return m_socket.valid()
     }
 
-	fn send(bytes: char[]) -> NetError {
+	// fn send(bytes: char[]) -> NetError {
+	fn send<T>(bytes: T[]) -> NetError {
+        size := bytes.len * sizeof *bytes.ptr
         if m_protocol & NET_PROTO_MESSAGE {
             header: MessageHeader
-            header.length = bytes.len
+            header.length = size
             err := m_socket.send(cast<void*>&header, sizeof header, 0)
             if err < 0 {
                 log("send msg failed1")
                 return NET_FAILURE
             }
             m_sent_bytes += sizeof header
-            err = m_socket.send(bytes.ptr, bytes.len, 0)
+            err = m_socket.send(cast<void*>bytes.ptr, header.length, 0)
             if err < 0 {
                 log("send msg failed2")
                 return NET_FAILURE
             }
-            m_sent_bytes += bytes.len
+            m_sent_bytes += header.length
         } else {
-            err := m_socket.send(bytes.ptr, bytes.len, 0)
+            err := m_socket.send(cast<void*>bytes.ptr, size, 0)
             if err < 0 {
                 log("send failed")
                 return NET_FAILURE
             }
-            m_sent_bytes += bytes.len
+            m_sent_bytes += size
         }
         return NET_SUCCESS
     }

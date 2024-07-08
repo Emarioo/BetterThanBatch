@@ -82,6 +82,10 @@ int main(int argc, const char** argv){
 
     CompileOptions options{};
     bool valid = InterpretCommands(arguments, &options);
+
+
+    int exit_code = EXIT_CODE_SUCCESS;
+
     if(!valid)
         return EXIT_CODE_FAILURE;
 
@@ -112,6 +116,10 @@ int main(int argc, const char** argv){
         Compiler compiler{};
         compiler.run(&options);
 
+        if(compiler.options->compileStats.errors > 0)
+            exit_code = EXIT_CODE_FAILURE;
+        else
+            exit_code = EXIT_CODE_SUCCESS;
 
         // VirtualMachine vm{};
         // vm.execute(compiler.bytecode,"main");
@@ -192,6 +200,11 @@ int main(int argc, const char** argv){
         //         } break;
         //     }
         // }
+        
+        if(compiler.options->compileStats.errors > 0)
+            exit_code = EXIT_CODE_FAILURE;
+        else
+            exit_code = EXIT_CODE_SUCCESS;
     }
 
     // ###### CLEANUP STUFF ######
@@ -214,7 +227,7 @@ int main(int argc, const char** argv){
     }
     log::out << "Finished\n";
 
-    return EXIT_CODE_SUCCESS;
+    return exit_code;
 }
 bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions* options) {
     using namespace engone;

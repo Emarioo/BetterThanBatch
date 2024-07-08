@@ -262,13 +262,23 @@ if !compileSuccess! == 0 if !RUN_AT_END!==1 (
 :RUN_COMPILER
     rem
 
-    @REM bin\btb -dev
+    bin\btb -dev
     @REM bin\btb --test
     
-    bin\btb examples/graphics/game
+    @REM bin\btb examples/graphics/chat
+
+    @REM if !errorlevel!==0 (
+    @REM     start test
+    @REM     timeout 1
+    @REM     start test client
+    @REM )
+
+    @REM bin\btb examples/graphics/game
     
-    start test
-    timeout 1
-    start test client
+    @REM if !errorlevel!==0 (
+    @REM     start test
+    @REM     timeout 1
+    @REM     start test client
+    @REM )
     
 )
