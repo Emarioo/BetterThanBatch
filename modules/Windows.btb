@@ -32,6 +32,9 @@ fn @import(Kernel) GetExitCodeProcess(
   hProcess: HANDLE,
   lpExitCode: i32*
 ) -> bool;
+fn @import(Kernel) ExitProcess(
+  uExitCode: u32
+);
 
 struct SECURITY_ATTRIBUTES {
   nLength:              i32;

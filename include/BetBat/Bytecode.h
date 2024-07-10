@@ -399,7 +399,7 @@ struct Bytecode {
     u32 getMemoryUsage();
     
     DynamicArray<TinyBytecode*> tinyBytecodes;
-    int index_of_main = -1;
+    int index_of_main = -1; // rename to index_of_entry_point?
 
     QuickArray<u8> dataSegment{};
     engone::Mutex lock_global_data;

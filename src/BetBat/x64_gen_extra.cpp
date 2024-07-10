@@ -540,8 +540,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         rel.bc_addr = bc_addr;
         relativeRelocations.add(rel);
     };
-    
-    bool is_entry_point = tinycode->name == "main"; // TODO: temporary, we should let the user specify entry point, the whole compiler assumes "main" as entry point...
+    // TODO: What about WinMain?
+    bool is_entry_point = tinycode->name == compiler->entry_point; // TODO: temporary, we should let the user specify entry point, the whole compiler assumes "main" as entry point...
 
     if(compiler->force_default_entry_point) {
         is_entry_point = false;

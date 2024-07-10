@@ -1,6 +1,27 @@
 // TODO: Fix Net.btb, disconnect, make sure disconnect, close events work, mutexes
 //   Testing Net.btb will be easier with a chat client than a game, probably.
-#import "examples/graphics/chat.btb"
+// #import "examples/graphics/chat.btb"
 
 // TODO: Improve game 
 // #import "examples/graphics/game.btb"
+
+#import "Logger"
+
+// global defers: i32
+// fn inside() {
+//     {
+//         log("begin scope")
+//         defer {
+//             defers++
+//             log("defer")
+//         }
+//         log("end scope")
+//     }
+//     log("before return")
+//     return
+// }
+// inside()
+// _test 1; defers
+
+#import "Net"
+TestNetEvents()

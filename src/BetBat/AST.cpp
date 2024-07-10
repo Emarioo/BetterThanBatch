@@ -573,14 +573,14 @@ bool AST::findEnumMember(ScopeId scopeId, const StringView& name, ASTEnum** out_
     // }
     return false;
 }
-bool AST::castable(TypeId from, TypeId to){
+bool AST::castable(TypeId from, TypeId to, bool less_strict){
     if (from == to)
         return true;
     if(from.isPointer()) {
         if (to == AST_BOOL)
             return true;
         if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
-            from.getPointerLevel() - to.getPointerLevel() == 1)
+            from.getPointerLevel() - to.getPointerLevel() == 1 && (less_strict || from.baseType() == AST_VOID))
             return true;
         // if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
         //     return true;
@@ -589,7 +589,7 @@ bool AST::castable(TypeId from, TypeId to){
     }
     if(to.isPointer()) {
         if ((from.baseType() == AST_UINT64 || from.baseType() == AST_INT64) && 
-            to.getPointerLevel() - from.getPointerLevel() == 1)
+            to.getPointerLevel() - from.getPointerLevel() == 1 && (less_strict || to.baseType() == AST_VOID))
             return true;
         // if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
         //     return true;
@@ -681,7 +681,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall,
             found_uint = false;
             for(int j=0;j<(int)fncall->nonNamedArgs;j++){
                 TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
-                bool is_castable = ast->castable(argTypes[j], implArgType);
+                bool is_castable = ast->castable(argTypes[j], implArgType, false);
                 if(!is_castable){
                     // Not castable with normal conversion
                     // Check hard conversions

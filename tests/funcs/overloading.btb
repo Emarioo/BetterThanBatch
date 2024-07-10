@@ -19,6 +19,17 @@ fn say2(v: char) {
 }
 say2(32) // should be fine, i32 is casted to i16
 
+fn match(p: i32*) {
+    _test 1; 0
+}
+// we should not accept match(i32*) as an overload because
+// we don't want to implicitly cast u64 to a i32*
+// it's strange behaviour and could cause bugs
+// void* to i32* is fine and u64 to void* is fine
+// User should explicitly do the casts to prevent bugs
+// TODO: Test this with polymorphism, not use normal overload matching
+@TEST_ERROR(ERROR_UNSPECIFIED) match(cast<u64>23)
+
 @TEST_CASE(add_or_operator)
 operator +(a: i32, b: i32) -> i32 {
     return a * b;

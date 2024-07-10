@@ -3365,6 +3365,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
     bool specifiedConvention = false;
     // Token linkToken{};
 
+    bool is_entry_point = false;
+
     lexer::Token tok_name{};
     if(!is_operator) {
         StringView view_fn_name{};
@@ -3512,6 +3514,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                 // function->linkConvention = NATIVE;
             } else if (view_fn_name == "blank"){
                 function->blank_body = true;
+            } else if (view_fn_name == "entry"){
+                is_entry_point = true;
             } else {
                 auto tok = info.gettok();
                 // It should not warn you because it is quite important that you use the right annotations with functions
@@ -3617,10 +3621,23 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
 
         function->name = name;
     }
-    
+
     // log::out << "begin " <<function->name<<"\n";
 
     function->location = info.srcloc(tok_name);
+
+    if (is_entry_point) {
+        if (compiler->entry_point != "main") {
+            ERR_SECTION(
+                ERR_HEAD2(function->location)
+                ERR_MSG("You can only specify entry point (@entry) once but it is specified at least twice. Remove the @entry from one of the functions.")
+                ERR_LINE2(compiler->location_of_entry_point, "previous entry point")
+                ERR_LINE2(function->location, "new entry point")
+            )
+        }
+        compiler->entry_point = function->name;
+        compiler->location_of_entry_point = function->location;
+    }
 
     ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder(), nullptr);
     funcScope->is_function_scope = true;

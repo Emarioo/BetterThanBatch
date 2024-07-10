@@ -57,6 +57,16 @@ fn net_callback(e: Event, user_data: void*) {
             tmp.append("Started client")
             chat_widget.add_msg(tmp);
         }
+    case EVENT_CLOSE:
+        if is_server {
+            tmp: StringBuilder
+            tmp.append("Stopped server")
+            chat_widget.add_msg(tmp);
+        } else {
+            tmp: StringBuilder
+            tmp.append("Stopped client")
+            chat_widget.add_msg(tmp);
+        }
     case EVENT_CONNECT:
         tmp: StringBuilder
             tmp.append("Someone connected")
@@ -78,6 +88,9 @@ fn net_callback(e: Event, user_data: void*) {
                 tmp.append(Slice<char>{cast<void*>body + sizeof (NetMessage) + body.sender_len,body.text_len})
                 chat_widget.add_msg(tmp);
 
+                if is_server {
+                    server.send(e.bytes, all_except = e.who)
+                }
             case:
                 std_prints("ERROR, bad message header ") std_print_any(header) log()
         }
@@ -108,6 +121,7 @@ struct ChatWidget {
         h = _h;
         text_size = 20.0
     }
+    // TODO: set_width/height
 
     fn render(window: WindowContext*) {
         layout_y := y
@@ -160,7 +174,7 @@ struct ChatWidget {
                         server.close()
                     if client.is_active()
                         client.close()
-                    server.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+                    server.start(DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
                 } else if args[0] == "/connect" {
                     // if args.len < 2 {
                     //     log("ERROR: /connect expects at least one argument, ip and optionally port. You provided ", args.len-1," argument(s).")
@@ -219,6 +233,25 @@ struct ChatWidget {
     }
 }
 
+#macro SKIP_CONSOLE #endmacro
+
+#if SKIP_CONSOLE
+#if OS_WINDOWS
+    // NOTE: A hack in the compiler, if a function named WinMain exists and the target is Windows, the linker will not use the console subsystem
+    fn @stdcall @entry WinMain(hInstance: void*, hPrevInstance: void*, cmdline: char*, showCmd: i32) -> i32 {
+        buf0: StringBuilder
+        buf1: Array<char*>
+        argc, argv := ParseCmdLine(sliced(cmdline), &buf0, &buf1)
+
+        main(argc, argv)
+
+        ExitProcess(0)
+
+        return 0
+    }
+#endif
+#endif
+
 fn main(argc: i32, argv: char**) -> i32 {
     // net_callback uses chat_widget so we make sure it's not null to avoid crashes
     chat: ChatWidget
@@ -233,7 +266,7 @@ fn main(argc: i32, argv: char**) -> i32 {
             client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
         } else if "server" == sliced(argv[1]) {
             is_server = true
-            server.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+            server.start(DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
         } else {
             log("Chat executable only handles one of these arguments: 'server' or 'client'.")
         }
@@ -248,36 +281,18 @@ fn start_chat() {
 
     step := 0
 
-    chat := chat_widget
-    // chat: ChatWidget
-    chat.init(0,0,window.width, window.height)
-    // chat_widget = &chat
-
-    // chat.input_message.append("Hello, this is some text")
-
-    // net_callback adds message indicating server or client when connection starts, no need to here.
-    // if is_server {
-    //     tmp: StringBuilder
-    //     tmp.append("You are Server")
-    //     chat.add_msg(tmp)
-    // } else {
-    //     tmp: StringBuilder
-    //     tmp.append("You are Client")
-    //     chat.add_msg(tmp)
-    // }
+    chat_widget.init(0,0,window.width, window.height)
 
     while window.running {
         FillColor(window, Color{0.2,0.2,0.2})
         
         window.enableUISpace(true)
         
-        chat.update(window)
-        chat.render(window)
+        chat_widget.w = window.width
+        chat_widget.h = window.height
 
-        // c: i32
-        // while @iknow c = window.pollChar() {
-        //     log(c)
-        // }
+        chat_widget.update(window)
+        chat_widget.render(window)
 
         RefreshWindow(window)
     }   

@@ -65,7 +65,8 @@ void GenContext::addCallToResolve(i32 bcIndex, FuncImpl* funcImpl){
 // Will perform cast on float and integers with pop, cast, push
 // uses register A
 // TODO: handle struct cast?
-bool GenContext::performSafeCast(TypeId from, TypeId to) {
+// NOTE: performSafeCast() should allow the same casts as ast->castable()
+bool GenContext::performSafeCast(TypeId from, TypeId to, bool less_strict) {
     if(!from.isValid() || !to.isValid())
         return false;
     if (from == to)
@@ -75,7 +76,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
         if (to == AST_BOOL)
             return true;
         if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
-            from.getPointerLevel() - to.getPointerLevel() == 1)
+            from.getPointerLevel() - to.getPointerLevel() == 1 && (less_strict || from.baseType() == AST_VOID))
             return true;
         // if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
         //     return true;
@@ -84,7 +85,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
     }
     if(to.isPointer()) {
         if ((from.baseType() == AST_UINT64 || from.baseType() == AST_INT64) && 
-            to.getPointerLevel() - from.getPointerLevel() == 1)
+            to.getPointerLevel() - from.getPointerLevel() == 1 && (less_strict || to.baseType() == AST_VOID))
             return true;
         // if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
         //     return true;
@@ -178,7 +179,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
     if(!hasForeignErrors()){
         std::string l = ast->typeToString(from);
         std::string r = ast->typeToString(to);
-        Assert(!ast->castable(from,to));
+        Assert(!ast->castable(from,to, less_strict));
     }
     return false;
 }
@@ -2763,7 +2764,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 //     outTypeIds->add(castType);
                 //     // data is fine as it is, just change the data type
                 // } else { 
-                bool yes = (ltype.getPointerLevel() > 0 && castType.getPointerLevel() > 0) || performSafeCast(ltype, castType);
+                bool yes = (ltype.getPointerLevel() > 0 && castType.getPointerLevel() > 0) || performSafeCast(ltype, castType, true);
                 if (yes) {
                     outTypeIds->add(castType);
                 } else {
@@ -4014,7 +4015,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             continue; // Skips implementation if it isn't used
         Assert(("func has already been generated!",funcImpl->tinycode_id == 0));
 
-        if(funcImpl->astFunction->name == "main") {
+        if(funcImpl->astFunction->name == compiler->entry_point) {
             switch(info.compiler->options->target) { // this is really cheeky
             case TARGET_WINDOWS_x64:
                 function->callConvention = STDCALL;
@@ -4036,7 +4037,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         builder.init(bytecode, tinycode, compiler);
         
         funcImpl->tinycode_id = tinycode->index + 1;
-        if(tinycode->name == "main") {
+        if(tinycode->name == compiler->entry_point) {
             bytecode->index_of_main = tinycode->index;
             bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->name, tinycode->index);
             if(!yes) {
@@ -4186,11 +4187,11 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
 
         // dfun->codeStart = info.bytecode->length();
 
-        if(funcImpl->astFunction->name == "main") {
+        if(funcImpl->astFunction->name == compiler->entry_point) {
             if(function->blank_body) {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
-                    ERR_MSG("The main function cannot be @blank because it's the entry point which initializes type information and global data.")
+                    ERR_MSG("The entry point function cannot be @blank because it's the entry point which initializes type information and global data.")
                     ERR_LINE2(function->location, "here")
                 )
             }
@@ -5382,7 +5383,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             _GLOG(SCOPE_LOG("RETURN"))
 
             if (!info.currentFunction) {
-                if(info.tinycode->name != "main") {
+                if(info.tinycode->name != compiler->entry_point) {
+                    // The global entry point can have return statement
                     ERR_SECTION(
                         ERR_HEAD2(statement->location)
                         ERR_MSG("Return only allowed in function.")
@@ -5393,7 +5395,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 if ((int)statement->arrayValues.size() > 1) {
                     ERR_SECTION(
                         ERR_HEAD2(statement->location)
-                        ERR_MSG("Found " << statement->arrayValues.size() << " return value(s) but only one is allowed when using the global scope as the main function body..")
+                        ERR_MSG("Found " << statement->arrayValues.size() << " return value(s) but only one is allowed when using the global scope as the entry point.")
                         ERR_LINE2(statement->location, "Y values")
                     )
                     continue;
@@ -5947,7 +5949,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     
     Identifier* iden = nullptr;
     if(is_initial_import) {
-        iden = compiler->ast->findIdentifier(scope->scopeId,0,"main", nullptr);
+        iden = compiler->ast->findIdentifier(scope->scopeId,0,compiler->entry_point, nullptr);
         if(!iden) {
             // If no main function exists then the code in global scope of
             // initial import will be the main function.
@@ -5960,7 +5962,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 case TARGET_BYTECODE: main_conv = BETCALL; break;
                 default: Assert(false);
             }
-            TinyBytecode* tb_main = context.bytecode->createTiny("main",main_conv);
+            TinyBytecode* tb_main = context.bytecode->createTiny(compiler->entry_point,main_conv);
             context.bytecode->index_of_main = tb_main->index;
 
             // TODO: Code below should be the same as the one in generateFunction.
@@ -5980,7 +5982,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
             auto dfun = di->addFunction(nullptr, context.tinycode, imp->path, 1);
             dfun->import_id = imp->import_id;
             context.debugFunction = dfun;
-            context.bytecode->addExportedFunction("main", context.tinycode->index);
+            context.bytecode->addExportedFunction(tb_main->name, context.tinycode->index);
 
             context.generatePreload();
 

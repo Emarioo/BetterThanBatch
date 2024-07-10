@@ -250,6 +250,8 @@ struct Compiler {
 
     CompileOptions* options = nullptr;
 
+    std::string entry_point = "main";
+    lexer::SourceLocation location_of_entry_point;
     bool has_generated_entry_point = false;
     bool force_default_entry_point = false; // libc requires it's own entry point
 

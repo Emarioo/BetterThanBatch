@@ -19,6 +19,7 @@
 #import "Logger"
 #import "Array"
 #import "Memory" // we use memcpy
+#import "Threads"
 
 enum @enclosed @specified lang_Primitive : u8 {
     NONE            = 0,
@@ -98,15 +99,16 @@ fn lang_typesize(id: lang_TypeId) -> u16 {
     return lang_typeInfos.ptr[index].size;
 }
 
-fn std_print(type: lang_TypeInfo*) {
-    std_prints("{ size: ",type.size,
-        ", type: ")
-    std_print_any(&type.type)
-    std_prints(
-        ", name: ",type.name.beg,"-",type.name.end,
-        ", members: ",type.members.beg,"-",type.members.end,
-    " }")
-}
+// NOTE: can't name function std_print because overload matching is scuffed. std_print(void*) would match with this function which we don't want.
+// fn std_print_lang(type: lang_TypeInfo*) {
+//     std_prints("{ size: ",type.size,
+//         ", type: ")
+//     std_print_any(&type.type)
+//     std_prints(
+//         ", name: ",type.name.beg,"-",type.name.end,
+//         ", members: ",type.members.beg,"-",type.members.end,
+//     " }")
+// }
 fn std_print(type: lang_TypeId) {
     fn print_pointers(type: lang_TypeId) {
         for 0..type.ptr_level
@@ -145,8 +147,8 @@ fn std_print<T>(value: T*) {
 //     std_print_any(&value, id, pretty);
 // }
 fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32 = 1) {
-    // NOTE: NOT THREAD SAFE!!!!!!
     global printed_pointers: Array<void*>
+    global mutex: Mutex
 
     if ptr == null {
         std_print("null")
@@ -154,7 +156,12 @@ fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32
     }
     
     if depth == 1 {
+        mutex.lock()
         printed_pointers.resize(0) // reset before use
+    }
+    defer {
+        if depth == 1
+            mutex.unlock()
     }
 
     if type == typeid Slice<char> {

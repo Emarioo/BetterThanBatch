@@ -8,6 +8,8 @@
       as a server or client.
       The reason this is troublesome is because when a server sends a message, we have to specify which connection
       while the client only has one connection. So we kind of need a switch even if we have one struct.
+
+    TODO: Tests for various events. Test for start, close, wait, disconnect. 
 */
 
 #import "Array"
@@ -15,6 +17,7 @@
 #import "String"
 #import "Threads"
 #import "Sockets"
+#import "OS" // we need Assert from OS, altough Assert should be moved to somewhere else
 
 #if OS_WINDOWS
     #import "Windows"
@@ -23,11 +26,11 @@
 #endif
 
 enum EventType {
-	EVENT_START,
-	EVENT_CLOSE,
-	EVENT_RECEIVE, // recived data
-	EVENT_CONNECT, // server only
-	EVENT_DISCONNECT, // server only
+	EVENT_START, // server starts listening or client connects to server
+	EVENT_CLOSE, // server stops listening or client closes connections
+	EVENT_RECEIVE, // data is received, server or client
+	EVENT_CONNECT, // from server side, a client connected
+	EVENT_DISCONNECT, // from server side, a client disconnected
 }
 struct Event {
 	type: EventType;
@@ -59,23 +62,33 @@ struct Connection {
     message_max: i32;
     socket: Socket;
     server: Server*;
-    conn_id: ConnectionID;
+    conn_id: ConnectionID; // index into server.m_connections, -1 means invalid connection
+    in_use: bool;
 }
 struct MessageHeader {
     length: i32;
 }
-
+// TODO: What if the client suddenly closes and the user wants to connect again as soon as possible.
+//   This can't be done in the event callback because it's in the connection thread. The user must first
+//   do client.close() to join the thread, then client.start(). Should we do something do make this more convenient?
+//   Maybe the user can do client.start() where the connection is closed and thread joined if it exists?
+// TODO: ConnectionID currently represents an index into an array but it may be a good
+//   idea to keep ids unique. That way, the user can easily tell if a connection is new or not.
+//   They don't have to worry about reused connection ids.
+//   However, the user may have their own array to store things where it is useful to have
+//   an index for each connection in use instead of a unique integer which can't index into a small array.
 struct Server {
     fn cleanup() {
         close() // make sure connection is closed
     }
 
-	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+	fn start(port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+        if m_is_initialized
+            return NET_FAILURE // already started, call close() first
+
         if !m_event_callback {
             log("You forgot to set the net callback for server")
         }
-        m_ip.clear()
-        m_ip.append(ip)
         m_port = port
         m_protocol = protocol
 
@@ -102,7 +115,7 @@ struct Server {
             return NET_FAILURE
         }
 
-        m_is_active = true
+        m_is_initialized = true
 
         m_listener_thread = ThreadCreate(listener_func, this)
         fn @oscall listener_func(arg: void*) -> i32 {
@@ -112,34 +125,59 @@ struct Server {
                 e: Event
                 e.type = EVENT_START
                 e.who = 0
+                // NOTE: If user sets server.m_event_callback to null at a bad timing then we may crash here
                 server.m_event_callback(e, server.m_user_data)
             }
 
             while {
-                log("#waiting")
+                // log("#waiting")
                 client_socket := server.m_socket.accept(null, null)
                 if !client_socket.valid() {
-                    log("accept failed")
-                    return 0
+                    // TODO: Handle error, normally accept fails because socket was closed but
+                    //   There may have been an error which we should report.
+                    // log("accept failed")
+                    break
                 }
 
-                log("Connection")
+                // Try to reuse connection
+                connection: Connection* = null
+                
+                server.mutex.lock()
 
-                connection: Connection* = Allocate(sizeof Connection)
-                memzero(connection, sizeof Connection)
+                for server.m_connections.sliced() {
+                    Assert(it)
+                    if !it.in_use {
+                        connection = it
+                    }
+                }
+                if !connection {
+                    // Otherwise create a new connection structure
+                    connection = Allocate(sizeof Connection)
+                    memzero(connection, sizeof Connection)
+                    connection.message_max = 0x10000
+                    connection.message_data = Allocate(connection.message_max)
+                    connection.server = server
+                    connection.conn_id = server.m_connections.size()
+                    server.m_connections.add(connection)
+                } else {
+                    // server, conn_id have already been set since we reuse a previous connection
+                    // message_data can also be reused, no need to free and allocate again.
+                }
                 connection.socket = client_socket
-                connection.message_max = 0x10000
-                connection.message_data = Allocate(connection.message_max)
+                if connection.receiver_thread.valid()
+                    connection.receiver_thread.join()
                 connection.receiver_thread = ThreadCreate(receiver_func2, connection)
-                connection.server = server
-                connection.conn_id = server.m_connections.size()
+                connection.in_use = true
 
-                server.m_connections.add(connection)
+                server.mutex.unlock()
 
                 fn @oscall receiver_func2(arg: void*) -> i32 {
                     connection: Connection* = arg
                     server := connection.server
                     protocol: NetProtocol = connection.server.m_protocol
+
+                    // NOTE: We cannot lock server.mutex because the listener thread may join
+                    //  client connections and when it does, it iterates through all connections and locks server.mutex, if we try to lock it then we end up in a deadlock
 
                     if server.m_event_callback {
                         e: Event
@@ -159,15 +197,15 @@ struct Server {
                                 break // graceful shutdown
                             }
                             if bytes < 0 {
-                                if server.m_event_callback {
-                                    e: Event
-                                    e.type = EVENT_DISCONNECT
-                                    e.who = connection.conn_id
-                                    server.m_event_callback(e, connection.server.m_user_data)
-                                }
+                                // if server.m_event_callback {
+                                //     break // forced shutdown
+                                // }
 
                                 if connection.socket.valid()
                                     connection.socket.close()
+
+                                // TODO: Handle error, some errors are okay like connection was forced to
+                                //   shutdown from the client side. Other errors should be reported to the user.
 
                                 #if OS_WINDOWS
                                     err := WSAGetLastError()
@@ -175,7 +213,7 @@ struct Server {
                                         break
                                 #endif
 
-                                log("recv failed")
+                                // log("recv failed")
                                 break
                             }
                             server.m_received_bytes += sizeof header
@@ -215,25 +253,19 @@ struct Server {
                         if bytes == 0 {
                             break
                         } else if bytes < 0 {
-                            if server.m_event_callback {
-                                e: Event
-                                e.type = EVENT_DISCONNECT
-                                e.who = connection.conn_id
-                                server.m_event_callback(e, connection.server.m_user_data)
-                            }
                             if connection.socket.valid()
                                 connection.socket.close()
                             
+                            // TODO: Handle/report error
                             #if OS_WINDOWS
                                 err := WSAGetLastError()
                                 if err == WSAECONNRESET
                                     break
                             #endif
 
-                            log("recv failed")
+                            // log("recv failed")
                             break
                         }
-
 
                         if connection.server.m_event_callback {
                             e: Event
@@ -245,10 +277,71 @@ struct Server {
                         // std_prints("[READ ", bytes,"]")
                         // std_print(buffer.ptr, bytes)
                     }
+
+                    if server.m_event_callback {
+                        e: Event
+                        e.type = EVENT_DISCONNECT
+                        e.who = connection.conn_id
+                        server.m_event_callback(e, server.m_user_data)
+                    }
+
+                    // We can't destroy Connection here because it stores data for thread
+                    // and we can't join the thread if we are in that thread.
+                    
+                    connection.socket.close() // we should close the connection though
+                    connection.in_use = false // indicates that connection can be destoyed and reused
+
                     return 0
                 }
             }
             server.m_socket.close()
+            // global mut: Mutex
+            // mut.lock()
+            // log(server.m_connections[0])
+            // log(server.m_connections[1])
+            // log(server.m_connections[2])
+            // mut.unlock()
+
+            // Create temporary array of connections so we don't have to keep
+            // locking the server.mutex.
+            // Perhaps a callback wants to access information of a connection
+            // before disconnecting and destroying connection.
+            server.mutex.lock()
+            cons := server.m_connections.copy()
+            server.mutex.unlock()
+
+            // Close connections first, triggering disconnect events.
+            for cons.sliced() {
+                Assert(it)
+                if it.in_use {
+                    if it.socket.valid() {
+                        it.socket.close()
+                    }
+                    if it.receiver_thread.valid() {
+                        it.receiver_thread.join()
+                    }
+                }
+                Assert(it.message_data)
+                Free(it.message_data)
+                Free(it)
+            }
+            cons.cleanup()
+
+            server.mutex.lock()
+            server.m_connections.cleanup()
+            server.mutex.unlock()
+
+            // Then trigger close event. We don't want the close event to trigger and then have stray disconnect events appear.
+            if server.m_event_callback {
+                e: Event
+                e.type = EVENT_CLOSE
+                server.m_event_callback(e, server.m_user_data)
+            }
+
+            // We may have closed all connections and the thread may have terminated but
+            // thread still needs to be joined. The user must therefore call server.close()
+            // to completely cleanup the server.
+
             return 0
         }
 
@@ -258,50 +351,87 @@ struct Server {
         // Close listener socket and thread
         if m_socket.valid() {
             m_socket.close()
-            if m_listener_thread.valid() {
-                ThreadJoin(m_listener_thread)
-                m_listener_thread.cleanup();
-            }
         }
 
-        // Close other connections
-        for m_connections.sliced() {
-            if it.socket.valid() {
-                it.socket.close()
-                ThreadJoin(it.receiver_thread)
-                Free(it.message_data)
-                Free(it)
-            }
+        if m_listener_thread.valid() && m_listener_thread.id != ThreadSelfId() {
+            m_listener_thread.join()
         }
-        m_connections.cleanup()
 
-        m_is_active = false
+        // NOTE: Connections are closed before listener_thread exits, no need to check it here.
+
+        m_is_initialized = false
     }
     fn wait() {
         if m_listener_thread.valid() {
-            ThreadJoin(m_listener_thread)
-            m_listener_thread.cleanup()
+            m_listener_thread.join()
         }
+        Assert(!m_socket.valid())
+        m_is_initialized = false
     }
     fn is_active() -> bool {
         return m_socket.valid()
     }
-	fn disconnect(connection_id: ConnectionID) -> NetError {
+	fn disconnect(who: ConnectionID) -> NetError {
+        connection: Connection*
+        {
+            mutex.lock()
+            if who < 0 || who >= m_connections.size() {
+                mutex.unlock()
+                return NET_FAILURE // invalid connection
+            }
+            connection = m_connections.get(who)
+            mutex.unlock()
+        }
 
+        if !connection.in_use
+            return NET_FAILURE // invalid connection
+
+        if connection.socket.valid()
+            connection.socket.close()
+        
+        if connection.receiver_thread.valid() && connection.receiver_thread.id != ThreadSelfId()
+            connection.receiver_thread.join()
+        return NET_SUCCESS
     }
     // -1 as connection id to send to all connections
 	// fn send(bytes: char[], connection_id: ConnectionID = -1) -> NetError {
-	fn send<T>(bytes: T[], connection_id: ConnectionID = -1) -> NetError {
-        if connection_id == -1 {
-            for connection: m_connections.sliced() {
-                send(bytes, connection.conn_id)
+	fn send<T>(bytes: T[], who: ConnectionID = -1, all_except: ConnectionID = -1) -> NetError {
+        Assert(!(who != -1 && all_except != -1)) // user can't specify who and all_except
+
+        // TODO: Decrease the amount of locking, it's expensive
+        if who == -1 {
+            mutex.lock()
+            for m_connections.sliced() {
+                mutex.unlock()
+                send(bytes, it.conn_id)
+                mutex.lock()
             }
+            mutex.unlock()
             return NET_SUCCESS
         }
-        if connection_id >= m_connections.size() {
+        mutex.lock()
+        if who >= m_connections.size() || all_except >= m_connections.size() {
+            mutex.unlock()
             return NET_FAILURE
         }
-        connection := m_connections.get(connection_id)
+        if all_except != -1 {
+            for m_connections.sliced() {
+                if it.conn_id != all_except {
+                    mutex.unlock()
+                    send(bytes, it.conn_id)
+                    mutex.lock()
+                }
+            }
+            mutex.unlock()
+            return NET_SUCCESS
+        }
+
+        connection := m_connections.get(who)
+        mutex.unlock()
+
+        if !connection.in_use
+            return NET_FAILURE // invalid connection
+
         size := bytes.len * sizeof *bytes.ptr
         if m_protocol & NET_PROTO_MESSAGE {
             header: MessageHeader
@@ -334,11 +464,10 @@ struct Server {
     }
 	// fn pollEvents(blocking: bool) -> Event[] { }
 	
-	m_ip: StringBuilder;
 	m_port: u32;
     m_protocol: NetProtocol;
 
-    m_is_active: bool;
+    m_is_initialized: bool; // false if the server is in a fresh state where server.start() can be called, true means that the server is running or was terminated but not yet cleaned up, server.close() can be called if so. Use is_active() to check if the server is running.
     m_socket: Socket;
     m_listener_thread: Thread;
 
@@ -350,7 +479,7 @@ struct Server {
     m_received_bytes: i32;
     m_sent_bytes: i32;
 
-	// mutex: Mutex;
+	mutex: Mutex;
 }
 struct Client {
     fn cleanup() {
@@ -364,6 +493,9 @@ struct Client {
     }
 
 	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+        if m_is_initialized
+            return NET_FAILURE // already started
+
         if !m_event_callback {
             log("You forgot to set the net callback for client.")
         }
@@ -411,7 +543,7 @@ struct Client {
 
         m_receiver_thread = ThreadCreate(receiver_func, this)
 
-        m_is_active = true // at this point, client should be fully up and running
+        m_is_initialized = true // at this point, client should be fully up and running
 
         fn @oscall receiver_func(arg: void*) -> i32 {
             client: Client* = arg
@@ -434,23 +566,17 @@ struct Client {
                         break // graceful shutdown
                     }
                     if bytes < 0 {
-                        if client.m_event_callback {
-                            e: Event
-                            e.type = EVENT_CLOSE
-                            e.who = 0
-                            client.m_event_callback(e, client.m_user_data)
-                        }
-
                         if client.m_socket.valid()
                             client.m_socket.close()
 
+                        // TODO: Handle error
                         #if OS_WINDOWS
                             err := WSAGetLastError()
                             if err == WSAECONNRESET
                                 break
                         #endif
 
-                        log("recv failed")
+                        // log("recv failed")
                         break
                     }
                     client.m_received_bytes += sizeof header
@@ -490,23 +616,17 @@ struct Client {
                 if bytes == 0 {
                     break
                 } else if bytes < 0 {
-                    if client.m_event_callback {
-                        e: Event
-                        e.type = EVENT_CLOSE
-                        e.who = 0
-                        client.m_event_callback(e, client.m_user_data)
-                    }
 
                     if client.m_socket.valid()
                         client.m_socket.close()
-                    
+                    // TODO: Report error
                     #if OS_WINDOWS
                         err := WSAGetLastError()
                         if err == WSAECONNRESET
                             break
                     #endif
 
-                    log("recv failed")
+                    // log("recv failed")
                     break
                 }
 
@@ -523,6 +643,13 @@ struct Client {
 
             client.m_socket.close()
 
+            if client.m_event_callback {
+                e: Event
+                e.type = EVENT_CLOSE
+                e.who = 0
+                client.m_event_callback(e, client.m_user_data)
+            }
+
             return 0
         }
 
@@ -532,16 +659,17 @@ struct Client {
         if m_socket.valid()
             m_socket.close()
 
-        ThreadJoin(m_receiver_thread)
-        m_receiver_thread.cleanup()
+        if m_receiver_thread.valid() {
+            m_receiver_thread.join()
+        }
 
-        m_is_active = false // set last when client is truly closed and ready to be started again
+        m_is_initialized = false // set last when client is truly closed and ready to be started again
     }
     fn wait() {
         if m_receiver_thread.valid() {
-            ThreadJoin(m_receiver_thread)
-            m_receiver_thread.cleanup()
+            m_receiver_thread.join()
         }
+        m_is_initialized = false
     }
     fn is_active() -> bool {
         return m_socket.valid()
@@ -591,7 +719,7 @@ struct Client {
 	m_port: u32;
     m_protocol: NetProtocol;
 
-    m_is_active: bool;
+    m_is_initialized: bool;
     m_socket: Socket;
 
     m_receiver_thread: Thread;
@@ -630,7 +758,7 @@ struct Client {
 // }
 // fn TestServer() {
 //     server: Server
-//     err := server.start(DEFAULT_IP,DEFAULT_PORT)
+//     err := server.start(DEFAULT_PORT)
 
 //     // while {
 //     //     events := server.pollEvents(true)
@@ -639,3 +767,52 @@ struct Client {
 //     //     }
 //     // }
 // }
+
+
+fn TestNetEvents() {
+    server: Server
+    client: Client
+    client1: Client
+    client2: Client
+
+    server.set_callback(s_callback, null)
+    client.set_callback(c_callback, null)
+    client1.set_callback(c_callback, null)
+    client2.set_callback(c_callback, null)
+    global mutex: Mutex
+    fn s_callback(e: Event, ud: void*) {
+        mutex.lock()
+        log("Server:")
+        std_print_any(&e, true) log()
+        // log(&e)
+        mutex.unlock()
+    }
+    fn c_callback(e: Event, ud: void*) {
+        mutex.lock()
+        log("Client")
+        std_print_any(&e, true) log()
+        // log(&e)
+        mutex.unlock()
+    }
+    // check start, close event
+    // check receive event
+    // check connect, disconnect event
+
+    server.start(4000, NET_PROTO_MESSAGE)
+    client.start("127.0.0.1",4000, NET_PROTO_MESSAGE)
+    client1.start("127.0.0.1",4000, NET_PROTO_MESSAGE)
+    
+    ProcessSleep(0.5)
+    server.disconnect(0)
+
+    client2.start("127.0.0.1",4000, NET_PROTO_MESSAGE)
+
+    // ProcessSleep(0.5)
+
+    server.close()
+
+    // if program doesn't freeze and we get events in this order then the event stuff works to some degree:
+        // server start, client start
+        // server disconnect
+        // client close, server close
+}

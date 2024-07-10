@@ -9,6 +9,22 @@ for 0..1 {
     }
 }
 
+global defers: i32
+fn inside() {
+    {
+        // log("begin scope")
+        defer {
+            defers++
+            // log("defer")
+        }
+        // log("end scope")
+    }
+    // log("before return")
+    return // There was a bug where defers inside scopes was added to return statments
+}
+inside()
+_test 1; defers
+
 @TEST_CASE(advanced_defer)
 
 #import "Logger"

@@ -469,7 +469,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         } else {
             if(useInterp) {
                 VirtualMachine vm{};
-                vm.execute(compiler.bytecode,"main");
+                vm.execute(compiler.bytecode, compiler.entry_point);
                 // Assert(false);
                 // interpreter.reset();
                 // interpreter.silent = true;

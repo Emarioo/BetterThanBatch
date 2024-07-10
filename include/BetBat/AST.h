@@ -978,7 +978,8 @@ struct AST {
     u32 getTypeSize(TypeId typeId);
     u32 getTypeAlignedSize(TypeId typeId);
 
-    bool castable(TypeId from, TypeId to);
+    // less_strict will allow u64 -> i32* conversions, integer to pointer is otherwise only allowed with void pointers.
+    bool castable(TypeId from, TypeId to, bool less_strict = false);
 
     bool findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, FnOverloads::Overload* overload = nullptr);
 

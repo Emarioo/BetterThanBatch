@@ -134,7 +134,7 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
             checkExpression(structInfo->scopeId, member.defaultValue,&tempTypes, false);
             if(tempTypes.size()==0)
                 tempTypes.add(AST_VOID);
-            if(!info.ast->castable(implMem.typeId, tempTypes.last())){
+            if(!info.ast->castable(implMem.typeId, tempTypes.last(), false)){
                 std::string deftype = info.ast->typeToString(tempTypes.last());
                 std::string memtype = info.ast->typeToString(implMem.typeId);
                 ERR_SECTION(
@@ -922,7 +922,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 matched = false;   
             } else {
                 for(int i=0;i<f->argumentTypes.size();i++) {
-                    if(!info.ast->castable(argTypes[i], f->argumentTypes[i].typeId)) {
+                    if(!info.ast->castable(argTypes[i], f->argumentTypes[i].typeId, false)) {
                         matched = false;
                         break;
                     }
@@ -1222,7 +1222,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     matched = false;   
                 } else {
                     for(int i=0;i<f->argumentTypes.size();i++) {
-                        if(!info.ast->castable(argTypes[i], f->argumentTypes[i].typeId)) {
+                        if(!info.ast->castable(argTypes[i], f->argumentTypes[i].typeId, false)) {
                             matched = false;
                             break;
                         }
@@ -1308,7 +1308,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     if(tempTypes.size()==0)
                         tempTypes.add(AST_VOID);
 
-                    bool is_castable = info.ast->castable(tempTypes.last(),argImpl.typeId);
+                    bool is_castable = info.ast->castable(tempTypes.last(),argImpl.typeId, false);
                     // if(!is_castable){
                     //     // Not castable with normal conversion
                     //     // Check hard conversions
@@ -1770,7 +1770,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         loc,nullptr);
                     // TypeId argType = checkType(scope->scopeId,overload.astFunc->arguments[j].stringType,
                     // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
-                    if(!info.ast->castable(argTypes[j], argType)){
+                    if(!info.ast->castable(argTypes[j], argType, false)){
                         found = false;
                         break;
                     }
@@ -2691,7 +2691,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                         ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
                     )
                 }
-            } else if(!(typeArray.last().getPointerLevel() > 0 && ti.getPointerLevel() > 0) && !info.ast->castable(typeArray.last(),ti)){
+            } else if(!(typeArray.last().getPointerLevel() > 0 && ti.getPointerLevel() > 0) && !info.ast->castable(typeArray.last(),ti, true)){
                 std::string strleft = info.ast->typeToString(typeArray.last());
                 std::string strcast = info.ast->typeToString(ti);
                 ERR_SECTION(
@@ -3214,7 +3214,8 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
                 // DynamicArray<TypeId> retTypes{}; // @unused
                 SignalIO yes = checkFunctionImpl( function, funcImpl, parentStruct, nullptr);
 
-                if(function->name == "main") {
+                // TODO: Implement a list of functions to forcefully generate
+                if(function->name == compiler->entry_point) {
                     funcImpl->usages = 1;
 
                     // We add main automatically in Compiler::processImports
@@ -3685,7 +3686,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
         // We check for it above. HOWEVER, we don't stop and that's because we try to
         // find more errors. That is why we need vi < ...
         if(vi < (int)poly_typeArray.size()){
-            if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
+            if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion], false)) {
                 auto badtype = info.ast->typeToString(varname.assignString);
                 ERR_SECTION(
                     ERR_HEAD2(now->firstExpression->location, ERROR_TYPE_MISMATCH)
@@ -3801,7 +3802,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                             // continue;
                         }
                     }
-                    if(!info.ast->castable(typeArray[0], elementType)) {
+                    if(!info.ast->castable(typeArray[0], elementType, false)) {
                         ERR_SECTION(
                             ERR_HEAD2(value->location)
                             ERR_MSG("Cannot cast '"<<info.ast->typeToString(typeArray[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
@@ -4325,15 +4326,6 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     // So instead of that mess, we check headers first to ensure that all references will work.
     SignalIO result = info.checkFunctions(scope);
 
-    // TODO: Delete code below, we don't need it anymore, i think.
-    // if(is_initial_import) {
-        // if we don't have main, then global functions will be checked
-        // it's when we do define a main that we have to check globals "manually"
-        // auto iden = compiler->ast->findIdentifier(scope->scopeId,0,"main");
-        // if(iden) {
-            // We check globals of the import because those are not checked otherwise.
-            // Most code is copied from CheckRest. Don't forget to modify CheckRest and here
-            // making changes.
     info.currentContentOrder.add(CONTENT_ORDER_ZERO);
     defer {
         info.currentContentOrder.pop();

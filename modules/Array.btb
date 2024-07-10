@@ -171,6 +171,15 @@ struct Array<T> {
         }
         return false;
     }
+    // shallow copy
+    fn copy() -> Array<T> {
+        new_array: Array<T>
+        
+        new_array.resize(len)
+        memcpy(new_array.ptr, ptr, len * sizeof T)
+
+        return new_array
+    }
 }
 // this does not work
 operator []<T>(arr: Array<T>, index: i32) -> T {

@@ -406,6 +406,9 @@ bool FileELF::WriteFile(const std::string& name, X64Program* program, u32 from, 
             // TODO: We assume that all named symbols are functions. This may not be true in the future.
             if(sym.name == "main") {
                 sym_main = addSymbol(sym.name, ind_text, sym.textOffset, STB_GLOBAL, STT_FUNC);
+            } else if(sym.name == "WinMain") {
+                // TODO: WinMain should be prioritized over main
+                sym_main = addSymbol(sym.name, ind_text, sym.textOffset, STB_GLOBAL, STT_FUNC);
             } else {
                 addSymbol(sym.name, ind_text, sym.textOffset, STB_GLOBAL, STT_FUNC);
             }

@@ -28,12 +28,20 @@ struct Thread {
     os_handle: u64 = 0;
     id: u64 = 0;
     
-    fn cleanup() {
-        os_handle = 0
-        id = 0
-    }
     fn valid() -> bool {
         return id != 0
+    }
+    fn join() {
+        // TODO: Handle error
+        #if OS_WINDOWS
+            WaitForSingleObject(os_handle, 0xFFFFFFFF); // 0xFFFFFFFF wait indefinitely
+            CloseHandle(os_handle);
+        #else
+            // Assert(sizeof(pthread) == sizeof(thread.os_handle));
+            err := pthread_join(cast<pthread_t>os_handle, cast<void**>null);
+        #endif
+        os_handle = 0
+        id = 0
     }
 }
 
@@ -68,16 +76,9 @@ fn ThreadCreate(func: FnThread, param: void*) -> Thread {
     #endif
     return thread;
 }
-fn ThreadJoin(thread: Thread) {
-    // TODO: Handle error
-    #if OS_WINDOWS
-        WaitForSingleObject(thread.os_handle, 0xFFFFFFFF); // 0xFFFFFFFF wait indefinitely
-        CloseHandle(thread.os_handle);
-    #else
-        // Assert(sizeof(pthread) == sizeof(thread.os_handle));
-        err := pthread_join(cast<pthread_t>thread.os_handle, cast<void**>null);
-    #endif
-}
+// NOTE: Replaced ThreadJoin with Thread.join, if it's a method then we can clear the thread data to
+//   represent an empty/invalid thread. With ThreadJoin, the user of the function as to clear the thread data which they may forget.
+
 fn ThreadSelfId() -> ThreadId {
     #if OS_WINDOWS
         return GetCurrentThreadId();

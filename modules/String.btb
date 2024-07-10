@@ -332,7 +332,7 @@ fn @hide swrite_unsafe(buffer: char*, value: u64) -> u32 {
     buffer += str.len;
     *buffer = '\0'; // not include in written bytes
 
-    return cast<u64>(buffer - start);
+    return cast_unsafe<u64>buffer - cast_unsafe<u64>start;
 }
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes

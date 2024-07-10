@@ -913,7 +913,7 @@ void Compiler::processImports() {
                 if(!had_errors) {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     // The 
-                    auto iden = ast->findIdentifier(imp->scopeId,0,"main",nullptr);
+                    auto iden = ast->findIdentifier(imp->scopeId,0,entry_point,nullptr);
                     if(iden && iden->is_fn()) {
                         auto fun = iden->cast_fn();
                         Assert(fun->funcOverloads.overloads.size());
@@ -1394,13 +1394,23 @@ void Compiler::run(CompileOptions* options) {
     if(!obj_write_success) {
         log::out << log::RED << "Could not write object file '"<<obj_file<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
     } else if(generate_exe_file && options->target != TARGET_BYTECODE) {
+        bool has_winmain = false;
+        if (options->target == TARGET_WINDOWS_x64 && entry_point == "WinMain") {
+            for(auto it : bytecode->tinyBytecodes) {
+                // log::out  << it->name << "\n";
+                if (it->name == "WinMain") {
+                    has_winmain = true;
+                    break;
+                }
+            }
+        }
         std::string cmd = "";
         bool outputOtherDirectory = false;
         switch(options->linker) {
         case LINKER_MSVC: {
             Assert(options->target == TARGET_WINDOWS_x64);
             outputOtherDirectory = exe_file.find("/") != std::string::npos;
-            
+
             if(options->useDebugInformation) {
                 // TODO: TEMPORARY text
                 log::out << log::GOLD << "Debug information (DWARF) cannot be linked using the MSVC linker. Plrease choose a different linker like GNU/g++ using the flag "<<log::LIME<<"--linker gnu"<<log::GOLD<<" (make sure to have gcc installed).\n";
@@ -1412,7 +1422,14 @@ void Compiler::run(CompileOptions* options) {
             cmd = "link /nologo /INCREMENTAL:NO ";
             if(options->useDebugInformation)
                 cmd += "/DEBUG ";
-                
+
+            if (has_winmain)
+                cmd += "/SUBSYSTEM:WINDOWS ";
+            else {
+                cmd += "/entry:" + entry_point + " ";
+            }
+
+
             cmd += obj_file + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
             
@@ -1462,8 +1479,12 @@ void Compiler::run(CompileOptions* options) {
                     // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
                 } else {
                     cmd += "-nostdlib ";
-                    cmd += "--entry main ";
                 }
+            }
+            cmd += "--entry " + entry_point + " ";
+            
+            if (has_winmain) {
+                cmd += "-Wl,-subsystem,windows "; // https://stackoverflow.com/questions/73676692/what-do-the-subsystem-windows-options-do-in-gcc
             }
 
             // cmd += "-ffreestanding "; // these do not make a difference (with mingw on windows at least)
@@ -1613,7 +1634,7 @@ void Compiler::run(CompileOptions* options) {
             } break;
             case TARGET_BYTECODE: {
                 VirtualMachine vm{};
-                vm.execute(bytecode, "main");
+                vm.execute(bytecode, entry_point);
             } break;
             default: Assert(false);
         }

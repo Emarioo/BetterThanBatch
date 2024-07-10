@@ -124,10 +124,74 @@ fn DumpEnvironment(envp: char** = null) {
     }
 }
 
+// returns argc, argv
+// don't forget to cleanup the buffers
+// TODO: Linear allocator for the buffers instead of StringBuilder and Array?
+fn ParseCmdLine(cmd: char[], buffer_text: StringBuilder*, buffer_args: Array<char*>*) -> i32, char** {
+    // This function doesn't conform to the way command line SHOULD be parsed
+
+    word_start := 0
+    parsed_command := false
+    inside_quote := false
+
+    head := 0
+    while head < cmd.len {
+        chr := cmd[head]
+        head++;
+
+        if chr == '"' {
+            if inside_quote {
+                // submit word
+                word_end := head - 1
+                buffer_args.add(cast<char*>cast<i64>buffer_text.size())
+                buffer_text.append(substring(cmd, word_start, word_end))
+                buffer_text.append('\0')
+            } else {
+                // start word
+                // word_start = head
+            }
+            word_start = head // new word may start at next character
+            inside_quote = !inside_quote
+            continue
+        }
+
+        if inside_quote
+            continue
+
+        if chr == ' ' || chr == '\n' || chr == '\t' || chr == '\r' || head == cmd.len {
+            word_end := head - 1
+            if head == cmd.len
+                word_end = head
+            if word_end - word_start > 0 {
+                buffer_args.add(cast<char*>cast<i64>buffer_text.size())
+                buffer_text.append(substring(cmd, word_start, word_end))
+                buffer_text.append('\0')
+            }
+            word_start = head
+        }
+    }
+
+    // fix arg pointers later because raw_args may be reallocated and invalidate pointers
+    for @ptr buffer_args.sliced() {
+        *it = cast<i64>*it + buffer_text.ptr
+    }
+
+    buffer_args.add(null) // null marks the end of arguments
+
+    // debugging
+    // log("Args:")
+    // log(command)
+    // for args.sliced()
+    //     log(it)
+
+    return buffer_args.len, buffer_args.ptr
+}
+
 // Only works on windows
 fn ExecuteCommand(cmd: char[], exit_code: i32*, asynchronous: bool = false) -> bool {
     // Parsing command line is more complicated than this.
     // Use the other ExecuteCommand overload separate cmd and arguments.
+    // TODO: Fix memory leak
     command: StringBuilder
     raw_args: StringBuilder
     args: Array<char*>
