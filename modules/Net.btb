@@ -68,10 +68,12 @@ struct MessageHeader {
 struct Server {
     fn cleanup() {
         close() // make sure connection is closed
-
     }
 
 	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+        if !m_event_callback {
+            log("You forgot to set the net callback for server")
+        }
         m_ip.clear()
         m_ip.append(ip)
         m_port = port
@@ -362,6 +364,9 @@ struct Client {
     }
 
 	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+        if !m_event_callback {
+            log("You forgot to set the net callback for client.")
+        }
         m_ip.clear()
         m_ip.append(ip)
         m_port = port

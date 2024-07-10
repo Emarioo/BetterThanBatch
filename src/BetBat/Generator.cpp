@@ -1578,7 +1578,8 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                     TypeId argType = tempTypes[0];
                     // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
                     bool wasSafelyCasted = performSafeCast(argType, signature->argumentTypes[i].typeId);
-                    if(!wasSafelyCasted) {
+                    if(!wasSafelyCasted && i < astFunc->nonDefaults) {
+                        // cast operator isn't supported with non named arguments at the moment
                         Assert(expression->uses_cast_operator);
                         FnOverloads::Overload cast_overload;
                         wasSafelyCasted = ast->findCastOperator(currentScopeId, argType, signature->argumentTypes[i].typeId, &cast_overload);
@@ -1610,14 +1611,14 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                         if(!is_function_pointer) {
                             ERR_SECTION(
                                 ERR_HEAD2(arg->location)
-                                ERR_MSG("Cannot cast argument of type " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(signature->argumentTypes[i].typeId) << ". This is the function: '"<<astFunc->name<<"'. (function may be an overloaded operator)")
-                                ERR_LINE2(arg->location,"bad argument")
+                                ERR_MSG_COLORED("Cannot cast expression of type '" << log::LIME << info.ast->typeToString(argType) << log::NO_COLOR << "' to argument of type '" <<log::LIME<< info.ast->typeToString(signature->argumentTypes[i].typeId) << log::NO_COLOR<<"'. This is the function: '" << log::LIME<<astFunc->name<<log::NO_COLOR<<"'. (function may be an overloaded operator)")
+                                ERR_LINE2(arg->location,"mismatching types")
                             )
                         } else {
                             ERR_SECTION(
                                 ERR_HEAD2(arg->location)
-                                ERR_MSG("Cannot cast argument of type " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(signature->argumentTypes[i].typeId) << ".")
-                                ERR_LINE2(arg->location,"bad argument")
+                                ERR_MSG_COLORED("Cannot cast argument of type '" << log::LIME << info.ast->typeToString(argType) << log::NO_COLOR << "' to '" << log::LIME <<  info.ast->typeToString(signature->argumentTypes[i].typeId) << log::NO_COLOR << "'.")
+                                ERR_LINE2(arg->location,"mismatching types")
                             )
                         }
                     }

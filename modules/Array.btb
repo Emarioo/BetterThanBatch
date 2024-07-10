@@ -11,7 +11,7 @@ struct Array<T> {
     len: i32; // elements in allocation
 
     fn cleanup(free_stuff: bool = true) {
-        log("clean array ", free_stuff)
+        // log("clean array ", free_stuff)
         if !free_stuff {
             ptr = null
             len = 0

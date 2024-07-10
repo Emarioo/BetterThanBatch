@@ -110,9 +110,9 @@ struct WindowContext {
         if typed_characters_start >= typed_characters_end {
             return 0;
         }
+        chr := typed_characters[typed_characters_start]
         typed_characters_start++
-        tmp := typed_characters
-        return tmp[typed_characters_start]
+        return chr
     }
     fn resetPollChar() {
         typed_characters_end = 0
@@ -305,7 +305,7 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
 
     glfwMakeContextCurrent(glfw_window)
 
-   
+    glfwSetInputMode(glfw_window, GLFW_LOCK_KEY_MODS, true)
 
     yes = gladLoadGL()
     // yes = gladLoadGLLoader(glfwGetProcAddress)
@@ -339,9 +339,11 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
     // glfwSetWindowFocusCallback(window, FocusCallback);
     // glfwSetWindowCloseCallback(window, CloseCallback);
     // glfwSetWindowPosCallback(window, PosCallback);
-    glfwSetCharCallback(window, CharCallback);
+    // log("char callback ", cast_unsafe<void*>CharCallback)
+    glfwSetCharCallback(glfw_window, CharCallback);
     // glfwSetDropCallback(window, DropCallback);
-
+    // err := glfwGetError(null)
+    // log(err)
     
     vshader := @strbeg
         #version 330 core
@@ -458,6 +460,7 @@ fn RefreshWindow(window: WindowContext*) {
     window.prev_timestamp = timestamp
     
     window.resetEvents(false)
+    window.resetPollChar()
     
     glfwSwapBuffers(window.glfw_window);
     glfwPollEvents();
@@ -580,30 +583,32 @@ fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: 
 // returns true if a change was made
 fn EditText(window: WindowContext*, text: StringBuilder*, cursor: i32*) -> bool {
     // text->editing = true;
+    // TODO: Selection feature? shift + arrow right
     length := text.size()
     if (*cursor < 0 || *cursor > length) {
         *cursor = length;
     }
-    
+    change := false
     if (window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_V)) {
         // TODO: Copy paste
         // std::string tmp = PollClipboard();
         // //str.insert(str.begin() + at, tmp);
         // text->text.insert(*cursor, tmp);
         // *cursor += (int)tmp.length();
-        return;
+        return true;
     }
     while {
         chr: i32 = window.pollChar()
-        if !chr {
+        if chr == 0 {
             break
         }
+        change = true
         length = text.size() // update size
         if (chr == GLFW_KEY_BACKSPACE) {
             if (length > 0 && *cursor > 0) {
                 text.removeAt(*cursor - 1);
                 // text->text = text->text.substr(0, *cursor - 1) + text->text.substr(*cursor);
-                *cursor--;
+                (*cursor)--;
             }
         } else if (chr == GLFW_KEY_ENTER) {
             // if (stopEditWithEnter) {
@@ -619,21 +624,32 @@ fn EditText(window: WindowContext*, text: StringBuilder*, cursor: i32*) -> bool 
             }
         } else if (chr == GLFW_KEY_LEFT) {
             if (*cursor > 0) {
-                *cursor--;
+                (*cursor)--;
             }
         } else if (chr == GLFW_KEY_RIGHT) {
-            if (*cursor < length) {
-                *cursor++;
+            if (*cursor < text.len + 1) {
+                (*cursor)++;
             }
+        } else if (chr == GLFW_KEY_HOME) {
+            *cursor = 0
+        } else if (chr == GLFW_KEY_END) {
+            *cursor = text.len
         } else {
             text.insert(*cursor, chr);
             // text->text.insert(text->text.begin() + *cursor, chr);
-            *cursor++;
+            (*cursor)++;
         }
     }
+    return change;
+}
+struct DrawTextInfo {
+    drawn_lines: i32;
+    drawn_height: i32; // includes lines
 }
 // TODO: Font* argument?
-fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
+// cursor is optional, -1 for no cursor
+// DrawTextInfo if non-null, is filled with useful information about how much was drawn
+fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], cursor: i32 = -1, out_info: DrawTextInfo* = null) {
     glUseProgram(window.base_shader);
     
     glDisable(GL_DEPTH_TEST)
@@ -662,20 +678,28 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
     CAM_VALUES
     
     // TODO: Batch draw calls
-    off_x: i32 = 0
+    cursor
+    off_x: f32 = 0
     off_y: f32 = 0
+    cur_x: f32 = 0
+    cur_y: f32 = 0
+    lines := 1 // always one
     for text {
         // log(it)
         if it == '\n' {
+            lines++
             off_y += h
             off_x = 0
+            if nr == cursor
+                cur_y = off_y
             continue
         }
 
         u, v, uw, vh := font.get_uvwh(it)
         
-        off := off_x * cast<f32> (font.char_width) / font.cell_h * h
-        off_x++
+        defer off_x += cast<f32> (font.char_width) / font.cell_h * h
+        if nr == cursor
+            cur_x = off_x
         w := cast<f32> font.char_width / font.cell_w * h
         
         // log(it," ", off," ", w, " ", font.char_width)
@@ -683,10 +707,10 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
         
         vertices: f32[] {
             // x ,y, uv.x, uv.y, color.rgba, texture
-            (bx + off) *     zoom + ox, (by + off_y) *     zoom + oy,     u,  v, color.r, color.b, color.g, color.a,  font.id,
-            (bx + off) *     zoom + ox, (by + off_y + h) * zoom + oy, u,  vh, color.r, color.b, color.g, color.a, font.id,
-            (bx + off + w) * zoom + ox, (by + off_y + h) * zoom + oy, uw, vh, color.r, color.b, color.g, color.a, font.id,
-            (bx + off + w) * zoom + ox, (by + off_y) *     zoom + oy,     uw, v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off_x) *     zoom + ox, (by + off_y) *     zoom + oy,     u,  v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off_x) *     zoom + ox, (by + off_y + h) * zoom + oy, u,  vh, color.r, color.b, color.g, color.a, font.id,
+            (bx + off_x + w) * zoom + ox, (by + off_y + h) * zoom + oy, uw, vh, color.r, color.b, color.g, color.a, font.id,
+            (bx + off_x + w) * zoom + ox, (by + off_y) *     zoom + oy,     uw, v, color.r, color.b, color.g, color.a,  font.id,
         }
         glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
@@ -694,6 +718,18 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[]) {
         
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, window.ibo);
         glDrawElements(GL_TRIANGLES, 6 * 1, GL_UNSIGNED_INT, null)
+    }
+    if cursor != -1 {
+        thick := 2
+        if cursor == text.len {
+            FillRect(window, x + off_x, y + off_y, thick, h, color)
+        } else {
+            FillRect(window, x + cur_x, y + cur_y, thick, h, color)
+        }
+    }
+    if out_info {
+        out_info.drawn_lines = lines
+        out_info.drawn_height = off_y + h
     }
 }
 
@@ -728,7 +764,38 @@ fn GLFW_CALLBACK_API KeyCallback(window: void*, key: i32, scancode: i32, action:
     context.setInput(key, action != 0); // if not 0 means if pressed or repeating
     LOG_GLFW_CALLBACK("key ",cast<char>key, ",", key, " ", scancode, " ", mods, " ",action)
 
-    if (action != 0 && (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE || key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT)) {
+    // log("key ", key, " mods ", mods)
+    // Assert(glfwGetInputMode(window, GLFW_LOCK_KEY_MODS) == true) // make sure LOCK_KEY_MODS is enabled
+
+    if mods & GLFW_MOD_NUM_LOCK == 0 { // we should use special actions if num lock is zero, if not zero then normal numbers from the numpad should be used
+        // These are the special actions on my numpad, TUF GAMING laptop
+        // All the numpads I have seen have the same actions on the same keys,
+        // But if you home, end, delete key isn't working on the numpad, this code my be why.
+        // (GLFW doesn't handle this as of yet, https://github.com/glfw/glfw/issues/946)
+        if key == GLFW_KEY_KP_DECIMAL {
+            if action != GLFW_RELEASE
+                CharCallback(window, GLFW_KEY_DELETE);
+        } else if key == GLFW_KEY_KP_7 {
+            if action != GLFW_RELEASE
+                CharCallback(window, GLFW_KEY_HOME);
+        } else if key == GLFW_KEY_KP_1 {
+            if action != GLFW_RELEASE
+                CharCallback(window, GLFW_KEY_END);
+        } else if key == GLFW_KEY_KP_9 {
+            // page up
+            // if action != GLFW_RELEASE
+            //     CharCallback(window, GLFW_KEY_PAGE_UP);
+        } else if key == GLFW_KEY_KP_3 {
+            // page down
+            // if action != GLFW_RELEASE
+            //     CharCallback(window, GLFW_KEY_PAGE_DOWN);
+        }
+        context.setInput(key, action != 0); // if not 0 means if pressed or repeating
+    } else {
+        context.setInput(key, action != 0); // if not 0 means if pressed or repeating
+    }
+
+    if action != 0 && (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE || key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT || key == GLFW_KEY_HOME || key == GLFW_KEY_END) {
         CharCallback(window, key);
     }
 }
@@ -767,15 +834,28 @@ fn GLFW_CALLBACK_API ResizeCallback(window: void*, width: i32, height: i32) {
 fn GLFW_CALLBACK_API CharCallback(window: void*, chr: u32) {
     context := GetWindowContextByGLFWWindow(window);
     Assert(context)
+
+    // log("val ",chr)
+
+    // TODO: DELETE THIS CODE!
+    // if context.typed_characters_end > 0 {
+    //     // Specific to my numpad, TUF GAMING laptop
+    //     last := context.typed_characters[context.typed_characters_end-1]
+    //     if (chr == '1' && last == GLFW_KEY_END) ||
+    //     (chr == '7' && last == GLFW_KEY_HOME) ||
+    //     (chr == ',' && last == GLFW_KEY_DELETE) {
+    //         return;
+    //     }
+    // }
     
-    if context.typed_characters_start < context.typed_characters_end {
+    if context.typed_characters_end < context.typed_characters.len {
         // we ignore characters that don't fit in the buffer
         // as long as the user doesn't type more than the max characters per frame (every time you poll characters), things should be fine.
-        context.typed_characters[context.typed_characters_start]
-        context.typed_characters_start++
+        context.typed_characters[context.typed_characters_end] = chr
+        context.typed_characters_end++
     }
 
-    LOG_GLFW_CALLBACK("char ",chr)
+    LOG_GLFW_CALLBACK("char ",cast<char>chr, ", codepoint ", chr)
 }
 /*##############################
     SOME USEFUL FUNCTIONS

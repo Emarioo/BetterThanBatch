@@ -1,5 +1,13 @@
 /*
     A chat client/server
+
+    Compile with: btb examples/graphics/chat.btb
+
+    Run executable and type /help
+    Write "/start" and press enter then start another
+      executable and write "/connect"
+    Now you have two applications that can send messages
+      back and forth.
 */
 
 #import "Graphics"
@@ -40,9 +48,19 @@ fn net_callback(e: Event, user_data: void*) {
     )
     switch e.type {
     case EVENT_START:
-        
+        if is_server {
+            tmp: StringBuilder
+            tmp.append("Started server")
+            chat_widget.add_msg(tmp);
+        } else {
+            tmp: StringBuilder
+            tmp.append("Started client")
+            chat_widget.add_msg(tmp);
+        }
     case EVENT_CONNECT:
-        
+        tmp: StringBuilder
+            tmp.append("Someone connected")
+            chat_widget.add_msg(tmp);
     case EVENT_RECEIVE:
 
         LOG_NET( log("msglen ", e.bytes.len) )
@@ -58,7 +76,7 @@ fn net_callback(e: Event, user_data: void*) {
                 tmp.append(Slice<char>{cast<void*>body + sizeof (NetMessage),body.sender_len})
                 tmp.append(": ")
                 tmp.append(Slice<char>{cast<void*>body + sizeof (NetMessage) + body.sender_len,body.text_len})
-                chat_widget.messages.add(tmp);
+                chat_widget.add_msg(tmp);
 
             case:
                 std_prints("ERROR, bad message header ") std_print_any(header) log()
@@ -77,6 +95,11 @@ struct ChatWidget {
 
     messages: Array<StringBuilder>;
     input_message: StringBuilder;
+    cursor_pos: i32;
+
+    fn add_msg(str: StringBuilder) {
+        messages.add(str)
+    }
 
     fn init(_x: f32, _y: f32, _w: f32, _h: f32) {
         x = _x;
@@ -89,58 +112,131 @@ struct ChatWidget {
     fn render(window: WindowContext*) {
         layout_y := y
         padding := 5
+        draw_info: DrawTextInfo
+        // TODO: Rendering 10000 messages will be slow.
+        //   If we don't have scroll, we can throw away unnecessary messages.
+        //   With scroll we can render the messages that fit on the screen, messages outside can be skipped.
+        //   For that we need to know the height of each message, more specifically, the amount of newlines in the message.
+        //   This should be stored alongside the text context for each message so we don't recompute it every time.
         for @ptr messages.sliced() {
-            DrawText(window, x + padding, padding + layout_y, text_size, it.sliced())
-            layout_y += text_size
+            DrawText(window, x + padding, padding + layout_y, text_size, it.sliced(), out_info = &draw_info)
+            // layout_y += text_size
+            layout_y += draw_info.drawn_height
         }
-        DrawText(window, padding + x, padding + y + h - text_size - 2*padding, text_size, input_message.sliced())
+        // TODO: Support newlines in input message? shift+enter? We also need to offset the render position
+        //   so the whole input message fits on the screen.
+        DrawText(window, padding + x, padding + y + h - text_size - 2*padding, text_size, input_message.sliced(), cursor_pos)
     }
 
-    fn update() {
+    fn update(window: WindowContext*) {
+        EditText(window, &input_message, &cursor_pos)
+
         if window.isKeyPressed(GLFW_KEY_ENTER) {
-            // log("Pressed enter")
-            sender: StringBuilder
-            defer sender.cleanup()
-            if is_server {
-                sender.append("Server")
+            if find("/", input_message.sliced()) == 0 {
+                // command
+                args := split(" ",input_message.sliced())
+                // log(&args)
+                if args.len == 0 {
+                    // what?
+                } else if args[0] == "/help" {
+                    tmp: StringBuilder
+                    tmp.append("Help:\n")
+                    tmp.append(" /start [port] - Start server\n")
+                    tmp.append(" /connect [ip] [port] - Start client\n")
+                    tmp.append(" /stop - Stop server or client")
+                    add_msg(tmp)
+                } else if args[0] == "/stop" {
+                    if server.is_active()
+                        server.close()
+                    if client.is_active()
+                        client.close()
+                } else if args[0] == "/start" {
+                    // TODO: start and connect commands always use defaul port and never the optional
+                    //   one provided by the user.
+                    // TODO: If client or server, close them.
+                    //   This may take some time so we should probably do it in another thread.
+                    is_server = true
+                    if server.is_active()
+                        server.close()
+                    if client.is_active()
+                        client.close()
+                    server.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+                } else if args[0] == "/connect" {
+                    // if args.len < 2 {
+                    //     log("ERROR: /connect expects at least one argument, ip and optionally port. You provided ", args.len-1," argument(s).")
+                    // } else {
+                        is_server = false
+                        if server.is_active()
+                            server.close()
+                        if client.is_active()
+                            client.close()
+                        if args.len > 1 {
+                            client.start(args[1], DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+                        } else {
+                            client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+                        }
+                    // }
+                }
+                input_message.clear()
             } else {
-                sender.append("Client")
+
+                // log("Pressed enter")
+                sender: StringBuilder
+                defer sender.cleanup()
+                if is_server {
+                    sender.append("Server")
+                } else {
+                    sender.append("Client")
+                }
+
+                header: NetMessage
+                header.header.type = MSGTYPE_MESSAGE
+                header.sender_len = sender.size()
+                header.text_len = input_message.size()
+
+                stream: ByteStream
+                defer stream.cleanup()
+                stream.reserve(sizeof (NetMessage) + sender.size() + input_message.size() + 20)
+
+                stream.write(&header, sizeof header)
+                stream.write(sender.data(), header.sender_len)
+                stream.write(input_message.data(), header.text_len)
+
+                // FileWrite("bin.txt", stream.sliced_unsafe())
+
+                if is_server {
+                    server.send(stream.sliced_unsafe())
+                } else {
+                    client.send(stream.sliced_unsafe())
+                }
+                tmp: StringBuilder
+                tmp.append("You: ")
+                tmp.append(input_message)
+                add_msg(tmp)
+                input_message.clear()
             }
-
-            header: NetMessage
-            header.header.type = MSGTYPE_MESSAGE
-            header.sender_len = sender.size()
-            header.text_len = input_message.size()
-
-            stream: ByteStream
-            defer stream.cleanup()
-            stream.reserve(sizeof (NetMessage) + sender.size() + input_message.size() + 20)
-
-            stream.write(&header, sizeof header)
-            stream.write(sender.data(), header.sender_len)
-            stream.write(input_message.data(), header.text_len)
-
-            // FileWrite("bin.txt", stream.sliced_unsafe())
-
-            if is_server {
-                server.send(stream.sliced_unsafe())
-            } else {
-                client.send(stream.sliced_unsafe())
-            }
-            input_message.clear()
         }
     }
 }
 
 fn main(argc: i32, argv: char**) -> i32 {
+    // net_callback uses chat_widget so we make sure it's not null to avoid crashes
+    chat: ChatWidget
+    // chat.init(0,0,window.width, window.height)
+    chat_widget = &chat
+
     // log(argc)
+    server.set_callback(net_callback, null)
+    client.set_callback(net_callback, null)
     if argc > 1 {
-        client.set_callback(net_callback, null)
-        client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
-    } else {
-        is_server = true
-        server.set_callback(net_callback, null)
-        server.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+        if "client" == sliced(argv[1]) {
+            client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+        } else if "server" == sliced(argv[1]) {
+            is_server = true
+            server.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+        } else {
+            log("Chat executable only handles one of these arguments: 'server' or 'client'.")
+        }
     }
     start_chat()
     return 0
@@ -152,34 +248,36 @@ fn start_chat() {
 
     step := 0
 
-    chat: ChatWidget
+    chat := chat_widget
+    // chat: ChatWidget
     chat.init(0,0,window.width, window.height)
-    chat_widget = &chat
+    // chat_widget = &chat
 
-    chat.input_message.append("Hello, this is some text")
+    // chat.input_message.append("Hello, this is some text")
 
-    if is_server {
-        tmp: StringBuilder
-        tmp.append("You are Server")
-        chat.messages.add(tmp)
-    } else {
-        tmp: StringBuilder
-        tmp.append("You are Client")
-        chat.messages.add(tmp.copy())
-    }
+    // net_callback adds message indicating server or client when connection starts, no need to here.
+    // if is_server {
+    //     tmp: StringBuilder
+    //     tmp.append("You are Server")
+    //     chat.add_msg(tmp)
+    // } else {
+    //     tmp: StringBuilder
+    //     tmp.append("You are Client")
+    //     chat.add_msg(tmp)
+    // }
 
     while window.running {
         FillColor(window, Color{0.2,0.2,0.2})
         
         window.enableUISpace(true)
         
-        chat.update()
+        chat.update(window)
         chat.render(window)
 
-        c: i32
-        while @iknow c = window.pollChar() {
-            log(c)
-        }
+        // c: i32
+        // while @iknow c = window.pollChar() {
+        //     log(c)
+        // }
 
         RefreshWindow(window)
     }   

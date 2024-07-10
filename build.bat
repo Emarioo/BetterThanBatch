@@ -268,9 +268,9 @@ if !compileSuccess! == 0 if !RUN_AT_END!==1 (
     @REM bin\btb examples/graphics/chat
 
     @REM if !errorlevel!==0 (
-    @REM     start test
+    @REM     start main server
     @REM     timeout 1
-    @REM     start test client
+    @REM     start main 
     @REM )
 
     @REM bin\btb examples/graphics/game

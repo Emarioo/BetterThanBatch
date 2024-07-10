@@ -24,6 +24,7 @@
 fn GLFW_API glfwInit() -> i32;
 fn GLFW_API glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
 fn GLFW_API glfwDestroyWindow(window: void*)
+fn GLFW_API glfwGetError(description: char**) -> i32
 
 fn GLFW_API glfwTerminate();
 fn GLFW_API glfwMakeContextCurrent(window: void*);
@@ -34,6 +35,9 @@ fn GLFW_API glfwWindowHint(target: i32, hint: i32);
 fn GLFW_API glfwGetWindowSize(window: void*, width: i32*, height: i32*);
 fn GLFW_API glfwSwapInterval(interval: i32);
 fn GLFW_API glfwGetCursorPos(window: void*, xpos: f64*, ypos: f64*);
+
+fn GLFW_API glfwGetInputMode(window: void*, mode: i32) -> i32;
+fn GLFW_API glfwSetInputMode(window: void*, mode: i32, value: i32);
 
 
 #macro GLFWkeyfun fn @stdcall(window: void*, key: i32, scancode: i32, action: i32, mods: i32)
@@ -53,12 +57,29 @@ fn GLFW_API glfwSetCharCallback(window: void*, callback: GLFWcharfun) -> GLFWcha
 fn GLFW_API glfwGetProcAddress(procname: char*) -> fn();
 
 /*
-    COPY PASTED TEXT FROM glfw3.h
+    Parts copy pasted from glfw3.h
 */
 #macro GLFW_CONTEXT_VERSION_MAJOR  0x00022002
 #macro GLFW_CONTEXT_VERSION_MINOR  0x00022003
 #macro GLFW_OPENGL_PROFILE         0x00022008
 #macro GLFW_OPENGL_CORE_PROFILE    0x00032001
+
+#macro GLFW_CURSOR                 0x00033001
+#macro GLFW_STICKY_KEYS            0x00033002
+#macro GLFW_STICKY_MOUSE_BUTTONS   0x00033003
+#macro GLFW_LOCK_KEY_MODS          0x00033004
+#macro GLFW_RAW_MOUSE_MOTION       0x00033005
+
+#macro GLFW_CURSOR_NORMAL          0x00034001
+#macro GLFW_CURSOR_HIDDEN          0x00034002
+#macro GLFW_CURSOR_DISABLED        0x00034003
+
+#macro GLFW_TRUE                   1
+#macro GLFW_FALSE                  0
+
+#macro GLFW_RELEASE                0
+#macro GLFW_PRESS                  1
+#macro GLFW_REPEAT                 2
 
 /* The unknown key */
 #macro GLFW_KEY_UNKNOWN            -1

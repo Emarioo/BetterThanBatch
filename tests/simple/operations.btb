@@ -188,3 +188,13 @@ b := a++ // x64 gen asserted here at one point
 
 // okay(a++) // and this
 // fn okay(n: i32) { }
+
+aaa := 0
+n := &aaa;
+
+++*n; // operator precedence of deref and increment
+*n++; // deref should happen before increment
+_test 2; *n;
+
+// log(*n)
+// #import "Logger"

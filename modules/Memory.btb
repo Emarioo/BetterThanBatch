@@ -13,6 +13,7 @@
 #import "Map" // used for tracker
 #import "Lang" // used for tracker
 
+// source and destination should not overlap
 fn @intrinsic memcpy(dst: void*, src: void*, len: i64);
 fn @intrinsic memzero(dst: void*, len: i64);
 

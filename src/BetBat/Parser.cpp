@@ -153,11 +153,13 @@ int OpPrecedence(int op){
         case AST_BNOT:
         case AST_NOT:
         case AST_UNARY_SUB:
-            // return 15;
         case AST_CAST:
+            // return 15;
+        case AST_INCREMENT:
+        case AST_DECREMENT:
+            // return 16;
         case AST_REFER:
         case AST_DEREF:
-            // return 16;
         case AST_MEMBER:
         case AST_FROM_NAMESPACE:
             return 20;

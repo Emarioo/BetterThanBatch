@@ -132,15 +132,21 @@ struct StringBuilder {
                 return;
             }
         }
-        memcpy(ptr + pos + 1, ptr + pos, len - pos);
+        for @rev pos..len
+            ptr[1 + nr] = ptr[nr]
+        
+        // memcpy(ptr + pos + 1, ptr + pos, len - pos);
         len += 1;
         ptr[pos] = chr
         ptr[len] = '\0';
     }
     fn removeAt(pos: i32) {
-        if len-pos < 0 {
-            memcpy(ptr + pos, ptr + pos + 1, len - (pos + 1));
-        }
+        if pos < 0 || pos >= len
+            return;
+        
+        for pos..len-1
+            ptr[nr] = ptr[nr+1]
+            // memcpy(ptr + pos, ptr + pos + 1, len - (pos + 1));
         len -= 1;
         ptr[len] = '\0';
     }
@@ -243,6 +249,7 @@ operator ==(a: Slice<char>, b: Slice<char>) -> bool {
             return false;
     return true;
 }
+
 // TODO: Inline
 operator !=(a: Slice<char>, b: Slice<char>) -> bool {
     return !(a == b);
@@ -645,14 +652,18 @@ fn split(pattern: char[], text: char[]) -> Array<char[]> {
         if it == pattern[correct] {
             correct++
             if correct == pattern.len {
-                arr.add(Slice<char>{text.ptr + split_start, nr + 1 - pattern.len  - split_start})
+                new_len := nr + 1 - pattern.len  - split_start
+                // if new_len > 0 // do we skip empty ones or no? probably not.
+                arr.add(Slice<char>{text.ptr + split_start, new_len})
                 correct = 0;
                 split_start = nr + 1
             }
         } else {
             correct = 0
             if nr == text.len - 1 {
-                arr.add(Slice<char>{text.ptr + split_start, 1 + nr - split_start})
+                new_len := 1 + nr - split_start
+                // if new_len > 0
+                arr.add(Slice<char>{text.ptr + split_start, new_len})
                 break
             }
         }
