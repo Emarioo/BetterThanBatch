@@ -81,6 +81,10 @@ fn GLFW_API glfwGetProcAddress(procname: char*) -> fn();
 #macro GLFW_PRESS                  1
 #macro GLFW_REPEAT                 2
 
+#macro GLFW_MOUSE_BUTTON_1         0 // left
+#macro GLFW_MOUSE_BUTTON_2         1 // right
+#macro GLFW_MOUSE_BUTTON_3         2 // middle
+
 /* The unknown key */
 #macro GLFW_KEY_UNKNOWN            -1
 

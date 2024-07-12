@@ -48,10 +48,14 @@ struct ParseContext : public PhaseContext {
     struct LoopScope {
         DynamicArray<ASTStatement*> defers; // apply these when continue, break or return is encountered
     };
+    struct AnyScope {
+        int defer_size;
+    };
     // function or global scope
     struct FunctionScope {
         DynamicArray<ASTStatement*> defers; // apply these when return is encountered
         DynamicArray<LoopScope> loopScopes;
+        DynamicArray<AnyScope> anyScopes;
         ASTFunction* function;
     };
     DynamicArray<FunctionScope> functionScopes;

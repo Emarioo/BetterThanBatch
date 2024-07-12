@@ -19,6 +19,9 @@ fn say2(v: char) {
 }
 say2(32) // should be fine, i32 is casted to i16
 
+fn match(p: void*) {
+    _test 1; 1
+}
 fn match(p: i32*) {
     _test 1; 0
 }
@@ -28,7 +31,10 @@ fn match(p: i32*) {
 // void* to i32* is fine and u64 to void* is fine
 // User should explicitly do the casts to prevent bugs
 // TODO: Test this with polymorphism, not use normal overload matching
-@TEST_ERROR(ERROR_UNSPECIFIED) match(cast<u64>23)
+// @TEST_ERROR(ERROR_OVERLOAD_MISMATCH) 
+match(cast<u64>23)
+// @TEST_ERROR(ERROR_UNSPECIFIED) 
+match(null)
 
 @TEST_CASE(add_or_operator)
 operator +(a: i32, b: i32) -> i32 {

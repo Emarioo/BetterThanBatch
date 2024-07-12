@@ -1,0 +1,30 @@
+/*
+    A dungeon crawler game
+
+    - Multiplayer (local and online co-op)
+    - Handmade levels + random generated dungeon
+    - Tile-based world
+    - Entities with velocity, effects, collision
+*/
+
+#import "./GameCore"
+
+fn main(argc: i32, argv: char**) -> i32 {
+    // log(argc)
+
+    // The user starts the game. What should happen?
+    // We initialize some stuff, assets?
+    // if argc > 1 {
+    //     client.set_callback(net_callback, null)
+    //     client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    // } else {
+    //     is_server = true
+    //     server.set_callback(net_callback, null)
+    //     server.start(DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    // }
+    
+    // Then we start game loop.
+    start_game()
+    return 0
+}
+

@@ -492,6 +492,8 @@ SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
 void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
     // TODO: Move this logic into BytecodeBuilder? (emit_memzero)
     if(size <= 8) {
+        if (hasErrors() || hasForeignErrors())
+            return;
         Assert(size == 1 || size == 2 || size == 4 || size == 8);
         builder.emit_bxor(size_reg, size_reg, size);
         builder.emit_mov_mr(ptr_reg, size_reg, size);
@@ -853,6 +855,31 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             endType = typeId;
             break;
         } else if(now->typeId == AST_MEMBER || now->typeId == AST_DEREF || now->typeId == AST_INDEX){
+            FuncImpl* operatorImpl = nullptr;
+            if (currentPolyVersion < now->versions_overload._array.size())
+                operatorImpl = now->versions_overload[currentPolyVersion].funcImpl;
+            if (now->typeId == AST_INDEX && operatorImpl) {
+                TypeId typeId{};
+                auto result = generateExpression(now, &tempTypes, idScope);
+                if(result!=SIGNAL_SUCCESS || tempTypes.size()!=1){
+                    return SIGNAL_FAILURE;
+                }
+                if (tempTypes.size() > 0)
+                    typeId = tempTypes[0];
+
+                if (typeId.getPointerLevel() == 0) {
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location)
+                        ERR_MSG("The expression is a user defined index operator and evaluates to '"<<ast->typeToString(typeId)<<"' which is a discrete value. The code tries to take a reference to this value which isn't possible. The index operator must return a pointer for this to be possible.")
+                        ERR_LINE2(now->location, ast->typeToString(typeId))
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                
+                endType = typeId;
+                pointerType=true;
+                break;
+            }
             // TODO: Refer is handled in GenerateExpression since refer will
             //   be combined with other operations. Refer on it's own isn't
             //   very useful and therefore not common so there is not
@@ -865,19 +892,42 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             if(result!=SIGNAL_SUCCESS || tempTypes.size()!=1){
                 return SIGNAL_FAILURE;
             }
-            // TODO: This does not work Slice<char>{null,4}[0] but it is technically possible.
-            //   It becomes a problem here get_my_slice()[3].
-            //   We need to move this error else where.
-            // if(!tempTypes.last().isPointer()){
-            //     ERR_SECTION(
-            //         ERR_HEAD2(now->location)
-            //         ERR_MSG("'"<<compiler->lexer.tostring(now->location)<<
-            //         "' must be a reference to some memory. "
-            //         "A variable, member or expression resulting in a dereferenced pointer would be.")
-            //         ERR_LINE2(now->location, "must be a reference")
-            //     )
-            //     return SIGNAL_FAILURE;
-            // }
+
+            if (exprs.size() > 0 && exprs.last()->typeId == AST_MEMBER) {
+                TypeId type = tempTypes[0];
+                TypeInfo* typeInfo = nullptr;
+                typeInfo = info.ast->getTypeInfo(type.baseType());
+
+                if(!typeInfo || !typeInfo->astStruct){
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location)
+                        ERR_MSG("'"<<info.ast->typeToString(type)<<"' is not a struct. Cannot access member.")
+                        ERR_LINE2(now->left->location, info.ast->typeToString(type).c_str())
+                    )
+                    return SIGNAL_FAILURE;
+                }
+
+                if (type.getPointerLevel() == 0) {
+                    auto mem_expr = exprs.last();
+
+                    if (typeInfo->astStruct->name == "Slice" && mem_expr->name == "ptr") {
+                        builder.emit_pop(BC_REG_B);
+                        builder.emit_pop(BC_REG_T0); // pop len from slice
+                        builder.emit_push(BC_REG_B);
+
+                        auto memdata = typeInfo->getMember("ptr");
+
+                        endType = memdata.typeId;
+                        pointerType=true;
+                        exprs.pop();
+                        break;
+                    }
+                } else {
+                    // if returned type is pointer then we simply handle it later
+                    // it's when it's not a pointer where we need some special code
+                }
+            }
+
             endType = tempTypes.last();
             pointerType=true;
             break;
@@ -900,10 +950,28 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 }
                 arrayLength = 0;
             }
+
+            TypeInfo* typeInfo = nullptr;
+            typeInfo = info.ast->getTypeInfo(endType.baseType());
+
+            if(!typeInfo || !typeInfo->astStruct){
+                ERR_SECTION(
+                    ERR_HEAD2(now->location)
+                    ERR_MSG("'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.")
+                    ERR_LINE2(now->left->location, info.ast->typeToString(endType).c_str())
+                )
+                return SIGNAL_FAILURE;
+            }
+
+            // if ()
+
+
             if(pointerType){
                 pointerType=false;
                 if(!endType.isPointer()) {
-                    auto prev = exprs[i+1];
+                    ASTExpression* prev = now->left;
+                    if (i+1 < exprs.size())
+                        prev = exprs[i+1];
                     ERR_SECTION(
                         ERR_HEAD2(prev->location)
                         ERR_MSG("'"<<compiler->lexer.tostring(prev->location)<<
@@ -923,16 +991,16 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 )
                 return SIGNAL_FAILURE;
             }
-            TypeInfo* typeInfo = nullptr;
-            typeInfo = info.ast->getTypeInfo(endType.baseType());
-            if(!typeInfo || !typeInfo->astStruct){
-                ERR_SECTION(
-                    ERR_HEAD2(now->location)
-                    ERR_MSG("'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.")
-                    ERR_LINE2(now->left->location, info.ast->typeToString(endType).c_str())
-                )
-                return SIGNAL_FAILURE;
-            }
+            // TypeInfo* typeInfo = nullptr;
+            // typeInfo = info.ast->getTypeInfo(endType.baseType());
+            // if(!typeInfo || !typeInfo->astStruct){
+            //     ERR_SECTION(
+            //         ERR_HEAD2(now->location)
+            //         ERR_MSG("'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.")
+            //         ERR_LINE2(now->left->location, info.ast->typeToString(endType).c_str())
+            //     )
+            //     return SIGNAL_FAILURE;
+            // }
 
             auto memberData = typeInfo->getMember(now->name);
             if(memberData.index==-1){
@@ -1045,48 +1113,107 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             FuncImpl* operatorImpl = nullptr;
             if(now->versions_overload._array.size()>0)
                 operatorImpl = now->versions_overload[info.currentPolyVersion].funcImpl;
-            Assert(("operator overloading when referencing not implemented",!operatorImpl));
-            
-            tempTypes.resize(0);
-            SignalIO result = generateExpression(now->right, &tempTypes);
-            if (result != SIGNAL_SUCCESS && tempTypes.size() != 1)
-                return SIGNAL_FAILURE;
-            
-            if(!AST::IsInteger(tempTypes.last())){
-                std::string strtype = info.ast->typeToString(tempTypes.last());
-                ERR_SECTION(
-                    ERR_HEAD2(now->right->location)
-                    ERR_MSG("Index operator (array[23]) requires integer type in the inner expression. '"<<strtype<<"' is not an integer. (Operator overloading doesn't work here)")
-                    ERR_LINE2(now->right->location,strtype.c_str());
-                )
-                return SIGNAL_FAILURE;
-            }
+            // I recently changed code in type checker for overload matching with polymorphism. Instead of == on types, we do check castable.
 
-            TypeInfo* linfo = nullptr;
-            if(endType.isNormalType()) {
-                linfo = ast->getTypeInfo(endType);
-            }
-            bool is_slice = linfo && linfo->astStruct && linfo->astStruct->name == "Slice";
-            if(is_slice) {
-                // NOTE: You may think that operator overload for index operator is implemented and
-                //   we therefore don't need is_slice BUT we operator overloading works like a
-                //   function with two inputs and one output. Since the output is a discrete value,
-                //   generateReference doesn't work since you can't take a pointer to a value that 
-                //   that is being pushed and popped on the stack.
-            } else if(!endType.isPointer()){
-                if(!info.hasForeignErrors()){
-                    std::string strtype = info.ast->typeToString(endType);
+            if (operatorImpl) {
+                // Handled when we add together exprs
+                Assert(("operator overloading when referencing not implemented",!operatorImpl));
+                // generateExpression(now, &tempTypes, idScope);
+            } else {
+                tempTypes.resize(0);
+                SignalIO result = generateExpression(now->right, &tempTypes);
+                if (result != SIGNAL_SUCCESS && tempTypes.size() != 1)
+                    return SIGNAL_FAILURE;
+                
+                if(!AST::IsInteger(tempTypes.last())){
+                    std::string strtype = info.ast->typeToString(tempTypes.last());
                     ERR_SECTION(
-                        ERR_HEAD2(now->left->location)
-                        ERR_MSG("Index operator (array[23]) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer. (Operator overloading doesn't work here)")
-                        ERR_LINE2(now->left->location,strtype.c_str());
+                        ERR_HEAD2(now->right->location)
+                        ERR_MSG("Index operator (array[23]) requires integer type in the inner expression. '"<<strtype<<"' is not an integer. (Operator overloading doesn't work here)")
+                        ERR_LINE2(now->right->location,strtype.c_str());
                     )
+                    return SIGNAL_FAILURE;
                 }
-                return SIGNAL_FAILURE;
-            }
 
-            if(pointerType){
-                pointerType=false;
+                TypeInfo* linfo = nullptr;
+                if(endType.isNormalType()) {
+                    linfo = ast->getTypeInfo(endType);
+                }
+                bool is_slice = linfo && linfo->astStruct && linfo->astStruct->name == "Slice";
+                if(is_slice) {
+                    // NOTE: You may think that operator overload for index operator is implemented and
+                    //   we therefore don't need is_slice BUT we operator overloading works like a
+                    //   function with two inputs and one output. Since the output is a discrete value,
+                    //   generateReference doesn't work since you can't take a pointer to a value that 
+                    //   that is being pushed and popped on the stack.
+                } else if(!endType.isPointer()){
+                    if(!info.hasForeignErrors()){
+                        std::string strtype = info.ast->typeToString(endType);
+                        ERR_SECTION(
+                            ERR_HEAD2(now->left->location)
+                            ERR_MSG("Index operator (array[23]) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer. (Operator overloading doesn't work here)")
+                            ERR_LINE2(now->left->location,strtype.c_str());
+                        )
+                    }
+                    return SIGNAL_FAILURE;
+                }
+
+                if(pointerType){
+                    pointerType=false;
+                    if(is_slice) {
+                        auto& mem = linfo->structImpl->members[0];
+                        Assert(linfo->astStruct->members[0].name == "ptr");
+
+                        endType = mem.typeId;
+                        endType.setPointerLevel(endType.getPointerLevel()-1);
+                        u32 typesize = info.ast->getTypeSize(endType);
+                        u32 rsize = info.ast->getTypeSize(tempTypes.last());
+                        BCRegister indexer_reg = BC_REG_D;
+
+                        builder.emit_pop(indexer_reg); // integer
+
+                        builder.emit_pop(BC_REG_B); // slice.ptr
+                        builder.emit_pop(BC_REG_F); // slice.len
+                        
+                        // TODO: BOUNDS CHECK
+                        if(typesize>1){
+                            builder.emit_li32(BC_REG_A, typesize);
+                            builder.emit_mul(indexer_reg, BC_REG_A, false, 8, false);
+                        }
+                        builder.emit_add(BC_REG_B, indexer_reg, false, 8);
+
+                        builder.emit_push(BC_REG_B);
+                        continue;
+                    } else {
+                        if(!endType.isPointer()) {
+                            auto prev = exprs[i+1];
+                            ERR_SECTION(
+                                ERR_HEAD2(prev->location)
+                                ERR_MSG("'"<<compiler->lexer.tostring(prev->location)<<
+                                "' must be a reference to some memory. "
+                                "A variable, member or expression resulting in a dereferenced pointer would be. The type was '"<<ast->typeToString(endType)<<"'")
+                                ERR_LINE2(prev->location, "must be a reference")
+                            )
+                            return SIGNAL_FAILURE;
+                        }
+                        endType.setPointerLevel(endType.getPointerLevel()-1);
+                        
+                        u32 typesize = info.ast->getTypeSize(endType);
+                        u32 rsize = info.ast->getTypeSize(tempTypes.last());
+                        BCRegister reg = BC_REG_C;
+                        builder.emit_pop(reg); // integer
+                        builder.emit_pop(BC_REG_B); // reference
+
+                        if(typesize>1){
+                            builder.emit_li32(BC_REG_A, typesize);
+                            builder.emit_mul(reg, BC_REG_A, false, 8, false);
+                        }
+                        builder.emit_add(BC_REG_B, reg, false, 8);
+                        builder.emit_push(BC_REG_B);
+                        continue;
+                    }
+                }
+
                 if(is_slice) {
                     auto& mem = linfo->structImpl->members[0];
                     Assert(linfo->astStruct->members[0].name == "ptr");
@@ -1095,94 +1222,41 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     endType.setPointerLevel(endType.getPointerLevel()-1);
                     u32 typesize = info.ast->getTypeSize(endType);
                     u32 rsize = info.ast->getTypeSize(tempTypes.last());
-                    BCRegister indexer_reg = BC_REG_D;
+                    BCRegister reg = BC_REG_D;
 
-                    builder.emit_pop(indexer_reg); // integer
+                    builder.emit_pop(reg); // integer
 
-                    builder.emit_pop(BC_REG_B); // slice.ptr
-                    builder.emit_pop(BC_REG_F); // slice.len
+                    builder.emit_pop(BC_REG_B); // reference to slice
+                    
+                    builder.emit_mov_rm_disp(BC_REG_C, BC_REG_B, 8, mem.offset); // dereference slice to pointer
+                    // builder.emit_mov_rm(BC_REG_C, BC_REG_B, 8, ); // dereference len
                     
                     // TODO: BOUNDS CHECK
                     if(typesize>1){
                         builder.emit_li32(BC_REG_A, typesize);
-                        builder.emit_mul(indexer_reg, BC_REG_A, false, 8, false);
+                        builder.emit_mul(reg, BC_REG_A, false, 8, false);
                     }
-                    builder.emit_add(BC_REG_B, indexer_reg, false, 8);
+                    builder.emit_add(BC_REG_C, reg, false, 8);
 
-                    builder.emit_push(BC_REG_B);
-                    continue;
+                    builder.emit_push(BC_REG_C);
                 } else {
-                    if(!endType.isPointer()) {
-                        auto prev = exprs[i+1];
-                        ERR_SECTION(
-                            ERR_HEAD2(prev->location)
-                            ERR_MSG("'"<<compiler->lexer.tostring(prev->location)<<
-                            "' must be a reference to some memory. "
-                            "A variable, member or expression resulting in a dereferenced pointer would be. The type was '"<<ast->typeToString(endType)<<"'")
-                            ERR_LINE2(prev->location, "must be a reference")
-                        )
-                        return SIGNAL_FAILURE;
-                    }
                     endType.setPointerLevel(endType.getPointerLevel()-1);
-                    
+
                     u32 typesize = info.ast->getTypeSize(endType);
                     u32 rsize = info.ast->getTypeSize(tempTypes.last());
-                    BCRegister reg = BC_REG_C;
+                    BCRegister reg = BC_REG_D;
                     builder.emit_pop(reg); // integer
                     builder.emit_pop(BC_REG_B); // reference
-
+                    builder.emit_mov_rm(BC_REG_C, BC_REG_B, 8); // dereference pointer to pointer
+                    
                     if(typesize>1){
                         builder.emit_li32(BC_REG_A, typesize);
                         builder.emit_mul(reg, BC_REG_A, false, 8, false);
                     }
-                    builder.emit_add(BC_REG_B, reg, false, 8);
-                    builder.emit_push(BC_REG_B);
-                    continue;
+                    builder.emit_add(BC_REG_C, reg, false, 8);
+
+                    builder.emit_push(BC_REG_C);
                 }
-            }
-
-            if(is_slice) {
-                auto& mem = linfo->structImpl->members[0];
-                Assert(linfo->astStruct->members[0].name == "ptr");
-
-                endType = mem.typeId;
-                endType.setPointerLevel(endType.getPointerLevel()-1);
-                u32 typesize = info.ast->getTypeSize(endType);
-                u32 rsize = info.ast->getTypeSize(tempTypes.last());
-                BCRegister reg = BC_REG_D;
-
-                builder.emit_pop(reg); // integer
-
-                builder.emit_pop(BC_REG_B); // reference to slice
-                
-                builder.emit_mov_rm_disp(BC_REG_C, BC_REG_B, 8, mem.offset); // dereference slice to pointer
-                // builder.emit_mov_rm(BC_REG_C, BC_REG_B, 8, ); // dereference len
-                
-                // TODO: BOUNDS CHECK
-                if(typesize>1){
-                    builder.emit_li32(BC_REG_A, typesize);
-                    builder.emit_mul(reg, BC_REG_A, false, 8, false);
-                }
-                builder.emit_add(BC_REG_C, reg, false, 8);
-
-                builder.emit_push(BC_REG_C);
-            } else {
-                endType.setPointerLevel(endType.getPointerLevel()-1);
-
-                u32 typesize = info.ast->getTypeSize(endType);
-                u32 rsize = info.ast->getTypeSize(tempTypes.last());
-                BCRegister reg = BC_REG_D;
-                builder.emit_pop(reg); // integer
-                builder.emit_pop(BC_REG_B); // reference
-                builder.emit_mov_rm(BC_REG_C, BC_REG_B, 8); // dereference pointer to pointer
-                
-                if(typesize>1){
-                    builder.emit_li32(BC_REG_A, typesize);
-                    builder.emit_mul(reg, BC_REG_A, false, 8, false);
-                }
-                builder.emit_add(BC_REG_C, reg, false, 8);
-
-                builder.emit_push(BC_REG_C);
             }
         }
     }
@@ -2875,13 +2949,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 }
                 auto& mem = typeInfo->astStruct->members[memberData.index];
                 if(mem.array_length > 0) {
-                    // Assert(nonReference); // i threw this here, is that okay?
-                    std::string slice_name = "Slice<" + ast->typeToString(memberData.typeId) + ">";
-                    auto slice_info = info.ast->convertToTypeInfo(slice_name, info.ast->globalScopeId, true);
-                    if(!slice_info) {
-                        Assert(info.hasForeignErrors());
-                        return SIGNAL_FAILURE;
-                    }
+                    
+                    auto type = memberData.typeId;
+                    type.setPointerLevel(type.getPointerLevel() + 1);
                     
                     bool popped = false;
                     BCRegister reg = BC_REG_B;
@@ -2902,16 +2972,51 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     }
                     if(!popped)
                         builder.emit_pop(reg);
-                        
                     
-                    builder.emit_li64(BC_REG_T0, mem.array_length);
-                    builder.emit_push(BC_REG_T0);
+                    // builder.emit_li64(BC_REG_T0, mem.array_length);
+                    // builder.emit_push(BC_REG_T0);
                     
                     builder.emit_push(reg);
+
+                    outTypeIds->add(type);
                     
-                    exprId = slice_info->id;
+                    // NOTE: Arrays in structs don't evaluate to slice anymore.
+                    // std::string slice_name = "Slice<" + ast->typeToString(memberData.typeId) + ">";
+                    // auto slice_info = info.ast->convertToTypeInfo(slice_name, info.ast->globalScopeId, true);
+                    // if(!slice_info) {
+                    //     Assert(info.hasForeignErrors());
+                    //     return SIGNAL_FAILURE;
+                    // }
                     
-                    outTypeIds->add(exprId);
+                    // bool popped = false;
+                    // BCRegister reg = BC_REG_B;
+                    // if(exprId.getPointerLevel()>0){
+                    //     if(!popped)
+                    //         builder.emit_pop(reg);
+                    //     popped = true;
+                    //     builder.emit_mov_rm(BC_REG_C, reg, 8);
+                    //     reg = BC_REG_C;
+                    // }
+                    // if(memberData.offset!=0){
+                    //     if(!popped)
+                    //         builder.emit_pop(reg);
+                    //     popped = true;
+                        
+                    //     builder.emit_li32(BC_REG_A, memberData.offset);
+                    //     builder.emit_add(reg, BC_REG_A, false, 8);
+                    // }
+                    // if(!popped)
+                    //     builder.emit_pop(reg);
+                        
+                    
+                    // builder.emit_li64(BC_REG_T0, mem.array_length);
+                    // builder.emit_push(BC_REG_T0);
+                    
+                    // builder.emit_push(reg);
+                    
+                    // exprId = slice_info->id;
+                    
+                    // outTypeIds->add(exprId);
                 } else {
                     if(!nonReference) {
                         // auto memberData = typeInfo->getMember(expression->name);

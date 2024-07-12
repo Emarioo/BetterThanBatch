@@ -106,6 +106,8 @@ struct ChatWidget {
 
     text_size: f32;
 
+    user_name: StringBuilder;
+
     messages: Array<StringBuilder>;
     input_message: StringBuilder;
     cursor_pos: i32;
@@ -121,7 +123,7 @@ struct ChatWidget {
         h = _h;
         text_size = 20.0
     }
-    // TODO: set_width/height
+    // TODO: set_width/height methods
 
     fn render(window: WindowContext*) {
         layout_y := y
@@ -139,7 +141,7 @@ struct ChatWidget {
         }
         // TODO: Support newlines in input message? shift+enter? We also need to offset the render position
         //   so the whole input message fits on the screen.
-        DrawText(window, padding + x, padding + y + h - text_size - 2*padding, text_size, input_message.sliced(), cursor_pos)
+        DrawText(window, padding + x, padding + y + h - text_size - 2*padding, text_size, input_message.sliced(), cursor = cursor_pos)
     }
 
     fn update(window: WindowContext*) {
@@ -164,6 +166,9 @@ struct ChatWidget {
                         server.close()
                     if client.is_active()
                         client.close()
+                } else if args[0] == "/setname" {
+                    user_name.clear()
+                    user_name.append(args[1])
                 } else if args[0] == "/start" {
                     // TODO: start and connect commands always use defaul port and never the optional
                     //   one provided by the user.
@@ -197,7 +202,9 @@ struct ChatWidget {
                 // log("Pressed enter")
                 sender: StringBuilder
                 defer sender.cleanup()
-                if is_server {
+                if user_name.size() != 0 {
+                    sender.append(user_name)
+                } else if is_server {
                     sender.append("Server")
                 } else {
                     sender.append("Client")

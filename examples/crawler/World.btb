@@ -1,0 +1,485 @@
+/*
+    This file contains structures and some logic for the world.
+    Tiles, entities...
+*/
+
+#import "BucketArray"
+#import "Array"
+#import "Graphics"
+#import "Math"
+#import "./Config"
+
+enum EntityType {
+    ENTITY_BLOB,
+    ENTITY_PLATFORM,
+
+    ENTITY_TYPE_MAX,
+}
+struct EntityInfo {
+    texture: Texture*;
+    color: Color;
+    is_static: bool;
+}
+enum TileType {
+    TILE_NONE,
+    TILE_GRASS,
+    TILE_ROCK,
+    TILE_WATER,
+
+    TILE_TYPE_MAX,
+}
+struct TileInfo {
+    texture: Texture*;
+    color: Color;
+    // has_collision?
+}
+struct Entity {
+    id: UUID;
+    pos: vec2;
+    size: vec2;
+    vel: vec2;
+    entity_info: i32; // entity type
+    on_ground: bool;
+}
+struct Tile {
+    tile_info: i32;
+}
+struct Chunk {
+    x: i32;
+    y: i32;
+    tiles: Array<Tile>; // The position of the tile is calculated based on it's index. All chunks have the same sized arrays
+}
+struct World {
+    entities: BucketArray<Entity>;
+    chunks: BucketArray<Chunk>;
+    chunk_size: i32 = 16;
+    fn init() {
+        entities.init(256)
+        chunks.init(100)
+    }
+    fn add_entity(x: f32, y: f32, w: f32, h: f32, type: EntityType) -> Entity* {
+        id, e := entities.add(null)
+        e.entity_info = cast<i32>type
+        e.pos.x = x
+        e.pos.y = y
+        e.size.x = w
+        e.size.y = h
+        e.id = gen_uuid()
+
+        return e
+    }
+    fn add_entitity_with_uuid(x: f32, y: f32, w: f32, h: f32, type: EntityType, uuid: UUID) -> Entity* {
+        id, e := entities.add(null)
+        e.entity_info = cast<i32>type
+        e.pos.x = x
+        e.pos.y = y
+        e.size.x = w
+        e.size.y = h
+        e.id = uuid
+
+        return e
+    }
+    fn get_entity(id: UUID) -> Entity* {
+        iter := entities.create_iterator()
+        while entities.iterate(&iter) {
+            if iter.ptr.id == id {
+                return iter.ptr
+            }
+        }
+        return null
+    }
+    fn find_chunk(x: i32, y: i32) -> Chunk* {
+        chunk_x := x / chunk_size
+        chunk_y := y / chunk_size
+        if x < 0
+            chunk_x--
+        if y < 0
+            chunk_y--
+
+        found_chunk: Chunk*;
+        iter := chunks.create_iterator()
+        while chunks.iterate(&iter) {
+            it := iter.ptr
+
+            if it.x == chunk_x && it.y == chunk_y {
+                found_chunk = it
+                break
+            }
+        }
+        if !found_chunk {
+            _: i32, found_chunk = chunks.add(null)
+            found_chunk.tiles.resize(chunk_size*chunk_size)
+        }
+        return found_chunk
+    }
+    fn set_tile(x: i32, y: i32, tile: Tile) {
+        found_chunk := find_chunk(x, y);
+
+        tile_x := x % chunk_size
+        tile_y := y % chunk_size
+
+        tilep := found_chunk.tiles.get_unsafe(tile_y * chunk_size + tile_x);
+        *tilep = tile
+    }
+    fn get_tile(x: i32, y: i32) -> Tile* {
+        found_chunk := find_chunk(x, y);
+
+        tile_x := x % chunk_size
+        tile_y := y % chunk_size
+
+        tile := found_chunk.tiles.get_unsafe(tile_y * chunk_size + tile_x)
+        return tile
+    }
+    fn update(window: WindowContext*) {
+        timestep := 1/60.0 // window.delta // temporary
+        speed := PLAYER_SPEED
+        jump_force := 200 * GRAVITY / 9
+
+        real_speed := speed
+        if window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+            real_speed *= 2
+
+
+        // IMPORTANT: How do we handle player movement?
+        // TODO: Debug mode where you can select which player you move. Perhaps can even select and move a monster.
+        
+        // if window.isKeyPressed(GLFW_KEY_R) {
+        //     // RestoreFrame(0) // broken
+        //     if player {
+        //         player.pos.x = 250
+        //         player.pos.y = 50
+        //         player.vel.x = 0
+        //         player.vel.y = 0
+        //     }
+        //     // if player2 {
+        //     //     player2.pos.x = 200
+        //     //     player2.pos.y = 50
+        //     //     player2.vel.x = 0
+        //     //     player2.vel.y = 0
+        //     // }
+        // }
+        
+        // if player {
+        //     // if window.isKeyDown(GLFW_KEY_W) {
+        //     //     // player.pos.y -= real_speed * window.delta
+        //     //     player.vel.y = -real_speed
+        //     // } else if window.isKeyDown(GLFW_KEY_S) {
+        //     //     player.vel.y = real_speed
+        //     //     // player.pos.y += real_speed * window.delta
+        //     // } else {
+        //     //     player.vel.y = 0
+        //     // }
+        //     if window.isKeyDown(GLFW_KEY_SPACE) || window.isKeyDown(GLFW_KEY_W) {
+        //         if player.on_ground {
+        //             player.vel.y = -jump_force
+        //         }
+        //     }
+        //     if window.isKeyDown(GLFW_KEY_A) {
+        //         // player.pos.x -= real_speed * window.delta
+        //         player.vel.x = -real_speed
+        //     } else if window.isKeyDown(GLFW_KEY_D) {
+        //         player.vel.x = real_speed
+        //         // player.pos.x += real_speed * window.delta
+        //     } else {
+        //         player.vel.x = 0
+        //     }
+        // }
+
+       
+
+        // if window.isKeyPressed(GLFW_KEY_2) {
+        //     pause_update = !pause_update
+        //     if !pause_update {
+        //         // TODO: Fix this feature
+        //         // EraseFutureFrames(current_frame)
+        //     }
+        // }
+
+        // if pause_update {
+        //     shift := window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+        //     if window.isKeyPressed(GLFW_KEY_1) || (shift && window.isKeyDown(GLFW_KEY_1))  {
+        //         // back a frame
+        //         if HasPreviousFrame(current_frame) {
+        //             current_frame--
+        //             RestoreFrame(current_frame)
+        //         }
+        //         return;
+        //     } else if window.isKeyPressed(GLFW_KEY_3) || (shift && window.isKeyDown(GLFW_KEY_3)) {
+        //         // forward a frame
+        //         if IsLastFrame(current_frame) {
+        //             current_frame++
+        //         } else {
+        //             current_frame++
+        //             RestoreFrame(current_frame)
+        //             return;
+        //         }
+        //     } else return;
+        // } else {
+        //     current_frame++
+        // }
+
+        iter := entities.create_iterator()
+        while entities.iterate(&iter) {
+            it := iter.ptr
+            // we do velocity first so that the collision
+            // has the previous velocity and not a modified version
+            // if it.entity_info == cast<i32> BLOB {
+            //     it.vel.y += GRAVITY // gravity
+            // }
+
+            it.pos.x += it.vel.x * timestep
+            it.pos.y += it.vel.y * timestep
+
+            it.on_ground = false
+        }
+
+        // 
+        // Collision
+        // 
+        iter0 := entities.create_iterator()
+        while entities.iterate(&iter0) {
+            it0 := iter0.ptr
+        // for i: 0..entities.size() {
+        //     it0 := entities.get_unsafe(i)
+
+            info0 := entity_infos.get_unsafe(it0.entity_info)
+
+            iter1 := entities.create_iterator(iter0.index + 1) // don't loop over the same entities multiple times
+            while entities.iterate(&iter1) {
+                it1 := iter1.ptr
+            // for j: i+1..entities.size() {
+            //     it1 := entities.get_unsafe(j)
+
+                info1 := entity_infos.get_unsafe(it1.entity_info)
+                
+                if info0.is_static && info1.is_static
+                    continue // nothing happens if static
+
+                if it0.pos.x + it0.size.x > it1.pos.x &&
+                    it0.pos.x < it1.pos.x + it1.size.x && 
+                    it0.pos.y + it0.size.y > it1.pos.y && 
+                    it0.pos.y < it1.pos.y + it1.size.y
+                {
+                    // TODO: Y position
+                    was_x := it0.pos.x - it0.vel.x * timestep + it0.size.x >
+                        it1.pos.x - it1.vel.x * timestep && it0.pos.x - it0.vel.x * timestep < it1.pos.x - it1.vel.x * timestep + it1.size.x
+                    was_y := it0.pos.y - it0.vel.y * timestep + it0.size.y > 
+                        it1.pos.y - it1.vel.y * timestep && it0.pos.y - it0.vel.y * timestep < it1.pos.y - it1.vel.y * timestep + it1.size.y
+
+                    if !was_y {
+                        if !info0.is_static
+                            it0.on_ground = true // set even if we entity hit the "roof"
+                        if !info1.is_static
+                            it1.on_ground = true
+
+                        both_down := it0.vel.y > it1.vel.y && it1.vel.y >= 0
+                        both_down2 := it1.vel.y > it0.vel.y && it0.vel.y >= 0
+                        both_up := it0.vel.y < it1.vel.y && it1.vel.y <= 0
+                        both_up2 := it1.vel.y < it0.vel.y  && it0.vel.y <= 0
+                        // #macro hi(...) log(...)
+                        #macro hi(...) #endmacro
+                        // TODO: Apply force to collided entity
+                        if both_down {
+                            hi("both_down")
+                            // both entities moving down, stick down
+                            if !info0.is_static {
+                                // if 0 isn't static then we want to position that entity
+                                it0.pos.y = it1.pos.y - it0.size.y
+                                it0.vel.y = 0
+                            } else if !info1.is_static {
+                                it1.pos.y = it0.pos.y + it0.size.y
+                                it1.vel.y = 0
+                            }
+                        } else if both_up {
+                            hi("both_up")
+                            // stick up
+                            if !info0.is_static {
+                                it0.pos.y = it1.pos.y + it1.size.y
+                                it0.vel.y = 0
+                            } else !info1.is_static {
+                                it1.pos.y = it0.pos.y + it1.size.y
+                                it1.vel.y = 0
+                            }
+                        } else if it0.vel.y > 0 && it1.vel.y < 0 {
+                            hi("head coll")
+                            // head on collision  it0 >|< it1
+                            if info1.is_static {
+                                it0.pos.y = it1.pos.y - it0.size.y
+                                it0.vel.y = 0
+                            } else if info0.is_static {
+                                // if 0 isn't static then we want to position that entity
+                                it1.pos.y = it0.pos.y + it0.size.y
+                                it1.vel.y = 0
+                            } else {
+                                mid_y := (it0.pos.y + it1.pos.y) / 2
+                                off := it0.size.y/2
+                                if it1.size.y < it0.size.y
+                                    off = it1.size.y/2
+                                it0.pos.y = mid_y - off
+                                it1.pos.y = mid_y + off
+
+                                it0.vel.y = 0
+                                it1.vel.y = 0
+                            }
+                        } else if it1.vel.y > it0.vel.y && it0.vel.y >= 0 {
+                            // stick down (for other entity)
+                            hi("both down 2")
+                            if !info1.is_static {
+                                it1.pos.y = it0.pos.y - it1.size.y
+                                it1.vel.y = 0
+                            } else {
+                                it0.pos.y = it1.pos.y - it1.size.y
+                                it0.vel.y = 0
+                            }
+                        } else if it1.vel.y < it0.vel.y  && it0.vel.y <= 0 {
+                            // stick up (for other entity)
+                            hi("both up 2")
+                            if !info1.is_static {
+                                it1.pos.y = it0.pos.y + it0.size.y
+                                it1.vel.y = 0
+                            } else {
+                                it0.pos.y = it1.pos.y + it0.size.y
+                                it0.vel.y = 0
+                            }
+                        } else if it1.vel.y > 0 && it0.vel.y < 0 {
+                            hi("head coll2")
+                            // head on collision  it1 >|< it0 (other way)
+                            if info1.is_static {
+                                it1.pos.y = it0.pos.y - it1.size.y
+                                it1.vel.y = 0
+                            } else if info0.is_static {
+                                it0.pos.y = it1.pos.y - it1.size.y
+                                it0.vel.y = 0
+                            } else {
+                                mid_y := (it0.pos.y + it1.pos.y) / 2
+                                off := it1.size.y/2
+                                if it0.size.y > it1.size.y
+                                    off = it0.size.y/2
+                                it1.pos.y = mid_y - off
+                                it0.pos.y = mid_y + off
+
+                                it0.vel.y = 0
+                                it1.vel.y = 0
+                            }
+                        } else {
+                            hi("why")
+                            // entities have zero velocity, should not have collided?
+                        }
+                    }
+                    // if !was_x {
+                    //     // TODO: Apply force to collided entity
+                    //     if it0.vel.x > it1.vel.x && it1.vel.x >= 0 {
+                    //         // stick left
+                    //         it0.pos.x = it1.pos.x - it0.size.x
+                    //         it0.vel.x = 0
+                    //     } else if it0.vel.x < it1.vel.x  && it1.vel.x <= 0 {
+                    //         // stick right
+                    //         it0.pos.x = it1.pos.x + it1.size.x
+                    //         it0.vel.x = 0
+                    //     } else if it0.vel.x > 0 && it1.vel.x < 0 {
+                    //         // head on collision
+                    //         mid_x := (it0.pos.x + it1.pos.x) / 2
+                    //         off := it0.size.x/2
+                    //         if it1.size.x < it0.size.x
+                    //             off = it1.size.x/2
+                    //         it0.pos.x = mid_x - off
+                    //         it1.pos.x = mid_x + off
+
+                    //         it0.vel.x = 0
+                    //         it1.vel.x = 0
+                    //     } else if it1.vel.x > it0.vel.x && it0.vel.x >= 0 {
+                    //         // stick left (for other entity)
+                    //         it1.pos.x = it0.pos.x - it1.size.x
+                    //         it1.vel.x = 0
+                    //     } else if it1.vel.x < it0.vel.x  && it0.vel.x <= 0 {
+                    //         // stick right (for other entity)
+                    //         it1.pos.x = it0.pos.x + it0.size.x
+                    //         it1.vel.x = 0
+                    //     } else if it1.vel.x > 0 && it0.vel.x < 0 {
+                    //         // hi("head on other")
+                    //         // head on collision (other way)
+                    //         mid_x := (it0.pos.x + it1.pos.x) / 2
+                    //         off := it1.size.x/2
+                    //         if it0.size.x > it1.size.x
+                    //             off = it0.size.x/2
+                    //         it1.pos.x = mid_x - off
+                    //         it0.pos.x = mid_x + off
+
+                    //         it0.vel.x = 0
+                    //         it1.vel.x = 0
+                    //     } else {
+                    //         hi("why")
+                    //         // entities have zero velocity, should not have collided?
+                    //     }
+                    // }
+                }
+            }
+        }
+
+    }
+}
+
+fn LoadWorld() -> World* {
+    world := cast<World*>Allocate(sizeof World)
+    construct(world)
+    
+
+    fn fill(x: i32, y: i32, w: i32, h: i32, tile: Tile, world: World* = world) {
+        for 0..w*h {
+            world.set_tile(x + nr % w, y + nr / w,tile)
+        }
+    }
+
+    grass := Tile{tile_info = TILE_GRASS}
+
+    fill(0,0,5,5,grass)
+
+    return world
+}
+
+global tile_infos: Array<TileInfo>
+global entity_infos: Array<EntityInfo>
+global textures: Array<Texture*>;
+
+enum TextureNames {
+    IMG_BLOB,
+    IMG_GRASS,
+    IMG_ROCK,
+    IMG_WATER,
+
+    IMG_MAX,
+}
+// Window (glfw, opengl context) should be initialized before calling this
+fn InitEntityInfos() {
+    textures.resize(IMG_MAX)
+    entity_infos.resize(ENTITY_TYPE_MAX)
+    tile_infos.resize(TILE_TYPE_MAX);
+
+    *&textures.get_unsafe(IMG_BLOB) = CreateTexture("examples/graphics/blob.png");
+
+    entity_infos.get_unsafe(ENTITY_BLOB).texture = textures[cast<i32>IMG_BLOB]
+
+    tile_infos.get_unsafe(TILE_GRASS).color = Color{0.1,0.9,0.1}
+    tile_infos.get_unsafe(TILE_ROCK).color = Color{0.08,0.08,0.1}
+    tile_infos.get_unsafe(TILE_WATER).color = Color{0.02,0.1,0.7}
+
+}
+
+
+
+
+
+
+struct UUID {
+    data: u64; // zero means invalid, none, empty UUID
+    fn valid() -> bool { return data != 0 }
+}
+operator ==(a: UUID, b: UUID) -> bool {
+    return a.data == b.data
+}
+operator !=(a: UUID, b: UUID) -> bool {
+    return a.data != b.data
+}
+fn gen_uuid() -> UUID {
+    return UUID{random64()}
+}

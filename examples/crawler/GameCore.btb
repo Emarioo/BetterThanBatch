@@ -1,0 +1,441 @@
+/*
+    This file contains the core game code.
+    Entities and things.
+*/
+
+#import "./Config"
+#import "./Debug"
+#import "./World"
+
+#import "Graphics"
+#import "Net"
+#import "Math"
+#import "Logger"
+#import "Array"
+#import "BucketArray"
+#import "String"
+
+
+global display_game: bool = true
+
+global window: WindowContext*;
+global pause_update: bool;
+global current_frame: i32
+global server: Server
+global client: Client
+global is_server: bool = false
+
+global player: Entity*;
+
+global enable_free_camera: bool
+
+enum NetType {
+    MSGTYPE_POSITION,
+    MSGTYPE_SPAWN,
+}
+struct NetHeader {
+    type: NetType
+}
+struct NetPosition {
+    header: NetHeader = NetHeader{MSGTYPE_POSITION};
+    pos: vec2;
+    vel: vec2;
+    id: UUID;
+}
+struct NetSpawn {
+    header: NetHeader = NetHeader{MSGTYPE_SPAWN};
+    pos: vec2;
+    size: vec2;
+    vel: vec2;
+    entity_info: i32; // entity type
+    id: UUID;
+}
+
+// #macro LOG_NET(X) X
+#macro LOG_NET(X) #endmacro
+
+fn net_callback(e: Event, user_data: void*) {
+    LOG_NET(
+        std_print("EVENT ") std_print_any(&e.type) log()
+    )
+    switch e.type {
+    case EVENT_START:
+        if is_server {
+            // msg: NetSpawn
+            // msg.pos = player.pos
+            // msg.size = player.size
+            // msg.entity_info = BLOB
+            // msg.id = player.id
+            // data := Slice<char>{cast<char*>&msg, sizeof msg}
+            // if is_server {
+            //     server.send(data)
+            // } else {
+            //     client.send(data)
+            // }
+            // msg: NetSpawn
+        //     msg.pos = vec2{50,50}
+        //     msg.size = vec2{30,30}
+        //     msg.entity_info = BLOB
+        //     data := Slice<char>(cast<char*>&msg, sizeof msg)
+        //     server.send(data)
+        } else {
+            // msg: NetSpawn
+            // msg.pos = player.pos
+            // msg.size = player.size
+            // msg.entity_info = BLOB
+            // msg.id = player.id
+            // data := Slice<char>{cast<char*>&msg, sizeof msg}
+            // client.send(data)
+        }
+    case EVENT_CONNECT:
+        msg: NetSpawn
+        msg.pos = player.pos
+        msg.size = player.size
+        msg.entity_info = BLOB
+        msg.id = player.id
+        data := Slice<char>{cast<char*>&msg, sizeof msg}
+        server.send(data, e.who)
+    case EVENT_RECEIVE:
+
+        LOG_NET( log("msglen ", e.bytes.len) )
+
+        Assert(e.bytes.len == sizeof NetMessage)
+        header := cast<NetHeader*>e.bytes.ptr
+        switch header.type {
+            case MSGTYPE_SPAWN:
+                body := cast<NetSpawn*>e.bytes.ptr
+                LOG_NET( std_print_any(body,true) )
+
+                entity := add_entitity_with_uuid(body.pos.x,body.pos.y, body.size.x,body.size.y, cast_unsafe<EntityType>body.entity_info, body.id)
+
+            case MSGTYPE_POSITION:
+                body := cast<NetPosition*>e.bytes.ptr
+                // LOG_NET( std_print_any(body,true) )
+
+                entity := get_entity(body.id)
+                if entity {
+                    entity.pos = body.pos
+                    entity.vel = body.vel
+                }
+
+            case:
+                std_prints("ERROR, bad message header ") std_print_any(header) log()
+        }
+    case: // nothing
+    }
+}
+
+fn start_game() {
+    // window = CreateWindow(1400,600)
+    window = CreateWindow(800,600)
+    InitEntityInfos()
+
+    world := LoadWorld()
+
+    player = world.add_entity(0,0,64,64,ENTITY_BLOB)
+
+
+    // Then start game loop where we display the menu
+    // the user presses.
+    
+    step := 0
+
+    while window.running {
+        FillColor(window, Color{0.2,0.2,0.2})
+        
+        // Send updated positions
+        step++
+        if step > 1 && (server.is_active() || client.is_active()){
+            msg: NetPosition
+            msg.pos = player.pos
+            msg.vel = player.vel
+            msg.id = player.id
+            data := Slice<char>{cast<void*>&msg, sizeof msg}
+            if is_server {
+                server.send(data)
+            } else {
+                client.send(data)
+            }
+            step = 0
+        }
+
+        window.enableUISpace(false)
+        //######################
+        // GAME STUFF
+        //######################
+        
+        if display_game {
+            PlayerMovement()
+            world.update(window)
+
+            RenderWorld(world)
+        }
+
+        window.enableUISpace(true)
+        
+        // ###################
+        // MENU STUFF
+        // ###################
+        temp: StringBuilder
+        defer temp.cleanup()
+
+        if !display_game {
+            font := window.defaultFont()
+            title_text_size := 40
+            option_text_size := 30
+            title_color := Color{1,1,1}
+            option_color := Color{1,1,1}
+            highlight_color := Color{0.3,1,0.7}
+            
+            temp.clear()
+            temp.append("Dungeon crawler No. 89")
+            
+            title_w := font.width_of_text(temp.sliced(), title_text_size)
+            DrawText(window, window.width / 2 - title_w / 2, window.height / 8, title_text_size, temp.sliced(), title_color)
+
+            layout_x := 10
+            layout_y := window.height / 3 + 100
+
+            enum OptionButton {
+                OPTION_PLAY,
+                OPTION_OPTIONS,
+                OPTION_QUIT,
+            }
+            options: char[][3] {
+                "Play",
+                "Options",
+                "Quit"
+            }
+            mx := window.getMouseX()
+            my := window.getMouseY()
+            pressed := -1
+            for @ptr options {
+                temp.clear()
+                temp.append(*it)
+
+                box := Box{layout_x, layout_y, 0, option_text_size}
+                box.w = font.width_of_text(temp.sliced(), option_text_size)
+
+                // log(mx," ",my," ",&box)
+                if box.inside(mx, my) {
+                    DrawText(window, box, temp.sliced(), highlight_color)
+                    // if pressed, do action
+                    if window.isKeyPressed(GLFW_MOUSE_BUTTON_1) {
+                        pressed = nr
+                    }
+
+                    // Temporary debug code
+                    if nr == cast<i32>OPTION_OPTIONS && window.isKeyDown(GLFW_MOUSE_BUTTON_1) {
+                        new_box := box
+                        new_box.x += new_box.w + 10
+                        DrawText(window, new_box, "incomplete", Color{1,0.5,0.5})
+                    }
+                } else {
+                    DrawText(window, box, temp.sliced(), option_color)
+                }
+                layout_y += option_text_size
+            }
+
+            switch pressed {
+            case OPTION_PLAY:
+                // Play
+                TransitionToGame()
+            case OPTION_OPTIONS:
+                // options
+                // render other options
+            case OPTION_QUIT:
+                // quit
+                window.close()
+            }
+        }
+
+        //######################
+        //  DEBUG STUFF
+        //######################
+        
+        layout_y: f32 = 0
+
+        fps: StringBuilder
+        fps.append(cast<i32>(window.delta*1000))
+        fps.append(".")
+        fps.append((cast<i32>(window.delta*10000)) % 10)
+        fps.append(" ms")
+        
+        DrawText(window, 0, layout_y, 20, fps)
+        layout_y += 20
+
+        temp.clear()
+        temp.append("frame: ")
+        temp.append(current_frame)
+        // temp.append("(saved ")
+        // temp.append(GetSavedFrames())
+        // temp.append(")")
+        DrawText(window, 0, layout_y, 20, temp.sliced())
+        layout_y += 20
+        temp.cleanup()
+
+        layout_y = window.height - 5
+        text_h: f32 = 18
+        text_w: f32 = 0
+        font := window.defaultFont()
+
+        #macro TEXT(TXT)
+            temp.append(TXT)
+            text_w = font.width_of_text(temp.sliced(), text_h)
+            layout_y -= text_h
+            DrawText(window, window.width - text_w - 5, layout_y, text_h, temp.sliced())
+            temp.cleanup()
+        #endmacro
+
+        // text is rendered bottom-up
+        TEXT("R to reset positions\nlalala")
+        TEXT("WASD and Arrow keys to move")
+
+        RefreshWindow(window)
+    }   
+    
+    // DestroyTexture(blob)
+    DestroyWindow(window)
+}
+fn PlayerMovement() {
+    if player {
+        real_speed := 200
+        if window.isKeyDown(GLFW_KEY_W) {
+            // player.pos.y -= real_speed * window.delta
+            player.vel.y = -real_speed
+        } else if window.isKeyDown(GLFW_KEY_S) {
+            player.vel.y = real_speed
+            // player.pos.y += real_speed * window.delta
+        } else {
+            player.vel.y = 0
+        }
+        // if window.isKeyDown(GLFW_KEY_SPACE) || window.isKeyDown(GLFW_KEY_W) {
+        //     if player.on_ground {
+        //         player.vel.y = -jump_force
+        //     }
+        // }
+        if window.isKeyDown(GLFW_KEY_A) {
+            // player.pos.x -= real_speed * window.delta
+            player.vel.x = -real_speed
+        } else if window.isKeyDown(GLFW_KEY_D) {
+            player.vel.x = real_speed
+            // player.pos.x += real_speed * window.delta
+        } else {
+            player.vel.x = 0
+        }
+    }
+}
+fn TransitionToGame() {
+    display_game = true
+}
+
+
+fn RenderWorld(world: World*) {
+    // ############
+    //  CAMERA + 
+    // ############
+    {
+        if window.isKeyPressed(GLFW_KEY_C) {
+            enable_free_camera = !enable_free_camera
+        }
+        if !enable_free_camera {
+            // TODO: Camera should follow the player.
+            //   If local co-op then camera should move and zoom out to
+            //   follow all players.
+            target: vec2 = vec2{0,0}
+            if player {
+                target = player.pos + player.size / 2.0
+            }
+            cam_pos := vec2{window.camera_x, window.camera_y}
+
+            global vel: vec2;
+
+            force: vec2 = (target - cam_pos) / 10.0
+
+            vel = vel * 0.8
+            vel = vel + force / 3
+
+            // window.camera_x += vel.x
+            // window.camera_y += vel.y
+            
+            window.camera_x += force.x
+            window.camera_y += force.y
+        } else {
+            // CAMERA MOVEMENT FOR DEBUG MODE
+            // TODO: Debug mode where you can freely move the camera.
+            speed := 200 * window.delta
+            if window.isKeyDown(GLFW_KEY_DOWN) {
+                window.camera_y += speed
+            } else if window.isKeyDown(GLFW_KEY_UP) {
+                window.camera_y -= speed
+            }
+            if window.isKeyDown(GLFW_KEY_LEFT) {
+                window.camera_x -= speed
+            } else if window.isKeyDown(GLFW_KEY_RIGHT) {
+                window.camera_x += speed
+            }
+            scroll := window.getScrollY()
+            if scroll > 0 {
+                window.camera_zoom *= 1.04;
+            } else if scroll < 0 {
+                window.camera_zoom *= 0.96;
+            }
+        }
+    }
+
+    // ############
+    // TILES
+    // ############
+    {
+        iter := world.chunks.create_iterator()
+        while world.chunks.iterate(&iter) {
+            chunk := iter.ptr
+            // log(chunk.x," ",chunk.y)
+
+            for 0..world.chunk_size*world.chunk_size {
+                tx := nr % world.chunk_size
+                ty := nr / world.chunk_size
+
+                type := chunk.tiles.ptr[nr].tile_info
+
+                if type == cast<i32>TILE_NONE
+                    continue
+                
+                w := 64
+                h := 64
+                x := chunk.x * world.chunk_size + tx
+                y := chunk.y * world.chunk_size + ty
+                x *= w
+                y *= h
+                
+                info := &tile_infos.ptr[type]
+                if info.texture {
+                    DrawTexture(window, x, y, w, h, info.texture)
+                } else {
+                    FillRect(window, x, y, w, h, info.color)
+                    DrawSquare(window, x, y, w, h, Color{1,1,1})
+                }
+            }
+        }
+    }
+    // ############
+    // ENTITIES
+    // ############
+    iter := world.entities.create_iterator()
+    while world.entities.iterate(&iter) {
+        it := iter.ptr
+
+        info := entity_infos.get_unsafe(it.entity_info)
+        if info.texture {
+            DrawTexture(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.texture)
+        } else {
+            FillRect(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.color)
+        }
+        
+        str: StringBuilder
+        str.append("on_ground: ")
+        str.append(it.on_ground)
+
+        DrawText(window, it.pos.x + it.size.x, it.pos.y - 16, 16, str.sliced())
+    }
+}

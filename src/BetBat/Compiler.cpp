@@ -1479,9 +1479,12 @@ void Compiler::run(CompileOptions* options) {
                     // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
                 } else {
                     cmd += "-nostdlib ";
+                    if (entry_point == "main")
+                        cmd += "--entry main"; // we must explicitly set entry point with nodstdlib even if main is used
                 }
             }
-            cmd += "--entry " + entry_point + " ";
+            if (entry_point != "main") // no need to set entry if main is used since it is the default
+                cmd += "--entry " + entry_point + " ";
             
             if (has_winmain) {
                 cmd += "-Wl,-subsystem,windows "; // https://stackoverflow.com/questions/73676692/what-do-the-subsystem-windows-options-do-in-gcc

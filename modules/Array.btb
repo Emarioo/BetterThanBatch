@@ -83,6 +83,11 @@ struct Array<T> {
             return T{}; // TODO: Assert instead
         return ptr[index];
     }
+    fn set(index: i32, t: T) {
+        if(index >= len)
+            return; // TODO: Assert instead
+        ptr[index] = t;
+    }
     fn last() -> T* {
         if(len == 0)
             return null; // TODO: Assert instead
@@ -91,7 +96,12 @@ struct Array<T> {
     fn get_unsafe(index: i32) -> T* {
         if(index >= len)
             return null;
-        return ptr + index * sizeof T;
+        return &ptr[index];
+    }
+    fn set_unsafe(index: i32, t: T*) {
+        if(index >= len)
+            return;
+        ptr[index] = t;
     }
     fn resize(newLen: i32) -> bool {
         // TODO: destruct elements if shrinking

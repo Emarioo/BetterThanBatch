@@ -1,3 +1,17 @@
+
+# If
+If-statement. What more is there to say.
+
+```c++
+if true {
+    // code
+} else if true {
+    // code
+} else {
+    // code
+}
+```
+
 # Loops
 There are two loops, for and while.
 

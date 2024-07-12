@@ -158,7 +158,7 @@ fn Interpret(path: char[], spec: FormatSpec*) {
     buffer: u8* = Allocate(filesize);
     defer Free(buffer, filesize);
     suc = FileRead(file, buffer, filesize);
-    // TODO: Assert(suc)
+    Assert(suc)
     FileClose(file);
     
     Interpret(Slice<u8>{buffer, filesize}, spec);

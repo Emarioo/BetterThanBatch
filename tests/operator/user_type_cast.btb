@@ -19,3 +19,20 @@ fn do(x: i32) {
     // log("'",str.ptr,"' ", str.len)
     _test 4; x;
 }
+
+@TEST_CASE(index_operator)
+#import "Array"
+
+arr: Array<i32*>
+arr.add(null)
+enum I {
+    FIRST
+}
+arr[FIRST] // enum should be casted to i32
+
+
+struct Ok {
+    x: i32[1]
+}
+ok: Ok
+ok.x[0] = 9 // ok.x can be a slice but in this case it's really just a pointer which we index into.

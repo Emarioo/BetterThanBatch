@@ -8,7 +8,7 @@ struct @no_padding MyData { ... }
 fn @stdcall MyFunction() { ... }
 ```
 
-See other chapters such as [Structs](./04-Structs.md) and [Enums](./06-Enums.md) for specific annotations.
+See other chapters such as [Structs](./04-Structs.md) and [Enums](./06-Enums%20and%20switch.md) for specific annotations.
 
 # Future / incomplete features
 

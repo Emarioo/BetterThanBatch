@@ -136,6 +136,26 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         || t == BC_RDTSC
         ;
     };
+    auto OVERWRITES_OP0=[&](InstructionOpcode t) {
+        return t == BC_MOV_RM
+        || t == BC_MOV_RM_DISP16
+        || t == BC_MOV_RR
+        || t == BC_POP
+        || t == BC_LI32
+        || t == BC_LI64
+        || t == BC_CAST
+        // || t == BC_STRLEN // it takes input and overwrites
+        || t == BC_ALLOC_LOCAL
+        || t == BC_GET_PARAM
+        || t == BC_GET_VAL
+        || t == BC_PTR_TO_LOCALS
+        || t == BC_PTR_TO_PARAMS
+        || t == BC_DATAPTR
+        || t == BC_EXT_DATAPTR
+        || t == BC_CODEPTR
+        || t == BC_RDTSC
+        ;
+    };
     // auto IS_WALL=[&](InstructionOpcode t) {
     //     return t == BC_JZ
     //     || t == BC_RET
@@ -380,11 +400,33 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     }
                 } else {
                     auto base = (InstBase_op1*)n->base;
-                    if(IS_GENERAL_REG(base->op0)) {
-                        n->reg0 = alloc_artifical_reg(n->bc_index);
-                        map_reg(n,0);
-                    } else if(base->op0 == BC_REG_LOCALS) {
-                        n->reg0 = alloc_artifical_reg(-1, X64_REG_BP); // we don't free BP and don't pass bc_index
+                    if (OVERWRITES_OP0(base->opcode)) {
+                        if(IS_GENERAL_REG(base->op0)) {
+                            n->reg0 = alloc_artifical_reg(n->bc_index);
+                            map_reg(n,0);
+                        } else if(base->op0 == BC_REG_LOCALS) {
+                            n->reg0 = alloc_artifical_reg(-1, X64_REG_BP); // we don't free BP and don't pass bc_index
+                        }
+                    } else {
+                        auto& v = bc_register_map[base->op0];
+                        auto recipient = v.used_by;
+                        auto reg_nr = v.reg_nr;
+                        if(recipient) {
+                            n->reg0 = recipient->regs[reg_nr];
+                            map_reg(n,0);
+
+                            if(IS_START(n->base->opcode)) {
+                                // TODO: Handle mov_rr, delete it if it isn't necessary
+                                free_map_reg(n,0);
+                            }
+                        } else {
+                            if(IS_GENERAL_REG(base->op0)) {
+                                n->reg0 = alloc_artifical_reg(n->bc_index);
+                                map_reg(n,0);
+                            } else if(base->op0 == BC_REG_LOCALS) {
+                                n->reg0 = alloc_artifical_reg(-1, X64_REG_BP); // we don't free BP and don't pass bc_index
+                            }
+                        }
                     }
                 }
             }
@@ -2974,6 +3016,12 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     X64Register reg_cur = reg0->reg;
                     X64Register reg_fin = reg1->reg;
 
+                    // TODO: We save registers because instrunctions afterwards may need the
+                    //   original values in them. We should optimize this code so that we
+                    //   only save when necessary. How do we know when they should be saved?
+                    emit_push(reg_cur, 8);
+                    emit_push(reg_fin, 8);
+
                     u8 prefix = PREFIX_REXW;
                     emit_prefix(PREFIX_REXW, reg_cur, reg_fin);
                     emit1(OPCODE_ADD_RM_REG);
@@ -3040,6 +3088,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit1((u8)(offset_loop - (code_size()+1)));
 
                     fix_jump_here_imm8(offset_jmp_imm);
+
+                    emit_pop(reg_fin, 8); // I remembered to pop in reverse order
+                    emit_pop(reg_cur, 8);
                 }
                 FIX_POST_IN_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
@@ -3073,6 +3124,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     X64Register src = reg1->reg;
                     X64Register fin = reg2->reg;
                     X64Register tmp = X64_REG_A;
+
+                    emit_push(reg0->reg, 8);
+                    emit_push(reg1->reg, 8);
+                    emit_push(reg2->reg, 8);
 
                     emit_prefix(PREFIX_REXW, fin, dst);
                     emit1(OPCODE_ADD_REG_RM);
@@ -3117,6 +3172,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit1((u8)(offset_loop - (code_size()+1)));
 
                     fix_jump_here_imm8(offset_jmp_imm);
+                    
+                    emit_pop(reg2->reg, 8); // popping in reverse order
+                    emit_pop(reg1->reg, 8);
+                    emit_pop(reg0->reg, 8);
                 }
                 FIX_POST_IN_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)

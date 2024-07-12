@@ -1493,7 +1493,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     if(!is_base_virtual && !is_poly_virtual) {
                         // no virtual/polymorphic type
                         TypeId real_type = info.ast->convertToTypeId(typeString, scopeId, true);
-                        if(real_type == typeToMatch){
+                        // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
+                        //   Perhaps we should cast when some types are polmorphic too?
+                        if(ast->castable(typeToMatch, real_type)){
                             continue;
                         }
                         found = false;
@@ -1724,7 +1726,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         polyOverload->astFunc->arguments[j + extra].location,nullptr);
                     // TypeId argType = checkType(scope->scopeId,overload.astFunc->arguments[j].stringType,
                     // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
-                    if(argType != argTypes[j]){
+                    if(!ast->castable(argTypes[j], argType)){
+                    // if(argType != argTypes[j]){
                         found = false;
                         break;
                     }
@@ -2496,20 +2499,26 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                                 outTypes->add(id);
                             *array_length = mem.array_length;
                         } else {
-                            std::string slice_name = "Slice<" + info.ast->typeToString(memdata.typeId) + ">";
-                            TypeId id = checkType(scopeId, slice_name, expr->location, nullptr);
-                            // if(!slice_info) {
-                            //     ERR_SECTION(
-                            //         ERR_HEAD2(expr->location)
-                            //         ERR_MSG("Member '"<<expr->name<<"' was an array within a struct which evaluates to the type '"<<slice_name<<"' BUT it was not a valid type.")
-                            //         ERR_LINE2(expr->location,"bad type?");
-                            //     )
-                            //     if(outTypes)
-                            //         outTypes->add(AST_VOID);
-                            //     return SIGNAL_FAILURE;
-                            // }
+                            TypeId id = memdata.typeId;
+                            id.setPointerLevel(id.getPointerLevel()+1);
                             if(outTypes)
                                 outTypes->add(id);
+
+                            // NOTE: Previously, We returned slice type but now we return pointer instead. We do this because indexing pointer doesn't require operator overload and things work better.
+                            // std::string slice_name = "Slice<" + info.ast->typeToString(memdata.typeId) + ">";
+                            // TypeId id = checkType(scopeId, slice_name, expr->location, nullptr);
+                            // // if(!slice_info) {
+                            // //     ERR_SECTION(
+                            // //         ERR_HEAD2(expr->location)
+                            // //         ERR_MSG("Member '"<<expr->name<<"' was an array within a struct which evaluates to the type '"<<slice_name<<"' BUT it was not a valid type.")
+                            // //         ERR_LINE2(expr->location,"bad type?");
+                            // //     )
+                            // //     if(outTypes)
+                            // //         outTypes->add(AST_VOID);
+                            // //     return SIGNAL_FAILURE;
+                            // // }
+                            // if(outTypes)
+                            //     outTypes->add(id);
                         }
                     } else {
                         if(outTypes)

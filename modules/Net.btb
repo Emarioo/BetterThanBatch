@@ -375,12 +375,11 @@ struct Server {
         connection: Connection*
         {
             mutex.lock()
+            defer mutex.unlock()
             if who < 0 || who >= m_connections.size() {
-                mutex.unlock()
                 return NET_FAILURE // invalid connection
             }
             connection = m_connections.get(who)
-            mutex.unlock()
         }
 
         if !connection.in_use
@@ -438,20 +437,20 @@ struct Server {
             header.length = bytes.len * sizeof *bytes.ptr
             err := connection.socket.send(cast<void*>&header, sizeof header, 0)
             if err < 0 {
-                log("server send header failed")
+                // log("server send header failed")
                 return NET_FAILURE
             }
             m_sent_bytes += sizeof header
             err = connection.socket.send(cast<void*>bytes.ptr, header.length, 0)
             if err < 0 {
-                log("server send body failed")
+                // log("server send body failed")
                 return NET_FAILURE
             }
             m_sent_bytes += header.length
         } else {
             err := connection.socket.send(cast<void*>bytes.ptr, size, 0)
             if err < 0 {
-                log("server send stream failed")
+                // log("server send stream failed")
                 return NET_FAILURE
             }
             m_sent_bytes += size
@@ -683,20 +682,20 @@ struct Client {
             header.length = size
             err := m_socket.send(cast<void*>&header, sizeof header, 0)
             if err < 0 {
-                log("send msg failed1")
+                // log("send header failed1")
                 return NET_FAILURE
             }
             m_sent_bytes += sizeof header
             err = m_socket.send(cast<void*>bytes.ptr, header.length, 0)
             if err < 0 {
-                log("send msg failed2")
+                // log("send body failed2")
                 return NET_FAILURE
             }
             m_sent_bytes += header.length
         } else {
             err := m_socket.send(cast<void*>bytes.ptr, size, 0)
             if err < 0 {
-                log("send failed")
+                // log("send stream failed")
                 return NET_FAILURE
             }
             m_sent_bytes += size
@@ -815,4 +814,6 @@ fn TestNetEvents() {
         // server start, client start
         // server disconnect
         // client close, server close
+
+    // TODO: Improve testing
 }

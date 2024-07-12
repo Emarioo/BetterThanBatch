@@ -26,8 +26,13 @@ struct WindowContext {
     width: i32; // read only
     height: i32;
     running: bool = true;
+    schedule_close: bool;
     delta: f32;
     prev_timestamp: u64;
+
+    fn close() {
+        schedule_close = true
+    }
     
     camera_zoom: f32 = 1.0; // modifiable
     camera_x: f32 = 1.0; // modifiable
@@ -97,9 +102,11 @@ struct WindowContext {
 		}else{
 			// log::out << "RELEASED "<<(char)code << " ("<<code << ")\n";
 			// printf("RELEASED %c (%d)\n",(char)code,code);
-			input.down = false;
-			input.tickReleased++;
-			input.frameReleased++;
+            if (input.down) {
+                input.down = false;
+                input.tickReleased++;
+                input.frameReleased++;
+            }
 		}
     }
 
@@ -465,7 +472,7 @@ fn RefreshWindow(window: WindowContext*) {
     glfwSwapBuffers(window.glfw_window);
     glfwPollEvents();
 
-    window.running = !glfwWindowShouldClose(window.glfw_window)
+    window.running = !glfwWindowShouldClose(window.glfw_window) && !window.schedule_close
 
     // temporary
     ProcessSleep(0.001) // don't use up CPU resources
@@ -489,6 +496,21 @@ struct Color {
     b: f32;
     a: f32 = 1.0;
 }
+struct Box {
+    x: f32;
+    y: f32;
+    w: f32;
+    h: f32;
+
+    fn inside(mx: f32, my: f32) -> bool {
+        return mx >= x && mx < x + w &&
+            my >= y && my < y + h
+    }
+    fn inside(box: Box) -> bool {
+        return box.x + box.w > x && box.x < x + w &&
+            box.y + box.h > y && box.y < y + h
+    }
+}
 
 fn FillColor(window: WindowContext*, color: Color) {
     glClearColor(color.r, color.g, color.b, color.a);
@@ -502,12 +524,15 @@ fn FillColor(window: WindowContext*, color: Color) {
     zoom := 1.
     if !window.enable_ui_space {
         zoom = window.camera_zoom
-        bx -= window.width/2
-        by -= window.height/2
+        // bx -= window.width/2
+        // by -= window.height/2
         ox += -window.camera_x + window.width/2
         oy += -window.camera_y + window.height/2
     }
 #endmacro
+fn FillRect(window: WindowContext*, box: Box, color: Color) {
+    FillRect(window, box.x, box.y, box.w, box.h, color)
+}
 fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color) {
     // @dumpbc
     glUseProgram(window.base_shader);
@@ -526,10 +551,10 @@ fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color
     
     vertices: f32[] {
         // x ,y, uv.x, uv.y, color.rgba, texture
-        (bx) *      zoom + ox, (by) *       zoom + oy, 0, 0, color.r, color.b, color.g, color.a, -1,
-        (bx) *      zoom + ox, (by + h) *   zoom + oy, 0, 1, color.r, color.b, color.g, color.a, -1,
-        (bx + w) *  zoom + ox, (by + h) *   zoom + oy, 1, 1, color.r, color.b, color.g, color.a, -1,
-        (bx + w) *  zoom + ox, (by) *       zoom + oy, 1, 0, color.r, color.b, color.g, color.a, -1,
+        (bx) *      zoom + ox, (by) *       zoom + oy, 0, 0, color.r, color.g, color.b, color.a, -1,
+        (bx) *      zoom + ox, (by + h) *   zoom + oy, 0, 1, color.r, color.g, color.b, color.a, -1,
+        (bx + w) *  zoom + ox, (by + h) *   zoom + oy, 1, 1, color.r, color.g, color.b, color.a, -1,
+        (bx + w) *  zoom + ox, (by) *       zoom + oy, 1, 0, color.r, color.g, color.b, color.a, -1,
     }
     glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
@@ -539,6 +564,19 @@ fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color
     glDrawElements(GL_TRIANGLES, 6 * 1, GL_UNSIGNED_INT, null)
     
     // glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+fn DrawSquare(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color) {
+    thickness := 2
+    // window.toggleUISpace()
+    FillRect(window, x, y, w, thickness, color) // top
+    FillRect(window, x, y + h - thickness, w, thickness, color) // down
+    
+    FillRect(window, x, y, thickness, h, color) // left
+    FillRect(window, x + w - thickness, y, thickness, h, color) // right
+    // window.toggleUISpace()
+}
+fn DrawTexture(window: WindowContext*, box: Box, texture: Texture*) {
+    DrawTexture(window, box.x, box.y, box.w, box.h, texture)
 }
 fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: Texture*) {
     glUseProgram(window.base_shader);
@@ -568,10 +606,10 @@ fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: 
     
     vertices: f32[] {
         // x ,y, uv.x, uv.y, color.rgba, texture
-        (bx) *     zoom + ox, (by) *     zoom + oy, 0, 0, color.r, color.b, color.g, color.a, texture.id,
-        (bx) *     zoom + ox, (by + h) * zoom + oy, 0, 1, color.r, color.b, color.g, color.a, texture.id,
-        (bx + w) * zoom + ox, (by + h) * zoom + oy, 1, 1, color.r, color.b, color.g, color.a, texture.id,
-        (bx + w) * zoom + ox, (by) *     zoom + oy, 1, 0, color.r, color.b, color.g, color.a, texture.id,
+        (bx) *     zoom + ox, (by) *     zoom + oy, 0, 0, color.r, color.g, color.b, color.a, texture.id,
+        (bx) *     zoom + ox, (by + h) * zoom + oy, 0, 1, color.r, color.g, color.b, color.a, texture.id,
+        (bx + w) * zoom + ox, (by + h) * zoom + oy, 1, 1, color.r, color.g, color.b, color.a, texture.id,
+        (bx + w) * zoom + ox, (by) *     zoom + oy, 1, 0, color.r, color.g, color.b, color.a, texture.id,
     }
     glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
@@ -646,10 +684,13 @@ struct DrawTextInfo {
     drawn_lines: i32;
     drawn_height: i32; // includes lines
 }
+fn DrawText(window: WindowContext*, box: Box, text: char[], color: Color = Color{1,1,1}, cursor: i32 = -1, out_info: DrawTextInfo* = null) {
+    DrawText(window, box.x, box.y, box.h, text, color, cursor, out_info)
+}
 // TODO: Font* argument?
 // cursor is optional, -1 for no cursor
 // DrawTextInfo if non-null, is filled with useful information about how much was drawn
-fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], cursor: i32 = -1, out_info: DrawTextInfo* = null) {
+fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], color: Color = Color{1,1,1}, cursor: i32 = -1, out_info: DrawTextInfo* = null) {
     glUseProgram(window.base_shader);
     
     glDisable(GL_DEPTH_TEST)
@@ -673,7 +714,7 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], cursor
     
     glUniform2f(loc,window.width,window.height);
     
-    color := Color{1,1,1}
+    // color := Color{1,1,1}
     
     CAM_VALUES
     

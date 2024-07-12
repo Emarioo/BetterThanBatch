@@ -46,9 +46,9 @@ Example of unfinished multiplayer game
 # How to get started
 **NOTE**: There are no releases yet so you have to compile it yourself. The compiler is just not stable enough yet.
 
-**Option 1:** Clone the repo and build the compiler executable yourself, see [Building](#building). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
+**Option 1:** Clone the repo and build the compiler executable yourself, see [Building](#building). Then have a look at [A small but very important guide](/docs/guide/00-Introduction.md).
 
-**Option 2 (coming soon):** Download a release of `BTB Compiler` at https://github.com/Emarioo/BetterThanBatch/releases. Then unzip it in a folder of your choice and edit your environment variable `PATH` with the path to the compiler executable (for convenience). Then have a look at [A little guide](/docs/guide/00-Introduction.md).
+**Option 2 (coming soon):** Download a release of `BTB Compiler` at https://github.com/Emarioo/BetterThanBatch/releases. Then unzip it in a folder of your choice and edit your environment variable `PATH` with the path to the compiler executable (for convenience). Then have a look at [A small but very important guide](/docs/guide/00-Introduction.md).
 
 <!-- TODO: Swap option 1 and 2 so that download release is first option, the recommended option. Compiling project is first option right now because there are no releases -->
 

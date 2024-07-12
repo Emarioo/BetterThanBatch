@@ -1730,7 +1730,6 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 // tmp->constantValue = tmp->left->constantValue && tmp->right->constantValue; // nocheckin
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "++"){ // TODO: Optimize
-
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INCREMENT));
                 tmp->location = info.getloc();
                 info.advance();
@@ -1742,9 +1741,10 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 values.add(tmp);
                 // tmp->constantValue = tmp->left->constantValue;// nocheckin
 
+                
+
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "--"){ // TODO: Optimize
-
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_DECREMENT));
                 tmp->location = info.getloc();
 
@@ -2716,6 +2716,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
         
         while(values.size()>0){
             OperationType nowOp = (OperationType)0;
+            bool is_post = false;
             lexer::SourceLocation loc_op{};
             if(ops.size()>=2&&!ending){
                 OperationType op1 = ops[ops.size()-2];
@@ -2820,10 +2821,19 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 } else {
                     // val->tokenRange.startIndex--;
                 }
-                val->location = loc_op;
-                val->left = er;
-                if(val->typeId != AST_REFER) {
-                    // val->constantValue = er->constantValue;// nocheckin
+                if(nowOp == AST_DEREF && (er->typeId == AST_INCREMENT || er->typeId == AST_DECREMENT) && er->postAction) {
+                    // We swap deref and post increment so that
+                    // *a++ is evaluated as (*a)++ instead of *(a++)
+                    val->location = loc_op;
+                    val->left = er->left;
+                    er->left = val;
+                    val = er;
+                } else {
+                    val->location = loc_op;
+                    val->left = er;
+                    if(val->typeId != AST_REFER) {
+                        // val->constantValue = er->constantValue;// nocheckin
+                    }
                 }
             } else if(values.size()>0){
                 val->location = loc_op;
@@ -4400,6 +4410,14 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
     };
 
     DynamicArray<ASTStatement*> nearDefers{};
+
+    // Code to keep track of which defers to insert before return statements
+    functionScopes.last().anyScopes.add({});
+    functionScopes.last().anyScopes.last().defer_size = functionScopes.last().defers.size();
+    defer {
+        functionScopes.last().defers.resize(functionScopes.last().anyScopes.last().defer_size);
+        functionScopes.last().anyScopes.pop();
+    };
 
     while(true){
         auto token = info.getinfo(&view);
