@@ -349,7 +349,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     // TODO: Use multithreading. Some threads compile test cases while others start programs and test them.
     //   One thread can test multiple programs and redirect stdout to some file.
 
-    u64 bufferSize = 0x10000;
+    i64 bufferSize = 0x10000;
     char* buffer = (char*)engone::Allocate(bufferSize);
     auto pipe = engone::PipeCreate(bufferSize, true, true);
     defer {
@@ -366,8 +366,8 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     };
     DynamicArray<TestResult> results;
 
-    u64 finalFailedTests = 0;
-    u64 finalTotalTests = 0;
+    i64 finalFailedTests = 0;
+    i64 finalTotalTests = 0;
 
     auto test_startTime = engone::StartMeasure();
     bool progress_bar = false;
@@ -421,8 +421,8 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         Compiler compiler{};
         compiler.run(&options);
 
-        u64 failedTests = 0;
-        u64 totalTests = 0;
+        i64 failedTests = 0;
+        i64 totalTests = 0;
         
         totalTests += testcase.expectedErrors.size();            
         for(int k=0;k<testcase.expectedErrors.size();k++){
@@ -439,6 +439,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             }
             if(!found) {
                 failedTests++;
+                totalTests++;
                 result.missing_errors.add(expectedError);
             }
         }
@@ -464,6 +465,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             // errors will be smaller than errorTypes since errors isn't incremented when doing TEST_ERROR(
             if(compiler.errorTypes.size() < options.compileStats.errors) {
                 log::out << log::YELLOW << "TestSuite: errorTypes: "<< compiler.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
+                totalTests += options.compileStats.errors - compiler.errorTypes.size();
                 failedTests += options.compileStats.errors - compiler.errorTypes.size();
             }
         } else {
@@ -518,6 +520,10 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                     PipeWrite(pipe, tinyBuffer, 4); // we must write some data to the pipe to prevent PipeRead from freezing if nothing was written to the pipe.
                     
                     u64 readBytes = PipeRead(pipe, buffer, bufferSize);
+                    if (readBytes < 0) {
+                        log::out << "pipe error "<<testcase.testName<<"\n";
+                        break;
+                    }
                     readBytes -= sizeof(tinyBuffer);
 
                     if(readBytes%4==0) {
@@ -545,6 +551,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             }
         }
         finalTotalTests += totalTests;
+        // log::out << testcase.testName << " add " << failedTests<<"\n";
         finalFailedTests += failedTests;
 
         result.totalTests = totalTests;

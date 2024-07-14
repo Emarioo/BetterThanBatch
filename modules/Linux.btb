@@ -185,6 +185,31 @@
 
 #macro INADDR_ANY 0
 
+
+#macro clockid_t i32
+/* Identifier for system-wide realtime clock.  */
+#macro CLOCK_REALTIME                 0
+/* Monotonic system-wide clock.  */
+#macro CLOCK_MONOTONIC                1
+/* High-resolution timer from the CPU.  */
+#macro CLOCK_PROCESS_CPUTIME_ID       2
+/* Thread-specific CPU-time clock.  */
+#macro CLOCK_THREAD_CPUTIME_ID        3
+/* Monotonic system-wide clock, not adjusted for frequency scaling.  */
+#macro CLOCK_MONOTONIC_RAW            4
+/* Identifier for system-wide realtime clock, updated only on ticks.  */
+#macro CLOCK_REALTIME_COARSE          5
+/* Monotonic system-wide clock, updated only on ticks.  */
+#macro CLOCK_MONOTONIC_COARSE         6
+/* Monotonic system-wide clock that includes time spent in suspension.  */
+#macro CLOCK_BOOTTIME                 7
+/* Like CLOCK_REALTIME but also wakes suspended system.  */
+#macro CLOCK_REALTIME_ALARM           8
+/* Like CLOCK_BOOTTIME but also wakes suspended system.  */
+#macro CLOCK_BOOTTIME_ALARM           9
+/* Like CLOCK_REALTIME but in International Atomic Time.  */
+#macro CLOCK_TAI                      11
+
 /*#################3
     SYSCALLS
 ################*/
@@ -243,6 +268,10 @@
 #macro SYS_unlink 87
 
 #macro SYS_getdents64 217
+
+#macro SYS_clock_getres 227
+#macro SYS_clock_gettime 228
+#macro SYS_clock_settime 229
 
 #macro SYS_waitid 247
 
@@ -337,6 +366,10 @@ SYSCALL(rmdir, i32, pathname: char*)
 
 // SYSCALL(getdents, i32, fd: i32, dirp: linux_dirent*, count: u32);
 SYSCALL(getdents64, i32, fd: i32, dirp: void*, count: u32);
+
+SYSCALL(clock_getres,  i32, clockid: clockid_t, res: timespec*);
+SYSCALL(clock_gettime, i32, clockid: clockid_t, tp: timespec*);
+SYSCALL(clock_settime, i32, clockid: clockid_t, tp: timespec*);
 
 SYSCALL(waitid, i32, type: i32, id: i32, info: siginfo*, options: i64, ru: void* = null);
 

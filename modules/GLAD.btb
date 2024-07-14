@@ -2,11 +2,12 @@
     GLAD Wrapper
     (incomplete)
 */
-// #link "gdi32.lib user32.lib OpenGL32.lib"
-// #link "libs/glad/src/glad.c"
-#load "OpenGL32.lib"
-
-#load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
+#if OS_WINDOWS
+    #load "OpenGL32.lib"
+    #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
+#else
+    // Linux?
+#endif
 
 global glErrCode: bool = false;
 // #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",#file,":",cast<i64>#line," code: "cast<i64>glErrCode,", ",glewGetErrorString(glErrCode)); }

@@ -58,7 +58,7 @@ The project is built using the Python script `build.py`. Python version 3.9 and 
 ## Linux
 **Requirements**: `g++`
 
-Make sure `g++` is available and run `python build.py` in a terminal.
+Make sure `g++` is available and run `python3 build.py` in a terminal.
 
 ## Windows
 **Requirements**: `cl` and `link` OR `g++`.

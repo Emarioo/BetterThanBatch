@@ -19,7 +19,10 @@ def main():
     #     Comment/uncomment the options you want
     #####################
 
-    config["output"] = "bin/btb.exe"
+    if platform.system() == "Windows":
+        config["output"] = "bin/btb.exe"
+    else:
+        config["output"] = "bin/btb"
     config["use_compiler"] = "gcc"
     # config["use_compiler"] = "msvc"
 
@@ -258,6 +261,8 @@ def compile(config):
         global modified_files
         modified_files = compute_modified_files(source_files, object_files, config["output"])
 
+        # print(modified_files)
+
         if enabled("log_objects"):
             print("Object files", object_files)
 
@@ -272,11 +277,14 @@ def compile(config):
         
         global head_compiled
         head_compiled = 0
+        global object_failed
+        object_failed = False
 
         def compile_objects():
             global head_compiled
             global modified_files
             global object_files
+            global object_failed
             while head_compiled < len(modified_files):
                 src = modified_files[head_compiled]
                 index = source_files.index(src)
@@ -287,7 +295,11 @@ def compile(config):
 
                 if enabled("log_compilation"):
                     print("Compile", trimmed_obj)
-                cmd("g++ "+GCC_WARN+" "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" -c "+src +" -o "+ obj)
+                err = cmd("g++ "+GCC_WARN+" "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" -c "+src +" -o "+ obj)
+                
+                if err != 0:
+                    object_failed = True
+
                 if enabled("log_compilation"):
                     print("Done", trimmed_obj)
 
@@ -305,7 +317,8 @@ def compile(config):
         for t in threads:
             t.join()
 
-        # print(modified_files)
+        if object_failed:
+            return False
 
         objs_str = ""
         for f in object_files:
@@ -316,14 +329,16 @@ def compile(config):
                 return False
 
         err = cmd("g++ "+GCC_LINK_OPTIONS+" "+objs_str+" -o "+config["output"])
-        # print(err)
         compile_success = err == 0
     else:
         print("Platform/compiler ",platform.system()+"/"+config["use_compiler"],"is not supported in build.py")
 
     finish_time = time.time() - start_time
-    if not enabled("silent"):
-        print("Compiled in", int(finish_time*100)/100)
+    if not compile_success:
+        print("Compile failed")
+    else:
+        if not enabled("silent"):
+            print("Compiled in", int(finish_time*100)/100)
 
     ################################
     #   COMPILE VENDOR LIBRARIES

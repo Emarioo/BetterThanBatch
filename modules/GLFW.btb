@@ -16,7 +16,8 @@
     #load "advapi32.lib"
     #load "shell32.lib"
 #else
-    // linux?
+    // TODO: I don't have a Linux computer where I can test GLFW.
+    //   I am testing the Linux stuff on a server without a graphical interface.
 #endif
 
 #macro GLFW_API @import(GLFW)

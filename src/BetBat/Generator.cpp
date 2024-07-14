@@ -1891,19 +1891,26 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
         }
         if(lib_path.size() == 0) {
             if(astFunc->linked_library.size() != 0) {
-                ERR_SECTION(
-                    ERR_HEAD2(astFunc->location)
-                    ERR_MSG_COLORED("'"<<log::LIME<<astFunc->linked_library<<log::NO_COLOR<<"' is not a library. Did you misspell it?")
-                    ERR_LINE2(astFunc->location, "this definition")
-                    ERR_LINE2(expression->location, "this call")
+                // TODO: If many functions complain about GLAD then only display the first 5 or so.
+                int errs = reporter->get_lib_errors(astFunc->linked_library);
+                reporter->add_lib_error(astFunc->linked_library);
+                if (errs >= Reporter::LIB_ERROR_LIMIT) {
+                    // log::out << "skip\n";
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(astFunc->location)
+                        ERR_MSG_COLORED("'"<<log::LIME<<astFunc->linked_library<<log::NO_COLOR<<"' is not a library. Did you misspell it?")
+                        ERR_LINE2(astFunc->location, "this definition")
+                        ERR_LINE2(expression->location, "this call")
 
-                    log::out << "These are the available libraries: ";
-                    for(int i=0;i<func_imp->libraries.size();i++){
-                        if(i!=0) log::out << ", ";
-                        log::out << log::LIME << func_imp->libraries[i].named_as << log::NO_COLOR;
-                    }
-                    log::out << "\n";
-                )
+                        log::out << "These are the available libraries: ";
+                        for(int i=0;i<func_imp->libraries.size();i++){
+                            if(i!=0) log::out << ", ";
+                            log::out << log::LIME << func_imp->libraries[i].named_as << log::NO_COLOR;
+                        }
+                        log::out << "\n";
+                    )
+                }
             } else {
                 // TOOD: Improve error message by showing how to specify import.
                 //   Also link to the guide.md.

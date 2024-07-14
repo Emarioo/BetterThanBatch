@@ -39,14 +39,18 @@
 // #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 #macro Assert(expression) #endmacro
 
-
+// NOTE: We force microsecond resolution (assuming MONOTONIC clock supports it)
+#macro __LINUX_MEASURE_RESOLUTION 1000_000
 fn StartMeasure() -> i64 {
     #if OS_WINDOWS
         tp: i64
         QueryPerformanceCounter(&tp)
         return tp
     #else
-    
+        spec: timespec
+        clock_gettime(CLOCK_MONOTONIC, &spec)
+        tp: i64 = cast<i64>(spec.tv_sec * __LINUX_MEASURE_RESOLUTION) + cast<i64>(spec.tv_nsec / (cast<i64>1000_000_000/cast<i64>__LINUX_MEASURE_RESOLUTION))
+        return tp
     #endif   
 }
 fn StopMeasure(timePoint: i64) -> f64 {
@@ -54,8 +58,13 @@ fn StopMeasure(timePoint: i64) -> f64 {
         tp, freq: i64
         QueryPerformanceCounter(&tp)
         QueryPerformanceFrequency(&freq)
-        return cast<f64> (tp - casttimePoint) / cast<f64> freq
+        return cast<f64> (tp - timePoint) / cast<f64> freq
     #elif OS_LINUX
+        spec: timespec
+        clock_gettime(CLOCK_MONOTONIC, &spec)
+        tp: i64 = cast<i64>(spec.tv_sec * __LINUX_MEASURE_RESOLUTION) + cast<i64>(spec.tv_nsec / (cast<i64>1000_000_000/cast<i64>__LINUX_MEASURE_RESOLUTION))
+
+        return cast<f64> (tp - timePoint) / cast<f64> __LINUX_MEASURE_RESOLUTION
     #endif
 }
 fn DiffMeasure(endSubStart: i64) -> f64 {
@@ -64,6 +73,7 @@ fn DiffMeasure(endSubStart: i64) -> f64 {
         QueryPerformanceFrequency(&freq)
         return cast<f64>endSubStart / cast<f64>freq
     #elif OS_LINUX
+        return cast<f64>endSubStart / cast<f64>__LINUX_MEASURE_RESOLUTION
     #endif
 }
 
@@ -75,7 +85,7 @@ fn ProcessSleep(seconds: f32) {
     if seconds >= 1. {
         time.tv_sec = cast<i64>seconds
     }
-    time.tv_sec = cast<i64>( 1000000000.0 * (seconds - cast<f32>cast<i64>seconds) )
+    time.tv_nsec = cast<i64>( 1000000000.0 * (seconds - cast<f32>cast<i64>seconds) )
     nanosleep(&time,null)
     #endif   
 }

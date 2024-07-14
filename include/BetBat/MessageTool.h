@@ -159,6 +159,22 @@ struct Reporter {
         err_mark(loc.tok, text);
     }
 
-
     ByteStream stream{engone::GlobalHeapAllocator()};
+
+    static const int LIB_ERROR_LIMIT = 3;
+    std::unordered_map<std::string, int> errors_per_library;
+    void add_lib_error(const std::string& lib) {
+        auto pair = errors_per_library.find(lib);
+        if (pair == errors_per_library.end()) {
+            errors_per_library[lib] = 1;
+        } else {
+            pair->second++;
+        }
+    }
+    int get_lib_errors(const std::string& lib) {
+        auto pair = errors_per_library.find(lib);
+        if (pair == errors_per_library.end())
+            return 0;
+        return pair->second;
+    }
 };

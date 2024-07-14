@@ -1480,7 +1480,7 @@ void Compiler::run(CompileOptions* options) {
                 } else {
                     cmd += "-nostdlib ";
                     if (entry_point == "main")
-                        cmd += "--entry main"; // we must explicitly set entry point with nodstdlib even if main is used
+                        cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
                 }
             }
             if (entry_point != "main") // no need to set entry if main is used since it is the default
