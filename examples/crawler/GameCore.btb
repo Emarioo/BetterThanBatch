@@ -309,11 +309,6 @@ fn PlayerMovement() {
         } else {
             player.vel.y = 0
         }
-        // if window.isKeyDown(GLFW_KEY_SPACE) || window.isKeyDown(GLFW_KEY_W) {
-        //     if player.on_ground {
-        //         player.vel.y = -jump_force
-        //     }
-        // }
         if window.isKeyDown(GLFW_KEY_A) {
             // player.pos.x -= real_speed * window.delta
             player.vel.x = -real_speed
@@ -328,7 +323,6 @@ fn PlayerMovement() {
 fn TransitionToGame() {
     display_game = true
 }
-
 
 fn RenderWorld(world: World*) {
     // ############

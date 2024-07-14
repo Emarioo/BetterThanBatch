@@ -211,7 +211,7 @@ namespace lexer {
         int comment_lines;
         int blank_lines;
     };
-    static const int yo = sizeof Import;
+    // static const int yo = sizeof (Import);
     /*
         The lexer class is responsible for managing memory and extra information about all tokens.
         

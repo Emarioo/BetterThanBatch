@@ -53,23 +53,30 @@ Example of unfinished multiplayer game
 <!-- TODO: Swap option 1 and 2 so that download release is first option, the recommended option. Compiling project is first option right now because there are no releases -->
 
 # Building
+The project is built using the Python script `build.py`. Python version 3.9 and higher should work without problems. Once compiled, the executable can be found in `bin/btb.exe`. I recommend editing the environment variable `PATH` so that you have access to `btb.exe` from anywhere.
 
 ## Linux
 **Requirements**: `g++`
 
-Run `build.sh`. Once built, the executable can be found in `bin/btb`. I recommend editing environment variable `PATH` so that you have access to `btb` from anywhere.
+Make sure `g++` is available and run `python build.py` in a terminal.
 
 ## Windows
 **Requirements**: `cl` and `link` OR `g++`.
 
-In `build.bat`, comment/uncomment the way you want to build the compiler.
-If you are using Visual Studio Tools (cl, link) then open the VS Developer Command Prompt and `cd` to the cloned repository. Then run `build.bat`.
-If you are using MinGW and `g++` then you can simply run `build.bat` (as long as `g++` is in your PATH env. variable).
+If you plan to compile the project once, I would recommend installing MinGW to get `g++` because it's easy. Then you can run `python build.py gcc` in a terminal. This may take between 30 and 60 seconds for a complete rebuild (gcc is slow).
 
-Once built, the executable can be found in `bin/btb.exe`. I recommend editing environment variable `PATH` so that you have access to `btb.exe` from anywhere.
+If you plan on compiling the project often, I would recommend using Visual Studio Developer Tools (cl, link) because it compiles the project quicker than GCC (6-12 seconds for a complete rebuild). Before you can run `python build.py msvc` in a terminal, you must make sure `cl` and `link` are available. You can do this by installing Visual Studio and in the launcher selecting something named `C/C++ desktop development` (if you have used C++ in Visual Studio then you probably have this). Then hit the windows key and search for `VS Developer Command Prompt`. This opens a terminal, type `cl` and you'll see that it's available. Now you need to cd into the project where `build.py` is and run `python build.py msvc`.
+
+**NOTE:** Compiling the project with Visual Studio may seem like a lot of work but you just have to open the VS developer terminal once. If you use VSCode as your editor than you can type `code` in the VS terminal and all terminals inside VSCode will have `cl` available. Another alternative is to add vcvars64.bat (look it up on the internet what it is) to your PATH and then you can run that in any terminal to make `cl` available. Personally, I have made `cl` available at all times by manually making the changes vcvars64 would do to environment variables.
+
+## Extra
+If you want to compile with debug information, tracy profiler or optimizations then you can toggle these options inside `build.py`. You can also pass them as arguments to the script like this: `python build.py use_debug use_optimizations use_tracy`.
+
+You can change the path of the executable like this: `python build.py output=bin/release/btb.exe`.
+All object files will still end up in `bin`, this cannot be changed at the moment.
 
 # Examples
-**NOTE:** These have been tested on my computer with my environment which means that it might not work on your computer. You may need to clone the repo, build the compiler with MSVC, and run `compiler.exe --run examples/graphics/quad.btb` to make it work. You have to build the repo because there is no release yet.
+**NOTE:** These have been tested on my computer with my environment which means that it might not work on your computer. You may need to clone the repo, build the compiler with MSVC, and run `btb.exe --run examples/graphics/quad.btb` to make it work. You have to build the repo because there is no release yet.
 
 [Rendering test](/examples/graphics/quad.btb) - Rendering with GLEW, GLFW, and OpenGL
 
@@ -78,5 +85,4 @@ Once built, the executable can be found in `bin/btb.exe`. I recommend editing en
 [Line counter](/examples/linecounter.btb) - Reading files using multiple threads. (probably broken)
 
 <!-- incomplete [Binary viewer](/examples/binary_viewer/main.btb) parsing/reading binary files, lexing -->
-
 

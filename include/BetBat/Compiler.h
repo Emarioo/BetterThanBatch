@@ -54,11 +54,11 @@ engone::Logger& operator<<(engone::Logger& logger, const Path& v);
 
 struct CompileOptions;
 struct CompileStats {
-    volatile long errors=0;
-    volatile long warnings=0;
+    volatile int errors=0;
+    volatile int warnings=0;
     volatile int lines=0;
     volatile int readBytes=0; // from the files, DOES NOT COUNT includeStreams! yet?
-    volatile long commentCount=0;
+    volatile int commentCount=0;
 
     // time measurements
     u64 start_compile = 0; // whole compiler

@@ -21,7 +21,7 @@
     Latest code for message handling
 */
 #ifdef LOG_MSG_LOCATION
-#ifdef OS_WINDOWS
+#ifndef COMPILER_GNU
 #define MSG_CODE_LOCATION2 engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n" <<
 #define MSG_CODE_LOCATION engone::log::out << engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n"
 #else
@@ -37,7 +37,7 @@
 
 #define BASE_SECTION2(CONTENT) if(info.showErrors) { if(!info.ignoreErrors) info.errors++; info.reporter->start_report(); MSG_CODE_LOCATION; CONTENT; info.reporter->end_report(); }
 
-#ifdef OS_WINDOWS
+#ifndef COMPILER_GNU
 #define ERR_HEAD2(T,...) info.reporter->err_head(T, __VA_ARGS__); info.compiler->addError(T, __VA_ARGS__);
 #else
 #define ERR_HEAD2(T, ...) info.reporter->err_head(T __VA_OPT__(,) __VA_ARGS__); info.compiler->addError(T __VA_OPT__(,) __VA_ARGS__);

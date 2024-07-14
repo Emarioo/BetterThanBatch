@@ -1891,7 +1891,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         return SIGNAL_SUCCESS;
     }
 
-    error_on_fncall:
+    // error_on_fncall:
 
     if(operatorOverloadAttempt || attempt) {
         FIX_NO_SPECIAL_ACTIONS

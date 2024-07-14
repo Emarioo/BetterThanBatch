@@ -16,7 +16,7 @@ Path::Path(const char* path) : text(path), _type((Type)0) {
     if(lastSlash + 1 == text.length()){
         _type |= (u32)DIR;
     }
-    
+
     if(colon != std::string::npos) {
         _type |= (u32)ABSOLUTE;
     } else {
