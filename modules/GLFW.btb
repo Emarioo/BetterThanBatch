@@ -20,43 +20,69 @@
     //   I am testing the Linux stuff on a server without a graphical interface.
 #endif
 
-#macro GLFW_API @import(GLFW)
+#macro GLFWAPI @import(GLFW)
+#macro GLFWwindow void
 
-fn GLFW_API glfwInit() -> i32;
-fn GLFW_API glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
-fn GLFW_API glfwDestroyWindow(window: void*)
-fn GLFW_API glfwGetError(description: char**) -> i32
+fn GLFWAPI glfwInit() -> i32;
+fn GLFWAPI glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
+fn GLFWAPI glfwDestroyWindow(window: void*)
+fn GLFWAPI glfwGetError(description: char**) -> i32
 
-fn GLFW_API glfwTerminate();
-fn GLFW_API glfwMakeContextCurrent(window: void*);
-fn GLFW_API glfwWindowShouldClose(window: void*) -> i32;
-fn GLFW_API glfwSwapBuffers(window: void*);
-fn GLFW_API glfwPollEvents();
-fn GLFW_API glfwWindowHint(target: i32, hint: i32);
-fn GLFW_API glfwGetWindowSize(window: void*, width: i32*, height: i32*);
-fn GLFW_API glfwSwapInterval(interval: i32);
-fn GLFW_API glfwGetCursorPos(window: void*, xpos: f64*, ypos: f64*);
+fn GLFWAPI glfwTerminate();
+fn GLFWAPI glfwMakeContextCurrent(window: void*);
+fn GLFWAPI glfwWindowShouldClose(window: void*) -> i32;
+fn GLFWAPI glfwSwapBuffers(window: void*);
+fn GLFWAPI glfwPollEvents();
+fn GLFWAPI glfwWindowHint(target: i32, hint: i32);
+fn GLFWAPI glfwGetWindowSize(window: void*, width: i32*, height: i32*);
+fn GLFWAPI glfwSwapInterval(interval: i32);
+fn GLFWAPI glfwGetCursorPos(window: void*, xpos: f64*, ypos: f64*);
 
-fn GLFW_API glfwGetInputMode(window: void*, mode: i32) -> i32;
-fn GLFW_API glfwSetInputMode(window: void*, mode: i32, value: i32);
+fn GLFWAPI glfwGetInputMode(window: void*, mode: i32) -> i32;
+fn GLFWAPI glfwSetInputMode(window: void*, mode: i32, value: i32);
 
 
-#macro GLFWkeyfun fn @stdcall(window: void*, key: i32, scancode: i32, action: i32, mods: i32)
-#macro GLFWmousebuttonfun fn @stdcall(window: void*, button: i32, action: i32, mods: i32)
-#macro GLFWcursorposfun fn @stdcall(window: void*, xpos: f64, ypos: f64)
-#macro GLFWscrollfun fn @stdcall(window: void*, xoffset: f64, yoffset: f64)
-#macro GLFWwindowsizefun fn @stdcall(window: void*, width: i32, height: i32)
-#macro GLFWcharfun fn @stdcall(window: void*, codepoint: u32)
+#macro GLFWkeyfun fn @oscall(window: void*, key: i32, scancode: i32, action: i32, mods: i32)
+#macro GLFWmousebuttonfun fn @oscall(window: void*, button: i32, action: i32, mods: i32)
+#macro GLFWcursorposfun fn @oscall(window: void*, xpos: f64, ypos: f64)
+#macro GLFWscrollfun fn @oscall(window: void*, xoffset: f64, yoffset: f64)
+#macro GLFWwindowsizefun fn @oscall(window: void*, width: i32, height: i32)
+#macro GLFWcharfun fn @oscall(window: void*, codepoint: u32)
+// event for joystick is GLFW_CONNECTED or GLFW_DISCONNECTED
+#macro GLFWjoystickfun fn @oscall(jid: i32, event: i32)
 
-fn GLFW_API glfwSetKeyCallback(window: void*, callback: GLFWkeyfun) -> GLFWkeyfun;
-fn GLFW_API glfwSetMouseButtonCallback(window: void*, callback: GLFWmousebuttonfun) -> GLFWmousebuttonfun;
-fn GLFW_API glfwSetCursorPosCallback(window: void*, callback: GLFWcursorposfun) -> GLFWcursorposfun;
-fn GLFW_API glfwSetScrollCallback(window: void*, callback: GLFWscrollfun) -> GLFWscrollfun;
-fn GLFW_API glfwSetWindowSizeCallback(window: void*, callback: GLFWwindowsizefun) -> GLFWwindowsizefun;
-fn GLFW_API glfwSetCharCallback(window: void*, callback: GLFWcharfun) -> GLFWcharfun;
+fn GLFWAPI glfwSetKeyCallback(window: void*, callback: GLFWkeyfun) -> GLFWkeyfun;
+fn GLFWAPI glfwSetMouseButtonCallback(window: void*, callback: GLFWmousebuttonfun) -> GLFWmousebuttonfun;
+fn GLFWAPI glfwSetCursorPosCallback(window: void*, callback: GLFWcursorposfun) -> GLFWcursorposfun;
+fn GLFWAPI glfwSetScrollCallback(window: void*, callback: GLFWscrollfun) -> GLFWscrollfun;
+fn GLFWAPI glfwSetWindowSizeCallback(window: void*, callback: GLFWwindowsizefun) -> GLFWwindowsizefun;
+fn GLFWAPI glfwSetCharCallback(window: void*, callback: GLFWcharfun) -> GLFWcharfun;
+fn GLFWAPI glfwSetJoystickCallback(callback: GLFWjoystickfun) -> GLFWjoystickfun;
 
-fn GLFW_API glfwGetProcAddress(procname: char*) -> fn();
+fn GLFWAPI glfwGetProcAddress(procname: char*) -> fn();
 
+fn GLFWAPI glfwJoystickPresent(jid: i32) -> i32;
+fn GLFWAPI glfwGetJoystickAxes(jid: i32, count: i32*) -> f32*;   // returns const
+fn GLFWAPI glfwGetJoystickButtons(jid: i32, count: i32*) -> u8*; // returns const
+fn GLFWAPI glfwGetJoystickHats(jid: i32, count: i32*) -> u8*;    // returns const
+fn GLFWAPI glfwGetJoystickName(jid: i32) -> char*; // returns const
+fn GLFWAPI glfwGetJoystickGUID(jid: i32) -> char*; // returns const
+
+fn GLFWAPI glfwSetJoystickUserPointer(jid: i32, pointer: void*);
+fn GLFWAPI glfwGetJoystickUserPointer(jid: i32) -> void*;
+
+fn GLFWAPI glfwJoystickIsGamepad(jid: i32) -> i32;
+fn GLFWAPI glfwUpdateGamepadMappings(string: char*) -> i32;
+fn GLFWAPI glfwGetGamepadName(jid: i32) -> char*;
+fn GLFWAPI glfwGetGamepadState(jid: i32, state: GLFWgamepadstate*) -> i32;
+
+struct GLFWgamepadstate {
+    buttons: u8[15]; // values can be GLFW_PRESS or GLFW_RELEASE
+    axes: f32[6]; // values range form -1.0 to 1.0
+}
+
+fn GLFWAPI glfwSetClipboardString(window: GLFWwindow*, string: char*);
+fn GLFWAPI glfwGetClipboardString(window: GLFWwindow*) -> char*; // returns const
 /*
     Parts copy pasted from glfw3.h
 */
@@ -74,6 +100,9 @@ fn GLFW_API glfwGetProcAddress(procname: char*) -> fn();
 #macro GLFW_CURSOR_NORMAL          0x00034001
 #macro GLFW_CURSOR_HIDDEN          0x00034002
 #macro GLFW_CURSOR_DISABLED        0x00034003
+
+#macro GLFW_CONNECTED              0x00040001
+#macro GLFW_DISCONNECTED           0x00040002
 
 #macro GLFW_TRUE                   1
 #macro GLFW_FALSE                  0
@@ -281,3 +310,50 @@ fn GLFW_API glfwGetProcAddress(procname: char*) -> fn();
 #macro GLFW_MOUSE_BUTTON_MIDDLE    GLFW_MOUSE_BUTTON_3
 /*! @} */
 
+#macro GLFW_JOYSTICK_1              0
+#macro GLFW_JOYSTICK_2              1
+#macro GLFW_JOYSTICK_3              2
+#macro GLFW_JOYSTICK_4              3
+#macro GLFW_JOYSTICK_5              4
+#macro GLFW_JOYSTICK_6              5
+#macro GLFW_JOYSTICK_7              6
+#macro GLFW_JOYSTICK_8              7
+#macro GLFW_JOYSTICK_9              8
+#macro GLFW_JOYSTICK_10             9
+#macro GLFW_JOYSTICK_11             10
+#macro GLFW_JOYSTICK_12             11
+#macro GLFW_JOYSTICK_13             12
+#macro GLFW_JOYSTICK_14             13
+#macro GLFW_JOYSTICK_15             14
+#macro GLFW_JOYSTICK_16             15
+#macro GLFW_JOYSTICK_LAST           GLFW_JOYSTICK_16
+
+#macro GLFW_GAMEPAD_BUTTON_A               0
+#macro GLFW_GAMEPAD_BUTTON_B               1
+#macro GLFW_GAMEPAD_BUTTON_X               2
+#macro GLFW_GAMEPAD_BUTTON_Y               3
+#macro GLFW_GAMEPAD_BUTTON_LEFT_BUMPER     4
+#macro GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER    5
+#macro GLFW_GAMEPAD_BUTTON_BACK            6
+#macro GLFW_GAMEPAD_BUTTON_START           7
+#macro GLFW_GAMEPAD_BUTTON_GUIDE           8
+#macro GLFW_GAMEPAD_BUTTON_LEFT_THUMB      9
+#macro GLFW_GAMEPAD_BUTTON_RIGHT_THUMB     10
+#macro GLFW_GAMEPAD_BUTTON_DPAD_UP         11
+#macro GLFW_GAMEPAD_BUTTON_DPAD_RIGHT      12
+#macro GLFW_GAMEPAD_BUTTON_DPAD_DOWN       13
+#macro GLFW_GAMEPAD_BUTTON_DPAD_LEFT       14
+#macro GLFW_GAMEPAD_BUTTON_LAST            GLFW_GAMEPAD_BUTTON_DPAD_LEFT
+
+#macro GLFW_GAMEPAD_BUTTON_CROSS       GLFW_GAMEPAD_BUTTON_A
+#macro GLFW_GAMEPAD_BUTTON_CIRCLE      GLFW_GAMEPAD_BUTTON_B
+#macro GLFW_GAMEPAD_BUTTON_SQUARE      GLFW_GAMEPAD_BUTTON_X
+#macro GLFW_GAMEPAD_BUTTON_TRIANGLE    GLFW_GAMEPAD_BUTTON_Y
+
+#macro GLFW_GAMEPAD_AXIS_LEFT_X        0
+#macro GLFW_GAMEPAD_AXIS_LEFT_Y        1
+#macro GLFW_GAMEPAD_AXIS_RIGHT_X       2
+#macro GLFW_GAMEPAD_AXIS_RIGHT_Y       3
+#macro GLFW_GAMEPAD_AXIS_LEFT_TRIGGER  4
+#macro GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER 5
+#macro GLFW_GAMEPAD_AXIS_LAST          GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER

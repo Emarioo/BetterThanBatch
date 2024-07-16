@@ -19,354 +19,496 @@
 global display_game: bool = true
 
 global window: WindowContext*;
-global pause_update: bool;
-global current_frame: i32
-global server: Server
-global client: Client
-global is_server: bool = false
-
-global player: Entity*;
 
 global enable_free_camera: bool
+global enable_entity_info: bool
 
-enum NetType {
-    MSGTYPE_POSITION,
-    MSGTYPE_SPAWN,
-}
-struct NetHeader {
-    type: NetType
-}
-struct NetPosition {
-    header: NetHeader = NetHeader{MSGTYPE_POSITION};
-    pos: vec2;
-    vel: vec2;
-    id: UUID;
-}
-struct NetSpawn {
-    header: NetHeader = NetHeader{MSGTYPE_SPAWN};
-    pos: vec2;
-    size: vec2;
-    vel: vec2;
-    entity_info: i32; // entity type
-    id: UUID;
-}
+// fn @oscall joystick_callback(jid: i32, event: i32) {
+//     log("jid ",jid, " e ", event)
+//     log(glfwGetJoystickName(jid))
+//     log(glfwJoystickIsGamepad(jid))
+//     log(glfwGetGamepadName(jid))
+// }
 
-// #macro LOG_NET(X) X
-#macro LOG_NET(X) #endmacro
+struct Player {
+    entity_id: UUID;
+    // entity_id: Entity*; // can't be pointer if we step through the frames
 
-fn net_callback(e: Event, user_data: void*) {
-    LOG_NET(
-        std_print("EVENT ") std_print_any(&e.type) log()
-    )
-    switch e.type {
-    case EVENT_START:
-        if is_server {
-            // msg: NetSpawn
-            // msg.pos = player.pos
-            // msg.size = player.size
-            // msg.entity_info = BLOB
-            // msg.id = player.id
-            // data := Slice<char>{cast<char*>&msg, sizeof msg}
-            // if is_server {
-            //     server.send(data)
-            // } else {
-            //     client.send(data)
+    online_player: bool;
+    joystick_id: i32; // -1 indicates keyboard player
+
+    deadzone: f32 = 0.1; // some controllers are great, some are terrible and require a high deadzone
+}
+struct GameCore {
+    // window: WindowContext*;
+    world: World*;
+    
+    players: Array<Player>;
+
+    pause_game: bool; // debug
+    current_frame: i32;
+
+
+    debug: DebugModule;
+
+    fn start_game() {
+
+        // window = CreateWindow(1400,600)
+        window = CreateWindow(800,600)
+        InitEntityInfos()
+
+        // glfwSetJoystickCallback(joystick_callback)
+
+        window.camera_zoom = 20
+
+        world = LoadWorld()
+
+        debug.init(world)
+
+        refresh_local_players()
+
+        keyboard_player := players.add()
+        keyboard_player_entity := world.add_entity(0,0,1,1,ENTITY_BLOB)
+        keyboard_player.entity_id = keyboard_player_entity.id
+        keyboard_player.online_player = false
+        keyboard_player.joystick_id = -1
+
+        // Then start game loop where we display the menu
+        // the user presses.
+        
+        step := 0
+
+        while window.running {
+            FillColor(window, Color{0.2,0.2,0.2})
+            
+            // Send updated positions
+            // step++
+            // if step > 1 && (server.is_active() || client.is_active()){
+            //     msg: NetPosition
+            //     msg.pos = player.pos
+            //     msg.vel = player.vel
+            //     msg.id = player.id
+            //     data := Slice<char>{cast<void*>&msg, sizeof msg}
+            //     if is_server {
+            //         server.send(data)
+            //     } else {
+            //         client.send(data)
+            //     }
+            //     step = 0
             // }
-            // msg: NetSpawn
-        //     msg.pos = vec2{50,50}
-        //     msg.size = vec2{30,30}
-        //     msg.entity_info = BLOB
-        //     data := Slice<char>(cast<char*>&msg, sizeof msg)
-        //     server.send(data)
-        } else {
-            // msg: NetSpawn
-            // msg.pos = player.pos
-            // msg.size = player.size
-            // msg.entity_info = BLOB
-            // msg.id = player.id
-            // data := Slice<char>{cast<char*>&msg, sizeof msg}
-            // client.send(data)
-        }
-    case EVENT_CONNECT:
-        msg: NetSpawn
-        msg.pos = player.pos
-        msg.size = player.size
-        msg.entity_info = BLOB
-        msg.id = player.id
-        data := Slice<char>{cast<char*>&msg, sizeof msg}
-        server.send(data, e.who)
-    case EVENT_RECEIVE:
 
-        LOG_NET( log("msglen ", e.bytes.len) )
+            window.enableUISpace(false)
+            //######################
+            // GAME STUFF
+            //######################
+            
+            if window.isKeyPressed(GLFW_KEY_ESCAPE) {
+                pause_game = !pause_game
+                if !pause_game {
+                    debug.EraseFutureFrames(current_frame)
+                }
+            }
+            if window.isKeyPressed(GLFW_KEY_I) {
+                enable_entity_info = !enable_entity_info
+            }
 
-        Assert(e.bytes.len == sizeof NetMessage)
-        header := cast<NetHeader*>e.bytes.ptr
-        switch header.type {
-            case MSGTYPE_SPAWN:
-                body := cast<NetSpawn*>e.bytes.ptr
-                LOG_NET( std_print_any(body,true) )
+            if display_game {
+                global refresh_ticks: i32
+                refresh_ticks++ // keep ticking, as soon as game is unpaused we will refresh local players, refreshing players while paused won't work since adding new entities could mess things up
 
-                entity := add_entitity_with_uuid(body.pos.x,body.pos.y, body.size.x,body.size.y, cast_unsafe<EntityType>body.entity_info, body.id)
+                if !pause_game {
+                    if refresh_ticks > 30 {
+                        refresh_local_players()
+                        refresh_ticks = 0
+                    }
+                    if current_frame == 0
+                        debug.SaveFrame(current_frame)
+                    
+                    game_logic()
 
-            case MSGTYPE_POSITION:
-                body := cast<NetPosition*>e.bytes.ptr
-                // LOG_NET( std_print_any(body,true) )
+                    update_player_movement()
+                    world.update(window)
 
-                entity := get_entity(body.id)
-                if entity {
-                    entity.pos = body.pos
-                    entity.vel = body.vel
+                    current_frame++
+                    debug.SaveFrame(current_frame)
+                } else {
+                    fast_step := window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+                    if window.isKeyPressed(GLFW_KEY_LEFT) || (fast_step && window.isKeyDown(GLFW_KEY_LEFT)) {
+                        if debug.is_valid_frame(current_frame-1) {
+                            current_frame--
+                            debug.RestoreFrame(current_frame)
+                        }
+                    }
+                    if window.isKeyPressed(GLFW_KEY_RIGHT) || (fast_step && window.isKeyDown(GLFW_KEY_RIGHT)) {
+                        if debug.is_valid_frame(current_frame+1) {
+                            current_frame++
+                            debug.RestoreFrame(current_frame)
+                        }
+                    }
                 }
 
-            case:
-                std_prints("ERROR, bad message header ") std_print_any(header) log()
-        }
-    case: // nothing
-    }
-}
-
-fn start_game() {
-    // window = CreateWindow(1400,600)
-    window = CreateWindow(800,600)
-    InitEntityInfos()
-
-    world := LoadWorld()
-
-    player = world.add_entity(0,0,64,64,ENTITY_BLOB)
-
-
-    // Then start game loop where we display the menu
-    // the user presses.
-    
-    step := 0
-
-    while window.running {
-        FillColor(window, Color{0.2,0.2,0.2})
-        
-        // Send updated positions
-        step++
-        if step > 1 && (server.is_active() || client.is_active()){
-            msg: NetPosition
-            msg.pos = player.pos
-            msg.vel = player.vel
-            msg.id = player.id
-            data := Slice<char>{cast<void*>&msg, sizeof msg}
-            if is_server {
-                server.send(data)
-            } else {
-                client.send(data)
+                render_world()
             }
-            step = 0
-        }
 
-        window.enableUISpace(false)
-        //######################
-        // GAME STUFF
-        //######################
-        
-        if display_game {
-            PlayerMovement()
-            world.update(window)
+            if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_S) {
+                SaveWorld("bin/world.dat",world)
+            }
+            if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_L) {
+                LoadWorld("bin/world.dat",world)
+            }
 
-            RenderWorld(world)
-        }
+            window.enableUISpace(true)
+            
+            // ###################
+            // MENU STUFF
+            // ###################
+            temp: StringBuilder
+            defer temp.cleanup()
 
-        window.enableUISpace(true)
-        
-        // ###################
-        // MENU STUFF
-        // ###################
-        temp: StringBuilder
-        defer temp.cleanup()
+            if !display_game {
+                font := window.defaultFont()
+                title_text_size := 40
+                option_text_size := 30
+                title_color := Color{1,1,1}
+                option_color := Color{1,1,1}
+                highlight_color := Color{0.3,1,0.7}
+                
+                temp.clear()
+                temp.append("Dungeon crawler No. 89")
+                
+                title_w := font.width_of_text(temp.sliced(), title_text_size)
+                DrawText(window, window.width / 2 - title_w / 2, window.height / 8, title_text_size, temp.sliced(), title_color)
 
-        if !display_game {
-            font := window.defaultFont()
-            title_text_size := 40
-            option_text_size := 30
-            title_color := Color{1,1,1}
-            option_color := Color{1,1,1}
-            highlight_color := Color{0.3,1,0.7}
+                layout_x := 10
+                layout_y := window.height / 3 + 100
+
+                enum OptionButton {
+                    OPTION_PLAY,
+                    OPTION_OPTIONS,
+                    OPTION_QUIT,
+                }
+                a := OPTION_OPTIONS
+                options: char[][3] {
+                    "Play",
+                    "Options",
+                    "Quit"
+                }
+                mx := window.getMouseX()
+                my := window.getMouseY()
+                pressed := -1
+                for @ptr options {
+                    temp.clear()
+                    temp.append(*it)
+
+                    box := Box{layout_x, layout_y, 0, option_text_size}
+                    box.w = font.width_of_text(temp.sliced(), option_text_size)
+
+                    // log(mx," ",my," ",&box)
+                    if box.inside(mx, my) {
+                        DrawText(window, box, temp.sliced(), highlight_color)
+                        // if pressed, do action
+                        if window.isKeyPressed(GLFW_MOUSE_BUTTON_1) {
+                            pressed = nr
+                        }
+
+                        // Temporary debug code
+                        if nr == cast<i32>OPTION_OPTIONS && window.isKeyDown(GLFW_MOUSE_BUTTON_1) {
+                            new_box := box
+                            new_box.x += new_box.w + 10
+                            DrawText(window, new_box, "incomplete", Color{1,0.5,0.5})
+                        }
+                    } else {
+                        DrawText(window, box, temp.sliced(), option_color)
+                    }
+                    layout_y += option_text_size
+                }
+
+                switch pressed {
+                case OPTION_PLAY:
+                    // Play
+                    transition_to_game()
+                case OPTION_OPTIONS:
+                    // options
+                    // render other options
+                case OPTION_QUIT:
+                    // quit
+                    window.close()
+                }
+            }
+
+            //######################
+            //  DEBUG STUFF
+            //######################
+            
+            layout_y: f32 = 0
+
+            fps: StringBuilder
+            fps.append(cast<i32>(window.delta*1000))
+            fps.append(".")
+            fps.append((cast<i32>(window.delta*10000)) % 10)
+            fps.append(" ms")
+            
+            DrawText(window, 0, layout_y, 20, fps)
+            layout_y += 20
+
+            temp.clear()
+            temp.append("frame: ")
+            temp.append(current_frame)
+            if pause_game {
+                temp.append(" (")
+                temp.append(debug.last_frame-debug.saved_frames+1)
+                temp.append("-")
+                temp.append(debug.last_frame)
+                temp.append(")")
+            }
+            DrawText(window, 0, layout_y, 20, temp.sliced())
+            layout_y += 20
             
             temp.clear()
-            temp.append("Dungeon crawler No. 89")
-            
-            title_w := font.width_of_text(temp.sliced(), title_text_size)
-            DrawText(window, window.width / 2 - title_w / 2, window.height / 8, title_text_size, temp.sliced(), title_color)
+            temp.append("zoom: ")
+            temp.append(window.camera_zoom)
+            DrawText(window, 0, layout_y, 20, temp.sliced())
+            layout_y += 20
 
-            layout_x := 10
-            layout_y := window.height / 3 + 100
+            layout_y = window.height - 5
+            text_h: f32 = 18
+            text_w: f32 = 0
+            font := window.defaultFont()
 
-            enum OptionButton {
-                OPTION_PLAY,
-                OPTION_OPTIONS,
-                OPTION_QUIT,
-            }
-            options: char[][3] {
-                "Play",
-                "Options",
-                "Quit"
-            }
-            mx := window.getMouseX()
-            my := window.getMouseY()
-            pressed := -1
-            for @ptr options {
+            #macro TEXT(TXT)
                 temp.clear()
-                temp.append(*it)
+                temp.append(TXT)
+                text_w = font.width_of_text(temp.sliced(), text_h)
+                DrawText(window, window.width - text_w - 5, layout_y, text_h, temp.sliced())
+                layout_y -= text_h
+                temp.cleanup()
+            #endmacro
 
-                box := Box{layout_x, layout_y, 0, option_text_size}
-                box.w = font.width_of_text(temp.sliced(), option_text_size)
+            // text is rendered bottom-up
+            TEXT("WASD or left joystick to move")
+            TEXT("shift or right bumper to sprint")
+            TEXT("C for free camera, arrow keys to move")
+            TEXT("scroll to zoom, when free camera")
+            TEXT("ESCAPE to pause, arrow keys to step frames")
+            TEXT("shift + arrow keys to step faster")
 
-                // log(mx," ",my," ",&box)
-                if box.inside(mx, my) {
-                    DrawText(window, box, temp.sliced(), highlight_color)
-                    // if pressed, do action
-                    if window.isKeyPressed(GLFW_MOUSE_BUTTON_1) {
-                        pressed = nr
-                    }
+            RefreshWindow(window)
+        }   
+        
+        // DestroyTexture(blob)
+        DestroyWindow(window)
+    }
 
-                    // Temporary debug code
-                    if nr == cast<i32>OPTION_OPTIONS && window.isKeyDown(GLFW_MOUSE_BUTTON_1) {
-                        new_box := box
-                        new_box.x += new_box.w + 10
-                        DrawText(window, new_box, "incomplete", Color{1,0.5,0.5})
-                    }
-                } else {
-                    DrawText(window, box, temp.sliced(), option_color)
+    fn refresh_local_players() {
+        global prev_present_joysticks: Array<bool>
+
+        if prev_present_joysticks.size() == 0 {
+            prev_present_joysticks.resize(GLFW_JOYSTICK_LAST+1)
+            // bools should be zeroed
+        }
+        
+        for 0..GLFW_JOYSTICK_LAST+1 {
+            is_present := glfwJoystickPresent(nr)
+            if is_present == prev_present_joysticks[nr]
+                continue
+            prev_present_joysticks.ptr[nr] = is_present
+            
+            joystick_id := nr
+            if is_present {
+                // connect
+                log("Connect joystick ",joystick_id, " ",glfwGetJoystickName(joystick_id))
+
+                if !glfwJoystickIsGamepad(joystick_id) {
+                    log("WARNING: Joystick ",joystick_id, " isn't a gamepad (glfwJoystickIsGamepad() == false).")
                 }
-                layout_y += option_text_size
+
+                player := players.add()
+                player.online_player = false
+                player.joystick_id = joystick_id
+                ent := world.add_entity(0,0,1,1,ENTITY_BLOB)
+                player.entity_id = ent.id
+                name := glfwGetJoystickName(joystick_id)
+
+                // TODO: Temporary, my joystick is terrible and randomly moves around between -0.8 and 0.8 so I have to set a high deadzone. There should be a options menu for setting deadzones and controller button bindings. While you're at it, design the menu to display the raw input from the controller, whether a button is pressed, the value of the joystick axes.
+                if "Xbox Controller" == sliced(name) {
+                    player.deadzone = 0.9
+                }
+            } else {
+                // disconnect
+                log("Disconnect joystick ",joystick_id)
+
+                for 0..players.len {
+                    plr := players.get_unsafe(nr)
+                    if plr.joystick_id != joystick_id
+                        continue
+                    
+                    world.remove_entity(plr.entity_id)
+                    players.remove(nr)
+                    break
+                }
             }
-
-            switch pressed {
-            case OPTION_PLAY:
-                // Play
-                TransitionToGame()
-            case OPTION_OPTIONS:
-                // options
-                // render other options
-            case OPTION_QUIT:
-                // quit
-                window.close()
-            }
-        }
-
-        //######################
-        //  DEBUG STUFF
-        //######################
-        
-        layout_y: f32 = 0
-
-        fps: StringBuilder
-        fps.append(cast<i32>(window.delta*1000))
-        fps.append(".")
-        fps.append((cast<i32>(window.delta*10000)) % 10)
-        fps.append(" ms")
-        
-        DrawText(window, 0, layout_y, 20, fps)
-        layout_y += 20
-
-        temp.clear()
-        temp.append("frame: ")
-        temp.append(current_frame)
-        // temp.append("(saved ")
-        // temp.append(GetSavedFrames())
-        // temp.append(")")
-        DrawText(window, 0, layout_y, 20, temp.sliced())
-        layout_y += 20
-        temp.cleanup()
-
-        layout_y = window.height - 5
-        text_h: f32 = 18
-        text_w: f32 = 0
-        font := window.defaultFont()
-
-        #macro TEXT(TXT)
-            temp.append(TXT)
-            text_w = font.width_of_text(temp.sliced(), text_h)
-            layout_y -= text_h
-            DrawText(window, window.width - text_w - 5, layout_y, text_h, temp.sliced())
-            temp.cleanup()
-        #endmacro
-
-        // text is rendered bottom-up
-        TEXT("R to reset positions\nlalala")
-        TEXT("WASD and Arrow keys to move")
-
-        RefreshWindow(window)
-    }   
-    
-    // DestroyTexture(blob)
-    DestroyWindow(window)
-}
-fn PlayerMovement() {
-    if player {
-        real_speed := 200
-        if window.isKeyDown(GLFW_KEY_W) {
-            // player.pos.y -= real_speed * window.delta
-            player.vel.y = -real_speed
-        } else if window.isKeyDown(GLFW_KEY_S) {
-            player.vel.y = real_speed
-            // player.pos.y += real_speed * window.delta
-        } else {
-            player.vel.y = 0
-        }
-        if window.isKeyDown(GLFW_KEY_A) {
-            // player.pos.x -= real_speed * window.delta
-            player.vel.x = -real_speed
-        } else if window.isKeyDown(GLFW_KEY_D) {
-            player.vel.x = real_speed
-            // player.pos.x += real_speed * window.delta
-        } else {
-            player.vel.x = 0
         }
     }
-}
-fn TransitionToGame() {
-    display_game = true
-}
+    fn update_player_movement() {
 
-fn RenderWorld(world: World*) {
-    // ############
-    //  CAMERA + 
-    // ############
-    {
-        if window.isKeyPressed(GLFW_KEY_C) {
-            enable_free_camera = !enable_free_camera
+        for @ptr player: players.sliced() {
+            entity := world.get_entity(player.entity_id)
+            if player.online_player
+                continue
+
+            real_speed := PLAYER_SPEED
+            if player.joystick_id == -1 {
+                
+                if window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+                    real_speed *= 2
+
+                if window.isKeyDown(GLFW_KEY_W) {
+                    entity.vel.y = real_speed
+                } else if window.isKeyDown(GLFW_KEY_S) {
+                    entity.vel.y = -real_speed
+                } else {
+                    entity.vel.y = 0
+                }
+                if window.isKeyDown(GLFW_KEY_A) {
+                    entity.vel.x = -real_speed
+                } else if window.isKeyDown(GLFW_KEY_D) {
+                    entity.vel.x = real_speed
+                } else {
+                    entity.vel.x = 0
+                }
+            } else {
+                state: GLFWgamepadstate
+                glfwGetGamepadState(player.joystick_id, &state)
+
+                axis_x := state.axes[GLFW_GAMEPAD_AXIS_LEFT_X]
+                axis_y := state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y]
+
+                if state.buttons[GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER] == GLFW_PRESS
+                    real_speed *= 2
+
+                // raxis_x := state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X]
+                // raxis_y := state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y]
+                
+                // log(axis_x," ",axis_y)
+
+                deadzone := player.deadzone
+                if axis_x < -deadzone || axis_x > deadzone
+                    entity.vel.x = real_speed * axis_x
+                else
+                    entity.vel.x = 0
+                if axis_y < -deadzone || axis_y > deadzone
+                    entity.vel.y = -real_speed * axis_y
+                else
+                    entity.vel.y = 0
+            }
         }
-        if !enable_free_camera {
-            // TODO: Camera should follow the player.
-            //   If local co-op then camera should move and zoom out to
-            //   follow all players.
-            target: vec2 = vec2{0,0}
-            if player {
-                target = player.pos + player.size / 2.0
+    }
+    fn transition_to_game() {
+        display_game = true
+    }
+
+    fn render_world() {
+        // ############
+        //  CAMERA + 
+        // ############
+        {
+            if window.isKeyPressed(GLFW_KEY_C) {
+                enable_free_camera = !enable_free_camera
             }
-            cam_pos := vec2{window.camera_x, window.camera_y}
+            if !enable_free_camera {
+                force_power: f32 = 8
+                extra_visibility: f32 = 6 // amount of tiles (since each tile is one unit)
 
-            global vel: vec2;
+                // TODO: Camera should follow the player.
+                //   If local co-op then camera should move and zoom out to
+                //   follow all players.
+                targets: Array<vec2>
+                for @ptr player: players.sliced() {
+                    if player.online_player
+                        continue
+                    ent := world.get_entity(player.entity_id)
+                    targets.add(ent.pos + ent.size / 2.0)
+                }
+                cam_pos := vec2{window.camera_x, window.camera_y}
 
-            force: vec2 = (target - cam_pos) / 10.0
+                target: vec2
+                for @ptr targets.sliced() {
+                    target = target + *it
+                }
+                if targets.len > 0 {
+                    target = target / targets.len
+                }
 
-            vel = vel * 0.8
-            vel = vel + force / 3
+                force: vec2 = (target - cam_pos) / force_power
 
-            // window.camera_x += vel.x
-            // window.camera_y += vel.y
-            
-            window.camera_x += force.x
-            window.camera_y += force.y
-        } else {
-            // CAMERA MOVEMENT FOR DEBUG MODE
-            // TODO: Debug mode where you can freely move the camera.
-            speed := 200 * window.delta
-            if window.isKeyDown(GLFW_KEY_DOWN) {
-                window.camera_y += speed
-            } else if window.isKeyDown(GLFW_KEY_UP) {
-                window.camera_y -= speed
-            }
-            if window.isKeyDown(GLFW_KEY_LEFT) {
-                window.camera_x -= speed
-            } else if window.isKeyDown(GLFW_KEY_RIGHT) {
-                window.camera_x += speed
+                if targets.len > 0 {
+                    low_x : f32 = 999999999.0
+                    low_y : f32 = 999999999.0
+                    high_x: f32 = -9999999999.0
+                    high_y: f32 = -9999999999.0
+                    for @ptr targets.sliced() {
+                        if it.x < low_x
+                            low_x = it.x
+                        if it.x > high_x
+                            high_x = it.x
+                        if it.y < low_y
+                            low_y = it.y
+                        if it.y > high_y
+                            high_y = it.y
+                    }
+
+                    // Extra zoom so that the players can see if they walk into monsters or walls. Without it, the code would zoom in as much as possible as long as all players are visible.
+                    low_x  -= extra_visibility
+                    low_y  -= extra_visibility
+                    high_x += extra_visibility
+                    high_y += extra_visibility
+
+                    // +1 because target stores the center of the player, we want the corners 0.5 + 0.5 = 1
+                    // this assumes all players are 1 unit in size.
+                    width := high_x - low_x +1
+                    height := high_y - low_y +1
+
+                    size := width
+                    screen_s := window.width
+                    ratio := cast<f32>window.height / cast<f32>window.width
+                    if height > width * ratio {
+                        size = height
+                        screen_s = window.height
+                    }
+
+                    // entity to screen calculation
+                    // screen_w = window.camera_zoom * (high_x - low_x)
+                    // window.width / 
+
+                    target_zoom := screen_s
+                    if size >= 1.0
+                        target_zoom = screen_s / (size)
+                    
+
+                    force_zoom := (target_zoom - window.camera_zoom) / (force_power * 1.5) // the constant is tweaked to be similar to force for camera position
+                    window.camera_zoom += force_zoom
+                }
+                
+                window.camera_x += force.x
+                window.camera_y += force.y
+            } else {
+                // CAMERA MOVEMENT FOR DEBUG MODE
+                // TODO: Debug mode where you can freely move the camera.
+                speed := CAMERA_SPEED * window.delta
+                speed /= window.camera_zoom
+                if window.isKeyDown(GLFW_KEY_LEFT_SHIFT) {
+                    speed *= 2
+                }
+                if window.isKeyDown(GLFW_KEY_DOWN) {
+                    window.camera_y -= speed
+                } else if window.isKeyDown(GLFW_KEY_UP) {
+                    window.camera_y += speed
+                }
+                if window.isKeyDown(GLFW_KEY_LEFT) {
+                    window.camera_x -= speed
+                } else if window.isKeyDown(GLFW_KEY_RIGHT) {
+                    window.camera_x += speed
+                }
             }
             scroll := window.getScrollY()
             if scroll > 0 {
@@ -375,61 +517,139 @@ fn RenderWorld(world: World*) {
                 window.camera_zoom *= 0.96;
             }
         }
-    }
 
-    // ############
-    // TILES
-    // ############
-    {
-        iter := world.chunks.create_iterator()
-        while world.chunks.iterate(&iter) {
-            chunk := iter.ptr
-            // log(chunk.x," ",chunk.y)
 
-            for 0..world.chunk_size*world.chunk_size {
-                tx := nr % world.chunk_size
-                ty := nr / world.chunk_size
+        // ############
+        // TILES
+        // ############
+        {
+            iter := world.chunks.create_iterator()
+            while world.chunks.iterate(&iter) {
+                chunk := iter.ptr
+                // log(chunk.x," ",chunk.y)
 
-                type := chunk.tiles.ptr[nr].tile_info
+                for 0..world.chunk_size*world.chunk_size {
+                    tx := nr % world.chunk_size
+                    ty := nr / world.chunk_size
 
-                if type == cast<i32>TILE_NONE
-                    continue
-                
-                w := 64
-                h := 64
-                x := chunk.x * world.chunk_size + tx
-                y := chunk.y * world.chunk_size + ty
-                x *= w
-                y *= h
-                
-                info := &tile_infos.ptr[type]
-                if info.texture {
-                    DrawTexture(window, x, y, w, h, info.texture)
-                } else {
-                    FillRect(window, x, y, w, h, info.color)
-                    DrawSquare(window, x, y, w, h, Color{1,1,1})
+                    type := chunk.tiles.ptr[nr].tile_info
+
+                    if type == cast<i32>TILE_NONE
+                        continue
+                    
+                    w := 1
+                    h := 1
+                    x := chunk.x * world.chunk_size + tx
+                    y := chunk.y * world.chunk_size + ty
+                    x *= w
+                    y *= h
+                    
+                    info := &tile_infos.ptr[type]
+                    if info.texture {
+                        DrawTexture(window, x, y, w, h, info.texture)
+                    } else {
+                        FillRect(window, x, y, w, h, info.color)
+                        DrawSquare(window, x, y, w, h, Color{1,1,1}, thickness = 0.05)
+                    }
                 }
             }
         }
-    }
-    // ############
-    // ENTITIES
-    // ############
-    iter := world.entities.create_iterator()
-    while world.entities.iterate(&iter) {
-        it := iter.ptr
+        // ############
+        // ENTITIES
+        // ############
+        iter := world.entities.create_iterator()
+        while world.entities.iterate(&iter) {
+            it := iter.ptr
 
-        info := entity_infos.get_unsafe(it.entity_info)
-        if info.texture {
-            DrawTexture(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.texture)
-        } else {
-            FillRect(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.color)
+            info := entity_infos.get_unsafe(it.entity_info)
+            if info.texture {
+                DrawTexture(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.texture)
+            } else {
+                FillRect(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.color)
+            }
         }
-        
-        str: StringBuilder
-        str.append("on_ground: ")
-        str.append(it.on_ground)
+        if enable_entity_info {
+            iter := world.entities.create_iterator()
+            while world.entities.iterate(&iter) {
+                it := iter.ptr
 
-        DrawText(window, it.pos.x + it.size.x, it.pos.y - 16, 16, str.sliced())
+                info := entity_infos.get_unsafe(it.entity_info)
+
+                
+                font := window.defaultFont()
+                th: f32 = 0.4
+                str: StringBuilder
+                str.append("pos: ")
+                str.append(it.pos.x)
+                str.append(", ")
+                str.append(it.pos.y)
+                str.append("\n")
+                str.append("vel: ")
+                str.append(it.vel.x)
+                str.append(", ")
+                str.append(it.vel.y)
+
+                w, h := font.size_of_text(str.sliced(), th)
+
+                {
+                    // this code prevents drastic changes to the entity info box when decimals of floats change
+                    struct RenderState {
+                        w: f32
+                    }
+                    global states: Array<RenderState>
+                    if states.size() <= iter.index
+                        states.resize(iter.index + 1)
+                    
+                    if states.ptr[iter.index].w == 0
+                        states.ptr[iter.index].w = w
+
+                    target_w := w
+                    w = states.ptr[iter.index].w
+
+                    if target_w > w
+                        w = target_w
+
+                    force := (target_w - w) / 20
+                    w += force
+
+                    states.ptr[iter.index].w = w
+                }
+
+                layout_x := it.pos.x + it.size.x
+                layout_y := it.pos.y + it.size.y - h
+                padding := 0.1
+                FillRect(window, layout_x - padding, layout_y -padding, w + padding*2,h+2*padding, Color{0,0,0,0.5})
+                DrawText(window, layout_x, layout_y, th, str.sliced())
+                // log(it.pos.y)
+            }
+        }
+
+        // ##############
+        //    DEBUG
+        // ##############
+        
+        // Rect and text at origin
+        // FillRect(window, 0,0, 0.0, 0.1, Color{0,0,0})
+        // DrawText(window, 0.0, 0.0, 1.0, "Hello", Color{0,0,0})
+
+    }
+    fn game_logic() {
+        global id: UUID
+        global dir: bool
+        if current_frame == 0 {
+            ent := world.add_entity(0,5,1,1,ENTITY_BLOB)
+            id = ent.id
+        }
+
+        ent := world.get_entity(id)
+        if ent.pos.y > 7 {
+            dir = false
+        } else if ent.pos.y < 3 {
+            dir = true
+        }
+        ent.vel.y = 0.8
+        if !dir
+            ent.vel.y *= -1
     }
 }
+

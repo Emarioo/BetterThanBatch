@@ -10,7 +10,7 @@
 @REM goto END
 
 if "%~1"=="run" (
-    @REM Run compiler with compiling it
+    @REM Run compiler without compiling it
     @REM btb -dev
 
     goto RUN_COMPILER
@@ -18,17 +18,8 @@ if "%~1"=="run" (
 
 SET RUN_AT_END=1
 
-if "%~1"=="release" (
-    SET RUN_AT_END=0
+python build.py
 
-    if not "%~2"=="" (
-        python build.py msvc use_optimizations output=%2
-    ) else (
-        python build.py msvc use_optimizations
-    )
-) else (
-    python build.py
-)
 SET compileSuccess=!errorlevel!
 
 if !compileSuccess! == 0 if !RUN_AT_END!==1 (

@@ -535,3 +535,11 @@ fn length(a: vec2) {
 fn length2(a: vec2) {
     return a.x*a.x + a.y*a.y
 }
+
+// a box collides with b box (aabb collision detection)
+fn collides(pos_a: vec2, size_a: vec2, pos_b: vec2, size_b: vec2) -> bool {
+    return pos_a.x + size_a.x > pos_b.x &&
+        pos_a.x < pos_b.x + size_b.x && 
+        pos_a.y + size_a.y > pos_b.y && 
+        pos_a.y < pos_b.y + size_b.y
+}

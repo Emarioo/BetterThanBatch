@@ -79,12 +79,20 @@ SignalIO TyperContext::checkEnums(ASTScope* scope){
                 error = SIGNAL_FAILURE;
         }
     }
-    
     for(auto afunc : scope->functions) {
         if(afunc->body){
             SignalIO result = checkEnums(afunc->body);
             if(result != SIGNAL_SUCCESS)
                 error = SIGNAL_FAILURE;
+        }
+    }
+    for(auto astStruct : scope->structs){
+        for(auto fun : astStruct->functions){
+            if(fun->body) {
+                SignalIO result = checkEnums(fun->body);
+                if(result != SIGNAL_SUCCESS)
+                    error = SIGNAL_FAILURE;
+            }
         }
     }
     return error;

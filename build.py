@@ -7,6 +7,11 @@
 
 import glob, os, sys, time, platform, threading, shutil
 
+global_config = {}
+def enabled(what):
+    global global_config
+    return what in global_config and global_config[what]
+
 # main is called at the bottom
 def main():
     min_ver = (3,9)
@@ -14,6 +19,8 @@ def main():
         print("WARNING in build.py: Script is tested with "+str(min_ver[0])+"."+str(min_ver[1])+", earlier python versions ("+str(sys.version_info[0])+"."+str(sys.version_info[1])+") may not work.")
 
     config = {}
+    global global_config
+    global_config = config
     #####################
     #   CONFIGURATIONS
     #     Comment/uncomment the options you want
@@ -23,8 +30,9 @@ def main():
         config["output"] = "bin/btb.exe"
     else:
         config["output"] = "bin/btb"
-    config["use_compiler"] = "gcc"
-    # config["use_compiler"] = "msvc"
+
+    # config["use_compiler"] = "gcc"
+    config["use_compiler"] = "msvc"
 
     config["use_debug"] = True
     # config["use_tracy"] = True
@@ -40,8 +48,38 @@ def main():
     # config["use_opengl"] = True # rarely used
     config["thread_count"] = 8
 
+    yes = compile(config)
+
+    if not yes:
+        print("Compilation failed")
+
+    if yes and enabled("run_when_finished"):
+        # cmd("bin/btb -dev")
+        cmd("./bin/btb -dev")
+
+        # cmd("bin/btb --test")
+        
+        # err = cmd("bin/btb examples/graphics/chat")
+
+        # if err == 0:
+        #     cmd("start main server")
+        #     cmd("timeout 1")
+        #     cmd("start main ")
+
+        # err = cmd("bin/btb examples/graphics/game")
+        
+        # if err == 0:
+        #     cmd("start test")
+        #     cmd("timeout 1")
+        #     cmd("start test client")
+
+
+    sys.exit(0 if yes else 1)
+
+def compile(config):
+    global global_config
     ###################################
-    #   Setup things and then compile
+    #   Validate and fix config
     ###################################
 
     if len(sys.argv) > 1:
@@ -51,6 +89,7 @@ def main():
         new_config["use_compiler"] = config["use_compiler"]
         new_config["thread_count"] = config["thread_count"]
         config = new_config
+        global_config = config
 
     # parse command line arguments
     for i in range(1,len(sys.argv)):
@@ -94,22 +133,6 @@ def main():
 
     if config["use_compiler"] == "msvc" and platform.system() == "Linux":
         config["use_compiler"] == "gcc"
-
-    yes = compile(config)
-    # if not yes:
-    #     print("Compilation failed")
-
-    sys.exit(0 if yes else 1)
-
-global_config = {}
-def enabled(what):
-    global global_config
-    return what in global_config and global_config[what]
-
-
-def compile(config):
-    global global_config
-    global_config = config
 
     if not "output" in config:
         print("config does not specify output path")
@@ -240,6 +263,7 @@ def compile(config):
             else:
                 print("build.py doesn't support opengl on Linux")
         
+        # Code below compiles the necessary object files
         global object_files
         object_files = []
 
@@ -257,7 +281,7 @@ def compile(config):
         
         # TODO: Add include directories to compute_modified_files? We assume that all includes come from "include/"
 
-        # Find modified source files
+        # Find source files that were updated since last compilation, incremental build
         global modified_files
         modified_files = compute_modified_files(source_files, object_files, config["output"])
 
@@ -275,6 +299,7 @@ def compile(config):
             if not os.path.exists(predir):
                 os.mkdir(predir)
         
+        # Compile the object files using multiple threads
         global head_compiled
         head_compiled = 0
         global object_failed
@@ -356,28 +381,6 @@ def compile(config):
         cmd("gcc -c "+GCC_PATHS+" libs/stb/src/stb_image.c -o bin/stb_image.o")
         cmd("ar rcs libs/stb/lib-mingw-w64/stb_image.lib bin/stb_image.o")
 
-    # We leave "run when finished" to the caller, build.bat or build.sh.
-    # if compile_success or config["run_when_finished"]:
-        
-    #     cmd("bin\\btb -dev")
-    #     @REM bin\btb --test
-        
-    #     @REM bin\btb examples/graphics/chat
-
-    #     @REM if !errorlevel!==0 (
-    #     @REM     start main server
-    #     @REM     timeout 1
-    #     @REM     start main 
-    #     @REM )
-
-    #     @REM bin\btb examples/graphics/game
-        
-    #     @REM if !errorlevel!==0 (
-    #     @REM     start test
-    #     @REM     timeout 1
-    #     @REM     start test client
-    #     @REM )
-
     return compile_success
 
 # returns a list of object files to compile
@@ -386,7 +389,9 @@ def compute_modified_files(source_files, object_files, exe_file):
     file_dependencies = {}
     source_times = []
 
-    # TODO: Optimize
+    # Calculate the modified timestamp for each source file
+    # source files that include other files will "inherit"
+    # the timestamp of the include if it's newer.
     for fi in range(len(source_files)):
         f = source_files[fi]
         dependencies = [f]
@@ -402,6 +407,9 @@ def compute_modified_files(source_files, object_files, exe_file):
             else:
                 # print(dep)
                 new_dependencies = compute_dependencies(dep)
+                # Store dependencies for the computed file
+                # so we don't have to compute them again
+                # if another file includes the same file.
                 file_dependencies[dep] = new_dependencies
             
             for new_dep in new_dependencies:
@@ -423,6 +431,7 @@ def compute_modified_files(source_files, object_files, exe_file):
     if os.path.exists(exe_file):
         exe_time = os.path.getmtime(exe_file)
 
+    # Find the newly modified files
     for i in range(len(source_times)):
         time = source_times[i]
         obj_time = -1
@@ -498,8 +507,33 @@ def compute_dependencies(file):
     return deps
 
 def cmd(c):
+    # Convert Windows style command to Linux style and vice versa.
+    if platform.system() == "Windows":
+        if len(c) > 1 and c[0:2] == './':
+            c = c[2:]
+        head = 0
+        while head < len(c):
+            chr = c[head]
+            head+=1
+            if chr == ' ':
+                break
+        c = c[0:head].replace('/','\\') + c[head:]
+    elif platform.system() == "Linux":
+        head = 0
+        while head < len(c):
+            chr = c[head]
+            head+=1
+            if chr == ' ':
+                break
+        
+        c = c[0:head].replace('\\','/') + c[head:]
+        is_relative = c.find("/", 0, head) != -1
+        if is_relative:
+            c = "./" + c
+
     if enabled("log_cmds"):
         print(c)
+
     return os.system(c)
 
 if __name__ == "__main__":

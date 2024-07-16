@@ -1295,7 +1295,18 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     layer_macro->quote_next_token = layer->quote_next_token;
                     layer->quote_next_token = false; // carry over the quoted
                     layers.add(layer_macro);
-                    layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
+                    if (layer->is_last(lexer)) {
+                        // NOTE: is_last checks the token after 'token' (macro identifier).
+                        //   if token after macro identifier is EOF then it's the last token
+                        //   in the current evaluation which mean we want to inherit
+                        //   ending_suffix, if the macro we will evaluate is empty then the 
+                        //   previous token should have received ending suffix instead, assuming 
+                        //   that token exists. so yes, that's a bug if we don't evaluate 
+                        //   any tokens...
+                        layer_macro->ending_suffix = layer->ending_suffix;
+                    } else {
+                        layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
+                    }
                     
                     // NOTE: Should unwrap be inherited?
                     layer_macro->unwrapped = layer->unwrapped;

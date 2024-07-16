@@ -55,11 +55,11 @@ fn main() {
 
     cmd: StringBuilder
     #if OS_WINDOWS
-        cmd.append("build.bat \"release\" ")
+        cmd.append("python build.py msvc use_optimizations output=")
         cmd.append(path_release)
         cmd.append("/btb.exe")
     #else
-        cmd.append("build.sh release ")
+        cmd.append("python3 build.py gcc use_optimizations output=")
         cmd.append(path_release)
         cmd.append("/btb")
     #endif

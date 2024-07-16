@@ -70,7 +70,8 @@ fn std_print(str: char*){
 }
 // IMPORTANT: This function does not print accurate
 //  floats. It has some precision issues.
-fn std_print(t: f32){
+// max_decimals can be used to limit the amount of printed decimals, spamming the terminal is bad
+fn std_print(t: f32, max_decimals: i32 = 3){
     
     bits: u32 = *cast<u32*>cast<void*>&t;
     // log("float")
@@ -128,6 +129,7 @@ fn std_print(t: f32){
         mul: u64 = 1;
         // std_print(decimalBits); std_print('\n')
         precision := 19; // digits u64 can contain (18446744073709551615)
+        
         minBits :i32= decimalBits - precision;
         if minBits < 0 {
             minBits = 0;
@@ -146,25 +148,32 @@ fn std_print(t: f32){
             }
         }
         // std_print(acc);
-        if acc == 0
+        if acc == 0 {
             std_print('0');
-        blank := true;
-        lastZero := 0
-        limit := precision;
-        if decimalBits < precision;
-            limit = decimalBits;
-        for @rev 0..limit {
-            digit := acc % 10u;
-            acc = acc / 10u;
-            if !blank || digit != 0 {
-                decimals.ptr[nr] = digit + '0';
-                if blank
-                    lastZero = nr+1
-                blank = false;
+        } else {
+            lastZero := 0
+            limit := precision;
+            if decimalBits < precision;
+                limit = decimalBits;
+
+            for @rev 0..limit {
+                digit := acc % 10u;
+                acc = acc / 10u;
+                if lastZero != 0 || digit != 0 {
+                    if max_decimals == 0 || nr < max_decimals {
+                        decimals.ptr[nr] = digit + '0';
+                        if lastZero != 0
+                            lastZero = nr+1
+                    }
+                }
+            }
+            if lastZero == 0 {
+                std_print('0')
+            } else {
+                decimals.len = lastZero;
+                std_print(decimals)
             }
         }
-        decimals.len = lastZero;
-        std_print(decimals)
     }
 
     // fn printBits(bits: u64) {

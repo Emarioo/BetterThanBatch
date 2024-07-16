@@ -1,0 +1,101 @@
+
+global server: Server
+global client: Client
+global is_server: bool = false
+
+
+enum NetType {
+    MSGTYPE_POSITION,
+    MSGTYPE_SPAWN,
+}
+struct NetHeader {
+    type: NetType
+}
+struct NetPosition {
+    header: NetHeader = NetHeader{MSGTYPE_POSITION};
+    pos: vec2;
+    vel: vec2;
+    id: UUID;
+}
+struct NetSpawn {
+    header: NetHeader = NetHeader{MSGTYPE_SPAWN};
+    pos: vec2;
+    size: vec2;
+    vel: vec2;
+    entity_info: i32; // entity type
+    id: UUID;
+}
+
+// #macro LOG_NET(X) X
+#macro LOG_NET(X) #endmacro
+
+fn net_callback(e: Event, user_data: void*) {
+    LOG_NET(
+        std_print("EVENT ") std_print_any(&e.type) log()
+    )
+    switch e.type {
+    case EVENT_START:
+        if is_server {
+            // msg: NetSpawn
+            // msg.pos = player.pos
+            // msg.size = player.size
+            // msg.entity_info = BLOB
+            // msg.id = player.id
+            // data := Slice<char>{cast<char*>&msg, sizeof msg}
+            // if is_server {
+            //     server.send(data)
+            // } else {
+            //     client.send(data)
+            // }
+            // msg: NetSpawn
+        //     msg.pos = vec2{50,50}
+        //     msg.size = vec2{30,30}
+        //     msg.entity_info = BLOB
+        //     data := Slice<char>(cast<char*>&msg, sizeof msg)
+        //     server.send(data)
+        } else {
+            // msg: NetSpawn
+            // msg.pos = player.pos
+            // msg.size = player.size
+            // msg.entity_info = BLOB
+            // msg.id = player.id
+            // data := Slice<char>{cast<char*>&msg, sizeof msg}
+            // client.send(data)
+        }
+    case EVENT_CONNECT:
+        msg: NetSpawn
+        msg.pos = player.pos
+        msg.size = player.size
+        msg.entity_info = BLOB
+        msg.id = player.id
+        data := Slice<char>{cast<char*>&msg, sizeof msg}
+        server.send(data, e.who)
+    case EVENT_RECEIVE:
+
+        LOG_NET( log("msglen ", e.bytes.len) )
+
+        Assert(e.bytes.len == sizeof NetMessage)
+        header := cast<NetHeader*>e.bytes.ptr
+        switch header.type {
+            case MSGTYPE_SPAWN:
+                body := cast<NetSpawn*>e.bytes.ptr
+                LOG_NET( std_print_any(body,true) )
+
+                entity := add_entitity_with_uuid(body.pos.x,body.pos.y, body.size.x,body.size.y, cast_unsafe<EntityType>body.entity_info, body.id)
+
+            case MSGTYPE_POSITION:
+                body := cast<NetPosition*>e.bytes.ptr
+                // LOG_NET( std_print_any(body,true) )
+
+                entity := get_entity(body.id)
+                if entity {
+                    entity.pos = body.pos
+                    entity.vel = body.vel
+                }
+
+            case:
+                std_prints("ERROR, bad message header ") std_print_any(header) log()
+        }
+    case: // nothing
+    }
+}

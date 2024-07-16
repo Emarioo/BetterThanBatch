@@ -57,7 +57,6 @@ struct BucketArray<T> {
         // TODO: Assert(m_valuesPerBucket == 0)
         m_valuesPerBucket = (valuesPerBucket+7)&~7 // ensure 8-byte alignment
     }
-    // Does not call free on the items.
     fn cleanup() {
         for i: 0..m_buckets_max {
 			bucket := &m_buckets[i];
@@ -77,6 +76,23 @@ struct BucketArray<T> {
 		memory_tracker.remove(m_buckets, m_buckets_max, typeid BucketArray_Bucket)
         m_buckets = null;
         m_buckets_max = 0;
+		m_valueCount = 0;
+    }
+	fn clear() {
+        for i: 0..m_buckets_max {
+			bucket := &m_buckets[i];
+			if (bucket.m_max != 0) {
+				for j: 0..m_valuesPerBucket {
+					yes := bucket.getBool(j);
+					if (yes) {
+						ptr: T* = bucket.getValue(j, sizeof(T), m_valuesPerBucket);
+						destruct(ptr)
+						bucket.setBool(j, false);
+					}
+				}
+			}
+			bucket.m_amountOfUsedSpots = 0
+		}
 		m_valueCount = 0;
     }
     

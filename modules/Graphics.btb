@@ -23,8 +23,8 @@
 
 struct WindowContext {
     glfw_window: void*;
-    width: i32; // read only
-    height: i32;
+    width: f32; // read only
+    height: f32;
     running: bool = true;
     schedule_close: bool;
     delta: f32;
@@ -35,8 +35,8 @@ struct WindowContext {
     }
     
     camera_zoom: f32 = 1.0; // modifiable
-    camera_x: f32 = 1.0; // modifiable
-    camera_y: f32 = 1.0; // modifiable
+    camera_x: f32 = 0.0; // modifiable
+    camera_y: f32 = 0.0; // modifiable
     
     base_shader: u32;
     font: Font*;
@@ -262,29 +262,28 @@ struct Font {
             cast<f32> cell_h * (cast<i32> chr / 16) / cast<f32> height + cast<f32>cell_h / height;
     }
     fn width_of_text(text: char[], text_height: f32) -> f32 {
-        max_len := 0
-        len := 0
-        for text {
-            if it == '\n' {
-                len=0
-                continue
-            }
-            len++
-            if len > max_len
-                max_len = len
-        }
-        return max_len * cast<f32> char_width/cast<f32>cell_h * text_height
+        w,h := size_of_text(text, text_height)
+        return w
     }
     fn height_of_text(text: char[], text_height: f32) -> f32 {
-        len := 1
-        for text {
-            if it == '\n'
-                len++
-        }
-        return len * text_height
+        w,h := size_of_text(text, text_height)
+        return h
     }
     fn size_of_text(text: char[], text_height: f32) -> f32, f32 {
-        // TODO:
+        max_tw := 0
+        tw := 0
+        th := 1
+        for text {
+            if it == '\n' {
+                tw=0
+                th++
+                continue
+            }
+            tw++
+            if tw > max_tw
+                max_tw = tw
+        }
+        return max_tw * cast<f32> char_width/cast<f32>cell_h * text_height, th * text_height
     }
 }
 
@@ -517,17 +516,17 @@ fn FillColor(window: WindowContext*, color: Color) {
     glClear(GL_COLOR_BUFFER_BIT);
 }
 #macro CAM_VALUES
-    bx := x              
-    by := y              
+    bx := x
+    by := y
     ox := 0.
     oy := 0.
     zoom := 1.
     if !window.enable_ui_space {
         zoom = window.camera_zoom
-        // bx -= window.width/2
-        // by -= window.height/2
-        ox += -window.camera_x + window.width/2
-        oy += -window.camera_y + window.height/2
+        bx -= window.camera_x
+        by = -(by - window.camera_y)
+        ox += window.width/2
+        oy = (oy + window.height/2)
     }
 #endmacro
 fn FillRect(window: WindowContext*, box: Box, color: Color) {
@@ -551,10 +550,10 @@ fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color
     
     vertices: f32[] {
         // x ,y, uv.x, uv.y, color.rgba, texture
-        (bx) *      zoom + ox, (by) *       zoom + oy, 0, 0, color.r, color.g, color.b, color.a, -1,
-        (bx) *      zoom + ox, (by + h) *   zoom + oy, 0, 1, color.r, color.g, color.b, color.a, -1,
-        (bx + w) *  zoom + ox, (by + h) *   zoom + oy, 1, 1, color.r, color.g, color.b, color.a, -1,
-        (bx + w) *  zoom + ox, (by) *       zoom + oy, 1, 0, color.r, color.g, color.b, color.a, -1,
+        (bx) *      zoom + ox, (by - h) *       zoom + oy, 0, 0, color.r, color.g, color.b, color.a, -1,
+        (bx) *      zoom + ox, (by) *   zoom + oy, 0, 1, color.r, color.g, color.b, color.a, -1,
+        (bx + w) *  zoom + ox, (by) *   zoom + oy, 1, 1, color.r, color.g, color.b, color.a, -1,
+        (bx + w) *  zoom + ox, (by - h) *       zoom + oy, 1, 0, color.r, color.g, color.b, color.a, -1,
     }
     glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
@@ -565,8 +564,7 @@ fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color
     
     // glDrawArrays(GL_TRIANGLES, 0, 3);
 }
-fn DrawSquare(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color) {
-    thickness := 2
+fn DrawSquare(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color, thickness: f32 = 2.0) {
     // window.toggleUISpace()
     FillRect(window, x, y, w, thickness, color) // top
     FillRect(window, x, y + h - thickness, w, thickness, color) // down
@@ -606,10 +604,10 @@ fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: 
     
     vertices: f32[] {
         // x ,y, uv.x, uv.y, color.rgba, texture
-        (bx) *     zoom + ox, (by) *     zoom + oy, 0, 0, color.r, color.g, color.b, color.a, texture.id,
-        (bx) *     zoom + ox, (by + h) * zoom + oy, 0, 1, color.r, color.g, color.b, color.a, texture.id,
-        (bx + w) * zoom + ox, (by + h) * zoom + oy, 1, 1, color.r, color.g, color.b, color.a, texture.id,
-        (bx + w) * zoom + ox, (by) *     zoom + oy, 1, 0, color.r, color.g, color.b, color.a, texture.id,
+        (bx) *     zoom + ox, (by - h) *     zoom + oy, 0, 0, color.r, color.g, color.b, color.a, texture.id,
+        (bx) *     zoom + ox, (by) * zoom + oy, 0, 1, color.r, color.g, color.b, color.a, texture.id,
+        (bx + w) * zoom + ox, (by) * zoom + oy, 1, 1, color.r, color.g, color.b, color.a, texture.id,
+        (bx + w) * zoom + ox, (by - h) *     zoom + oy, 1, 0, color.r, color.g, color.b, color.a, texture.id,
     }
     glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);
@@ -729,7 +727,7 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], color:
         // log(it)
         if it == '\n' {
             lines++
-            off_y += h
+            off_y -= h
             off_x = 0
             if nr == cursor
                 cur_y = off_y
@@ -748,10 +746,10 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], color:
         
         vertices: f32[] {
             // x ,y, uv.x, uv.y, color.rgba, texture
-            (bx + off_x) *     zoom + ox, (by + off_y) *     zoom + oy,     u,  v, color.r, color.b, color.g, color.a,  font.id,
-            (bx + off_x) *     zoom + ox, (by + off_y + h) * zoom + oy, u,  vh, color.r, color.b, color.g, color.a, font.id,
-            (bx + off_x + w) * zoom + ox, (by + off_y + h) * zoom + oy, uw, vh, color.r, color.b, color.g, color.a, font.id,
-            (bx + off_x + w) * zoom + ox, (by + off_y) *     zoom + oy,     uw, v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off_x) *     zoom + ox, (by + off_y - h) *     zoom + oy,     u,  v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off_x) *     zoom + ox, (by + off_y) * zoom + oy, u,  vh, color.r, color.b, color.g, color.a, font.id,
+            (bx + off_x + w) * zoom + ox, (by + off_y) * zoom + oy, uw, vh, color.r, color.b, color.g, color.a, font.id,
+            (bx + off_x + w) * zoom + ox, (by + off_y - h) *     zoom + oy,     uw, v, color.r, color.b, color.g, color.a,  font.id,
         }
         glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);

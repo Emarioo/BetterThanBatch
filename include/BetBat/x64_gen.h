@@ -370,6 +370,10 @@ struct X64Builder {
         // TODO: Don't alloc new register, we can reuse artifical register for BP.
         artificalRegisters.last().reg = reg;
         artificalRegisters.last().started_by_bc_index = bc_index;
+        // artificalRegisters.last().floaty = false;
+        // artificalRegisters.last().size = 0;
+        // artificalRegisters.last().freed = 0;
+
         return artificalRegisters.size()-1;
     }
     void suggest_artifical(int id, X64Register reg) {

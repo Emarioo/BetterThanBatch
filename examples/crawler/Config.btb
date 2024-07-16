@@ -1,4 +1,5 @@
 
 #macro DEFAULT_PORT 4097
-#macro PLAYER_SPEED 120.0
+#macro PLAYER_SPEED 3.0
+#macro CAMERA_SPEED 200.0
 #macro GRAVITY 17.0

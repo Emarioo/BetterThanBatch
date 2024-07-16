@@ -8,6 +8,13 @@
 add(fun(me), 2)
 // the first ) should not end the macro, parenthesis should accumulate
 
+@TEST_CASE(macro_other2)
+
+#macro no 1
+#macro yes no
+
+yes+1 // at one point E1200 occured, the last token from yes was flagged as newline, bug in preprocessor, this was due to nested macros
+
 @TEST_CASE(macro_other)
 // single- and multiline definitions
 #macro SINGLE i am SINGLE
@@ -75,3 +82,27 @@ Mass(Hey, you, cool?)
 // Empty base
 #macro Mass(M,...) print M Mass(...)
 #macro Mass() #endmacro
+
+
+@TEST_CASE(tuple_macro)
+
+#macro DEF_TUPLE_NAMED(struct_name, ...) struct struct_name { DEF_TUPLE_MEMBERS(...) }
+#macro DEF_TUPLE_NAMED_MEMBERS(member0, ...) member0; DEF_TUPLE_NAMED(...)
+#macro DEF_TUPLE(struct_name, ...) struct struct_name { DEF_TUPLE_MEMBERS(...) }
+#macro DEF_TUPLE_MEMBERS(member0, ...) m ## #counter: member0; DEF_TUPLE_MEMBERS(...)
+
+#import "Math"
+#import "Lang"
+#import "Logger"
+enum Direction {
+    a,b
+}
+
+DEF_TUPLE(Collision, bool, Direction, vec2)
+DEF_TUPLE_NAMED(Collision2, bool, Direction, vec2)
+
+a: Collision
+log(&a)
+
+b: Collision2
+log(&b)

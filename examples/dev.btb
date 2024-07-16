@@ -1,3 +1,19 @@
 // #import "examples/graphics/chat"
 
 #import "examples/crawler/main"
+
+// #import "String"
+// #import "Logger"
+
+
+// string: StringBuilder
+// buffer: char* = Allocate(400)
+
+// n := 5
+
+// swrite_unsafe(buffer, n)
+// string.append(n)
+
+// log(buffer)
+// log(string)
+// std_print(n) log()

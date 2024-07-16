@@ -336,7 +336,7 @@ fn @hide swrite_unsafe(buffer: char*, value: u64) -> u32 {
 }
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
+fn @hide swrite_unsafe(buffer: char*, t: f32, max_decimals: i32 = 3) -> i32 {
     // LN;
     start := buffer;
     bits: u32 = *cast<u32*>cast<void*>&t;
@@ -380,7 +380,8 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
             
             memcpy(buffer, str.ptr, str.len);
             buffer += str.len;
-            log("o");
+            // log("o");
+
         }
 
         // buffer += swrite_unsafe(buffer, intPart);
@@ -391,8 +392,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
     } else {
         // log("ya");
 
-        // LN
-        if exp > 126u
+        if exp >= 127u
             intPart = (mantissa) >> decimalBits;
         // LN;
         // log(intPart)
@@ -420,31 +420,36 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> i32 {
                 }
             }
         }
-        // LN
         if acc == 0 {
             *buffer = '0';
             buffer++;
-        }
-        blank := true;
-        lastZero := 0;
-        limit := precision;
-        if decimalBits < precision;
-            limit = decimalBits;
+        } else {
+            blank := true;
+            lastZero := 0;
+            limit := precision;
+            if decimalBits < precision;
+                limit = decimalBits;
+            for @rev 0..limit {
+                digit := acc % 10u;
+                acc = acc / 10u;
+                if lastZero != 0 || digit != 0 {
+                    if max_decimals == 0 || nr < max_decimals {
+                        decimals.ptr[nr] = digit + '0';
+                        if lastZero == 0
+                            lastZero = nr+1
+                    }
+                }
+            }
             // LN
-        for @rev 0..limit {
-            digit := acc % 10u;
-            acc = acc / 10u;
-            if !blank || digit != 0 {
-                decimals.ptr[nr] = digit + '0';
-                if blank
-                    lastZero = nr+1
-                blank = false;
+            if lastZero == 0 {
+                *buffer = '0'
+                buffer++
+            } else {
+                decimals.len = lastZero;
+                memcpy(buffer, decimals.ptr, decimals.len);
+                buffer += decimals.len;
             }
         }
-        // LN
-        decimals.len = lastZero;
-        memcpy(buffer, decimals.ptr, decimals.len);
-        buffer += decimals.len;
         // LN
     }
     *buffer = '\0'; // not include in written bytes

@@ -8,102 +8,118 @@
 // #macro MAX_FRAMES (60 * 60*2) // 2 minutes
 #macro MAX_FRAMES (60 * 5) // 5 sec
 struct Frame {
-    changes: Array<Entity>
+    entities: Array<Entity>
 }
-global last_frame: i32
-global saved_frames: i32
-global frames: Array<Frame>
-global permanent_frames: Array<Frame>
-global permanent_frames_indices: Array<i32>
-fn SavePermanentFrame(frame_index: i32) {
-    // NOTE: This broke, entities is now bucket array
-    // if frame_index < 0
-    //     frame_index = 0
+struct DebugModule {
+    world: World*;
 
-    // permanent_frames.add(Frame{})
-    // permanent_frames_indices.add(frame_index)
-    // frame := permanent_frames.last()
-
-    // // TODO: only store changes
-    // frame.changes.resize(entities.size())
-    // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
-}
-fn SaveFrame(frame_index: i32) {
-    // NOTE: This broke, entities is now bucket array
-    // if frame_index < 0
-    //     frame_index = 0
-
-    // if frame_index > last_frame {
-    //     last_frame = frame_index
-    //     if saved_frames < MAX_FRAMES
-    //         saved_frames++
-    // }
-
-    // real_index := frame_index % MAX_FRAMES
-
-    // frame: Frame*;
-    // if frames.size() <= real_index {
-    //     frames.add(Frame{})
-    //     frame = frames.last()
-    //     // TODO: Erase future frames?
-    // } else {
-    //     frame = frames.get_unsafe(real_index)
-    // }
-
-    // // TODO: only store changes
-    // frame.changes.resize(entities.size())
-    // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
-}
-fn EraseFutureFrames(frame_index: i32) {
-    if frame_index < 0
-        frame_index = 0
-    diff := last_frame - frame_index
-    if diff > MAX_FRAMES
-        saved_frames = 0
-    else
-        saved_frames = diff
-    last_frame = frame_index
-}
-fn GetSavedFrames() -> i32 {
-    return saved_frames
-}
-fn HasPreviousFrame(frame_index: i32) -> bool {
-    // TODO: Check off-by-one error
-    if frame_index-1 <= last_frame - MAX_FRAMES {
-        return false
+    fn init(w: World*) {
+        world = w
     }
-    return true
-}
-fn IsLastFrame(frame_index: i32) -> bool {
-    if frame_index < 0
-        frame_index = 0
-    return last_frame <= frame_index
-}
-fn FrameMemoryUsage() -> i32 {
-    // we do a quick estimation
-    ents := 0
-    if frames.size()
-        ents = frames.last().changes.max
-    sum := frames.max * (sizeof (Frame) + ents * sizeof Entity)
-    return sum
-}
-fn RestoreFrame(frame_index: i32) {
-    // NOTE: This broke when entities became a bucket array, we can't just resize it
-    // if frame_index < 0
-    //     frame_index = 0
 
-    // for permanent_frames_indices.sliced() {
-    //     if it == frame_index {
-    //         frame := permanent_frames.get_unsafe(nr)
-    //         entities.resize(frame.changes.size())
-    //         memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
-    //         return;
-    //     }
+    frames: Array<Frame>;
+    last_frame: i32 = -1;
+    saved_frames: i32;
+
+    // global permanent_frames: Array<Frame>
+    // global permanent_frames_indices: Array<i32>
+    // fn SavePermanentFrame(frame_index: i32) {
+    //     // NOTE: This broke, entities is now bucket array
+    //     // if frame_index < 0
+    //     //     frame_index = 0
+
+    //     // permanent_frames.add(Frame{})
+    //     // permanent_frames_indices.add(frame_index)
+    //     // frame := permanent_frames.last()
+
+    //     // // TODO: only store changes
+    //     // frame.changes.resize(entities.size())
+    //     // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
     // }
+    fn SaveFrame(frame_index: i32) {
+        // NOTE: This broke, entities is now bucket array
+        if frame_index < 0
+            frame_index = 0
 
-    // real_index := frame_index % MAX_FRAMES
+        if frame_index > last_frame {
+            last_frame = frame_index
+            if saved_frames < MAX_FRAMES
+                saved_frames++
+        }
 
-    // frame := frames.get_unsafe(real_index)
-    // entities.resize(frame.changes.size())
-    // memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
+        real_index := frame_index % MAX_FRAMES
+
+        frame: Frame*;
+        if frames.size() <= real_index {
+            frames.add(Frame{})
+            frame = frames.last()
+        } else {
+            frame = frames.get_unsafe(real_index)
+            frame.entities.clear()
+        }
+
+        // TODO: Store changes compared to previous frame instead of all data of the current game state
+        frame.entities.reserve(world.entities.getCount())
+
+        iter := world.entities.create_iterator()
+        while world.entities.iterate(&iter) {
+            frame.entities.add(*iter.ptr)
+            // TODO: do memcpy and manually increment frame.entities.len instead of calling add()
+            // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
+
+        }
+    }
+    fn EraseFutureFrames(frame_index: i32) {
+        if frame_index < 0
+            frame_index = 0
+        diff := last_frame - frame_index
+        // log("diff ",diff, " saved ", saved_frames, " cur ", frame_index )
+        if diff > saved_frames
+            saved_frames = 0
+        else
+            saved_frames = saved_frames - diff
+        last_frame = frame_index
+    }
+    fn GetSavedFrames() -> i32 {
+        return saved_frames
+    }
+    fn is_valid_frame(frame_index: i32) -> bool {
+        return frame_index > last_frame - saved_frames &&
+               frame_index <= last_frame
+    }
+    fn FrameMemoryUsage() -> i32 {
+        // we do a quick estimation
+        ents := 0
+        if frames.size()
+            ents = frames.last().changes.max
+        sum := frames.max * (sizeof (Frame) + ents * sizeof Entity)
+        return sum
+    }
+    fn RestoreFrame(frame_index: i32) {
+        // NOTE: This broke when entities became a bucket array, we can't just resize it
+        if frame_index < 0
+            frame_index = 0
+
+        // for permanent_frames_indices.sliced() {
+        //     if it == frame_index {
+        //         frame := permanent_frames.get_unsafe(nr)
+        //         entities.resize(frame.changes.size())
+        //         memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
+        //         return;
+        //     }
+        // }
+
+        real_index := frame_index % MAX_FRAMES
+
+        frame := frames.get_unsafe(real_index)
+        
+        world.entities.clear()
+        // log("Restore")
+
+        for @ptr frame.entities.sliced() {
+            // log(it)
+            world.entities.add(it)
+        }
+    }
 }
+

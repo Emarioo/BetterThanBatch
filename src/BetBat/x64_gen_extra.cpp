@@ -110,6 +110,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         || t == BC_MEMZERO
         || t == BC_ASM
         || t == BC_TEST_VALUE
+        || t == BC_ALLOC_ARGS
+        || t == BC_ALLOC_LOCAL
+        || t == BC_FREE_ARGS
+        || t == BC_FREE_LOCAL
         ;
     };
 
@@ -197,6 +201,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             }
         }
     )
+
+    // TODO: It's a good idea to refactor the for loop below. We have IS_ESSENTIAL, IS_OVERWRITE, IS_START which aren't used correctly. At least not IS_OVERWRITE. I have written code thinking we assign artifical registers from first to last instruction but we actually go in reverse. The code mostly works (some occasional bugs) but I would like to fully understand it instead of relying on "it works, don't touch it".
 
     DynamicArray<int> insts_to_delete{};
     for(int i=inst_list.size()-1;i>=0;i--) {
@@ -362,6 +368,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         // TODO: What if two operands refer to the same register
         if(IS_ESSENTIAL(n->base->opcode)) {
             if(instruction_contents[n->base->opcode] & BASE_op1) {
+
                 if(n->base->opcode == BC_SET_RET) {
                     auto base = (InstBase_op1_ctrl_imm16*)n->base;
                     switch(tinycode->call_convention) {
@@ -397,6 +404,20 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         }
                     } else if(base->op0 == BC_REG_LOCALS) {
                         n->reg0 = alloc_artifical_reg(-1, X64_REG_BP); // we don't free BP and don't pass bc_index
+                    }
+                } else if(n->base->opcode == BC_ALLOC_LOCAL || n->base->opcode == BC_ALLOC_ARGS) {
+                    auto base = (InstBase_op1*)n->base;
+                    if(base->op0 != BC_REG_INVALID) {
+                        auto& v = bc_register_map[base->op0];
+                        auto recipient = v.used_by;
+                        auto reg_nr = v.reg_nr;
+                        if(recipient) {
+                            n->reg0 = recipient->regs[reg_nr];
+                            map_reg(n,0);
+                            free_map_reg(n,0);
+                        } else {
+                            Assert(recipient);
+                        }
                     }
                 } else {
                     auto base = (InstBase_op1*)n->base;

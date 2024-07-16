@@ -3562,13 +3562,20 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 int size = info.ast->getTypeSize(ltype);
                 BCRegister regMask = BC_REG_A;
                 BCRegister regValue = BC_REG_D;
-                if(size == 8)
-                    builder.emit_li64(regMask, 0x8000000000000000);
-                else
-                    builder.emit_li32(regMask, 0x80000000);
+
                 builder.emit_pop(regValue);
-                builder.emit_bxor(regValue, regMask, size);
-                builder.emit_push(regValue);
+                builder.emit_li32(regMask, 0);
+                builder.emit_sub(regMask, regValue, true, size);
+                builder.emit_push(regMask);
+
+                // if(size == 8)
+                //     builder.emit_li64(regMask, 0x8000000000000000);
+                // else
+                //     builder.emit_li32(regMask, 0x80000000);
+                // builder.emit_pop(regValue);
+                // builder.emit_bxor(regValue, regMask, size);
+                // builder.emit_push(regValue);
+
                 outTypeIds->add(ltype);
             } else {
                 std::string strtype = info.ast->typeToString(ltype);
