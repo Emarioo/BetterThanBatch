@@ -1,6 +1,12 @@
 /*
     This file contains the core game code.
     Entities and things.
+
+
+    TODO:
+        Chat
+        Level editor
+        Multiplayer
 */
 
 #import "./Config"

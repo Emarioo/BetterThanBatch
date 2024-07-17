@@ -1,8 +1,9 @@
 #import "Memory"
 #import "Logger"
 #import "Array"
+#import "Lang"
 
-#macro LN printc('L'); printc('N'); std_print(cast<i64>#line); std_print('\n')
+// #macro LN printc('L'); printc('N'); std_print(cast<i64>#line); std_print('\n')
 
 
 // heap allocated for now
@@ -40,12 +41,6 @@ struct StringBuilder {
             *ptr = '\0'
         }
     }
-    fn append(value: i64) {
-        if len + 20 > max {
-            reserve(len + 20);
-        }
-        len += swrite_unsafe(ptr + len, value);
-    }
     fn append(value: char) {
         if len + 1u > max {
             if !reserve(len + 5)
@@ -61,18 +56,6 @@ struct StringBuilder {
         } else {
             append("false")
         }
-    }
-    fn append(value: u64) {
-        if len + 20 > max {
-            reserve(len + 20);
-        }
-        len += swrite_unsafe(ptr + len, value);
-    }
-    fn append(value: f32) {
-        if len + 25 > max {
-            reserve(len + 25);
-        }
-        len += swrite_unsafe(ptr + len, value);
     }
     fn append(str: char[]) {
         if str.len == 0
@@ -102,6 +85,348 @@ struct StringBuilder {
     fn append(str: StringBuilder) {
         append(str.sliced())
     }
+    fn append(value: i64) -> i32 {
+        if len + 21 > max {
+            reserve(len + 21);
+        }
+
+        start := len;
+        if value == 0 {
+            append('0')
+            return len - start;
+        }
+        if value < 0 {
+            value = -value;
+            append('-')
+        }
+        
+        str: char[21];
+        used := 20;
+        while value > 0 && used > 0 {
+            num := value % 10;
+            value = value / 10;
+            str.ptr[used] = num + '0';
+            used--;
+        }
+        // LN
+        str.ptr += used + 1;
+        str.len -= used + 1;
+
+        append(str)
+
+        return len - start;
+    }
+    fn append(value: u64) -> i32 {
+        if len + 20 > max {
+            reserve(len + 20);
+        }
+        
+        start := len;
+        if value == 0 {
+            append('0')
+            return len - start;
+        }
+        str: char[21];
+        used := 20;
+        while value > 0u && used >= 0 {
+            num := value % 10u;
+            value = value / 10u;
+            str.ptr[used] = num + '0';
+            used--;
+        }
+        str.ptr += used + 1;
+        str.len -= used + 1;
+
+        append(str)
+
+        return len - start;
+    }
+    fn append(value: f64, max_decimals: i32 = 3) -> i32 {
+        return append(cast<f32>value, max_decimals)
+    }
+    fn append(value: f32, max_decimals: i32 = 3) -> i32 {
+        if len + 25 > max {
+            reserve(len + 25);
+        }
+        start := len;
+        bits: u32 = *cast<u32*>cast<void*>&value;
+
+        sign := (bits >> 31u) & 1u;
+        exp := (bits >> 23u) & cast<u32>0xFF
+        mantissa: u64 = cast<u64>0x80_0000 | (cast<u64>bits & cast<u64>0x7FFFFF)
+
+        if sign {
+            append('-')
+        }
+
+        intPart: u64 = 0;
+        decimalBits: i32 = 23 - (exp-127);
+        if decimalBits < 1 {
+            intPart = (mantissa) << (0-decimalBits);
+
+            // log("pl");
+            if intPart == 0 {
+                append('0')
+            } else {
+                // we don't use swrite_unsafe because it uses
+                // i64 but we need u64 for the extra large integers.
+                str: char[23];
+                used := 22;
+                while intPart > 0u && used > 0 {
+                    digit: u8 = intPart % 10u;
+                    // log("i",intPart);
+                    // log("d",digit);
+                    str.ptr[used] = digit + '0';
+                    used--;
+                    intPart = intPart / 10u;
+                }
+                str.ptr += used + 1;
+                str.len -= used + 1;
+                // prints(str);
+                append(str)
+                // log("o");
+
+            }
+
+            append('.')
+            append('0')
+        } else {
+            // log("ya");
+
+            if exp >= 127u
+                intPart = (mantissa) >> decimalBits;
+
+            // log(intPart)
+            append(cast<i64>intPart)
+        
+            append('.')
+
+            decimals: char[24];
+
+            acc: u64 = 0;
+            mul: u64 = 1;
+            precision := 19; // digits u64 can contain (18446744073709551615)
+            minBits := decimalBits - precision;
+            if minBits < 0
+                minBits = 0;
+            for @rev minBits..decimalBits {
+                mul *= 5u;
+                acc = acc*10u
+                if nr < 24 {
+                    bit := cast<u64>1 & (mantissa >> nr)
+                    if bit {
+                        acc += mul;
+                    }
+                }
+            }
+            if acc == 0 {
+                append('0')
+            } else {
+                blank := true;
+                lastZero := 0;
+                limit := precision;
+                if decimalBits < precision;
+                    limit = decimalBits;
+                for @rev 0..limit {
+                    digit := acc % 10u;
+                    acc = acc / 10u;
+                    if lastZero != 0 || digit != 0 {
+                        if max_decimals == 0 || nr < max_decimals {
+                            decimals.ptr[nr] = digit + '0';
+                            if lastZero == 0
+                                lastZero = nr+1
+                        }
+                    }
+                }
+                // LN
+                if lastZero == 0 {
+                    append('0')
+                } else {
+                    decimals.len = lastZero;
+                    append(decimals)
+                }
+            }
+        }
+        return len - start;
+    }
+    
+    fn append(value: void*) {
+        append('0')
+        append('x')
+        zeros: bool = true;
+        for @rev 0..16 {
+            hex := (cast<u64>value >> cast<u64>(4*nr)) & cast<u64>0xF;
+            if hex != 0  zeros = false
+            if !zeros {
+                if hex < 10u
+                    append('0'+hex)
+                else
+                    append('a' + hex - 10)
+            }
+        }
+        if zeros
+            append('0'); // we want at least one zero
+    }
+    fn append<T>(value: T*,pretty: bool = false) {
+        append(value, typeid(T),pretty)
+    }
+    fn append(value: void*, type: lang_TypeId, pretty: bool = false, depth: i32 = 1) {
+        global printed_pointers: Array<void*>
+        global mutex: Mutex
+
+        if value == null {
+            append("null")
+            return;
+        }
+        
+        if depth == 1 {
+            mutex.lock()
+            printed_pointers.resize(0) // reset before use
+        }
+        defer {
+            if depth == 1
+                mutex.unlock()
+        }
+
+        if type == typeid Slice<char> {
+            value := cast<Slice<char>*>value
+            append('"')
+            append(value.ptr, value.len)
+            append('"')
+            return;
+        }
+
+        if type.ptr_level != 0 {
+            found := false
+            for printed_pointers.sliced() {
+                if it == value {
+                    found = true
+                    break
+                }
+            }
+            if found {
+                append(*cast<void**>(value))
+            } else {
+                printed_pointers.add(value)
+                // log(new_type)
+                if type == typeid (char*) {
+                    append('"')
+                    str := *cast<char**>(value)
+                    len := strlen(str)
+                    append(str, len)
+                    append('"')
+                } else {
+                    new_type := type
+                    new_type.ptr_level--
+                    append(*cast<void**>(value), new_type, pretty, depth + 1)
+                }
+            }
+            return;   
+        }
+        enum ASTPrimitives {
+            AST_VOID = 0,
+            AST_UINT8,
+            AST_UINT16,
+            AST_UINT32,
+            AST_UINT64,
+            AST_INT8,
+            AST_INT16,
+            AST_INT32,
+            AST_INT64,
+            AST_BOOL,
+            AST_CHAR,
+            AST_FLOAT32,
+            AST_FLOAT64,   
+        }
+        
+        type_id := type.index();
+        switch type_id {
+        case AST_UINT8:     append(*cast<u8*>  (value)) return;
+        case AST_UINT16:    append(*cast<u16*> (value)) return;
+        case AST_UINT32:    append(*cast<u32*> (value)) return;
+        case AST_UINT64:    append(*cast<u64*> (value)) return;
+        case AST_INT8:      append(*cast<i8*>  (value)) return;
+        case AST_INT16:     append(*cast<i16*> (value)) return;
+        case AST_INT32:     append(*cast<i32*> (value)) return;
+        case AST_INT64:     append(*cast<i64*> (value)) return;
+        case AST_BOOL:      append(*cast<bool*>(value)) return;
+        case AST_CHAR:      append(*cast<char*>(value)) return;
+        case AST_FLOAT32:   append(*cast<f32*> (value)) return;
+        case AST_FLOAT64:   append(*cast<f64*> (value)) return;
+        }
+        
+        fn indent(n: i32, this: StringBuilder* = this) { for 0..n this.append("  ") }
+        
+        // std_print(lang_typename(id));
+
+        typeinfo := lang_typeInfos.ptr[type_id]
+
+        a := lang_Primitive.STRUCT
+        b := lang_Primitive.ENUM
+
+        if typeinfo.type == lang_Primitive.STRUCT {
+            append("{")
+            if pretty  append('\n')
+            members := lang_typemembers(type);
+            if members.len > 0 {
+                for @ptr members {
+                    if nr != 0 {
+                        append(", ");
+                        if pretty  append('\n')
+                    }
+                    
+                    if pretty  indent(depth)
+                    
+                    name := lang_name_from_range(it.name);
+                    append(name)
+                    append(": ")
+                    
+                    append(value + it.offset, it.type, pretty, depth + 1)
+                }
+            }
+            if pretty {
+                append('\n')
+                indent(depth-1)
+            }
+            
+            append("}");
+        } else if typeinfo.type == lang_Primitive.ENUM {
+            members := lang_typemembers(type);
+            value: i64
+            memcpy(&value, value, typeinfo.size)
+            printed := false
+            for @ptr members {
+                // TODO: What about bit field?
+                if it.value == value {
+                    name := lang_name_from_range(it.name);
+                    append(name)
+                    printed = true
+                    break
+                }
+            }
+            if !printed {
+                append(value) // print raw value
+            }
+        }
+    }
+    
+    fn append_hex(value: i32) {
+        append("0x")
+        zeros: bool = true;
+        for @rev 0..16 {
+            hex := (cast<u64>value >> cast<u64>(4*nr)) & cast<u64>0xF;
+            if hex != 0  zeros = false
+            if !zeros {
+                if hex < 10u
+                    append('0'+hex)
+                else
+                    append('a' + hex - 10)
+            }
+        }
+        if zeros
+            append('0'); // we want at least one zero
+    }
+
     fn append_hex<T>(p: T*) {
         bytes: u8* = cast<u8*>cast<void*>p
         l: u32 = sizeof T
@@ -159,7 +484,6 @@ struct StringBuilder {
         len = newLen;
         return true;
     }
-    // TODO: Some useful functions
     fn reserve(newMax: i32) -> bool {
         // log("newMax",newMax)
         if(newMax==0){
@@ -232,7 +556,7 @@ fn sliced(s: char*) -> char[] {
     return Slice<char>{s, strlen(s)}
 }
 
-fn @hide std_print(t: StringBuilder){
+fn std_print(t: StringBuilder){
     std_print(t.sliced())
 }
 
@@ -255,21 +579,23 @@ operator !=(a: Slice<char>, b: Slice<char>) -> bool {
     return !(a == b);
 }
 
-// fn @hide swrite_hex_unsafe(ptr: void*, len: void*) -> u32 {
+
+#if DEPRECATED
+
+// fn swrite_hex_unsafe(ptr: void*, len: void*) -> u32 {
     
 // }
 
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, slice: char[]) -> i32 {
-    // LN;
+fn swrite_unsafe(buffer: char*, slice: char[]) -> i32 {
     memcpy(buffer, slice.ptr, slice.len);
     buffer[slice.len] = '\0';
     return slice.len;
 }
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> i32 {
+fn swrite_unsafe(buffer: char*, cstr: char*) -> i32 {
     // LN;
     len = strlen(cstr);
     memcpy(buffer, cstr, len);
@@ -278,7 +604,7 @@ fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> i32 {
 }
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, value: i64) -> i32 {
+fn swrite_unsafe(buffer: char*, value: i64) -> i32 {
     // LN
     start := buffer;
     if value == 0 {
@@ -310,7 +636,7 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> i32 {
 
     return cast<u64>(buffer - start);
 }
-fn @hide swrite_unsafe(buffer: char*, value: u64) -> u32 {
+fn swrite_unsafe(buffer: char*, value: u64) -> u32 {
     start := buffer;
     if value == 0 {
         buffer[0] = '0';
@@ -336,7 +662,7 @@ fn @hide swrite_unsafe(buffer: char*, value: u64) -> u32 {
 }
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
-fn @hide swrite_unsafe(buffer: char*, t: f32, max_decimals: i32 = 3) -> i32 {
+fn swrite_unsafe(buffer: char*, t: f32, max_decimals: i32 = 3) -> i32 {
     // LN;
     start := buffer;
     bits: u32 = *cast<u32*>cast<void*>&t;
@@ -464,7 +790,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32, max_decimals: i32 = 3) -> i32 {
 // the written amount will be added onto baseOffset
 // will put a null termination at the end of the written bytes if 
 // space is available
-// fn @hide swrite(buffer: Slice<char>*, value: i64, baseOffset: u32* = null) -> u32 {
+// fn swrite(buffer: Slice<char>*, value: i64, baseOffset: u32* = null) -> u32 {
 //     // optimise by using a log10 function, unless they are slow, to know how many characters you need.
 //     offset = 0;
 //     if baseOffset
@@ -518,7 +844,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32, max_decimals: i32 = 3) -> i32 {
 //     // log(written);
 //     return str.len;
 // }
-
+#endif // DEPRECATED
 
 fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
     // TODO: Parse white space?

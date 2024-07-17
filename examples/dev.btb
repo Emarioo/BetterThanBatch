@@ -1,19 +1,52 @@
 // #import "examples/graphics/chat"
 
-#import "examples/crawler/main"
+// #import "examples/crawler/main"
 
-// #import "String"
-// #import "Logger"
+/* Today's quest: Standardize types to string.
+    We have std_print (Logger) and swrite_unsafe (StringBuilder) which
+    takes integers, floats and converts them to string.
+    
+    First problem is that std_print and swrite_unsafe has the same code.
+    The only difference is that one prints to console while the other 
+    writes to a buffer. We just want to have one function that prints to
+    buffer. std_print should then call that function, ta da, no more
+    duplicated code.
+
+    Second problem is structs. Printing structs to console is no problem.
+    Converting struct to a string into a buffer is a problem because the
+    size of the buffer must be large enough to fit the content. With integers
+    and floats there is a maximum amount of characters that will be printed.
+    Preparing a buffer of size 24 will always be enough.
+
+    We can solve writing structs to a buffer by having a resizable buffer like StringBuilder.
+    Another solution is just to write all that we can to the buffer and if it's too small then
+    we would just stop writing to buffer leaving us with an incomplete string of the struct.
+    However, we could add ... at the end if that happens: '{name: "okay", age: 92...'
+
+        fn swrite(buffer: StringBuilder*, value: i32) {...}
+        fn swrite(buffer: char[], value: i32) {...}
+
+    Now we have the first problem again. Two functions with the same code. Actually, swrite for StringBuilder isn't necessary. swrite is just the append method of StringBuilder.
+    With swrite(buffer: char[], value: i32) we could internally create a StringBuilder and write to it then copy the contents into the buffer as much as possible.
+
+    Third thing, we want to write the type information to a string not just print it.
+*/
+#import "String"
+#import "Logger"
 
 
-// string: StringBuilder
-// buffer: char* = Allocate(400)
+struct SomeType {
+    x: i32 = 3;
+    y: i32 = -5;
+}
 
-// n := 5
+type: SomeType
 
-// swrite_unsafe(buffer, n)
-// string.append(n)
+string: StringBuilder
+string.append("Content of SomeType: ")
+string.append(&type)
 
-// log(buffer)
-// log(string)
-// std_print(n) log()
+s: StringBuilder
+s.append(&string)
+
+log(s)

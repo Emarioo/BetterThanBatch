@@ -1,16 +1,6 @@
 // #import "OS"
+#import "String"
 
-// always preloaded
-// fn @native prints(str: char[]);
-// fn @native printc(str: char);
-
-
-/*
-    The reason functions are named "print" and not "log"
-    is because you might want your own log function.
-    Altough, log is a smaller name than print so it would be unfortunate
-    if the language took that name from you.
-*/
 
 #macro log(...) { log_inner(...) }
 #macro log_inner(X, ...) std_print(X); log_inner(...)
@@ -20,49 +10,15 @@
 
 #macro std_prints(X,...) std_print(X); std_prints(...)
 
-// IMPORTANT: SAFE_CONVERSIONS in x64_Converter must be defined for this function to work properly.
-//  There will be some unexpected bits otherwise.
-fn @hide std_print(t: u64){
-    
-    // optimise by using a log10 function to know how many characters you need.
-    // then allocate some memory for that space
-    // run a while looop filling up that memory
-    // then print all characters at once
-    // free memory
-    // One last thing, the memory should be allocated using a linear allocator
-    // or some other temporary allocator. Perhaps you can allocate it on the
-    // stack or something?
-    // log("int")
-    if t == 0 {
-        printc('0')
-        return;
-    }
-
-    // max_int_64: 18446744073709551615
-    str: char[21];
-    used := 20;
-    value := t;
-    while value > 0u && used >= 0 {
-        num: u32 = value % 10u;
-        // log('A','0'+num)
-        // log(,num)
-        str.ptr[used] = num + '0';
-        used--;
-        
-        value = value / 10u;
-    }
-    str.ptr += used + 1;
-    str.len -= used + 1;
-    prints(str);
+fn std_print(value: u64){
+    s: StringBuilder
+    s.append(value)
+    prints(s)
 }
-fn @hide std_print(t: i64){
-    mask: i64 = 0x8000_0000_0000_0000;
-    if t & mask {
-        printc('-');
-        std_print(cast<u64>(-t));
-    } else {
-        std_print(cast<u64>(t));
-    }
+fn std_print(value: i64){
+    s: StringBuilder
+    s.append(value)
+    prints(s)
 }
 fn std_print(str: char*){
     slice := Slice<char>{str, strlen(str)};
@@ -71,166 +27,36 @@ fn std_print(str: char*){
 // IMPORTANT: This function does not print accurate
 //  floats. It has some precision issues.
 // max_decimals can be used to limit the amount of printed decimals, spamming the terminal is bad
-fn std_print(t: f32, max_decimals: i32 = 3){
-    
-    bits: u32 = *cast<u32*>cast<void*>&t;
-    // log("float")
-    
-    sign := (bits >> 31u) & 1u;
-    exp := (bits >> 23u) & 0xFFu;
-    mantissa: u64 = 0x80_0000u | (bits & 0x7FFFFFu)
-
-    // 0x8000_0000_0000_0000
-
-    // printBits(bits);
-    if sign
-        std_print('-');
-    // 01011111000000000000000000000000
-    intPart: u64 = 0;
-    decimalBits: i32 = 23 - (exp-127);
-    // log(decimalBits)
-    // std_print('\n')
-    // std_print(exp)
-    // std_print('\n')
-    if decimalBits < 1 {
-        // log(mantissa);
-        intPart = (mantissa) << (0-decimalBits);
-        // log("herea");
-        // printBits(intPart);
-        if intPart == 0 {
-            printc('0')
-        } else {
-            str: char[23];
-            used := 22;
-            while intPart > 0u && used > 0 {
-                digit: u8 = intPart % 10u;
-                // log("i",intPart);
-                // log("d",digit);
-                str.ptr[used] = digit + '0';
-                used--;
-                intPart = intPart / 10u;
-            }
-            str.ptr += used + 1;
-            str.len -= used + 1;
-            prints(str);
-        }
-        // std_print(intPart);
-        std_print('.');
-        std_print('0');
-    } else {
-        if exp >= 127u
-            intPart = (mantissa) >> decimalBits;
-        std_print(cast<i64>intPart);
-        std_print('.');
-
-        decimals: char[24];
-
-        acc: u64 = 0;
-        mul: u64 = 1;
-        // std_print(decimalBits); std_print('\n')
-        precision := 19; // digits u64 can contain (18446744073709551615)
-        
-        minBits :i32= decimalBits - precision;
-        if minBits < 0 {
-            minBits = 0;
-        }
-        // log(minBits, decimalBits)
-        for @rev minBits..decimalBits {
-            mul *= 5u;
-            acc = acc*10u
-            // log("nr", nr)
-            if nr < 24 {
-                bit := cast<u64>1 & (mantissa >> nr)
-                if bit {
-                    acc += mul;
-                }
-                // std_print(acc); std_print('\n')
-            }
-        }
-        // std_print(acc);
-        if acc == 0 {
-            std_print('0');
-        } else {
-            lastZero := 0
-            limit := precision;
-            if decimalBits < precision;
-                limit = decimalBits;
-
-            for @rev 0..limit {
-                digit := acc % 10u;
-                acc = acc / 10u;
-                if lastZero != 0 || digit != 0 {
-                    if max_decimals == 0 || nr < max_decimals {
-                        decimals.ptr[nr] = digit + '0';
-                        if lastZero != 0
-                            lastZero = nr+1
-                    }
-                }
-            }
-            if lastZero == 0 {
-                std_print('0')
-            } else {
-                decimals.len = lastZero;
-                std_print(decimals)
-            }
-        }
-    }
-
-    // fn printBits(bits: u64) {
-    //     for @reverse 0..64 {
-    //         if bits & (cast<u64>1 << nr) {
-    //             std_print('1')
-    //         } else 
-    //             std_print('0')
-    //     }
-    //     std_print('\n')
-    // }
-    // fn printBits(bits: u32) {
-    //     for @reverse 0..32 {
-    //         if bits & (cast<u64>1 << nr) {
-    //             std_print('1')
-    //         } else 
-    //             std_print('0')
-    //     }
-    //     std_print('\n')
-    // }
+fn std_print(value: f32, max_decimals: i32 = 3){
+    s: StringBuilder
+    s.append(value, max_decimals)
+    prints(s)
 }
-fn std_print(tt: f64){
+fn std_print(value: f64, max_decimals: i32 = 3){
     // TODO: Print 64-bit float without casting it to 32-bit and loosing information.
-    std_print(cast<f32>tt);
+    s: StringBuilder
+    s.append(cast<f32>value, max_decimals)
+    prints(s)
 }
-fn std_print(p: void*) {
-// fn std_print<T>(p: T*) {
-    // std_print(cast<u64>p)
-    prints("0x")
-    zeros: bool = true;
-    for @rev 0..16 {
-        hex := (cast<u64>p >> cast<u64>(4*nr)) & cast<u64>0xF;
-        if hex != 0  zeros = false
-        if !zeros {
-            if hex < 10u
-                printc('0'+hex)
-            else
-                printc('a' + hex - 10)
-        }
-    }
-    if zeros
-        printc('0'); // we want at least one zero
+fn std_print(value: void*) {
+    s: StringBuilder
+    s.append(value)
+    prints(s)
 }
-fn @hide std_print(t: char){
+fn std_print(t: char){
     // printc(t);
     prints(Slice<char>{&t, 1})
 }
-fn @hide std_print(t: bool){
+fn std_print(t: bool){
     if t
         prints("true");
     else
         prints("false");
 }
-fn @hide std_print(t: char[]){
+fn std_print(t: char[]){
     prints(t);
 }
-fn @hide std_print(ptr: char*, len: u64){
+fn std_print(ptr: char*, len: u64){
     prints(Slice<char>{ptr, len});
 }
 
@@ -276,19 +102,8 @@ fn std_print_hex(ptr: void*, len: u32, big_endian: bool = false) {
     }
 }
 
-fn std_print_hex(n: i32) {
-    prints("0x")
-    zeros: bool = true;
-    for @rev 0..16 {
-        hex := (cast<u64>n >> cast<u64>(4*nr)) & cast<u64>0xF;
-        if hex != 0  zeros = false
-        if !zeros {
-            if hex < 10u
-                printc('0'+hex)
-            else
-                printc('a' + hex - 10)
-        }
-    }
-    if zeros
-        printc('0'); // we want at least one zero
+fn std_print_hex(value: i32) {
+    s: StringBuilder
+    s.append(value)
+    prints(s)
 }
