@@ -1,12 +1,16 @@
 
+#import "Net"
+#import "./GameCore"
+
 global server: Server
 global client: Client
 global is_server: bool = false
 
-
 enum NetType {
     MSGTYPE_POSITION,
     MSGTYPE_SPAWN,
+    MSGTYPE_REMOVE,
+    MSGTYPE_CHAT_MSG,
 }
 struct NetHeader {
     type: NetType
@@ -25,17 +29,28 @@ struct NetSpawn {
     entity_info: i32; // entity type
     id: UUID;
 }
+struct NetRemove {
+    header: NetHeader = NetHeader{MSGTYPE_REMOVE};
+    id: UUID;
+}
+struct NetMessage {
+    header: NetHeader = NetHeader{MSGTYPE_CHAT_MSG};
+    sender_len: i32;
+    text_len: i32;
+}
 
-// #macro LOG_NET(X) X
-#macro LOG_NET(X) #endmacro
+#macro LOG_NET(X) X
+// #macro LOG_NET(X) #endmacro
 
 fn net_callback(e: Event, user_data: void*) {
+    game_core: GameCore* = user_data
     LOG_NET(
         std_print("EVENT ") std_print_any(&e.type) log()
     )
     switch e.type {
     case EVENT_START:
         if is_server {
+            log("Start server")
             // msg: NetSpawn
             // msg.pos = player.pos
             // msg.size = player.size
@@ -54,6 +69,7 @@ fn net_callback(e: Event, user_data: void*) {
         //     data := Slice<char>(cast<char*>&msg, sizeof msg)
         //     server.send(data)
         } else {
+            log("Start client")
             // msg: NetSpawn
             // msg.pos = player.pos
             // msg.size = player.size
@@ -63,13 +79,19 @@ fn net_callback(e: Event, user_data: void*) {
             // client.send(data)
         }
     case EVENT_CONNECT:
-        msg: NetSpawn
-        msg.pos = player.pos
-        msg.size = player.size
-        msg.entity_info = BLOB
-        msg.id = player.id
-        data := Slice<char>{cast<char*>&msg, sizeof msg}
-        server.send(data, e.who)
+        for @ptr game_core.players.sliced() {
+            if it.online_player
+                continue
+            ent := game_core.world.get_entity(it.entity_id)
+
+            msg: NetSpawn
+            msg.pos = ent.pos
+            msg.size = ent.size
+            msg.entity_info = ENTITY_BLOB
+            msg.id = ent.id
+            data := Slice<char>{cast<char*>&msg, sizeof msg}
+            server.send(data, e.who)
+        }
     case EVENT_RECEIVE:
 
         LOG_NET( log("msglen ", e.bytes.len) )
@@ -81,18 +103,49 @@ fn net_callback(e: Event, user_data: void*) {
                 body := cast<NetSpawn*>e.bytes.ptr
                 LOG_NET( std_print_any(body,true) )
 
-                entity := add_entitity_with_uuid(body.pos.x,body.pos.y, body.size.x,body.size.y, cast_unsafe<EntityType>body.entity_info, body.id)
+                entity := game_core.world.add_entitity_with_uuid(body.pos.x,body.pos.y, body.size.x,body.size.y, cast_unsafe<EntityType>body.entity_info, body.id)
+                entity.flags |= ENTITY_FLAG_ONLINE
+
+                if is_server {
+                    server.send(e.bytes, all_except = e.who)
+                }
+
+             case MSGTYPE_REMOVE:
+                body := cast<NetRemove*>e.bytes.ptr
+                LOG_NET( std_print_any(body,true) )
+
+                game_core.world.remove_entity_from_net(body.id)
+
+                if is_server {
+                    server.send(e.bytes, all_except = e.who)
+                }
 
             case MSGTYPE_POSITION:
                 body := cast<NetPosition*>e.bytes.ptr
                 // LOG_NET( std_print_any(body,true) )
 
-                entity := get_entity(body.id)
+                entity := game_core.world.get_entity(body.id)
                 if entity {
                     entity.pos = body.pos
                     entity.vel = body.vel
                 }
+                if is_server {
+                    server.send(e.bytes, all_except = e.who)
+                }
+            case MSGTYPE_CHAT_MSG:
+                body := cast<NetMessage*>e.bytes.ptr
+                LOG_NET( std_print_any(body,true) )
 
+                tmp: StringBuilder
+                // Make sure you get the pointer arithmetic correct
+                tmp.append(Slice<char>{cast<void*>body + sizeof (NetMessage),body.sender_len})
+                tmp.append(": ")
+                tmp.append(Slice<char>{cast<void*>body + sizeof (NetMessage) + body.sender_len,body.text_len})
+                game_core.chat.add_msg(tmp);
+
+                if is_server {
+                    server.send(e.bytes, all_except = e.who)
+                }
             case:
                 std_prints("ERROR, bad message header ") std_print_any(header) log()
         }

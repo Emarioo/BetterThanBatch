@@ -33,12 +33,17 @@ struct TileInfo {
     color: Color;
     // has_collision?
 }
+enum EntityFlags {
+    ENTITY_FLAG_NONE = 0,
+    ENTITY_FLAG_ONLINE = 0x1,
+}
 struct Entity {
     id: UUID;
     pos: vec2;
     size: vec2;
     vel: vec2;
     entity_info: i32; // entity type
+    flags: EntityFlags;
 }
 struct Tile {
     tile_info: i32;
@@ -62,7 +67,10 @@ struct World {
     entities: BucketArray<Entity>;
     chunks: BucketArray<Chunk>;
     chunk_size: i32 = 16;
-    timestep: f32 = 1/60.0
+    timestep: f32 = 1/60.0;
+
+    removed_entities: Array<UUID>;
+    added_entities: Array<UUID>;
 
     fn init() {
         entities.init(256)
@@ -77,6 +85,8 @@ struct World {
         e.size.y = h
         e.id = gen_uuid()
 
+        added_entities.add(e.id)
+
         return e
     }
     fn remove_entity(id: UUID) {
@@ -86,9 +96,21 @@ struct World {
                 break
             }
         }
-
+        
+        removed_entities.add(iter.ptr.id)
         entities.removeAt(iter.index)
     }
+    fn remove_entity_from_net(id: UUID) {
+        iter := entities.create_iterator()
+        while entities.iterate(&iter) {
+            if iter.ptr.id == id {
+                break
+            }
+        }
+        
+        entities.removeAt(iter.index)
+    }
+    // from network
     fn add_entitity_with_uuid(x: f32, y: f32, w: f32, h: f32, type: EntityType, uuid: UUID) -> Entity* {
         id, e := entities.add(null)
         e.entity_info = cast<i32>type
@@ -301,6 +323,11 @@ fn SaveWorld(path: char[], world: World*) -> bool {
     iter := world.entities.create_iterator()
     while world.entities.iterate(&iter) {
         ent := iter.ptr
+        if ent.flags & ENTITY_FLAG_ONLINE
+            continue
+
+        // TODO: Players should be stored differently.
+
         FileWrite(file, ent, sizeof(Entity))
     }
 

@@ -1396,10 +1396,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             // if(ent.set_implicit_this || expr->isMemberCall()) 
             if(ent.set_implicit_this)
                 lessArguments = 1;
-            // if(parentAstStruct) {
-            //     // ignoring methods for the time being
-            //     INCOMPLETE
-            // }
+            
             // What needs to be done compared to other code paths is that fnPolyArgs is empty and needs to be decided.
             // This can get complicated fn size<T>(a: Slice<T*>)
             DynamicArray<TypeId> choosenTypes{};
@@ -1557,6 +1554,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         // first we check if base type matches (T)
                         // Then the individual ones
 
+                        // NOTE: I am fairly certain there are bugs here and scenarios that aren't handled.
+
                         TypeInfo* match_typeInfo = info.ast->getTypeInfo(typeToMatch.baseType());
                         if(!match_typeInfo->astStruct) {
                             found = false;
@@ -1589,11 +1588,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                                     found = false;
                                     break;
                                 }
-                                TypeId newChoosen = match_baseType;
                                 if(typeToMatch.getPointerLevel() < plevel) {
                                     found = false;
                                     break;
                                 }
+                                TypeId newChoosen = match_baseType;
                                 newChoosen.setPointerLevel(typeToMatch.getPointerLevel() - plevel);
                                 choosenTypes.add(newChoosen);
 
@@ -1602,7 +1601,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                             }
                         } else {
                             TypeId real_type = info.ast->convertToTypeId(baseToken, scopeId, true);
-                            if(real_type != match_baseType){
+                            
+                            if(real_type != match_baseType || plevel != typeToMatch.getPointerLevel()){
                                 found = false;
                                 break;
                             }
@@ -1740,7 +1740,31 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         break;
                     }
                 }
-                Assert(found); // If function we thought would match doesn't then the code is incorrect.
+                if(!found) {
+                    if (operatorOverloadAttempt) {
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("COMPILER BUG, when matching operator overloads. Polymorphic overload was generated which didn't match the actual arguments. It's also possible that we shouldn't have generated one to begin with.")
+                            if (expr->left && argTypes.size() > 0) {
+                                ERR_LINE2(expr->left->location, ast->typeToString(argTypes[0]))
+                            }
+                            if (expr->right && argTypes.size() > 1) {
+                                ERR_LINE2(expr->right->location,ast->typeToString(argTypes[1]))
+                            }
+                        )
+                    } else {
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("COMPILER BUG, when matching function overloads. The matching generated a polymorphic overload that was meant to match the arguments but which doesn't.")
+                            
+                            for (int i=0;argTypes.size();i++) {
+                                if (expr->args.size() > i)
+                                ERR_LINE2(expr->args[i]->location, ast->typeToString(argTypes[i]))
+                            }
+                        )
+                    }
+                    Assert(found); // If function we thought would match doesn't then the code is incorrect.
+                }
             }
         } else {
             // IMPORTANT: Poly parent structs may not be handled properly!

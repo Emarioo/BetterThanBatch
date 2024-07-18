@@ -12,6 +12,8 @@
 #import "./Config"
 #import "./Debug"
 #import "./World"
+#import "./Network"
+#import "./Chat"
 
 #import "Graphics"
 #import "Net"
@@ -21,6 +23,13 @@
 #import "BucketArray"
 #import "String"
 
+#macro TIMED_CODE(T, CODE)
+global timed_step_ ## #line: i32
+if timed_step_###line++ > T {
+    CODE
+    timed_step_###line = 0
+}
+#endmacro
 
 global display_game: bool = true
 
@@ -29,12 +38,11 @@ global window: WindowContext*;
 global enable_free_camera: bool
 global enable_entity_info: bool
 
-// fn @oscall joystick_callback(jid: i32, event: i32) {
-//     log("jid ",jid, " e ", event)
-//     log(glfwGetJoystickName(jid))
-//     log(glfwJoystickIsGamepad(jid))
-//     log(glfwGetGamepadName(jid))
-// }
+enum FocusedElement {
+    FOCUS_GAME,
+    FOCUS_CHAT,
+}
+global focused_element: FocusedElement = FOCUS_GAME
 
 struct Player {
     entity_id: UUID;
@@ -46,7 +54,6 @@ struct Player {
     deadzone: f32 = 0.1; // some controllers are great, some are terrible and require a high deadzone
 }
 struct GameCore {
-    // window: WindowContext*;
     world: World*;
     
     players: Array<Player>;
@@ -54,20 +61,23 @@ struct GameCore {
     pause_game: bool; // debug
     current_frame: i32;
 
+    chat: ChatWidget;
 
     debug: DebugModule;
 
     fn start_game() {
-
         // window = CreateWindow(1400,600)
         window = CreateWindow(800,600)
         InitEntityInfos()
 
-        // glfwSetJoystickCallback(joystick_callback)
+        client.set_callback(net_callback, this)
+        server.set_callback(net_callback, this)
 
         window.camera_zoom = 20
 
         world = LoadWorld()
+
+        chat.init(0,0,window.width, window.height)
 
         debug.init(world)
 
@@ -108,14 +118,16 @@ struct GameCore {
             // GAME STUFF
             //######################
             
-            if window.isKeyPressed(GLFW_KEY_ESCAPE) {
-                pause_game = !pause_game
-                if !pause_game {
-                    debug.EraseFutureFrames(current_frame)
+            if focused_element == FOCUS_GAME {
+                if window.isKeyPressed(GLFW_KEY_ESCAPE) {
+                    pause_game = !pause_game
+                    if !pause_game {
+                        debug.EraseFutureFrames(current_frame)
+                    }
                 }
-            }
-            if window.isKeyPressed(GLFW_KEY_I) {
-                enable_entity_info = !enable_entity_info
+                if window.isKeyPressed(GLFW_KEY_I) {
+                    enable_entity_info = !enable_entity_info
+                }
             }
 
             if display_game {
@@ -135,32 +147,37 @@ struct GameCore {
                     update_player_movement()
                     world.update(window)
 
+                    refresh_network()
+
                     current_frame++
                     debug.SaveFrame(current_frame)
                 } else {
-                    fast_step := window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
-                    if window.isKeyPressed(GLFW_KEY_LEFT) || (fast_step && window.isKeyDown(GLFW_KEY_LEFT)) {
-                        if debug.is_valid_frame(current_frame-1) {
-                            current_frame--
-                            debug.RestoreFrame(current_frame)
+                    if focused_element == FOCUS_GAME {
+                        fast_step := window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+                        if window.isKeyPressed(GLFW_KEY_LEFT) || (fast_step && window.isKeyDown(GLFW_KEY_LEFT)) {
+                            if debug.is_valid_frame(current_frame-1) {
+                                current_frame--
+                                debug.RestoreFrame(current_frame)
+                            }
                         }
-                    }
-                    if window.isKeyPressed(GLFW_KEY_RIGHT) || (fast_step && window.isKeyDown(GLFW_KEY_RIGHT)) {
-                        if debug.is_valid_frame(current_frame+1) {
-                            current_frame++
-                            debug.RestoreFrame(current_frame)
+                        if window.isKeyPressed(GLFW_KEY_RIGHT) || (fast_step && window.isKeyDown(GLFW_KEY_RIGHT)) {
+                            if debug.is_valid_frame(current_frame+1) {
+                                current_frame++
+                                debug.RestoreFrame(current_frame)
+                            }
                         }
                     }
                 }
 
                 render_world()
             }
-
-            if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_S) {
-                SaveWorld("bin/world.dat",world)
-            }
-            if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_L) {
-                LoadWorld("bin/world.dat",world)
+            if focused_element == FOCUS_GAME {
+                if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_S) {
+                    SaveWorld("bin/world.dat",world)
+                }
+                if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_L) {
+                    LoadWorld("bin/world.dat",world)
+                }
             }
 
             window.enableUISpace(true)
@@ -170,6 +187,21 @@ struct GameCore {
             // ###################
             temp: StringBuilder
             defer temp.cleanup()
+
+            if display_game {
+                // render chat at bottom left corner
+                chat.w = window.width * 0.3
+                chat.h = window.height * 0.25
+                chat.x = 0
+                chat.y = window.height - chat.h
+                // TIMED_CODE(60, log(&chat))
+                chat.render(window)
+
+                if chat.editing
+                    focused_element = FOCUS_CHAT
+                else
+                    focused_element = FOCUS_GAME
+            }
 
             if !display_game {
                 font := window.defaultFont()
@@ -333,6 +365,9 @@ struct GameCore {
                 player.joystick_id = joystick_id
                 ent := world.add_entity(0,0,1,1,ENTITY_BLOB)
                 player.entity_id = ent.id
+
+                // add player to network
+
                 name := glfwGetJoystickName(joystick_id)
 
                 // TODO: Temporary, my joystick is terrible and randomly moves around between -0.8 and 0.8 so I have to set a high deadzone. There should be a options menu for setting deadzones and controller button bindings. While you're at it, design the menu to display the raw input from the controller, whether a button is pressed, the value of the joystick axes.
@@ -347,11 +382,70 @@ struct GameCore {
                     plr := players.get_unsafe(nr)
                     if plr.joystick_id != joystick_id
                         continue
-                    
+
+                    // remove player from network
                     world.remove_entity(plr.entity_id)
                     players.remove(nr)
                     break
                 }
+            }
+        }
+    }
+    fn refresh_network() {
+        // TODO: Add remove entities in batches. A net message that adds/removes multiple entities
+        if server.is_active() || client.is_active() {
+            if world.removed_entities.size() > 0 {
+                for @ptr world.removed_entities.sliced() {
+                    msg: NetRemove
+                    msg.id = *it
+                    data := Slice<char>{cast<char*>&msg, sizeof msg}
+                    if is_server {
+                        server.send(data)
+                    } else {
+                        client.send(data)
+                    }
+                }
+            }
+            
+            if world.added_entities.size() > 0 {
+                for @ptr world.added_entities.sliced() {
+                    ent := world.get_entity(*it)
+                    msg: NetSpawn
+                    msg.pos = ent.pos
+                    msg.size = ent.size
+                    msg.entity_info = ent.entity_info
+                    msg.id = ent.id
+                    data := Slice<char>{cast<char*>&msg, sizeof msg}
+                    if is_server {
+                        server.send(data)
+                    } else {
+                        client.send(data)
+                    }
+                }
+            }
+            world.added_entities.clear()
+            world.removed_entities.clear()
+            global step: i32
+            step++
+            if step > 4 {
+                iter := world.entities.create_iterator()
+                while world.entities.iterate(&iter) {
+                    ent := iter.ptr
+                    if ent.flags & ENTITY_FLAG_ONLINE
+                        continue
+
+                    msg: NetPosition
+                    msg.pos = ent.pos
+                    msg.vel = ent.vel
+                    msg.id  = ent.id
+                    data := Slice<char>{cast<void*>&msg, sizeof msg}
+                    if is_server {
+                        server.send(data)
+                    } else {
+                        client.send(data)
+                    }
+                }
+                step = 0
             }
         }
     }
@@ -364,23 +458,24 @@ struct GameCore {
 
             real_speed := PLAYER_SPEED
             if player.joystick_id == -1 {
-                
-                if window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
-                    real_speed *= 2
+                if focused_element == FOCUS_GAME {
+                    if window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+                        real_speed *= 2
 
-                if window.isKeyDown(GLFW_KEY_W) {
-                    entity.vel.y = real_speed
-                } else if window.isKeyDown(GLFW_KEY_S) {
-                    entity.vel.y = -real_speed
-                } else {
-                    entity.vel.y = 0
-                }
-                if window.isKeyDown(GLFW_KEY_A) {
-                    entity.vel.x = -real_speed
-                } else if window.isKeyDown(GLFW_KEY_D) {
-                    entity.vel.x = real_speed
-                } else {
-                    entity.vel.x = 0
+                    if window.isKeyDown(GLFW_KEY_W) {
+                        entity.vel.y = real_speed
+                    } else if window.isKeyDown(GLFW_KEY_S) {
+                        entity.vel.y = -real_speed
+                    } else {
+                        entity.vel.y = 0
+                    }
+                    if window.isKeyDown(GLFW_KEY_A) {
+                        entity.vel.x = -real_speed
+                    } else if window.isKeyDown(GLFW_KEY_D) {
+                        entity.vel.x = real_speed
+                    } else {
+                        entity.vel.x = 0
+                    }
                 }
             } else {
                 state: GLFWgamepadstate
@@ -418,7 +513,7 @@ struct GameCore {
         //  CAMERA + 
         // ############
         {
-            if window.isKeyPressed(GLFW_KEY_C) {
+            if focused_element == FOCUS_GAME && window.isKeyPressed(GLFW_KEY_C) {
                 enable_free_camera = !enable_free_camera
             }
             if !enable_free_camera {
@@ -500,27 +595,29 @@ struct GameCore {
             } else {
                 // CAMERA MOVEMENT FOR DEBUG MODE
                 // TODO: Debug mode where you can freely move the camera.
-                speed := CAMERA_SPEED * window.delta
-                speed /= window.camera_zoom
-                if window.isKeyDown(GLFW_KEY_LEFT_SHIFT) {
-                    speed *= 2
+                if focused_element == FOCUS_GAME {
+                    speed := CAMERA_SPEED * window.delta
+                    speed /= window.camera_zoom
+                    if window.isKeyDown(GLFW_KEY_LEFT_SHIFT) {
+                        speed *= 2
+                    }
+                    if window.isKeyDown(GLFW_KEY_DOWN) {
+                        window.camera_y -= speed
+                    } else if window.isKeyDown(GLFW_KEY_UP) {
+                        window.camera_y += speed
+                    }
+                    if window.isKeyDown(GLFW_KEY_LEFT) {
+                        window.camera_x -= speed
+                    } else if window.isKeyDown(GLFW_KEY_RIGHT) {
+                        window.camera_x += speed
+                    }
                 }
-                if window.isKeyDown(GLFW_KEY_DOWN) {
-                    window.camera_y -= speed
-                } else if window.isKeyDown(GLFW_KEY_UP) {
-                    window.camera_y += speed
+                scroll := window.getScrollY()
+                if scroll > 0 {
+                    window.camera_zoom *= 1.04;
+                } else if scroll < 0 {
+                    window.camera_zoom *= 0.96;
                 }
-                if window.isKeyDown(GLFW_KEY_LEFT) {
-                    window.camera_x -= speed
-                } else if window.isKeyDown(GLFW_KEY_RIGHT) {
-                    window.camera_x += speed
-                }
-            }
-            scroll := window.getScrollY()
-            if scroll > 0 {
-                window.camera_zoom *= 1.04;
-            } else if scroll < 0 {
-                window.camera_zoom *= 0.96;
             }
         }
 

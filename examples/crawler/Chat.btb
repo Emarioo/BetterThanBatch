@@ -1,6 +1,9 @@
 #import "String"
 #import "Logger"
 #import "Array"
+#import "Stream"
+
+#import "./GameCore"
 
 struct ChatWidget {
     x: f32;
@@ -9,6 +12,8 @@ struct ChatWidget {
     h: f32;
 
     text_size: f32;
+
+    editing: bool;
 
     user_name: StringBuilder;
 
@@ -30,9 +35,18 @@ struct ChatWidget {
     // TODO: set_width/height methods
 
     fn render(window: WindowContext*) {
-        EditText(window, &input_message, &cursor_pos)
-
-        if window.isKeyPressed(GLFW_KEY_ENTER) {
+        if editing {
+            EditText(window, &input_message, &cursor_pos)
+        }
+        if !editing && window.isKeyPressed(GLFW_KEY_T) {
+            editing = true
+        }
+        
+        if editing && window.isKeyPressed(GLFW_KEY_ESCAPE) {
+            editing = false
+        }
+        if editing && window.isKeyPressed(GLFW_KEY_ENTER) {
+            // editing = false
             if find("/", input_message.sliced()) == 0 {
                 // command
                 args := split(" ",input_message.sliced())
@@ -96,7 +110,7 @@ struct ChatWidget {
                 }
 
                 header: NetMessage
-                header.header.type = MSGTYPE_MESSAGE
+                header.header.type = MSGTYPE_CHAT_MSG
                 header.sender_len = sender.size()
                 header.text_len = input_message.size()
 
@@ -123,21 +137,38 @@ struct ChatWidget {
             }
         }
 
-        layout_y := y
-        padding := 5
+        padding := 5.0
+        input_box_h := text_size + padding * 1.5
+        input_box_y := h - text_size - padding
+        messages_h := h - input_box_h
+        FillRect(window,x,y,w,h - input_box_h,Color{0,0,0,0.5})
+
+        FillRect(window,x, y + input_box_y - padding*0.5, w, input_box_h,Color{0,0.2,0.2,0.5})
+
+
         draw_info: DrawTextInfo
         // TODO: Rendering 10000 messages will be slow.
         //   If we don't have scroll, we can throw away unnecessary messages.
         //   With scroll we can render the messages that fit on the screen, messages outside can be skipped.
         //   For that we need to know the height of each message, more specifically, the amount of newlines in the message.
         //   This should be stored alongside the text context for each message so we don't recompute it every time.
-        for @ptr messages.sliced() {
-            DrawText(window, x + padding, padding + layout_y, text_size, it.sliced(), out_info = &draw_info)
+        layout_y := y + messages_h - text_size
+        font := window.defaultFont()
+        for @rev @ptr messages.sliced() {
+            if !(layout_y >= y && layout_y + text_size <= y + h - input_box_h / 2)
+                continue // don't render text outside the box
+
+            tw,th := font.size_of_text(it.sliced(), text_size)
+            DrawText(window, x + padding, layout_y - th + text_size, text_size, it.sliced(), out_info = &draw_info)
             // layout_y += text_size
-            layout_y += draw_info.drawn_height
+            layout_y -= draw_info.drawn_height
         }
         // TODO: Support newlines in input message? shift+enter? We also need to offset the render position
         //   so the whole input message fits on the screen.
-        DrawText(window, padding + x, padding + y + h - text_size - 2*padding, text_size, input_message.sliced(), cursor = cursor_pos)
+
+        curpos := cursor_pos
+        if !editing
+            curpos = -1
+        DrawText(window, x + padding, y + input_box_y, text_size, input_message.sliced(), cursor = curpos)
     }
 }

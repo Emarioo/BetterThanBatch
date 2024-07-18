@@ -36,3 +36,10 @@ struct Ok {
 }
 ok: Ok
 ok.x[0] = 9 // ok.x can be a slice but in this case it's really just a pointer which we index into.
+
+@TEST_CASE(operator_bad_matching)
+
+real: char[]
+ptr: char[]* = &real
+
+ptr[0] // triggered an assert at one point, bug in overload matching
