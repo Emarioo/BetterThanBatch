@@ -74,6 +74,8 @@ struct WindowContext {
     fn setScrollX(x: f32) { m_frameScrollX += x; m_tickScrollX += x;}
     fn setScrollY(y: f32) { m_frameScrollY += y; m_tickScrollY += y; }
 
+    // This function is available to the user because they might want to simulate
+    // a player's input and test the gameplay.
     fn setInput(code: i32, down: bool) {
         index: i32 = -1;
 		for @ptr inp: m_inputs.sliced() {

@@ -25,6 +25,13 @@ fn main(argc: i32, argv: char**) -> i32 {
     
     // Then we start game loop.
     core: GameCore
+    if argc > 1 {
+        if "client" == sliced(argv[1]) {
+            core.special_action = SPECIAL_START_CLIENT
+        } else if "server" == sliced(argv[1]) {
+            core.special_action = SPECIAL_START_SERVER
+        }
+    }
     core.start_game()
     return 0
 }

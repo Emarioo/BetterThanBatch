@@ -27,16 +27,17 @@ if !compileSuccess! == 0 if !RUN_AT_END!==1 (
 :RUN_COMPILER
     rem
 
-    bin\btb -dev
+    @REM bin\btb examples/dev -d -o test.exe
+    @REM bin\btb -dev
     @REM bin\btb --test
     
-    @REM bin\btb examples/graphics/chat
+    bin\btb examples/dev
 
-    @REM if !errorlevel!==0 (
-    @REM     start main server
-    @REM     timeout 1
-    @REM     start main 
-    @REM )
+    if !errorlevel!==0 (
+        start main server
+        timeout 1
+        start main client
+    )
 
     @REM bin\btb examples/graphics/game
     

@@ -33,7 +33,6 @@ struct ChatWidget {
         text_size = 20.0
     }
     // TODO: set_width/height methods
-
     fn render(window: WindowContext*) {
         if editing {
             EditText(window, &input_message, &cursor_pos)
@@ -83,16 +82,16 @@ struct ChatWidget {
                     // if args.len < 2 {
                     //     log("ERROR: /connect expects at least one argument, ip and optionally port. You provided ", args.len-1," argument(s).")
                     // } else {
-                        is_server = false
-                        if server.is_active()
-                            server.close()
-                        if client.is_active()
-                            client.close()
-                        if args.len > 1 {
-                            client.start(args[1], DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
-                        } else {
-                            client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
-                        }
+                    is_server = false
+                    if server.is_active()
+                        server.close()
+                    if client.is_active()
+                        client.close()
+                    if args.len > 1 {
+                        client.start(args[1], DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+                    } else {
+                        client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+                    }
                     // }
                 }
                 input_message.clear()
@@ -122,7 +121,7 @@ struct ChatWidget {
                 stream.write(sender.data(), header.sender_len)
                 stream.write(input_message.data(), header.text_len)
 
-                // FileWrite("bin.txt", stream.sliced_unsafe())
+                FileWrite("bin.txt", stream.sliced_unsafe())
 
                 if is_server {
                     server.send(stream.sliced_unsafe())
@@ -147,11 +146,11 @@ struct ChatWidget {
 
 
         draw_info: DrawTextInfo
-        // TODO: Rendering 10000 messages will be slow.
-        //   If we don't have scroll, we can throw away unnecessary messages.
-        //   With scroll we can render the messages that fit on the screen, messages outside can be skipped.
-        //   For that we need to know the height of each message, more specifically, the amount of newlines in the message.
-        //   This should be stored alongside the text context for each message so we don't recompute it every time.
+        // // TODO: Rendering 10000 messages will be slow.
+        // //   If we don't have scroll, we can throw away unnecessary messages.
+        // //   With scroll we can render the messages that fit on the screen, messages outside can be skipped.
+        // //   For that we need to know the height of each message, more specifically, the amount of newlines in the message.
+        // //   This should be stored alongside the text context for each message so we don't recompute it every time.
         layout_y := y + messages_h - text_size
         font := window.defaultFont()
         for @rev @ptr messages.sliced() {
@@ -162,7 +161,7 @@ struct ChatWidget {
             DrawText(window, x + padding, layout_y - th + text_size, text_size, it.sliced(), out_info = &draw_info)
             // layout_y += text_size
             layout_y -= draw_info.drawn_height
-        }
+        }   
         // TODO: Support newlines in input message? shift+enter? We also need to offset the render position
         //   so the whole input message fits on the screen.
 

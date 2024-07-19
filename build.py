@@ -142,6 +142,7 @@ def compile(config):
     #    FIND SOURCE FILES
     #########################
 
+    global source_files
     source_files = []
 
     for file in glob.glob("src/**/*.cpp", recursive = True):
@@ -155,7 +156,18 @@ def compile(config):
             continue
 
         source_files.append(file)
+
+    global object_files
+    object_files = []
+
+    for f in source_files:
+        object_files.append(f.replace(".cpp",".o").replace("src/","bin/"))
     
+    # With MSVC, we compile all source files every time, we therefore don't need to compute modified files
+    # However, if we want to skip compiling the executable because it's up to date, we must compute modified files
+    global modified_files
+    modified_files = compute_modified_files(source_files, object_files, config["output"])
+
     if enabled("log_sources"):
         print("Source files:", source_files)
 
@@ -210,17 +222,20 @@ def compile(config):
         if not os.path.exists("bin/hacky_stdcall.obj"):
             cmd("ml64 /nologo /Fobin/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # nocheckin piping output to nul might not work with os.system
 
-        # With MSVC we do a unity build, compile on source file that includes all other source files
-        srcfile = "bin/all.cpp"
-        fd = open(srcfile, "w")
-        for file in source_files:
-            fd.write("#include \"" + os.path.abspath(file) + "\"\n")
-        fd.close()
+        if len(modified_files) == 0 and os.path.exists(config["output"]):
+            compile_success = True
+        else:
+            # With MSVC we do a unity build, compile on source file that includes all other source files
+            srcfile = "bin/all.cpp"
+            fd = open(srcfile, "w")
+            for file in source_files:
+                fd.write("#include \"" + os.path.abspath(file) + "\"\n")
+            fd.close()
 
-        err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
-        # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
+            err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
+            # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
 
-        compile_success = err == 0
+            compile_success = err == 0
         
         # TODO: Precompiled headers?
 
@@ -264,12 +279,7 @@ def compile(config):
                 print("build.py doesn't support opengl on Linux")
         
         # Code below compiles the necessary object files
-        global object_files
-        object_files = []
-
-        for f in source_files:
-            object_files.append(f.replace(".cpp",".o").replace("src/","bin/"))
-
+      
         if platform.system() == "Windows":
             if not os.path.exists("bin/hacky_stdcall.o"):
                 cmd("as -c src/BetBat/hacky_stdcall.s -o bin/hacky_stdcall.o")
@@ -282,8 +292,9 @@ def compile(config):
         # TODO: Add include directories to compute_modified_files? We assume that all includes come from "include/"
 
         # Find source files that were updated since last compilation, incremental build
-        global modified_files
-        modified_files = compute_modified_files(source_files, object_files, config["output"])
+        # NOTE: This was moved up
+        # global modified_files
+        # modified_files = compute_modified_files(source_files, object_files, config["output"])
 
         # print(modified_files)
 

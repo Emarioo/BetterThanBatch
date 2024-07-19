@@ -270,11 +270,11 @@ struct StringBuilder {
     fn append<T>(value: T*,pretty: bool = false) {
         append(value, typeid(T),pretty)
     }
-    fn append(value: void*, type: lang_TypeId, pretty: bool = false, depth: i32 = 1) {
+    fn append(data: void*, type: lang_TypeId, pretty: bool = false, depth: i32 = 1) {
         global printed_pointers: Array<void*>
         global mutex: Mutex
 
-        if value == null {
+        if data == null {
             append("null")
             return;
         }
@@ -289,9 +289,9 @@ struct StringBuilder {
         }
 
         if type == typeid Slice<char> {
-            value := cast<Slice<char>*>value
+            data := cast<Slice<char>*>data
             append('"')
-            append(value.ptr, value.len)
+            append(data.ptr, data.len)
             append('"')
             return;
         }
@@ -299,26 +299,26 @@ struct StringBuilder {
         if type.ptr_level != 0 {
             found := false
             for printed_pointers.sliced() {
-                if it == value {
+                if it == data {
                     found = true
                     break
                 }
             }
             if found {
-                append(*cast<void**>(value))
+                append(*cast<void**>(data))
             } else {
-                printed_pointers.add(value)
+                printed_pointers.add(data)
                 // log(new_type)
                 if type == typeid (char*) {
                     append('"')
-                    str := *cast<char**>(value)
+                    str := *cast<char**>(data)
                     len := strlen(str)
                     append(str, len)
                     append('"')
                 } else {
                     new_type := type
                     new_type.ptr_level--
-                    append(*cast<void**>(value), new_type, pretty, depth + 1)
+                    append(*cast<void**>(data), new_type, pretty, depth + 1)
                 }
             }
             return;   
@@ -341,18 +341,18 @@ struct StringBuilder {
         
         type_id := type.index();
         switch type_id {
-        case AST_UINT8:     append(*cast<u8*>  (value)) return;
-        case AST_UINT16:    append(*cast<u16*> (value)) return;
-        case AST_UINT32:    append(*cast<u32*> (value)) return;
-        case AST_UINT64:    append(*cast<u64*> (value)) return;
-        case AST_INT8:      append(*cast<i8*>  (value)) return;
-        case AST_INT16:     append(*cast<i16*> (value)) return;
-        case AST_INT32:     append(*cast<i32*> (value)) return;
-        case AST_INT64:     append(*cast<i64*> (value)) return;
-        case AST_BOOL:      append(*cast<bool*>(value)) return;
-        case AST_CHAR:      append(*cast<char*>(value)) return;
-        case AST_FLOAT32:   append(*cast<f32*> (value)) return;
-        case AST_FLOAT64:   append(*cast<f64*> (value)) return;
+        case AST_UINT8:     append(*cast<u8*>  (data)) return;
+        case AST_UINT16:    append(*cast<u16*> (data)) return;
+        case AST_UINT32:    append(*cast<u32*> (data)) return;
+        case AST_UINT64:    append(*cast<u64*> (data)) return;
+        case AST_INT8:      append(*cast<i8*>  (data)) return;
+        case AST_INT16:     append(*cast<i16*> (data)) return;
+        case AST_INT32:     append(*cast<i32*> (data)) return;
+        case AST_INT64:     append(*cast<i64*> (data)) return;
+        case AST_BOOL:      append(*cast<bool*>(data)) return;
+        case AST_CHAR:      append(*cast<char*>(data)) return;
+        case AST_FLOAT32:   append(*cast<f32*> (data)) return;
+        case AST_FLOAT64:   append(*cast<f64*> (data)) return;
         }
         
         fn indent(n: i32, this: StringBuilder* = this) { for 0..n this.append("  ") }
@@ -381,7 +381,7 @@ struct StringBuilder {
                     append(name)
                     append(": ")
                     
-                    append(value + it.offset, it.type, pretty, depth + 1)
+                    append(data + it.offset, it.type, pretty, depth + 1)
                 }
             }
             if pretty {
@@ -392,12 +392,12 @@ struct StringBuilder {
             append("}");
         } else if typeinfo.type == lang_Primitive.ENUM {
             members := lang_typemembers(type);
-            value: i64
-            memcpy(&value, value, typeinfo.size)
+            enum_value: i64
+            memcpy(&enum_value, data, typeinfo.size)
             printed := false
             for @ptr members {
                 // TODO: What about bit field?
-                if it.value == value {
+                if it.value == enum_value {
                     name := lang_name_from_range(it.name);
                     append(name)
                     printed = true
@@ -405,16 +405,16 @@ struct StringBuilder {
                 }
             }
             if !printed {
-                append(value) // print raw value
+                append(*cast<i64*>data) // print raw value
             }
         }
     }
     
-    fn append_hex(value: i32) {
+    fn append_hex(data: i32) {
         append("0x")
         zeros: bool = true;
         for @rev 0..16 {
-            hex := (cast<u64>value >> cast<u64>(4*nr)) & cast<u64>0xF;
+            hex := (cast<u64>data >> cast<u64>(4*nr)) & cast<u64>0xF;
             if hex != 0  zeros = false
             if !zeros {
                 if hex < 10u
@@ -581,6 +581,8 @@ operator !=(a: Slice<char>, b: Slice<char>) -> bool {
 
 
 #if DEPRECATED
+// Use StringBuilder.append instead of swrite_unsafe.
+// swrite_unsafe is dangerous
 
 // fn swrite_hex_unsafe(ptr: void*, len: void*) -> u32 {
     

@@ -454,3 +454,6 @@ operator !=(a: UUID, b: UUID) -> bool {
 fn gen_uuid() -> UUID {
     return UUID{random64()}
 }
+fn std_print(id: UUID) {
+    std_print_hex(&id, sizeof id)
+}

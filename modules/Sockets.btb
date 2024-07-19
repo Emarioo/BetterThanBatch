@@ -95,16 +95,17 @@ struct Socket {
             err := win_recv(TO_INTERNAL(os_handle), buf, len, flags)
             if err == SOCKET_ERROR
                 return -1, SOCKET_FAILURE
-            return err, SOCKET_SUCCESS
         #else
             err := read(TO_INTERNAL(os_handle), buf, len)
             if err < 0
                 return err, SOCKET_FAILURE
-            return err, SOCKET_SUCCESS
         #endif
+        // log("socket.recv ",err)
+        return err, SOCKET_SUCCESS
     }
     fn send(buf: char*, len: i32, flags: i32 //  MSG_OOB, MSG_DONTROUTE
     ) -> i32, SocketError {
+        // log("socket.send ",len)
          #if OS_WINDOWS
             err := win_send(TO_INTERNAL(os_handle), buf, len, flags)
             if err == SOCKET_ERROR

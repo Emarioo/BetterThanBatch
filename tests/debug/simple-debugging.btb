@@ -70,3 +70,15 @@ fn hey() -> i32 {
 }
 
 // @TEST_CASE(debug_asm_scope)
+
+@TEST_CASE(debug_operator)
+
+// there was a bug here where the debugger wasn't working, incorreclty generated DWARF debug information 
+// It was due to preload which isn't a file and the fact that the preload contained an operator overloaded function (altough any function would do).
+// Generating line statements for a file that doesn't exist did not make the debugger happy.
+
+fn split(pattern: char[])  {
+    pattern[0] // commenting out this line fixed the bug, causing the operator overload to be skipped
+}
+
+split(" ") // break point on this line did not work

@@ -53,6 +53,16 @@ struct Player {
 
     deadzone: f32 = 0.1; // some controllers are great, some are terrible and require a high deadzone
 }
+enum SpecialAction {
+    SPECIAL_NONE,
+    SPECIAL_START_SERVER,
+    SPECIAL_START_CLIENT,
+}
+struct Code {
+    func: fn(void*);
+    data: void*;
+    ticks: i32; // ticks until called
+}
 struct GameCore {
     world: World*;
     
@@ -62,6 +72,10 @@ struct GameCore {
     current_frame: i32;
 
     chat: ChatWidget;
+
+    delayed_code: Array<Code>;
+
+    special_action: SpecialAction;
 
     debug: DebugModule;
 
@@ -73,6 +87,7 @@ struct GameCore {
         client.set_callback(net_callback, this)
         server.set_callback(net_callback, this)
 
+
         window.camera_zoom = 20
 
         world = LoadWorld()
@@ -83,6 +98,24 @@ struct GameCore {
 
         refresh_local_players()
 
+        if special_action != SPECIAL_NONE {
+            chat.editing = true
+            window.setInput(GLFW_KEY_ENTER, true)
+            window.setInput(GLFW_KEY_ENTER, false)
+            delayed_code.add(Code{press_t, this})
+            fn press_t(data: void*) {
+                core: GameCore* = data
+                core.chat.editing = false
+            }
+            if special_action == SPECIAL_START_CLIENT {
+                chat.input_message.clear()
+                chat.input_message.append("/connect")
+            } else if special_action == SPECIAL_START_SERVER {
+                chat.input_message.clear()
+                chat.input_message.append("/start")
+            }
+        }
+
         keyboard_player := players.add()
         keyboard_player_entity := world.add_entity(0,0,1,1,ENTITY_BLOB)
         keyboard_player.entity_id = keyboard_player_entity.id
@@ -92,26 +125,8 @@ struct GameCore {
         // Then start game loop where we display the menu
         // the user presses.
         
-        step := 0
-
         while window.running {
             FillColor(window, Color{0.2,0.2,0.2})
-            
-            // Send updated positions
-            // step++
-            // if step > 1 && (server.is_active() || client.is_active()){
-            //     msg: NetPosition
-            //     msg.pos = player.pos
-            //     msg.vel = player.vel
-            //     msg.id = player.id
-            //     data := Slice<char>{cast<void*>&msg, sizeof msg}
-            //     if is_server {
-            //         server.send(data)
-            //     } else {
-            //         client.send(data)
-            //     }
-            //     step = 0
-            // }
 
             window.enableUISpace(false)
             //######################
@@ -330,6 +345,18 @@ struct GameCore {
             TEXT("ESCAPE to pause, arrow keys to step frames")
             TEXT("shift + arrow keys to step faster")
 
+            for @ptr delayed_code.sliced() {
+                if it.ticks <= 0 {
+                    it.func(it.data)
+                    delayed_code.remove(nr)
+                    nr--
+                } else {
+                    it.ticks--
+                }
+                
+            }
+            delayed_code.clear()
+
             RefreshWindow(window)
         }   
         
@@ -407,27 +434,30 @@ struct GameCore {
                 }
             }
             
-            if world.added_entities.size() > 0 {
-                for @ptr world.added_entities.sliced() {
-                    ent := world.get_entity(*it)
-                    msg: NetSpawn
-                    msg.pos = ent.pos
-                    msg.size = ent.size
-                    msg.entity_info = ent.entity_info
-                    msg.id = ent.id
-                    data := Slice<char>{cast<char*>&msg, sizeof msg}
-                    if is_server {
-                        server.send(data)
-                    } else {
-                        client.send(data)
-                    }
-                }
-            }
+            // if world.added_entities.size() > 0 {
+            //     for @ptr world.added_entities.sliced() {
+            //         ent := world.get_entity(*it)
+            //         log("send ", ent.id)
+            //         msg: NetSpawn
+            //         msg.pos = ent.pos
+            //         msg.size = ent.size
+            //         msg.entity_info = ent.entity_info
+            //         msg.id = ent.id
+            //         data := Slice<char>{cast<char*>&msg, sizeof msg}
+            //         if is_server {
+            //             server.send(data)
+            //         } else {
+            //             client.send(data)
+            //         }
+            //     }
+            // }
             world.added_entities.clear()
             world.removed_entities.clear()
+
             global step: i32
             step++
             if step > 4 {
+                step = 0
                 iter := world.entities.create_iterator()
                 while world.entities.iterate(&iter) {
                     ent := iter.ptr
@@ -445,7 +475,6 @@ struct GameCore {
                         client.send(data)
                     }
                 }
-                step = 0
             }
         }
     }
@@ -737,22 +766,22 @@ struct GameCore {
 
     }
     fn game_logic() {
-        global id: UUID
-        global dir: bool
-        if current_frame == 0 {
-            ent := world.add_entity(0,5,1,1,ENTITY_BLOB)
-            id = ent.id
-        }
+        // global id: UUID
+        // global dir: bool
+        // if current_frame == 0 {
+        //     ent := world.add_entity(0,5,1,1,ENTITY_BLOB)
+        //     id = ent.id
+        // }
 
-        ent := world.get_entity(id)
-        if ent.pos.y > 7 {
-            dir = false
-        } else if ent.pos.y < 3 {
-            dir = true
-        }
-        ent.vel.y = 0.8
-        if !dir
-            ent.vel.y *= -1
+        // ent := world.get_entity(id)
+        // if ent.pos.y > 7 {
+        //     dir = false
+        // } else if ent.pos.y < 3 {
+        //     dir = true
+        // }
+        // ent.vel.y = 0.8
+        // if !dir
+        //     ent.vel.y *= -1
     }
 }
 

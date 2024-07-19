@@ -103,7 +103,7 @@ int main(int argc, const char** argv){
         // opts.file_count = 20;
         // GenerateFuzzedFiles(opts,"main.btb");
 
-        options.output_file = "test.exe";
+        options.output_file = "main.exe";
         options.source_file = "examples/dev.btb";
         // options.target = TARGET_BYTECODE;
         // options.target = TARGET_WINDOWS_x64;

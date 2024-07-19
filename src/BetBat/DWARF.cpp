@@ -272,13 +272,19 @@ namespace dwarf {
             relocs.reserve(debug->functions.size() * 2 + 4);
 
             WRITE_LEB(abbrev_compUnit) // abbrev code
-            stream->write("BTB Compiler 0.2.1");
+            stream->write("BTB Compiler 0.2.0");
             // stream->write1(0); // language
             if(debug->files.size() == 0) {
                 log::out << "debug->files is zero, can't correctly generate DWARF\n";
                 return;
             }
-            std::string path = debug->files[0];
+            // std::string path = debug->files[0];
+            std::string path = compiler->options->source_file;
+            int dot_index = path.find_last_of(".");
+            if (dot_index == -1) {
+                path += ".btb";
+            }
+            // compiler->options->source_file
             std::string proj_dir = TrimLastFile(path);
             proj_dir = proj_dir.substr(0,proj_dir.length()-1);
             std::string file = TrimDir(path);
@@ -846,7 +852,13 @@ namespace dwarf {
             DynamicArray<std::string> dir_entries{}; // unique entries
             for(int i=0;i<debug->files.size();i++) {
                 auto& file = debug->files[i];
+
                 std::string dir = TrimLastFile(file); // skip / at end
+                if (dir.size() == 0 || dir == "/") {
+                    file_dir_indices[i] = 0;
+                    continue;
+                }
+
                 dir = dir.substr(0,dir.length()-1);
                 int dir_index = -1;
                 for(int j=0;j<dir_entries.size();j++) {
@@ -1016,6 +1028,10 @@ namespace dwarf {
                 auto& fun = debug->functions[fi];
                 int file_index = fun->fileIndex + 1;
                 if(reg_file != file_index) {
+                    std::string file = debug->files[fun->fileIndex];
+                    if (file == "<preload>") // hacky thing, what if we have other files that aren't actually files, virtual files with test cases perhaps?
+                        continue;
+
                     reg_file = file_index;
                     WRITE_LEB(DW_LNS_set_file)
                     WRITE_LEB(reg_file)

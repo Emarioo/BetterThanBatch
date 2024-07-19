@@ -333,13 +333,13 @@ int PatternMatchFiles(const std::string& pattern, DynamicArray<std::string>* mat
     return num_matched_files;
 }
 std::string TrimLastFile(const std::string& path){
-    int slashI = path.find_last_of("/");
+    size_t slashI = path.find_last_of("/");
     if(slashI==std::string::npos)
-        return "/";
+        return "/"; // just to let you know, code relies on / being returned, linker fails otherwise (i didn't look into why but yeah...)
     return path.substr(0,slashI + 1);
 }
 std::string TrimDir(const std::string& path){
-    int slashI = path.find_last_of("/");
+    size_t slashI = path.find_last_of("/");
     if(slashI==std::string::npos)
         return path;
     return path.substr(slashI+1);

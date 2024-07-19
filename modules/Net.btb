@@ -433,24 +433,28 @@ struct Server {
 
         size := bytes.len * sizeof *bytes.ptr
         if m_protocol & NET_PROTO_MESSAGE {
+            m_send_mutex.lock() // Ensure that only one thread sends header and body at once.
+                                // Two thread may send headers first and then bodies which will result in the receiver reading two headers which is strange
+            defer m_send_mutex.unlock()
+
             header: MessageHeader
             header.length = bytes.len * sizeof *bytes.ptr
             err := connection.socket.send(cast<void*>&header, sizeof header, 0)
             if err < 0 {
-                // log("server send header failed")
+                log("server send header failed")
                 return NET_FAILURE
             }
             m_sent_bytes += sizeof header
             err = connection.socket.send(cast<void*>bytes.ptr, header.length, 0)
             if err < 0 {
-                // log("server send body failed")
+                log("server send body failed")
                 return NET_FAILURE
             }
             m_sent_bytes += header.length
         } else {
             err := connection.socket.send(cast<void*>bytes.ptr, size, 0)
             if err < 0 {
-                // log("server send stream failed")
+                log("server send stream failed")
                 return NET_FAILURE
             }
             m_sent_bytes += size
@@ -479,6 +483,7 @@ struct Server {
     m_sent_bytes: i32;
 
 	mutex: Mutex;
+	m_send_mutex: Mutex;
 }
 struct Client {
     fn cleanup() {
@@ -555,11 +560,11 @@ struct Client {
             }
 
             while {
-                bytes: i32
+                read_bytes: i32
                 if client.m_protocol & NET_PROTO_MESSAGE {
                     header: MessageHeader
 
-                    bytes = client.m_socket.recv(cast<void*>&header, sizeof header, 0)
+                    bytes := client.m_socket.recv(cast<void*>&header, sizeof header, 0)
 
                     if bytes == 0 {
                         break // graceful shutdown
@@ -597,24 +602,30 @@ struct Client {
                         client.m_message_data = new_data
                         client.m_message_max = new_max
                     }
-                    total_bytes := 0
-                    while header.length != total_bytes {
-                        bytes = client.m_socket.recv(client.m_message_data + total_bytes, header.length - total_bytes, 0)
+                    read_bytes = 0
+                    while header.length != read_bytes {
+                        // log("read ",read_bytes," len ",header.length)
+                        bytes = client.m_socket.recv(client.m_message_data + read_bytes, header.length - read_bytes, 0)
+                        // log("bytes ",bytes, " read ", read_bytes," len ",header.length)
                         if bytes <= 0
                             break
-                        total_bytes += bytes
+                        read_bytes += bytes
                         client.m_received_bytes += bytes
+
+                        if header.length == read_bytes
+                            break
+                        // log("extra read again ", bytes, " read ",read_bytes, "len ",header.length)
                     }
                 } else {
-                    bytes = client.m_socket.recv(client.m_message_data, client.m_message_max, 0)
-                    if bytes > 0
-                        client.m_received_bytes += bytes
+                    read_bytes = client.m_socket.recv(client.m_message_data, client.m_message_max, 0)
+                    if read_bytes > 0
+                        client.m_received_bytes += read_bytes
                 }
                 
                 // handle error or shutdown
-                if bytes == 0 {
+                if read_bytes == 0 {
                     break
-                } else if bytes < 0 {
+                } else if read_bytes < 0 {
 
                     if client.m_socket.valid()
                         client.m_socket.close()
@@ -633,11 +644,11 @@ struct Client {
                     e: Event
                     e.type = EVENT_RECEIVE
                     e.who = 0
-                    e.bytes = Slice<char>{client.m_message_data,bytes}
+                    e.bytes = Slice<char>{client.m_message_data,read_bytes}
                     client.m_event_callback(e, client.m_user_data)
                 }
-                // std_prints("[READ ", bytes,"]")
-                // std_print(buffer.ptr, bytes)
+                // std_prints("[READ ", read_bytes,"]")
+                // std_print(buffer.ptr, read_bytes)
             }
 
             client.m_socket.close()
@@ -678,6 +689,10 @@ struct Client {
 	fn send<T>(bytes: T[]) -> NetError {
         size := bytes.len * sizeof *bytes.ptr
         if m_protocol & NET_PROTO_MESSAGE {
+            m_send_mutex.lock() // Ensure that only one thread sends header and body at once.
+                                // Two thread may send headers first and then bodies which will result in the receiver reading two headers which is strange
+            defer m_send_mutex.unlock()
+
             header: MessageHeader
             header.length = size
             err := m_socket.send(cast<void*>&header, sizeof header, 0)
@@ -724,6 +739,8 @@ struct Client {
     m_receiver_thread: Thread;
     m_event_callback: EventCallback;
     m_user_data: void*;
+
+    m_send_mutex: Mutex;
 
     m_message_data: char*;
     m_message_max: i32;

@@ -44,11 +44,12 @@ struct NetMessage {
 
 fn net_callback(e: Event, user_data: void*) {
     game_core: GameCore* = user_data
-    LOG_NET(
-        std_print("EVENT ") std_print_any(&e.type) log()
-    )
+    // LOG_NET(
+    //     std_print("EVENT ") std_print_any(&e.type) log()
+    // )
     switch e.type {
     case EVENT_START:
+        
         if is_server {
             log("Start server")
             // msg: NetSpawn
@@ -70,31 +71,48 @@ fn net_callback(e: Event, user_data: void*) {
         //     server.send(data)
         } else {
             log("Start client")
-            // msg: NetSpawn
-            // msg.pos = player.pos
-            // msg.size = player.size
-            // msg.entity_info = BLOB
-            // msg.id = player.id
-            // data := Slice<char>{cast<char*>&msg, sizeof msg}
-            // client.send(data)
+            iter := game_core.world.entities.create_iterator()
+            while game_core.world.entities.iterate(&iter) {
+                ent := iter.ptr
+                if ent.flags & ENTITY_FLAG_ONLINE
+                    continue
+                // ent := game_core.world.get_entity(*it)
+                log("send ", ent.id)
+                msg: NetSpawn
+                msg.pos = ent.pos
+                msg.size = ent.size
+                msg.entity_info = ent.entity_info
+                msg.id = ent.id
+                data := Slice<char>{cast<char*>&msg, sizeof msg}
+                client.send(data)
+            }
+        }
+    case EVENT_CLOSE:
+        if is_server {
+            log("Close server")
+        } else {
+            log("Close client")
         }
     case EVENT_CONNECT:
-        for @ptr game_core.players.sliced() {
-            if it.online_player
+        iter := game_core.world.entities.create_iterator()
+        while game_core.world.entities.iterate(&iter) {
+            ent := iter.ptr
+            if ent.flags & ENTITY_FLAG_ONLINE
                 continue
-            ent := game_core.world.get_entity(it.entity_id)
-
+            // ent := game_core.world.get_entity(*it)
+            // log("send ", ent.id)
             msg: NetSpawn
             msg.pos = ent.pos
             msg.size = ent.size
-            msg.entity_info = ENTITY_BLOB
+            msg.entity_info = ent.entity_info
             msg.id = ent.id
             data := Slice<char>{cast<char*>&msg, sizeof msg}
             server.send(data, e.who)
         }
+        
     case EVENT_RECEIVE:
 
-        LOG_NET( log("msglen ", e.bytes.len) )
+        // LOG_NET( log("msglen ", e.bytes.len) )
 
         Assert(e.bytes.len == sizeof NetMessage)
         header := cast<NetHeader*>e.bytes.ptr
@@ -106,9 +124,9 @@ fn net_callback(e: Event, user_data: void*) {
                 entity := game_core.world.add_entitity_with_uuid(body.pos.x,body.pos.y, body.size.x,body.size.y, cast_unsafe<EntityType>body.entity_info, body.id)
                 entity.flags |= ENTITY_FLAG_ONLINE
 
-                if is_server {
-                    server.send(e.bytes, all_except = e.who)
-                }
+                // if is_server {
+                //     server.send(e.bytes, all_except = e.who)
+                // }
 
              case MSGTYPE_REMOVE:
                 body := cast<NetRemove*>e.bytes.ptr
@@ -147,7 +165,7 @@ fn net_callback(e: Event, user_data: void*) {
                     server.send(e.bytes, all_except = e.who)
                 }
             case:
-                std_prints("ERROR, bad message header ") std_print_any(header) log()
+                std_prints("ERROR, bad message header len: ", e.bytes.len, ", ") std_print_any(header) log()
         }
     case: // nothing
     }
