@@ -123,7 +123,7 @@ struct X64Program {
     u8* globalData = nullptr;
     u64 globalSize = 0;
 
-    int index_of_main = 0;
+    int index_of_main = -1;
 
     struct DataRelocation {
         u32 dataOffset; // offset in data segment

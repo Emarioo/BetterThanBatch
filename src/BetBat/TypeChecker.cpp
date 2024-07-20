@@ -2764,7 +2764,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     outTypes->add(leftType);
                 } else if (AST::IsInteger(rightType) && rightType.isPointer()) {
                     outTypes->add(rightType);
-                } else if ((AST::IsInteger(leftType) || leftType == AST_CHAR) && (AST::IsInteger(rightType) || rightType == AST_CHAR)){
+                } else if (AST::IsInteger(leftType) && AST::IsInteger(rightType)) {
                     u8 lsize = info.ast->getTypeSize(leftType);
                     u8 rsize = info.ast->getTypeSize(rightType);
                     auto outtype = lsize > rsize ? leftType : rightType;
@@ -2774,6 +2774,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                         Assert(AST::IsSigned(outtype) && AST::IsInteger(outtype));
                     }
                     outTypes->add(outtype);
+                } else if ((AST::IsInteger(leftType) || leftType == AST_CHAR) && (AST::IsInteger(rightType) || rightType == AST_CHAR)){
+                    // '0' + 5 should return a char and not an integer
+                    // std_print('0' + 5) this would print integer instead of char otherwise
+                    outTypes->add(AST_CHAR);
                 } else if ((AST::IsDecimal(leftType) || AST::IsInteger(leftType)) && (AST::IsDecimal(rightType) || AST::IsInteger(rightType))){
                     if(AST::IsDecimal(leftType))
                         outTypes->add(leftType);
@@ -3258,14 +3262,17 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
                 // TODO: Implement a list of functions to forcefully generate
                 if(function->name == compiler->entry_point) {
                     funcImpl->usages = 1;
-
                     // We add main automatically in Compiler::processImports
                     // no need to addTask_type_body here
                     // TypeChecker::CheckImpl checkImpl{};
                     // checkImpl.astFunc = fnOverloads->overloads[overload_i].astFunc;
                     // checkImpl.funcImpl = fnOverloads->overloads[overload_i].funcImpl;
                     // info.typeChecker->checkImpls.add(checkImpl);
+                } else if(function->export_alias.size() != 0) {
+                    auto overload = fnOverloads->overloads.last();
+                    ast->declareUsageOfOverload(&overload);
                 }
+
                 // implementation isn't checked/generated
                 // if(function->body){
                 //     CheckInfo::CheckImpl checkImpl{};
@@ -3278,6 +3285,13 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
             }
         }
     } else {
+        if (function->export_alias.size() != 0) {
+            ERR_SECTION(
+                ERR_HEAD2(function->location)
+                ERR_MSG("You cannot export polymorphic functions.")
+                ERR_LINE2(function->location, "here")
+            )
+        }
         // TODO: Is the ambiguity solved? I did some changes to overload matching and it seems to work fine.
 
         // if(fnOverloads->polyOverloads.size()!=0){

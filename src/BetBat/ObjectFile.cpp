@@ -35,21 +35,25 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         {
             // main function should be first in the text section
             int i = program->index_of_main;
-            if(i < 0)
-                return false;
-            auto tinyprog = program->tinyPrograms[i];
-            auto tinycode = compiler->bytecode->tinyBytecodes[i];
+            if(i < 0) {
+                // TODO: Check if we're compiling a dll or library.
+                //   They don't have entry point.
+                //   If we compile exe then we should have entry point.
+            } else {
+                auto tinyprog = program->tinyPrograms[i];
+                auto tinycode = compiler->bytecode->tinyBytecodes[i];
 
-            if(tinyprog->head == 0) {
-                log::out << engone::log::RED<< "COMPILER BUG:"<<engone::log::NO_COLOR<<" Function '"<<log::GREEN << tinycode->name<<log::NO_COLOR<<"' did not have any instructions (x64 generator did not create any).\n";
-                return false;
+                if(tinyprog->head == 0) {
+                    log::out << engone::log::RED<< "COMPILER BUG:"<<engone::log::NO_COLOR<<" Function '"<<log::GREEN << tinycode->name<<log::NO_COLOR<<"' did not have any instructions (x64 generator did not create any).\n";
+                    return false;
+                }
+
+                tinyprogram_offsets[i] = text_stream->getWriteHead();
+                text_stream->write(tinyprog->text, tinyprog->head);
+                
+                tinycode->debugFunction->asm_start = tinyprogram_offsets[i];
+                tinycode->debugFunction->asm_end = text_stream->getWriteHead();
             }
-
-            tinyprogram_offsets[i] = text_stream->getWriteHead();
-            text_stream->write(tinyprog->text, tinyprog->head);
-            
-            tinycode->debugFunction->asm_start = tinyprogram_offsets[i];
-            tinycode->debugFunction->asm_end = text_stream->getWriteHead();
         }
         
         bool messaged = false;

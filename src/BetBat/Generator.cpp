@@ -3672,9 +3672,15 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 TypeInfo* right_info = info.ast->getTypeInfo(rtype.baseType());
                 Assert(left_info && right_info);
                 
+                TypeId voidp = TypeId::Create(AST_VOID);
+                voidp.setPointerLevel(1);
                 if((ltype.getId() < AST_TRUE_PRIMITIVES || ltype.getPointerLevel() > 0) && (rtype.getId() < AST_TRUE_PRIMITIVES || rtype.getPointerLevel())){
                     // okay
                 } else if(left_info->astEnum && ltype == rtype) {
+                    // okay
+                } else if(left_info->funcType && ltype == rtype) {
+                    // okay
+                } else if((left_info->funcType || right_info->funcType) && (ltype == voidp || rtype == voidp)) {
                     // okay
                 } else {
                     if(left_info->astStruct || right_info->astStruct) {
@@ -3767,7 +3773,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                         outSize = ast->getTypeSize(outType);
                         operand_size = outSize;
                     }
-                } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR || left_info->astEnum) && (AST::IsInteger(rtype) || rtype == AST_CHAR || right_info->astEnum)){
+                } else if (AST::IsInteger(ltype) && AST::IsInteger(rtype)){
                     // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
                     int lsize = info.ast->getTypeSize(ltype);
                     int rsize = info.ast->getTypeSize(rtype);
@@ -3852,6 +3858,80 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             Assert(AST::IsSigned(outType));
                         }
                     }
+                } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR || left_info->astEnum) && (AST::IsInteger(rtype) || rtype == AST_CHAR || right_info->astEnum)){
+                    // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
+                    int lsize = info.ast->getTypeSize(ltype);
+                    int rsize = info.ast->getTypeSize(rtype);
+                    if(operationType == AST_DIV) {
+                        if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
+                            ERR_SECTION(
+                                ERR_HEAD2(expression->location)
+                                ERR_MSG("You cannot divide signed and unsigned integers. Both integers must be either signed or unsigned.")
+                                ERR_LINE2(expression->left->location,(AST::IsSigned(ltype)?"signed":"unsigned"))
+                                ERR_LINE2(expression->right->location,(AST::IsSigned(rtype)?"signed":"unsigned"))
+                            )
+                            return SIGNAL_FAILURE;
+                        }
+                    } else if(operationType == AST_MUL) {
+                        if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
+                            ERR_SECTION(
+                                ERR_HEAD2(expression->location)
+                                ERR_MSG("You cannot multiply signed and unsigned integers. Both integers must be either signed or unsigned.")
+                                ERR_LINE2(expression->left->location,(AST::IsSigned(ltype)?"signed":"unsigned"))
+                                ERR_LINE2(expression->right->location,(AST::IsSigned(rtype)?"signed":"unsigned"))
+                            )
+                            return SIGNAL_FAILURE;
+                        }
+                    }  else if(operationType == AST_MODULO) {
+                        if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
+                            ERR_SECTION(
+                                ERR_HEAD2(expression->location)
+                                ERR_MSG("You cannot take remainder (modulus) of signed and unsigned integers. Both integers must be either signed or unsigned.")
+                                ERR_LINE2(expression->left->location,(AST::IsSigned(ltype)?"signed":"unsigned"))
+                                ERR_LINE2(expression->right->location,(AST::IsSigned(rtype)?"signed":"unsigned"))
+                            )
+                            return SIGNAL_FAILURE;
+                        }
+                    } else if(is_comparison) {
+                        if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
+                            ERR_SECTION(
+                                ERR_HEAD2(expression->location)
+                                ERR_MSG("You cannot compare signed and unsigned integers. Both integers must be either signed or unsigned.")
+                                ERR_LINE2(expression->left->location,(AST::IsSigned(ltype)?"signed":"unsigned"))
+                                ERR_LINE2(expression->right->location,(AST::IsSigned(rtype)?"signed":"unsigned"))
+                            )
+                            return SIGNAL_FAILURE;
+                        }
+                    }
+                    int outSize = 1; // sizeof char
+                    if(is_comparison || is_equality) {
+                        operand_size = outSize;
+                    }
+                    if(operationType == AST_BLSHIFT || operationType == AST_BRSHIFT) {
+                        
+                    } else {
+                        if(lsize != outSize || (!AST::IsSigned(ltype) && AST::IsSigned(rtype))) {
+                            if(!AST::IsSigned(ltype) && !AST::IsSigned(rtype))
+                                builder.emit_cast(left_reg,left_reg, CAST_UINT_UINT, lsize, outSize);
+                            if(!AST::IsSigned(ltype) && AST::IsSigned(rtype))
+                                builder.emit_cast(left_reg,left_reg, CAST_UINT_SINT, lsize, outSize);
+                            if(AST::IsSigned(ltype) && !AST::IsSigned(rtype))
+                                builder.emit_cast(left_reg,left_reg, CAST_SINT_UINT, lsize, outSize);
+                            if(AST::IsSigned(ltype) && AST::IsSigned(rtype))
+                                builder.emit_cast(left_reg,left_reg, CAST_SINT_SINT, lsize, outSize);
+                        }
+                        if(rsize != outSize || (!AST::IsSigned(rtype) && AST::IsSigned(ltype))) {
+                            if(!AST::IsSigned(rtype) && !AST::IsSigned(ltype))
+                                builder.emit_cast(right_reg,right_reg, CAST_UINT_UINT, rsize, outSize);
+                            if(!AST::IsSigned(rtype) && AST::IsSigned(ltype))
+                                builder.emit_cast(right_reg,right_reg, CAST_UINT_SINT, rsize, outSize);
+                            if(AST::IsSigned(rtype) && !AST::IsSigned(ltype))
+                                builder.emit_cast(right_reg,right_reg, CAST_SINT_UINT, rsize, outSize);
+                            if(AST::IsSigned(rtype) && AST::IsSigned(ltype))
+                                builder.emit_cast(right_reg,right_reg, CAST_SINT_SINT, rsize, outSize);
+                        }
+                    }
+                    outType = AST_CHAR;
                 } else if ((AST::IsDecimal(ltype) || AST::IsInteger(ltype)) && (AST::IsDecimal(rtype) || AST::IsInteger(rtype))){
                     if(!is_arithmetic && !is_comparison && !is_equality) {
                         // We may allow bitwise operation like 'num & 0x8000_0000' to check if a decimal is decimal or not.
@@ -4162,8 +4242,20 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             if(!yes) {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
-                    ERR_MSG("You cannot have two functions named main since it is the entry point. Either main is overloaded or polymorphic which isn't allowed.\n")
-                    ERR_LINE2(function->location,"second main (or third...)")
+                    ERR_MSG("You cannot have two functions named '"<<funcImpl->astFunction->name<<"' since it is the entry point. Either main is overloaded or polymorphic which isn't allowed.")
+                    ERR_LINE2(function->location,"second '"<<funcImpl->astFunction->name<<"' (or third...)")
+                    // TODO: Show all functions named main
+                )
+            }
+        }
+
+        if(function->export_alias.size() != 0) {
+            bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->export_alias, tinycode->index);
+            if (!yes) {
+                ERR_SECTION(
+                    ERR_HEAD2(function->location)
+                    ERR_MSG("You cannot export functions with the same name. Use alias in annotation to export with a different name than the one used inside the language.")
+                    ERR_LINE2(function->location,"rename or alias")
                     // TODO: Show all functions named main
                 )
             }
@@ -6068,53 +6160,55 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     
     Identifier* iden = nullptr;
     if(is_initial_import) {
-        iden = compiler->ast->findIdentifier(scope->scopeId,0,compiler->entry_point, nullptr);
-        if(!iden) {
-            // If no main function exists then the code in global scope of
-            // initial import will be the main function.
+        if(compiler->entry_point.size() != 0) {
+            iden = compiler->ast->findIdentifier(scope->scopeId,0,compiler->entry_point, nullptr);
+            if(!iden) {
+                // If no main function exists then the code in global scope of
+                // initial import will be the main function.
 
-            // TODO: Code here
-            CallConvention main_conv;
-            switch(compiler->options->target) {
-                case TARGET_WINDOWS_x64: main_conv = STDCALL; break;
-                case TARGET_LINUX_x64: main_conv = UNIXCALL; break;
-                case TARGET_BYTECODE: main_conv = BETCALL; break;
-                default: Assert(false);
-            }
-            TinyBytecode* tb_main = context.bytecode->createTiny(compiler->entry_point,main_conv);
-            context.bytecode->index_of_main = tb_main->index;
+                // TODO: Code here
+                CallConvention main_conv;
+                switch(compiler->options->target) {
+                    case TARGET_WINDOWS_x64: main_conv = STDCALL; break;
+                    case TARGET_LINUX_x64: main_conv = UNIXCALL; break;
+                    case TARGET_BYTECODE: main_conv = BETCALL; break;
+                    default: Assert(false);
+                }
+                TinyBytecode* tb_main = context.bytecode->createTiny(compiler->entry_point,main_conv);
+                context.bytecode->index_of_main = tb_main->index;
 
-            // TODO: Code below should be the same as the one in generateFunction.
-            //   If we change the code in generateFunction but forget to here then
-            //   we will be in trouble. So, how do we combine the code?
+                // TODO: Code below should be the same as the one in generateFunction.
+                //   If we change the code in generateFunction but forget to here then
+                //   we will be in trouble. So, how do we combine the code?
 
-            context.tinycode = tb_main;
-            context.builder.init(context.bytecode, context.tinycode, compiler);
-            context.currentScopeId = context.ast->globalScopeId;
-            context.currentFrameOffset = 0;
-            context.currentScopeDepth = -1;
-            context.currentPolyVersion = 0;
+                context.tinycode = tb_main;
+                context.builder.init(context.bytecode, context.tinycode, compiler);
+                context.currentScopeId = context.ast->globalScopeId;
+                context.currentFrameOffset = 0;
+                context.currentScopeDepth = -1;
+                context.currentPolyVersion = 0;
 
-            out_codes->add(tb_main);
+                out_codes->add(tb_main);
 
-            auto di = context.bytecode->debugInformation;
-            auto dfun = di->addFunction(nullptr, context.tinycode, imp->path, 1);
-            dfun->import_id = imp->import_id;
-            context.debugFunction = dfun;
-            context.bytecode->addExportedFunction(tb_main->name, context.tinycode->index);
+                auto di = context.bytecode->debugInformation;
+                auto dfun = di->addFunction(nullptr, context.tinycode, imp->path, 1);
+                dfun->import_id = imp->import_id;
+                context.debugFunction = dfun;
+                context.bytecode->addExportedFunction(tb_main->name, context.tinycode->index);
 
-            context.generatePreload();
+                context.generatePreload();
 
-            context.generateBody(scope);
-            // TestGenerate(context.builder);
-            
-            if(context.builder.get_last_opcode() != BC_RET) {
-                if(context.currentFrameOffset != 0)
-                    context.builder.emit_free_local(-context.currentFrameOffset);
-                // context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, true);
-                context.builder.emit_ret();
-            } else {
-                // context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
+                context.generateBody(scope);
+                // TestGenerate(context.builder);
+                
+                if(context.builder.get_last_opcode() != BC_RET) {
+                    if(context.currentFrameOffset != 0)
+                        context.builder.emit_free_local(-context.currentFrameOffset);
+                    // context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, true);
+                    context.builder.emit_ret();
+                } else {
+                    // context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
+                }
             }
         }
     }

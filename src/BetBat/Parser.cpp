@@ -3376,6 +3376,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
     // Token linkToken{};
 
     bool is_entry_point = false;
+    bool is_export = false;
 
     lexer::Token tok_name{};
     if(!is_operator) {
@@ -3385,7 +3386,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         while (token_name->type == lexer::TOKEN_ANNOTATION){
             if(view_fn_name == "hide"){
                 function->setHidden(true);
-            } else if (view_fn_name == "dllimport" || view_fn_name == "varimport" || view_fn_name == "import"){
+            } else if (view_fn_name == "dllimport" || view_fn_name == "varimport" || view_fn_name == "import" || view_fn_name == "export"){
                 // Implicitly specify convention
                 specifiedConvention = true;
                 if(info.compiler->options->target == TARGET_WINDOWS_x64) {
@@ -3409,6 +3410,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                     needsExplicitCallConvention = true;
                 } else if (view_fn_name == "import"){
                     function->linkConvention = LinkConvention::IMPORT;
+                } else if (view_fn_name == "export"){
+                    is_export = true;
                 }
 
                 info.advance();
@@ -3440,7 +3443,11 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                                 
                                 if(token->type == lexer::TOKEN_LITERAL_STRING) {
                                     info.advance();
-                                    function->linked_alias = token_str;
+                                    if (view_fn_name == "export") {
+                                        function->export_alias = token_str;
+                                    } else {
+                                        function->linked_alias = token_str;
+                                    }
                                 } else {
                                     ERR_SECTION(
                                         ERR_HEAD2(tok)
@@ -3450,17 +3457,30 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                                     return SIGNAL_COMPLETE_FAILURE;
                                 }
                             } else {
-                                ERR_SECTION(
-                                    ERR_HEAD2(tok)
-                                    ERR_MSG("Annotation for import can be supplied with a named library and optionally an alias. '"<<token_str<<"' is not an attribute that can be set.")
-                                    ERR_LINE2(tok,"here")
-                                    ERR_EXAMPLE(1,"@import(yourlib, alias = \"_verbose_func\")")
-                                )
+                                if (view_fn_name == "export") {
+                                    ERR_SECTION(
+                                        ERR_HEAD2(tok)
+                                        ERR_MSG("Annotation for export can be supplied with an alias. '"<<token_str<<"' is not an attribute that can be set.")
+                                        ERR_LINE2(tok,"here")
+                                        ERR_EXAMPLE(1,"@export(alias = \"_verbose_func\")")
+                                    )
+                                } else {
+                                    ERR_SECTION(
+                                        ERR_HEAD2(tok)
+                                        ERR_MSG("Annotation for import can be supplied with a named library and optionally an alias. '"<<token_str<<"' is not an attribute that can be set.")
+                                        ERR_LINE2(tok,"here")
+                                        ERR_EXAMPLE(1,"@import(yourlib, alias = \"_verbose_func\")")
+                                    )
+                                }
                                 return SIGNAL_COMPLETE_FAILURE;
                             }
                         } else if(token->type == lexer::TOKEN_IDENTIFIER) {
                             info.advance();
-                            function->linked_library = token_str;
+                            if (view_fn_name == "export") {
+
+                            }else {
+                                function->linked_library = token_str;
+                            }
                         } else {
                             ERR_SECTION(
                                 ERR_HEAD2(tok)
@@ -3633,6 +3653,11 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
     }
 
     // log::out << "begin " <<function->name<<"\n";
+
+    if (is_export) {
+        if(function->export_alias.size() == 0)
+            function->export_alias = function->name;
+    }
 
     function->location = info.srcloc(tok_name);
 

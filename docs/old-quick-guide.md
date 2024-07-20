@@ -1,7 +1,5 @@
 # THIS GUIDE IS FOR A DIFFERENT VERSION OF THE LANGUAGE
-I haven't deleted this because the guide for the new
-version will probably have the same sections with
-some differences.
+I haven't deleted this because it can be interesting to see the early stages of the language.
 
 # Guide to the language
 A quick guide which doesn't go much into detail since things might change.

@@ -1,3 +1,5 @@
+**A common mistake** is tangling the calling conventions. Normally, a custom convention is used for functions but if you import or export a function it is implicitly changed to the native standard convention (stdcall or System V ABI). If you are casting function pointers, make sure to annotate them with the correct convention.
+
 # Linking in the compiler
 We begin with the basics.
 1. The compiler generates an object file (bin/main.o).
@@ -50,8 +52,26 @@ fn main(argc: i32, argv: char**) {
 
 **NOTE**: The calling convention is assumed to be stdcall when targeting Windows and System V ABI when targeting Linux.
 
+# Compiling libraries
+Compile executable: `btb main.btb -o app.exe`
+Compile dynamic library: `btb main.btb -o app.dll`
+Compile static library: `btb main.btb -o app.lib`
 
-# Expterimental features
+When compiling libraries, the functions you want to export must be annotated with `@export`. Exported functions cannot be polymorphic and you cannot export functions with the same name. You can alias the name.
+```c++
+fn @export multiply(x: f32, y: f32) -> f32 {
+    return x * y
+}
+fn @export(alias="multiply_int") multiply(x: i32, y: i32) -> i32 {
+    return x * y
+}
+```
+
+A thing to note is that only the functions that are used such as the entry point and exported functions are generated. All other functions are skipped and are not present in the binary.
+
+**NOTE**: The calling convention for exports is assumed to be stdcall when targeting Windows and System V ABI when targeting Linux.
+
+# Experimental features
 
 ## @dllimport
 Below is an example of linking with the Win32 API. The `@dllimport` differs from `@import` by which call instruction is used.

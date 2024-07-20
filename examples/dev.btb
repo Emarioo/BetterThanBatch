@@ -1,2 +1,71 @@
 
-#import "examples/crawler/main"
+// #import "examples/crawler/main"
+
+/* Today's quest: Hotreloading
+
+    A standard library (module) for hotreloading.
+    Hotreloading may require custom allocators.
+    We may need the ability to change allocators of
+    arrays and maps.
+    
+    Step 0:     <- I am here
+        Compile and use dlls
+
+    Step 1:
+        Get hotreloading working with crawler game.
+        Generalize hotreloading into a module.
+        Test it however we would do that?
+
+    Step 2 (maybe later, add to TODO list):
+        Module for reloading files and settings with file watchers.
+        For example: If an image is modified, it's automatically reloaded.
+
+    Step 3 (maybe later, add to TODO list):
+        A compiler feature that warns you when a struct is modified if
+        the game is running and you are using hotreloading.
+
+    What is hotreloading?
+        It's about changing the game code while the game is running.
+        The state and memory used by the game stays the same.
+        This means that changing structs will break things since the 
+        stored memory is based on the old structs while the new code 
+        is based on the new structs.
+
+        Hotreloading is implemented using dynamic libraries (dll, so) and
+        a separation between code and state in the game.
+        
+*/
+
+
+/* Build with:
+    bin\btb examples/dev2 -d -o bin/math.dll
+    bin\btb examples/dev2 -d -o main.exe -r
+*/  
+
+#if !BUILD_EXE
+    // DLL
+    fn @export(alias="mult") dll_mult(x: f32, y: f32) -> f32 {
+        return x * y
+    }
+#else
+    // EXE
+    #import "Logger"
+    #import "Lang"
+    #import "OS"
+
+    #load "bin/math.dll" as Math
+    fn @import(Math) mult(x: f32, y: f32) -> f32
+
+    fn main() {
+        z := mult(1.9, 5)
+        log("mult: ",z)
+
+        lib := LoadDynamicLibrary("bin/math.dll")
+        log("lib: ",&lib)
+        f := cast_unsafe<fn @oscall(f32,f32)->f32> lib.get_pointer("mult")
+        log("func ",cast_unsafe<void*>f)
+
+        z2 := f(1.9, 5.0)
+        log("mult2: ",z2)
+    }
+#endif

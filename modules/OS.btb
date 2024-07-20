@@ -486,6 +486,54 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
 #endif
 }
 
+// A struct that refers to a dynamically linked library
+// TODO: Linux implementation
+struct DynamicLibrary {
+    handle: void*;
+
+    fn valid() -> bool { return handle }
+
+    fn cleanup() {
+        yes := FreeLibrary(handle);
+		if (!yes) {
+			err := GetLastError();
+			log("[WinError ",err,"] UnloadDynamicLibrary");
+		}
+    }
+    // You may need to cast the function pointer to the appropriate function.
+    // Also used for global variables.
+    // IMPORTANT: MAKE SURE TO CAST TO THE RIGHT CALLING CONVENTION!
+    //   Exported and imported functions use @oscall by default (stdcall, sys v abi).
+    fn get_pointer(name: char[]) -> fn() {
+        // TODO: Check null termination
+        proc := GetProcAddress(handle, name.ptr);
+		if (proc == null) {
+			err := GetLastError();
+			if(err==ERROR_PROC_NOT_FOUND){
+				log("[WinError ",err,"] GetFunctionPointer, could not find '",name,"'");
+			}else {
+                log("[WinError ",err,"] GetFunctionPointer ",name);
+            }
+		}
+		return cast_unsafe<fn()>proc;
+    }
+}
+// return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 
+fn LoadDynamicLibrary(path: char[], log_error: bool = true) -> DynamicLibrary {
+    // TODO: Check null termination
+    #if OS_WINDOWS
+        module := LoadLibraryA(path.ptr);
+        if (module == null) {
+            err := GetLastError();
+            if(log_error) {
+                log("[WinError ",err,"] LoadDynamicLibrary: ",path);
+            }
+        }
+        return DynamicLibrary{module};
+    #else
+        incomplete
+    #endif
+}
 
 fn set_cursor(x: u32, y: u32) {
     std_print("\e[",(x),";",(y),"H")

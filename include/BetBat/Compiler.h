@@ -116,7 +116,7 @@ struct CompileOptions {
     }
 
     std::string source_file;
-    std::string output_file = "main.exe"; // Should .exe be default on Unix too?
+    std::string output_file = "main.exe"; // Should .exe be default on Unix too? no right?
     TargetPlatform target = CONFIG_DEFAULT_TARGET;
     LinkerChoice linker = CONFIG_DEFAULT_LINKER;
     // std::string linker_cmd = "";

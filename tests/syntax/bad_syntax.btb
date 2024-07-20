@@ -38,3 +38,12 @@ if never == ' ' || never
     _test 0; 1;
 }
 */
+
+
+// let's say you have a web URL and forget to comment it out
+
+https://www.example.com
+@TEST_ERROR(ERROR_UNSPECIFIED) fn okay() { }
+
+// it will result in this which causes bad error messages.
+// https: fn okay() {}

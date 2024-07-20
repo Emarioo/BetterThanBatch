@@ -7,6 +7,10 @@
 #load "Kernel32.lib" as Kernel
 
 #macro HANDLE void*
+#macro HINSTANCE void*
+#macro HMODULE void*
+// NOTE: This is the definition for FARPROC in C: typedef long long (__stdcall *FARPROC)();
+#macro FARPROC fn @stdcall() -> i64
 #macro INVALID_HANDLE_VALUE (cast<HANDLE>cast<i64>-1)
 
 // https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
@@ -165,7 +169,12 @@ fn @import(Kernel) GetFileSizeEx(
   hFile: HANDLE,
   lpFileSizeHigh: i64*
 ) -> bool;
-
+fn @import(Kernel) GetFileTime(
+  hFile: HANDLE,
+  lpCreationTime: i64*, // arguments actually use FILETIME but they are basically i64
+  lpLastAccessTime: i64*,
+  lpLastWriteTime: i64*
+) -> bool;
 // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
 fn @import(Kernel) ReadFile(
   hFile: HANDLE,
@@ -200,6 +209,18 @@ fn @import(Kernel) FindNextFileA(
 fn @import(Kernel) FindClose(
   hFindFile: HANDLE
 ) -> bool;
+
+// https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya
+fn @import(Kernel) LoadLibraryA(
+  lpLibFileName: char*
+) -> HMODULE;
+fn @import(Kernel) FreeLibrary(
+  hLibModule: HMODULE
+) -> bool;
+fn @import(Kernel) GetProcAddress(
+  hModule: HMODULE,
+  lpProcName: char*
+) -> FARPROC;
 
 // A user may want to use the name 'Sleep' so we rename the function
 fn @import(Kernel,alias="Sleep") win32_Sleep(
@@ -577,5 +598,7 @@ fn ntohs(netshort: u16) -> u16 {
 #macro WSANO_RECOVERY                   11003
 // The requested name is valid, but no data of the requested type was found.
 #macro WSANO_DATA                       11004
+
+#macro ERROR_PROC_NOT_FOUND 127
 
 #endif // OS_WINDOWS

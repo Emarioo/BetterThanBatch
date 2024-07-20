@@ -912,16 +912,18 @@ void Compiler::processImports() {
 
                 if(!had_errors) {
                     imp->state = (TaskType)(imp->state | picked_task.type);
-                    // The 
-                    auto iden = ast->findIdentifier(imp->scopeId,0,entry_point,nullptr);
-                    if(iden && iden->is_fn()) {
-                        auto fun = iden->cast_fn();
-                        Assert(fun->funcOverloads.overloads.size());
-                        auto overload = fun->funcOverloads.overloads[0];
-                        addTask_type_body(overload.astFunc, overload.funcImpl);
-                    } else {
-                        if(is_initial_import) {
-                            addTask_type_body(imp->import_id);
+                    
+                    if (entry_point.size() != 0) {
+                        auto iden = ast->findIdentifier(imp->scopeId,0,entry_point,nullptr);
+                        if(iden && iden->is_fn()) {
+                            auto fun = iden->cast_fn();
+                            Assert(fun->funcOverloads.overloads.size());
+                            auto overload = fun->funcOverloads.overloads[0];
+                            addTask_type_body(overload.astFunc, overload.funcImpl);
+                        } else {
+                            if(is_initial_import) {
+                                addTask_type_body(imp->import_id);
+                            }
                         }
                     }
 
@@ -1143,10 +1145,12 @@ void Compiler::run(CompileOptions* options) {
 
     std::string obj_file = "bin/main.o";
     std::string exe_file = "bin/main.exe";
+    std::string dll_file = "bin/main.dll";
     std::string bc_file = "bin/main.bc";
 
     bool generate_obj_file = false;
     bool generate_exe_file = false;
+    bool generate_dll_file = false;
     bool generate_bc_file = false;
 
     if(options->output_file.size() == 0) {
@@ -1175,6 +1179,11 @@ void Compiler::run(CompileOptions* options) {
             Assert(false);
             generate_bc_file = true;
             bc_file = options->output_file;
+        } else if(format == ".dll" || format == ".so") {
+            // NOTE: dll for windows, so for linux.
+            //   We shouldn't allow the user to use .so on windows
+            generate_dll_file = true;
+            dll_file = options->output_file;
         } else {
             log::out << "You specified '"<<format<<"' as file extension for the output file but the compiler has no idea what to generate.\n";
             #define PRINT_FORMAT_OPTIONS\
@@ -1193,6 +1202,11 @@ void Compiler::run(CompileOptions* options) {
             PRINT_FORMAT_OPTIONS
             return;
         }
+    }
+
+    if (generate_dll_file) {
+        entry_point = ""; // no entry point for dlls
+        // You should export DllMain for Windows
     }
 
     importDirectories.add(options->modulesDirectory);
@@ -1261,6 +1275,9 @@ void Compiler::run(CompileOptions* options) {
             preload += "#macro OS_LINUX #endmacro\n";
         } else if(options->target == TARGET_BYTECODE) {
             preload += "#macro OS_BYTECODE #endmacro\n";
+        }
+        if (generate_exe_file) {
+            preload += "#macro BUILD_EXE #endmacro\n";
         }
         if(options->linker == LINKER_MSVC) {
             preload += "#macro LINKER_MSVC #endmacro\n";
@@ -1393,14 +1410,18 @@ void Compiler::run(CompileOptions* options) {
     
     if(!obj_write_success) {
         log::out << log::RED << "Could not write object file '"<<obj_file<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
-    } else if(generate_exe_file && options->target != TARGET_BYTECODE) {
+    } else if((generate_exe_file || generate_dll_file) && options->target != TARGET_BYTECODE) {
         bool has_winmain = false;
-        if (options->target == TARGET_WINDOWS_x64 && entry_point == "WinMain") {
-            for(auto it : bytecode->tinyBytecodes) {
-                // log::out  << it->name << "\n";
-                if (it->name == "WinMain") {
-                    has_winmain = true;
-                    break;
+        if (generate_exe_file) {
+            // dll doesn't care about entry point
+            // well, it has it's own entry point on windows
+            if (options->target == TARGET_WINDOWS_x64 && entry_point == "WinMain") {
+                for(auto it : bytecode->tinyBytecodes) {
+                    // log::out  << it->name << "\n";
+                    if (it->name == "WinMain") {
+                        has_winmain = true;
+                        break;
+                    }
                 }
             }
         }
@@ -1423,12 +1444,16 @@ void Compiler::run(CompileOptions* options) {
             if(options->useDebugInformation)
                 cmd += "/DEBUG ";
 
-            if (has_winmain)
-                cmd += "/SUBSYSTEM:WINDOWS ";
-            else {
-                cmd += "/entry:" + entry_point + " ";
-            }
-
+            if (generate_exe_file) {
+                if (has_winmain)
+                    cmd += "/SUBSYSTEM:WINDOWS ";
+                else {
+                    cmd += "/entry:" + entry_point + " ";
+                }
+            } else if (generate_dll_file) {
+                // TODO: Add exports
+                cmd += "/DLL ";
+            } else Assert(false);
 
             cmd += obj_file + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
@@ -1450,12 +1475,30 @@ void Compiler::run(CompileOptions* options) {
                 cmd += path + " ";
             }
             #define LINK_TEMP_EXE "temp_382.exe"
+            #define LINK_TEMP_DLL "temp_382.dll"
             #define LINK_TEMP_PDB "temp_382.pdb"
-            if(outputOtherDirectory) {
-                // MSVC linker cannot output to another directory than the current.
-                cmd += "/OUT:" LINK_TEMP_EXE;
-            } else {
-                cmd += "/OUT:" + exe_file+" ";
+            if (generate_exe_file) {
+                if(outputOtherDirectory) {
+                    // MSVC linker cannot output to another directory than the current.
+                    cmd += "/OUT:" LINK_TEMP_EXE;
+                    bool yes = FileCopy(LINK_TEMP_EXE, exe_file);
+                    if (!yes) {
+                        log::out << log::RED << "Could not copy '"<<LINK_TEMP_EXE<<"' to '"<<exe_file<<"'\n";
+                    }
+                } else {
+                    cmd += "/OUT:" + exe_file+" ";
+                }
+            } else if(generate_dll_file) {
+                if(outputOtherDirectory) {
+                    // MSVC linker cannot output to another directory than the current.
+                    cmd += "/OUT:" LINK_TEMP_DLL;
+                    bool yes = FileCopy(LINK_TEMP_DLL, dll_file);
+                    if (!yes) {
+                        log::out << log::RED << "Could not copy '"<<LINK_TEMP_EXE<<"' to '"<<exe_file<<"'\n";
+                    }
+                } else {
+                    cmd += "/OUT:" + dll_file+" ";
+                }
             }
         } break;
         case LINKER_CLANG:
@@ -1465,30 +1508,34 @@ void Compiler::run(CompileOptions* options) {
                 case LINKER_CLANG: cmd += "clang++ "; break;
                 default: break;
             }
-            
             if(options->useDebugInformation)
                 cmd += "-g ";
 
             cmd += obj_file + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
             
-            if(!force_default_entry_point) {
-                if(options->target == TARGET_WINDOWS_x64) {
-                    // Always use cruntime entry point on Windows because
-                    // parsing command line arguments is though.
-                    // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
-                } else {
-                    cmd += "-nostdlib ";
-                    if (entry_point == "main")
-                        cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
+            if (generate_exe_file) {
+                if(!force_default_entry_point) {
+                    if(options->target == TARGET_WINDOWS_x64) {
+                        // Always use cruntime entry point on Windows because
+                        // parsing command line arguments is though.
+                        // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
+                    } else {
+                        cmd += "-nostdlib ";
+                        if (entry_point == "main")
+                            cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
+                    }
                 }
-            }
-            if (entry_point != "main") // no need to set entry if main is used since it is the default
-                cmd += "--entry " + entry_point + " ";
-            
-            if (has_winmain) {
-                cmd += "-Wl,-subsystem,windows "; // https://stackoverflow.com/questions/73676692/what-do-the-subsystem-windows-options-do-in-gcc
-            }
+                if (entry_point != "main") // no need to set entry if main is used since it is the default
+                    cmd += "--entry " + entry_point + " ";
+                
+                if (has_winmain) {
+                    cmd += "-Wl,-subsystem,windows "; // https://stackoverflow.com/questions/73676692/what-do-the-subsystem-windows-options-do-in-gcc
+                }
+            } else if(generate_dll_file) {
+                // TODO: Add -nostdlib?
+                cmd += "-shared ";
+            } else Assert(false);
 
             // cmd += "-ffreestanding "; // these do not make a difference (with mingw on windows at least)
             // cmd += "-Os ";
@@ -1530,8 +1577,11 @@ void Compiler::run(CompileOptions* options) {
                 if(file != "")
                     cmd += "-l" + file + " ";
             }
-
-            cmd += "-o " + exe_file;
+            if(generate_exe_file)
+                cmd += "-o " + exe_file;
+            else if(generate_dll_file)
+                cmd += "-o " + dll_file;
+            else Assert(false);
         } break;
         default: {
             Assert(false);
@@ -1552,7 +1602,11 @@ void Compiler::run(CompileOptions* options) {
             bool yes = engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
             failed = !yes;
             options->compileStats.end_linker = engone::StartMeasure();
-            options->compileStats.generatedFiles.add(exe_file);
+            if(generate_exe_file) {
+                options->compileStats.generatedFiles.add(exe_file);
+            } else if(generate_dll_file) {
+                options->compileStats.generatedFiles.add(dll_file);
+            } else Assert(false);
         }
         options->compileStats.end_linker = StartMeasure();
         if(exitCode != 0 || failed) {

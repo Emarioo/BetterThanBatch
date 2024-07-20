@@ -315,6 +315,8 @@ struct StringBuilder {
                     len := strlen(str)
                     append(str, len)
                     append('"')
+                } else if type == typeid (void*) {
+                    append(*cast<void**>(data))
                 } else {
                     new_type := type
                     new_type.ptr_level--

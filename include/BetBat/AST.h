@@ -809,6 +809,8 @@ struct ASTFunction : ASTNode {
     std::string linked_alias;
     std::string linked_library;
 
+    std::string export_alias; // empty means no export, same name as function means no alias, different means alias
+
     struct PolyState {
         DynamicArray<TypeId> argTypes;
         DynamicArray<TypeId> structTypes;
