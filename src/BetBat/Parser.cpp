@@ -3546,6 +3546,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                 function->blank_body = true;
             } else if (view_fn_name == "entry"){
                 is_entry_point = true;
+            } else if (view_fn_name == "compiler"){
+                function->is_compiler_func = true;
             } else {
                 auto tok = info.gettok();
                 // It should not warn you because it is quite important that you use the right annotations with functions

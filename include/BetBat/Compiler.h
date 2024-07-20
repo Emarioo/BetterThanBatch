@@ -123,9 +123,10 @@ struct CompileOptions {
     TextBuffer source_buffer; // pure text instead of a path to some file
 
     bool useDebugInformation = false;
-    bool silent=false;
-    bool verbose=false;
+    bool silent = false;
+    bool verbose = false;
     bool executeOutput = false;
+    bool incremental_build = false;
 
     bool disable_preload = false;
 
@@ -259,6 +260,9 @@ struct Compiler {
     u32 preload_import_id = 0;
     u32 typeinfo_import_id = 0;
 
+    double last_modified_time = 0.0;
+    bool output_is_up_to_date = false;
+
     bool have_prepared_global_data = false;
     bool have_generated_comp_time_global_data = false;
     bool compiler_got_stuck = false;
@@ -316,6 +320,7 @@ struct Compiler {
     // thread safe, duplicates will be ignored
     void addLinkDirective(const std::string& text);
 
+    double compute_last_modified_time();
 
     struct Error {
         CompileError errorType;

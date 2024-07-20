@@ -227,10 +227,11 @@ fn DirectoryDelete(path: char[]) -> bool {
 }
 fn FileCopy(src: char[], dst: char[]) -> bool {
     #if OS_WINDOWS
-        yes := CopyFileA(src.ptr,dst.ptr,false);
+        yes := CopyFileExA(src.ptr,dst.ptr,null,null,null,0);
+        // yes := CopyFileA(src.ptr,dst.ptr,false); // false means, don't fail if exist
 		if(!yes){
 			err := GetLastError();
-            log("[WinError ",err,"] CopyFile '",src,"' '",dst,"'");
+            log("[WinError ",err,"] CopyFile '",src,"' to '",dst,"'");
             return false;
 		}
 		return true;
@@ -711,6 +712,48 @@ fn AbsolutePath(path: char[]) -> StringBuilder {
     return b
     #endif
 }
+// returns -1 if invalid
+fn FileModifiedTime(path: char[]) -> i64 {
+    // TODO: Ensure null terminated path
+    #if OS_WINDOWS
+        time: i64
+        handle := CreateFileA(path.ptr, GENERIC_READ, FILE_SHARE_READ, null, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL , null)
+        if handle == INVALID_HANDLE_VALUE
+            return -1 // file not found or something else
+        defer CloseHandle(handle)
+        yes := GetFileTime(handle, null, null, &time)
+        if !yes
+            return -1
+        return time
+    #elif OS_LINUX
+        buf: stat
+        err := stat(path.ptr, &buf);
+        if err != 0
+            return -1 // file not found or something
+        return buf.st_mtime * cast<u64>1_000_000_000 + st_mtime_nsec
+    #endif
+}
+// returns -1 if invalid
+fn FileModifiedTime(file: FileHandle) -> i64 {
+    #if OS_WINDOWS
+        time: i64
+        yes := GetFileTime(file, null, null, &time)
+        if !yes
+            return -1
+        return time
+    #elif OS_LINUX
+        buf: stat
+        err := fstat(InternalToHandle(file), &buf);
+        if err != 0
+            return -1 // file not found or something
+        return buf.st_mtime * cast<u64>1_000_000_000 + st_mtime_nsec
+    #endif
+    /* Test with this code
+    t := FileModifiedTime("btb.exe")
+    log(t)
+    log(t / cast<i64>10_000_000 / 60 / 60 / 24 / 365 + 1601) // should print the year the file was last modified
+    */
+}
 
 // returns absolute path to the found file, empty string if nothing was found
 // if multiple files match then any one can be picked (depends on DirectoryIterator)
@@ -720,6 +763,7 @@ fn FindFile(path: char[], search_env_path: bool = false, recursive: bool = false
     // TODO: Rename function to FindFileInEnvPath?
     // TODO: Perhaps have another function FindFile(path, directories_to_search)?
     #if OS_WINDOWS
+    incomplete
     #elif OS_LINUX
     result: StringBuilder
     if access(path.ptr, F_OK) == 0 {

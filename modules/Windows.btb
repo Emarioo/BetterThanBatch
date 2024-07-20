@@ -13,6 +13,15 @@
 #macro FARPROC fn @stdcall() -> i64
 #macro INVALID_HANDLE_VALUE (cast<HANDLE>cast<i64>-1)
 
+// Initialize once for each new process.
+// Return FALSE to fail DLL load.
+#macro DLL_PROCESS_ATTACH   1
+// Do thread-specific initialization.
+#macro DLL_THREAD_ATTACH    2
+// Do thread-specific cleanup.
+#macro DLL_THREAD_DETACH    3
+#macro DLL_PROCESS_DETACH   0
+
 // https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
 fn @import(Kernel) CloseHandle(
   hObject: HANDLE
@@ -152,16 +161,25 @@ fn @import(Kernel) RemoveDirectoryA(
 ) -> bool;
 
 fn @import(Kernel) MoveFileA(
-  /* [in] LPCTSTR*/ lpExistingFileName: char*,
-  /* [in] LPCTSTR*/ lpNewFileName: char*
+  /* [in] LPCTSTR */ lpExistingFileName: char*,
+  /* [in] LPCTSTR */ lpNewFileName: char*
 ) -> bool;
 fn @import(Kernel) CopyFileA(
-  /* [in] LPCTSTR*/ lpExistingFileName: char*,
-  /* [in] LPCTSTR*/ lpNewFileName: char*,
-  /* [in] BOOL   */ bFailIfExists: bool
+  /* [in] LPCTSTR */ lpExistingFileName: char*,
+  /* [in] LPCTSTR */ lpNewFileName: char*,
+  /* [in] BOOL    */ bFailIfExists: bool
 ) -> bool;
 fn @import(Kernel) DeleteFileA(
   /* [in] LPCTSTR*/ lpFileName: char*
+) -> bool;
+
+fn @import(Kernel) CopyFileExA(
+  /* [in]           LPCSTR             */ lpExistingFileName: char*,
+  /* [in]           LPCSTR             */ lpNewFileName: char*,
+  /* [in, optional] LPPROGRESS_ROUTINE */ lpProgressRoutine: void*,
+  /* [in, optional] LPVOID             */ lpData: void*,
+  /* [in, optional] LPBOOL             */ pbCancel: bool*,
+  /* [in]           DWORD              */ dwCopyFlags: i32
 ) -> bool;
 
 // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfilesizeex

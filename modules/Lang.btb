@@ -30,6 +30,7 @@ enum @enclosed @specified lang_Primitive : u8 {
     DECIMAL         = 5,
     CHAR            = 6,
     BOOL            = 7,
+    FUNCTION        = 8,
 }
 struct lang_TypeId {
     index0: u16;
@@ -64,6 +65,8 @@ struct lang_TypeMember {
 global lang_typeInfos: lang_TypeInfo[];
 global lang_members: lang_TypeMember[];
 global lang_strings: char[]; // string data
+
+fn @compiler init_preload()
 
 // These are not necessary because of nameof, sizeof
 // #macro LANG_TYPENAME(TYPE) lang_typename(typeid(TYPE))
@@ -135,10 +138,10 @@ fn std_print_any<T>(value: T*, pretty: bool = false) {
     id := typeid(T);
     std_print_any(value, id, pretty);
 }
-fn std_print<T>(value: T*) {
+fn std_print<T>(value: T*, pretty: bool = false) {
     id := typeid(T);
     // TODO: Function to enable/disable pretty print? thread local setting
-    std_print_any(value, id, false);
+    std_print_any(value, id, pretty);
     // std_print_any(value, id, true);
 }
 // Overloading needs fixing

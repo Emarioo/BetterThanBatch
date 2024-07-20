@@ -23,6 +23,66 @@
 #import "BucketArray"
 #import "String"
 
+#import "Hotreloading"
+
+// #if OS_WINDOWS
+// fn @export @stdcall DllMain(hinstDLL: HINSTANCE, fdwReason: i32, lpvReserved: void* ) -> bool {
+//     // Perform actions based on the reason for calling.
+//     switch fdwReason {
+//         case DLL_PROCESS_ATTACH:
+//             // Initialize once for each new process.
+//             // Return FALSE to fail DLL load.
+//             init_preload()
+//             break;
+//         case DLL_THREAD_ATTACH:
+//             // Do thread-specific initialization.
+//             break;
+//         case DLL_THREAD_DETACH:
+//             // Do thread-specific cleanup.
+//             break;
+//         case DLL_PROCESS_DETACH:
+//             if lpvReserved {
+//                 break; // do not do cleanup if process termination scenario
+//             }
+//             // Perform any necessary cleanup.
+//             break;
+//     }
+//     return true;  // Successful DLL_PROCESS_ATTACH.
+// }
+// #else
+// #endif
+
+fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
+    if event == APP_CODE_LOAD  init_preload() // init global data, type information
+    
+    if event == APP_INIT {
+        core: GameCore* = Allocate(sizeof GameCore)
+        construct(core)
+        if app.argc > 1 {
+            if "client" == sliced(app.argv[1]) {
+                core.special_action = SPECIAL_START_CLIENT
+            } else if "server" == sliced(app.argv[1]) {
+                core.special_action = SPECIAL_START_SERVER
+            }
+        }
+        app.user_data = core
+    }
+
+    if event == APP_TICK {
+        global tick: i32
+        tick++
+        if tick < 70
+            return;
+        tick = 0
+    }
+
+    // log(&event)
+    // std_print(app, true) log()
+
+    log("Automatic code reload is very cool")
+}
+
+
 #macro TIMED_CODE(T, CODE)
 global timed_step_ ## #line: i32
 if timed_step_###line++ > T {

@@ -206,6 +206,7 @@ namespace lexer {
         // Token getToken(u32 token_index_into_import);
 
         // interesting but not stricly necessary information
+        double last_modified_time;
         int fileSize;
         int lines;
         int comment_lines;

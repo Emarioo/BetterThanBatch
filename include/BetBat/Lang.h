@@ -15,6 +15,7 @@ namespace lang {
         DECIMAL         = 5,
         CHAR            = 6,
         BOOL            = 7,
+        FUNCTION        = 8,
     };
     struct Range {
         i32 beg;

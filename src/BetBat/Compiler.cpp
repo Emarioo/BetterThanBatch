@@ -595,6 +595,21 @@ void Compiler::processImports() {
                         break;
                     }
                 }
+                if(options->incremental_build && !missing_dependency && last_modified_time == 0.0) {
+                    // NOTE: incremental_build is an experimental feature.
+                    //   It doesn't consider linked libraries. Only .btb source files.
+                    last_modified_time = compute_last_modified_time(); // should run once
+                    double output_time = 0.0;
+                    bool yes = FileLastWriteSeconds(options->output_file, &output_time);
+                    if(yes) {
+                        // log::out << last_modified_time << " < " << output_time << " ("<<options->output_file<<")\n";
+                        if (last_modified_time < output_time) {
+                            tasks.resize(0);
+                            output_is_up_to_date = true;
+                            break;
+                        }
+                    }
+                }
             } else if (task.type == TASK_TYPE_BODY) {
                 // when we check bodies, functions and globals from other imports must be available
 
@@ -1153,6 +1168,8 @@ void Compiler::run(CompileOptions* options) {
     bool generate_dll_file = false;
     bool generate_bc_file = false;
 
+    bool obj_write_success = false;
+
     if(options->output_file.size() == 0) {
         switch(options->target){
             case TARGET_BYTECODE: {
@@ -1255,6 +1272,7 @@ void Compiler::run(CompileOptions* options) {
         "operator []<T>(slice: Slice<T>, index: u32) -> T {\n"
         "    return slice.ptr[index];\n"
         "}\n"
+        "fn @compiler init_preload()\n" // init global data and stuff
         "struct Range {\n"
         // "struct @hide Range {" 
         "    beg: i32;\n"
@@ -1327,6 +1345,17 @@ void Compiler::run(CompileOptions* options) {
     for(int i=0;i<thread_count-1;i++) {
         threads[i].join();
     }
+
+
+    if(output_is_up_to_date) {
+        if(!options->silent) {
+            // We finished, don't print anything?
+            log::out << log::GOLD << "Output is up to date with the source files.\n";
+            log::out << log::GOLD << "Stopping compilation.\n";
+        }
+        goto JUMP_TO_EXEC;
+        // return;
+    }
     
     switch(options->target) {
         case TARGET_BYTECODE: {
@@ -1387,7 +1416,6 @@ void Compiler::run(CompileOptions* options) {
         return;
     }
     
-    bool obj_write_success = false;
     switch(options->target){
         case TARGET_BYTECODE: {
             // if(generate_obj_file) {
@@ -1645,6 +1673,7 @@ void Compiler::run(CompileOptions* options) {
     //         }
     //     }
     // }
+JUMP_TO_EXEC:
     
     if(options->executeOutput) {
         switch(options->target) {
@@ -1954,6 +1983,26 @@ CompilerImport* Compiler::getImport(u32 import_id){
     auto imp = imports.get(id-1);
     lock_imports.unlock();
     return imp;
+}
+double Compiler::compute_last_modified_time() {
+    using namespace engone;
+    auto iter = imports.iterator();
+    double time = 0.0;
+    while (imports.iterate(iter)) {
+        auto it = iter.ptr;
+        if (it->preproc_import_id == 0)
+            continue;
+
+        auto imp = lexer.getImport_unsafe(it->import_id-1);
+        // preload doesn't have import, imp will be null then
+        if (imp) {
+            // log::out << imp->path << " " << imp->last_modified_time<<"\n";
+            if (imp->last_modified_time > time) {
+                time = imp->last_modified_time;
+            }
+        }
+    }
+    return time;
 }
 const char* annotation_names[]{
     "unknown",

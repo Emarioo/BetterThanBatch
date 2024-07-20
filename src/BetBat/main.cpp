@@ -110,6 +110,7 @@ int main(int argc, const char** argv){
         // options.linker = LINKER_MSVC;
         // options.linker = LINKER_GNU;
         options.executeOutput = true;
+        // options.incremental_build = true;
         // options.disable_preload = true;
         // options.only_preprocess = true;
         options.useDebugInformation = true;
@@ -225,7 +226,8 @@ int main(int argc, const char** argv){
         ZoneNamedN(zone0,"sleep",true);
         engone::Sleep(0.5); // give time for program to connect and send data to tracy profiler
     }
-    log::out << "Finished\n";
+
+    // log::out << "Finished\n";
 
     return exit_code;
 }
@@ -303,6 +305,8 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
             }
         } else if (arg == "--debug" || arg == "-d") {
             options->useDebugInformation = true;
+        } else if (arg == "--incremental" || arg == "-i") {
+            options->incremental_build = true;
         } else if (arg == "--silent") {
             options->silent = true;
         } else if (arg == "--verbose") {

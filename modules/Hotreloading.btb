@@ -1,0 +1,137 @@
+// I love my language
+
+/*
+    Hotreloading only works for a single thread.
+    Each thread would need it's own hotreloading thing.
+    Networking code for example. How do we hotreload that!?
+
+    Hotreloading uses dlls, they can be confusing.
+    Here are some useful links:
+        https://learn.microsoft.com/en-us/windows/win32/dlls/dynamic-link-library-data
+
+
+    Before running code form the dll, you must initialize global data (if the dll code uses global data).
+    Calling init_preload() from a function in the dll will do so.
+*/
+
+#import "File"
+#import "OS"
+
+#macro EventFunction fn @oscall(AppInstance*, AppEvent)
+
+#macro HOTRELOAD_FN_EVENT hotreload_event
+#macro HOTRELOAD_FN_EVENT_S "hotreload_event"
+
+enum AppEvent {
+    APP_CODE_LOAD,   // code is loaded before APP_INIT (this is where you set up global data and such)
+    APP_CODE_UNLOAD, // here you can unload things if you need, allocated memory in global variables for example
+    APP_INIT, // called once at start of app
+    APP_TICK, // continous event (while loop)
+    APP_STOP, // called at end of app, this is called before the final APP_CODE_UNLOAD
+}
+
+struct AppInstance {
+    fn init(code_path: char[], data: void* = null) {
+        dynamic_library_path = code_path
+        core_data = data
+    }
+    rebuild_func: fn();
+    dynamic_library_path: char[];
+    user_data: void*; // data from the dynamic library
+
+    core_data: void*; // data from the main executable (rarely used)
+    argc: i32;
+    argv: char**;
+
+    running: bool; // the app runs as long as this is true
+
+    start_time: i64;
+    reload_rate_seconds: f32 = 1.0;
+
+    // private stuff
+    library: DynamicLibrary;
+    current_func_event: EventFunction;
+    last_modified_time: i64;
+}
+fn StartInfiniteLoop(app: AppInstance) {
+    initialized: bool
+    app.running = true
+    app.start_time = StartMeasure()
+    last_time: i64 = StartMeasure()
+    acc: f32 = app.reload_rate_seconds; // we begin with high accumulation so that we try to load code right away
+    while app.running {
+        // Check if code should be reloaded
+        now := StartMeasure()
+        dt := DiffMeasure(now - last_time)
+        last_time = now;
+        acc += dt
+        // log(acc)
+        if acc >= app.reload_rate_seconds {
+            if app.rebuild_func {
+                // TODO: If user specified rebuild function then we compile code.
+                app.rebuild_func()
+            }
+            acc = 0.0
+            time := FileModifiedTime(app.dynamic_library_path)
+            if time > app.last_modified_time {
+                // Unload previous code
+                if app.library.valid() {
+                    if app.current_func_event
+                        app.current_func_event(&app, APP_CODE_UNLOAD)
+                    app.library.cleanup()
+                    app.current_func_event = null
+                }
+
+                // Copy dll because the compiler can't compile dll if it's loaded.
+                // By using a copy the compiler is free to overwrite the original dll
+                real_path: StringBuilder
+                dot_index := find(".", app.dynamic_library_path)
+                if dot_index != -1 {
+                    real_path.append(substring(app.dynamic_library_path, 0, dot_index))
+                    real_path.append("_tmp")
+                    real_path.append(substring(app.dynamic_library_path, dot_index))
+                } else {
+                    real_path.append(app.dynamic_library_path)
+                }
+                yes := FileCopy(app.dynamic_library_path, real_path)
+
+                if !yes {
+                    log("Failed copying '", app.dynamic_library_path, "' to '", real_path, "'")
+                    app.running = false;
+                } else {
+                    app.library = LoadDynamicLibrary(real_path)
+                    if app.library.valid() {
+                        app.current_func_event = cast_unsafe<EventFunction> app.library.get_pointer(HOTRELOAD_FN_EVENT_S)
+                        if !app.current_func_event {
+                            log("Failed loading dll proc: ", HOTRELOAD_FN_EVENT_S)
+                            app.running = false;
+                        } else {
+                            app.current_func_event(&app, APP_CODE_LOAD)
+                            if !initialized
+                                app.current_func_event(&app, APP_INIT)
+                            initialized = true;
+
+                            app.last_modified_time = time
+                        }
+                    } else {
+                        log("Failed loading dll: ", real_path)
+                        app.running = false
+                    }
+                }
+            } else {
+                // same code as before, do nothing
+            }
+        }
+
+        if app.current_func_event {
+            app.current_func_event(&app, APP_TICK)
+        }
+
+        ProcessSleep(0.001)
+        // ProcessSleep(0.01)
+    }
+    if app.current_func_event
+        app.current_func_event(&app, APP_STOP)
+    if app.current_func_event
+        app.current_func_event(&app, APP_CODE_UNLOAD)
+}

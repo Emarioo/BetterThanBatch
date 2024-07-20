@@ -185,13 +185,14 @@ struct TypeId {
     TypeId() = default;
     TypeId(PrimitiveType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
     TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
-    static TypeId Create(u32 id) {
+    static TypeId Create(u32 id, int level = 0) {
         TypeId out={}; 
         // TODO: ENUM or STRUCT?
         // out._flags = VALID_MASK;
         out.valid = true;
         out._infoIndex0 = id&0xFFFF;
         out._infoIndex1 = id>>16;
+        out.pointer_level = level;
         return out; 
     }
     static TypeId CreateString(u32 index) {
@@ -811,6 +812,8 @@ struct ASTFunction : ASTNode {
 
     std::string export_alias; // empty means no export, same name as function means no alias, different means alias
 
+    bool is_compiler_func = false;
+
     struct PolyState {
         DynamicArray<TypeId> argTypes;
         DynamicArray<TypeId> structTypes;
@@ -840,7 +843,7 @@ struct ASTFunction : ASTNode {
     // When function should have a body or not has changed a lot recently
     // and I have needed to rewrite a lot. Having the requirement abstracted in
     // a function will prevent some of the changes you would need to make.
-    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC; }
+    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC && !is_compiler_func; }
 
     void print(AST* ast, int depth);
 };

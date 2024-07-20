@@ -7,32 +7,25 @@
     - Entities with velocity, effects, collision
 */
 
-#import "./GameCore"
+#import "Hotreloading"
+#import "OS"
 
 fn main(argc: i32, argv: char**) -> i32 {
-    // log(argc)
-
-    // The user starts the game. What should happen?
-    // We initialize some stuff, assets?
-    // if argc > 1 {
-    //     client.set_callback(net_callback, null)
-    //     client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
-    // } else {
-    //     is_server = true
-    //     server.set_callback(net_callback, null)
-    //     server.start(DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
-    // }
-    
-    // Then we start game loop.
-    core: GameCore
-    if argc > 1 {
-        if "client" == sliced(argv[1]) {
-            core.special_action = SPECIAL_START_CLIENT
-        } else if "server" == sliced(argv[1]) {
-            core.special_action = SPECIAL_START_SERVER
-        }
+    app: AppInstance
+    app.argc = argc
+    app.argv = argv
+    app.rebuild_func = build
+    fn build() {
+        ExecuteCommand("btb examples/crawler/GameCore -d --silent --incremental -o bin/code.dll", asynchronous = true)
     }
-    core.start_game()
+    #if OS_WINDOWS
+        app.init("bin/code.dll")
+    #else
+        app.init("bin/code.so")
+    #endif
+
+    StartInfiniteLoop(app)
+
     return 0
 }
 

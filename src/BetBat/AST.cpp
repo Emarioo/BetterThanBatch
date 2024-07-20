@@ -620,11 +620,21 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
     TypeInfo* from_typeInfo = nullptr;
     if(from.isNormalType())
         from_typeInfo = getTypeInfo(from);
+    TypeInfo* to_typeInfo = nullptr;
+    if(to.isNormalType())
+        to_typeInfo = getTypeInfo(to);
     int to_size = getTypeSize(to);
     if(from_typeInfo && from_typeInfo->astEnum && AST::IsInteger(to)) {
         // TODO: Print an error that says big enums can't be casted to small integers.
         if(to_size >= from_typeInfo->getSize())
             return true;
+    }
+    auto voidp = TypeId::Create(AST_VOID, 1);
+    if (from == voidp && to_typeInfo && to_typeInfo->funcType) {
+        return true;
+    }
+    if (from_typeInfo && from_typeInfo->funcType && to == voidp) {
+        return true;
     }
     if (from_typeInfo && from_typeInfo->funcType && to == AST_BOOL) {
         return true;

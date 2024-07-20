@@ -409,6 +409,8 @@ struct StringBuilder {
             if !printed {
                 append(*cast<i64*>data) // print raw value
             }
+        } else if typeinfo.type == lang_Primitive.FUNCTION {
+            append(*cast<void**>data) // print raw value
         }
     }
     

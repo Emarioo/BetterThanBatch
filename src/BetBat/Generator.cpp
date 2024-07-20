@@ -72,9 +72,18 @@ bool GenContext::performSafeCast(TypeId from, TypeId to, bool less_strict) {
     if (from == to)
         return true;
     
+    #define CAST_TO_BOOL builder.emit_pop(BC_REG_T0);            \
+            builder.emit_li32(BC_REG_A, 0);                      \
+            builder.emit_neq(BC_REG_T0, BC_REG_A, false, from_size);     \
+            builder.emit_push(BC_REG_T0);                         
+
+    auto from_size = ast->getTypeSize(from);
+
     if(from.isPointer()) {
-        if (to == AST_BOOL)
+        if (to == AST_BOOL) {
+            CAST_TO_BOOL
             return true;
+        }
         if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
             from.getPointerLevel() - to.getPointerLevel() == 1 && (less_strict || from.baseType() == AST_VOID))
             return true;
@@ -96,7 +105,6 @@ bool GenContext::performSafeCast(TypeId from, TypeId to, bool less_strict) {
     // TODO: I just threw in currentScopeId. Not sure if it is supposed to be in all cases.
     // auto fti = info.ast->getTypeInfo(from);
     // auto tti = info.ast->getTypeInfo(to);
-    auto from_size = ast->getTypeSize(from);
     auto to_size = ast->getTypeSize(to);
     BCRegister from_reg = BC_REG_T0;
     BCRegister to_reg = BC_REG_T1;
@@ -144,6 +152,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to, bool less_strict) {
     if(to == AST_BOOL) {
         auto finfo = info.ast->getTypeInfo(from);
         if(finfo->astEnum) {
+            CAST_TO_BOOL
             return true;
         }
     }
@@ -163,6 +172,9 @@ bool GenContext::performSafeCast(TypeId from, TypeId to, bool less_strict) {
     TypeInfo* from_typeInfo = nullptr;
     if(from.isNormalType())
         from_typeInfo = ast->getTypeInfo(from);
+    TypeInfo* to_typeInfo = nullptr;
+    if(to.isNormalType())
+        to_typeInfo = ast->getTypeInfo(to);
     // int to_size = info.ast->getTypeSize(to);
     if(from_typeInfo && from_typeInfo->astEnum && AST::IsInteger(to)) {
         // TODO: Print an error that says big enums can't be casted to small integers.
@@ -173,6 +185,14 @@ bool GenContext::performSafeCast(TypeId from, TypeId to, bool less_strict) {
         }
     }
     if (from_typeInfo && from_typeInfo->funcType && to == AST_BOOL) {
+        CAST_TO_BOOL
+        return true;
+    }
+    auto voidp = TypeId::Create(AST_VOID, 1);
+    if (from == voidp && to_typeInfo && to_typeInfo->funcType) {
+        return true;
+    }
+    if (from_typeInfo && from_typeInfo->funcType && to == voidp) {
         return true;
     }
     // Asserts when we have missed a conversion
@@ -4408,8 +4428,21 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
             generatePreload();
         }
-        
-        SignalIO result = generateBody(function->body);
+
+        if (function->is_compiler_func) {
+            if (function->name == "init_preload") {
+                generatePreload();
+            } else {
+                ERR_SECTION(
+                    ERR_HEAD2(function->location)
+                    ERR_MSG_COLORED("'"<<log::LIME<<function->name<<log::NO_COLOR<<"' is not a function from the compiler.")
+                    ERR_LINE2(function->location,"here")
+                )
+            }
+
+        } else {
+            SignalIO result = generateBody(function->body);
+        }
 
         // dfun->codeEnd = info.bytecode->length();
 
@@ -5896,6 +5929,13 @@ SignalIO GenContext::generateData() {
                         count_stringdata += mem.name.length() + 1; // +1 for null termination
                     }
                 }
+                if(ti->funcType) {
+                    // count_members += ti->astEnum->members.size();
+                    // for(int mi=0;mi<ti->astEnum->members.size();mi++){
+                    //     auto& mem = ti->astEnum->members[mi];
+                    //     count_stringdata += mem.name.length() + 1; // +1 for null termination
+                    // }
+                }
             }
             bytecode->ensureAlignmentInData(8); // just to be safe
             int off_typedata   = bytecode->appendData(nullptr, count_types * sizeof(lang::TypeInfo));
@@ -5930,6 +5970,7 @@ SignalIO GenContext::generateData() {
                     else                             typedata[i].type = lang::Primitive::UNSIGNED_INT;
                 } else if(ti->id == AST_CHAR)        typedata[i].type = lang::Primitive::CHAR;
                 else if(ti->id == AST_BOOL)          typedata[i].type = lang::Primitive::BOOL;
+                else if(ti->funcType)                typedata[i].type = lang::Primitive::FUNCTION;
                 else typedata[i].type = lang::Primitive::NONE; // compiler specific type like ast_typeid or ast_string, ast_fncall
                 
                 typedata[i].name.beg = string_offset;
@@ -5985,6 +6026,25 @@ SignalIO GenContext::generateData() {
                         member_count++;
                     }
                     typedata[i].members.end = member_count;
+                } else if(ti->funcType) {
+                    // typedata[i].members.beg = member_count;
+
+                    // for(int mi=0;mi<ti->astEnum->members.size();mi++){
+                    //     auto& ast_mem = ti->astEnum->members[mi];
+
+                    //     memberdata[member_count].name.beg = string_offset;
+
+                    //     memcpy(stringdata + string_offset, ast_mem.name.c_str(), ast_mem.name.length());
+                    //     stringdata[string_offset + ast_mem.name.length()] = '\0';
+                    //     string_offset += ast_mem.name.length() + 1;
+
+                    //     memberdata[member_count].name.end = string_offset - 1; // -1 won't include null termination
+
+                    //     memberdata[member_count].value = ast_mem.enumValue;
+
+                    //     member_count++;
+                    // }
+                    // typedata[i].members.end = member_count;
                 }
             }
             Assert(string_offset == count_stringdata && count_members == member_count);

@@ -58,8 +58,11 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     }
     Assert(lexer_import && file_id != 0);
     
-    
     lexer_import->fileSize = length;
+
+    lexer_import->last_modified_time = 0;
+    FileLastWriteSeconds(path_name, &lexer_import->last_modified_time);
+    // log::out << path_name << " " << lexer_import->last_modified_time<<"\n";
 
     // TODO: Optimize by keeping traack of chunks ids and their pointers here instead of using
     //  appendToken which queries file and chunk id every time.

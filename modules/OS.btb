@@ -198,13 +198,18 @@ fn ParseCmdLine(cmd: char[], buffer_text: StringBuilder*, buffer_args: Array<cha
 }
 
 // Only works on windows
-fn ExecuteCommand(cmd: char[], exit_code: i32*, asynchronous: bool = false) -> bool {
+fn ExecuteCommand(cmd: char[], exit_code: i32* = null, asynchronous: bool = false) -> bool {
     // Parsing command line is more complicated than this.
     // Use the other ExecuteCommand overload separate cmd and arguments.
-    // TODO: Fix memory leak
+    
     command: StringBuilder
     raw_args: StringBuilder
     args: Array<char*>
+    defer {
+        command.cleanup()
+        raw_args.cleanup()
+        args.cleanup()
+    }
 
     word_start := 0
 
@@ -272,7 +277,8 @@ fn ExecuteCommand(cmd: char[], exit_code: i32*, asynchronous: bool = false) -> b
     // for args.sliced()
     //     log(it)
 
-    return ExecuteCommand(command.sliced(), args.ptr, exit_code, asynchronous)
+    yes := ExecuteCommand(command.sliced(), args.ptr, exit_code, asynchronous)
+    return yes
 }
 
 // Returns false if anything failed, NOT if the program you called
@@ -383,7 +389,7 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
         }
         return false;
     }
-    if(asynchronous){
+    if(!asynchronous){
         WaitForSingleObject(pi.hProcess,INFINITE);
         if(exit_code){
             success := GetExitCodeProcess(pi.hProcess, cast<i32*>exit_code);

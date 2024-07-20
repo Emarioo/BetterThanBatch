@@ -519,7 +519,7 @@ namespace engone {
         }
         return (attributes & FILE_ATTRIBUTE_DIRECTORY);
     }
-    bool FileLastWriteSeconds(const std::string& path, double* seconds){
+    bool FileLastWriteSeconds(const std::string& path, double* seconds, bool log_error){
         // HANDLE handle = CreateFileA(path.c_str(),GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL, NULL);
         HANDLE handle = CreateFileA(path.c_str(),GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0, NULL);
 		
@@ -530,9 +530,11 @@ namespace engone {
 				// denied access to some more fundamental error is important however.
 				// PL_PRINTF("[WinError %lu] Cannot find '%s'\n",err,path.c_str());
 			}else if(err == ERROR_ACCESS_DENIED){
-				PL_PRINTF("[WinError %lu] Denied access to '%s'\n",err,path.c_str()); // tried to open a directory?
+				if(log_error)
+					PL_PRINTF("[WinError %lu] Denied access to '%s'\n",err,path.c_str()); // tried to open a directory?
 			}else {
-				PL_PRINTF("[WinError %lu] Error opening '%s'\n",err,path.c_str());
+				if(log_error)
+					PL_PRINTF("[WinError %lu] Error opening '%s'\n",err,path.c_str());
 			}
 			return false;
 		}
@@ -542,19 +544,21 @@ namespace engone {
         BOOL success = GetFileTime(handle,&creation,&access,&modified);
         if(!success){
             DWORD err = GetLastError();
-            PL_PRINTF("[WinError %lu] GetFileTime '%s'\n",err,path.c_str());
+			if(log_error)
+            	PL_PRINTF("[WinError %lu] GetFileTime '%s'\n",err,path.c_str());
             return false;
         }
         success = CloseHandle(handle);
         if(!success){
             DWORD err = GetLastError();
-            PL_PRINTF("[WinError %lu] CloseHandle '%s'\n",err,path.c_str());
+			if(log_error)
+            	PL_PRINTF("[WinError %lu] CloseHandle '%s'\n",err,path.c_str());
         }
 		u64 t0 = (u64)creation.dwLowDateTime+(u64)creation.dwHighDateTime*((u64)MAXDWORD+1);
 		u64 t1 = (u64)access.dwLowDateTime+(u64)access.dwHighDateTime*((u64)MAXDWORD+1);
 		u64 t2 = (u64)modified.dwLowDateTime+(u64)modified.dwHighDateTime*((u64)MAXDWORD+1);
 		//printf("T: %llu, %llu, %llu\n",t0,t1,t2);
-		*seconds = t2/10000000.; // 100-nanosecond intervals
+		*seconds = t2/10'000'000.0; // 100-nanosecond intervals
         return true;
     }
 	bool FileCopy(const std::string& src, const std::string& dst){
