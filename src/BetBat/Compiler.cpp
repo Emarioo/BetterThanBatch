@@ -1163,78 +1163,79 @@ void Compiler::run(CompileOptions* options) {
     if (dot_index == -1) {
         dot_index = options->output_file.size();
     }
-    std::string out_file_name = options->output_file.substr(slash_index+1, dot_index - (slash_index+1));
 
-    std::string obj_file = "bin/"+out_file_name+".o";
-    std::string exe_file = "bin/"+out_file_name+".exe";
-    std::string dll_file = "bin/"+out_file_name+".dll";
-    std::string lib_file = "bin/"+out_file_name+".lib";
-    std::string bc_file =  "bin/"+out_file_name+".bc";
-
-    bool generate_obj_file = false;
-    bool generate_exe_file = false;
-    bool generate_dll_file = false;
-    bool generate_lib_file = false;
-    bool generate_bc_file = false;
+    enum OutputType {
+        OUTPUT_INVALID,
+        OUTPUT_OBJ,
+        OUTPUT_EXE,
+        OUTPUT_LIB,
+        OUTPUT_DLL,
+        OUTPUT_BC,
+    };
+    OutputType output_type = OUTPUT_INVALID;
 
     bool obj_write_success = false;
+
+    std::string output_path = options->output_file;
 
     if(options->output_file.size() == 0) {
         switch(options->target){
             case TARGET_BYTECODE: {
-                options->output_file = bc_file;
+                output_path = "bin/main.bc";
             } break;
             case TARGET_WINDOWS_x64:
             case TARGET_LINUX_x64: {
-                options->output_file = exe_file;
+                output_path = "bin/main.exe"; // skip .exe on Linux?
             } break;
             default: Assert(false);
         }
     }
 
-    int last_dot = options->output_file.find_last_of(".");
-    if(last_dot != -1) {
-        std::string format = options->output_file.substr(last_dot);
-        if(format == ".o" || format == ".obj") {
-            obj_file = options->output_file;
-            generate_obj_file = true;
-        } else if(format == ".exe") {
-            generate_exe_file = true;
-            exe_file = options->output_file;
-        } else if(format == ".bc"){
+    std::string output_filename = output_path.substr(slash_index+1, dot_index - (slash_index+1));
+    std::string output_extension = ExtractExtension(output_path);
+    
+    std::string object_path = "bin/" + output_filename + ".o";
+    std::string temp_path{};
+    bool perform_copy = false;
+
+    if(output_extension.size() != 0) {
+        if(output_extension == ".o" || output_extension == ".obj") {
+            output_type = OUTPUT_OBJ;
+        } else if(output_extension == ".exe") {
+            output_type = OUTPUT_EXE;
+        } else if(output_extension == ".bc"){
             Assert(false);
-            generate_bc_file = true;
-            bc_file = options->output_file;
-        } else if(format == ".dll" || format == ".so") {
+            output_type = OUTPUT_BC;
+        } else if(output_extension == ".dll" || output_extension == ".so") {
+            output_type = OUTPUT_DLL;
             // NOTE: dll for windows, so for linux.
             //   We shouldn't allow the user to use .so on windows
-            generate_dll_file = true;
-            dll_file = options->output_file;
-        } else if(format == ".lib" || format == ".a") {
+        } else if(output_extension == ".lib" || output_extension == ".a") {
+            output_type = OUTPUT_LIB;
             // NOTE: Linux uses libNAME.a but we just check .a, should we warn the user if they forgot lib at the start of the file?
-            generate_lib_file = true;
-            lib_file = options->output_file;
-        } else {
-            log::out << "You specified '"<<format<<"' as file extension for the output file but the compiler has no idea what to generate.\n";
-            #define PRINT_FORMAT_OPTIONS\
-                log::out << log::RED << "  Specify .o (or .obj) for object file\n";             \
-                log::out << log::RED << "          .exe for executable (or no extension if on Linux)\n";                      \
-                log::out << log::RED << "          .bc for bytecode\n";                      \
-                log::out << log::RED << "  or no output file for the default "<<exe_file<<"\n"; 
-            PRINT_FORMAT_OPTIONS
-            return;
         }
     } else {
         if(options->target == TARGET_LINUX_x64) {
-            exe_file = options->output_file;
-        } else {
-            log::out << log::RED << "The specified output file '"<<options->output_file<<"' does not have a format. This is assumed to be an executable when targeting Linux but you are not ("<<options->target<<")\n";
-            PRINT_FORMAT_OPTIONS
-            return;
+            output_type = OUTPUT_EXE;
         }
     }
+    if(output_type == OUTPUT_INVALID) {
+        if(output_extension.size() == 0) {
+            log::out << log::RED << "The output file '"<<options->output_file<<"' does not have a format. This is assumed to be an executable when targeting Linux but you are targeting "<<options->target<<"\n";
+        } else {
+            log::out << log::RED << "You specified '"<<output_extension<<"' as the file extension which the compiler does not support.\n";
+        }
+        log::out << log::GOLD << "These are the valid file extensions:\n";
+        log::out << "  .obj .o  - object file\n";
+        log::out << "  .exe     - executable\n";
+        log::out << "  .dll .so - dynamic library\n";
+        log::out << "  .lib .a  - static library\n";
+        log::out << "  .bc      - bytecode\n";
+        return;
+    }
 
-    if (generate_dll_file || generate_lib_file) {
+    if (output_type == OUTPUT_DLL || output_type == OUTPUT_LIB) {
+        // NOTE: No entry point for object files?
         entry_point = ""; // no entry point for dlls
     }
 
@@ -1257,14 +1258,12 @@ void Compiler::run(CompileOptions* options) {
         } break;
         default: Assert(false);
     }
-
     
     if(options->source_buffer.buffer && options->source_file.size()) {
         log::out << log::RED << "A source buffer and source file was specified. You can only specify one\n";
         options->compileStats.errors++;
         return;
     }
-    
     
     bool skip_preload = false;
     skip_preload = options->disable_preload;
@@ -1306,10 +1305,11 @@ void Compiler::run(CompileOptions* options) {
         } else if(options->target == TARGET_BYTECODE) {
             preload += "#macro OS_BYTECODE #endmacro\n";
         }
-        if (generate_exe_file) preload += "#macro BUILD_EXE #endmacro\n";
-        if (generate_dll_file) preload += "#macro BUILD_DLL #endmacro\n";
-        if (generate_lib_file) preload += "#macro BUILD_LIB #endmacro\n";
-        if (generate_obj_file) preload += "#macro BUILD_OBJ #endmacro\n";
+        if (output_type == OUTPUT_EXE) preload += "#macro BUILD_EXE #endmacro\n";
+        if (output_type == OUTPUT_DLL) preload += "#macro BUILD_DLL #endmacro\n";
+        if (output_type == OUTPUT_LIB) preload += "#macro BUILD_LIB #endmacro\n";
+        if (output_type == OUTPUT_OBJ) preload += "#macro BUILD_OBJ #endmacro\n";
+        if (output_type == OUTPUT_BC)  preload += "#macro BUILD_BC  #endmacro\n";
         
         if(options->linker == LINKER_MSVC) {
             preload += "#macro LINKER_MSVC #endmacro\n";
@@ -1359,7 +1359,6 @@ void Compiler::run(CompileOptions* options) {
     for(int i=0;i<thread_count-1;i++) {
         threads[i].join();
     }
-
 
     if(output_is_up_to_date) {
         if(!options->silent) {
@@ -1429,6 +1428,7 @@ void Compiler::run(CompileOptions* options) {
     if(compiler_got_stuck) {
         return;
     }
+
     
     switch(options->target){
         case TARGET_BYTECODE: {
@@ -1440,21 +1440,21 @@ void Compiler::run(CompileOptions* options) {
             // }
         } break;
         case TARGET_WINDOWS_x64: {
-            obj_write_success = ObjectFile::WriteFile(OBJ_COFF, obj_file, program, this);
-            options->compileStats.generatedFiles.add(obj_file);
+            obj_write_success = ObjectFile::WriteFile(OBJ_COFF, object_path, program, this);
+            options->compileStats.generatedFiles.add(object_path);
         } break;
         case TARGET_LINUX_x64: {
-            obj_write_success = ObjectFile::WriteFile(OBJ_ELF, obj_file, program, this);
-            options->compileStats.generatedFiles.add(obj_file);
+            obj_write_success = ObjectFile::WriteFile(OBJ_ELF, object_path, program, this);
+            options->compileStats.generatedFiles.add(object_path);
         } break;
         default: Assert(false);
     }
     
     if(!obj_write_success) {
-        log::out << log::RED << "Could not write object file '"<<obj_file<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
-    } else if((generate_exe_file || generate_dll_file|| generate_lib_file) && options->target != TARGET_BYTECODE) {
+        log::out << log::RED << "Could not write object file '"<<object_path<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
+    } else if((output_type == OUTPUT_EXE || output_type == OUTPUT_DLL || output_type == OUTPUT_LIB) && options->target != TARGET_BYTECODE) {
         bool has_winmain = false;
-        if (generate_exe_file) {
+        if (output_type == OUTPUT_EXE) {
             // dll doesn't care about entry point
             // well, it has it's own entry point on windows
             if (options->target == TARGET_WINDOWS_x64 && entry_point == "WinMain") {
@@ -1483,20 +1483,20 @@ void Compiler::run(CompileOptions* options) {
                 // That's why you cannot use MVSC linker.
             }
 
-            if(generate_lib_file) {
+            if(output_type == OUTPUT_LIB) {
                 cmd = "lib /nologo ";
             } else {
                 cmd = "link /nologo /INCREMENTAL:NO ";
                 if(options->useDebugInformation)
                     cmd += "/DEBUG ";
 
-                if (generate_exe_file) {
+                if (output_type == OUTPUT_EXE) {
                     if (has_winmain)
                         cmd += "/SUBSYSTEM:WINDOWS ";
                     else {
                         cmd += "/entry:" + entry_point + " ";
                     }
-                } else if (generate_dll_file) {
+                } else if (output_type == OUTPUT_DLL) {
                     cmd += "/DLL ";
                 } else Assert(false);
                 // turn off because parsing command line arguments must be done manually when using our own entry point
@@ -1505,15 +1505,15 @@ void Compiler::run(CompileOptions* options) {
                 // this runtime instead
                 cmd += "/DEFAULTLIB:MSVCRT ";
             }
-            if (generate_dll_file && bytecode->exportedFunctions.size() > 0) {
+            if (output_type == OUTPUT_DLL && bytecode->exportedFunctions.size() > 0) {
                 // When exporting dll we need to specify which functions are exported.
                 // We can do this on the command line using /EXPORT but it won't work with lots of exports.
                 // We therefore create a .def file which contains all exports.
                 std::string def_path = "bin/exports.def";
                 cmd += "/DEF:" + def_path + " ";
-                int dot_index = dll_file.find_last_of(".");
+                int dot_index = output_path.find_last_of(".");
                 Assert(dot_index != -1);
-                std::string implib_path = dll_file.substr(0,dot_index) + "dll.lib";
+                std::string implib_path = output_path.substr(0,dot_index) + "dll.lib";
                 
                 // When linking with dlls at load-time we can't link with .dll when linking executable.
                 // We must use an import library that contains exports and dll name at compile-time (link time).
@@ -1522,7 +1522,7 @@ void Compiler::run(CompileOptions* options) {
                 cmd += "/IMPLIB:" + implib_path + " ";
                 auto file = FileOpen(def_path, FILE_CLEAR_AND_WRITE);
                 std::string content="";
-                std::string dll_name = out_file_name;
+                std::string dll_name = output_filename;
                 for (int i=0;i<dll_name.size();i++) {
                     ((char*)dll_name.data())[i] &= ~32; // swap to upper case
                 }
@@ -1537,7 +1537,7 @@ void Compiler::run(CompileOptions* options) {
                 FileClose(file);
             }
 
-            cmd += obj_file + " ";
+            cmd += object_path + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
             
             // cmd += "/DEFAULTLIB:LIBCMT ";
@@ -1566,48 +1566,27 @@ void Compiler::run(CompileOptions* options) {
             #define LINK_TEMP_DLL "temp_382.dll"
             #define LINK_TEMP_LIB "temp_382.lib"
             #define LINK_TEMP_PDB "temp_382.pdb"
-            if (generate_exe_file) {
-                if(outputOtherDirectory) {
-                    // MSVC linker cannot output to another directory than the current.
-                    cmd += "/OUT:" LINK_TEMP_EXE;
-                    bool yes = FileCopy(LINK_TEMP_EXE, exe_file);
-                    if (!yes) {
-                        log::out << log::RED << "Could not copy '"<<LINK_TEMP_EXE<<"' to '"<<exe_file<<"'\n";
-                    }
-                } else {
-                    cmd += "/OUT:" + exe_file+" ";
+            if(outputOtherDirectory) {
+                perform_copy = true;
+                // MSVC linker cannot output to another directory than the current.
+                if (output_type == OUTPUT_EXE) {
+                    temp_path = LINK_TEMP_EXE;
+                } else if(output_type == OUTPUT_DLL) {
+                    temp_path = LINK_TEMP_DLL;
+                } else if(output_type == OUTPUT_LIB) {
+                    temp_path = LINK_TEMP_LIB;
                 }
-            } else if(generate_dll_file) {
-                if(outputOtherDirectory) {
-                    // MSVC linker cannot output to another directory than the current.
-                    cmd += "/OUT:" LINK_TEMP_DLL;
-                    bool yes = FileCopy(LINK_TEMP_DLL, dll_file);
-                    if (!yes) {
-                        log::out << log::RED << "Could not copy '"<<LINK_TEMP_DLL<<"' to '"<<dll_file<<"'\n";
-                    }
-                } else {
-                    cmd += "/OUT:" + dll_file+" ";
-                }
-            } else if(generate_lib_file) {
-                if(outputOtherDirectory) {
-                    // MSVC linker cannot output to another directory than the current.
-                    cmd += "/OUT:" LINK_TEMP_LIB;
-                    bool yes = FileCopy(LINK_TEMP_LIB, lib_file);
-                    if (!yes) {
-                        log::out << log::RED << "Could not copy '"<<LINK_TEMP_LIB<<"' to '"<<lib_file<<"'\n";
-                    }
-                } else {
-                    cmd += "/OUT:" + lib_file+" ";
-                }
+                cmd += "/OUT:" + temp_path;
+            } else {
+                // dll, lib or exe can all use /OUT
+                cmd += "/OUT:" + output_path+" ";
             }
         } break;
         case LINKER_CLANG:
         case LINKER_GCC: {
-            if(generate_lib_file) {
+            if(output_type == OUTPUT_LIB) {
                 cmd += "ar rcs ";
-                cmd += lib_file + " ";
-                // cmd += obj_file + " ";
-
+                cmd += output_path + " ";
             } else {
                 switch(options->linker) {
                     case LINKER_GCC: cmd += "gcc "; break;
@@ -1619,7 +1598,7 @@ void Compiler::run(CompileOptions* options) {
 
                 // TODO: Don't link with default libraries. Try to get the executable as small as possible.
                 
-                if (generate_exe_file) {
+                if (output_type == OUTPUT_EXE) {
                     if(!force_default_entry_point) {
                         if(options->target == TARGET_WINDOWS_x64) {
                             // Always use cruntime entry point on Windows because
@@ -1637,7 +1616,7 @@ void Compiler::run(CompileOptions* options) {
                     if (has_winmain) {
                         cmd += "-Wl,-subsystem,windows "; // https://stackoverflow.com/questions/73676692/what-do-the-subsystem-windows-options-do-in-gcc
                     }
-                } else if(generate_dll_file) {
+                } else if(output_type == OUTPUT_DLL) {
                     // TODO: Add -nostdlib?
                     // cmd += "-shared ";
                     cmd += "-shared -fPIC ";
@@ -1650,7 +1629,7 @@ void Compiler::run(CompileOptions* options) {
                 // cmd += "-s ";
             }
 
-            cmd += obj_file + " ";
+            cmd += object_path + " ";
 
             if(options->target == TARGET_WINDOWS_x64) {
                 cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
@@ -1703,12 +1682,10 @@ void Compiler::run(CompileOptions* options) {
             }
 
 
-            if(generate_exe_file)
-                cmd += "-o " + exe_file;
-            else if(generate_dll_file)
-                cmd += "-o " + dll_file;
-            else if(generate_lib_file) ; // already handled
-            else Assert(false);
+            // ar for static library uses output file as first/second argument.
+            // linking/compiling dll or exe can use -o
+            if(output_type != OUTPUT_LIB)
+                cmd += "-o " + output_path;
         } break;
         default: {
             Assert(false);
@@ -1727,15 +1704,15 @@ void Compiler::run(CompileOptions* options) {
             
             options->compileStats.start_linker = engone::StartMeasure();
             bool yes = engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+            if(yes && perform_copy) {
+                bool success = FileCopy(temp_path, options->output_file);
+                if(!success) {
+                    log::out << log::RED << "Could not copy '"<<temp_path<<"' to '"<<options->output_file<<"'\n";
+                }
+            }
             failed = !yes;
             options->compileStats.end_linker = engone::StartMeasure();
-            if(generate_exe_file) {
-                options->compileStats.generatedFiles.add(exe_file);
-            } else if(generate_dll_file) {
-                options->compileStats.generatedFiles.add(dll_file);
-            } else if(generate_lib_file) {
-                options->compileStats.generatedFiles.add(lib_file);
-            } else Assert(false);
+            options->compileStats.generatedFiles.add(output_path);
         }
         options->compileStats.end_linker = StartMeasure();
         if(exitCode != 0 || failed) {
@@ -1776,13 +1753,14 @@ void Compiler::run(CompileOptions* options) {
     // }
 JUMP_TO_EXEC:
     
-    if(options->executeOutput && generate_exe_file) {
+    if(options->executeOutput && output_type == OUTPUT_EXE) {
         switch(options->target) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS
                 int exitCode;
 
-                std::string cmd = exe_file;
+                std::string cmd = output_path;
+                ReplaceChar((char*)cmd.data(), cmd.size(), '/', '\\');
                 for (auto& a : options->userArguments) {
                     cmd += " " + a;
                 }
@@ -1803,7 +1781,7 @@ JUMP_TO_EXEC:
                 #ifdef OS_LINUX
                 int exitCode;
                 bool some_crash = false;
-                std::string cmd = "./"+exe_file; // TODO: Assumes exe path is relative, not good
+                std::string cmd = "./"+output_path; // TODO: Assumes exe path is relative, not good
 
                 for (auto& a : options->userArguments) {
                     cmd += " " + a;

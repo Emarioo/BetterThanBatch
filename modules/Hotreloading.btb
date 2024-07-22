@@ -31,15 +31,14 @@ enum AppEvent {
 }
 
 struct AppInstance {
-    fn init(code_path: char[], data: void* = null) {
+    fn init(code_path: char[]) {
         dynamic_library_path = code_path
-        core_data = data
     }
     rebuild_func: fn();
     dynamic_library_path: char[];
     user_data: void*; // data from the dynamic library
+    extra_user_data: void*; // could be used to save and restore global data of dll
 
-    core_data: void*; // data from the main executable (rarely used)
     argc: i32;
     argv: char**;
 
@@ -77,6 +76,7 @@ fn StartInfiniteLoop(app: AppInstance) {
             acc = 0.0
             time := FileModifiedTime(app.dynamic_library_path)
             if time > app.last_modified_time {
+                log("Reload ", FILE_TIME_TO_SECONDS(time), " > ", FILE_TIME_TO_SECONDS(app.last_modified_time))
                 // Unload previous code
                 if app.library.valid() {
                     if app.current_func_event

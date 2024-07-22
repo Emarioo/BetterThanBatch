@@ -42,6 +42,8 @@ std::string TrimLastFile(const std::string& path);
 std::string TrimDir(const std::string& path);
 std::string BriefString(const std::string& path, int max=25, bool skip_cwd = true);
 std::string TrimCWD(const std::string& path);
+// returns extension including the dot, empty string is returned if no string
+std::string ExtractExtension(const std::string& path);
 
 /*
 Matching rules:

@@ -4,8 +4,13 @@
 */
 #if OS_WINDOWS
     #load "OpenGL32.lib"
-    // #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
-    #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
+    #if LINKER_MSVC
+        // #load "libs/glad/lib-vc2022/glad.lib" as GLAD
+        #load "libs/glad/lib-vc2022/glad.dll" as GLAD
+    #else
+        // #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
+        #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
+    #endif
 #else
     // Linux?
 #endif

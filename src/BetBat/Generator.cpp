@@ -1369,6 +1369,7 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
     }
 
     TypeId arg_type = types[0];
+
     bool is_destruct = expression->name == "destruct";
     if(expression->name == "construct" || expression->name == "destruct") { 
         // NOTE: construct and destruct are very similar, they can share code, search for is_destruct to find the differences
@@ -1493,12 +1494,20 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
     
                 builder.emit_free_args(allocated_stack_space);
             }
-        } else {
+        } else if(arg_type != AST_VOID) {
             builder.emit_pop(BC_REG_B); // pop pointer to data object
 
             int size = ast->getTypeSize(arg_type);
             Assert(size <= 8); // only structs can be bigger than 8
             genMemzero(BC_REG_B, BC_REG_A, size);
+        } else {
+            auto loc = expression->args[0]->location;
+            ERR_SECTION(
+                ERR_HEAD2(loc)
+                ERR_MSG("Expressions evaluates to void*. Compiler cannot construct/destruct void.")
+                ERR_LINE2(loc, "here")
+            )
+            return SIGNAL_FAILURE;
         }
     } else {
         Assert(false);

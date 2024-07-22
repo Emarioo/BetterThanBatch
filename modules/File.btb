@@ -733,11 +733,15 @@ fn FileModifiedTime(path: char[]) -> i64 {
         return buf.st_mtime * cast<u64>1_000_000_000 + st_mtime_nsec
     #endif
 }
+#macro FILE_TIME_TO_SECONDS(X) (cast<f64>cast<i64>(X) / cast<f64>cast<i64>1_000_000_000)
 // returns -1 if invalid
 fn FileModifiedTime(file: FileHandle) -> i64 {
     #if OS_WINDOWS
         time: i64
         yes := GetFileTime(file, null, null, &time)
+        time *= cast<u64>100 // GetFileTime returns a value where each unit represents 100 nanoseconds, multiply 100 and we return the number of nanoseconds
+        // With nanoseconds and a signed 64-bit integer we can represent a span of 292 years (pow(2,63) / 10**9 / 60 / 60 / 24 / 365)
+        // This code will probably not be around then...
         if !yes
             return -1
         return time
@@ -746,12 +750,12 @@ fn FileModifiedTime(file: FileHandle) -> i64 {
         err := fstat(InternalToHandle(file), &buf);
         if err != 0
             return -1 // file not found or something
-        return buf.st_mtime * cast<u64>1_000_000_000 + st_mtime_nsec
+        return cast<u64>buf.st_mtime * cast<u64>1_000_000_000 + cast<u64>st_mtime_nsec
     #endif
     /* Test with this code
     t := FileModifiedTime("btb.exe")
     log(t)
-    log(t / cast<i64>10_000_000 / 60 / 60 / 24 / 365 + 1601) // should print the year the file was last modified
+    log(t / cast<i64>1_000_000_000 / 60 / 60 / 24 / 365 + 1601) // should print the year the file was last modified
     */
 }
 

@@ -1352,7 +1352,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             X64Register reg = stdcall_normal_regs[i];
                             if(IS_CONTROL_FLOAT(control))
                                 reg = stdcall_float_regs[i];
-
+                            else {
+                                emit_prefix(0, reg, reg);
+                                emit1(OPCODE_XOR_REG_RM);
+                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(reg));
+                            }
                             emit_mov_reg_mem(reg,reg_args,control,off);
                         }
                     } break;
@@ -1369,7 +1373,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             X64Register reg = unixcall_normal_regs[i];
                             if(IS_CONTROL_FLOAT(control))
                                 reg = unixcall_float_regs[i];
-
+                            else {
+                                emit_prefix(0, reg, reg);
+                                emit1(OPCODE_XOR_REG_RM);
+                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(reg));
+                            }
                             emit_mov_reg_mem(reg,reg_args,control,off);
                         }
                     } break;

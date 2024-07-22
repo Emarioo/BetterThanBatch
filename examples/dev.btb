@@ -37,13 +37,63 @@
         
 */
 
+// TODO: Fix double precision float to string conversion
+
+#import "Logger"
+v: f64;
+*cast_unsafe<i64*>&v = 0x41A2DDFC0884C4A9
+
+log(v)
+
+// btb examples/dev -o bin/core.dll
+// btb examples/dev -o main.exe -r
+
+// #if BUILD_DLL
+
+// #import "GLAD"
+// #import "GLFW"
+
+// fn @export init() -> void* {
+//     glfwInit();
+//     win := glfwCreateWindow(800,600,"title".ptr,null,null);
+//     glfwMakeContextCurrent(win);
+
+//     gladLoadGL()
+//     func := glViewport
+//     return func
+// }
+// fn @export get_func() -> void* {
+//     func := glViewport
+//     return func
+// }
+
+// #else
+// #import "OS"
 // #import "Logger"
+// fn main() {
+//     lib := LoadDynamicLibrary("bin/core.dll")
 
-#import "OS"
+//     {    
+//         f := cast_unsafe< fn @oscall ()->void*> lib.get_pointer("init")
+//         ptr := f()
+//         log("ptr ",ptr)
+//     }
 
-ExecuteCommand("btb examples/windows/sound.btb -o sound.dll")
-ExecuteCommand("btb examples/windows/sound.btb -o sound.lib")
-ExecuteCommand("btb examples/windows/test_link.btb -o link_test.exe -r")
+//     // glad_lib := LoadDynamicLibrary("glad.dll")
+//     // glfw_lib := LoadDynamicLibrary("glfw3.dll")
+//     glad_lib := LoadDynamicLibrary("libs/glad/lib-mingw-w64/glad.dll")
+//     glfw_lib := LoadDynamicLibrary("libs/glfw-3.3.9/lib-mingw-w64/glfw3.dll")
 
-// #import "examples/foreign/dll_glad.btb"
-// #import "examples/graphics/quad"
+//     lib.cleanup()
+
+//     lib = LoadDynamicLibrary("core.dll")
+
+//     {
+//         f := cast_unsafe< fn @oscall ()->void*> lib.get_pointer("get_func")
+//         ptr := f()
+//         log("ptr ",ptr)
+//     }
+
+// }
+
+// #endif

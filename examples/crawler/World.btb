@@ -420,6 +420,23 @@ enum TextureNames {
 
     IMG_MAX,
 }
+
+fn SaveWorldGlobals() -> void* {
+    size := sizeof textures
+    data := Allocate(3 * size)
+    memcpy(data             , &tile_infos   , size)
+    memcpy(data + size      , &entity_infos , size)
+    memcpy(data + 2 * size  , &textures     , size)
+    return data
+}
+fn RestoreWorldGlobals(data: void*) {
+    size := sizeof textures
+    memcpy(&tile_infos  , data           , size)
+    memcpy(&entity_infos, data + size    , size)
+    memcpy(&textures    , data + 2 * size, size)
+    Free(data)
+}
+
 // Window (glfw, opengl context) should be initialized before calling this
 fn InitEntityInfos() {
     textures.resize(IMG_MAX)

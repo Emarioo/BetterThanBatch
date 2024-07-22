@@ -789,15 +789,23 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], color:
 
 #macro GLFW_CALLBACK_API @stdcall
 
-global global_window_context: WindowContext*;
+// Useful with hotreloading
+fn SaveGraphicsGlobals() -> void* {
+    return g_window_context
+}
+fn RestoreGraphicsGlobals(data: void*) {
+    g_window_context = data
+}
+
+global g_window_context: WindowContext*;
 fn MapWindowContext(window: WindowContext*) {
-    Assert(!global_window_context)
+    Assert(!g_window_context)
     // TODO: Do an actual mapping
-    global_window_context = window;
+    g_window_context = window;
 } 
 fn GetWindowContextByGLFWWindow(glfw_window: void*) -> WindowContext* {
     // TODO: Do an actual mapping
-    return global_window_context;
+    return g_window_context;
 }
 // #macro LOG_GLFW_CALLBACK(...) log(...)
 #macro LOG_GLFW_CALLBACK(...) #endmacro

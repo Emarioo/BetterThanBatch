@@ -338,6 +338,18 @@ std::string TrimLastFile(const std::string& path){
         return "/"; // just to let you know, code relies on / being returned, linker fails otherwise (i didn't look into why but yeah...)
     return path.substr(0,slashI + 1);
 }
+std::string ExtractExtension(const std::string& path) {
+    Assert(path.find("\\") == -1);
+    int slash = path.find_last_of("/");
+    int dot = path.find_last_of(".");
+    // In this case: path/.vs/okay
+    //   .vs/okay should not be seen as the extension
+    //   there should be no extension
+    if (dot > slash) {
+        return path.substr(dot);
+    }
+    return "";
+}
 std::string TrimDir(const std::string& path){
     size_t slashI = path.find_last_of("/");
     if(slashI==std::string::npos)

@@ -496,15 +496,20 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
 // TODO: Linux implementation
 struct DynamicLibrary {
     handle: void*;
+    path: StringBuilder;
 
     fn valid() -> bool { return handle }
 
     fn cleanup() {
         yes := FreeLibrary(handle);
+        log("Unload ", path)
+        handle = null
+        path.cleanup()
 		if (!yes) {
 			err := GetLastError();
 			log("[WinError ",err,"] UnloadDynamicLibrary");
-		}
+            return
+        }
     }
     // You may need to cast the function pointer to the appropriate function.
     // Also used for global variables.
@@ -534,8 +539,12 @@ fn LoadDynamicLibrary(path: char[], log_error: bool = true) -> DynamicLibrary {
             if(log_error) {
                 log("[WinError ",err,"] LoadDynamicLibrary: ",path);
             }
+            return DynamicLibrary{}
         }
-        return DynamicLibrary{module};
+        log("Load ", path)
+        str: StringBuilder
+        str.append(path)
+        return DynamicLibrary{module, str};
     #else
         incomplete
     #endif

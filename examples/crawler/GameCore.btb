@@ -53,9 +53,16 @@ fn main(argc: i32, argv: char**) -> i32 {
 #endif
 
 fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
-    if event == APP_CODE_LOAD  init_preload() // init global data, type information
-    
     core: GameCore* = app.user_data
+
+    struct ExtraData {
+        graphics_data: void*;
+        world_data: void*;
+    }
+    if !app.extra_user_data {
+        app.extra_user_data = Allocate(sizeof ExtraData)
+        construct(cast<ExtraData*>app.extra_user_data)
+    }
 
     switch event {
         case APP_START:
@@ -76,7 +83,16 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
             core.stop_game(app)
 
         case APP_CODE_LOAD:
-        case APP_CODE_UNLOAD: // do nothing for now
+            init_preload() // init global data, type information
+            extra: ExtraData* = app.extra_user_data
+            if extra.graphics_data
+                RestoreGraphicsGlobals(extra.graphics_data)
+            if extra.world_data
+                RestoreWorldGlobals(extra.world_data)
+        case APP_CODE_UNLOAD:
+            extra: ExtraData* = app.extra_user_data
+            extra.graphics_data = SaveGraphicsGlobals()
+            extra.world_data = SaveWorldGlobals()
     }
 
     // if event == APP_TICK {
@@ -90,7 +106,6 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
     // std_print(app, true) log()
 }
 
-
 #macro TIMED_CODE(T, CODE)
 global timed_step_ ## #line: i32
 if timed_step_###line++ > T {
@@ -99,18 +114,10 @@ if timed_step_###line++ > T {
 }
 #endmacro
 
-global display_game: bool = true
-
-global window: WindowContext*;
-
-global enable_free_camera: bool
-global enable_entity_info: bool
-
 enum FocusedElement {
     FOCUS_GAME,
     FOCUS_CHAT,
 }
-global focused_element: FocusedElement = FOCUS_GAME
 
 struct Player {
     entity_id: UUID;
@@ -140,6 +147,12 @@ struct GameCore {
     current_frame: i32;
 
     chat: ChatWidget;
+    focused_element: FocusedElement = FOCUS_GAME;
+
+    window: WindowContext*;
+    display_game: bool = true;
+    enable_free_camera: bool;
+    enable_entity_info: bool;
 
     delayed_code: Array<Code>;
 
@@ -152,8 +165,8 @@ struct GameCore {
         window = CreateWindow(800,600)
         InitEntityInfos()
 
-        client.set_callback(net_callback, this)
-        server.set_callback(net_callback, this)
+        // client.set_callback(net_callback, this)
+        // server.set_callback(net_callback, this)
 
 
         window.camera_zoom = 20
