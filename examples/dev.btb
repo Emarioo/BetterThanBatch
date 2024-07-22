@@ -1,5 +1,6 @@
 
-#import "examples/crawler/main"
+// #import "examples/crawler/main"
+// #import "examples/crawler/GameCore"
 
 /* Today's quest: Hotreloading
 
@@ -8,10 +9,10 @@
     We may need the ability to change allocators of
     arrays and maps.
     
-    Step 0:     <- I am here
+    Step 0:
         Compile and use dlls
 
-    Step 1:
+    Step 1:    <- I am here
         Get hotreloading working with crawler game.
         Generalize hotreloading into a module.
         Test it however we would do that?
@@ -38,4 +39,7 @@
 
 // #import "Logger"
 
-// log("Test okay hi")
+// #import "test_link.btb"
+
+// #import "examples/foreign/dll_glad.btb"
+#import "examples/graphics/quad"

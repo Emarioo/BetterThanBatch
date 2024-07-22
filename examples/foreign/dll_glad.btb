@@ -1,0 +1,49 @@
+/*
+    NOTE: Make sure glad.dll exists at the root of the project
+    btb examples/foreign/dll_glad.btb -o wa2.exe -r
+
+    Resources:
+        https://dennisbabkin.com/blog/?t=intricacies-of-microsoft-compilers-part-2-__imp_-and-__imp_load_-prefixes
+*/
+
+#load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib" as GLFW
+// #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
+#load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
+#load "gdi32.lib"
+#load "opengl32.lib"
+
+#import "Logger"
+
+// fn @varimport(GLAD, alias="__imp_glad_glViewport") glViewport(x: i32, y: i32, w: i32, h: i32);
+
+// TODO: Can't create pointer to function?
+// global @import(GLAD, alias="__imp_glad_glViewport") glViewport: fn(i32,i32,i32,i32)*;
+
+fn @import(GLAD, alias="gladLoadGL") gladLoadGL() -> i32;
+
+global @import(GLAD, alias="glad_glViewport") glViewport: fn(i32,i32,i32,i32);
+
+fn @import(GLFW) glfwInit() -> i32;
+fn @import(GLFW) glfwCreateWindow(w: i32, h: i32, title: char*, a: void*, b: void*) -> void*;
+fn @import(GLFW) glfwMakeContextCurrent(w: void*);
+
+fn main() -> i32 {
+    glfwInit();
+
+    win := glfwCreateWindow(800,600,"title".ptr,null,null);
+
+    glfwMakeContextCurrent(win);
+
+    // log("glfw")
+
+    gladLoadGL();
+    // log("loaded")
+
+    // fp := **cast_unsafe<void*>glViewport
+    // f := cast_unsafe<fn(i32,i32,i32,i32)>fp
+    // fp(0,0,0,0);
+
+    glViewport(0,0,0,0)
+
+    return 0;
+}

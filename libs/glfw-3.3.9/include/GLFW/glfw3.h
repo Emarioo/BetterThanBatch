@@ -130,7 +130,7 @@ extern "C" {
 /* Some Windows OpenGL headers need this.
  */
 #if !defined(WINGDIAPI) && defined(_WIN32)
- #define WINGDIAPI __declspec(dllimport)
+ #define WINGDIAPI __declspec(importdll)
  #define GLFW_WINGDIAPI_DEFINED
 #endif /* WINGDIAPI */
 
@@ -263,7 +263,7 @@ extern "C" {
  #define GLFWAPI __declspec(dllexport)
 #elif defined(_WIN32) && defined(GLFW_DLL)
  /* We are calling a GLFW Win32 DLL */
- #define GLFWAPI __declspec(dllimport)
+ #define GLFWAPI __declspec(importdll)
 #elif defined(__GNUC__) && defined(_GLFW_BUILD_DLL)
  /* We are building GLFW as a Unix shared library */
  #define GLFWAPI __attribute__((visibility("default")))

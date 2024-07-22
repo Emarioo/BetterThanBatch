@@ -43,7 +43,7 @@ void ReformatDumpbinAsm(LinkerChoice linker, QuickArray<char>& inBuffer, QuickAr
     // endIndex = index; endIndex is set in while loop
     break;
     }
-    case LINKER_GNU: {
+    case LINKER_GCC: {
     // Skip heading
     int index = 0;
     int lineCount = 0;
@@ -359,7 +359,7 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, X64Prog
     }
     break;
     }
-    case LINKER_GNU: {
+    case LINKER_GCC: {
     // HOLY CRAP THIS CODE IS BEAUTIFUL AND SIMPLE
     enum State {
         BEGIN, // beginning of a new error

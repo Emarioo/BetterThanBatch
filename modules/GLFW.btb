@@ -10,6 +10,8 @@
         #load "libs/glfw-3.3.9/lib-vc2022/glfw3.lib" as GLFW
     #else
         #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib" as GLFW
+        // #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.dll" as GLFW
+        // #load "libs/glfw-3.3.9/lib-mingw-w64/libglfw3dll.a" as GLFW
     #endif
     #load "user32.lib" // glfw3 requires these libraries
     #load "gdi32.lib"

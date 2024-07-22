@@ -101,10 +101,10 @@
 // // #link "uuid.lib" // not necessary for some reason
 // #link "bin/NativeLayer.lib"
 
-// fn @dllimport GetStdHandle(num: u32) -> void*;
-// fn @dllimport WriteFile(file: void*, buffer: void*, bytes: u32, 
+// fn @importdll GetStdHandle(num: u32) -> void*;
+// fn @importdll WriteFile(file: void*, buffer: void*, bytes: u32, 
 //     writtenBytes: u32*, overlapped: void*) -> bool;
-// fn @dllimport GetLastError() -> u32;
+// fn @importdll GetLastError() -> u32;
 
 // fn @import printme() -> u32;
 
@@ -116,7 +116,7 @@
 //-- external/native functions
 // fn @native prints(n: char[]);
 // prints("HELL YES!\n")
-// fn @dllimport GetStdHandle(id: u32);
+// fn @importdll GetStdHandle(id: u32);
 // GetStdHandle(-11);
 
 //-- global data

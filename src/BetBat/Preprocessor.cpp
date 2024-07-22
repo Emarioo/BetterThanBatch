@@ -1740,6 +1740,8 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
     //     auto c = context.new_lexer_import->chunks.last();
     //     log::out << "preproc toks/srcs " << c->tokens.size() << "/" << c->sources.size()<<"\n";
     // }
+
+    context.compiler->options->compileStats.errors += context.errors;
     
     return context.new_import_id;
 }

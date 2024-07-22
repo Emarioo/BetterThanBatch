@@ -27,16 +27,17 @@ if !compileSuccess! == 0 if !RUN_AT_END!==1 (
 :RUN_COMPILER
     rem
 
-    @REM bin\btb -dev
+    bin\btb -dev
 
-    bin\btb examples/crawler/GameCore -d -o bin/code.dll
+    @REM bin\btb examples/crawler/GameCore -d -o main.exe -r
+    @REM bin\btb examples/crawler/GameCore -d -o bin/code.dll
 
-    if !errorlevel! == 0 (
-        tasklist /fi "IMAGENAME eq main.exe" | find /I "main.exe"
-        if not !errorlevel! == 0 (
-            bin\btb examples/crawler/main -d -o main.exe -r
-        )
-    )
+    @REM if !errorlevel! == 0 (
+    @REM     tasklist /fi "IMAGENAME eq main.exe" | find /I "main.exe"
+    @REM     if not !errorlevel! == 0 (
+    @REM         bin\btb examples/crawler/main -d -o main.exe -r
+    @REM     )
+    @REM )
     
     @REM bin\btb examples/dev -d -o test.exe
     @REM bin\btb --test

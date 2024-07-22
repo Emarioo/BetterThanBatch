@@ -18,7 +18,7 @@ TargetPlatform ToTarget(const std::string& str);
 // Also known as linker tools
 enum LinkerChoice : u32 {
     LINKER_UNKNOWN = 0,
-    LINKER_GNU,
+    LINKER_GCC,
     LINKER_MSVC,
     LINKER_CLANG,
 

@@ -294,7 +294,7 @@ struct InstBase_link_call_imm32 {
 struct InstBase_op1_link_call {
     InstructionOpcode opcode;
     BCRegister op0;
-    LinkConvention link;
+    LinkConvention link; // not needed, we call a pointer, we don't resolve a symbol so there is only one way to link
     CallConvention call;
 };
 #pragma pack(pop)

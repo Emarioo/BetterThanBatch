@@ -20,7 +20,7 @@ mov t0, [b]
 arg t0
 mov t0, [b+8]
 arg t0
-call WriteFile, l1, stdcall, dllimport
+call WriteFile, l1, stdcall, importdll
 
 mov [b], rax
 
@@ -67,6 +67,6 @@ pop a
 mov [a0], a
 pop a
 mov [a1], a
-call WriteFile, stdcall, dllimport
+call WriteFile, stdcall, importdll
 
 

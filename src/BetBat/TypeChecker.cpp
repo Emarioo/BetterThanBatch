@@ -1192,8 +1192,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 // auto var = info.ast->getVariableByIdentifier(iden);
                 auto type = var->versions_typeId[info.currentPolyVersion];
                 
-                auto type_info = info.ast->getTypeInfo(type);
-                if(!type_info->funcType) {
+                TypeInfo* type_info = nullptr;
+                if (type.isNormalType())
+                    type_info = info.ast->getTypeInfo(type);
+                if(!type_info || !type_info->funcType) {
                     if(operatorOverloadAttempt || attempt) {
                         FIX_NO_SPECIAL_ACTIONS
                         return SIGNAL_NO_MATCH;
@@ -3488,7 +3490,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
         if(now->firstExpression) {
             ERR_SECTION(
                 ERR_HEAD2(now->location)
-                ERR_MSG("Imported variables cannot have expressions")
+                ERR_MSG("Imported variables cannot have expressions.")
                 ERR_LINE2(now->location, "here")
             )
             return SIGNAL_FAILURE;
@@ -3496,7 +3498,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
         if(now->varnames.size() != 1) {
             ERR_SECTION(
                 ERR_HEAD2(now->location)
-                ERR_MSG("Imported variables cannot only have one variable name and one type")
+                ERR_MSG("Imported variables cannot only have one variable name and one type.")
                 ERR_LINE2(now->location, "here")
             )
             return SIGNAL_FAILURE;

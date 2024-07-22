@@ -3386,28 +3386,22 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         while (token_name->type == lexer::TOKEN_ANNOTATION){
             if(view_fn_name == "hide"){
                 function->setHidden(true);
-            } else if (view_fn_name == "dllimport" || view_fn_name == "varimport" || view_fn_name == "import" || view_fn_name == "export"){
+            } else if (view_fn_name == STR_STATIC_IMPORT || view_fn_name == STR_DYNAMIC_IMPORT || view_fn_name == "import" || view_fn_name == "export"){
                 // Implicitly specify convention
-                specifiedConvention = true;
-                if(info.compiler->options->target == TARGET_WINDOWS_x64) {
-                    function->callConvention = CallConvention::STDCALL;
-                } else if(info.compiler->options->target == TARGET_LINUX_x64) {
-                    function->callConvention = CallConvention::UNIXCALL;
-                } else {
-                    #ifdef OS_WINDOWS
-                    function->callConvention = CallConvention::STDCALL;
-                    #else
-                    function->callConvention = CallConvention::UNIXCALL;
-                    #endif
+                if(!specifiedConvention) {
+                    if(info.compiler->options->target == TARGET_WINDOWS_x64) {
+                        specifiedConvention = true;
+                        function->callConvention = CallConvention::STDCALL;
+                    } else if(info.compiler->options->target == TARGET_LINUX_x64) {
+                        specifiedConvention = true;
+                        function->callConvention = CallConvention::UNIXCALL;
+                    } else Assert(false);
                 }
                 
-                if (view_fn_name == "dllimport") {
-                    // TODO: dllimport should probably be limited to Windows only.
-                    function->linkConvention = LinkConvention::DLLIMPORT;
-                    needsExplicitCallConvention = true;
-                } else if (view_fn_name == "varimport"){
-                    function->linkConvention = LinkConvention::VARIMPORT;
-                    needsExplicitCallConvention = true;
+                if (view_fn_name == STR_DYNAMIC_IMPORT) {
+                    function->linkConvention = LinkConvention::DYNAMIC_IMPORT;
+                } else if (view_fn_name == STR_STATIC_IMPORT){
+                    function->linkConvention = LinkConvention::STATIC_IMPORT;
                 } else if (view_fn_name == "import"){
                     function->linkConvention = LinkConvention::IMPORT;
                 } else if (view_fn_name == "export"){
@@ -3524,7 +3518,6 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             //     specifiedConvention = true;
             } else if (view_fn_name == "betcall"){
                 function->callConvention = CallConvention::BETCALL;
-                function->linkConvention = LinkConvention::NONE;
                 specifiedConvention = true;
             // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
             } else if (view_fn_name == "unixcall"){
@@ -4032,8 +4025,25 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
     auto token_name = info.getinfo(&view);
     // tok_name = info.gettok();
     while (token_name->type == lexer::TOKEN_ANNOTATION){
-        if (view == "import"){
+        if (view == "import" || view == STR_DYNAMIC_IMPORT || view == STR_STATIC_IMPORT || view == "export"){
+            auto loc = info.getloc();
             info.advance();
+
+            if (view == STR_DYNAMIC_IMPORT) {
+                statement->linkConvention = LinkConvention::DYNAMIC_IMPORT;
+            } else if (view == STR_STATIC_IMPORT){
+                statement->linkConvention = LinkConvention::STATIC_IMPORT;
+            } else if (view == "import"){
+                statement->linkConvention = LinkConvention::IMPORT;
+            } else if (view == "export"){
+                // is_export = true;
+                ERR_SECTION(
+                    ERR_HEAD2(loc)
+                    ERR_MSG("@export is not supported yet.")
+                    ERR_LINE2(loc, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            }
             
             StringView token_str{};
             auto token = info.getinfo(&token_str);
@@ -4118,6 +4128,8 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
                 ERR_MSG("Unknown annotation for variables.")
                 ERR_LINE2(tok,"unknown")
             )
+            info.advance(); // prevent infinite loop
+            return SIGNAL_COMPLETE_FAILURE;
         }
         // info.advance();
         token_name = info.getinfo(&view);

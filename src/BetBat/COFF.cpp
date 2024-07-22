@@ -16,7 +16,8 @@ namespace coff {
         engone::Logger& operator<<(engone::Logger& logger, TYPE flags){return logger << ToString(flags);}\
         const char* ToString(TYPE flags){ switch(flags){
     #define CASE(X) case X: return #X;
-    #define SWITCH_END default: {Assert(false);}} return "Undefined machine"; }
+    #define SWITCH_END default: { }} return "UNKNOWN"; }
+    // #define SWITCH_END default: {Assert(false);}} return "Undefined machine"; }
     
     #define LOG_START(TYPE) engone::Logger& operator<<(engone::Logger& logger, TYPE flags){ std::string out="";
     #define IFOR(X) if(flags&X) out += #X ", ";
@@ -82,6 +83,7 @@ namespace coff {
         CASE(IMAGE_REL_AMD64_SREL32)
         CASE(IMAGE_REL_AMD64_PAIR)
         CASE(IMAGE_REL_AMD64_SSPAN32)
+        case 17: return "R_X86_64_32S"; // I got this from compiling assembly with as and doing objdump -r on .o file
     SWITCH_END
 
     SWITCH_START(Storage_Class)

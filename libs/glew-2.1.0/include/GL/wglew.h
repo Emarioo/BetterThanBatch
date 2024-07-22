@@ -81,7 +81,7 @@
 #  ifdef GLEW_BUILD
 #    define GLEWAPI extern __declspec(dllexport)
 #  else
-#    define GLEWAPI extern __declspec(dllimport)
+#    define GLEWAPI extern __declspec(importdll)
 #  endif
 #endif
 

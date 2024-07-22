@@ -3,11 +3,12 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/include/**",
-                "${workspaceFolder}/libs/glew-2.1.0/include/**",
-                "${workspaceFolder}/libs/glfw-3.3.9/include/**",
-                "${workspaceFolder}/libs/stb/include/**",
-                "${workspaceFolder}/libs/tracy-0.10/public/**"
+                "${workspaceFolder}/include/*",
+                "${workspaceFolder}/libs/glad/include/*",
+                "${workspaceFolder}/libs/glew-2.1.0/include/*",
+                "${workspaceFolder}/libs/glfw-3.3.9/include/*",
+                "${workspaceFolder}/libs/stb/include/*",
+                "${workspaceFolder}/libs/tracy-0.10/public/*"
             ],
             "defines": [
                 "_DEBUG",

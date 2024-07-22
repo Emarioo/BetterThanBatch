@@ -1,0 +1,14 @@
+// btb sound.btb -o sound.dll
+// btb sound.btb -o sound.lib
+
+#import "Logger"
+
+#if BUILD_DLL
+    fn @export Play_dll(path: char*) {
+        log("dll - Play sound: ", path)
+    }
+#else
+    fn @export Play_lib(path: char*) {
+        log("lib - Play sound: ", path)
+    }
+#endif

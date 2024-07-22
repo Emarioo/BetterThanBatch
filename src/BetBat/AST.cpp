@@ -18,9 +18,9 @@ const char* ToString(LinkConvention stuff){
     switch(stuff){
         CASE(NONE,"none")
         CASE(NATIVE,"native")
-        CASE(DLLIMPORT,"dllimport")
-        CASE(VARIMPORT,"varimport")
         CASE(IMPORT,"import")
+        CASE(DYNAMIC_IMPORT,STR_DYNAMIC_IMPORT)
+        CASE(STATIC_IMPORT,STR_STATIC_IMPORT)
     }
     return "<unknown-link>";
     #undef CASE
@@ -287,10 +287,9 @@ IdentifierFunction *AST::addFunction(ScopeId scopeId, const StringView &name, Co
 
     return iden;
 }
-Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes){
+Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes, bool searchSharedScopes){
     using namespace engone;
     // Assert(crossed_function_boundary); // crossed function boundary is only valid for local variables, if we search for function identifier then argument will be null so we can't assert it
-
 
     if(crossed_function_boundary)
         *crossed_function_boundary = false;
@@ -303,7 +302,7 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
         defer { lock_variables.unlock(); };
         if(ns.len == 0) {
             auto iterator = createScopeIterator(startScopeId, contentOrder);
-            while(iterate(iterator)) {
+            while(iterate(iterator, searchSharedScopes)) {
                 auto scope = iterator.next_scope;
                 auto order = iterator.next_order;
 
@@ -444,7 +443,7 @@ AST::ScopeIterator AST::createScopeIterator(ScopeId scopeId, ContentOrder order)
     iter.search_items.add(it);
     return iter;
 }
-ScopeInfo* AST::iterate(ScopeIterator& iterator){
+ScopeInfo* AST::iterate(ScopeIterator& iterator, bool searchSharedScopes){
     auto add = [&](ScopeInfo* s, ContentOrder order, bool crossed_boundary) {
         // TODO: Optimize
         for (int i=0;i<iterator.search_items.size();i++) {
@@ -464,9 +463,11 @@ ScopeInfo* AST::iterate(ScopeIterator& iterator){
         ScopeIterator::Item it = iterator.search_items[iterator.search_index];
         iterator.search_index++;
         
-        for(auto s : it.scope->sharedScopes) {
-            // MAX so that we can see everything in the shared scope
-            add(s, CONTENT_ORDER_MAX, true);
+        if (searchSharedScopes) {
+            for(auto s : it.scope->sharedScopes) {
+                // MAX so that we can see everything in the shared scope
+                add(s, CONTENT_ORDER_MAX, true);
+            }
         }
         
         if(it.scope->id != it.scope->parent) {

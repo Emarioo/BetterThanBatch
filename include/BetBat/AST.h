@@ -9,6 +9,7 @@ typedef u32 ContentOrder;
 #define CONTENT_ORDER_ZERO 0
 #define CONTENT_ORDER_MAX (u32)-1
 struct ASTStruct;
+struct ASTStatement;
 struct ASTEnum;
 struct ASTFunction;
 struct AST;
@@ -24,12 +25,14 @@ enum CallConvention : u8 {
     // https://www.ired.team/miscellaneous-reversing-forensics/windows-kernel-internals/linux-x64-calling-convention-stack-frame
     UNIXCALL, // System V AMD64 ABI calling convention.
 };
+#define STR_STATIC_IMPORT "importlib"
+#define STR_DYNAMIC_IMPORT "importdll"
 enum LinkConvention : u8 {
     NONE=0x00, // no linkConvention export/import
     // DLLEXPORT, // .drectve section is needed to pass /EXPORT: to the linker. The exported function must use stdcall convention
     IMPORT=0x80, // external from the source code, linkConvention with static library or object files
-    DLLIMPORT=0x81, // linkConvention with dll, function are renamed to __impl_
-    VARIMPORT=0x82, // linkConvention with extern global variables (extern FUNCPTRTYPE someFunction;)
+    STATIC_IMPORT=0x81,  // linkConvention with lib or relative code
+    DYNAMIC_IMPORT=0x82, // linkConvention with dll, function are renamed to __impl_
     NATIVE=0x10, // for interpreter or other implementation in x64 converter, TO BE DEPRACATED
 };
 
@@ -400,7 +403,7 @@ struct Identifier {
     IdentifierVariable* cast_var() { return (IdentifierVariable*)this; }
     IdentifierFunction* cast_fn() { return (IdentifierFunction*)this; }
 };
-struct ASTStatement;
+
 struct IdentifierVariable : public Identifier {
     i32 memberIndex = -1; // only used with MEMBER type
     int argument_index = 0;
@@ -621,6 +624,8 @@ struct ASTStatement : ASTNode {
     lexer::SourceLocation location{};
     DynamicArray<VarName> varnames;
     std::string alias;
+
+    LinkConvention linkConvention; // used with imported global variables
 
     bool uses_cast_operator = false;
 
@@ -946,7 +951,7 @@ struct AST {
 
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
-    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes = true);
+    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes = true, bool searchSharedScopes = true);
     void findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, DynamicArray<Identifier*>& out_identifiers, bool* crossed_function_boundary, bool searchParentScopes = true);
     // Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool searchParentScopes = true);
     // VariableInfo* identifierToVariable(Identifier* identifier);
@@ -978,7 +983,7 @@ struct AST {
         friend class AST;
     };
     ScopeIterator createScopeIterator(ScopeId scopeId, ContentOrder order);
-    ScopeInfo* iterate(ScopeIterator& iterator);
+    ScopeInfo* iterate(ScopeIterator& iterator, bool searchSharedScopes = true);
         
     u32 getTypeSize(TypeId typeId);
     u32 getTypeAlignedSize(TypeId typeId);

@@ -300,7 +300,7 @@ engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
 const char* ToString(LinkerChoice v) {
     #define CASE(X,N) case X: return N;
     switch(v){
-        CASE(LINKER_GNU,"gnu")
+        CASE(LINKER_GCC,"gcc")
         CASE(LINKER_MSVC,"msvc")
         CASE(LINKER_CLANG,"clang")
         CASE(LINKER_UNKNOWN,"unknown-linker")
@@ -311,7 +311,7 @@ const char* ToString(LinkerChoice v) {
 }
 LinkerChoice ToLinker(const std::string& str) {
     #define CASE(N,X) if (str==X) return N;
-    CASE(LINKER_GNU,"gnu")
+    CASE(LINKER_GCC,"gcc")
     CASE(LINKER_MSVC,"msvc")
     CASE(LINKER_CLANG,"clang")
     CASE(LINKER_UNKNOWN,"unknown-linker")
@@ -929,7 +929,7 @@ void Compiler::processImports() {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     
                     if (entry_point.size() != 0) {
-                        auto iden = ast->findIdentifier(imp->scopeId,0,entry_point,nullptr);
+                        auto iden = ast->findIdentifier(imp->scopeId,0,entry_point,nullptr, true, false);
                         if(iden && iden->is_fn()) {
                             auto fun = iden->cast_fn();
                             Assert(fun->funcOverloads.overloads.size());
@@ -1158,14 +1158,23 @@ void Compiler::run(CompileOptions* options) {
         return;
     }
 
-    std::string obj_file = "bin/main.o";
-    std::string exe_file = "bin/main.exe";
-    std::string dll_file = "bin/main.dll";
-    std::string bc_file = "bin/main.bc";
+    int slash_index = options->output_file.find_last_of("/");
+    int dot_index = options->output_file.find_last_of(".");
+    if (dot_index == -1) {
+        dot_index = options->output_file.size();
+    }
+    std::string out_file_name = options->output_file.substr(slash_index+1, dot_index - (slash_index+1));
+
+    std::string obj_file = "bin/"+out_file_name+".o";
+    std::string exe_file = "bin/"+out_file_name+".exe";
+    std::string dll_file = "bin/"+out_file_name+".dll";
+    std::string lib_file = "bin/"+out_file_name+".lib";
+    std::string bc_file =  "bin/"+out_file_name+".bc";
 
     bool generate_obj_file = false;
     bool generate_exe_file = false;
     bool generate_dll_file = false;
+    bool generate_lib_file = false;
     bool generate_bc_file = false;
 
     bool obj_write_success = false;
@@ -1201,6 +1210,10 @@ void Compiler::run(CompileOptions* options) {
             //   We shouldn't allow the user to use .so on windows
             generate_dll_file = true;
             dll_file = options->output_file;
+        } else if(format == ".lib" || format == ".a") {
+            // NOTE: Linux uses libNAME.a but we just check .a, should we warn the user if they forgot lib at the start of the file?
+            generate_lib_file = true;
+            lib_file = options->output_file;
         } else {
             log::out << "You specified '"<<format<<"' as file extension for the output file but the compiler has no idea what to generate.\n";
             #define PRINT_FORMAT_OPTIONS\
@@ -1221,9 +1234,8 @@ void Compiler::run(CompileOptions* options) {
         }
     }
 
-    if (generate_dll_file) {
+    if (generate_dll_file || generate_lib_file) {
         entry_point = ""; // no entry point for dlls
-        // You should export DllMain for Windows
     }
 
     importDirectories.add(options->modulesDirectory);
@@ -1294,13 +1306,15 @@ void Compiler::run(CompileOptions* options) {
         } else if(options->target == TARGET_BYTECODE) {
             preload += "#macro OS_BYTECODE #endmacro\n";
         }
-        if (generate_exe_file) {
-            preload += "#macro BUILD_EXE #endmacro\n";
-        }
+        if (generate_exe_file) preload += "#macro BUILD_EXE #endmacro\n";
+        if (generate_dll_file) preload += "#macro BUILD_DLL #endmacro\n";
+        if (generate_lib_file) preload += "#macro BUILD_LIB #endmacro\n";
+        if (generate_obj_file) preload += "#macro BUILD_OBJ #endmacro\n";
+        
         if(options->linker == LINKER_MSVC) {
             preload += "#macro LINKER_MSVC #endmacro\n";
-        } else if(options->linker == LINKER_GNU) {
-            preload += "#macro LINKER_GNU #endmacro\n";
+        } else if(options->linker == LINKER_GCC) {
+            preload += "#macro LINKER_GCC #endmacro\n";
         }
         
         auto virtual_path = PRELOAD_NAME;
@@ -1438,7 +1452,7 @@ void Compiler::run(CompileOptions* options) {
     
     if(!obj_write_success) {
         log::out << log::RED << "Could not write object file '"<<obj_file<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
-    } else if((generate_exe_file || generate_dll_file) && options->target != TARGET_BYTECODE) {
+    } else if((generate_exe_file || generate_dll_file|| generate_lib_file) && options->target != TARGET_BYTECODE) {
         bool has_winmain = false;
         if (generate_exe_file) {
             // dll doesn't care about entry point
@@ -1468,29 +1482,31 @@ void Compiler::run(CompileOptions* options) {
                 // That's why you cannot use MVSC linker.
             }
 
-            cmd = "link /nologo /INCREMENTAL:NO ";
-            if(options->useDebugInformation)
-                cmd += "/DEBUG ";
+            if(generate_lib_file) {
+                cmd = "lib /nologo  ";
+            } else {
+                cmd = "link /nologo /INCREMENTAL:NO ";
+                if(options->useDebugInformation)
+                    cmd += "/DEBUG ";
 
-            if (generate_exe_file) {
-                if (has_winmain)
-                    cmd += "/SUBSYSTEM:WINDOWS ";
-                else {
-                    cmd += "/entry:" + entry_point + " ";
-                }
-            } else if (generate_dll_file) {
-                // TODO: Add exports
-                cmd += "/DLL ";
-            } else Assert(false);
+                if (generate_exe_file) {
+                    if (has_winmain)
+                        cmd += "/SUBSYSTEM:WINDOWS ";
+                    else {
+                        cmd += "/entry:" + entry_point + " ";
+                    }
+                } else if (generate_dll_file) {
+                    cmd += "/DLL ";
+                } else Assert(false);
+                // turn off because parsing command line arguments must be done manually when using our own entry point
+                // cmd += "/NODEFAULTLIB "; // entry point must be set manually with NODEFAULTLIB
+                // cmd += "/ENTRY:main ";
+                // this runtime instead
+                cmd += "/DEFAULTLIB:MSVCRT ";
+            }
 
             cmd += obj_file + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
-            
-            // turn off because parsing command line arguments must be done manually when using our own entry point
-            // cmd += "/NODEFAULTLIB "; // entry point must be set manually with NODEFAULTLIB
-            // cmd += "/ENTRY:main ";
-            // this runtime instead
-            cmd += "/DEFAULTLIB:MSVCRT ";
             
             // cmd += "/DEFAULTLIB:LIBCMT ";
             cmd += "Kernel32.lib "; // _test and prints uses WriteFile so we must link with kernel32
@@ -1500,10 +1516,14 @@ void Compiler::run(CompileOptions* options) {
                 cmd += dir + " ";
             }
             for(auto& path : program->libraries) {
-                cmd += path + " ";
+                std::string p = path;
+                if (p.find("./") == 0)
+                    p = p.substr(2);
+                cmd += p + " ";
             }
             #define LINK_TEMP_EXE "temp_382.exe"
             #define LINK_TEMP_DLL "temp_382.dll"
+            #define LINK_TEMP_LIB "temp_382.lib"
             #define LINK_TEMP_PDB "temp_382.pdb"
             if (generate_exe_file) {
                 if(outputOtherDirectory) {
@@ -1522,54 +1542,75 @@ void Compiler::run(CompileOptions* options) {
                     cmd += "/OUT:" LINK_TEMP_DLL;
                     bool yes = FileCopy(LINK_TEMP_DLL, dll_file);
                     if (!yes) {
-                        log::out << log::RED << "Could not copy '"<<LINK_TEMP_EXE<<"' to '"<<exe_file<<"'\n";
+                        log::out << log::RED << "Could not copy '"<<LINK_TEMP_DLL<<"' to '"<<dll_file<<"'\n";
                     }
                 } else {
                     cmd += "/OUT:" + dll_file+" ";
                 }
+            } else if(generate_lib_file) {
+                if(outputOtherDirectory) {
+                    // MSVC linker cannot output to another directory than the current.
+                    cmd += "/OUT:" LINK_TEMP_LIB;
+                    bool yes = FileCopy(LINK_TEMP_LIB, lib_file);
+                    if (!yes) {
+                        log::out << log::RED << "Could not copy '"<<LINK_TEMP_LIB<<"' to '"<<lib_file<<"'\n";
+                    }
+                } else {
+                    cmd += "/OUT:" + lib_file+" ";
+                }
             }
         } break;
         case LINKER_CLANG:
-        case LINKER_GNU: {
-            switch(options->linker) {
-                case LINKER_GNU: cmd += "gcc "; break;
-                case LINKER_CLANG: cmd += "clang++ "; break;
-                default: break;
+        case LINKER_GCC: {
+            if(generate_lib_file) {
+                cmd += "ar rcs ";
+                cmd += lib_file + " ";
+                cmd += obj_file + " ";
+
+            } else {
+                switch(options->linker) {
+                    case LINKER_GCC: cmd += "gcc "; break;
+                    case LINKER_CLANG: cmd += "clang++ "; break;
+                    default: break;
+                }
+                if(options->useDebugInformation)
+                    cmd += "-g ";
+
+                // TODO: Don't link with default libraries. Try to get the executable as small as possible.
+                
+                if (generate_exe_file) {
+                    if(!force_default_entry_point) {
+                        if(options->target == TARGET_WINDOWS_x64) {
+                            // Always use cruntime entry point on Windows because
+                            // parsing command line arguments is though.
+                            // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
+                        } else {
+                            cmd += "-nostdlib ";
+                            if (entry_point == "main")
+                                cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
+                        }
+                    }
+                    if (entry_point != "main") // no need to set entry if main is used since it is the default
+                        cmd += "--entry " + entry_point + " ";
+                    
+                    if (has_winmain) {
+                        cmd += "-Wl,-subsystem,windows "; // https://stackoverflow.com/questions/73676692/what-do-the-subsystem-windows-options-do-in-gcc
+                    }
+                } else if(generate_dll_file) {
+                    // TODO: Add -nostdlib?
+                    // cmd += "-shared ";
+                    cmd += "-shared -fPIC ";
+                } else Assert(false);
+
+                // cmd += "-ffreestanding "; // these do not make a difference (with mingw on windows at least)
+                // cmd += "-Os ";
+                // cmd += "-nostartfiles ";
+                // cmd += "-nodefaultlibs ";
+                // cmd += "-s ";
             }
-            if(options->useDebugInformation)
-                cmd += "-g ";
 
             cmd += obj_file + " ";
-            // TODO: Don't link with default libraries. Try to get the executable as small as possible.
-            
-            if (generate_exe_file) {
-                if(!force_default_entry_point) {
-                    if(options->target == TARGET_WINDOWS_x64) {
-                        // Always use cruntime entry point on Windows because
-                        // parsing command line arguments is though.
-                        // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
-                    } else {
-                        cmd += "-nostdlib ";
-                        if (entry_point == "main")
-                            cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
-                    }
-                }
-                if (entry_point != "main") // no need to set entry if main is used since it is the default
-                    cmd += "--entry " + entry_point + " ";
-                
-                if (has_winmain) {
-                    cmd += "-Wl,-subsystem,windows "; // https://stackoverflow.com/questions/73676692/what-do-the-subsystem-windows-options-do-in-gcc
-                }
-            } else if(generate_dll_file) {
-                // TODO: Add -nostdlib?
-                cmd += "-shared ";
-            } else Assert(false);
 
-            // cmd += "-ffreestanding "; // these do not make a difference (with mingw on windows at least)
-            // cmd += "-Os ";
-            // cmd += "-nostartfiles ";
-            // cmd += "-nodefaultlibs ";
-            // cmd += "-s ";
             if(options->target == TARGET_WINDOWS_x64) {
                 cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
             } else if(options->target == TARGET_LINUX_x64) {
@@ -1581,34 +1622,51 @@ void Compiler::run(CompileOptions* options) {
                 cmd += dir + " ";
             }
 
-            std::unordered_map<std::string, bool> dirs;
+            // TODO: We need to improve the way we find libraries.
+            //   For system libraries -lKernel32 should be used.
+            //   For relative user libraries libs/glad/glad.dll should be used, no -L or -l.
+            //   How does /load indicate this though?
+
+            DynamicArray<std::string> dynamic_libs{};
             for(auto& path : program->libraries) {
-                std::string dir = TrimLastFile(path);
-                auto pair = dirs.find(dir);
-                if(pair == dirs.end())
-                    dirs[dir] = true;
+                if (path.find("/") != -1) {
+                    // User library
+                    std::string good_path = path;
+                    if (good_path.find("./") == 0)
+                        good_path = good_path.substr(2);
+                    cmd += good_path + " ";
+                    if (good_path.find(".dll") == good_path.size() - 4 || good_path.find(".so") == good_path.size() - 3) {
+                        dynamic_libs.add(good_path);
+                    }
+                } else {
+                    // System library
+                    std::string file = path;
+                    int pos = file.find_last_of(".");
+                    if(pos != file.npos)
+                        file = file.substr(0,file.find_last_of("."));
+                    if(file != "")
+                        cmd += "-l" + file + " ";
+                }
             }
-            for(auto& pair : dirs) {
-                if(pair.first == "/") {
-                    // TODO: This will always happen when linking with
-                    //   Bcrypt or Kernel32 because they don't have a
-                    //   directory. I guess that's fine?
-                    cmd += "-L. ";
-                } else 
-                    cmd += "-L"+pair.first+" ";
-            }
-            for(auto& path : program->libraries) {
+            std::string output_dir = TrimLastFile(options->output_file);
+            if (output_dir == "/")
+                output_dir = "";
+            for(auto& path : dynamic_libs) {
                 std::string file = TrimDir(path);
-                int pos = file.find_last_of(".");
-                if(pos != file.npos)
-                    file = file.substr(0,file.find_last_of("."));
-                if(file != "")
-                    cmd += "-l" + file + " ";
+                std::string new_path = output_dir + file;
+
+                if (path != new_path) {
+                    FileCopy(path, new_path); // we copy even if file exists since the user may have compiled the dll and so we should update it
+                    // we can check last modified time to avoid copy if nothing has changed
+                }
             }
+
+
             if(generate_exe_file)
                 cmd += "-o " + exe_file;
             else if(generate_dll_file)
                 cmd += "-o " + dll_file;
+            else if(generate_lib_file) ; // already handled
             else Assert(false);
         } break;
         default: {
@@ -1634,6 +1692,8 @@ void Compiler::run(CompileOptions* options) {
                 options->compileStats.generatedFiles.add(exe_file);
             } else if(generate_dll_file) {
                 options->compileStats.generatedFiles.add(dll_file);
+            } else if(generate_lib_file) {
+                options->compileStats.generatedFiles.add(lib_file);
             } else Assert(false);
         }
         options->compileStats.end_linker = StartMeasure();
@@ -1675,7 +1735,7 @@ void Compiler::run(CompileOptions* options) {
     // }
 JUMP_TO_EXEC:
     
-    if(options->executeOutput) {
+    if(options->executeOutput && generate_exe_file) {
         switch(options->target) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS
@@ -1915,10 +1975,10 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     //     }
     // }
     if (keep_searching) {
-        Path temp = sourceDirectory.text;
-        if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
-            temp.text += "/";
-        temp.text += fullPath.text;
+        Path temp{}; // = sourceDirectory.text;
+        // if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
+        //     temp.text += "/";
+        // temp.text += fullPath.text;
         for(int i=0;i<(int)importDirectories.size();i++){
             const Path& dir = importDirectories[i];
             Assert(dir.isDir() && dir.isAbsolute());

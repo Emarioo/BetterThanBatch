@@ -144,6 +144,9 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         objectFile.addSymbol(SYM_FUNCTION, sym.name, section_text, real_offset);
     }
 
+    // Useful resource when figuring out how linking and calls work.
+    // https://dennisbabkin.com/blog/?t=intricacies-of-microsoft-compilers-part-2-__imp_-and-__imp_load_-prefixes
+
     if(program->globalSize != 0) {
         auto stream = objectFile.getStreamFromSection(section_data);
         suc = stream->write(program->globalData, program->globalSize);
@@ -336,7 +339,8 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
         } else if(sym.type == SYM_DATA) {
             symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_STATIC;
         } else {
-            Assert(false); // TODO: global variables
+            symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
+            // Assert(false); // TODO: global variables
         }
 
         symbol->Type = 0; // safe to ignore?

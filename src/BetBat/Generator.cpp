@@ -34,6 +34,19 @@ GenContext::LoopScope* GenContext::getLoop(int index){
     if(index < 0 || index >= (int)loopScopes.size()) return nullptr;
     return loopScopes[index];
 }
+LinkConvention DetermineLinkConvention(const std::string& lib_path) {
+    if (lib_path.size() == 0)
+        return LinkConvention::IMPORT;
+
+    int dot_index = lib_path.find_last_of(".");
+    auto format = lib_path.substr(dot_index);
+    if (format == ".dll" || format == ".so") {
+        return LinkConvention::DYNAMIC_IMPORT;
+    } else if(format == ".lib" || format == ".a") { // TODO: Linux uses libNAME.a for static libraries, we only check .a here but we should perhaps check the prefix 'lib' too.
+        return LinkConvention::STATIC_IMPORT;
+    }
+    return LinkConvention::IMPORT;
+}
 bool GenContext::popLoop(){
     if(loopScopes.size()==0)
         return false;
@@ -234,20 +247,7 @@ InstructionOpcode ASTOpToBytecode(TypeId astOp, bool floatVersion){
     return (InstructionOpcode)0;
 }
 void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo) {
-    if(compiler->options->target == TARGET_WINDOWS_x64) {
-        ERR_SECTION(
-            ERR_HEAD2(varinfo->declaration->location)
-            ERR_MSG("Windows target does not handle imported global variables. (not implemented yet)")
-            ERR_LINE2(varinfo->declaration->location, "here")
-        )
-    }
-
-
-    builder.emit_ext_dataptr(reg, LinkConvention::VARIMPORT);
-    int reloc = builder.get_pc(); // ext_dataptr doesn't have an immediate,
-    // reloc therefore points to the next instruction which may seem wierd BUT,
-    // the x64 generator knows this and generates an instruction with an immediate
-    // that is relocated. It's just that the bytecode doesn't need an immediate so we skip it.
+    using namespace engone;
 
     std::string alias = varinfo->declaration->linked_alias.size() == 0 ? varinfo->declaration->varnames[0].name : varinfo->declaration->linked_alias;
     std::string lib_path = "";
@@ -262,7 +262,51 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
             break;
         }
     }
-    addExternalRelocation(alias, lib_path, reloc, true);
+    LinkConvention link_convention = varinfo->declaration->linkConvention;
+    if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
+        link_convention = DetermineLinkConvention(lib_path);
+    }
+    if (lib_path.size() == 0) {
+        int errs = reporter->get_lib_errors(varinfo->declaration->linked_library);
+        reporter->add_lib_error(varinfo->declaration->linked_library);
+        if (errs >= Reporter::LIB_ERROR_LIMIT) {
+            // log::out << "skip\n";
+        } else {
+            ERR_SECTION(
+                ERR_HEAD2(varinfo->declaration->location)
+                ERR_MSG_COLORED("'"<<log::LIME<<varinfo->declaration->linked_library<<log::NO_COLOR<<"' is not a library. Did you misspell it?")
+                ERR_LINE2(varinfo->declaration->location, "this declaration")
+
+                log::out << "These are the available libraries: ";
+                for(int i=0;i<func_imp->libraries.size();i++){
+                    if(i!=0) log::out << ", ";
+                    log::out << log::LIME << func_imp->libraries[i].named_as << log::NO_COLOR;
+                }
+                log::out << "\n";
+            )
+        }
+    }
+    
+    if(link_convention == LinkConvention::IMPORT) {
+        builder.emit_ext_dataptr(reg, LinkConvention::NONE); // emit to prevent triggering asserts to make sure we keep compiling and catch more errors
+        ERR_SECTION(
+            ERR_HEAD2(varinfo->declaration->location)
+            ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. This was the library name and path: '"<<log::LIME << varinfo->declaration->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'. You can always specify @importdll or @importlib manually.")
+            ERR_LINE2(varinfo->declaration->location,"this declaration")
+        )
+    } else {
+        builder.emit_ext_dataptr(reg, link_convention);
+        int reloc = builder.get_pc(); // ext_dataptr doesn't have an immediate,
+        // reloc therefore points to the next instruction which may seem wierd BUT,
+        // the x64 generator knows this and generates an instruction with an immediate
+        // that is relocated. It's just that the bytecode doesn't need an immediate so we skip it.
+
+        if(link_convention == LinkConvention::DYNAMIC_IMPORT && compiler->options->target == TARGET_WINDOWS_x64) {
+            // I don't know how linking works on Linux...
+            alias = "__imp_" + alias;
+        }
+        addExternalRelocation(alias, lib_path, reloc, false); // is_var = false BECAUSE it's an external symbol from a dll or static library
+    }
 }
 SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
     using namespace engone;
@@ -1812,7 +1856,6 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
         auto arg = all_arguments[i];
         generatePop_set_arg(signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
     }
-
     
     i32 reloc = 0;
     if(is_function_pointer) {
@@ -1852,10 +1895,11 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
             switch(varinfo->type) {
                 case Identifier::GLOBAL_VARIABLE: {
                     if(varinfo->declaration && varinfo->declaration->isImported()) {
-                        generate_ext_dataptr(BC_REG_B, varinfo);
+                        generate_ext_dataptr(reg, varinfo);
                     } else {
                         builder.emit_dataptr(reg, varinfo->versions_dataOffset[version]);
                     }
+                    builder.emit_mov_rm(reg, reg, 8);
                 } break; 
                 case Identifier::LOCAL_VARIABLE: {
                     builder.emit_mov_rm_disp(reg, BC_REG_LOCALS, 8, varinfo->versions_dataOffset[info.currentPolyVersion]);
@@ -1891,14 +1935,19 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
             }
         }
         
+        // TODO: There should be no link convention
         builder.emit_call_reg(reg, LinkConvention::NONE, call_convention);
-        
-        // info.addCallToResolve(reloc, funcImpl);
-        
-    } else if(astFunc->linkConvention == LinkConvention::IMPORT || astFunc->linkConvention == LinkConvention::DLLIMPORT
-        || astFunc->linkConvention == LinkConvention::VARIMPORT){
-        builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-        std::string alias = astFunc->linked_alias.size() == 0 ? astFunc->name : astFunc->linked_alias;
+    } else if(astFunc->linkConvention == LinkConvention::NONE ||astFunc->linkConvention == LinkConvention::NATIVE) {
+            builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
+            info.addCallToResolve(reloc, funcImpl);
+    } else {
+        // determine link convention
+        LinkConvention link_convention = astFunc->linkConvention;
+
+        std::string alias = astFunc->name;
+        if (astFunc->linked_alias.size() != 0)
+            alias = astFunc->linked_alias;
+
         std::string lib_path = "";
         auto func_imp = info.compiler->getImport(astFunc->getImportId(&info.compiler->lexer));
         Assert(func_imp);
@@ -1909,7 +1958,10 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                 break;
             }
         }
-        if(lib_path.size() == 0) {
+        if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
+            link_convention = DetermineLinkConvention(lib_path);
+        }
+        if (lib_path.size() == 0) {
             if(astFunc->linked_library.size() != 0) {
                 // TODO: If many functions complain about GLAD then only display the first 5 or so.
                 int errs = reporter->get_lib_errors(astFunc->linked_library);
@@ -1946,21 +1998,28 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                 )
             }
         }
-        if(astFunc->linkConvention == IMPORT) {
+        if(link_convention == STATIC_IMPORT) {
+            builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
             addExternalRelocation(alias, lib_path, reloc);
-        } else if(astFunc->linkConvention == DLLIMPORT){
-            addExternalRelocation("__imp_"+alias, lib_path, reloc);
-        } else if(astFunc->linkConvention == VARIMPORT){
-            // Assert(false);
-            // TODO: VARIMPORT refers to a global variable that is a function pointer.
-            // Not sure how to handle this.
-            // An additional way is to allow ´global @import MyFunction: fn (i32) -> i32;
-            // Importing a global variable.
+        } else if(link_convention == DYNAMIC_IMPORT){
+            builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
+            if(compiler->options->target == TARGET_WINDOWS_x64) {
+                // I don't know how linking works on Linux...
+                alias = "__imp_" + alias;
+            }
             addExternalRelocation(alias, lib_path, reloc);
-        } else Assert(false);
-    } else {
-        builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
-        info.addCallToResolve(reloc, funcImpl);
+            // addExternalRelocation("__imp_"+alias, lib_path, reloc);
+        } else {
+            // NOTE: We emit call to prevent asserts and keep compiling since this link problem
+            //   is a problem in x64.
+            builder.emit_call(LinkConvention::NONE, astFunc->callConvention, &reloc);
+            ERR_SECTION(
+                ERR_HEAD2(astFunc->location)
+                ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. This was the library name and path: '"<<log::LIME << astFunc->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'. You can always specify @importdll or @importlib manually.")
+                ERR_LINE2(astFunc->location,"function")
+                ERR_LINE2(expression->location,"call")
+            )
+        }
     }
     
     builder.emit_free_args(allocated_stack_space);
@@ -2447,9 +2506,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             // #define IS_WHITESPACE(C) (C == ' ' || C == '\n' || C == '\r' || C == '\t')
             #define IS_WHITESPACE(C) (C == ' ' || C == '\t')
             
-            
+            new_assembly = assembly;
             // I think I overcomplicated this parsing. We need to find "[some_name]" and if any characters doesn't match
             // that then we find the next opening bracket.
+        #ifdef gone
             while(head < assembly.size()) {
                 char chr = assembly[head];
                 head++;
@@ -2510,7 +2570,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                     //   We found a variable name
                                     // ############################
                                     std::string name = std::string(assembly.data() + name_start, name_end-name_start);
-                                    log::out << "Var " << name<<"\n";
+                                    // log::out << "Var " << name<<"\n";
                                     
                                     ContentOrder order = CONTENT_ORDER_MAX; // TODO: Fix content order
                                     bool crossed_function = false;
@@ -2573,6 +2633,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                             )
                                         }
                                     } else {
+
                                         ERR_SECTION(
                                             ERR_HEAD2(expression->location)
                                             ERR_MSG("Undefined variable '"<<name<<"' in inline assembly.")
@@ -2632,6 +2693,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     default: Assert(false);
                 }
             }
+        #endif
 
             lexer::TokenSource* src_start, *src_end;
             compiler->lexer.getTokenInfoFromImport(imp->file_id, expression->asm_range.token_index_start, &src_start);
@@ -3793,7 +3855,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                         outSize = ast->getTypeSize(outType);
                         operand_size = outSize;
                     }
-                } else if (AST::IsInteger(ltype) && AST::IsInteger(rtype)){
+                } else if ((AST::IsInteger(ltype) || left_info->astEnum) && (AST::IsInteger(rtype) || right_info->astEnum)){
                     // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
                     int lsize = info.ast->getTypeSize(ltype);
                     int rsize = info.ast->getTypeSize(rtype);
@@ -3878,7 +3940,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             Assert(AST::IsSigned(outType));
                         }
                     }
-                } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR || left_info->astEnum) && (AST::IsInteger(rtype) || rtype == AST_CHAR || right_info->astEnum)){
+                } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR) && (AST::IsInteger(rtype) || rtype == AST_CHAR)){
                     // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
                     int lsize = info.ast->getTypeSize(ltype);
                     int rsize = info.ast->getTypeSize(rtype);
@@ -6221,7 +6283,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     Identifier* iden = nullptr;
     if(is_initial_import) {
         if(compiler->entry_point.size() != 0) {
-            iden = compiler->ast->findIdentifier(scope->scopeId,0,compiler->entry_point, nullptr);
+            iden = compiler->ast->findIdentifier(scope->scopeId,0,compiler->entry_point, nullptr, true, false);
             if(!iden) {
                 // If no main function exists then the code in global scope of
                 // initial import will be the main function.

@@ -108,7 +108,7 @@ int main(int argc, const char** argv){
         // options.target = TARGET_BYTECODE;
         // options.target = TARGET_WINDOWS_x64;
         // options.linker = LINKER_MSVC;
-        // options.linker = LINKER_GNU;
+        // options.linker = LINKER_GCC;
         options.executeOutput = true;
         // options.incremental_build = true;
         // options.disable_preload = true;

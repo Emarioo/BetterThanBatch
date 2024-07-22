@@ -25,61 +25,68 @@
 
 #import "Hotreloading"
 
-// #if OS_WINDOWS
-// fn @export @stdcall DllMain(hinstDLL: HINSTANCE, fdwReason: i32, lpvReserved: void* ) -> bool {
-//     // Perform actions based on the reason for calling.
-//     switch fdwReason {
-//         case DLL_PROCESS_ATTACH:
-//             // Initialize once for each new process.
-//             // Return FALSE to fail DLL load.
-//             init_preload()
-//             break;
-//         case DLL_THREAD_ATTACH:
-//             // Do thread-specific initialization.
-//             break;
-//         case DLL_THREAD_DETACH:
-//             // Do thread-specific cleanup.
-//             break;
-//         case DLL_PROCESS_DETACH:
-//             if lpvReserved {
-//                 break; // do not do cleanup if process termination scenario
-//             }
-//             // Perform any necessary cleanup.
-//             break;
-//     }
-//     return true;  // Successful DLL_PROCESS_ATTACH.
-// }
-// #else
-// #endif
+#if BUILD_EXE
+fn main(argc: i32, argv: char**) -> i32 {
+    log("HI!")
+    app: AppInstance
+    app.argc = argc
+    app.argv = argv
+    // app.rebuild_func = build
+    // fn build() {
+    //     ExecuteCommand("btb examples/crawler/GameCore -d --silent --incremental -o bin/code.dll", asynchronous = true)
+    // }
+    // #if OS_WINDOWS
+    //     app.init("bin/code.dll")
+    // #else
+    //     app.init("bin/code.so")
+    // #endif
+
+    HOTRELOAD_FN_EVENT (&app, APP_START)
+    while app.running {
+        HOTRELOAD_FN_EVENT (&app, APP_TICK)
+    }
+    HOTRELOAD_FN_EVENT (&app, APP_STOP)
+
+    return 0
+}
+#endif
 
 fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
     if event == APP_CODE_LOAD  init_preload() // init global data, type information
     
-    if event == APP_INIT {
-        core: GameCore* = Allocate(sizeof GameCore)
-        construct(core)
-        if app.argc > 1 {
-            if "client" == sliced(app.argv[1]) {
-                core.special_action = SPECIAL_START_CLIENT
-            } else if "server" == sliced(app.argv[1]) {
-                core.special_action = SPECIAL_START_SERVER
+    core: GameCore* = app.user_data
+
+    switch event {
+        case APP_START:
+            core = Allocate(sizeof GameCore)
+            construct(core)
+            if app.argc > 1 {
+                if "client" == sliced(app.argv[1]) {
+                    core.special_action = SPECIAL_START_CLIENT
+                } else if "server" == sliced(app.argv[1]) {
+                    core.special_action = SPECIAL_START_SERVER
+                }
             }
-        }
-        app.user_data = core
+            app.user_data = core
+            core.start_game(app)
+        case APP_TICK:
+            core.tick_game(app)
+        case APP_STOP:
+            core.stop_game(app)
+
+        case APP_CODE_LOAD:
+        case APP_CODE_UNLOAD: // do nothing for now
     }
 
-    if event == APP_TICK {
-        global tick: i32
-        tick++
-        if tick < 70
-            return;
-        tick = 0
-    }
-
+    // if event == APP_TICK {
+    //     global tick: i32
+    //     tick++
+    //     if tick < 70
+    //         return;
+    //     tick = 0
+    // }
     // log(&event)
     // std_print(app, true) log()
-
-    log("Automatic code reload is very cool")
 }
 
 
@@ -139,7 +146,7 @@ struct GameCore {
 
     debug: DebugModule;
 
-    fn start_game() {
+    fn start_game(app: AppInstance*) {
         // window = CreateWindow(1400,600)
         window = CreateWindow(800,600)
         InitEntityInfos()
@@ -181,246 +188,245 @@ struct GameCore {
         keyboard_player.entity_id = keyboard_player_entity.id
         keyboard_player.online_player = false
         keyboard_player.joystick_id = -1
+    }
+    fn tick_game(app: AppInstance*) {
+        if app
+            app.running = window.running
 
-        // Then start game loop where we display the menu
-        // the user presses.
+        FillColor(window, Color{0.2,0.2,0.2})
+
+        window.enableUISpace(false)
+        //######################
+        // GAME STUFF
+        //######################
         
-        while window.running {
-            FillColor(window, Color{0.2,0.2,0.2})
-
-            window.enableUISpace(false)
-            //######################
-            // GAME STUFF
-            //######################
-            
-            if focused_element == FOCUS_GAME {
-                if window.isKeyPressed(GLFW_KEY_ESCAPE) {
-                    pause_game = !pause_game
-                    if !pause_game {
-                        debug.EraseFutureFrames(current_frame)
-                    }
-                }
-                if window.isKeyPressed(GLFW_KEY_I) {
-                    enable_entity_info = !enable_entity_info
-                }
-            }
-
-            if display_game {
-                global refresh_ticks: i32
-                refresh_ticks++ // keep ticking, as soon as game is unpaused we will refresh local players, refreshing players while paused won't work since adding new entities could mess things up
-
+        if focused_element == FOCUS_GAME {
+            if window.isKeyPressed(GLFW_KEY_ESCAPE) {
+                pause_game = !pause_game
                 if !pause_game {
-                    if refresh_ticks > 30 {
-                        refresh_local_players()
-                        refresh_ticks = 0
-                    }
-                    if current_frame == 0
-                        debug.SaveFrame(current_frame)
-                    
-                    game_logic()
+                    debug.EraseFutureFrames(current_frame)
+                }
+            }
+            if window.isKeyPressed(GLFW_KEY_I) {
+                enable_entity_info = !enable_entity_info
+            }
+        }
 
-                    update_player_movement()
-                    world.update(window)
+        if display_game {
+            global refresh_ticks: i32
+            refresh_ticks++ // keep ticking, as soon as game is unpaused we will refresh local players, refreshing players while paused won't work since adding new entities could mess things up
 
-                    refresh_network()
-
-                    current_frame++
+            if !pause_game {
+                if refresh_ticks > 30 {
+                    refresh_local_players()
+                    refresh_ticks = 0
+                }
+                if current_frame == 0
                     debug.SaveFrame(current_frame)
-                } else {
-                    if focused_element == FOCUS_GAME {
-                        fast_step := window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
-                        if window.isKeyPressed(GLFW_KEY_LEFT) || (fast_step && window.isKeyDown(GLFW_KEY_LEFT)) {
-                            if debug.is_valid_frame(current_frame-1) {
-                                current_frame--
-                                debug.RestoreFrame(current_frame)
-                            }
+                
+                game_logic()
+
+                update_player_movement()
+                world.update(window)
+
+                refresh_network()
+
+                current_frame++
+                debug.SaveFrame(current_frame)
+            } else {
+                if focused_element == FOCUS_GAME {
+                    fast_step := window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+                    if window.isKeyPressed(GLFW_KEY_LEFT) || (fast_step && window.isKeyDown(GLFW_KEY_LEFT)) {
+                        if debug.is_valid_frame(current_frame-1) {
+                            current_frame--
+                            debug.RestoreFrame(current_frame)
                         }
-                        if window.isKeyPressed(GLFW_KEY_RIGHT) || (fast_step && window.isKeyDown(GLFW_KEY_RIGHT)) {
-                            if debug.is_valid_frame(current_frame+1) {
-                                current_frame++
-                                debug.RestoreFrame(current_frame)
-                            }
+                    }
+                    if window.isKeyPressed(GLFW_KEY_RIGHT) || (fast_step && window.isKeyDown(GLFW_KEY_RIGHT)) {
+                        if debug.is_valid_frame(current_frame+1) {
+                            current_frame++
+                            debug.RestoreFrame(current_frame)
                         }
                     }
                 }
-
-                render_world()
-            }
-            if focused_element == FOCUS_GAME {
-                if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_S) {
-                    SaveWorld("bin/world.dat",world)
-                }
-                if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_L) {
-                    LoadWorld("bin/world.dat",world)
-                }
             }
 
-            window.enableUISpace(true)
-            
-            // ###################
-            // MENU STUFF
-            // ###################
-            temp: StringBuilder
-            defer temp.cleanup()
-
-            if display_game {
-                // render chat at bottom left corner
-                chat.w = window.width * 0.3
-                chat.h = window.height * 0.25
-                chat.x = 0
-                chat.y = window.height - chat.h
-                // TIMED_CODE(60, log(&chat))
-                chat.render(window)
-
-                if chat.editing
-                    focused_element = FOCUS_CHAT
-                else
-                    focused_element = FOCUS_GAME
+            render_world()
+        }
+        if focused_element == FOCUS_GAME {
+            if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_S) {
+                SaveWorld("bin/world.dat",world)
             }
-
-            if !display_game {
-                font := window.defaultFont()
-                title_text_size := 40
-                option_text_size := 30
-                title_color := Color{1,1,1}
-                option_color := Color{1,1,1}
-                highlight_color := Color{0.3,1,0.7}
-                
-                temp.clear()
-                temp.append("Dungeon crawler No. 89")
-                
-                title_w := font.width_of_text(temp.sliced(), title_text_size)
-                DrawText(window, window.width / 2 - title_w / 2, window.height / 8, title_text_size, temp.sliced(), title_color)
-
-                layout_x := 10
-                layout_y := window.height / 3 + 100
-
-                enum OptionButton {
-                    OPTION_PLAY,
-                    OPTION_OPTIONS,
-                    OPTION_QUIT,
-                }
-                a := OPTION_OPTIONS
-                options: char[][3] {
-                    "Play",
-                    "Options",
-                    "Quit"
-                }
-                mx := window.getMouseX()
-                my := window.getMouseY()
-                pressed := -1
-                for @ptr options {
-                    temp.clear()
-                    temp.append(*it)
-
-                    box := Box{layout_x, layout_y, 0, option_text_size}
-                    box.w = font.width_of_text(temp.sliced(), option_text_size)
-
-                    // log(mx," ",my," ",&box)
-                    if box.inside(mx, my) {
-                        DrawText(window, box, temp.sliced(), highlight_color)
-                        // if pressed, do action
-                        if window.isKeyPressed(GLFW_MOUSE_BUTTON_1) {
-                            pressed = nr
-                        }
-
-                        // Temporary debug code
-                        if nr == cast<i32>OPTION_OPTIONS && window.isKeyDown(GLFW_MOUSE_BUTTON_1) {
-                            new_box := box
-                            new_box.x += new_box.w + 10
-                            DrawText(window, new_box, "incomplete", Color{1,0.5,0.5})
-                        }
-                    } else {
-                        DrawText(window, box, temp.sliced(), option_color)
-                    }
-                    layout_y += option_text_size
-                }
-
-                switch pressed {
-                case OPTION_PLAY:
-                    // Play
-                    transition_to_game()
-                case OPTION_OPTIONS:
-                    // options
-                    // render other options
-                case OPTION_QUIT:
-                    // quit
-                    window.close()
-                }
+            if window.isKeyDown(GLFW_KEY_LEFT_CONTROL) && window.isKeyPressed(GLFW_KEY_L) {
+                LoadWorld("bin/world.dat",world)
             }
+        }
 
-            //######################
-            //  DEBUG STUFF
-            //######################
-            
-            layout_y: f32 = 0
-
-            fps: StringBuilder
-            fps.append(cast<i32>(window.delta*1000))
-            fps.append(".")
-            fps.append((cast<i32>(window.delta*10000)) % 10)
-            fps.append(" ms")
-            
-            DrawText(window, 0, layout_y, 20, fps)
-            layout_y += 20
-
-            temp.clear()
-            temp.append("frame: ")
-            temp.append(current_frame)
-            if pause_game {
-                temp.append(" (")
-                temp.append(debug.last_frame-debug.saved_frames+1)
-                temp.append("-")
-                temp.append(debug.last_frame)
-                temp.append(")")
-            }
-            DrawText(window, 0, layout_y, 20, temp.sliced())
-            layout_y += 20
-            
-            temp.clear()
-            temp.append("zoom: ")
-            temp.append(window.camera_zoom)
-            DrawText(window, 0, layout_y, 20, temp.sliced())
-            layout_y += 20
-
-            layout_y = window.height - 5
-            text_h: f32 = 18
-            text_w: f32 = 0
-            font := window.defaultFont()
-
-            #macro TEXT(TXT)
-                temp.clear()
-                temp.append(TXT)
-                text_w = font.width_of_text(temp.sliced(), text_h)
-                DrawText(window, window.width - text_w - 5, layout_y, text_h, temp.sliced())
-                layout_y -= text_h
-                temp.cleanup()
-            #endmacro
-
-            // text is rendered bottom-up
-            TEXT("WASD or left joystick to move")
-            TEXT("shift or right bumper to sprint")
-            TEXT("C for free camera, arrow keys to move")
-            TEXT("scroll to zoom, when free camera")
-            TEXT("ESCAPE to pause, arrow keys to step frames")
-            TEXT("shift + arrow keys to step faster")
-
-            for @ptr delayed_code.sliced() {
-                if it.ticks <= 0 {
-                    it.func(it.data)
-                    delayed_code.remove(nr)
-                    nr--
-                } else {
-                    it.ticks--
-                }
-                
-            }
-            delayed_code.clear()
-
-            RefreshWindow(window)
-        }   
+        window.enableUISpace(true)
         
-        // DestroyTexture(blob)
+        // ###################
+        // MENU STUFF
+        // ###################
+        temp: StringBuilder
+        defer temp.cleanup()
+
+        if display_game {
+            // render chat at bottom left corner
+            chat.w = window.width * 0.3
+            chat.h = window.height * 0.25
+            chat.x = 0
+            chat.y = window.height - chat.h
+            // TIMED_CODE(60, log(&chat))
+            chat.render(window)
+
+            if chat.editing
+                focused_element = FOCUS_CHAT
+            else
+                focused_element = FOCUS_GAME
+        }
+
+        if !display_game {
+            font := window.defaultFont()
+            title_text_size := 40
+            option_text_size := 30
+            title_color := Color{1,1,1}
+            option_color := Color{1,1,1}
+            highlight_color := Color{0.3,1,0.7}
+            
+            temp.clear()
+            temp.append("Dungeon crawler No. 89")
+            
+            title_w := font.width_of_text(temp.sliced(), title_text_size)
+            DrawText(window, window.width / 2 - title_w / 2, window.height / 8, title_text_size, temp.sliced(), title_color)
+
+            layout_x := 10
+            layout_y := window.height / 3 + 100
+
+            enum OptionButton {
+                OPTION_PLAY,
+                OPTION_OPTIONS,
+                OPTION_QUIT,
+            }
+            a := OPTION_OPTIONS
+            options: char[][3] {
+                "Play",
+                "Options",
+                "Quit"
+            }
+            mx := window.getMouseX()
+            my := window.getMouseY()
+            pressed := -1
+            for @ptr options {
+                temp.clear()
+                temp.append(*it)
+
+                box := Box{layout_x, layout_y, 0, option_text_size}
+                box.w = font.width_of_text(temp.sliced(), option_text_size)
+
+                // log(mx," ",my," ",&box)
+                if box.inside(mx, my) {
+                    DrawText(window, box, temp.sliced(), highlight_color)
+                    // if pressed, do action
+                    if window.isKeyPressed(GLFW_MOUSE_BUTTON_1) {
+                        pressed = nr
+                    }
+
+                    // Temporary debug code
+                    if nr == cast<i32>OPTION_OPTIONS && window.isKeyDown(GLFW_MOUSE_BUTTON_1) {
+                        new_box := box
+                        new_box.x += new_box.w + 10
+                        DrawText(window, new_box, "incomplete", Color{1,0.5,0.5})
+                    }
+                } else {
+                    DrawText(window, box, temp.sliced(), option_color)
+                }
+                layout_y += option_text_size
+            }
+
+            switch pressed {
+            case OPTION_PLAY:
+                // Play
+                transition_to_game()
+            case OPTION_OPTIONS:
+                // options
+                // render other options
+            case OPTION_QUIT:
+                // quit
+                window.close()
+            }
+        }
+
+        //######################
+        //  DEBUG STUFF
+        //######################
+        
+        layout_y: f32 = 0
+
+        fps: StringBuilder
+        fps.append(cast<i32>(window.delta*1000))
+        fps.append(".")
+        fps.append((cast<i32>(window.delta*10000)) % 10)
+        fps.append(" ms")
+        
+        DrawText(window, 0, layout_y, 20, fps)
+        layout_y += 20
+
+        temp.clear()
+        temp.append("frame: ")
+        temp.append(current_frame)
+        if pause_game {
+            temp.append(" (")
+            temp.append(debug.last_frame-debug.saved_frames+1)
+            temp.append("-")
+            temp.append(debug.last_frame)
+            temp.append(")")
+        }
+        DrawText(window, 0, layout_y, 20, temp.sliced())
+        layout_y += 20
+        
+        temp.clear()
+        temp.append("zoom: ")
+        temp.append(window.camera_zoom)
+        DrawText(window, 0, layout_y, 20, temp.sliced())
+        layout_y += 20
+
+        layout_y = window.height - 5
+        text_h: f32 = 18
+        text_w: f32 = 0
+        font := window.defaultFont()
+
+        #macro TEXT(TXT)
+            temp.clear()
+            temp.append(TXT)
+            text_w = font.width_of_text(temp.sliced(), text_h)
+            DrawText(window, window.width - text_w - 5, layout_y, text_h, temp.sliced())
+            layout_y -= text_h
+            temp.cleanup()
+        #endmacro
+
+        // text is rendered bottom-up
+        TEXT("WASD or left joystick to move")
+        TEXT("shift or right bumper to sprint")
+        TEXT("C for free camera, arrow keys to move")
+        TEXT("scroll to zoom, when free camera")
+        TEXT("ESCAPE to pause, arrow keys to step frames")
+        TEXT("shift + arrow keys to step faster")
+
+        for @ptr delayed_code.sliced() {
+            if it.ticks <= 0 {
+                it.func(it.data)
+                delayed_code.remove(nr)
+                nr--
+            } else {
+                it.ticks--
+            }
+            
+        }
+        delayed_code.clear()
+
+        RefreshWindow(window)
+    }
+    fn stop_game(app: AppInstance*) {
         DestroyWindow(window)
     }
 

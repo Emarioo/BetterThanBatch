@@ -159,7 +159,7 @@
 /* <wingdi.h> and <winnt.h> */
 #ifndef WINGDIAPI
 #define GLEW_WINGDIAPI_DEFINED
-#define WINGDIAPI __declspec(dllimport)
+#define WINGDIAPI __declspec(importdll)
 #endif
 /* <ctype.h> */
 #if (defined(_MSC_VER) || defined(__BORLANDC__)) && !defined(_WCHAR_T_DEFINED)
@@ -203,7 +203,7 @@ typedef _W64 int ptrdiff_t;
 #  ifdef GLEW_BUILD
 #    define GLEWAPI extern __declspec(dllexport)
 #  else
-#    define GLEWAPI extern __declspec(dllimport)
+#    define GLEWAPI extern __declspec(importdll)
 #  endif
 #endif
 

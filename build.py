@@ -388,6 +388,15 @@ def compile(config):
     if not os.path.exists("libs/glad/lib-mingw-w64/glad.lib"):
         cmd("gcc -c "+GCC_PATHS+" libs/glad/src/glad.c -o bin/glad.o")
         cmd("ar rcs libs/glad/lib-mingw-w64/glad.lib bin/glad.o")
+    if not os.path.exists("libs/glad/lib-mingw-w64/glad.dll"):
+        cmd("gcc -shared -fPIC "+GCC_PATHS+" -DGLAD_GLAPI_EXPORT_BUILD libs/glad/src/glad.c -o libs/glad/lib-mingw-w64/glad.dll")
+        # cmd("gcc -c "+GCC_PATHS+" -DGLAD_GLAPI_EXPORT libs/glad/src/glad.c -o bin/glad.o")
+        # cmd("ar rcs libs/glad/lib-mingw-w64/libgladdll.a bin/glad.o")
+
+    # NOTE: glfw isn't something we compile, it's prebuilt
+    if not os.path.exists("libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib"):
+        shutil.copy("libs/glfw-3.3.9/lib-mingw-w64/libglfw3.a","libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib")
+
     if not os.path.exists("libs/stb/lib-mingw-w64/stb_image.lib"):
         cmd("gcc -c "+GCC_PATHS+" libs/stb/src/stb_image.c -o bin/stb_image.o")
         cmd("ar rcs libs/stb/lib-mingw-w64/stb_image.lib bin/stb_image.o")

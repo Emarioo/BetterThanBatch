@@ -1,0 +1,38 @@
+// btb test_link.btb -o test_link.exe -r
+
+// The compiler doesn't know that the assembly uses
+// these libraries so we must forcefully link them
+#load "./sound.dll"
+#load "./sound.lib"
+// #load "./sound.dll" as Sound_dll
+// #load "./sound.lib" as Sound_lib
+
+// fn @import(Sound_dll) Play_dll(path: char*);
+// fn @import(Sound_lib) Play_lib(path: char*);
+
+fn main() {
+    asm("hi.wav".ptr) {
+        // NOTE: Assembly assumes GCC syntax with intel flavour
+
+        // we must declare external symbols
+        .extern Play_lib
+        .extern __imp_Play_dll
+        // .extern Play_dll
+
+        // NOTE: We assume stdcall convention...
+        pop rbx // pop pointer to string
+
+        sub rsp, 32 // alloc space for args, stdcall needs 32 bytes
+        
+        mov rcx, rbx
+        call Play_lib
+        
+        mov rcx, rbx
+        call qword ptr [__imp_Play_dll]
+        // call Play_dll
+
+        add rsp, 32 // free space for args
+    }
+    // Play_dll("hi.wav".ptr)
+    // Play_lib("hi.wav".ptr)
+}

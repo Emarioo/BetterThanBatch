@@ -4,7 +4,8 @@
 */
 #if OS_WINDOWS
     #load "OpenGL32.lib"
-    #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
+    // #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
+    #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
 #else
     // Linux?
 #endif
@@ -17,7 +18,7 @@ global glErrCode: bool = false;
 #endif
 
 #macro GLAD_IMPORT @import(GLAD)
-#macro GLAD_VARIMPORT(X) @varimport(GLAD, alias = #quoted glad_##X) X
+#macro GLAD_VARIMPORT(X) @import(GLAD, alias = #quoted glad_##X) X
 
 #macro GL_COLOR_BUFFER_BIT 0x00004000
 #macro GL_STATIC_DRAW 0x88E4
@@ -87,58 +88,61 @@ global glErrCode: bool = false;
 fn GLAD_IMPORT gladLoadGL() -> i32;
 fn GLAD_IMPORT gladLoadGLLoader(func: fn()) -> i32;
 
-fn GLAD_VARIMPORT(glClear)(mask: u32);
-fn GLAD_VARIMPORT(glClearColor)(red: f32, green: f32, blue: f32, alpha: f32);
-fn GLAD_VARIMPORT(glViewport)(x: i32, y: i32, w: i32, h: i32);
+#macro DEF_GLAD_VAR(X) global GLAD_VARIMPORT(X): fn @oscall /* args go here */
 
-fn GLAD_VARIMPORT(glGenBuffers)(size: i32, buffers: u32*);
-fn GLAD_VARIMPORT(glDeleteBuffers)(size: i32, buffers: u32*);
-fn GLAD_VARIMPORT(glBindBuffer)(target: u32, buffer: u32);
-fn GLAD_VARIMPORT(glBufferData)(target: u32, size: u64, data: void*, usage: u32);
-fn GLAD_VARIMPORT(glBufferSubData)(target: u32, offset: i64, size: i64, data: void*);
+DEF_GLAD_VAR(glClear)(mask: u32);
+DEF_GLAD_VAR(glClearColor)(red: f32, green: f32, blue: f32, alpha: f32);
+DEF_GLAD_VAR(glViewport)(x: i32, y: i32, w: i32, h: i32);
+// global @import(GLAD, alias="__imp_glad_glViewport") glViewport: fn@oscall(x: i32, y: i32, w: i32, h: i32);
 
-fn GLAD_VARIMPORT(glCreateShader)(type: u32) -> u32;
-fn GLAD_VARIMPORT(glShaderSource)(shader: u32, count: i32, string: char**, length: i32*);
-fn GLAD_VARIMPORT(glCompileShader)(shader: u32);
-fn GLAD_VARIMPORT(glGetShaderiv)(shader: u32, pname: u32, param: i32*);
-fn GLAD_VARIMPORT(glGetShaderInfoLog)(shader: u32, bufSize: i32, length: i32*, infoLog: char*);
-fn GLAD_VARIMPORT(glCreateProgram)() -> u32;
-fn GLAD_VARIMPORT(glAttachShader)(program: u32, shader: u32);
-fn GLAD_VARIMPORT(glLinkProgram)(program: u32);
-fn GLAD_VARIMPORT(glUseProgram)(program: u32);
-fn GLAD_VARIMPORT(glGetProgramiv)(program: u32, pname: u32, param: i32*);
-fn GLAD_VARIMPORT(glGetProgramInfoLog)(program: u32, bufSize: i32, length: i32*, infoLog: char*);
-fn GLAD_VARIMPORT(glDeleteShader)(shader: u32);
-fn GLAD_VARIMPORT(glGetUniformLocation)(program: u32, name: char*) -> u32;
+DEF_GLAD_VAR(glGenBuffers)(size: i32, buffers: u32*);
+DEF_GLAD_VAR(glDeleteBuffers)(size: i32, buffers: u32*);
+DEF_GLAD_VAR(glBindBuffer)(target: u32, buffer: u32);
+DEF_GLAD_VAR(glBufferData)(target: u32, size: u64, data: void*, usage: u32);
+DEF_GLAD_VAR(glBufferSubData)(target: u32, offset: i64, size: i64, data: void*);
 
-fn GLAD_VARIMPORT(glUniform1i)(location: i32, v0: i32);
-fn GLAD_VARIMPORT(glUniform2i)(location: i32, v0: i32, v1: i32);
-fn GLAD_VARIMPORT(glUniform3i)(location: i32, v0: i32, v1: i32, v2: i32);
-fn GLAD_VARIMPORT(glUniform4i)(location: i32, v0: i32, v1: i32, v2: i32, v3: i32);
-fn GLAD_VARIMPORT(glUniform1f)(location: i32, v0: f32);
-fn GLAD_VARIMPORT(glUniform2f)(location: i32, v0: f32, v1: f32);
-fn GLAD_VARIMPORT(glUniform3f)(location: i32, v0: f32, v1: f32, v2: f32);
-fn GLAD_VARIMPORT(glUniform4f)(location: i32, v0: f32, v1: f32, v2: f32, v3: f32);
+DEF_GLAD_VAR(glCreateShader)(type: u32) -> u32;
+DEF_GLAD_VAR(glShaderSource)(shader: u32, count: i32, string: char**, length: i32*);
+DEF_GLAD_VAR(glCompileShader)(shader: u32);
+DEF_GLAD_VAR(glGetShaderiv)(shader: u32, pname: u32, param: i32*);
+DEF_GLAD_VAR(glGetShaderInfoLog)(shader: u32, bufSize: i32, length: i32*, infoLog: char*);
+DEF_GLAD_VAR(glCreateProgram)() -> u32;
+DEF_GLAD_VAR(glAttachShader)(program: u32, shader: u32);
+DEF_GLAD_VAR(glLinkProgram)(program: u32);
+DEF_GLAD_VAR(glUseProgram)(program: u32);
+DEF_GLAD_VAR(glGetProgramiv)(program: u32, pname: u32, param: i32*);
+DEF_GLAD_VAR(glGetProgramInfoLog)(program: u32, bufSize: i32, length: i32*, infoLog: char*);
+DEF_GLAD_VAR(glDeleteShader)(shader: u32);
+DEF_GLAD_VAR(glGetUniformLocation)(program: u32, name: char*) -> u32;
 
-fn GLAD_VARIMPORT(glVertexAttribPointer)(index: u32, size: i32, type: u32, normalized: bool, stride: i32, pointer: void*);
-fn GLAD_VARIMPORT(glEnableVertexAttribArray)(index: u32);
-fn GLAD_VARIMPORT(glGenVertexArrays)(b: i32, arrays: u32*);
-fn GLAD_VARIMPORT(glBindVertexArray)(array: u32);
-fn GLAD_VARIMPORT(glDeleteVertexArrays)(n: i32, arrays: u32*);
+DEF_GLAD_VAR(glUniform1i)(location: i32, v0: i32);
+DEF_GLAD_VAR(glUniform2i)(location: i32, v0: i32, v1: i32);
+DEF_GLAD_VAR(glUniform3i)(location: i32, v0: i32, v1: i32, v2: i32);
+DEF_GLAD_VAR(glUniform4i)(location: i32, v0: i32, v1: i32, v2: i32, v3: i32);
+DEF_GLAD_VAR(glUniform1f)(location: i32, v0: f32);
+DEF_GLAD_VAR(glUniform2f)(location: i32, v0: f32, v1: f32);
+DEF_GLAD_VAR(glUniform3f)(location: i32, v0: f32, v1: f32, v2: f32);
+DEF_GLAD_VAR(glUniform4f)(location: i32, v0: f32, v1: f32, v2: f32, v3: f32);
 
-fn GLAD_VARIMPORT(glDrawArrays)(mode: u32, first: i32, count: i32);
-fn GLAD_VARIMPORT(glDrawElements)(mode: u32, count: i32, type: u32, indices: void*);
+DEF_GLAD_VAR(glVertexAttribPointer)(index: u32, size: i32, type: u32, normalized: bool, stride: i32, pointer: void*);
+DEF_GLAD_VAR(glEnableVertexAttribArray)(index: u32);
+DEF_GLAD_VAR(glGenVertexArrays)(b: i32, arrays: u32*);
+DEF_GLAD_VAR(glBindVertexArray)(array: u32);
+DEF_GLAD_VAR(glDeleteVertexArrays)(n: i32, arrays: u32*);
+
+DEF_GLAD_VAR(glDrawArrays)(mode: u32, first: i32, count: i32);
+DEF_GLAD_VAR(glDrawElements)(mode: u32, count: i32, type: u32, indices: void*);
 // TODO: Add glPolygonMode, GL_FRONT_AND_BACK, GL_LINE, GL_FILL
 
-fn GLAD_VARIMPORT(glActiveTexture)(texture: i32)
-fn GLAD_VARIMPORT(glBindTexture)(target: u32, texture: u32)
-fn GLAD_VARIMPORT(glGenTextures)(n: i32, textures: u32*);
-fn GLAD_VARIMPORT(glDeleteTextures)(n: i32, textures: u32*);
-fn GLAD_VARIMPORT(glTexParameteri)(target: u32, pname: i32, param: i32);
-fn GLAD_VARIMPORT(glTexImage2D)(target: u32, level: i32, internalformat: i32, width: i32, height: i32, border: i32, format: u32, type: u32, pixels: void*);
+DEF_GLAD_VAR(glActiveTexture)(texture: i32)
+DEF_GLAD_VAR(glBindTexture)(target: u32, texture: u32)
+DEF_GLAD_VAR(glGenTextures)(n: i32, textures: u32*);
+DEF_GLAD_VAR(glDeleteTextures)(n: i32, textures: u32*);
+DEF_GLAD_VAR(glTexParameteri)(target: u32, pname: i32, param: i32);
+DEF_GLAD_VAR(glTexImage2D)(target: u32, level: i32, internalformat: i32, width: i32, height: i32, border: i32, format: u32, type: u32, pixels: void*);
 
-fn GLAD_VARIMPORT(glEnable)(cap: u32);
-fn GLAD_VARIMPORT(glDisable)(cap: u32);
-fn GLAD_VARIMPORT(glBlendFunc)(sfactor: u32, dfactor: u32);
+DEF_GLAD_VAR(glEnable)(cap: u32);
+DEF_GLAD_VAR(glDisable)(cap: u32);
+DEF_GLAD_VAR(glBlendFunc)(sfactor: u32, dfactor: u32);
 
-fn GLAD_VARIMPORT(glGetError)() -> u32;
+DEF_GLAD_VAR(glGetError)() -> u32;

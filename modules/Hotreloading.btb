@@ -23,9 +23,9 @@
 #macro HOTRELOAD_FN_EVENT_S "hotreload_event"
 
 enum AppEvent {
-    APP_CODE_LOAD,   // code is loaded before APP_INIT (this is where you set up global data and such)
+    APP_CODE_LOAD,   // code is loaded before APP_START (this is where you set up global data and such)
     APP_CODE_UNLOAD, // here you can unload things if you need, allocated memory in global variables for example
-    APP_INIT, // called once at start of app
+    APP_START, // called once at start of app
     APP_TICK, // continous event (while loop)
     APP_STOP, // called at end of app, this is called before the final APP_CODE_UNLOAD
 }
@@ -54,6 +54,9 @@ struct AppInstance {
     last_modified_time: i64;
 }
 fn StartInfiniteLoop(app: AppInstance) {
+    // log(GetErrorMode());
+    // SetErrorMode(0);
+
     initialized: bool
     app.running = true
     app.start_time = StartMeasure()
@@ -95,6 +98,8 @@ fn StartInfiniteLoop(app: AppInstance) {
                 }
                 yes := FileCopy(app.dynamic_library_path, real_path)
 
+                // ProcessSleep(0.1)
+
                 if !yes {
                     log("Failed copying '", app.dynamic_library_path, "' to '", real_path, "'")
                     app.running = false;
@@ -108,7 +113,7 @@ fn StartInfiniteLoop(app: AppInstance) {
                         } else {
                             app.current_func_event(&app, APP_CODE_LOAD)
                             if !initialized
-                                app.current_func_event(&app, APP_INIT)
+                                app.current_func_event(&app, APP_START)
                             initialized = true;
 
                             app.last_modified_time = time
@@ -127,7 +132,7 @@ fn StartInfiniteLoop(app: AppInstance) {
             app.current_func_event(&app, APP_TICK)
         }
 
-        ProcessSleep(0.001)
+        // ProcessSleep(0.001)
         // ProcessSleep(0.01)
     }
     if app.current_func_event

@@ -1,4 +1,4 @@
-@TEST_CASE(test_dllimport)
+@TEST_CASE(test_importdll)
 
 
 #if OS_WINDOWS
@@ -6,7 +6,7 @@
 #load "Bcrypt.lib" as bcrypt
 
 fn @import(bcrypt,alias="BCryptGenRandom") BCryptGenRandom_lib(_: void*, buf: void*, len: u32, flags: u32) -> i32;
-fn @dllimport(bcrypt,alias="BCryptGenRandom") BCryptGenRandom_dll(_: void*, buf: void*, len: u32, flags: u32) -> i32;
+fn @importdll(bcrypt,alias="BCryptGenRandom") BCryptGenRandom_dll(_: void*, buf: void*, len: u32, flags: u32) -> i32;
 
 data, data2: i32;
 status  := BCryptGenRandom_lib(null, &data , sizeof data , 2);

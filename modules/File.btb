@@ -227,8 +227,8 @@ fn DirectoryDelete(path: char[]) -> bool {
 }
 fn FileCopy(src: char[], dst: char[]) -> bool {
     #if OS_WINDOWS
-        yes := CopyFileExA(src.ptr,dst.ptr,null,null,null,0);
-        // yes := CopyFileA(src.ptr,dst.ptr,false); // false means, don't fail if exist
+        // yes := CopyFileExA(src.ptr,dst.ptr,null,null,null,0);
+        yes := CopyFileA(src.ptr,dst.ptr,false); // false means, don't fail if exist
 		if(!yes){
 			err := GetLastError();
             log("[WinError ",err,"] CopyFile '",src,"' to '",dst,"'");

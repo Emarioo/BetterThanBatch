@@ -307,6 +307,8 @@ fn @import(Kernel) ReleaseSemaphore(
 #macro INFINITE            0xFFFFFFFFu  // Infinite timeout
 #macro WAIT_FAILED         0xFFFFFFFFu
 
+fn @import(Kernel) GetErrorMode() -> i32;
+fn @import(Kernel) SetErrorMode(n: i32) -> i32;
 
 /*#############
     SOCKETS
