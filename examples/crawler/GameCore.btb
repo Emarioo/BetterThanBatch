@@ -27,7 +27,7 @@
 
 #if BUILD_EXE
 fn main(argc: i32, argv: char**) -> i32 {
-    log("HI!")
+    // log("HI!")
     app: AppInstance
     app.argc = argc
     app.argv = argv
@@ -41,6 +41,7 @@ fn main(argc: i32, argv: char**) -> i32 {
     //     app.init("bin/code.so")
     // #endif
 
+    app.running = true
     HOTRELOAD_FN_EVENT (&app, APP_START)
     while app.running {
         HOTRELOAD_FN_EVENT (&app, APP_TICK)

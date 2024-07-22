@@ -381,6 +381,7 @@ def compile(config):
     ################################
 
     GCC_PATHS = "-Llibs/glfw-3.3.9/lib-mingw-w64 -Ilibs/glfw-3.3.9/include -Ilibs/glad/include -Lbin -Ilibs/stb/include"
+    MSVC_PATHS = "/Ilibs/glfw-3.3.9/include /Ilibs/glad/include /Ilibs/stb/include"
 
     if not os.path.exists("libs/glad/lib-mingw-w64/libglad.a"):
         cmd("gcc -c "+GCC_PATHS+" libs/glad/src/glad.c -o bin/glad.o")
@@ -389,9 +390,20 @@ def compile(config):
         cmd("gcc -c "+GCC_PATHS+" libs/glad/src/glad.c -o bin/glad.o")
         cmd("ar rcs libs/glad/lib-mingw-w64/glad.lib bin/glad.o")
     if not os.path.exists("libs/glad/lib-mingw-w64/glad.dll"):
-        cmd("gcc -shared -fPIC "+GCC_PATHS+" -DGLAD_GLAPI_EXPORT_BUILD libs/glad/src/glad.c -o libs/glad/lib-mingw-w64/glad.dll")
-        # cmd("gcc -c "+GCC_PATHS+" -DGLAD_GLAPI_EXPORT libs/glad/src/glad.c -o bin/glad.o")
-        # cmd("ar rcs libs/glad/lib-mingw-w64/libgladdll.a bin/glad.o")
+        cmd("gcc -shared -fPIC "+GCC_PATHS+" -DGLAD_GLAPI_EXPORT -DGLAD_GLAPI_EXPORT_BUILD libs/glad/src/glad.c -o libs/glad/lib-mingw-w64/glad.dll")
+    
+    if not os.path.exists("libs/glad/lib-vc2022"):
+        os.mkdir("libs/glad/lib-vc2022")
+    # if not os.path.exists("libs/glad/lib-vc2022/glad.lib"):
+    #     cmd("cl /nologo /c /TC "+MSVC_PATHS+" libs/glad/src/glad.c /Fo:bin/glad.obj")
+    #     cmd("lib bin/glad.obj /OUT:libs/glad/lib-vc2022/glad.lib")
+    if not os.path.exists("libs/glad/lib-vc2022/glad.dll") or not os.path.exists("libs/glad/lib-vc2022/gladdll.lib"):
+        #cl /nologo /TC /Ilibs/glad/include /DGLAD_GLAPI_EXPORT_BUILD libs/glad/src/glad.c /link /dll /OUT:libs/glad/lib-vc2022/glad.dll
+        # cmd("link /nologo bin/glad.obj /DLL /OUT:libs/glad/lib-vc2022/glad.dll /IMPLIB:libs/glad/lib-vc2022/gladdll.lib
+            
+        # cmd("cl /c /nologo /TC "+MSVC_PATHS+" /DGLAD_GLAPI_EXPORT_BUILD /DGLAD_GLAPI_EXPORT libs/glad/src/glad.c /Fo:bin/glad.obj")
+        # cmd("link /nologo bin/glad.obj /DLL /OUT:libs/glad/lib-vc2022/glad.dll /IMPLIB:libs/glad/lib-vc2022/gladdll.lib")
+        cmd("cl /nologo /TC "+MSVC_PATHS+" /DGLAD_GLAPI_EXPORT_BUILD /DGLAD_GLAPI_EXPORT libs/glad/src/glad.c /link /DLL /OUT:libs/glad/lib-vc2022/glad.dll /IMPLIB:libs/glad/lib-vc2022/gladdll.lib")
 
     # NOTE: glfw isn't something we compile, it's prebuilt
     if not os.path.exists("libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib"):

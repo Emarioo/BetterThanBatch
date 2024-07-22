@@ -97,11 +97,13 @@ A thing to note is that only the functions that are used such as the entry point
 **NOTE**: Exported functions default to @oscall. Write `fn @betcall @import(...` to force another calling convention.
 
 # What does @import do and how does the compiler link stuff?
-**NOTE:** The text is based on Windows and x64.
-
 **TODO:** Write some text about Linux.
-
 **TODO:** Include resources (websites) that contains more information about each part.
+
+[James McNellis "Everything You Ever Wanted to Know about DLLs"](https://www.youtube.com/watch?v=JPQWQfDhICA)
+
+Before we begin it is important to know that a library linked with one compiler tool chain (MSVC, GCC) will be compatible with another. When testing things you must make sure to recompile every library when changing which linker you are using. Therefore, you should probably not change the linker (GCC is recommended because the compiler doesn't support debug information with MSVC).
+Also, the text is based on Windows and x64. Things described may not be true on Linux.
 
 This section covers details which is useful to know if your program is crashing or you have linker errors. Compile these files and follow along the explanation to better understand linking:
 
@@ -139,7 +141,17 @@ fn main() {
 }
 ```
 
-First, let's figure out what we are dealing with. When we link the final executable `test_link.exe` we have `test_link.o` which contains the `main` function, `sound.lib` which contains `Play_lib`, and `sound.dll` which contains `Play_dll`. These libraries were linked because the execution of the executable the `main` function calls the play functions. If we didn't call any play function, the compiler would not link with the libraries because they weren't used. If only `Play_dll` was used then only `sound.dll` would be linked. I recommend commenting out the functions and testing this.
+First, let's figure out what we are dealing with. When we link the final executable `test_link.exe` we have `test_link.o` which contains the `main` function, `sound.lib` which contains `Play_lib`, and `sound.dll` which contains `Play_dll`. These libraries were linked because the `main` function calls the play functions. If we didn't call any play function, the compiler would not link with the libraries because they weren't used. If only `Play_dll` was used then only `sound.dll` would be linked. I recommend commenting out the functions and testing this.
+
+Before we move on it is important to remember that different compilers do things differently. For example, you cannot link dlls to an executable using MSVC linker. There you have to link with a static import library. When compiling `btb sound.btb -o sound.dll --linker msvc`, a `sounddll.lib` file created alongside `sound.dll`. Internally, the compiler will automatically link with `sounddll.lib` when using MSVC instead of `sound.dll` while with the GCC linker, `sound.dll` will be linked directly.
+
+```
+// Linker command when using MSVC
+link /nologo /INCREMENTAL:NO /entry:main /DEFAULTLIB:MSVCRT bin/test_link.o Kernel32.lib sound.lib sounddll.lib /OUT:test_link.exe
+
+// Command when using gcc
+gcc bin/test_link.o -lKernel32 sound.lib sound.dll -o test_link.exe
+```
 
 The executable contains three things (not literally). The x64 code for `main`, the x64 code for `Play_lib`, and an *Import Address Table* (IAT) with an entry for `Play_dll`.
 
@@ -174,38 +186,82 @@ Now we can answer the question of how we call `Play_dll`. The pointer to the fun
 
 With all this knowledge we can write a program in assembly.
 
-**TODO:** WORK IN PROGRESS!!!!!!!
 ```c++
 // btb test_link.btb -o test_link.exe -r
 
-#load "./sound.dll" as Sound_dll
-#load "./sound.lib" as Sound_lib
+// The compiler doesn't know that the assembly uses
+// these libraries so we must forcefully link them
+#load @force "./sound.dll" as Sound_dll
+#load @force "./sound.lib" as Sound_lib
 
 fn @import(Sound_dll) Play_dll(path: char*);
 fn @import(Sound_lib) Play_lib(path: char*);
 
 fn main() {
-    asm("hi.wav".ptr) {
-        // NOTE: Assembly assumes GCC syntax with intel flavour
-
-        // we must declare external symbols
-        extern Play_lib
-        extern __imp_Play_dll
+    asm("cool".ptr) {
+    #if !LINKER_MSVC
+        // GCC syntax with intel flavour
+            
+        // declare external symbols
+        .extern Play_lib
+        .extern __imp_Play_dll
 
         // NOTE: We assume stdcall convention...
-        pop rbx // pop pointer to string
+        pop rbx // pop pointer to string which was passed to inline assembly
+
+        sub rsp, 32 // alloc space for args, stdcall needs 32 bytes
+        
+        mov rcx, rbx
+        call Play_lib
+        
+        mov rcx, rbx
+        call qword ptr [rip+__imp_Play_dll]
+        // rip+ tells the assembler to use rip relative instruction
+        // We get the wrong instruction and relocation without it
+
+        add rsp, 32 // free space for args
+    }
+    Play_lib("hi.wav".ptr)
+    Play_dll("hi.wav".ptr)
+}
+```
+
+Same assembly with syntax for MSVC assembler (MASM)
+```c++
+// btb test_link.btb -o test_link.exe -r
+
+// The compiler doesn't know that the assembly uses
+// these libraries so we must forcefully link them
+#load @force "./sound.dll" as Sound_dll
+#load @force "./sound.lib" as Sound_lib
+
+fn @import(Sound_dll) Play_dll(path: char*);
+fn @import(Sound_lib) Play_lib(path: char*);
+
+fn main() {
+    asm("cool".ptr) {
+        // MSVC syntax with intel flavour
+        extern Play_lib : proto
+        extern __imp_Play_dll : proto
+
+        pop rbx
+
         sub rsp, 32
         
         mov rcx, rbx
-        call 
+        call Play_lib
         
         mov rcx, rbx
-        call
+        call qword ptr [__imp_Play_dll]
+        // MSVC assembler generate the call we want, no need for rip+ (it's not even valid syntax)
+
+        add rsp, 32 // free space for args
     }
-    // Play_lib("hi.wav".ptr)
-    // Play_dll("hi.wav".ptr)
+    Play_lib("hi.wav".ptr)
+    Play_dll("hi.wav".ptr)
 }
 ```
+
 
 **NOTE:** There is an extra thing that linkers do which is stubs for functions from dynamic libraries. These are created if the compiler created a `call rel32` (`call Play_dll`) instead of a `call reg` (`call [__imp_Play_dll]`). Since the `call rel32` instruction cannot call functions from dlls and you can't convert it to a `call reg`, a stub is created where the relative call (`call Play_dll`, Play_dll is a symbol to the stub) jumps to the stub which contains a jump instruction that can jump to code in dlls (`jmp [__imp_Play_dll]`). This is not relevant in the BTB Compiler because you have to explicitly state where the function comes from. Therefore, we always know what type of call to use.
 
@@ -213,32 +269,13 @@ fn main() {
 
 # Experimental features
 
-## @importdll
-Below is an example of linking with the Win32 API. The `@importdll` differs from `@import` by which call instruction is used.
-Normal import uses a relative call while importdll uses a RIP relative call and "__imp_" is pre-appended to the external function name.
-
-I don't know why we would need `@importdll`. I tried various methods while struggling to implement calls to external functions and
-RIP relative call and __imp_ is one method I tried.
-
-```c++
-#load "Bcrypt.lib" as bcrypt
-
-// Both work
-fn @import(bcrypt,alias="BCryptGenRandom") BCryptGenRandom_lib(_: void*, buf: void*, len: u32, flags: u32) -> i32;
-fn @importdll(bcrypt,alias="BCryptGenRandom") BCryptGenRandom_dll(_: void*, buf: void*, len: u32, flags: u32) -> i32;
-
-data, data2: i32;
-status  := BCryptGenRandom_lib(null, &data , sizeof data , 2);
-status2 := BCryptGenRandom_dll(null, &data2, sizeof data2, 2);
-```
-
 ## Non-repetitive library import
-The syntax needs redesigning.
+If you have a library with many functions which you want to import like GLAD or GLFW it would be nice if you didn't have to use @import(Math) on every single function. Below are some examples:
 ```c++
 #load "math.lib" as Math
 
-// @mass_import applies @import(Math) to all functions within the scope
-@mass_import(Math) {
+// Everything in the namespace receives @import(Math) to all functions within the scope
+namespace @import(Math) {
     fn box_inside_box(...) -> bool;
     fn circle_inside_box(...) -> bool;
 }
@@ -248,4 +285,11 @@ The syntax needs redesigning.
     fn box_inside_box(...) -> bool;
     fn circle_inside_box(...) -> bool;
 }
+```
+
+Even though that's great, we still have a problem with alias. What if every function is prefixed with `math_`. We would then need something like this:
+```c++
+namespace @import(Math, alias="math_*") { /* ... */ }
+
+namespace @import(Math, prefix_alias="math_") { /* ... */ }
 ```

@@ -1472,7 +1472,8 @@ void Compiler::run(CompileOptions* options) {
         switch(options->linker) {
         case LINKER_MSVC: {
             Assert(options->target == TARGET_WINDOWS_x64);
-            outputOtherDirectory = exe_file.find("/") != std::string::npos;
+            
+            outputOtherDirectory = options->output_file.find("/") != std::string::npos;
 
             if(options->useDebugInformation) {
                 // TODO: TEMPORARY text
@@ -1483,7 +1484,7 @@ void Compiler::run(CompileOptions* options) {
             }
 
             if(generate_lib_file) {
-                cmd = "lib /nologo  ";
+                cmd = "lib /nologo ";
             } else {
                 cmd = "link /nologo /INCREMENTAL:NO ";
                 if(options->useDebugInformation)
@@ -1504,6 +1505,37 @@ void Compiler::run(CompileOptions* options) {
                 // this runtime instead
                 cmd += "/DEFAULTLIB:MSVCRT ";
             }
+            if (generate_dll_file && bytecode->exportedFunctions.size() > 0) {
+                // When exporting dll we need to specify which functions are exported.
+                // We can do this on the command line using /EXPORT but it won't work with lots of exports.
+                // We therefore create a .def file which contains all exports.
+                std::string def_path = "bin/exports.def";
+                cmd += "/DEF:" + def_path + " ";
+                int dot_index = dll_file.find_last_of(".");
+                Assert(dot_index != -1);
+                std::string implib_path = dll_file.substr(0,dot_index) + "dll.lib";
+                
+                // When linking with dlls at load-time we can't link with .dll when linking executable.
+                // We must use an import library that contains exports and dll name at compile-time (link time).
+                // Then at run time, the actual .dll will be linked.
+                // I would like to add that GCC is not this complex.
+                cmd += "/IMPLIB:" + implib_path + " ";
+                auto file = FileOpen(def_path, FILE_CLEAR_AND_WRITE);
+                std::string content="";
+                std::string dll_name = out_file_name;
+                for (int i=0;i<dll_name.size();i++) {
+                    ((char*)dll_name.data())[i] &= ~32; // swap to upper case
+                }
+
+                content += "LIBRARY   " + dll_name + "\n";
+                content += "EXPORTS\n";
+                for (auto& f : bytecode->exportedFunctions) {
+                    content += std::string("   ") + f.name + "\n";
+                }
+
+                FileWrite(file, content.data(),content.size());
+                FileClose(file);
+            }
 
             cmd += obj_file + " ";
             // TODO: Don't link with default libraries. Try to get the executable as small as possible.
@@ -1519,7 +1551,16 @@ void Compiler::run(CompileOptions* options) {
                 std::string p = path;
                 if (p.find("./") == 0)
                     p = p.substr(2);
-                cmd += p + " ";
+                if (p.find(".dll") == p.size() - 4) {
+                    // we can't link with dlls at compile-time
+                    // we must link with the corresponding import library.
+                    int dot_index = p.find_last_of(".");
+                    Assert(dot_index != -1);
+                    std::string implib_path = p.substr(0,dot_index) + "dll.lib";
+                    cmd += implib_path + " ";
+                } else {
+                    cmd += p + " ";
+                }
             }
             #define LINK_TEMP_EXE "temp_382.exe"
             #define LINK_TEMP_DLL "temp_382.dll"
@@ -1565,7 +1606,7 @@ void Compiler::run(CompileOptions* options) {
             if(generate_lib_file) {
                 cmd += "ar rcs ";
                 cmd += lib_file + " ";
-                cmd += obj_file + " ";
+                // cmd += obj_file + " ";
 
             } else {
                 switch(options->linker) {

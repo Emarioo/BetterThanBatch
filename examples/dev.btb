@@ -39,7 +39,11 @@
 
 // #import "Logger"
 
-// #import "test_link.btb"
+#import "OS"
+
+ExecuteCommand("btb examples/windows/sound.btb -o sound.dll")
+ExecuteCommand("btb examples/windows/sound.btb -o sound.lib")
+ExecuteCommand("btb examples/windows/test_link.btb -o link_test.exe -r")
 
 // #import "examples/foreign/dll_glad.btb"
-#import "examples/graphics/quad"
+// #import "examples/graphics/quad"

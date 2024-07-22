@@ -254,6 +254,23 @@ SignalIO PreprocContext::parseLoad(){
     using namespace engone;
     // ZoneScopeC(tracy::Color::Wheat);
 
+    bool do_force = false;
+
+    StringView anot_view{};
+    lexer::Token anot_token = gettok(&anot_view);
+    if(anot_token.type == lexer::TOKEN_ANNOTATION) {
+        if(anot_view == "force") {
+            info.advance();
+            do_force = true;
+        } else {
+            ERR_SECTION(
+                ERR_HEAD2(anot_token)
+                ERR_MSG("Unknown annotation.")
+                ERR_LINE2(anot_token, "here")
+            )
+        }
+    }
+
     StringView path{};
     lexer::Token name_token = gettok(&path);
     if(name_token.type != lexer::TOKEN_LITERAL_STRING){
@@ -287,7 +304,8 @@ SignalIO PreprocContext::parseLoad(){
     if(evaluateTokens) {
         if(view_as.size() != 0)
             compiler->addLibrary(import_id, path, view_as);
-        else if(compiler->program) {
+        if(view_as.size() == 0 || do_force) {
+            Assert(compiler->program);
             compiler->program->addForcedLibrary(path);
         }
     }

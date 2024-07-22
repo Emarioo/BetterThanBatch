@@ -5,7 +5,7 @@
 #  if defined TRACY_EXPORTS
 #    define TRACY_API __declspec(dllexport)
 #  elif defined TRACY_IMPORTS
-#    define TRACY_API __declspec(importdll)
+#    define TRACY_API __declspec(dllimport)
 #  else
 #    define TRACY_API
 #  endif

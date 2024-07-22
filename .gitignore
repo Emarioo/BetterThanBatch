@@ -6,6 +6,8 @@
 # Ignore generated binaries
 bin
 *.exe
+*.exp
+*.def
 *.lib
 *.dll
 .vs

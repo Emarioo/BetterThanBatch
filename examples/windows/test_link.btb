@@ -1,0 +1,47 @@
+// btb test_link.btb -o test_link.exe -r
+
+// The compiler doesn't know that the assembly uses
+// these libraries so we must forcefully link them
+#load @force "./sound.dll" as Sound_dll
+#load @force "./sound.lib" as Sound_lib
+
+fn @import(Sound_dll) Play_dll(path: char*);
+fn @import(Sound_lib) Play_lib(path: char*);
+
+fn main() {
+    asm("cool".ptr) {
+        // declare external symbols
+        #if LINKER_MSVC
+            // MSVC MASM syntax with intel flavour
+            extern Play_lib : proto
+            extern __imp_Play_dll : proto
+        #else
+            // GCC syntax with intel flavour
+            .extern Play_lib
+            .extern __imp_Play_dll
+        #endif
+
+        // NOTE: We assume stdcall convention...
+        pop rbx // pop pointer to string which was passed to inline assembly
+
+        sub rsp, 32 // alloc space for args, stdcall needs 32 bytes
+        
+        mov rcx, rbx
+        call Play_lib
+        
+        mov rcx, rbx
+        #if LINKER_MSVC
+            call qword ptr [__imp_Play_dll]
+            // MSVC assembler generate the call we want, no need for rip+ (it's not even valid syntax)
+        #else
+            call qword ptr [rip+__imp_Play_dll]
+            // rip+ tells the assembler to use rip relative instruction
+            // We get the wrong instruction and relocation without it
+        #endif
+
+        add rsp, 32 // free space for args
+    #endif
+    }
+    Play_lib("hi.wav".ptr)
+    Play_dll("hi.wav".ptr)
+}
