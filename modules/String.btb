@@ -142,7 +142,133 @@ struct StringBuilder {
         return len - start;
     }
     fn append(value: f64, max_decimals: i32 = 3) -> i32 {
-        return append(cast<f32>value, max_decimals)
+        if len + 50 > max {
+            reserve(len + 50);
+        }
+        // TODO: We may reserve to few bytes to store a large float which could cause an extra reallocation when appending digits.
+        start := len;
+        bits: u64 = *cast<u64*>cast<void*>&value;
+
+        sign_mask :u64= cast<u64>1
+        exp_mask :u64= cast<u64>((cast<u64>1<<11)-1)
+        mantissa_mask :u64= cast<u64>((cast<u64>1<<52)-1)
+
+        // std_print("sign|exp|mantissa\n")
+        // for @rev 0..64 {
+        //     bit := cast<u64>1 & (bits >> nr)
+        //     std_print(bit)
+        //     if nr == 52 + 11 || nr == 52
+        //         std_print('\n')
+        //         // std_print(' ')
+        // }
+        // log()
+
+        sign := (bits >> 63u) & sign_mask;
+        exp := (bits >> 52u) & exp_mask
+        mantissa: u64 = (cast<u64>1 << 52) | (bits & mantissa_mask)
+        // mantissa: u64 = (bits & mantissa_mask)
+
+        // std_print("exp ") std_print_bits(exp) log()
+        // std_print("mant ") std_print_bits(mantissa) log()
+        // 0100000000000000000000000000000000000000000000000000
+        // log(sign) // log()
+        // log(exp)  // log()
+        // std_print_hex(mantissa) log()
+
+        if sign {
+            append('-')
+        }
+        
+        intPart: u64 = 0;
+        decimalBits: i32 = 52 - (exp - ((1 << 10) - 1));
+        // log(decimalBits)
+        if decimalBits < 1 {
+            // TODO: A large exponent would shift the mantissa out of the 64-bit integer. 'intPart' cannot represent really large integers, how do we solve it?
+            intPart = (mantissa) << (0-decimalBits);
+
+            if intPart == 0 {
+                append('0')
+            } else {
+                str: char[53];
+                used := str.len-1;
+                while intPart > 0u && used > 0 {
+                    digit: u8 = intPart % 10u;
+                    // log("i",intPart);
+                    // log("d",digit);
+                    str.ptr[used] = digit + '0';
+                    used--;
+                    intPart = intPart / 10u;
+                }
+                str.ptr += used + 1;
+                str.len -= used + 1;
+                // prints(str);
+                append(str)
+                // log("o");
+
+            }
+
+            append(".0")
+        } else {
+            // log("ya");
+
+            if exp >= cast<u64>((1u << 10) - 1)
+                intPart = (mantissa) >> decimalBits;
+
+            // log(intPart)
+            append(cast<i64>intPart)
+        
+            append('.')
+
+            // TODO: A small exponent with a small value won't fit in 'acc' (64-bit integer). If we manually print zeros then we could fit "useful" values in acc instead.
+
+            decimals: char[53];
+
+            acc: u64 = 0;
+            mul: u64 = 1;
+            precision := 19; // acc has limited precision, it cannot store all decimals
+            minBits := decimalBits - precision;
+            if minBits < 0
+                minBits = 0;
+            for @rev minBits..decimalBits {
+                mul *= 5u;
+                acc = acc*10u
+                if nr < decimals.len {
+                    bit := cast<u64>1 & (mantissa >> nr)
+                    // log(nr," ",bit, " ",acc)
+                    if bit {
+                        acc += mul;
+                    }
+                }
+            }
+            if acc == 0 {
+                append('0')
+            } else {
+                blank := true;
+                lastZero := 0;
+                limit := precision;
+                if decimalBits < precision;
+                    limit = decimalBits;
+                for @rev 0..limit {
+                    digit := acc % 10u;
+                    acc = acc / 10u;
+                    if lastZero != 0 || digit != 0 {
+                        if max_decimals == 0 || nr < max_decimals {
+                            decimals.ptr[nr] = digit + '0';
+                            if lastZero == 0
+                                lastZero = nr+1
+                        }
+                    }
+                }
+                // LN
+                if lastZero == 0 {
+                    append('0')
+                } else {
+                    decimals.len = lastZero;
+                    append(decimals)
+                }
+            }
+        }
+        return len - start;
     }
     fn append(value: f32, max_decimals: i32 = 3) -> i32 {
         if len + 25 > max {
@@ -205,7 +331,7 @@ struct StringBuilder {
 
             acc: u64 = 0;
             mul: u64 = 1;
-            precision := 19; // digits u64 can contain (18446744073709551615)
+            precision := 19; // acc has limited precision, it cannot store all decimal digits.
             minBits := decimalBits - precision;
             if minBits < 0
                 minBits = 0;
@@ -414,8 +540,8 @@ struct StringBuilder {
         }
     }
     
-    fn append_hex(data: i32) {
-        append("0x")
+    fn append_hex(data: u64) {
+        append("0x") // TODO: Option to remove prefix
         zeros: bool = true;
         for @rev 0..16 {
             hex := (cast<u64>data >> cast<u64>(4*nr)) & cast<u64>0xF;
@@ -430,8 +556,18 @@ struct StringBuilder {
         if zeros
             append('0'); // we want at least one zero
     }
+    fn append_bits(data: u64, end: i32 = 64, start: i32 = 0) {
+        for @rev start..end {
+            bit := cast<u64>1 & (data >> nr);
+            if bit
+                append('1')
+            else
+                append('0')
+        }
+    }
 
     fn append_hex<T>(p: T*) {
+        append("0x")
         bytes: u8* = cast<u8*>cast<void*>p
         l: u32 = sizeof T
         for 0..l {
@@ -444,6 +580,7 @@ struct StringBuilder {
         }
     }
     fn append_hex(p: void*, l: u32) {
+        append("0x")
         bytes: u8* = cast<u8*>cast<void*>p
         for 0..l {
             hex0 := bytes[nr] & cast<u8>0x0F
@@ -583,278 +720,10 @@ operator !=(a: Slice<char>, b: Slice<char>) -> bool {
     return !(a == b);
 }
 
-
-#if DEPRECATED
-// Use StringBuilder.append instead of swrite_unsafe.
-// swrite_unsafe is dangerous
-
-// fn swrite_hex_unsafe(ptr: void*, len: void*) -> u32 {
-    
-// }
-
-// Returns the amount of written bytes
-// Will put a null termination at the end of the written bytes
-fn swrite_unsafe(buffer: char*, slice: char[]) -> i32 {
-    memcpy(buffer, slice.ptr, slice.len);
-    buffer[slice.len] = '\0';
-    return slice.len;
-}
-// Returns the amount of written bytes
-// Will put a null termination at the end of the written bytes
-fn swrite_unsafe(buffer: char*, cstr: char*) -> i32 {
-    // LN;
-    len = strlen(cstr);
-    memcpy(buffer, cstr, len);
-    buffer[len] = '\0';
-    return len;
-}
-// Returns the amount of written bytes
-// Will put a null termination at the end of the written bytes
-fn swrite_unsafe(buffer: char*, value: i64) -> i32 {
-    // LN
-    start := buffer;
-    if value == 0 {
-        buffer[0] = '0';
-        buffer[1] = '\0';
-        return 1;
-    }
-    if value < 0 {
-        value = -value;
-        *buffer = '-';
-        buffer++;
-    }
-    // LN
-    str: char[21];
-    used := 20;
-    while value > 0 && used > 0 {
-        num := value % 10;
-        value = value / 10;
-        str.ptr[used] = num + '0';
-        used--;
-    }
-    // LN
-    str.ptr += used + 1;
-    str.len -= used + 1;
-
-    memcpy(buffer, str.ptr, str.len);
-    buffer += str.len;
-    *buffer = '\0'; // not include in written bytes
-
-    return cast<u64>(buffer - start);
-}
-fn swrite_unsafe(buffer: char*, value: u64) -> u32 {
-    start := buffer;
-    if value == 0 {
-        buffer[0] = '0';
-        buffer[1] = '\0';
-        return 1;
-    }
-    str: char[21];
-    used := 20;
-    while value > 0u && used >= 0 {
-        num := value % 10u;
-        value = value / 10u;
-        str.ptr[used] = num + '0';
-        used--;
-    }
-    str.ptr += used + 1;
-    str.len -= used + 1;
-
-    memcpy(buffer, str.ptr, str.len);
-    buffer += str.len;
-    *buffer = '\0'; // not include in written bytes
-
-    return cast_unsafe<u64>buffer - cast_unsafe<u64>start;
-}
-// Returns the amount of written bytes
-// Will put a null termination at the end of the written bytes
-fn swrite_unsafe(buffer: char*, t: f32, max_decimals: i32 = 3) -> i32 {
-    // LN;
-    start := buffer;
-    bits: u32 = *cast<u32*>cast<void*>&t;
-
-    sign := (bits >> 31u) & 1u;
-    exp := (bits >> 23u) & cast<u32>0xFF
-    mantissa: u64 = cast<u64>0x80_0000 | (cast<u64>bits & cast<u64>0x7FFFFF)
-
-    if sign {
-        *buffer = '-';
-        buffer++;
-    }
-
-    // log("Bro")
-
-    intPart: u64 = 0;
-    decimalBits: i32 = 23 - (exp-127);
-    if decimalBits < 1 {
-        intPart = (mantissa) << (0-decimalBits);
-
-        // log("pl");
-        if intPart == 0 {
-            *buffer = '0';
-            buffer++;
-        } else {
-            // we don't use swrite_unsafe because it uses
-            // i64 but we need u64 for the extra large integers.
-            str: char[23];
-            used := 22;
-            while intPart > 0u && used > 0 {
-                digit: u8 = intPart % 10u;
-                // log("i",intPart);
-                // log("d",digit);
-                str.ptr[used] = digit + '0';
-                used--;
-                intPart = intPart / 10u;
-            }
-            str.ptr += used + 1;
-            str.len -= used + 1;
-            // prints(str);
-            
-            memcpy(buffer, str.ptr, str.len);
-            buffer += str.len;
-            // log("o");
-
-        }
-
-        // buffer += swrite_unsafe(buffer, intPart);
-        *buffer = '.';
-        buffer++;
-        *buffer = '0';
-        buffer++;
-    } else {
-        // log("ya");
-
-        if exp >= 127u
-            intPart = (mantissa) >> decimalBits;
-        // LN;
-        // log(intPart)
-        { 
-            buffer += swrite_unsafe(buffer, cast<i64>intPart);
-        }
-        *buffer = '.';
-        buffer++;
-        // LN
-        decimals: char[24];
-
-        acc: u64 = 0;
-        mul: u64 = 1;
-        precision := 19; // digits u64 can contain (18446744073709551615)
-        minBits := decimalBits - precision;
-        if minBits < 0
-            minBits = 0;
-        for @rev minBits..decimalBits {
-            mul *= 5u;
-            acc = acc*10u
-            if nr < 24 {
-                bit := cast<u64>1 & (mantissa >> nr)
-                if bit {
-                    acc += mul;
-                }
-            }
-        }
-        if acc == 0 {
-            *buffer = '0';
-            buffer++;
-        } else {
-            blank := true;
-            lastZero := 0;
-            limit := precision;
-            if decimalBits < precision;
-                limit = decimalBits;
-            for @rev 0..limit {
-                digit := acc % 10u;
-                acc = acc / 10u;
-                if lastZero != 0 || digit != 0 {
-                    if max_decimals == 0 || nr < max_decimals {
-                        decimals.ptr[nr] = digit + '0';
-                        if lastZero == 0
-                            lastZero = nr+1
-                    }
-                }
-            }
-            // LN
-            if lastZero == 0 {
-                *buffer = '0'
-                buffer++
-            } else {
-                decimals.len = lastZero;
-                memcpy(buffer, decimals.ptr, decimals.len);
-                buffer += decimals.len;
-            }
-        }
-        // LN
-    }
-    *buffer = '\0'; // not include in written bytes
-    return cast<i64>(buffer - start);
-}
-
-
-// TODO: swrite needs to be tested, mainly with baseOffset
-// returns the amount of written bytes
-// returns 0 if buffer was to small to fit the number
-// baseOffset is optional
-// the written amount will be added onto baseOffset
-// will put a null termination at the end of the written bytes if 
-// space is available
-// fn swrite(buffer: Slice<char>*, value: i64, baseOffset: u32* = null) -> u32 {
-//     // optimise by using a log10 function, unless they are slow, to know how many characters you need.
-//     offset = 0;
-//     if baseOffset
-//         offset = *baseOffset;
-//     if value == 0 {
-//         if buffer.len - offset < 1 {
-//             return 0;
-//         }
-//         buffer.ptr[offset++] = '0';
-//         if buffer.len - offset > 0 {
-//             buffer.ptr[offset] = '\0';
-//         }
-//         if baseOffset;
-//             *baseOffset = offset;
-//         return 1;
-//     }
-//     signed = false;
-//     if value < 0 {
-//         signed = true;
-//         value = -value;
-//     }
-//     str: char[21];
-//     used = 20;
-//     while value > 0 && used > 0 {
-//         num = value % 10;
-//         str.ptr[used] = num + '0';
-//         // log("a ",num, used)
-//         used--;
-        
-//         value = value / 10;
-//     }
-//     if signed {
-//         str.ptr[used] = '-';
-//         used--;
-//     }
-//     str.ptr += used + 1;
-//     str.len -= used + 1;
-//     // log(strstr.len)
-//     if str.len > buffer.len - offset {
-//         return 0;
-//     }
-//     memcpy(buffer.ptr + offset, str.ptr, str.len);
-//     offset += str.len;
-//     if 1 > buffer.len - offset {
-//         buffer.ptr[offset] = '\0';
-//     }
-
-//     if baseOffset {
-//         *baseOffset = offset;
-//     }
-//     // log(written);
-//     return str.len;
-// }
-#endif // DEPRECATED
-
 fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
     // TODO: Parse white space?
     // TODO: Parse negative number
+    // TODO: Provide parsing errors, non-digit character, digit has no trailing whitespace (a number would still be returned in case you don't care, but if you do care, there you go)
     result: i64;
     i: u32 = 0;
     while i < slice.len {

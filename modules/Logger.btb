@@ -33,9 +33,8 @@ fn std_print(value: f32, max_decimals: i32 = 3){
     prints(s)
 }
 fn std_print(value: f64, max_decimals: i32 = 3){
-    // TODO: Print 64-bit float without casting it to 32-bit and loosing information.
     s: StringBuilder
-    s.append(cast<f32>value, max_decimals)
+    s.append(value, max_decimals)
     prints(s)
 }
 fn std_print(value: void*) {
@@ -102,8 +101,18 @@ fn std_print_hex(ptr: void*, len: u32, big_endian: bool = false) {
     }
 }
 
-fn std_print_hex(value: i32) {
+// fn std_print_hex(value: i32) {
+//     s: StringBuilder
+//     s.append_hex(value)
+//     prints(s)
+// }
+fn std_print_hex(value: u64) {
     s: StringBuilder
-    s.append(value)
+    s.append_hex(value)
+    prints(s)
+}
+fn std_print_bits(value: u64) {
+    s: StringBuilder
+    s.append_bits(value)
     prints(s)
 }

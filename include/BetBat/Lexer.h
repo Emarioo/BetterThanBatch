@@ -374,7 +374,7 @@ namespace lexer {
 
     };
     
-    double ConvertDecimal(const StringView& view);
+    double ConvertDecimal(const StringView& view, bool* double_suffix = nullptr);
     int ConvertInteger(const StringView& view);
     // 0x is optional. Asserts if first character is minus
     u64 ConvertHexadecimal(const StringView& view);

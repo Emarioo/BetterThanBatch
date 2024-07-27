@@ -1,0 +1,39 @@
+/*
+    This module contains useful functions to CPU instructions.
+    Note that the compiler doesn't check
+    if the instructions in inline assembly is supported.
+
+    Website for x64 instructions (an alternative would be the intel manual): https://www.felixcloutier.com/x86
+*/
+
+struct i128 {
+    high: i64; // on little endian, it makes sense for high 64 bits to be first and low 64 bit to be last
+    low: u64;
+}
+// returns a 128-bit integer (two 64-bit integers, low,high) from a 64-bit multiplication
+fn mul_64_to_128(x: i64, y: i64) -> u64, i64 {
+    v := asm<i128>(x,y) {
+        pop rdx
+        pop rax
+        mul rdx
+        // rdx = high, rax = low (after multiplication)
+        push rdx // high
+        push rax // low
+    }
+    // return v.high, v.low
+    return v.low, v.high
+}
+// returns a 64-bit integer plus carry (low, carry) from 64-bit addition
+fn add_64_carry(x: i64, y: i64) -> u64, u64 {
+    v := asm<i128>(x,y) {
+        pop rdx
+        pop rax
+        xor rcx, rcx
+        add rax, rdx
+        setc cl
+        push cl // high
+        push rax // low
+    }
+    return v.low, v.high
+    // return v.high, v.low
+}

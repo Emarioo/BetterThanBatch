@@ -1,4 +1,3 @@
-
 // #import "examples/crawler/main"
 // #import "examples/crawler/GameCore"
 
@@ -40,60 +39,10 @@
 // TODO: Fix double precision float to string conversion
 
 #import "Logger"
-v: f64;
-*cast_unsafe<i64*>&v = 0x41A2DDFC0884C4A9
+s := "12542.21512621582357"
+f: f32 = 12542.21484375;
+v: f64 = 12542.215126215824056998826563358306884765625d;
 
-log(v)
-
-// btb examples/dev -o bin/core.dll
-// btb examples/dev -o main.exe -r
-
-// #if BUILD_DLL
-
-// #import "GLAD"
-// #import "GLFW"
-
-// fn @export init() -> void* {
-//     glfwInit();
-//     win := glfwCreateWindow(800,600,"title".ptr,null,null);
-//     glfwMakeContextCurrent(win);
-
-//     gladLoadGL()
-//     func := glViewport
-//     return func
-// }
-// fn @export get_func() -> void* {
-//     func := glViewport
-//     return func
-// }
-
-// #else
-// #import "OS"
-// #import "Logger"
-// fn main() {
-//     lib := LoadDynamicLibrary("bin/core.dll")
-
-//     {    
-//         f := cast_unsafe< fn @oscall ()->void*> lib.get_pointer("init")
-//         ptr := f()
-//         log("ptr ",ptr)
-//     }
-
-//     // glad_lib := LoadDynamicLibrary("glad.dll")
-//     // glfw_lib := LoadDynamicLibrary("glfw3.dll")
-//     glad_lib := LoadDynamicLibrary("libs/glad/lib-mingw-w64/glad.dll")
-//     glfw_lib := LoadDynamicLibrary("libs/glfw-3.3.9/lib-mingw-w64/glfw3.dll")
-
-//     lib.cleanup()
-
-//     lib = LoadDynamicLibrary("core.dll")
-
-//     {
-//         f := cast_unsafe< fn @oscall ()->void*> lib.get_pointer("get_func")
-//         ptr := f()
-//         log("ptr ",ptr)
-//     }
-
-// }
-
-// #endif
+// std_print(f, max_decimals = 0) log()
+std_print(v, max_decimals = 0) log()
+log(s)

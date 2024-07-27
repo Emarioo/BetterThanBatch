@@ -2008,14 +2008,15 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
             } else if(token->type == lexer::TOKEN_LITERAL_DECIMAL){
                 auto loc = info.getloc();
 
-                auto tok_suffix = info.gettok(1);
                 ASTExpression* tmp = nullptr;
                 Assert(view.ptr[0]!='-');// ensure that the tokenizer hasn't been changed
                 // to clump the - together with the number token
-                if((token->flags&lexer::TOKEN_FLAG_ANY_SUFFIX)==0 && tok_suffix.type == 'd') {
+                bool double_suffix = false;
+                double value = lexer::ConvertDecimal(view, &double_suffix);
+                if(double_suffix) {
                     info.advance(2);
                     tmp = info.ast->createExpression(TypeId(AST_FLOAT64));
-                    tmp->f64Value = lexer::ConvertDecimal(view);
+                    tmp->f64Value = value;
                     if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                         ops.pop();
                         saved_locations.pop();
@@ -2024,7 +2025,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 } else {
                     info.advance();
                     tmp = info.ast->createExpression(TypeId(AST_FLOAT32));
-                    tmp->f32Value = lexer::ConvertDecimal(view);
+                    tmp->f32Value = value;
                     if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                         ops.pop();
                         saved_locations.pop();

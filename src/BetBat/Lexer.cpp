@@ -598,12 +598,12 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         }
         
         bool nextLiteralSuffix = false;
-        {
-            char tmp = nextChr | 32;
-            if(isNumber && isDecimal && !inHexidecimal && !inBinary && !inOctal) {
-                nextLiteralSuffix = !inHexidecimal && !inBinary && !inOctal && isNumber && ((tmp>='a'&&tmp<='z') || nextChr == '_');
-            }
-        }
+        // {
+        //     char tmp = nextChr | 32;
+        //     if(isNumber && isDecimal && !inHexidecimal && !inBinary && !inOctal) {
+        //         nextLiteralSuffix = !inHexidecimal && !inBinary && !inOctal && isNumber && ((tmp>='a'&&tmp<='z') || nextChr == '_');
+        //     }
+        // }
         if(str_start != str_end && (isDelim || isQuotes || isComment || isSpecial || nextLiteralSuffix || index==length)){
             new_tokens->flags = 0;
             // TODO: is checking line feed necessary? line feed flag of last token is set further up.
@@ -708,7 +708,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 // else CASE("asm",         TOKEN_ASM)
                 #undef CASE
             }
-            
+            // if(nextLiteralSuffix) {
+            //     index++;
+            // }
             if(has_data) {
                 APPEND_DATA(text+str_start, str_end - str_start);
             }
@@ -1887,9 +1889,15 @@ void Lexer::decode_import_token_index(u32 token_index_into_file, u32* file_chunk
     return decode_origin(TokenOrigin{token_index_into_file}, file_chunk_index, tiny_token_index);
 }
 
-double ConvertDecimal(const StringView& view) {
+double ConvertDecimal(const StringView& view, bool* double_suffix) {
     Assert(view.ptr[view.len] == '\0');
     double num = atof(view.ptr);
+    if (double_suffix){
+        if (view.ptr[view.len-1] == 'd')
+            *double_suffix = true;
+        else
+        *double_suffix = false;
+    }
     return num;
 }
 int ConvertInteger(const StringView& view) {

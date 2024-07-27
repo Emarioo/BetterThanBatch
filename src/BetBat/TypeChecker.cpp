@@ -2837,6 +2837,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     // TODO: output poison type
                     // outTypes->add(leftType);
                 }
+                return SIGNAL_FAILURE;
             }
         } break;
         case AST_BNOT:
