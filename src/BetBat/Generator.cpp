@@ -410,7 +410,7 @@ SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
         typeInfo = ast->getTypeInfo(typeId);
     int size = ast->getTypeSize(typeId);
     if(size == 0) {
-        Assert(hasForeignErrors() || hasErrors());
+        Assert(hasAnyErrors());
         return SIGNAL_FAILURE;
     }
     if (!typeInfo || !typeInfo->astStruct) {
@@ -556,7 +556,7 @@ SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
 void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
     // TODO: Move this logic into BytecodeBuilder? (emit_memzero)
     if(size <= 8) {
-        if (hasErrors() || hasForeignErrors())
+        if (hasAnyErrors())
             return;
         Assert(size == 1 || size == 2 || size == 4 || size == 8);
         builder.emit_bxor(size_reg, size_reg, size);
@@ -1471,7 +1471,7 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
                             bool wasSafelyCasted = performSafeCast(argType, signature->argumentTypes[i].typeId);
 
                             // NOTE: We don't allow cast operators here because i'd rather have less and simpler code.
-                            if(!wasSafelyCasted && !info.hasErrors()){
+                            if(!wasSafelyCasted && !info.hasAnyErrors()){
                                 ERR_SECTION(
                                     ERR_HEAD2(arg->location)
                                     ERR_MSG("Cannot cast argument of type " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(signature->argumentTypes[i].typeId) << ". The function in question was called by destruct/construct.")
@@ -1700,7 +1700,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                     )
                 }
             } else {
-                Assert(hasErrors());
+                Assert(hasAnyErrors());
             }
         } else {
             // TODO: if expr should be casted, then emit space for arguments
@@ -1755,7 +1755,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                         TypeId typeId = ret.typeId;
                         generatePush_get_val(ret.offset - cast_sig->returnSize, typeId);
                     }
-                    if(!wasSafelyCasted && !info.hasErrors()){
+                    if(!wasSafelyCasted && !info.hasAnyErrors()){
                         if(!is_function_pointer) {
                             ERR_SECTION(
                                 ERR_HEAD2(arg->location)
@@ -3773,6 +3773,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     // okay
                 } else if((left_info->funcType || right_info->funcType) && (ltype == voidp || rtype == voidp)) {
                     // okay
+                } else if((left_info->funcType || right_info->funcType) && (ltype == AST_BOOL || rtype == AST_BOOL)) {
+                    // okay
                 } else {
                     if(left_info->astStruct || right_info->astStruct) {
                         // log::out << "Fail, " << expression->nodeId<<"\n";
@@ -5426,7 +5428,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             if(statement->rangedForLoop){
                 auto& varnameNr = statement->varnames[0];
                 if(!varnameNr.identifier) {
-                    Assert(hasErrors());
+                    Assert(hasAnyErrors());
                     continue;
                 }
                 auto varinfo_index = varnameNr.identifier;

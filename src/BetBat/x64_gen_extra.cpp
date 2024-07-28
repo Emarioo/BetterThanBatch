@@ -1047,7 +1047,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit1((u8)-8);
 
                     emit3(OPCODE_3_MOVSD_REG_RM);
-                    emit_modrm(MODE_DEREF_DISP8, CLAMP_EXT_REG(reg0->reg), X64_REG_SP);
+                    emit_modrm(MODE_DEREF_DISP8, CLAMP_XMM(reg0->reg), X64_REG_SP);
                     emit1((u8)-8);
                 } else {
                     u8 reg_field = CLAMP_EXT_REG(reg0->reg) - 1;

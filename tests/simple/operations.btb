@@ -208,3 +208,11 @@ _test 2; *n;
 
 // log(*n)
 // #import "Logger"
+
+if (5.23 < 23.2d) { // <- Error here at one point, bug with d suffix 
+
+}
+
+nah: i32;
+pt := &nah;
+@TEST_ERROR(ERROR_UNSPECIFIED) nah * sizeof *pt

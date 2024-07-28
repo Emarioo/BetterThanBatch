@@ -20,6 +20,7 @@
 #import "Linux"
 #endif
 
+
 // #if LINKER_MSVC
 //     #load "bin/NativeLayer.lib" as native_layer
 // #else
@@ -34,6 +35,33 @@
     #macro LINK_TYPE @import(native_layer) @unixcall
 #endif
 
+struct Process {
+    os_handle: i64;
+
+    fn cleanup() {
+        if !os_handle
+            return;
+        #if OS_WINDOWS
+            CloseHandle(API_TO_OS_HANDLE(os_handle))
+            os_handle = 0
+        #else
+            incomplete
+        #endif
+    }
+    fn valid() -> bool { return os_handle }
+    fn is_active() -> bool {
+        if !os_handle
+            return false
+        #if OS_WINDOWS
+            exit_code: i32
+            yes := GetExitCodeProcess(os_handle, &exit_code)
+            // return exit code as a second return value or through argument when inactive?
+            return exit_code == STILL_ACTIVE
+        #else
+            incomplete
+        #endif
+    }
+}
 
 // TODO: Where should we define Assert? not in OS.btb, maybe in preload?
 // #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
@@ -198,7 +226,7 @@ fn ParseCmdLine(cmd: char[], buffer_text: StringBuilder*, buffer_args: Array<cha
 }
 
 // Only works on windows
-fn ExecuteCommand(cmd: char[], exit_code: i32* = null, asynchronous: bool = false) -> bool {
+fn ExecuteCommand(cmd: char[], exit_code: i32* = null, asynchronous: bool = false, process: Process* = null) -> bool {
     // Parsing command line is more complicated than this.
     // Use the other ExecuteCommand overload separate cmd and arguments.
     
@@ -277,14 +305,14 @@ fn ExecuteCommand(cmd: char[], exit_code: i32* = null, asynchronous: bool = fals
     // for args.sliced()
     //     log(it)
 
-    yes := ExecuteCommand(command.sliced(), args.ptr, exit_code, asynchronous)
+    yes := ExecuteCommand(command.sliced(), args.ptr, exit_code, asynchronous, process)
     return yes
 }
 
 // Returns false if anything failed, NOT if the program you called
 // failed. Check 'exit_code' for that.
 // 'asynchronous' will run the command without waiting for status code
-fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool = false) -> bool {
+fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronous: bool = false, process: Process* = null) -> bool {
     // TODO: This function doesn't mix well with Windows and Linux. cmd can contain executable path
     // and arguments on Windows but on Linux you must separate them where cmd has executable and 'args'
     // has arguments.
@@ -404,12 +432,17 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
                 }
             }
         }
-    }else{
-        // TODO: what happens with return value when we don't wait for the process?	
+    } else {
+        *exit_code = 0 // perhaps we shouldn't set exit code at all?
     }
     
-    CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
+    if process && asynchronous {
+        *process = Process{}
+        process.os_handle = OS_TO_API_HANDLE(pi.hProcess)
+    } else {
+        CloseHandle(pi.hProcess);
+    }
     
     return true;
 #elif OS_LINUX
@@ -492,6 +525,7 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32*, asynchronous: bool
 #endif
 }
 
+global enable_logging_dynamic_library: bool
 // A struct that refers to a dynamically linked library
 // TODO: Linux implementation
 struct DynamicLibrary {
@@ -502,7 +536,8 @@ struct DynamicLibrary {
 
     fn cleanup() {
         yes := FreeLibrary(handle);
-        log("Unload ", path)
+        if enable_logging_dynamic_library
+            log("Unload ", path)
         handle = null
         path.cleanup()
 		if (!yes) {
@@ -541,7 +576,8 @@ fn LoadDynamicLibrary(path: char[], log_error: bool = true) -> DynamicLibrary {
             }
             return DynamicLibrary{}
         }
-        log("Load ", path)
+        if enable_logging_dynamic_library
+            log("Load ", path)
         str: StringBuilder
         str.append(path)
         return DynamicLibrary{module, str};
@@ -549,6 +585,7 @@ fn LoadDynamicLibrary(path: char[], log_error: bool = true) -> DynamicLibrary {
         incomplete
     #endif
 }
+
 
 fn set_cursor(x: u32, y: u32) {
     std_print("\e[",(x),";",(y),"H")

@@ -364,6 +364,9 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             }
         }
         if (token->type == '*') {
+            if(envs.last().may_be_name) {
+                return SIGNAL_FAILURE;
+            }
             info.advance();
             envs.last().buffer += "*";
             envs.last().only_pointer = true;
@@ -374,6 +377,9 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             // auto token2 = info.getinfo(2);
             // if(token->type == ']' && token2->type != '{') {
             if(token->type == ']') {
+                if(envs.last().may_be_name) {
+                    return SIGNAL_FAILURE;
+                }
                 info.advance(2);
                 std::string tmp = envs.last().buffer;
                 envs.last().buffer = "Slice<" + tmp + ">";
@@ -2014,7 +2020,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 bool double_suffix = false;
                 double value = lexer::ConvertDecimal(view, &double_suffix);
                 if(double_suffix) {
-                    info.advance(2);
+                    info.advance();
                     tmp = info.ast->createExpression(TypeId(AST_FLOAT64));
                     tmp->f64Value = value;
                     if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
@@ -2277,7 +2283,10 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 showErrors = false;
 
                 ASTExpression* left=nullptr;
-                auto signal = parseExpression(left);
+                SignalIO signal = SIGNAL_NO_MATCH;
+                
+                if(hasParentheses)
+                    signal = parseExpression(left);
 
                 ignoreErrors = prev_ignore;
                 showErrors   = prev_show;
@@ -2292,9 +2301,10 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                         // TODO: Save error messages from parseExpression and print them here.
                         ERR_SECTION(
                             ERR_HEAD2(tmp->location)
-                            ERR_MSG("Cannot parse type. Or was it an expression, if so somethings wrong.")
+                            ERR_MSG("Cannot parse type in sizeof/nameof/typeid. If it was supposed to be an expression, wrap it in parenthesis 'sizeof(*struct.ptr)'. It it was a type, then it has incorrect syntax.")
                             ERR_LINE2(tmp->location, "here")
                         )
+                        return SIGNAL_COMPLETE_FAILURE;
                     }
                     // log::out << "parsed " << tmp->name << "\n";
                 }
@@ -2865,7 +2875,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
         if(ending){
             expression = values.last();
             // expression->computeWhenPossible = shouldComputeExpression;// nocheckin
-            if(!info.hasErrors()) {
+            if(!info.hasAnyErrors()) {
                 Assert(values.size()==1);
             }
             Assert(saved_locations.size() == 0);

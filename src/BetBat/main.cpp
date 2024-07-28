@@ -41,6 +41,8 @@ int main(int argc, const char** argv){
     #define EXIT_CODE_SUCCESS 0
     #define EXIT_CODE_FAILURE 1
 
+    auto main_start = StartMeasure();
+
     // log::out << sizeof(pthread_mutex_t) << "\n";
 
     // // auto cmd = GetCommandLineA();
@@ -222,12 +224,17 @@ int main(int argc, const char** argv){
         GlobalHeapAllocator()->tracker.printAllocations();
     }
 
-    {
-        ZoneNamedN(zone0,"sleep",true);
-        engone::Sleep(0.5); // give time for program to connect and send data to tracy profiler
-    }
+    // #ifdef TRACY_ENABLE
+    // {
+    //     ZoneNamedN(zone0,"sleep",true);
+    //     engone::Sleep(0.5); // give time for program to connect and send data to tracy profiler
+    // }
+    // #endif
 
     // log::out << "Finished\n";
+
+    auto main_time = StopMeasure(main_start);
+    // log::out << "Main time: " << main_time<<"\n";
 
     return exit_code;
 }

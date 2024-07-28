@@ -18,13 +18,12 @@
 
 enum @enclosed FileHandle : i64 { INVALID }
 
-// TODO: These should be scoped to this file
-fn HandleToInternal(n: FileHandle) -> i64 {
-    return cast<void*> ( cast<i64>n - 1 )
-}
-fn InternalToHandle(n: i64) -> FileHandle {
-    return cast_unsafe<FileHandle> ( cast<i64>n + 1 )
-}
+
+#macro OS_TO_API_HANDLE(N) (cast_unsafe<i64>(N) + 1)
+#macro API_TO_OS_HANDLE(N) (cast_unsafe<void*>((N) - 1))
+
+#macro OS_TO_FILE_HANDLE(N) (cast_unsafe<FileHandle>(cast_unsafe<i64>(N) + 1))
+#macro FILE_TO_OS_HANDLE(N) (cast_unsafe<void*>(cast_unsafe<i64>(N) - 1))
 
 enum @specified FileOpenFlags {
     FILE_READ_ONLY          = 0x1,
@@ -113,7 +112,7 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
             return FileHandle.INVALID
         }
     }
-    return InternalToHandle(handle)
+    return OS_TO_FILE_HANDLE(handle)
 #elif OS_LINUX
     open_flags, mode: i32
     
@@ -129,7 +128,7 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
     // log(c_path)
     fd := open(c_path, open_flags, mode)
     if fd < 0
-        return InternalToHandle(fd)
+        return OS_TO_FILE_HANDLE(fd)
 
     if outFileSize {
         info: stat
@@ -139,19 +138,19 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
         } else
             *outFileSize = info.st_size
     }
-    return InternalToHandle(fd)
+    return OS_TO_FILE_HANDLE(fd)
 #endif
 }
 // returns read bytes
 fn FileRead(file: FileHandle, buffer: void*, size: i32) -> i32 {
     #if OS_WINDOWS
         read: i32
-        yes := ReadFile(HandleToInternal(file), buffer, size, &read, null)
+        yes := ReadFile(FILE_TO_OS_HANDLE(file), buffer, size, &read, null)
         if !yes
             return 0 // TODO: Handle error
         return read
     #else
-        bytes := read(HandleToInternal(file), buffer, size)
+        bytes := read(FILE_TO_OS_HANDLE(file), buffer, size)
         if bytes < 0
             return bytes // TODO: Handle error?
         return bytes
@@ -161,12 +160,12 @@ fn FileRead(file: FileHandle, buffer: void*, size: i32) -> i32 {
 fn FileWrite(file: FileHandle, buffer: void*, size: i32) -> i32 {
     #if OS_WINDOWS
         written: i32
-        yes := WriteFile(HandleToInternal(file), buffer, size, &written, null)
+        yes := WriteFile(FILE_TO_OS_HANDLE(file), buffer, size, &written, null)
         if !yes
             return 0 // TODO: Handle error
         return written
     #else
-        bytes := write(HandleToInternal(file), buffer, size)
+        bytes := write(FILE_TO_OS_HANDLE(file), buffer, size)
         if bytes < 0
             return bytes // TODO: Handle error
         return bytes
@@ -174,9 +173,9 @@ fn FileWrite(file: FileHandle, buffer: void*, size: i32) -> i32 {
 }
 fn FileClose(file: FileHandle) {
     #if OS_WINDOWS
-        CloseHandle(HandleToInternal(file))
+        CloseHandle(FILE_TO_OS_HANDLE(file))
     #else
-        close(HandleToInternal(file))
+        close(FILE_TO_OS_HANDLE(file))
     #endif
 }
 // Convenient function
@@ -189,11 +188,31 @@ fn FileWrite(path: char[], buffer: void*, size: i32) -> i32 {
 // Convenient function
 fn FileWrite<T>(path: char[], buffer: T[]) -> i32 {
     f := FileOpen(path, FILE_CLEAR_AND_WRITE)
-    bytes := FileWrite(f, buffer.ptr, buffer.len * sizeof *buffer.ptr)
+    bytes := FileWrite(f, buffer.ptr, buffer.len * sizeof(*buffer.ptr))
     FileClose(f)
     return bytes
 }
+fn FileSize(file: FileHandle) -> i64 {
+    size: i64
+    success := GetFileSizeEx(FILE_TO_OS_HANDLE(file), &size);
+    if !success {
+        return -1
+    }
+    return size
+}
+fn FileSize(path: char[]) -> i64 {
+    c_path := path.ptr
+    handle := CreateFileA(c_path,GENERIC_READ,FILE_SHARE_READ,null,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL, null);
+    if(handle == INVALID_HANDLE_VALUE){
+        // TODO: provide a better error
+        return -1
+    }
 
+    size := FileSize(OS_TO_FILE_HANDLE(handle))
+    
+    CloseHandle(handle)
+    return size
+}
 fn DirectoryCreate(path: char[]) -> bool {
     #if OS_WINDOWS
         success := CreateDirectoryA(path.ptr, null);
@@ -257,7 +276,7 @@ fn FileMove(src: char[], dst: char[]) -> bool {
     #if OS_WINDOWS
         yes := MoveFileA(src.ptr,dst.ptr);
 		if(!yes){
-			DWORD err = GetLastError();
+			err := GetLastError();
             log("[WinError ",err,"] MoveFile '",src,"' '",dst,"'");
             return false;
 		}
@@ -407,13 +426,13 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
         }
         index = nr
         iter = AllocateHeap(sizeof DirIterator_impl)
-        memzero(iter, sizeof *iter)
+        memzero(iter, sizeof (*iter))
         _directory_iterators.ptr[index] = iter
         break
     }
     if index == -1 {
         it := AllocateHeap(sizeof DirIterator_impl)
-        memzero(it, sizeof *it)
+        memzero(it, sizeof (*it))
         _directory_iterators.add(it)
         index = _directory_iterators.size()-1
     }
@@ -734,6 +753,7 @@ fn FileModifiedTime(path: char[]) -> i64 {
     #endif
 }
 #macro FILE_TIME_TO_SECONDS(X) (cast<f64>cast<i64>(X) / cast<f64>cast<i64>1_000_000_000)
+#macro SECONDS_TO_FILE_TIME(X) (cast<i64>((X) * cast<i64>1_000_000_000))
 // returns -1 if invalid
 fn FileModifiedTime(file: FileHandle) -> i64 {
     #if OS_WINDOWS
@@ -747,7 +767,7 @@ fn FileModifiedTime(file: FileHandle) -> i64 {
         return time
     #elif OS_LINUX
         buf: stat
-        err := fstat(InternalToHandle(file), &buf);
+        err := fstat(OS_TO_FILE_HANDLE(file), &buf);
         if err != 0
             return -1 // file not found or something
         return cast<u64>buf.st_mtime * cast<u64>1_000_000_000 + cast<u64>st_mtime_nsec

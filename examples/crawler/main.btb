@@ -14,18 +14,8 @@ fn main(argc: i32, argv: char**) -> i32 {
     app: AppInstance
     app.argc = argc
     app.argv = argv
-    app.rebuild_func = build
-
-    global do_async: bool
-    global exit_code: i32
-    fn build() {
-        ExecuteCommand("btb examples/crawler/GameCore -d --silent --incremental -o bin/code.dll", &exit_code, asynchronous = do_async)
-    }
-    do_async = false
-    build()
-    if exit_code != 0
-        return 1;
-    do_async = true
+    app.rebuild_cmd.append("btb examples/crawler/GameCore -d --silent --incremental -o bin/code.dll")
+    // app.rebuild_cmd.append("btb examples/crawler/GameCore -d --incremental -o bin/code.dll")
 
     #if OS_WINDOWS
         app.init("bin/code.dll")
@@ -33,14 +23,17 @@ fn main(argc: i32, argv: char**) -> i32 {
         app.init("bin/code.so")
     #endif
     
-    // Load libraries to make sure they never unload
-    // when we reload game core, their global data will be reset otherwise
-    // We hardcode the path, not sure how else to do it.
+    // Load libraries to make sure they never unload when
+    // we reload game code, their global data will be reset otherwise.
+    // Ideally, we would have a list of all libraries the game relies on
+    // but. I have hardcoded them for the time being.
     lib0 := LoadDynamicLibrary("glad.dll")
     lib1 := LoadDynamicLibrary("glfw3.dll")
 
-    StartInfiniteLoop(app)
+    yes := StartInfiniteLoop(app)
 
+    if !yes
+        return 1
     return 0
 }
 

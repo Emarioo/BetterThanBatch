@@ -30,7 +30,7 @@ enum @enclosed @specified lang_Primitive : u8 {
     DECIMAL         = 5,
     CHAR            = 6,
     BOOL            = 7,
-    FUNCTION        = 8,
+    FUNCTION        = 8, // function pointer
 }
 struct lang_TypeId {
     index0: u16;
@@ -44,7 +44,7 @@ operator ==(a: lang_TypeId, b: lang_TypeId) -> bool {
 }
 struct lang_TypeInfo {
     type: lang_Primitive;
-    _pad: u8; // reserved?
+    _pad: u8; // reserved? TODO: 8-bit for flags, such as is_polymorphic, has_members
     size: u16;
     name: Range; // refers to lang_strings
 
@@ -113,27 +113,36 @@ fn lang_typesize(id: lang_TypeId) -> u16 {
 //     " }")
 // }
 fn std_print(type: lang_TypeId) {
-    fn print_pointers(type: lang_TypeId) {
-        for 0..type.ptr_level
-            printc('*')
-    }
-    std_print("{ ");
-    std_print(lang_typename(type));
-    print_pointers(type)
-    std_print(", size: ")
-    std_print(lang_typesize(type));
-    members := lang_typemembers(type);
-    if members.len > 0 {
-        std_print(", members: ");
-        for @ptr members {
-            if nr != 0
-                std_print(", ");
-            std_print(lang_typename(it.type))
-            print_pointers(it.type)
-        }
-    }
+    // std_print(type.index())
+    // std_print(&type)
+    std_print("{ index: ");
+    std_print(type.index())
+    std_print(", ptr_level: ")
+    std_print(type.ptr_level)
     std_print(" }");
 }
+// fn std_print(type: lang_TypeId) {
+//     fn print_pointers(type: lang_TypeId) {
+//         for 0..type.ptr_level
+//             printc('*')
+//     }
+//     std_print("{ ");
+//     std_print(lang_typename(type));
+//     print_pointers(type)
+//     std_print(", size: ")
+//     std_print(lang_typesize(type));
+//     members := lang_typemembers(type);
+//     if members.len > 0 {
+//         std_print(", members: ");
+//         for @ptr members {
+//             if nr != 0
+//                 std_print(", ");
+//             std_print(lang_typename(it.type))
+//             print_pointers(it.type)
+//         }
+//     }
+//     std_print(" }");
+// }
 fn std_print_any<T>(value: T*, pretty: bool = false) {
     id := typeid(T);
     std_print_any(value, id, pretty);

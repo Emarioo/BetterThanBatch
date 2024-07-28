@@ -1,6 +1,5 @@
 /*
     GLFW Wrapper
-    (incomplete)
 */
 
 // TODO: The location of GLFW library may change, if you compile with gcc or msvc

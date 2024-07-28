@@ -5,6 +5,8 @@
 
 // #macro LN printc('L'); printc('N'); std_print(cast<i64>#line); std_print('\n')
 
+#macro appends(S, V, ...) S.append(V) appends(S, ...)
+#macro appends(S) #endmacro
 
 // heap allocated for now
 // null terminated

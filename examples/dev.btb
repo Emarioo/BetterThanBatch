@@ -1,48 +1,5 @@
-// #import "examples/crawler/main"
+// With hotreloading
+#import "examples/crawler/main"
+// Without hotreloading
 // #import "examples/crawler/GameCore"
 
-/* Today's quest: Hotreloading
-
-    A standard library (module) for hotreloading.
-    Hotreloading may require custom allocators.
-    We may need the ability to change allocators of
-    arrays and maps.
-    
-    Step 0:
-        Compile and use dlls
-
-    Step 1:    <- I am here
-        Get hotreloading working with crawler game.
-        Generalize hotreloading into a module.
-        Test it however we would do that?
-
-    Step 2 (maybe later, add to TODO list):
-        Module for reloading files and settings with file watchers.
-        For example: If an image is modified, it's automatically reloaded.
-
-    Step 3 (maybe later, add to TODO list):
-        A compiler feature that warns you when a struct is modified if
-        the game is running and you are using hotreloading.
-
-    What is hotreloading?
-        It's about changing the game code while the game is running.
-        The state and memory used by the game stays the same.
-        This means that changing structs will break things since the 
-        stored memory is based on the old structs while the new code 
-        is based on the new structs.
-
-        Hotreloading is implemented using dynamic libraries (dll, so) and
-        a separation between code and state in the game.
-        
-*/
-
-// TODO: Fix double precision float to string conversion
-
-#import "Logger"
-s := "12542.21512621582357"
-f: f32 = 12542.21484375;
-v: f64 = 12542.215126215824056998826563358306884765625d;
-
-// std_print(f, max_decimals = 0) log()
-std_print(v, max_decimals = 0) log()
-log(s)

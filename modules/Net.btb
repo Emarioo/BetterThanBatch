@@ -431,14 +431,14 @@ struct Server {
         if !connection.in_use
             return NET_FAILURE // invalid connection
 
-        size := bytes.len * sizeof *bytes.ptr
+        size := bytes.len * sizeof (*bytes.ptr)
         if m_protocol & NET_PROTO_MESSAGE {
             m_send_mutex.lock() // Ensure that only one thread sends header and body at once.
                                 // Two thread may send headers first and then bodies which will result in the receiver reading two headers which is strange
             defer m_send_mutex.unlock()
 
             header: MessageHeader
-            header.length = bytes.len * sizeof *bytes.ptr
+            header.length = bytes.len * sizeof (*bytes.ptr)
             err := connection.socket.send(cast<void*>&header, sizeof header, 0)
             if err < 0 {
                 log("server send header failed")
@@ -529,7 +529,7 @@ struct Client {
             log("getaddrinfo failed")
             return NET_BAD_IP
         }
-        err := m_socket.connect(result.ai_addr, sizeof *result.ai_addr)
+        err := m_socket.connect(result.ai_addr, sizeof (*result.ai_addr))
 
         // addr: sockaddr_in
         // addr.sin_family = AF_INET
@@ -687,7 +687,7 @@ struct Client {
 
 	// fn send(bytes: char[]) -> NetError {
 	fn send<T>(bytes: T[]) -> NetError {
-        size := bytes.len * sizeof *bytes.ptr
+        size := bytes.len * sizeof (*bytes.ptr)
         if m_protocol & NET_PROTO_MESSAGE {
             m_send_mutex.lock() // Ensure that only one thread sends header and body at once.
                                 // Two thread may send headers first and then bodies which will result in the receiver reading two headers which is strange

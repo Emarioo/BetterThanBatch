@@ -11,6 +11,6 @@ struct PhaseContext {
     int warnings = 0;
     bool disableCodeGeneration = false; // used by Generator
     
-    bool hasErrors();
-    bool hasForeignErrors();
+    bool hasForeignErrors(); // has errors from outside this context
+    bool hasAnyErrors(); // has error from this and the outside context
 };

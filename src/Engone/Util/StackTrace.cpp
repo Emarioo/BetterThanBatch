@@ -13,6 +13,7 @@ struct AssertHandler {
         const char* file = nullptr;
         int line = 0;
         std::vector<std::function<void()>> funcs;
+        std::function<void()> single_func;
     };
     // we use std::vector instead of DynamicArray because it has asserts in it, infinite loop would happen
     std::vector<Trace> traces;
@@ -74,10 +75,15 @@ void PopStackTrace() {
 
     g_assertHandler->traces.pop_back();
 }
-void SetCallbackOnAssert(std::function<void()> func) {
+void PushCallbackOnAssert(std::function<void()> func) {
     EnsureInitializedStackTrace();
 
     g_assertHandler->traces.back().funcs.push_back(func);
+}
+void SetSingleCallbackOnAssert(std::function<void()> func) {
+    EnsureInitializedStackTrace();
+
+    g_assertHandler->traces.back().single_func = func;
 }
 void PopLastCallback() {
     EnsureInitializedStackTrace();
@@ -95,6 +101,9 @@ void FireAssertHandler() {
             break;
         }
     }
+    if(g_assertHandler->traces.size() > 0 &&g_assertHandler->traces.back().single_func) {
+        has_any_callback = true;
+    }
 
     if (has_any_callback) {
         log::out << log::RED << "CALLBACKS FROM ASSERT:\n";
@@ -102,6 +111,14 @@ void FireAssertHandler() {
         for (auto& trace : g_assertHandler->traces) {
             for(auto& f : trace.funcs)
                 f();
+        }
+        // only fire the most recent single_func
+        for(int i=g_assertHandler->traces.size()-1;i>=0;i--) {
+            auto& trace = g_assertHandler->traces[i];
+            if(trace.single_func) {
+                trace.single_func();
+                break;
+            }
         }
     }
 

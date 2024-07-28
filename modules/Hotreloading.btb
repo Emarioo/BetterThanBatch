@@ -34,7 +34,7 @@ struct AppInstance {
     fn init(code_path: char[]) {
         dynamic_library_path = code_path
     }
-    rebuild_func: fn();
+    rebuild_cmd: StringBuilder;
     dynamic_library_path: char[];
     user_data: void*; // data from the dynamic library
     extra_user_data: void*; // could be used to save and restore global data of dll
@@ -52,14 +52,30 @@ struct AppInstance {
     current_func_event: EventFunction;
     last_modified_time: i64;
 }
-fn StartInfiniteLoop(app: AppInstance) {
+fn StartInfiniteLoop(app: AppInstance) -> bool {
     // log(GetErrorMode());
     // SetErrorMode(0);
+
+    // We compile code to find any errors and only
+    // start the application if there were no errors.
+    // Rebuild won't stop execution if there were errors.
+    exit_code: i32
+    last_process: Process
+    // t := StartMeasure()
+    ExecuteCommand(app.rebuild_cmd.sliced(), &exit_code)
+    // log("Comp time: ", StopMeasure(t))
+    if exit_code != 0
+        return false;
+    skipped_rebuild_once: bool
+
+    // TODO: Option to log hotreloading? What to we want to log though?
+    //   I mainly want to log it when debugging.
 
     initialized: bool
     app.running = true
     app.start_time = StartMeasure()
     last_time: i64 = StartMeasure()
+    
     acc: f32 = app.reload_rate_seconds; // we begin with high accumulation so that we try to load code right away
     while app.running {
         // Check if code should be reloaded
@@ -69,14 +85,63 @@ fn StartInfiniteLoop(app: AppInstance) {
         acc += dt
         // log(acc)
         if acc >= app.reload_rate_seconds {
-            if app.rebuild_func {
-                // TODO: If user specified rebuild function then we compile code.
-                app.rebuild_func()
-            }
             acc = 0.0
             time := FileModifiedTime(app.dynamic_library_path)
+            if app.rebuild_cmd.size() {
+                // skip first rebuild since we already compiled the game at the start of the function.
+                if skipped_rebuild_once {
+                    while { // TODO: Implement and use a scoped break/return or goto labels or something like that so we don't have to use while loop
+                        defer break
+                        // NOTE: Compiling the game code may take longer than the reload rate.
+                        //   If so then we don't want to compile the game code using two processes
+                        //   at the same time. We prevent this by checking if such a process is active and start one again if not.
+                        //  This also stops a problem where the dll is reloaded multiple times
+                        //  because of the multiple processes overwrite each others' produced dll.
+                        if last_process.valid() {
+                            if last_process.is_active() {
+                                // log("btb is running")
+                                break
+                            }
+                            last_process.cleanup()
+                        }
+                        // log("rebuild")
+                        // TODO: How do we handle errors?
+                        //   If there is an error, I want to keep using the code we have.
+                        //   If there is an error, I don't want to keep spamming that there is an error if the source didn't change, I already know there is an error.
+                        //   When checking for a change, we compare the timestamp of code.dll but it
+                        //   will always be considered old since we didn't create a new code.dll because of the error.
+                        //   Therefore, we may need to store a timestamp for when we last tried to compile code instead of the timestamp of our output dll.
+                        //   With that, we won't keep trying to compile and produce the same error.
+                        //
+                        //   Now we have the question of where to store the timestamp. Perhaps in a 
+                        //   bin/btb.cache file or something.
+
+                        // TODO: A problem here is the compile time. It takes 2-3 seconds from when
+                        //   the source is modified to when we notice a change. This at least be
+                        //   under 1 second (500 ms would be fantastic).
+                        //   
+                        //   To achieve this we must optimize the compiler and eliminate
+                        //   the compiler process startup time. A continously running compiler process
+                        //   which that accepts compile requests from inter-process communication
+                        //   would do wonders. The process startup time is gone, memory is allocated
+                        //   once instead of every time we compile, up-to-date source files can be
+                        //   cached in memory instead of serializing it in between compiler processes.
+                        // 
+                        //   Before going crazy. Optimizing compiler takes priority. When testing,
+                        //   starting a process takes 100-150 ms which isn't to bad considering
+                        //   the compiler can take 2.3 seconds. Get your priorities straight!
+                        // 
+                        //   Inter-process communication on Windows: https://learn.microsoft.com/en-us/windows/win32/memory/sharing-files-and-memory
+                        ExecuteCommand(app.rebuild_cmd.sliced(), &exit_code, asynchronous = true, process = &last_process)
+                    }
+                }
+                skipped_rebuild_once = true
+            }
+            // log("check ", time, " > ", app.last_modified_time)
             if time > app.last_modified_time {
-                log("Reload ", FILE_TIME_TO_SECONDS(time), " > ", FILE_TIME_TO_SECONDS(app.last_modified_time))
+                // Nice message, It's useful to know when code was reloaded
+                log("Reload ", app.dynamic_library_path)
+
                 // Unload previous code
                 if app.library.valid() {
                     if app.current_func_event
@@ -139,4 +204,6 @@ fn StartInfiniteLoop(app: AppInstance) {
         app.current_func_event(&app, APP_STOP)
     if app.current_func_event
         app.current_func_event(&app, APP_CODE_UNLOAD)
+    
+    return true
 }

@@ -29,7 +29,8 @@ struct DeferStruct_2 {
     #define TRACE_FUNC() PushStackTrace(__FUNCTION__, __FILE__, __LINE__); defer_2 { PopStackTrace(); };
 #endif
 
-#define CALLBACK_ON_ASSERT(X) SetCallbackOnAssert([&](){ X });
+#define CALLBACK_ON_ASSERT(X) PushCallbackOnAssert([&](){ X });
+#define SINGLE_CALLBACK_ON_ASSERT(X) SetSingleCallbackOnAssert([&](){ X });
 
 #define POP_LAST_CALLBACK() PopLastCallback();
 
@@ -38,7 +39,8 @@ struct DeferStruct_2 {
 void PushStackTrace(const char* name, const char* file = nullptr, int line = 0);
 void PopStackTrace();
 // sets callback for last trace
-void SetCallbackOnAssert(std::function<void()> func);
+void PushCallbackOnAssert(std::function<void()> func);
+void SetSingleCallbackOnAssert(std::function<void()> func);
 void PopLastCallback();
 // calls added callbacks for each trace and prints the stack trace
 void FireAssertHandler();

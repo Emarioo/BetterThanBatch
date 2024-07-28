@@ -87,8 +87,8 @@ fn ThreadSelfId() -> ThreadId {
     #endif
 }
 
-#macro INTERNAL_TO_OS_HANDLE(N) (cast<u64>(N) + 1)
-#macro OS_HANDLE_TO_INTERNAL(N) (cast<void*>((N) - 1))
+#macro OS_TO_API_HANDLE(N) (cast<u64>(N) + 1)
+#macro API_TO_OS_HANDLE(N) (cast<void*>((N) - 1))
 
 struct Mutex {
     os_handle: u64;
@@ -117,10 +117,10 @@ struct Mutex {
                     err := GetLastError();
                     log("[WinError ",err,"] CreateMutex");
                 } else
-                    os_handle = INTERNAL_TO_OS_HANDLE(handle)
+                    os_handle = OS_TO_API_HANDLE(handle)
             }
             if os_handle != 0 {
-                res := WaitForSingleObject(OS_HANDLE_TO_INTERNAL(os_handle), INFINITE)
+                res := WaitForSingleObject(API_TO_OS_HANDLE(os_handle), INFINITE)
                 newId := ThreadSelfId()
                 owner := _owner_thread
                 // log("Lock ",newId," ",os_handle);
@@ -168,7 +168,7 @@ struct Mutex {
             if os_handle != 0 {
                 // log("Unlock ",_owner_thread," ", os_handle);
                 _owner_thread = 0;
-                yes := ReleaseMutex(OS_HANDLE_TO_INTERNAL(os_handle))
+                yes := ReleaseMutex(API_TO_OS_HANDLE(os_handle))
                 if !yes {
                     err := GetLastError();
                     log("[WinError ",err,"] ReleaseMutex");
@@ -207,12 +207,12 @@ struct Semaphore {
 			err := GetLastError();
 			log("[WinError ",err,"] CreateSemaphore");
 		} else {
-			os_handle = INTERNAL_TO_OS_HANDLE(handle);
+			os_handle = OS_TO_API_HANDLE(handle);
 		}
     }
     fn cleanup() {
         if (os_handle != 0){
-            yes := CloseHandle(OS_HANDLE_TO_INTERNAL(os_handle));
+            yes := CloseHandle(API_TO_OS_HANDLE(os_handle));
             if(!yes){
                 err := GetLastError();
                 log("[WinError ",err,"] CloseHandle");
@@ -228,11 +228,11 @@ struct Semaphore {
 				err := GetLastError();
                 log("[WinError ",err,"] CreateSemaphore");
 			} else {
-                os_handle = INTERNAL_TO_OS_HANDLE(handle);
+                os_handle = OS_TO_API_HANDLE(handle);
 			}
 		}
 		if (os_handle != 0) {
-			res := WaitForSingleObject(OS_HANDLE_TO_INTERNAL(os_handle), INFINITE);
+			res := WaitForSingleObject(API_TO_OS_HANDLE(os_handle), INFINITE);
 			if (res == WAIT_FAILED) {
 				err := GetLastError();
 				log("[WinError ",err,"] WaitForSingleObject");
@@ -243,7 +243,7 @@ struct Semaphore {
     fn signal(count: i32 = 1) {
         // MEASURE
 		if (os_handle != 0) {
-			yes := ReleaseSemaphore(INTERNAL_TO_OS_HANDLE(os_handle), count, null);
+			yes := ReleaseSemaphore(OS_TO_API_HANDLE(os_handle), count, null);
 			if (!yes) {
 				err := GetLastError();
 				// if(err == ERROR_TOO_MANY_POSTS)

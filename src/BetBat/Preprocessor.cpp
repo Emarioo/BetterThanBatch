@@ -1019,6 +1019,21 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             } else if(token.type == ')') {
                 layer->paren_depth--;
             }
+            if(token.type == '<') { // should arrows use the same depth as parenthesis?
+                layer->paren_depth++;
+            } else if(token.type == '>') {
+                layer->paren_depth--;
+            }
+            if(token.type == '[') { // should arrows use the same depth as parenthesis?
+                layer->paren_depth++;
+            } else if(token.type == ']') {
+                layer->paren_depth--;
+            }
+            if(token.type == '{') { // should arrows use the same depth as parenthesis?
+                layer->paren_depth++;
+            } else if(token.type == '}') {
+                layer->paren_depth--;
+            }
             
             if(token.type == '#') {
                 StringView unwrap_str{};

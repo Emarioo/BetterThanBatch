@@ -22,8 +22,9 @@ The *for* loop is used to iterate through an array or range of values
 #import "Logger" // See chapter about "Imports and namespaces"
 // Logger provides a macro/function called 'log' which can print numbers, strings, and floats among other types.
 
-TODO: Explain it, nr
-TODO: Explain that it, nr uses the same memory with ranges but not with slices
+// TODO: Explain it, nr
+// TOOD: Explain Range
+// TODO: Explain that it, nr uses the same memory with ranges but not with slices
 
 for 0..5
     log(it);

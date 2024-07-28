@@ -281,8 +281,8 @@ TypeId TyperContext::checkType(ScopeId scopeId, TypeId typeString, lexer::Source
     //     _TCLOG(log::out << "check type typeid wasn't string type\n";)
     //     return typeString;
     // }
-    auto token = info.ast->getStringFromTypeString(typeString);
-    return checkType(scopeId, token, err_location, printedError);
+    auto view = info.ast->getStringFromTypeString(typeString);
+    return checkType(scopeId, view, err_location, printedError);
 }
 TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::SourceLocation err_location, bool* printedError){
     using namespace engone;
@@ -374,6 +374,12 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
                 }
             }
             if(chr == ')') {
+                depth--;
+            }
+            if(chr == '<') { // we use the same depth variable for parenthesis and arrows, we should detect if the user is mixing them and print errors
+                depth++;
+            }
+            if(chr == '>') {
                 depth--;
             }
             
@@ -525,6 +531,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
         ERR_SECTION(
             ERR_HEAD2(err_location)
             ERR_MSG("Polymorphic type "<<typeString << " has "<< (u32)polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<(u32)baseInfo->astStruct->polyArgs.size()<<".")
+            ERR_LINE2(err_location,"here somewhere")
         )
         // ERR() << "Polymorphic type "<<typeString << " has "<< polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<baseInfo->astStruct->polyArgs.size()<< "\n";
         if(printedError)
@@ -2032,6 +2039,16 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         }
     };
 
+    TRACE_FUNC()
+
+    SINGLE_CALLBACK_ON_ASSERT(
+        ERR_SECTION(
+            ERR_HEAD2(expr->location)
+            ERR_MSG("Compiler bug!")
+            ERR_LINE2(expr->location,"cause")
+        )
+    )
+
     // IMPORTANT NOTE: CheckExpression HAS to run for left and right expressions
     //  since they may require types to be checked. AST_SIZEOF needs to evalute for example
 
@@ -2236,20 +2253,35 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                         finalType = checkType(scopeId, name, expr->location, nullptr);
                     }
                 }
-            } else {
-                if(!hasForeignErrors()) {
-                    Assert(expr->name.size()); // error, if we didn't have any
-                } else {
-                    // return SIGNAL_FAILURE; // OI, WE DO NOTHING HERE, OK!
+                if(!finalType.isValid()) {
+                    // DynamicArray<TypeId> temps{};
+                    typeArray.resize(0);
+                    SignalIO result = checkExpression(scopeId, expr->left, &typeArray, attempt);
+                    finalType = typeArray.size()==0 ? AST_VOID : typeArray.last();
                 }
-                finalType = checkType(scopeId, expr->name, expr->location, nullptr);
+            } else {
+                auto& name = expr->name;
+                bool crossed_boundary = false;
+                Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
+
+                if(iden && !iden->is_fn() && (iden->type == Identifier::GLOBAL_VARIABLE || !crossed_boundary)){
+                    auto var = iden->cast_var();
+                    finalType = var->versions_typeId[info.currentPolyVersion];
+                } else {
+                    // auto sc = info.ast->getScope(scopeId);
+                    // sc->print(info.ast);
+                    finalType = checkType(scopeId, name, expr->location, nullptr);
+                }
+                if(!finalType.isValid()) {
+                    if(!hasForeignErrors()) {
+                        Assert(expr->name.size()); // error, if we didn't have any
+                    } else {
+                        // return SIGNAL_FAILURE; // OI, WE DO NOTHING HERE, OK!
+                    }
+                    finalType = checkType(scopeId, expr->name, expr->location, nullptr);
+                }
             }
-            if(!finalType.isValid()) {
-                // DynamicArray<TypeId> temps{};
-                typeArray.resize(0);
-                SignalIO result = checkExpression(scopeId, expr->left, &typeArray, attempt);
-                finalType = typeArray.size()==0 ? AST_VOID : typeArray.last();
-            }
+            
             if(finalType.isValid()) {
                 if(expr->typeId == AST_SIZEOF) {
                     expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
@@ -2281,6 +2313,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     if(outTypes)  outTypes->add(theType);
                 }
             } else {
+                Assert(hasForeignErrors());
                 if(outTypes) outTypes->add(AST_VOID);
             }
         } else if(expr->typeId == AST_ASM){
@@ -2366,7 +2399,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 auto signal = checkExpression(scopeId, expr->right, &typeArray, attempt);
                 
                 if(typeArray.size() > 0 && typeArray[0] == AST_VOID) {
-                    if(hasErrors()) {
+                    if(hasAnyErrors()) {
                         return SIGNAL_FAILURE;
                     } else {
                         log::out << log::RED << "WHY WAS TYPE VOID\n";
@@ -2908,7 +2941,7 @@ SignalIO TyperContext::checkFunctionImpl(ASTFunction* func, FuncImpl* funcImpl, 
                 ti = checkType(func->scopeId, arg.stringType, func->location, &printedError);
             
             if(ti == AST_VOID){
-                if(!info.hasErrors()) { 
+                if(!info.hasAnyErrors()) { 
                     std::string msg = info.ast->typeToString(arg.stringType);
                     ERR_SECTION(
                         ERR_HEAD2(func->location)
@@ -2919,7 +2952,7 @@ SignalIO TyperContext::checkFunctionImpl(ASTFunction* func, FuncImpl* funcImpl, 
             } else if(ti.isValid()){
 
             } else if(!printedError) {
-                if(!info.hasErrors()) { 
+                if(!info.hasAnyErrors()) { 
                     std::string msg = info.ast->typeToString(arg.stringType);
                     ERR_SECTION(
                         ERR_HEAD2(func->location)
@@ -3595,8 +3628,8 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             // DECLARE NEW VARIABLE(S)
 
             // The code below should have caused less errors but it causes more errors because of undeclared identifiers
-            // if(!varname.versions_assignType[info.currentPolyVersion].isValid() && info.hasErrors()) {
-            //     // Assert(info.hasErrors());
+            // if(!varname.versions_assignType[info.currentPolyVersion].isValid() && info.hasAnyErrors()) {
+            //     // Assert(info.hasAnyErrors());
             //     continue;
             // }
 

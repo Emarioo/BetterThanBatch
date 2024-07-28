@@ -1,6 +1,5 @@
 /*
     GLAD Wrapper
-    (incomplete)
 */
 #if OS_WINDOWS
     #load "OpenGL32.lib"

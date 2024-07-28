@@ -84,7 +84,6 @@ struct PROCESS_INFORMATION {
 #macro ERROR_BAD_EXE_FORMAT             193
 #macro ERROR_ALREADY_EXISTS             183
 
-#macro STILL_ACTIVE    STATUS_PENDING
 
 /*########################
     MEMORY, ALLOCATIONS
@@ -93,6 +92,7 @@ struct PROCESS_INFORMATION {
 #macro STATUS_PENDING 0x00000103
 #macro STATUS_NO_MEMORY cast<void*>cast<i64>0xC0000017
 #macro STATUS_ACCESS_VIOLATION cast<void*>cast<i64>0xC0000005
+#macro STILL_ACTIVE    STATUS_PENDING
 
 // https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-getprocessheap
 fn @import(Kernel) GetProcessHeap() -> HANDLE;

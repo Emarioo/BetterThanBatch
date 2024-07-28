@@ -68,22 +68,59 @@ f := 3.144   // float literal
 f := 3.144d  // 64-bit float literal
 
 chr: char = 'K'   // character literal
-str: Slice<char> = "My string"  // string literal, more about how to use strings further below
+str: char[] = "My string"  // string literal, more about how to use strings further below
 ```
 
 **NOTE**: `Slice<char>` is a polymorphic struct that contains a pointer and a length. See the chapters about structs and polymorphism for how to create this kind of type yourself.
 
-## Pointers and arrays
+## Pointers, slices, and arrays
 The language has pointers like C/C++.
 ```c++
 a: i32 = 82;
 ptr: i32* = &a;     // take a pointer to a variable
 value: i32 = *ptr;  // dereference the pointer to get the value at the pointer's address
+```
+There is also the *Slice* type which is a predefined struct with a *pointer* and a *length*. It is recommended to pass around a *Slice* instead of a pointer to multiple elements, since *Slice* has a built-in length and is better supported by the compiler.
+<!-- NOTE: I don't know if we should show the struct and explain the preload. It could be too much information.
+// <preload> (always available)
+struct Slice<T> {
+    ptr: T*;
+    len: i64;
+}-->
+```c++
+#import "Memory" // imports the 'Allocate' function, functions and imports are covered in another chapter.
+#import "Logger" // imports the 'log' macro which prints stuff to the terminal, macros are covered in another chapter.
 
-ints: i32[20];             // zero initialized array
+slice: i32[];
+slice.len = 4
+slice.ptr = Allocate(slice.len * sizeof i32)
+
+slice[0] = 23
+slice[2] = 2
+log(slice[0] + slice[2]) // prints 25
+
+// Since *Slice* is a struct you can also write it like this:
+// But you don't have to because of operator overloading and
+// the fact that the compiler converts i32[] to Slice<i32>. 
+
+slice: Slice<i32>;
+/* ... */
+
+slice.ptr[0] = 23
+slice.ptr[2] = 2
+log(slice.ptr[0] + slice.ptr[2]) // prints 25
+```
+
+**NOTE**: Similarly to *Slice*, there is also a *Range* struct which consists of two integers representing the *start* and *end* (exclusive) of a range. This becomes relevant with for loops covered in a different chapter.
+
+It is also possible to define arrays on the stack or in a struct. An array on the stack consists of two parts, the slice and the raw elements. Arrays in structs are a little more special, see chapter about structs for more information.
+
+**NOTE**: Definining global arrays is not supported yet.
+```c++
+ints: i32[20];             // zero initialized array on stack
 ints: i32[20] { 3, 8, 4 }; // initialize with values
 // the type of 'ints' is Slice<i32>
-ints: i32[.] { 3, 8, 4 };  // array length based on number of expressions
+ints: i32[] { 3, 8, 4 };  // array length based on number of expressions
 
 // Arrays have a pointer and a length
 ints.ptr[0]  // first element from the pointer
@@ -92,8 +129,6 @@ ints[0]      // first element using a predefined operator overload for Slices
 // inst.ptr must be used when setting the value of an element (operator overload for it doesn't exist yet)
 ints.ptr[ints.len - 1] = 239; // set last element
 
-str: Slice<char> = "String";
-str[str.len - 1] // access last character which is 'g'
 ```
 
 The language has pointer arithmetic which means that you can perform add and subtract operations on
@@ -107,6 +142,29 @@ arr.ptr[arr.len-1] = 92
 ```
 
 **NOTE**: In the future, not having the automatic scaling may be a nuisance and thus could change. The reason we don't is because we want pointer arithmetic on `void*` but since it is 0 in size, it doesn't make since to scale it by 0 bytes. You could of course see void* as an edge case and use a 1-byte scaling. In C/C++ you are required to do quite a few casts and it would be nice if you didn't need to. Sometimes you can feel as though you are fighting the pointer arithmetic which isn't good.
+
+## Strings
+There is not a primitive type for strings. There is however character slice (*char[]*) for string views and **StringBuilder** for common string operations.
+
+```c++
+// char slice when passing strings to functions
+str: char[] = "String";
+str[str.len - 1] // access last character which is 'g'
+
+// StringBuilder when creating and appending strings and numbers
+#import "String"
+
+string: StringBuilder
+string.append("Hello, I have")
+string.append(5)
+item := "cookies"
+string.append(item)
+
+
+// There is also a convenient macro to avoid repeating yourself
+msg: StringBuilder
+appends(msg, "This is the string: ", string)
+```
 
 ## More operations
 Words: bitwise operator, comparison/equality operator, logical operator

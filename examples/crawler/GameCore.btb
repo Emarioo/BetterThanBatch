@@ -94,7 +94,7 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
             extra.graphics_data = SaveGraphicsGlobals()
             extra.world_data = SaveWorldGlobals()
     }
-
+    // right
     // if event == APP_TICK {
     //     global tick: i32
     //     tick++
@@ -159,6 +159,8 @@ struct GameCore {
     special_action: SpecialAction;
 
     debug: DebugModule;
+
+    prev_present_joysticks: Array<bool>
 
     fn start_game(app: AppInstance*) {
         // window = CreateWindow(1400,600)
@@ -445,8 +447,6 @@ struct GameCore {
     }
 
     fn refresh_local_players() {
-        global prev_present_joysticks: Array<bool>
-
         if prev_present_joysticks.size() == 0 {
             prev_present_joysticks.resize(GLFW_JOYSTICK_LAST+1)
             // bools should be zeroed
