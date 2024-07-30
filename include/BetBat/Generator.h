@@ -31,6 +31,8 @@ struct GenContext : public PhaseContext {
     void pushNode(ASTNode* node);
     void popNode();
 
+    void emit_abstract_dataptr(BCRegister reg, int offset, IdentifierVariable* global_ident);
+
     void generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo);
 
     void addExternalRelocation(const std::string& name, const std::string& lib_path, u32 codeAddress, bool is_var = false) {

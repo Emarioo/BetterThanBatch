@@ -400,8 +400,8 @@ struct Identifier {
     bool is_fn() { return type == FUNCTION; }
     bool is_var() { return type != FUNCTION; }
 
-    IdentifierVariable* cast_var() { return (IdentifierVariable*)this; }
-    IdentifierFunction* cast_fn() { return (IdentifierFunction*)this; }
+    IdentifierVariable* cast_var() { Assert(is_var()); return (IdentifierVariable*)this; }
+    IdentifierFunction* cast_fn() { Assert(is_fn()); return (IdentifierFunction*)this; }
 };
 
 struct IdentifierVariable : public Identifier {
@@ -662,7 +662,7 @@ struct ASTStatement : ASTNode {
     // };
     PolyVersions<QuickArray<TypeId>> versions_expressionTypes; // types from firstExpression
 
-
+    bool is_notstable = false;
     bool rangedForLoop=false; // otherwise sliced for loop
     bool globalDeclaration=false; // for variables, indicates whether variable refers to global data in data segment
     bool sharedContents = false; // this node is not the owner of it's nodes.

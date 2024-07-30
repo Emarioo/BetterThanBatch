@@ -113,12 +113,13 @@ def compile(config):
         elif arg == "gcc" or arg == "msvc":
             config["use_compiler"] = arg
         elif arg == "clean":
-            for f in glob.glob("bin/*"):
-                # print(f)
-                if os.path.isdir(f):
-                    shutil.rmtree(f)
-                else:
-                    os.remove(f)
+            counter = 0
+            counter += remove_files("bin/*")
+            counter += remove_files("libs/stb/lib-*")
+            counter += remove_files("libs/glad/lib-*")
+            
+            print("Removed " + str(counter) + " files in bin")
+            return True
         else:
             config[arg] = True
 
@@ -380,40 +381,52 @@ def compile(config):
     #   COMPILE VENDOR LIBRARIES
     ################################
 
+    if platform.system() == "Windows":
+      
+        compile_vendor("glad","glad.c", "glad", "GLAD_GLAPI_EXPORT GLAD_GLAPI_EXPORT_BUILD")
+        # NOTE: stb_image was modified to support STB_IMAGE_BUILD_DLL.
+        compile_vendor("stb","stb_image.c", "stb_image", "STB_IMAGE_BUILD_DLL")
+
+    return compile_success
+
+def compile_vendor(vendor, src, bin_name, dll_defs = ""):
     GCC_PATHS = "-Llibs/glfw-3.3.9/lib-mingw-w64 -Ilibs/glfw-3.3.9/include -Ilibs/glad/include -Lbin -Ilibs/stb/include"
     MSVC_PATHS = "/Ilibs/glfw-3.3.9/include /Ilibs/glad/include /Ilibs/stb/include"
 
-    if not os.path.exists("libs/glad/lib-mingw-w64/libglad.a"):
-        cmd("gcc -c "+GCC_PATHS+" libs/glad/src/glad.c -o bin/glad.o")
-        cmd("ar rcs libs/glad/lib-mingw-w64/libglad.a bin/glad.o")
-    if not os.path.exists("libs/glad/lib-mingw-w64/glad.lib"):
-        cmd("gcc -c "+GCC_PATHS+" libs/glad/src/glad.c -o bin/glad.o")
-        cmd("ar rcs libs/glad/lib-mingw-w64/glad.lib bin/glad.o")
-    if not os.path.exists("libs/glad/lib-mingw-w64/glad.dll"):
-        cmd("gcc -shared -fPIC "+GCC_PATHS+" -DGLAD_GLAPI_EXPORT -DGLAD_GLAPI_EXPORT_BUILD libs/glad/src/glad.c -o libs/glad/lib-mingw-w64/glad.dll")
+    src = "libs/"+vendor+"/src/" + src
+    path_mingw = "libs/"+vendor+"/lib-mingw-w64/"
+    path_vc = "libs/"+vendor+"/lib-vc2022/"
+    mingw_lib = path_mingw + bin_name + ".lib"
+    mingw_dll = path_mingw + bin_name + ".dll"
+    mingw_obj = "bin/" + bin_name + ".o"
+    vc_lib = path_vc + bin_name + ".lib"
+    vc_dll = path_vc + bin_name + ".dll"
+    vc_dlllib = path_vc + bin_name + "dll.lib"
+    vc_obj = "bin/" + bin_name + ".obj"
+
+    mingw_dll_defs = ""
+    vc_dll_defs = ""
+    for v in dll_defs.split(" "):
+        mingw_dll_defs += "-D"+v + " "
+        vc_dll_defs += "/D"+v + " "
+
+    if not os.path.exists(path_mingw):
+        os.mkdir(path_mingw)
+    if not os.path.exists(path_vc):
+        os.mkdir(path_vc)
+
+    if not os.path.exists(mingw_lib):
+        cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ mingw_obj)
+        cmd("ar rcs "+mingw_lib+" " + mingw_obj)
+    if not os.path.exists(mingw_dll):
+        cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ mingw_dll_defs + " " + src + " -o "+mingw_dll)
     
-    if not os.path.exists("libs/glad/lib-vc2022"):
-        os.mkdir("libs/glad/lib-vc2022")
-    # if not os.path.exists("libs/glad/lib-vc2022/glad.lib"):
-    #     cmd("cl /nologo /c /TC "+MSVC_PATHS+" libs/glad/src/glad.c /Fo:bin/glad.obj")
-    #     cmd("lib bin/glad.obj /OUT:libs/glad/lib-vc2022/glad.lib")
-    if not os.path.exists("libs/glad/lib-vc2022/glad.dll") or not os.path.exists("libs/glad/lib-vc2022/gladdll.lib"):
-        #cl /nologo /TC /Ilibs/glad/include /DGLAD_GLAPI_EXPORT_BUILD libs/glad/src/glad.c /link /dll /OUT:libs/glad/lib-vc2022/glad.dll
-        # cmd("link /nologo bin/glad.obj /DLL /OUT:libs/glad/lib-vc2022/glad.dll /IMPLIB:libs/glad/lib-vc2022/gladdll.lib
-            
-        # cmd("cl /c /nologo /TC "+MSVC_PATHS+" /DGLAD_GLAPI_EXPORT_BUILD /DGLAD_GLAPI_EXPORT libs/glad/src/glad.c /Fo:bin/glad.obj")
-        # cmd("link /nologo bin/glad.obj /DLL /OUT:libs/glad/lib-vc2022/glad.dll /IMPLIB:libs/glad/lib-vc2022/gladdll.lib")
-        cmd("cl /nologo /TC "+MSVC_PATHS+" /DGLAD_GLAPI_EXPORT_BUILD /DGLAD_GLAPI_EXPORT libs/glad/src/glad.c /link /DLL /OUT:libs/glad/lib-vc2022/glad.dll /IMPLIB:libs/glad/lib-vc2022/gladdll.lib")
-
-    # NOTE: glfw isn't something we compile, it's prebuilt
-    if not os.path.exists("libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib"):
-        shutil.copy("libs/glfw-3.3.9/lib-mingw-w64/libglfw3.a","libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib")
-
-    if not os.path.exists("libs/stb/lib-mingw-w64/stb_image.lib"):
-        cmd("gcc -c "+GCC_PATHS+" libs/stb/src/stb_image.c -o bin/stb_image.o")
-        cmd("ar rcs libs/stb/lib-mingw-w64/stb_image.lib bin/stb_image.o")
-
-    return compile_success
+    if not os.path.exists(vc_lib):
+        cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
+        cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
+    
+    if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
+        cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
 
 # returns a list of object files to compile
 def compute_modified_files(source_files, object_files, exe_file):
@@ -537,6 +550,18 @@ def compute_dependencies(file):
 
     f.close()
     return deps
+
+# files or directories
+def remove_files(path):
+    counter = 0
+    for f in glob.glob(path):
+        # print("del: " + f)
+        if os.path.isdir(f):
+            shutil.rmtree(f)
+        else:
+            os.remove(f)
+        counter+=1
+    return counter
 
 def cmd(c):
     # Convert Windows style command to Linux style and vice versa.

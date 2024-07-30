@@ -561,20 +561,24 @@ namespace engone {
 		*seconds = t2/10'000'000.0; // 100-nanosecond intervals
         return true;
     }
-	bool FileCopy(const std::string& src, const std::string& dst){
+	bool FileCopy(const std::string& src, const std::string& dst, bool log_error){
 		bool yes = CopyFileA(src.c_str(),dst.c_str(),0);
 		if(!yes){
-			DWORD err = GetLastError();
-            PL_PRINTF("[WinError %lu] CopyFile '%s' '%s'\n",err,src.c_str(),dst.c_str());
+			if (log_error) {
+				DWORD err = GetLastError();
+				PL_PRINTF("[WinError %lu] CopyFile '%s' '%s'\n",err,src.c_str(),dst.c_str());
+			}
             return false;
 		}
 		return true;
 	}
-	bool FileMove(const std::string& src, const std::string& dst){
+	bool FileMove(const std::string& src, const std::string& dst, bool log_error){
 		bool yes = MoveFileA(src.c_str(),dst.c_str());
 		if(!yes){
-			DWORD err = GetLastError();
-            PL_PRINTF("[WinError %lu] MoveFile '%s' '%s'\n",err,src.c_str(),dst.c_str());
+			if (log_error) {
+				DWORD err = GetLastError();
+				PL_PRINTF("[WinError %lu] MoveFile '%s' '%s'\n",err,src.c_str(),dst.c_str());
+			}
             return false;
 		}
 		return true;

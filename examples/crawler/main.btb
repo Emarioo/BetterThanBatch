@@ -14,7 +14,8 @@ fn main(argc: i32, argv: char**) -> i32 {
     app: AppInstance
     app.argc = argc
     app.argv = argv
-    app.rebuild_cmd.append("btb examples/crawler/GameCore -d --silent --incremental -o bin/code.dll")
+    app.rebuild_cmd.append("btb examples/crawler/GameCore -d --stable-globals --silent --incremental -o bin/code.dll")
+    // app.rebuild_cmd.append("btb examples/crawler/GameCore -d --silent --incremental -o bin/code.dll")
     // app.rebuild_cmd.append("btb examples/crawler/GameCore -d --incremental -o bin/code.dll")
 
     #if OS_WINDOWS
@@ -29,6 +30,7 @@ fn main(argc: i32, argv: char**) -> i32 {
     // but. I have hardcoded them for the time being.
     lib0 := LoadDynamicLibrary("glad.dll")
     lib1 := LoadDynamicLibrary("glfw3.dll")
+    lib2 := LoadDynamicLibrary("stb_image.dll")
 
     yes := StartInfiniteLoop(app)
 

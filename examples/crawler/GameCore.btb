@@ -59,15 +59,16 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
         graphics_data: void*;
         world_data: void*;
     }
-    if !app.extra_user_data {
-        app.extra_user_data = Allocate(sizeof ExtraData)
-        construct(cast<ExtraData*>app.extra_user_data)
-    }
+    // if !app.extra_user_data {
+    //     app.extra_user_data = Allocate(sizeof ExtraData)
+    //     construct(cast<ExtraData*>app.extra_user_data)
+    // }
 
     switch event {
         case APP_START:
             core = Allocate(sizeof GameCore)
             construct(core)
+            
             if app.argc > 1 {
                 if "client" == sliced(app.argv[1]) {
                     core.special_action = SPECIAL_START_CLIENT
@@ -84,16 +85,38 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
 
         case APP_CODE_LOAD:
             init_preload() // init global data, type information
-            extra: ExtraData* = app.extra_user_data
-            if extra.graphics_data
-                RestoreGraphicsGlobals(extra.graphics_data)
-            if extra.world_data
-                RestoreWorldGlobals(extra.world_data)
+
+            #if ENABLED_STABLE_GLOBALS
+                global_data := global_slice()
+                if !app.stable_globals.ptr {
+                    log("Enabled stable globals")
+                    app.stable_globals.len = global_data.len
+                    // stable globals should be freed when we stop the app
+                    app.stable_globals.ptr = Allocate(global_data.len)
+                    memcpy(app.stable_globals.ptr, global_data.ptr, global_data.len)
+                }
+                if (global_data.len != app.stable_globals.len) {
+                    // expect crash
+                    log("Size of global data changed! Stable globals cannot handle this!")
+                }
+                stable_global_memory = app.stable_globals.ptr
+            #endif
+
+            // extra: ExtraData* = app.extra_user_data
+            // if extra.graphics_data
+            //     RestoreGraphicsGlobals(extra.graphics_data)
+            // if extra.world_data
+            //     RestoreWorldGlobals(extra.world_data)
         case APP_CODE_UNLOAD:
-            extra: ExtraData* = app.extra_user_data
-            extra.graphics_data = SaveGraphicsGlobals()
-            extra.world_data = SaveWorldGlobals()
+            // extra: ExtraData* = app.extra_user_data
+            // extra.graphics_data = SaveGraphicsGlobals()
+            // extra.world_data = SaveWorldGlobals()
     }
+
+    // log("nash")
+    log(&entities_infos)
+    // log(&tile_infos)
+
     // right
     // if event == APP_TICK {
     //     global tick: i32
@@ -107,7 +130,7 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
 }
 
 #macro TIMED_CODE(T, CODE)
-global timed_step_ ## #line: i32
+global @notstable timed_step_ ## #line: i32
 if timed_step_###line++ > T {
     CODE
     timed_step_###line = 0

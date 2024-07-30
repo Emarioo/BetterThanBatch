@@ -7,7 +7,13 @@
     You must compile stb into a static library.
 */
 
-#load "libs/stb/lib-mingw-w64/stb_image.lib" as STB_IMAGE
+#if LINKER_MSVC
+    // #load "libs/stb/lib-vc2022/stb_image.lib" as STB_IMAGE
+    #load "libs/stb/lib-vc2022/stb_image.dll" as STB_IMAGE
+#else
+    // #load "libs/stb/lib-mingw-w64/stb_image.lib" as STB_IMAGE
+    #load "libs/stb/lib-mingw-w64/stb_image.dll" as STB_IMAGE
+#endif
 
 #macro STB_IMPORT @import(STB_IMAGE)
 

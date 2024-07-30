@@ -82,6 +82,11 @@ int main(int argc, const char** argv){
     for(int i=1;i<argc;i++) // is the first argument always the executable?
         arguments.add(argv[i]);
 
+
+    // NOTE: I have not moved InterpretCommands and compiler option parsing to it's own file
+    //   it's rather temporary. In the future, you will specify compile options such as
+    //   target, debug, output path, incremental linking, and linker exe in a build.btb script.
+    //   I would rather implement the real solution than mess around with compile options here.
     CompileOptions options{};
     bool valid = InterpretCommands(arguments, &options);
 
@@ -290,9 +295,6 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
             } else {
                 invalidArguments = true;
                 log::out << log::RED << "You must specify a file path after '-out'.\n";
-                // TODO: print list of targets
-                // for(int j=0;j<){
-                // }
             }
         } else if (arg == "-dev") {
             options->devmode = true;
@@ -314,6 +316,16 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
             options->useDebugInformation = true;
         } else if (arg == "--incremental" || arg == "-i") {
             options->incremental_build = true;
+        } else if (arg == "--stable-globals") {
+            options->stable_global_data = true;
+        } else if (arg == "--macro" || arg == "-m") {
+            i++;
+            if(i<commands.size()){
+                options->defined_macros.add(commands[i]);
+            } else {
+                invalidArguments = true;
+                log::out << log::RED << "You must specify a macro name after '"<<arg<<"'.\n";
+            }
         } else if (arg == "--silent") {
             options->silent = true;
         } else if (arg == "--verbose") {
@@ -323,12 +335,14 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
             options->show_profiling = true;
         } else if (arg == "--target" || arg == "-t"){
             i++;
+            bool print_targets = false;
             if(i<commands.size()){
                 options->target = ToTarget(commands[i]);
                 if(options->target == TARGET_UNKNOWN) {
                     invalidArguments = true;
                     log::out << log::RED << arg << " is not a valid target.\n";
                     // TODO: print list of targets
+                    print_targets = true;
                 }
             } else {
                 invalidArguments = true;
@@ -336,9 +350,17 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
                 // TODO: print list of targets
                 // for(int j=0;j<){
                 // }
+                print_targets = true;
+            }
+            if (print_targets) {
+                log::out << "These targets are available:\n";
+                for(int j=TARGET_START;j<TargetPlatform::TARGET_END;j++) {
+                    log::out << " " << ToString((TargetPlatform)j);
+                }
             }
         } else if (arg == "--linker" || arg == "-l") {
             i++;
+            bool print_linkers = false;
             if(i<commands.size()){
                 options->linker = ToLinker(commands[i]);
                 if(options->linker == LINKER_UNKNOWN) {
@@ -351,17 +373,12 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
                 log::out << log::RED << "You must specify a linker after '"<<arg<<"'.\n";
                 // TODO: print list of targets
             }
-        // } else if (streq(arg,"--linker-cmd")){
-        //     CUSTOM LINKER is not possible because we don't know what flags to pass to the linker.
-        //     Is -o the flag for output or is it -output, /out perhaps /OUT or /Fo:
-        //     i++;
-        //     if(i<argc){
-        //         arg = argv[i];
-        //         options.linker_cmd = arg;
-        //     } else {
-        //         invalidArguments = true;
-        //         log::out << log::RED << "You must specify a command line linker after '"<<arg<<"'.\n";
-        //     }
+             if (print_linkers) {
+                log::out << "These linkers are available:\n";
+                for(int j=LINKER_START;j<LinkerChoice::LINKER_END;j++) {
+                    log::out << " " << ToString((LinkerChoice)j);
+                }
+            }
         } else if (arg == "--pattern-match" || arg == "-pm") {
             search_for_source = true;
             i++;
@@ -370,7 +387,6 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
             } else {
                 invalidArguments = true;
                 log::out << log::RED << "You must specify a pattern after '"<<arg<<"'.\n";
-                // TODO: print list of targets
             }
         } else if(arg == "--user-args" || arg == "-ua") {
             i++;

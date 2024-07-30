@@ -3848,8 +3848,10 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                     }
                 }
             } else {
-                varinfo->declaration = now;
+                // varinfo->declaration = now;
             }
+            // should we not always set this?
+            varinfo->declaration = now;
         }
         // Array initializer list
         if(now->arrayValues.size()!=0) {

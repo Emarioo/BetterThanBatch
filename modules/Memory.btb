@@ -46,6 +46,14 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
     if !ptr {
         new_ptr = HeapAlloc(heap, 0, size)
         // if type.index() == 0
+        #if ENABLED_STABLE_GLOBALS
+            // hotreloading + stable globals requires allocation for stable globals
+            // but to track stuff we require global data
+            // so it's an infinite loop
+            // this disables tracking if we use stable globals and if we 
+            // dont have stable globals memory ready yet, scuffed and complicated but it works
+            if stable_global_memory
+        #endif
             memory_tracker.add(new_ptr, size)
         // else
         //     memory_tracker.add(new_ptr, size, type)

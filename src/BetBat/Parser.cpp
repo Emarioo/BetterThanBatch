@@ -3936,6 +3936,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             } else if(tok.type == ','){
                 info.advance();
                 continue;
+            } else if (!function->needsBody()) {
+                break;
             } else {
                 if(function->linkConvention != LinkConvention::NONE)
                     break;
@@ -4036,7 +4038,11 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
     auto token_name = info.getinfo(&view);
     // tok_name = info.gettok();
     while (token_name->type == lexer::TOKEN_ANNOTATION){
-        if (view == "import" || view == STR_DYNAMIC_IMPORT || view == STR_STATIC_IMPORT || view == "export"){
+        
+        if(view == "notstable") {
+            info.advance();
+            statement->is_notstable = true;
+        } else if (view == "import" || view == STR_DYNAMIC_IMPORT || view == STR_STATIC_IMPORT || view == "export"){
             auto loc = info.getloc();
             info.advance();
 

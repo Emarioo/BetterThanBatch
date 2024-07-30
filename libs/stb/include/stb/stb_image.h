@@ -1,3 +1,5 @@
+// IMPORTANT: THIS FILE IS MODIFIED FROM THE ORIGINAL TO SUPPORT DLL BUILDS, search for IMPORTANT to see other changes in this file.
+
 /* stb_image - v2.28 - public domain image loader - http://nothings.org/stb
                                   no warranty implied; use at your own risk
 
@@ -389,11 +391,41 @@ typedef unsigned short stbi_us;
 extern "C" {
 #endif
 
+
+
 #ifndef STBIDEF
 #ifdef STB_IMAGE_STATIC
 #define STBIDEF static
 #else
-#define STBIDEF extern
+
+// IMPORTANT: THIS CODE IS CHANGED TO SUPPORT DLL BUILDS.
+//   Code is copied from glfw3.h with a few tweaks.
+#if defined(STB_IMAGE_DLL) && defined(STB_IMAGE_BUILD_DLL)
+ /* STB_IMAGE_DLL must be defined by applications that are linking against the DLL
+  * version of the STB_IMAGE library. STB_IMAGE_BUILD_DLL is when
+  * building a DLL.
+  */
+ #error "You must not have both STB_IMAGE_DLL and STB_IMAGE_BUILD_DLL defined"
+#endif
+#if defined(_WIN32) && defined(STB_IMAGE_BUILD_DLL)
+ /* We are building STB_IMAGE as a Win32 DLL */
+ #define STBIDEF extern __declspec(dllexport)
+#elif defined(_WIN32) && defined(STB_IMAGE_DLL)
+ /* We are calling a STB_IMAGE Win32 DLL */
+ #define STBIDEF extern __declspec(dllimport)
+#elif defined(__GNUC__) && defined(STB_IMAGE_BUILD_DLL)
+ /* We are building STB_IMAGE as a Unix shared library */
+ #define STBIDEF extern __attribute__((visibility("default")))
+#else
+ #define STBIDEF extern
+#endif
+
+
+/* IMPORTANT: This was the original code:
+
+   #define STBIDEF extern
+*/
+
 #endif
 #endif
 

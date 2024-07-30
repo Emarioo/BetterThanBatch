@@ -308,6 +308,11 @@ extern const char* register_names[];
 
 #define MISALIGNMENT(X,ALIGNMENT) ((ALIGNMENT - (X) % ALIGNMENT) % ALIGNMENT)
 
+struct BCRelocation {
+    int tinycode_index=-1;
+    int pc=-1;
+    bool valid() { return tinycode_index != -1; }
+};
 struct ExternalRelocation {
     std::string name;
     std::string library_path;
@@ -608,6 +613,10 @@ struct BytecodeBuilder {
     // returns whether enabled previously
     bool disable_builder(bool yes) { bool tmp = disable_code_gen; disable_code_gen = yes; return tmp; }
     
+    BCRelocation get_relocation(int offset) {
+        return { tinycode->index, (int)tinycode->instructionSegment.size() + offset };
+    }
+
 private:
     // building blocks for every instruction
     void emit_opcode(InstructionOpcode type);

@@ -986,6 +986,8 @@ void Compiler::processImports() {
                 auto my_scope = ast->getScope(imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Gen bytecode: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
 
+                // NOTE: Type checker reserves all require global data.
+                //   The generator phase does not create new global data.
                 if(!have_prepared_global_data) { // cheap quick check, will the compiler optimize it away?
                     lock_miscellaneous.lock();
                     if(!have_prepared_global_data) { // thread safe check
@@ -1284,6 +1286,8 @@ void Compiler::run(CompileOptions* options) {
         "    return slice.ptr[index];\n"
         "}\n"
         "fn @compiler init_preload()\n" // init global data and stuff
+        "fn @compiler global_slice() -> Slice<char>\n" // retrieves a slice of global data
+
         "struct Range {\n"
         // "struct @hide Range {" 
         "    beg: i32;\n"
@@ -1310,6 +1314,15 @@ void Compiler::run(CompileOptions* options) {
         if (output_type == OUTPUT_LIB) preload += "#macro BUILD_LIB #endmacro\n";
         if (output_type == OUTPUT_OBJ) preload += "#macro BUILD_OBJ #endmacro\n";
         if (output_type == OUTPUT_BC)  preload += "#macro BUILD_BC  #endmacro\n";
+
+        if(options->stable_global_data) {
+            preload += "global @notstable stable_global_memory: void*;\n";
+            preload += "#macro ENABLED_STABLE_GLOBALS #endmacro\n";
+        }
+
+        for(auto& s : options->defined_macros) {
+            preload += "#macro " + s + " #endmacro\n";
+        }
         
         if(options->linker == LINKER_MSVC) {
             preload += "#macro LINKER_MSVC #endmacro\n";
@@ -1676,7 +1689,8 @@ void Compiler::run(CompileOptions* options) {
                 std::string new_path = output_dir + file;
 
                 if (path != new_path) {
-                    FileCopy(path, new_path); // we copy even if file exists since the user may have compiled the dll and so we should update it
+                    // log::out << "copy " << path << " -> " << new_path << "\n";
+                    FileCopy(path, new_path, false); // we copy even if file exists since the user may have compiled the dll and so we should update it
                     // we can check last modified time to avoid copy if nothing has changed
                 }
             }

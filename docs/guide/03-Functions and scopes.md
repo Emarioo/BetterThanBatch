@@ -127,3 +127,41 @@ struct Config {
 }
 global config: Config // initialized with default values in struct
 ```
+
+There is also a builtin function `global_slice()` which returns a slice to the global data. If you need to copy the data for whatever reason than you can.
+```c++
+global_data := global_slice()
+log(global_data)
+
+// The function is defined in a preload script like this:
+fn @compiler global_slice() -> Slice<char>
+
+// This code is pretty fun
+#import "OS"
+#import "Logger"
+
+x := global_slice()
+for x {
+    std_print(it)
+    ProcessSleep(0.001)
+}
+```
+
+## Advanced (stable globals for hotreloading)
+**WARNING:** This feature is rather buggy and can crash a lot if you don't know what you are doing.
+
+Stable global data is mainly used with hotreloading to implement global data that persists between dll reloads. This is done by allocating heap memory for global data. Code in dll that accesses global data will access the heap memory instead of the global data. Global data would be reset upon dll reload while the heap memory stays the same.
+
+However, you should probably avoid using globals but when you are prototyping and just need some globals to store some arrays for testing then this feature can be quite useful.
+
+These are the steps to use stable global data:
+- Compile dll with stable globals flag: `btb --stable-globals main.btb -o main.dll`
+- At start of application, allocate heap memory the same size as global_size().
+- Upon fist load of dll, copy global data (the initial state of global data) to the allocated memory.
+- Then every time the dll is reloaded (including first time), execute this code inside the dll code: `stable_global_memory = ptr_to_allocated_memory`. Pointer to allocated memory needs to be passed from the executable that loaded the dll. You could export a function in the dll that sets the stable_global_memory. Or you have this line inside the hotreloading_event function which you create in the dll when using hotreloading based on `Hotreloading.btb`. `AppInstance` could store pointer to allocated memory.
+
+Note that if you recompile the dll and it has added globals, removed globals, or type changes then the application will probably crash because the heap memory is based on the previous dlls global data layout. This is similar to if you change structs since hotreloading only works with code changes, not data layout, at least if the data persists from dll reload.
+
+Note that stable global data won't work if the dll imports static libraries. Static libraries do not support stable global data, especially if they were compiled from C.
+
+**TODO:** Provide small example on how to use stable global data.

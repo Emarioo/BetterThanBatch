@@ -127,6 +127,7 @@ struct CompileOptions {
     bool verbose = false;
     bool executeOutput = false;
     bool incremental_build = false;
+    bool stable_global_data = false; // I though about disallowing stable globals when using executable and mostly allowing it for dlls and libs but then I thought, "I dont know how users will use it so why should I limit the possibilities.".
 
     bool disable_preload = false;
 
@@ -139,6 +140,8 @@ struct CompileOptions {
     std::string pattern_for_files;
 
     std::string modulesDirectory{"./modules/"}; // Where the standard library can be found. Typically "modules"
+
+    DynamicArray<std::string> defined_macros;
 
     DynamicArray<std::string> userArguments; // Ignored if output isn't executed. Arguments to pass to the interpreter or executable
 
@@ -268,7 +271,7 @@ struct Compiler {
     bool compiler_got_stuck = false;
 
     int struct_tasks_since_last_change = 0;
-    
+
     CompilerImport* getImport(u32 import_id);
     BucketArray<CompilerImport> imports{256};
     long volatile globalUniqueCounter = 0; // type must be long volatile because of _InterlockedIncrement

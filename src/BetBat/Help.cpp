@@ -80,6 +80,18 @@ void print_help(){
     DESC("Will run the executable after it's been compiled.\n")
     END
 
+    USAGE("--incremental")
+    DESC("Compiles source code if any file changed since last compilation.\n")
+    END
+
+    USAGE("--stable-globals")
+    DESC("Mainly used with hotreloading where the global data is heap allocated to make it non-volatile. Code that refers to global variables will instead use the allocated memory. The global data remains in an initialized state.\n")
+    END
+
+    USAGE("-m,--macro")
+    DESC("Defines an empty macro visible in all source files\n")
+    END
+
     HEADER("Debugging")
 
     USAGE("-d,--debug")
@@ -94,6 +106,7 @@ void print_help(){
     USAGE("--silent")
     DESC("reserved.\n")
     END
+    
     
     USAGE("--verbose")
     DESC("reserved.\n")

@@ -46,13 +46,6 @@
 
 #define BASE_WARN_SECTION(CODE, CONTENT) { info.compiler->options->compileStats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compiler) info.compiler->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compiler) info.compiler->reporter.end_report(); }
 
-// #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
-// #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
-#ifdef OS_WINDOWS
-#define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true, __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compiler->options->compileStats.addError(TR, __VA_ARGS__);
-#else
-#define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true __VA_OPT__(,) __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->options->compileStats.addError(TR __VA_OPT__(,) __VA_ARGS__);
-#endif
 #define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n\n";
 #define ERR_MSG_LOG(STR) engone::log::out << STR;
 #define ERR_MSG_COLORED(STR) engone::log::out << STR << "\n\n";

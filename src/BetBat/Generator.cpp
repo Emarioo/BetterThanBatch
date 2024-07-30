@@ -246,6 +246,31 @@ InstructionOpcode ASTOpToBytecode(TypeId astOp, bool floatVersion){
 #undef CASE
     return (InstructionOpcode)0;
 }
+void GenContext::emit_abstract_dataptr(BCRegister reg, int offset, IdentifierVariable* global_ident) {
+    Assert(global_ident->declaration);
+    if(compiler->options->stable_global_data && !global_ident->declaration->is_notstable) {
+                
+        auto iden = ast->findIdentifier(currentScopeId, CONTENT_ORDER_MAX, "stable_global_memory", nullptr);
+        Assert(iden);
+        auto varinfo = iden->cast_var();
+        auto version = currentPolyVersion; // globals do not share polyVersion with current scope, they can come from a different scope
+            if(varinfo->is_import_global)
+                version = 0;
+        
+        BCRegister reg_tmp = BC_REG_T1;
+
+        Assert(offset != varinfo->versions_dataOffset[version]); // we shouldn't redirect stable_global_memory to heap allocated memory, stable memory pointer is always accessed and set in global data
+
+        // get pointer to real global data
+        builder.emit_dataptr(reg, varinfo->versions_dataOffset[version]);
+        builder.emit_mov_rm(reg, reg, 8);
+        // calcualte the offset to data object we want
+        builder.emit_li32(reg_tmp, offset);
+        builder.emit_add(reg, reg_tmp, false, 8);
+    } else {
+        builder.emit_dataptr(reg, offset);
+    }
+}
 void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo) {
     using namespace engone;
 
@@ -703,6 +728,13 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
     // runs those offsets would be valid but it's already to late.
     // I am leaveing the comment here in case you decide to use FramePush to handle static data in the future WHICH YOU REALLY SHOULDN'T!
 
+    // Also, when we generateData before generating bytecode for functions we need all data to be reserved.
+    // otherwise some global data would not have been generated. So staticData really doesn't work.
+    // I had one idea though with compile time execution which might create new functions to be checked and generated
+    // but to execute it we need to have generate bytecode and globals, but then we get into trouble since the
+    // bytecode may create new functions to check and generate which is problematic if they have globals in them.
+    // Either we disallow global data in those functions, or we change the global data system to be more incremental.
+
     // IMPORTANT: This code has been copied to array assignment. Change that code
     //  when changing code here.
     i32 size = info.ast->getTypeSize(typeId);
@@ -714,6 +746,7 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
         bytecode->ensureAlignmentInData(asize);
         int offset = bytecode->appendData(nullptr,size);
         
+        Assert(false); // This is broken due to stable_global_data
         info.builder.emit_dataptr(BC_REG_D, offset);
 
         *outFrameOffset = offset;
@@ -868,7 +901,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     if(varinfo->declaration && varinfo->declaration->isImported()) {
                         generate_ext_dataptr(BC_REG_B, varinfo);
                     } else {
-                        builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[version]);
+                        emit_abstract_dataptr(BC_REG_B, varinfo->versions_dataOffset[version], varinfo);
                     }
                 } break; 
                 case Identifier::LOCAL_VARIABLE: {
@@ -1906,7 +1939,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                     if(varinfo->declaration && varinfo->declaration->isImported()) {
                         generate_ext_dataptr(reg, varinfo);
                     } else {
-                        builder.emit_dataptr(reg, varinfo->versions_dataOffset[version]);
+                        emit_abstract_dataptr(reg, varinfo->versions_dataOffset[version], varinfo);
                     }
                     builder.emit_mov_rm(reg, reg, 8);
                 } break; 
@@ -2119,7 +2152,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
     //             int pushedSize = -(endVirtual - startVirual);
                 
     //             int offset = bytecode->appendData(pushedValues, pushedSize);
-    //             builder.emit_dataptr(BC_REG_B, );
+    //             builder.emit_da taptr(BC_REG_B, );
     //             info.addImm(offset);
     //             for(int i=0;i<(int)outTypeIds->size();i++){
     //                 SignalIO result = GeneratePushFromValues(info, BC_REG_B, 0, outTypeIds->get(i));
@@ -2259,7 +2292,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             if(varinfo->declaration && varinfo->declaration->isImported()) {
                                 generate_ext_dataptr(BC_REG_B, varinfo);
                             } else {
-                                builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[version]);
+                                emit_abstract_dataptr(BC_REG_B, varinfo->versions_dataOffset[version], varinfo);
                             }
                             generatePush(BC_REG_B, 0, type);
                         } break; 
@@ -2368,6 +2401,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             if (expression->flags & ASTNode::NULL_TERMINATED) {
                 typeInfo = info.ast->convertToTypeInfo("char*", info.ast->globalScopeId, true);
                 Assert(typeInfo);
+                // NOTE: Literal strings are accessed from global data section, not the stable global data if we have it, meaning, we don't use emit_abstract_dataptr here!
                 builder.emit_dataptr(BC_REG_B, constString.address);
                 builder.emit_push(BC_REG_B);
                 TypeId ti = AST_CHAR;
@@ -2397,6 +2431,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 }
 
                 // first member is pushed last
+                // NOTE: Literal strings don't use emit_abstract_dataptr
                 builder.emit_dataptr(BC_REG_B, constString.address);
                 builder.emit_push(BC_REG_B);
                 outTypeIds->add(typeInfo->id);
@@ -2757,6 +2792,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             }
 
             // first member is pushed last
+            // NOTE: Literal strings don't use emit_abstract_dataptr
             builder.emit_dataptr(BC_REG_B, constString.address);
             builder.emit_push(BC_REG_B);
 
@@ -2924,8 +2960,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             BCRegister lreg = BC_REG_A;
             BCRegister creg = BC_REG_A;
             if(expression->isUnsafeCast()) {
-                builder.emit_pop(lreg);
-                builder.emit_push(creg);
+                // Is there a reason we should pop and push?
+                // builder.emit_pop(lreg);
+                // builder.emit_push(creg);
                 outTypeIds->add(castType);
             } else {
                 // if ((castType.isPointer() && ltype.isPointer()) || (castType.isPointer() && (ltype == (TypeId)AST_INT64 ||
@@ -4505,6 +4542,24 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         if (function->is_compiler_func) {
             if (function->name == "init_preload") {
                 generatePreload();
+            } else if (function->name == "global_slice") {
+                BCRegister reg = BC_REG_A;
+                builder.emit_dataptr(reg, 0);
+                builder.emit_set_ret(reg, -16, 8, false);
+
+                // NOTE: We return preallocated data which is the globals defined by the user instead
+                //   of dataSegment.size() which also contains string literals and type information.
+                //   We don't want users to modify those (of course they can but we make it harder
+                //   by giving them less information).
+                // builder.emit_li32(reg, bytecode->dataSegment.size());
+                builder.emit_li32(reg, ast->preallocatedGlobalSpace());
+                // NOTE: We don't need a fixup of the global data size because once we're in the generator phase
+                //   all global data has already been reserved by the type checker.
+                //   This may change in the future but for now this will work fine.
+                // Assert(!compiler->global_size_relocation.valid()); // Setting this twice would be an error
+                // compiler->global_size_relocation = builder.get_relocation(-4);
+
+                builder.emit_set_ret(reg, -8, 8, false);
             } else {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
@@ -4512,7 +4567,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     ERR_LINE2(function->location,"here")
                 )
             }
-
         } else {
             SignalIO result = generateBody(function->body);
         }
@@ -4531,24 +4585,27 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         }
 
         if (funcImpl->signature.returnTypes.size() != 0 && !function->blank_body) { // blank body requires the user to manually return arguments through assembly. It's the user's fault if they did it incorrectly.
-            // check last statement for a return and "exit" early
-            bool foundReturn = function->body->statements.size()>0 && 
-                function->body->statements.get(function->body->statements.size()-1) ->type == ASTStatement::RETURN;
-            // TODO: A return statement might be okay in an inner scope and not necessarily the
-            //  top scope.
-            if(!foundReturn){
-                for(auto it : function->body->statements){
-                    if (it->type == ASTStatement::RETURN) {
-                        foundReturn = true;
-                        break;
+            // @compiler functions do not have bodies.
+            if(function->body) {
+                // check last statement for a return and "exit" early
+                bool foundReturn = function->body->statements.size()>0 && 
+                    function->body->statements.get(function->body->statements.size()-1) ->type == ASTStatement::RETURN;
+                // TODO: A return statement might be okay in an inner scope and not necessarily the
+                //  top scope.
+                if(!foundReturn){
+                    for(auto it : function->body->statements){
+                        if (it->type == ASTStatement::RETURN) {
+                            foundReturn = true;
+                            break;
+                        }
                     }
-                }
-                if (!foundReturn) {
-                    ERR_SECTION(
-                        ERR_HEAD2(function->location)
-                        ERR_MSG("Missing return statement in '" << function->name << "'.")
-                        ERR_LINE2(function->location,"put a return in the body")
-                    )
+                    if (!foundReturn) {
+                        ERR_SECTION(
+                            ERR_HEAD2(function->location)
+                            ERR_MSG("Missing return statement in '" << function->name << "'.")
+                            ERR_LINE2(function->location,"put a return in the body")
+                        )
+                    }
                 }
             }
         }
@@ -4793,7 +4850,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
                 int alignment = 0;
                 if (varname.arrayLength>0){
-                    Assert(("global arrays not implemented",!statement->globalDeclaration));
+                    if(statement->globalDeclaration) {
+                        ERR_SECTION(
+                            ERR_HEAD2(statement->location)
+                            ERR_MSG("Global arrays have not been implemented.")
+                            ERR_LINE2(statement->location, "here")
+                        )
+                        continue;
+                    }
                     // TODO: Fix arrays with static data
                     if(statement->firstExpression) {
                         ERR_SECTION(
@@ -6182,8 +6246,6 @@ SignalIO GenContext::generateGlobalData() {
         // Assert(stmt->firstExpression); // statement should not have been added if there was no expression
         Assert(stmt->arrayValues.size() == 0); // we don't handle initializer lists
         Assert(stmt->varnames.size() == 1); // multiple varnames means that the expression produces multiple values which is annoying to handle so skip it for now
-
-        
 
         // TODO: Code below should be the same as the one in generateFunction.
         //   If we change the code in generateFunction but forget to here then

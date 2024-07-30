@@ -62,9 +62,10 @@ struct lang_TypeMember {
 }
 
 // Generator.cpp refers to these names, don't forget to modify them there.
-global lang_typeInfos: lang_TypeInfo[];
-global lang_members: lang_TypeMember[];
-global lang_strings: char[]; // string data
+// @notstable disables stable global data, type information should not be reset when using hotreloading and reloading dlls
+global @notstable lang_typeInfos: lang_TypeInfo[];
+global @notstable lang_members: lang_TypeMember[];
+global @notstable lang_strings: char[]; // string data
 
 fn @compiler init_preload()
 
