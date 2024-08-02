@@ -97,7 +97,8 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
                 }
                 if (global_data.len != app.stable_globals.len) {
                     // expect crash
-                    log("Size of global data changed! Stable globals cannot handle this!")
+                    log("Size of global data changed! Stable globals cannot handle this! Stopping app.")
+                    app.running = false
                 }
                 stable_global_memory = app.stable_globals.ptr
             #endif
@@ -114,7 +115,7 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
     }
 
     // log("nash")
-    log(&entities_infos)
+    // log(&entity_infos)
     // log(&tile_infos)
 
     // right
@@ -233,6 +234,10 @@ struct GameCore {
             app.running = window.running
 
         FillColor(window, Color{0.2,0.2,0.2})
+        // FillColor(window, Color{0.0,0.0,0.0})
+        // RefreshWindow(window)
+
+        // return;
 
         window.enableUISpace(false)
         //######################

@@ -1606,7 +1606,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     case STDCALL:
                     case INTRINSIC:
                     case UNIXCALL: {
-                        // nocheckin, TODO: FIXME, do we need to modify the register allocation loop before generation?
+                        // TODO: Do we need to modify the register allocation loop before generation?
                         // auto r = alloc_register(X64_REG_A, false);
                         // Assert(r != X64_REG_INVALID);
                     } break;
@@ -1680,7 +1680,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 int imm_offset = code_size();
                 emit4((u32)0);
                 
-                const u8 BYTE_OF_BC_JZ = 1 + 1 + 4; // nocheckin TODO: DON'T HARDCODE VALUES!
+                const u8 BYTE_OF_BC_JZ = 1 + 1 + 4; // TODO: DON'T HARDCODE VALUES!
                 int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JZ + base->imm32;
                 addRelocation32(imm_offset - 2, imm_offset, jmp_bc_addr);
                 

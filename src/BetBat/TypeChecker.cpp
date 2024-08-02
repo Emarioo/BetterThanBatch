@@ -138,15 +138,18 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
         implMem.typeId = tid;
         if(member.defaultValue){
             // TODO: Don't check default expression every time. Do check once and store type in AST.
+            inferred_type = implMem.typeId;
             tempTypes.resize(0);
             checkExpression(structInfo->scopeId, member.defaultValue,&tempTypes, false);
+            inferred_type = {};
+
             if(tempTypes.size()==0)
                 tempTypes.add(AST_VOID);
             if(!info.ast->castable(implMem.typeId, tempTypes.last(), false)){
                 std::string deftype = info.ast->typeToString(tempTypes.last());
                 std::string memtype = info.ast->typeToString(implMem.typeId);
                 ERR_SECTION(
-                    ERR_HEAD2(member.defaultValue->location) // nocheckin, message should mark the whole expression, not just some random token/operation inside it
+                    ERR_HEAD2(member.defaultValue->location) // TODO: message should mark the whole expression, not just some random token/operation inside it
                     ERR_MSG("Type of default value does not match member.")
                     ERR_LINE2(member.defaultValue->location,deftype.c_str())
                     ERR_LINE2(member.location,memtype.c_str())
@@ -726,7 +729,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
             } else if(!printedError) {
                 ERR_SECTION(
-                    ERR_HEAD2(expr->location) // nocheckin, mark all tokens in the expression,location is just one token
+                    ERR_HEAD2(expr->location) // TODO: mark all tokens in the expression,location is just one token
                     ERR_MSG("Type for polymorphic argument was not valid.")
                     ERR_LINE2(expr->location,"bad")
                 )
@@ -741,6 +744,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
     TINY_ARRAY(TypeId, argTypes, 5);
     TINY_ARRAY(TypeId, tempTypes, 2);
 
+    DynamicArray<bool> inferred_args{}; // Inferred arguments are assumed to be initializers for structs. Variable should maybe be renamed to initializer arguments.
     struct Entry {
         FnOverloads* fn_overloads = nullptr;
         StructImpl* parentStructImpl = nullptr;
@@ -773,6 +777,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
         argTypes.resize(operatorArgs->size());
         memcpy(argTypes.data(), operatorArgs->data(), operatorArgs->size() * sizeof(TypeId)); // TODO: Use TintArray::copyFrom() instead (function not implemented yet)
+        inferred_args.resize(2);
         
         // DynamicArray<TypeId> tempTypes{};
         // tempTypes.resize(0);
@@ -808,7 +813,17 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             Assert(argExpr);
 
             tempTypes.resize(0);
-            auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
+            SignalIO signal = SIGNAL_SUCCESS;
+            if(argExpr->is_inferred_initializer()) {
+                // do not check inferred initializer because the type comes from
+                // function argument. Since we don't know the function to call,
+                // we can't check the expression yet.
+                // We still add something though.
+                argTypes.add({});
+                inferred_args.add(true);
+                continue;
+            } else
+                signal = checkExpression(scopeId,argExpr,&tempTypes, false);
             // log::out << "signal " << signal<<"\n";
             Assert(tempTypes.size()==1); // should be void at least
             if(expr->isMemberCall() && i==0){
@@ -831,6 +846,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             }
             // log::out << "Yes "<< info.ast->typeToString(tempTypes[0])<<"\n";
             argTypes.add(tempTypes[0]);
+            inferred_args.add(false);
         }
         // cannot continue if we don't know which struct the method comes from
         if(thisFailed) {
@@ -853,7 +869,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         // checkExpression(scope, thisArg, &structType);
         // if(structType.getPointerLevel()>1){
         //     ERR_SECTION(
-        //         ERR_HEAD2(thisArg->location) // nocheckin, badly marked token
+        //         ERR_HEAD2(thisArg->location) // TODO: badly marked token
         //         ERR_MSG("'"<<info.ast->typeToString(structType)<<"' to much of a pointer.")
         //         ERR_LINE2(thisArg->location,"must be a reference to a struct")
         //     )
@@ -864,7 +880,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         
         if(!ti || !ti->astStruct){
             ERR_SECTION(
-                ERR_HEAD2(expr->location)// nocheckin, badly marked token
+                ERR_HEAD2(expr->location)// TODO: badly marked token
                 ERR_MSG("'"<<info.ast->typeToString(structType)<<"' is not a struct. Method cannot be called.")
                 ERR_LINE2(thisArg->location,"not a struct")
             )
@@ -873,7 +889,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
         if(!ti->getImpl()){
             ERR_SECTION(
-                ERR_HEAD2(expr->location) // nocheckin, badly marked token
+                ERR_HEAD2(expr->location) // TODO: badly marked token
                 ERR_MSG("'"<<info.ast->typeToString(structType)<<"' is a polymorphic struct with not poly args specified.")
                 ERR_LINE2(thisArg->location,"base polymorphic struct")
             )
@@ -937,6 +953,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 matched = false;   
             } else {
                 for(int i=0;i<f->argumentTypes.size();i++) {
+                    if (inferred_args[i]) {
+                        continue;
+                    }
                     if(!info.ast->castable(argTypes[i], f->argumentTypes[i].typeId, false)) {
                         matched = false;
                         break;
@@ -961,6 +980,16 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 FNCALL_FAIL
                 return SIGNAL_FAILURE;
             }
+
+            for(int i=0;i<expr->args.size();i++) {
+                auto argExpr = expr->args[i];
+                if (inferred_args[i]) {
+                    Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
+                    inferred_type = f->argumentTypes[i].typeId;
+                    auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
+                    inferred_type = {};
+                }
+             }
             
             if(outTypes) {
                 if(f->returnTypes.size()==0)
@@ -981,7 +1010,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             }
 
             ERR_SECTION(
-                ERR_HEAD2(expr->location) // nocheckin, badly marked token
+                ERR_HEAD2(expr->location) // TODO: badly marked token
                 ERR_MSG("Method '"<<baseName <<"' does not exist. Did you mispell the name?")
                 ERR_LINE2(expr->location,"undefined")
             )
@@ -1239,6 +1268,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     matched = false;   
                 } else {
                     for(int i=0;i<f->argumentTypes.size();i++) {
+                        if(inferred_args[i])
+                            continue;
                         if(!info.ast->castable(argTypes[i], f->argumentTypes[i].typeId, false)) {
                             matched = false;
                             break;
@@ -1259,6 +1290,18 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     )
                     FNCALL_FAIL
                     return SIGNAL_FAILURE;
+                }
+
+                for(int i=0;i<expr->args.size();i++) {
+                    auto argExpr = expr->args[i];
+                    if (inferred_args[i]) {
+                        Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
+                        // nocheckin TODO: argTypes index is displaced if methods or implicit this.
+                        argTypes[i] = f->argumentTypes[i].typeId;
+                        inferred_type = argTypes[i];
+                        auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
+                        inferred_type = {};
+                    }
                 }
                 
                 if(outTypes) {
@@ -1298,9 +1341,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
             // match args with normal impls
             
-            FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, scopeId, argTypes, ent.set_implicit_this, expr, fnOverloads->overloads.size()==1);
+            FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, scopeId, argTypes, ent.set_implicit_this, expr, fnOverloads->overloads.size()==1, &inferred_args);
             if(!overload)
-                overload = fnOverloads->getOverload(info.ast, scopeId, argTypes, ent.set_implicit_this, expr, true);
+                overload = fnOverloads->getOverload(info.ast, scopeId, argTypes, ent.set_implicit_this, expr, true, &inferred_args);
 
 
             if(operatorOverloadAttempt && !overload) {
@@ -1313,15 +1356,33 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
                 // BREAK(overload->astFunc->name == "create_snapshot")
 
+                // Check inferred expressions, initializers
+                if(!operatorOverloadAttempt) {
+                    Assert(argTypes.size() == expr->args.size());
+
+                    for(int i=0; i<argTypes.size();i++) {
+                        auto exprArg = expr->args[i];
+                        if(!inferred_args[i])
+                            continue;
+                        // nocheckin TODO: Won't work with methods, implicit argument.
+                        argTypes[i] = overload->funcImpl->signature.argumentTypes[i].typeId;
+                        inferred_type = argTypes[i];
+                        SignalIO result = checkExpression(scopeId, exprArg, &tempTypes, false);
+                        inferred_type = {};
+                    }
+                }
                 // Check default values of function
                 for(int i=argTypes.size() + (ent.set_implicit_this?1:0); i<overload->astFunc->arguments.size();i++) {
+
                 // for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
                     auto& argImpl = overload->funcImpl->signature.argumentTypes[i];
                     auto& arg = overload->astFunc->arguments[i];
                     if(!arg.defaultValue)
                         continue;
                     tempTypes.resize(0);
+                    inferred_type = argImpl.typeId;
                     SignalIO result = checkExpression(scopeId, arg.defaultValue,&tempTypes,false);
+                    inferred_type = {};
                     if(tempTypes.size()==0)
                         tempTypes.add(AST_VOID);
 
@@ -1373,7 +1434,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         bool implicitPoly = (fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0));
         // TODO: Optimize by checking what in the overloads didn't match. If all parent structs are a bad match then
         //  we don't have we don't need to getOverload the second time with canCast=true
-        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly);
+        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
@@ -1383,7 +1444,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             return SIGNAL_SUCCESS;
         }
         // bool useCanCast = false;
-        overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true);
+        overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
 
@@ -1457,6 +1518,14 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 // TODO: Fix this code it does not work properly. Some behaviour is missing.
                 bool found = true;
                 for (u32 j=0;j<expr->nonNamedArgs;j++){
+                    if(inferred_args[j]) {
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->args[i]->location)
+                            ERR_MSG("Initializers is not allowed with polymorphic functions.")
+                            ERR_LINE2(expr->args[i]->location, "here")
+                        )
+                        continue;
+                    }
                     TypeId typeToMatch = argTypes[j];
                     // Assert(typeToMatch.isValid());
                     // We begin by matching the first argument.
@@ -1978,7 +2047,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
         // TODO: You may not want to print 10 overloads here. Limiting it to 3-5 might
         //  be a good idea. You could have an option in user profiles.
-        // nocheckin TODO: What if there are no possible overloads?
+        // TODO: What if there are no possible overloads?
         int amount_of_overloads = 0;
         for(auto& ent : possible_overload_groups) {
             auto fnOverloads = ent.fn_overloads;
@@ -2395,8 +2464,12 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             }
             if(expr->right) {
                 typeArray.resize(0);
-                // BREAK(expr->nodeId == 291)
+                bool is_assignment = (expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0);
+                if(is_assignment) {
+                    inferred_type = leftType;
+                }
                 auto signal = checkExpression(scopeId, expr->right, &typeArray, attempt);
+                inferred_type = {};
                 
                 if(typeArray.size() > 0 && typeArray[0] == AST_VOID) {
                     if(hasAnyErrors()) {
@@ -2407,7 +2480,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     }
                 }
 
-                if(expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0) {
+                if(is_assignment) {
                     // TODO: Skipping values with assignment is okay.
                     //   But user may want to specify that you can't skip
                     //   values from certain functions (like error codes).
@@ -2712,13 +2785,25 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             if(outTypes) outTypes->add(theType);
         } break;
         case AST_INITIALIZER: {
-            // Assert(expr->args);
-            // for(auto now : *expr->args){
-            for(auto arg_expr : expr->args){
-                // DynamicArray<TypeId> temp={};
-                checkExpression(scopeId, arg_expr, nullptr, attempt);
+            TypeId ti{};
+            if (!expr->castType.isValid()) {
+                // infer type
+                if (!inferred_type.isValid()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG_COLORED("Struct name was not specified for initializer. This requires that the type is inferred but the inferred type was '" << log::LIME << ast->typeToString(inferred_type) << log::NO_COLOR << "'. Types only be inferred from assignments and function arguments.")
+                        ERR_LINE2(expr->location, "here")
+                        ERR_EXAMPLE(1, "a: vec2 = {1,2}")
+                        ERR_EXAMPLE(1, "fn hi(a: vec2) {}\nhi({1,2})")
+                    )
+                    return SIGNAL_FAILURE;
+                } else {
+                    ti = inferred_type;
+                    inferred_type = {};
+                }
             }
-            auto ti = checkType(scopeId, expr->castType, expr->location, nullptr);
+            if(!ti.isValid())
+                ti = checkType(scopeId, expr->castType, expr->location, nullptr);
             if(!ti.isValid()) {
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
@@ -2726,6 +2811,16 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     ERR_LINE2(expr->location,"bad")
                 )
                 return SIGNAL_FAILURE;
+            }
+            TypeInfo* typeinfo = ast->getTypeInfo(ti);
+            for(int i=0;i<expr->args.size();i++) {
+                auto arg_expr = expr->args[i];
+                if(typeinfo->structImpl) {
+                    // getMember returns invalid type if 'i' is out of bounds
+                    inferred_type = typeinfo->getMember(i).typeId;
+                }
+                checkExpression(scopeId, arg_expr, nullptr, attempt);
+                inferred_type = {};
             }
             if(outTypes)
                 outTypes->add(ti);
@@ -3548,7 +3643,18 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             // __debugbreak();
             // log::out << "okay\n";
         // }
+        if (now->varnames.size() > 0) {
+            auto& last_varname = now->varnames.last();
+            if(last_varname.assignString.isValid()) {
+                inferred_type = now->varnames.last().versions_assignType[info.currentPolyVersion];
+            } else {
+                // can't set inferred type
+                // TODO: Throw error if expression is initializer without a type
+            }
+        }
         SignalIO result = checkExpression(scope->scopeId,now->firstExpression, &poly_typeArray, false);
+        inferred_type = {};
+        
         for(int i=0;i<poly_typeArray.size();i++){
             if(poly_typeArray[i].isValid() && poly_typeArray[i] != AST_VOID)
                 continue;
@@ -4357,7 +4463,7 @@ void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
 
     _VLOG(log::out << log::BLUE << "Type check enums:\n";)
     // Check enums first since they don't depend on anything.
-    SignalIO result = info.checkEnums(scope); // nocheckin
+    SignalIO result = info.checkEnums(scope);
     info.compiler->options->compileStats.errors += info.errors;
 }
 SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ignore_errors, bool* changed) {

@@ -477,7 +477,7 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, X64Prog
             int fileIndex = 0;
             // TODO: This will be slow with many functions
 
-            Assert(false); // nocheckin, uncomment code and fix
+            Assert(false); // TODO: uncomment code and fix
             // for(int k=0;k<d->functions.size();k++) {
             //     auto& func = d->functions[k];
             //     if(func-.funcStart <= it.textOffset && it.textOffset < func.funcEnd) {

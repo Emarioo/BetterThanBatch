@@ -23,41 +23,58 @@
 
 #macro GLFWAPI @import(GLFW)
 #macro GLFWwindow void
+#macro GLFWmonitor void
 
 fn GLFWAPI glfwInit() -> i32;
 fn GLFWAPI glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
-fn GLFWAPI glfwDestroyWindow(window: void*)
+fn GLFWAPI glfwDestroyWindow(window: GLFWwindow*)
 fn GLFWAPI glfwGetError(description: char**) -> i32
 
+fn GLFWAPI glfwGetPrimaryMonitor() -> GLFWmonitor* 
+fn GLFWAPI glfwGetMonitors(count: i32*) -> GLFWmonitor** 
+fn GLFWAPI glfwGetVideoMode(monitor: GLFWmonitor*) -> GLFWvidmode*;
+fn GLFWAPI glfwGetVideoModes(monitor: GLFWmonitor*, count: i32*) -> GLFWvidmode*;
+
+struct GLFWvidmode {
+    width:       i32; /* The width, in screen coordinates, of the video mode.  */        
+    height:      i32; /* The height, in screen coordinates, of the video mode. */
+    redBits:     i32; /* The bit depth of the red channel of the video mode.   */
+    greenBits:   i32; /* The bit depth of the green channel of the video mode. */
+    blueBits:    i32; /* The bit depth of the blue channel of the video mode.  */
+    refreshRate: i32; /* The refresh rate, in Hz, of the video mode.           */
+} GLFWvidmode;
+
 fn GLFWAPI glfwTerminate();
-fn GLFWAPI glfwMakeContextCurrent(window: void*);
-fn GLFWAPI glfwWindowShouldClose(window: void*) -> i32;
-fn GLFWAPI glfwSwapBuffers(window: void*);
+fn GLFWAPI glfwMakeContextCurrent(window: GLFWwindow*);
+fn GLFWAPI glfwWindowShouldClose(window: GLFWwindow*) -> i32;
+fn GLFWAPI glfwSwapBuffers(window: GLFWwindow*);
 fn GLFWAPI glfwPollEvents();
 fn GLFWAPI glfwWindowHint(target: i32, hint: i32);
-fn GLFWAPI glfwGetWindowSize(window: void*, width: i32*, height: i32*);
+fn GLFWAPI glfwGetWindowSize(window: GLFWwindow*, width: i32*, height: i32*);
 fn GLFWAPI glfwSwapInterval(interval: i32);
-fn GLFWAPI glfwGetCursorPos(window: void*, xpos: f64*, ypos: f64*);
+fn GLFWAPI glfwGetCursorPos(window: GLFWwindow*, xpos: f64*, ypos: f64*);
+fn GLFWAPI glfwGetWindowPos(window: GLFWwindow*, xpos: i32*, ypos: i32*);
+fn GLFWAPI glfwSetWindowPos(window: GLFWwindow*, xpos: i32, ypos: i32);
 
-fn GLFWAPI glfwGetInputMode(window: void*, mode: i32) -> i32;
-fn GLFWAPI glfwSetInputMode(window: void*, mode: i32, value: i32);
+fn GLFWAPI glfwGetInputMode(window: GLFWwindow*, mode: i32) -> i32;
+fn GLFWAPI glfwSetInputMode(window: GLFWwindow*, mode: i32, value: i32);
 
 
-#macro GLFWkeyfun fn @oscall(window: void*, key: i32, scancode: i32, action: i32, mods: i32)
-#macro GLFWmousebuttonfun fn @oscall(window: void*, button: i32, action: i32, mods: i32)
-#macro GLFWcursorposfun fn @oscall(window: void*, xpos: f64, ypos: f64)
-#macro GLFWscrollfun fn @oscall(window: void*, xoffset: f64, yoffset: f64)
-#macro GLFWwindowsizefun fn @oscall(window: void*, width: i32, height: i32)
-#macro GLFWcharfun fn @oscall(window: void*, codepoint: u32)
+#macro GLFWkeyfun         fn @oscall (window: GLFWwindow*, key: i32, scancode: i32, action: i32, mods: i32)
+#macro GLFWmousebuttonfun fn @oscall (window: GLFWwindow*, button: i32, action: i32, mods: i32)
+#macro GLFWcursorposfun   fn @oscall (window: GLFWwindow*, xpos: f64, ypos: f64)
+#macro GLFWscrollfun      fn @oscall (window: GLFWwindow*, xoffset: f64, yoffset: f64)
+#macro GLFWwindowsizefun  fn @oscall (window: GLFWwindow*, width: i32, height: i32)
+#macro GLFWcharfun        fn @oscall (window: GLFWwindow*, codepoint: u32)
+#macro GLFWjoystickfun    fn @oscall (jid: i32, event: i32)
 // event for joystick is GLFW_CONNECTED or GLFW_DISCONNECTED
-#macro GLFWjoystickfun fn @oscall(jid: i32, event: i32)
 
-fn GLFWAPI glfwSetKeyCallback(window: void*, callback: GLFWkeyfun) -> GLFWkeyfun;
-fn GLFWAPI glfwSetMouseButtonCallback(window: void*, callback: GLFWmousebuttonfun) -> GLFWmousebuttonfun;
-fn GLFWAPI glfwSetCursorPosCallback(window: void*, callback: GLFWcursorposfun) -> GLFWcursorposfun;
-fn GLFWAPI glfwSetScrollCallback(window: void*, callback: GLFWscrollfun) -> GLFWscrollfun;
-fn GLFWAPI glfwSetWindowSizeCallback(window: void*, callback: GLFWwindowsizefun) -> GLFWwindowsizefun;
-fn GLFWAPI glfwSetCharCallback(window: void*, callback: GLFWcharfun) -> GLFWcharfun;
+fn GLFWAPI glfwSetKeyCallback(window: GLFWwindow*, callback: GLFWkeyfun) -> GLFWkeyfun;
+fn GLFWAPI glfwSetMouseButtonCallback(window: GLFWwindow*, callback: GLFWmousebuttonfun) -> GLFWmousebuttonfun;
+fn GLFWAPI glfwSetCursorPosCallback(window: GLFWwindow*, callback: GLFWcursorposfun) -> GLFWcursorposfun;
+fn GLFWAPI glfwSetScrollCallback(window: GLFWwindow*, callback: GLFWscrollfun) -> GLFWscrollfun;
+fn GLFWAPI glfwSetWindowSizeCallback(window: GLFWwindow*, callback: GLFWwindowsizefun) -> GLFWwindowsizefun;
+fn GLFWAPI glfwSetCharCallback(window: GLFWwindow*, callback: GLFWcharfun) -> GLFWcharfun;
 fn GLFWAPI glfwSetJoystickCallback(callback: GLFWjoystickfun) -> GLFWjoystickfun;
 
 fn GLFWAPI glfwGetProcAddress(procname: char*) -> fn();
@@ -101,6 +118,8 @@ fn GLFWAPI glfwGetClipboardString(window: GLFWwindow*) -> char*; // returns cons
 #macro GLFW_CURSOR_NORMAL          0x00034001
 #macro GLFW_CURSOR_HIDDEN          0x00034002
 #macro GLFW_CURSOR_DISABLED        0x00034003
+
+#macro GLFW_DECORATED              0x00020005
 
 #macro GLFW_CONNECTED              0x00040001
 #macro GLFW_DISCONNECTED           0x00040002

@@ -897,3 +897,36 @@ fn FindFile(path: char[], search_env_path: bool = false, recursive: bool = false
     return result
     #endif
 }
+
+// fix slashes
+// struct Path {
+//     using _string; // inherit string builder methods and fields
+
+//     _string: StringBuilder;
+
+//     fn append(s: Path) {
+//         append(s._string)
+//     }
+
+//     fn append(str: char[]) {
+//         if str.len == 0
+//             return;
+//         if len + str.len > max {
+//             if !reserve(str.len + 10 + max * 2) {
+//                 return;
+//             }
+//         }
+
+//         // TODO: 
+
+//         memcpy(ptr + len, str.ptr, str.len);
+//         len += str.len;
+//         ptr[len] = '\0';
+//     }
+
+//     fn copy() -> Path {
+//         p: Path
+//         p.append(_string)
+//     }
+// }
+

@@ -643,7 +643,7 @@ namespace dwarf {
                         int arg_off = arg_impl.offset;
                         // log::out << "  arg " << arg_off<<"\n";
                         if(fun->funcAst->callConvention == UNIXCALL) {
-                            // nocheckin TODO: Don't hardcode this. What about non-volatile registers, what if x64_gen changes and puts more stuff on stack?
+                            // TODO: Don't hardcode this. What about non-volatile registers, what if x64_gen changes and puts more stuff on stack?
                             if(fun->name == "main") {
                                 if(pi == 0) {
                                     // I came up with the offsets by trial and error

@@ -332,7 +332,7 @@ void BytecodeBuilder::emit_empty_alloc_args(int* out_size_offset) {
 
     has_return_values = false;
     // pushed_offset = 0;
-    // nocheckin VP needs fixing!
+    // VP needs fixing? or not?
     // virtual_stack_pointer -= size;
 }
 void BytecodeBuilder::fix_alloc_args(int index, u16 size) {

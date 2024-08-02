@@ -3,7 +3,7 @@
 
 #if OS_WINDOWS
 
-// #load "Kernel32.dll" as Kernel // nocheckin
+// #load "Kernel32.dll" as Kernel
 #load "Kernel32.lib" as Kernel
 
 #macro HANDLE void*

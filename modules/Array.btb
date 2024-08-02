@@ -25,7 +25,7 @@ struct Array<T> {
     fn add() -> T* {
         if len + 1 > max {
             res := reserve(7 + max * 2);
-            // res := reserve(1 + max); // nocheckin, small growth when debugging
+            // res := reserve(1 + max); // small growth when debugging
             if !res {
                 return null;
             }
@@ -38,7 +38,7 @@ struct Array<T> {
     fn add(newElement: T) -> T* {
         if len + 1 > max {
             res := reserve(7 + max * 2);
-            // res := reserve(1 + max); // nocheckin, small growth when debugging
+            // res := reserve(1 + max); // small growth when debugging
             if !res {
                 return null;
             }

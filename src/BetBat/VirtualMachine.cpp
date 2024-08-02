@@ -459,7 +459,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         case BC_ALLOC_LOCAL:
         case BC_ALLOC_ARGS: {
-            // Assert(push_offset == 0); // Ensure that no push instructions executed before nocheckin
             op0 = (BCRegister)instructions[pc++];
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
@@ -487,7 +486,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         case BC_FREE_LOCAL:
         case BC_FREE_ARGS: {
-            // Assert(push_offset == 0); // Ensure that no push instructions executed before nocheckin
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
             if(opcode == BC_FREE_ARGS) {
@@ -925,8 +923,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
 
-            // nocheckin, we assume 32 bit float operation
-            
             if(IS_CONTROL_FLOAT(control)) {
                 if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
                     switch(opcode){

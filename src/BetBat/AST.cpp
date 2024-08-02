@@ -170,7 +170,7 @@ AST *AST::Create(Compiler* compiler) {
 
     ast->globalScope = ast->createBody();
 
-    ast->_scopeInfos.resize(0x10000); // nocheckin
+    ast->_scopeInfos.resize(0x10000);
 
     ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO, ast->globalScope)->id;
     ast->globalScopeId = scopeId;
@@ -408,7 +408,7 @@ bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, Fn
         if (iden->type != Identifier::FUNCTION)
             continue;
         
-        // nocheckin TODO: Find polymorphic overloads
+        // TODO: Find polymorphic overloads
         for(auto& fn : iden->funcOverloads.overloads) {
 
             // log::out << compiler->lexer.get_source_information_string(fn.astFunc->location) << " check this overload\n";
@@ -644,7 +644,7 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
 
 }
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, DynamicArray<bool>* inferred_args){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -691,6 +691,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall,
             found_sint = false; // we don't use int
             found_uint = false;
             for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                if(inferred_args->get(j))
+                    continue; // NOTE: Because argument is inferred, the argument expression has not been checked and so the type 'argTypes[i]' will be invalid. But we don't care about the type because inferred types, presumably initializers, will always match.
                 TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
                 bool is_castable = ast->castable(argTypes[j], implArgType, false);
                 if(!is_castable){
@@ -711,6 +713,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall,
             }
         } else {
             for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                if(inferred_args->get(j))
+                    continue;
                 TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
                 if(argTypes[j] != implArgType) {
                     found = false;
@@ -781,9 +785,9 @@ void AST::declareUsageOfOverload(FnOverloads::Overload* overload) {
     overload->funcImpl->usages++;
 }
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, DynamicArray<bool>* inferred_args){
     using namespace engone;
-    // nocheckin IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
+    // IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
     // That means that we match if two parent structs have different args.
 
     // Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
@@ -839,6 +843,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
 
             if(canCast) {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(inferred_args && inferred_args->get(j))
+                        continue;
                     if(!ast->castable(argTypes[j], overload.funcImpl->signature.argumentTypes[j+1].typeId)) {
                         found = false;
                         break;
@@ -847,6 +853,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                 }
             } else {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(inferred_args && inferred_args->get(j))
+                        continue;
                     if(argTypes[j] != overload.funcImpl->signature.argumentTypes[j+1].typeId) {
                         // TODO: foundInt, see non-poly version of getOverload
                         found = false;
@@ -865,6 +873,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
                     if(fncall->isMemberCall() && j == 0)
                         continue;
+                    if(inferred_args && inferred_args->get(j))
+                        continue;
                     if(!ast->castable(argTypes[j], overload.funcImpl->signature.argumentTypes[j].typeId)) {
                         found = false;
                         break;
@@ -874,6 +884,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
             } else {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
                     if(fncall->isMemberCall() && j == 0)
+                        continue;
+                    if(inferred_args && inferred_args->get(j))
                         continue;
                     if(argTypes[j] != overload.funcImpl->signature.argumentTypes[j].typeId) {
                         // TODO: foundInt, see non-poly version of getOverload
@@ -1110,7 +1122,7 @@ void ASTScope::add(AST* ast, ASTStatement *astStatement) {
         ast->getScope(astStatement->secondBody->scopeId)->contentOrder = content.size()-1;
     }
     FOR(astStatement->switchCases) {
-        // nocheckin IMPORTANT: Will this work, the switch case scopes having the same order?
+        // IMPORTANT: Will this work, the switch case scopes having the same order?
         ast->getScope(it.caseBody->scopeId)->contentOrder = content.size()-1;
     }
 }
@@ -1118,7 +1130,7 @@ void ASTScope::add(AST* ast, ASTStatement *astStatement) {
 //     TAIL_ADD(statements, astStatement)
     
 //     // if(contentOrder == CONTENT_ORDER_ZERO) {
-//     //     // nocheckin, This is used to put globals at the beginning and making sure they are checked
+//     //     //  This is used to put globals at the beginning and making sure they are checked
 //     //     // first. This was the easiest way to implement that but probably not the best.
 //     //     // This is only used for the root scope or wherever you appendToMainBody.
 //     //     content.add({});
@@ -1136,7 +1148,7 @@ void ASTScope::add(AST* ast, ASTStatement *astStatement) {
 //         ast->getScope(astStatement->secondBody->scopeId)->contentOrder = content.size()-1;
 //     }
 //     FOR(astStatement->switchCases) {
-//         // nocheckin IMPORTANT: Will this work, the switch case scopes having the same order?
+//         // IMPORTANT: Will this work, the switch case scopes having the same order?
 //         ast->getScope(it.caseBody->scopeId)->contentOrder = content.size()-1;
 //     }
 // }
@@ -1305,7 +1317,7 @@ ScopeInfo* AST::createScope(ScopeId parentScope, ContentOrder contentOrder, ASTS
     auto ptr = (ScopeInfo *)allocate(sizeof(ScopeInfo));
     u32 id = 0;
     
-    // id = nextScopeInfoIndex++; // nocheckin
+    // id = nextScopeInfoIndex++;
 
     id = engone::atomic_add((volatile i32*)&nextScopeInfoIndex, 1) - 1;
     _scopeInfos[id] = ptr;

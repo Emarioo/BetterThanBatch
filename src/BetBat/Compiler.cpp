@@ -558,7 +558,7 @@ void Compiler::processImports() {
                 CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
                     CompilerImport* dep = imports.get(im->dependencies[j].id-1);
-                    // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
+                    // TODO: I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
                     if(!dep || !(dep->state & TASK_PREPROCESS_AND_PARSE)) {
                         LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
@@ -570,7 +570,7 @@ void Compiler::processImports() {
                 CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
                     CompilerImport* dep = imports.get(im->dependencies[j].id-1);
-                    // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
+                    // TODO: I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
                     if(!dep || !(dep->state & TASK_TYPE_ENUMS)) {
                         LOG(LOG_TASKS, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
@@ -766,7 +766,7 @@ void Compiler::processImports() {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     picked_task.type = TASK_PREPROCESS_AND_PARSE;
                     picked_task.import_id = imp->import_id;
-                    tasks.add(picked_task); // nocheckin, lock tasks
+                    tasks.add(picked_task); // TODO: lock tasks
                 }
             } else if(picked_task.type == TASK_PREPROCESS_AND_PARSE) {
                 CompilerImport* imp = imports.get(picked_task.import_id-1);
@@ -804,7 +804,7 @@ void Compiler::processImports() {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     picked_task.type = TASK_TYPE_ENUMS;
                     picked_task.import_id = imp->import_id;
-                    tasks.add(picked_task); // nocheckin, lock tasks
+                    tasks.add(picked_task); // TODO: lock tasks
                 }
             } else if(picked_task.type == TASK_TYPE_ENUMS) {
                 CompilerImport* imp = imports.get(picked_task.import_id-1);
@@ -854,10 +854,10 @@ void Compiler::processImports() {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     picked_task.type = TASK_TYPE_STRUCTS;
                     picked_task.import_id = imp->import_id;
-                    tasks.add(picked_task); // nocheckin, lock tasks
+                    tasks.add(picked_task); // TODO: lock tasks
                 }
             } else if(picked_task.type == TASK_TYPE_STRUCTS) {
-                CompilerImport* imp = imports.get(picked_task.import_id-1); // nocheckin, lock imports, this is not the only spot
+                CompilerImport* imp = imports.get(picked_task.import_id-1); // TODO: lock imports, this is not the only spot
                 auto my_scope = ast->getScope(imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Type structs: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 
@@ -886,7 +886,7 @@ void Compiler::processImports() {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     picked_task.type = TASK_TYPE_FUNCTIONS;
                     picked_task.import_id = imp->import_id;
-                    tasks.add(picked_task); // nocheckin, lock tasks
+                    tasks.add(picked_task); // TODO: lock tasks
                 } else {
                     // log::out << "fail, "<<struct_tasks_since_last_change << ", tasks: " << tasks.size() << " " << BriefString(imp->path)<<"\n";
                     if(struct_tasks_since_last_change > tasks.size() * 2) {
@@ -951,7 +951,7 @@ void Compiler::processImports() {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     picked_task.type = TASK_GEN_BYTECODE;
                     picked_task.import_id = imp->import_id;
-                    tasks.add(picked_task); // nocheckin, lock tasks
+                    tasks.add(picked_task); // TODO: lock tasks
                 }
             } else if(picked_task.type == TASK_TYPE_BODY) {
                 auto imp = imports.get(picked_task.import_id-1);
@@ -1064,7 +1064,7 @@ void Compiler::processImports() {
                     imp->state = (TaskType)(imp->state | picked_task.type);
                     picked_task.type = TASK_GEN_MACHINE_CODE;
                     picked_task.import_id = imp->import_id;
-                    tasks.add(picked_task); // nocheckin, lock tasks
+                    tasks.add(picked_task); // TODO: lock tasks
                 }
             } else if(picked_task.type == TASK_GEN_MACHINE_CODE) {
                 auto imp = imports.get(picked_task.import_id-1);
@@ -1333,7 +1333,7 @@ void Compiler::run(CompileOptions* options) {
         auto virtual_path = PRELOAD_NAME;
         lexer.createVirtualFile(virtual_path, &preload); // add before creating import
         preload_import_id = addOrFindImport(virtual_path);
-        Assert(preload_import_id); // nocheckin
+        Assert(preload_import_id);
     }
 
     if(options->source_buffer.buffer) {
@@ -1896,7 +1896,7 @@ void Compiler::addTask_type_body(ASTFunction* ast_func, FuncImpl* func_impl) {
     picked_task.import_id = get_map_id(ast_func->getImportId(&lexer));
     picked_task.astFunc = ast_func;
     picked_task.funcImpl = func_impl;
-    tasks.add(picked_task); // nocheckin, lock tasks
+    tasks.add(picked_task); // TODO: lock tasks
 }
 void Compiler::addTask_type_body(u32 import_id) {
     lock_imports.lock();
@@ -1904,7 +1904,7 @@ void Compiler::addTask_type_body(u32 import_id) {
     CompilerTask picked_task{};
     picked_task.type = TASK_TYPE_BODY;
     picked_task.import_id = import_id;
-    tasks.add(picked_task); // nocheckin, lock tasks
+    tasks.add(picked_task); // TODO: lock tasks
 }
 void Compiler::addLibrary(u32 import_id, const std::string& path, const std::string& as_name) {
     using namespace engone;

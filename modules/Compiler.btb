@@ -1,0 +1,105 @@
+/*
+    This file contains features from the compiler. Suprise!
+    
+    WORK IN PROGRESS
+*/
+
+// THIS ENUM SHOULD BE THE EXACT SAME AS THE ONE IN CompilerEnums.h
+enum TargetPlatform {
+    TARGET_UNKNOWN = 0,
+    TARGET_BYTECODE,
+    TARGET_WINDOWS_x64,
+    TARGET_LINUX_x64,
+
+    TARGET_END,
+    TARGET_START = TARGET_UNKNOWN + 1,
+}
+// THIS ENUM SHOULD BE THE EXACT SAME AS THE ONE IN CompilerEnums.h
+// Also known as linker tools
+enum LinkerChoice : u32 {
+    LINKER_UNKNOWN = 0,
+    LINKER_GCC,
+    LINKER_MSVC,
+    LINKER_CLANG,
+
+    LINKER_END,
+    LINKER_START = LINKER_UNKNOWN + 1,
+}
+enum OptimizationFlags {
+    OPTIMIZE_NONE = 0,
+    // Optimization goals
+    // enables all optimizations for runtime speed
+    OPTIMIZE_SPEED = 0,
+    // enable all optimizations for smallest program size
+    OPTIMIZE_SIZE =  0,
+    // quickly compile with some optimizations for runtime speed
+    OPTIMIZE_SPEED_QUICKLY = 0,
+    // quickly compile with some optimizations for smallest program size
+    OPTIMIZE_SIZE_QUICKLY = 0,
+
+    // Individual optimizations
+    // OPTIMIZE_
+}
+
+struct BuildOptions {
+    // common options
+    source_file: StringBuilder;
+    source_code: StringBuilder;
+    output: StringBuilder;
+    target: TargetPlatform;
+    linker: LinkerChoice;
+    optimizations: OptimizationFlags;
+
+    // extra options
+    working_directory: StringBuilder; // leave empty for current working directory
+    use_debug_information: bool;
+    silent: bool;
+    incremental: bool;
+    use_stable_global_data: bool;
+
+    modules_directory: StringBuilder;
+    import_directories: Array<StringBuilder>;
+    defined_macros: Array<StringBuilder>;
+
+    // sets default options based on host operating system
+    fn init() {
+        #if OS_WINDOWS
+            target = TARGET_WINDOWS_x64
+        #else
+            target = TARGET_LINUX_x64
+        #endif
+        linker = LINKER_GCC
+        optimizations = OPTIMIZE_NONE
+        set_source_file("main.btb")
+        set_output("main.exe")
+
+        use_debug_information = true
+        set_modules_dir("modules/")
+    }
+
+    fn set_source_file(s: char[]) {
+        source_file.clear()
+        source_file.append(s)
+    }
+    fn set_output(s: char[]) {
+        output.clear()
+        output.append(s)
+    }
+    fn set_modules_dir(s: char[]) {
+        modules_directory.clear()
+        modules_directory.append(s)
+    }
+}
+
+fn compile_code(b: BuildOptions*) {
+    // internals
+}
+
+fn build_example() {
+    b: BuildOptions
+    b.init() // default options
+    b.set_source_file("game.btb")
+    b.set_output("game.exe")
+
+    compile_code(&b)
+}

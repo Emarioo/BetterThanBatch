@@ -469,7 +469,12 @@ SignalIO PreprocContext::parseIf(){
     }
     
     if(tok.type != lexer::TOKEN_IDENTIFIER) {
-        Assert(false); // nocheckin, fix error   
+        ERR_SECTION(
+            ERR_HEAD2(tok)
+            ERR_MSG("Expected identififer when parsing #if. Encountered '"<<lexer->tostring(tok)<<"' instead.")
+            ERR_LINE2(tok, "here")
+        )
+        return SIGNAL_COMPLETE_FAILURE;
     }
     advance();
     
@@ -1006,7 +1011,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
 
                     deleteLayer(layer);
                     layers.pop();
-                    // nocheckin TODO: Can the last layer be argument layer and
+                    // TODO: Can the last layer be argument layer and
                     //   not macro body? Perhaps with macros within argument layer?
                     layers.last()->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
                     continue;
@@ -1844,7 +1849,7 @@ MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, b
 }
 
 void Preprocessor::insertCertainMacro(u32 import_id, MacroRoot* rootMacro, MacroSpecific* localMacro) {
-    // nocheckin, we should not be able to insert specific macros into roots from other imports. Otherwise other files that import those files would suddenly have a specific macro available to them even if the import of the root macro didn't specify it.
+    // TODO: we should not be able to insert specific macros into roots from other imports. Otherwise other files that import those files would suddenly have a specific macro available to them even if the import of the root macro didn't specify it.
     lock_imports.lock();
     Import* imp = imports.get(import_id-1);
     lock_imports.unlock();
@@ -1888,7 +1893,7 @@ void Preprocessor::insertCertainMacro(u32 import_id, MacroRoot* rootMacro, Macro
 }
 
 bool Preprocessor::removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int argumentAmount, bool variadic){
-    Assert(false); // nocheckin, only for local macros
+    Assert(false); // TOOD: only for local macros
     lock_imports.lock();
     Import* imp = imports.get(import_id-1);
     lock_imports.unlock();
@@ -1932,7 +1937,7 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name) {
         Import* imp = imports.get(id-1);
         lock_imports.unlock();
         
-        // lock_imports.lock(); // nocheckin, TODO: lock
+        // lock_imports.lock(); // TODO: lock
         CompilerImport* cimp = compiler->imports.get(id-1);
         // lock_imports.unlock();
         // may happen if import wasn't preprocessed and added to 'imports'

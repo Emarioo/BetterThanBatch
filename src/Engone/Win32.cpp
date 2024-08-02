@@ -939,7 +939,7 @@ namespace engone {
 		#ifdef ENABLE_MEMORY_CORRUPTION_DETECTION
 		AllocHeap(0, ptr, bytes);
 		#else
-		free(ptr); // nocheckin
+		free(ptr);
 		#endif
         // TracyFree(ptr);
 

@@ -1,59 +1,53 @@
 // With hotreloading
-#import "examples/crawler/main"
+// #import "examples/crawler/main"
 // Without hotreloading
 // #import "examples/crawler/GameCore"
 
+
 /*
-    Today's Quest: Hotreloading destroys global data.
-    Can we use it anyway?
+    Today's quest: Inferred initializers.
 
-What you can do with global data:
-    Global data can be used for small ints like counting steps/ticks and doing something every 10 steps, reseting such a variable is fine.
-
-    GLobal data that is used for caching simple things.
-    Maybe counting the frames per second in a circular
-    buffer.
-
-What you can't do:
-    You cannot use global data for arrays and structures
-    that allocate memory and must be destructed to avoid
-    memory leaks.
-
-    You cannot take a pointer to global data and store
-    it for the next tick. It will be invalidated on reload.
-
-
-Solutions:
-    We can allocate temporary memory and copy global data into it.
-    Then reload dll, then paste back the copied global data.
-    No memory was leaked.
-
-    This does not solve the invalidation of pointers to the global data.
-    The data itself remains but pointers to it refer to the old invalid data.
-
-    This can be solved by allocating a chunk of heap where we store the supposed "global data".
-    In reality, the global data we refer to in code is just heap memory that stays the same
-    when dlls are reloaded. To access the "global data" on the heap we would store the pointer
-    to the heap memory in the actual global data which we offset by however much to access the object in the global data. At the start of the program we would load the actual global data into the heap memory and every time we load the dll we would set the heap global data pointer to the heap global data memory.
-
-    The benefit of this is that we don't have to copy around global data which will be expensive if it's a lot. The global data still exists because we need to know it's initial state but after that we use the artifical global data.
-
-    We need a name for the heap "global data". Artifical global data, fictional global data, external, extra, extended, permanent, stable. I like stable global data the most.
-
-    Slow down! We still have a problem with hotreloading. If you reload then the global data will have changed and it's
-
-    How do we specify to compile with stable global data?
-    - A compile option for now? Later on it might be specified in the source code, compile workspace?
-    - All code that refers to globals must base their access from the pointer to the global data instead of the global data section.
-    - Stable global data must be initialized once and pointer to data must be initialized every dll reload.
+    Below are some scenarios
 */
-// #import "Logger"
+#import "Logger"
 
-// log()
+struct A {
+    x: i32
+}
+// Declarations
+arr: A = { 1 }
 
-// x := global_slice()
+// Assignments
+arr = { 5 }
+log(&arr)
 
-// log(stable_global_data)
+// // Default members
+struct B {
+    a: A =  { 3 };
+}
+b: B
 
-// log(cast_unsafe<Slice<void>*>&x)
-// log(x)
+// // Initializers
+b = { { 2 } }
+log(&b)
+
+// Function calls
+fn okay(a: A) { log(&a)}
+okay({ 2 })
+
+// // Default args
+fn hi(a: A = { 1 }) {}
+hi()
+
+// Named arguments with default arg
+fn okaye(a: A = { 1 }) { log(&a) }
+okaye(a = { 2 })
+
+// Named argument WITHOUT default arg (doesn't work because named args don't work without default args)
+// fn okayed(a: i32) {}
+// okayed(a = {})
+
+// // operators
+// added := get_a() + { 1 }
+// Should we allow this?
+

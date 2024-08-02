@@ -42,7 +42,6 @@ easier.
 // HAVE BC_REG_LOCALS. YES it's just one register BUT WHO KNOWS
 // IF WE WILL HAVE MORE IN THE FUTURE!
 X64Register ToNativeRegister(BCRegister reg) {
-  // if(reg == BC_REG_SP) return X64_REG_SP; // nocheckin
   if (reg == BC_REG_LOCALS)
     return X64_REG_BP;
   return X64_REG_INVALID;

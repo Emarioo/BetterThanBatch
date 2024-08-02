@@ -304,12 +304,25 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    // Borderless fullscreen
+    // monitor := glfwGetPrimaryMonitor()
+    // mode := glfwGetVideoMode(monitor)
+    // if mode {
+    //     // log(mode)
+    //     width =  mode.width
+    //     height = mode.height
+    //     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    // }
+
     glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
     if !glfw_window {
         log("window failed");
         glfwTerminate();
         return null
     }
+
+    glfwSetWindowPos(glfw_window, 0, 0)
 
     glfwMakeContextCurrent(glfw_window)
 

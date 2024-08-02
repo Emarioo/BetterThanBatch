@@ -787,7 +787,7 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
 
 SectionNr ObjectFile::createSection(const std::string& name, ObjectFile::SectionFlags flags, u32 alignment) {
     auto ptr = TRACK_ALLOC(Section);
-    new(ptr) Section(); // nocheckin, use allocator instead of new
+    new(ptr) Section(); // TODO: use allocator instead of new
     _sections.add(ptr);
 
     ptr->number = _sections.size();

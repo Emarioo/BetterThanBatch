@@ -254,7 +254,7 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(token->type == ')') {
                 info.advance();
                 envs.last().buffer += ")";
-            } else Assert(false); // nocheckin, throw error?
+            } else Assert(false); // TODO: throw error?
             CURTOK();
             auto token2 = info.getinfo(1);
             if (( 0 == (token->flags & lexer::TOKEN_FLAG_ANY_SUFFIX) && token->type == '-' && token2->type == '>')) {
@@ -733,7 +733,7 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
             log::out << log::GOLD << "Union is an incomplete features\n";
             Assert(false);
 
-            // Assert(union_depth < 1); // nocheckin, support nested unions and structs
+            // Assert(union_depth < 1); // TODO: support nested unions and structs
             
             // Token tok = info.gettok();
             // if(IsName(tok)) {
@@ -876,6 +876,7 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
             token = info.getinfo();
             if(token->type == '='){
                 info.advance();
+
                 signal = parseExpression(defaultValue);
             }
             switch(signal) {
@@ -1647,6 +1648,8 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 ops.add(AST_ASSIGN);
                 assignOps.add((OperationType)0);
 
+                // allow_inferred_initializers = true;
+
                 _PLOG(log::out << "Operator "<<token<<"\n";)
             } else if((opType = IsAssignOp(token)) && token1->type  == '=') {
                 saved_locations.add(info.getloc());
@@ -1733,7 +1736,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 values.pop();
                 tmp->right = indexExpr;
                 values.add(tmp);
-                // tmp->constantValue = tmp->left->constantValue && tmp->right->constantValue; // nocheckin
+                // tmp->constantValue = tmp->left->constantValue && tmp->right->constantValue; // TODO: constant evaluation
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "++"){ // TODO: Optimize
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INCREMENT));
@@ -1745,10 +1748,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 tmp->left = values.last();
                 values.pop();
                 values.add(tmp);
-                // tmp->constantValue = tmp->left->constantValue;// nocheckin
-
-                
-
+                // tmp->constantValue = tmp->left->constantValue;
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "--"){ // TODO: Optimize
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_DECREMENT));
@@ -1760,7 +1760,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 tmp->left = values.last();
                 values.pop();
                 values.add(tmp);
-                // tmp->constantValue = tmp->left->constantValue;// nocheckin
+                // tmp->constantValue = tmp->left->constantValue;// 
 
                 continue;
             } else if(token->type == ')'){
@@ -1785,7 +1785,14 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     // }
                 }
             }
-        }else{
+        } else {
+            bool try_inferred_initializer = false;
+            // if(allow_inferred_initializers && token->type == '{') {
+            //     try_inferred_initializer = true;
+            //     allow_inferred_initializers = false;
+            // }
+            try_inferred_initializer = true; // always try this, we handle error in type checker?
+
             bool cstring = false;
             if(token->type == lexer::TOKEN_ANNOTATION) {
                 if(view == "cstr") {
@@ -2009,7 +2016,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 tmp->location = info.srcloc(token_tiny);
                 tmp->i64Value = negativeNumber ? -num : num;
                 
-                // tmp->constantValue = true;// nocheckin
+                // tmp->constantValue = true;// 
                 values.add(tmp);
             } else if(token->type == lexer::TOKEN_LITERAL_DECIMAL){
                 auto loc = info.getloc();
@@ -2040,7 +2047,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 }
                 tmp->location = loc;
                 values.add(tmp);
-                // tmp->constantValue = true;// nocheckin
+                // tmp->constantValue = true;// 
             } else if(token->type == lexer::TOKEN_LITERAL_HEXIDECIMAL || token->type == lexer::TOKEN_LITERAL_BINARY || token->type == lexer::TOKEN_LITERAL_OCTAL) {
                 auto token_tiny = info.gettok();
                 info.advance();
@@ -2152,7 +2159,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
             //     if(negativeNumber)
             //         tmp->i64Value = -tmp->i64Value;
             //     values.add(tmp);
-            //     // tmp->constantValue = true;// nocheckin
+            //     // tmp->constantValue = true;// 
             } else if(token->type == lexer::TOKEN_LITERAL_STRING) {
                 auto loc = info.getloc();
                 info.advance();
@@ -2162,11 +2169,11 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 if((token->flags&lexer::TOKEN_FLAG_SINGLE_QUOTED)){
                     tmp = info.ast->createExpression(TypeId(AST_CHAR));
                     tmp->charValue = *view.ptr;
-                    // tmp->constantValue = true;// nocheckin
+                    // tmp->constantValue = true;// 
                 }else if((token->flags&lexer::TOKEN_FLAG_DOUBLE_QUOTED)) {
                     tmp = info.ast->createExpression(TypeId(AST_STRING));
                     tmp->name = view;
-                    // tmp->constantValue = true;// nocheckin
+                    // tmp->constantValue = true;// 
                     if(cstring)
                         tmp->flags |= ASTNode::NULL_TERMINATED;
 
@@ -2190,7 +2197,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 tmp->boolValue = token->type == lexer::TOKEN_TRUE;
                 tmp->location = info.getloc();
                 info.advance();
-                // tmp->constantValue = true;// nocheckin
+                // tmp->constantValue = true;// 
                 values.add(tmp);
                 // tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
@@ -2248,7 +2255,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 tmp->location = info.getloc();
                 info.advance();
                 values.add(tmp);
-                // tmp->constantValue = true;// nocheckin
+                // tmp->constantValue = true;// 
                 // tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
                 // tmp->tokenRange.endIndex = info.at()+1;
@@ -2309,7 +2316,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     // log::out << "parsed " << tmp->name << "\n";
                 }
 
-                // tmp->constantValue = true;// nocheckin
+                // tmp->constantValue = true;// 
 
                 if(hasParentheses) {
                     auto tok = info.gettok();
@@ -2442,6 +2449,77 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     info.advance();
                 }
                 values.add(tmp);
+            } else if(try_inferred_initializer && token->type == '{') {
+                // nocheckin, FIGURE THIS OUT
+                // NOTE: Code is copied from the other AST_INITIALIZER of the form 'Struct{}'
+                //   You should refactor this, duplicated code is bad.
+                ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
+                initExpr->location = info.getloc();
+                info.advance();
+                // NOTE: Type checker works on TypeIds not AST_FROM_NAMESPACE.
+                //  AST_FROM... is used for functions and variables.
+                
+                initExpr->castType = {};
+                
+                bool mustBeNamed=false;
+                lexer::Token prevNamed = {};
+                int count=0;
+                WHILE_TRUE_N(10000) {
+                    auto token = info.getinfo(&view);
+                    auto tok = info.gettok();
+                    if(token->type == '}'){
+                        info.advance();
+                        break;
+                    }
+
+                    bool named=false;
+                    auto tok_eq = info.gettok(1);
+                    if(token->type == lexer::TOKEN_IDENTIFIER && tok_eq.type == '='){
+                        info.advance(2);
+                        named = true;
+                        prevNamed = tok;
+                        mustBeNamed = true;
+                    } else if(mustBeNamed){
+                        ERR_SECTION(
+                            ERR_HEAD2(tok)
+                            ERR_MSG("Arguments after a named argument must also be named in a struct initializer.")
+                            ERR_LINE2(tok,"this argument should be named..")
+                            ERR_LINE2(prevNamed,"...because of this")
+                        )
+                        // return or continue could desync the parsing so don't do that.
+                    }
+
+                    ASTExpression* expr=0;
+                    auto signal = parseExpression(expr);
+                    switch(signal) {
+                    case SIGNAL_SUCCESS: break;
+                    case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
+                    default: Assert(false);
+                    }
+                    if(named){
+                        expr->namedValue = view;
+                    }
+                    initExpr->args.add(expr);
+                    count++;
+                    
+                    tok = info.gettok();
+                    if(tok.type == ','){
+                        info.advance();
+                        continue;
+                    }else if(tok.type == '}'){
+                        info.advance();
+                        break;
+                    } else {
+                        ERR_SECTION(
+                            ERR_HEAD2(tok)
+                            ERR_MSG("Expected , or } in initializer list not '"<<info.lexer->tostring(tok)<<"'.")
+                            ERR_LINE2(tok,"bad")
+                        )
+                        continue;
+                    }
+                }
+                // log::out << "Parse initializer "<<count<<"\n";
+                values.add(initExpr);
             } else if(token->type == lexer::TOKEN_IDENTIFIER){
                 auto loc = info.getloc();
                 info.advance();
@@ -2843,7 +2921,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     val->location = loc_op;
                     val->left = er;
                     if(val->typeId != AST_REFER) {
-                        // val->constantValue = er->constantValue;// nocheckin
+                        // val->constantValue = er->constantValue;// 
                     }
                 }
             } else if(values.size()>0){
@@ -2862,7 +2940,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     val->assignOpType = assignOps.last();
                     assignOps.pop();
                 }
-                // val->constantValue = val->left->constantValue && val-// nocheckin>right->constantValue;
+                // val->constantValue = val->left->constantValue && val-// >right->constantValue;
             } else {
                 Assert(("Bug in compiler",false));
             }
@@ -2874,7 +2952,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
         expectOperator=!expectOperator;
         if(ending){
             expression = values.last();
-            // expression->computeWhenPossible = shouldComputeExpression;// nocheckin
+            // expression->computeWhenPossible = shouldComputeExpression;// 
             if(!info.hasAnyErrors()) {
                 Assert(values.size()==1);
             }
@@ -3756,7 +3834,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         function->arguments.add({});
         auto& argv = function->arguments[function->arguments.size()-1];
         argv.name = "this";
-        // nocheckin, add source location for this?
+        // TODO: add source location for this?
         // argv.name.tokenStream = info.tokens; // feed and print won't work if we set these, they think this comes from the stream and tries to print it
         // argv.name.tokenIndex = tok.tokenIndex;
         // argv.name.line = tok.line;
@@ -4316,9 +4394,12 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
     if(tok.type == '=') {
         info.advance(); // =
 
+        // Assert(!allow_inferred_initializers);
+        // allow_inferred_initializers = true;
         auto signal = parseExpression(statement->firstExpression);
-        SIGNAL_SWITCH_LAZY()
+        // allow_inferred_initializers = false;
 
+        SIGNAL_SWITCH_LAZY()
     // } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)) {
     } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_NEWLINE)) {
         // array initializer
@@ -4637,8 +4718,6 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
         case SIGNAL_SUCCESS: break;
         case SIGNAL_NO_MATCH: {
             auto tok = info.gettok();
-            // Assert(false); // nocheckin, fix error
-            // auto token = info.gettok();
             ERR_SECTION(
                 ERR_HEAD2(tok)
                 ERR_MSG("Did not expect '"<<info.lexer->tostring(tok)<<"' when parsing body. A new statement, struct or function was expected (or enum, namespace, ...).")
@@ -4805,7 +4884,7 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     info.setup_token_iterator();
 
     ASTScope* body = nullptr;
-    // nocheckin, what to do about 'import path as namespace'
+    // TODO: what to do about 'import path as namespace'
     // if(theNamespace.size()==0){
         body = info.ast->createBody();
         // body->scopeId = info.ast->globalScopeId;

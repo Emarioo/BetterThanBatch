@@ -1103,7 +1103,7 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
             Assert(bareProcedure != -1);
             WRITE(u32, bareProcedure); // procedure type
 
-            Assert(false); // nocheckin, uncomment code and fix!
+            Assert(false); // TODO: uncomment code and fix!
             // pdb->write(streamNumber, offset, it.name.length() + 1, (void*)it.name.c_str());
             // offset += it.name.length() + 1;
             

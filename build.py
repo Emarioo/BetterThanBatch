@@ -5,7 +5,7 @@
 # Run this if you have linking problems: python build.py clean
 #   the system may not have recognized a file as changed
 
-import glob, os, sys, time, platform, threading, shutil
+import glob, os, sys, time, platform, threading, shutil, multiprocessing
 
 global_config = {}
 def enabled(what):
@@ -46,7 +46,8 @@ def main():
     # config["silent"] = True # TODO: Fix
 
     # config["use_opengl"] = True # rarely used
-    config["thread_count"] = 8
+    # config["thread_count"] = 8
+    config["thread_count"] = multiprocessing.cpu_count()
 
     yes = compile(config)
 
@@ -221,7 +222,7 @@ def compile(config):
         MSVC_COMPILE_OPTIONS += " /FI pch.h"
 
         if not os.path.exists("bin/hacky_stdcall.obj"):
-            cmd("ml64 /nologo /Fobin/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # nocheckin piping output to nul might not work with os.system
+            cmd("ml64 /nologo /Fobin/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
 
         if len(modified_files) == 0 and os.path.exists(config["output"]):
             compile_success = True

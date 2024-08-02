@@ -12,6 +12,10 @@ struct Apples {
 
 your_apples = Apples{ 5, 92.1 };
 
+// The type of the struct initializer can also be inferred from
+// assignments, declarations, and function paramaters.
+your_apples = { 5, 92.1 };
+
 log(your_apples.count, your_apples.size);
 ```
 

@@ -286,9 +286,9 @@ struct FnOverloads {
     QuickArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false);
+    Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, DynamicArray<bool>* inferred_args = nullptr);
     // Note that this function becomes complex if parentStruct is polymorphic.
-    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this,ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
+    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this,ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, DynamicArray<bool>* inferred_args = nullptr);
     
     // FuncImpl can be null and probably will be most of the time
     // when you call this.
@@ -517,6 +517,10 @@ struct ASTExpression : ASTNode {
     bool isPostAction() const { return postAction; }
     void setPostAction(bool yes) { postAction = yes; }
     
+    bool is_inferred_initializer() {
+        return typeId == AST_INITIALIZER && !castType.isValid();
+    }
+
     bool uses_cast_operator = false;
 
     union {
@@ -1033,7 +1037,7 @@ struct AST {
         
         // u32 new_index = engone::atomic_add((volatile i32*)&linearAllocationUsed, size) - size;
 
-        u32 new_index = linearAllocationUsed; // nocheckin
+        u32 new_index = linearAllocationUsed; // TODO: Bad
         linearAllocationUsed += size;
         
         void* ptr = linearAllocation + new_index;

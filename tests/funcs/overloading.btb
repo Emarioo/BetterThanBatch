@@ -64,3 +64,10 @@ str := "Hello";
 _test 'H'; str[0];
 
 // str[2] = 'S'; // Not possible at the moment, how do we make it possible?
+
+
+@TEST_CASE(default_arg_overload)
+
+// this doesn't work, argument must have defaults or named arguments will cause errors.
+fn okayed(a: i32) {}
+okayed(a = 2)

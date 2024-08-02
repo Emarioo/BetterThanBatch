@@ -678,18 +678,21 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
                         SignalIO result = generatePop(baseReg, offset + memdata.offset, memdata.typeId);
                     }
                 } else {
-                    StringBuilder values = {};
-                    FORN(tempTypes) {
-                        auto& it = tempTypes[nr];
-                        if(nr != 0)
-                            values += ", ";
-                        values += ast->typeToString(it);
+                    if (!hasAnyErrors()) {
+                        StringBuilder values = {};
+                        values.reserve(5);
+                        FORN(tempTypes) {
+                            auto& it = tempTypes[nr];
+                            if(nr != 0)
+                                values += ", ";
+                            values += ast->typeToString(it);
+                        }
+                        ERR_SECTION(
+                            ERR_HEAD2(member.defaultValue->location)
+                            ERR_MSG("Default value of member produces more than one value but only one is allowed.")
+                            ERR_LINE2(member.defaultValue->location, values.data())
+                        )
                     }
-                    ERR_SECTION(
-                        ERR_HEAD2(member.defaultValue->location)
-                        ERR_MSG("Default value of member produces more than one value but only one is allowed.")
-                        ERR_LINE2(member.defaultValue->location, values.data())
-                    )
                 }
             } else {
                 if(!memdata.typeId.isValid() || memdata.typeId == AST_VOID) {
@@ -1748,7 +1751,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                 // x64_gen does optimize them away though.
                 builder.emit_empty_alloc_args(&off_alloc_args);
             }
-            // nocheckin TODO: if alloc args isn't used, we may have problems.
+            // TODO: if alloc args isn't used, we may have problems.
 
             DynamicArray<TypeId> tempTypes{};
             result = generateExpression(arg, &tempTypes);
@@ -3266,12 +3269,14 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             TypeInfo* base_typeInfo = info.ast->getTypeInfo(castType.baseType()); // TODO: castType should be renamed
             // TypeInfo *structInfo = info.ast->getTypeInfo(info.currentScopeId, Token(*expression->name));
             if (!base_typeInfo) {
-                auto str = info.ast->typeToString(castType);
-                ERR_SECTION(
-                    ERR_HEAD2(expression->location)
-                    ERR_MSG_COLORED("Cannot do initializer on type '" << log::YELLOW << str << log::NO_COLOR << "'.")
-                    ERR_LINE2(expression->location, "bad")
-                )
+                if(!hasAnyErrors()) {
+                    auto str = info.ast->typeToString(castType);
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG_COLORED("Cannot do initializer on type '" << log::YELLOW << str << log::NO_COLOR << "'.")
+                        ERR_LINE2(expression->location, "bad")
+                    )
+                }
                 return SIGNAL_FAILURE;
             }
             bool is_struct = base_typeInfo->astStruct && castType.isNormalType();
@@ -3346,11 +3351,6 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     if (!exprs[i])
                         exprs[i] = mem.defaultValue;
                 }
-                // for (int i = (int)astruct->members.size()-1;i>=0; i--) {
-                //     auto &mem = astruct->members[i];
-                //     if (!exprs[i])
-                //         exprs[i] = mem.defaultValue;
-                // }
 
                 int index = (int)exprs.size();
                 while (index > 0) {
@@ -4745,7 +4745,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             builder.disable_builder(info.disableCodeGeneration);
             info.ignoreErrors = true;
             
-            // Assert(false); // nocheckin, broken
+            // Assert(false); // TODO, broken
             // prev_stackAlignment_size = info.stackAlignment.size();
             // prev_virtualStackPointer = info.virtualStackPointer;
             // prev_currentFrameOffset = info.currentFrameOffset;
@@ -4757,7 +4757,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
         defer {
             if(statement->isNoCode()) {
-                // Assert(false); // nocheckin, broken
+                // Assert(false); // TODO, broken
                 // Assert(prev_stackAlignment_size <= info.stackAlignment.size()); // We lost information, the no code remove stack elements which we can't get back. We would need to save the elements not just the size of stack alignment
                 // info.stackAlignment.resize(prev_stackAlignment_size);
                 // info.virtualStackPointer = prev_virtualStackPointer;
@@ -5576,7 +5576,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     varinfo_index->versions_typeId[info.currentPolyVersion],
                     info.currentScopeDepth + 1,
                     varnameNr.identifier->scopeId);
-            }else{
+            } else {
                 auto& varnameIt = statement->varnames[0];
                 auto& varnameNr = statement->varnames[1];
                 if(!varnameIt.identifier || !varnameNr.identifier) {
@@ -6308,7 +6308,7 @@ SignalIO GenContext::generateGlobalData() {
             type = types[0];
         }
 
-        // nocheckin TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
+        // TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
 
         // get pointer to global data from stack
         builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, 8, -8);

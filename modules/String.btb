@@ -44,13 +44,7 @@ struct StringBuilder {
         }
     }
     fn append(value: char) {
-        if len + 1u > max {
-            if !reserve(len + 5)
-                return;
-        }
-        ptr[len] = value
-        len++
-        ptr[len] = '\0'
+        append(Slice<char>{&value, 1})
     }
     fn append(value: bool) {
         if value {
@@ -72,14 +66,7 @@ struct StringBuilder {
         ptr[len] = '\0';
     }
     fn append(str: char*, size: i32) {
-        if len + size > max {
-            if !reserve(size + max * 2) {
-                return;
-            }
-        }
-        memcpy(ptr + len, str, size);
-        len += size;
-        ptr[len] = '\0';
+        append(Slice<char>{str, size})
     }
     fn append(str: char*) {
         append(str, strlen(str))

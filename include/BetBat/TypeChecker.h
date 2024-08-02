@@ -37,6 +37,7 @@ struct TyperContext : public PhaseContext {
     bool ignoreErrors = false; // not thread safe, you need one of these per thread
     bool ignore_polymorphism_with_struct = false;
 
+    TypeId inferred_type{};
 
     FuncImpl* currentFuncImpl = nullptr;
     ASTFunction* currentAstFunc = nullptr;
