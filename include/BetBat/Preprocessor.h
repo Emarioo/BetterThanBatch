@@ -25,6 +25,10 @@ struct MacroSpecific {
     u32 nonVariadicArguments() { return isVariadic() ? parameters.size() - 1 : parameters.size(); }
     // -1 if not found
     int matchArg(lexer::Token token, lexer::Lexer* lexer);
+
+    bool canMatchArg() {
+        return parameters.size();
+    }
 };
 struct MacroRoot {
     ~MacroRoot() {
@@ -41,6 +45,7 @@ struct MacroRoot {
     bool hasBlank=false;
     MacroSpecific variadicMacro;
 };
+struct PreprocContext;
 struct Preprocessor {
     void cleanup() {
         imports.cleanup();
@@ -54,7 +59,7 @@ struct Preprocessor {
     MacroRoot* create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank);
     void insertCertainMacro(u32 import_id, MacroRoot* rootMacro, MacroSpecific* localMacro);
     bool removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int argumentAmount, bool variadic);
-    MacroRoot* matchMacro(u32 import_id, const std::string& name);
+    MacroRoot* matchMacro(u32 import_id, const std::string& name, PreprocContext* context = nullptr);
     MacroSpecific* matchArgCount(MacroRoot* root, int count);
 private:
     lexer::Lexer* lexer=nullptr;
@@ -79,6 +84,7 @@ private:
     
     friend class PreprocContext;
 };
+typedef DynamicArray<lexer::Token> TokenList;
 struct PreprocContext : PhaseContext {
     Preprocessor* preprocessor=nullptr;
     lexer::Lexer* lexer=nullptr;
@@ -99,7 +105,102 @@ struct PreprocContext : PhaseContext {
     lexer::Import* old_lexer_import = nullptr;
     Preprocessor::Import* current_import = nullptr;
     u32 head=0;
-    
+
+    struct CachedMacro {
+        MacroRoot* root;
+    };
+    std::unordered_map<std::string, CachedMacro> cached_macro_names;
+
+    DynamicArray<u32> ids_to_check{};
+    bool has_computed_deps = false;
+
+    struct Layer {
+        Layer(bool eval_content) : eval_content(eval_content) {
+            // Assert(eval_content);
+            specific = nullptr;
+            root = nullptr;
+            // if(eval_content) {
+                // new(&input_arguments)DynamicArray<TokenList>();
+            // } else {
+                import_id = 0;
+                top_caller = nullptr;
+                paren_depth = 0;
+            // }
+        }
+        ~Layer() {
+            // if(eval_content) {
+                for(auto& l : input_arguments) {
+                    l.cleanup();
+                }
+                input_arguments.cleanup();
+            // } else {
+                
+            // }
+        }
+        u32 _head = 0;
+        u32 start_head = 0;
+        u32* ref_head = nullptr;
+        u16 ending_suffix = 0;
+        bool eval_content = true;
+        bool unwrapped = false;
+        bool concat_next_token = false;
+        bool quote_next_token = false;
+        MacroSpecific* specific;
+        MacroRoot* root;
+        // union {
+        //     struct {
+                DynamicArray<TokenList> input_arguments{};
+                
+            // };
+            // struct {
+                u32 import_id = 0;
+                Layer* top_caller=nullptr; // the parent macro that called this macro (used by argument parsing or body parsing)
+                Layer* adjacent_callee=nullptr; // when this layer is parsing arguments, callee refers to the layer (macro) that uses the arguments
+                int paren_depth=0;
+            // };
+        // };
+        void add_input_arg(engone::Allocator* allocator) {
+            input_arguments.add({});
+            input_arguments.last().init(allocator);
+        }
+        lexer::Token get(lexer::Lexer* lexer, int off = 0, StringView* string = nullptr) {
+            if(import_id!=0 && !eval_content) {
+                u32 index = *ref_head + off;
+                return lexer->getTokenFromImport(import_id, *ref_head + off, string);
+            } else {
+                auto spec = specific;
+                if(top_caller)
+                    spec = top_caller->specific; // for arguments
+                Assert(specific);
+                u32 index = spec->content.token_index_start + *ref_head + off;
+                if(index >= spec->content.token_index_end)
+                    return {lexer::TOKEN_EOF};
+                return lexer->getTokenFromImport(spec->content.importId, index, string);
+            }
+        }
+        bool is_last(lexer::Lexer* lexer, int off = 0) {
+            return get(lexer,off).type == lexer::TOKEN_EOF;
+        }
+        void step(int n = 1) {
+            *ref_head+=n;
+        }
+        void sethead(u32 head) {
+            _head = head;
+            start_head = head;
+            ref_head = &_head;
+        }
+        void sethead(u32* phead) {
+            this->ref_head = phead;
+            this->start_head = *phead;
+        }
+        u32 gethead() {
+            return *ref_head;
+        }
+    };
+    // DynamicArray<Layer*> cached_layers{}; // caching memory
+
+    engone::LinearAllocator scratch_allocator{}; // TODO: Preserve allocator between threads, each thread can allocate memory for preprocessor once.
+
     bool quick_iterator = false;
     lexer::Import* lexer_import=nullptr;
     DynamicArray<lexer::Chunk*> lexer_chunks;

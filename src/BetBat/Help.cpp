@@ -72,7 +72,7 @@ void print_help(){
     log::out << log::GRAY << " Exclude directories: "<<GREEN("!*/libs/*")<<", "<<GREEN("!*/bin/*|!*/res/*")<<" (.vs, .git, .vscode are excluded by default)\n";
     END
 
-    USAGE("-ua,--user-args")
+    USAGE("--,-ua,--user-args")
     DESC("Will pass arguments to the executable. Can only be used with '--run'. All arguments after this flag will be sent to the compiled program instead of the compiler.\n")
     END
 

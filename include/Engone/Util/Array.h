@@ -174,14 +174,25 @@ struct TinyArray {
 };
 #endif
 
+// global variable?
+// extern engone::Allocator* global_array_allocator;
 // Do not pop or add elements while iterating.
 // Be careful at least.
 template<typename T>
 struct DynamicArray {
-    DynamicArray() = default;
+    DynamicArray() {
+        // This is bad and confusing design, you may have
+        // dynamic arrays, deep down in function calls which inits an array which you didn't expect. If allocator is a linear allocator/scratch allocator while the code requires a permanent storage then you've got problems.
+        // this->allocator = global_array_allocator;
+    }
     ~DynamicArray() { cleanup(); }
     void cleanup(){
         reserve(0);
+    }
+
+    void init(engone::Allocator* allocator) {
+        Assert(!_ptr);
+        this->allocator = allocator;
     }
 
     DynamicArray(DynamicArray<T>& arr) = delete;
@@ -218,10 +229,6 @@ struct DynamicArray {
             _ptr[i] = arr._ptr[i];
         }
     }
-
-    T* _ptr = nullptr;
-    u32 used = 0;
-    u32 max = 0;
 
     bool add(const T& t){
         TRACE_FUNC()
@@ -337,8 +344,12 @@ struct DynamicArray {
                 for(u32 i = 0; i < used; i++){
                     (_ptr + i)->~T();
                 }
-                // engone::Free(_ptr, max * sizeof(T));
-                TRACK_ARRAY_FREE(_ptr, T, max);
+                if(allocator) {
+                    allocator->allocate(0, _ptr, max * sizeof(T));
+                } else {
+                    // engone::Free(_ptr, max * sizeof(T));
+                    TRACK_ARRAY_FREE(_ptr, T, max);
+                }
             }
             _ptr = nullptr;
             max = 0;
@@ -347,7 +358,11 @@ struct DynamicArray {
         }
         if(!_ptr){
             // _ptr = (T*)engone::Allocate(sizeof(T) * newMax);
-            _ptr = TRACK_ARRAY_ALLOC(T, newMax);
+            if(allocator) {
+                _ptr = (T*)allocator->allocate(newMax * sizeof T);
+            } else {
+                _ptr = TRACK_ARRAY_ALLOC(T, newMax);
+            }
             Assert(_ptr);
             // initialization of elements is done when adding them
             if(!_ptr)
@@ -366,7 +381,12 @@ struct DynamicArray {
 
             // T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
             // T* newPtr = (T*)engone::Allocate(sizeof(T) * newMax);
-            T* newPtr = TRACK_ARRAY_ALLOC(T, newMax);
+            T* newPtr = nullptr;
+            if(allocator) {
+                newPtr = (T*)allocator->allocate(newMax * sizeof T);
+            } else {
+                newPtr = TRACK_ARRAY_ALLOC(T, newMax);
+            }
             
             Assert(newPtr);
             
@@ -379,7 +399,11 @@ struct DynamicArray {
                 (_ptr + i)->~T();
             }
             
-            TRACK_ARRAY_FREE(_ptr, T, max);
+            if(allocator) {
+                allocator->allocate(0, _ptr, max * sizeof T);
+            } else {
+                TRACK_ARRAY_FREE(_ptr, T, max);
+            }
             // engone::Free(_ptr, sizeof(T) * max);
 
             // if (newMax > max) {
@@ -398,6 +422,9 @@ struct DynamicArray {
             return true;
         }
         return false;
+    }
+    void clear() {
+        resize(0);
     }
     // Will not shrink alloction to fit the new size
     bool resize(u32 newSize){
@@ -450,6 +477,12 @@ struct DynamicArray {
     //         arr.max = 0;
     //     }
     // }
+
+private:
+    T* _ptr = nullptr;
+    u32 used = 0;
+    u32 max = 0;
+    engone::Allocator* allocator = nullptr;
 };
 
 // Does not call any constructors or destructors.

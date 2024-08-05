@@ -80,7 +80,7 @@ box.items[9] = 3
 _test 3; box.items[9]
 _test 3; *(box.items.ptr + 9 * sizeof i32)
 
-_test 8; sizeof box.items // items is evaluated to a pointer, not a slice
+_test 8; sizeof (box.items) // items is evaluated to a pointer, not a slice
 _test 20; box.items.len // even though items is a evaluated to a pointer, since it's an array of a struct and we know the size, .len is allowed
 _test 80; sizeof box
 

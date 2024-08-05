@@ -91,6 +91,23 @@ namespace engone{
             return type > ALLOCATOR_NON_VOLATILE;
         }
 
+        template <class T>
+        inline T* create(const DebugLocation& debug = {}) {
+            auto obj = (T*)m_func(this, sizeof (T), nullptr, 0, debug);
+            new(obj)T();
+            return obj;
+        }
+        template <class T>
+        inline T* create_no_init(const DebugLocation& debug = {}) {
+            auto obj = (T*)m_func(this, sizeof (T), nullptr, 0, debug);
+            return obj;
+        }
+        template <class T>
+        inline void destroy(T* obj, const DebugLocation& debug = {}) {
+            obj->~T();
+            m_func(this, 0, obj, sizeof T, debug);
+        }
+
         Tracker tracker;
     private:
         FnAllocate m_func;
@@ -138,14 +155,35 @@ namespace engone{
             used = 0;
         }
         inline void* allocate(u64 bytes, void* ptr = nullptr, u64 old_bytes = 0) {
-            Assert(ptr == nullptr); // reallocate not allowed
-            Assert(bytes != 0); // free not allowed
+            if(bytes == 0) {
+                return nullptr; // we can't free unless we free the last allocated chunk of bytes
+            }
+            if(ptr != nullptr) {
+                // we last chunk is reallocated then
+                // we can just expand the allocation
+                // instead of creating a whole new one.
+                // Also, we can't free memory so many reallocations would quickly use up the linear allocator.
+                if(used + bytes > max) {
+                    Assert(("linear allocator too small",false));
+                    return nullptr;
+                }
+                void* new_ptr = (u8*)data + used;
+                used += bytes;
+                memcpy(new_ptr, ptr, bytes);
+                return new_ptr;
+            }
 
             // linear allocator can't reserve/resize for more memory because it would invalidate the returned pointers.
-            Assert(used + bytes <= max);
+            if(used + bytes > max) {
+                Assert(("linear allocator too small",false));
+                return nullptr;
+            }
             void* new_ptr = (u8*)data + used;
             used += bytes;
             return new_ptr;
+        }
+        bool initialized() {
+            return max;
         }
 
     private:

@@ -789,7 +789,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                         line++;
                         column=1;
                     }
-                    register char tmp = chr | 32;
+                    char tmp = chr | 32;
                     if(!(tmp >= 'a' && tmp <= 'z') && !(chr == '_') && !(chr >= '0' && chr <= '9') ) {
                     // if(c==' '||c=='\t'||c=='\r'||c=='\n'){
                         if(chr=='\n')

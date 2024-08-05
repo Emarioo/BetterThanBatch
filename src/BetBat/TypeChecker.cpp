@@ -2812,10 +2812,12 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 )
                 return SIGNAL_FAILURE;
             }
-            TypeInfo* typeinfo = ast->getTypeInfo(ti);
+            TypeInfo* typeinfo = nullptr;
+            if(ti.isNormalType())
+                typeinfo = ast->getTypeInfo(ti);
             for(int i=0;i<expr->args.size();i++) {
                 auto arg_expr = expr->args[i];
-                if(typeinfo->structImpl) {
+                if(typeinfo && typeinfo->structImpl) {
                     // getMember returns invalid type if 'i' is out of bounds
                     inferred_type = typeinfo->getMember(i).typeId;
                 }

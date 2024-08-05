@@ -956,7 +956,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             break;
         } else if(now->typeId == AST_MEMBER || now->typeId == AST_DEREF || now->typeId == AST_INDEX){
             FuncImpl* operatorImpl = nullptr;
-            if (currentPolyVersion < now->versions_overload._array.size())
+            if (currentPolyVersion < now->versions_overload.size())
                 operatorImpl = now->versions_overload[currentPolyVersion].funcImpl;
             if (now->typeId == AST_INDEX && operatorImpl) {
                 TypeId typeId{};
@@ -1211,7 +1211,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
         } else if(now->typeId == AST_INDEX) {
             arrayLength = 0;
             FuncImpl* operatorImpl = nullptr;
-            if(now->versions_overload._array.size()>0)
+            if(now->versions_overload.size()>0)
                 operatorImpl = now->versions_overload[info.currentPolyVersion].funcImpl;
             // I recently changed code in type checker for overload matching with polymorphism. Instead of == on types, we do check castable.
 
@@ -2827,7 +2827,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
         outTypeIds->add(expression->typeId);
     } else {
         FuncImpl* operatorImpl = nullptr;
-        if(expression->versions_overload._array.size()>0)
+        if(expression->versions_overload.size()>0)
             operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
         TypeId ltype = AST_VOID;
         DynamicArray<TypeId> tmp_types{};
@@ -3523,7 +3523,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
         } 
         else if(expression->typeId == AST_INDEX){
             FuncImpl* operatorImpl = nullptr;
-            if(expression->versions_overload._array.size()>0)
+            if(expression->versions_overload.size()>0)
                 operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
             TypeId ltype = AST_VOID;
             if(operatorImpl){
@@ -4730,6 +4730,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
     for (auto statement : body->statements) {
         MAKE_NODE_SCOPE(statement);
 
+        // TODO: Debug information is very slow.
         auto srcinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
         debugFunction->addLine(srcinfo->line, builder.get_pc(), statement->location.tok.origin);
         
@@ -4744,14 +4745,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             info.disableCodeGeneration = true;
             builder.disable_builder(info.disableCodeGeneration);
             info.ignoreErrors = true;
-            
-            // Assert(false); // TODO, broken
-            // prev_stackAlignment_size = info.stackAlignment.size();
-            // prev_virtualStackPointer = info.virtualStackPointer;
-            // prev_currentFrameOffset = info.currentFrameOffset;
         } else {
             std::string line = compiler->lexer.getline(statement->location);
-            // auto tokinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
             builder.push_line(srcinfo->line, line);
         }
 
@@ -6037,7 +6032,7 @@ SignalIO GenContext::generateData() {
                 Assert(identifiers[nr]->is_var());
                 compiler->varInfos[nr] = identifiers[nr];
                 Assert(compiler->varInfos[nr] && compiler->varInfos[nr]->isGlobal());
-                Assert(compiler->varInfos[nr]->versions_dataOffset._array.size() == 1);
+                Assert(compiler->varInfos[nr]->versions_dataOffset.size() == 1);
             }
 
             // TODO: Optimize, don't append the types that aren't used in the code.

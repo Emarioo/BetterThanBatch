@@ -36,7 +36,7 @@ struct Box<T> {
 }
 
 box: Box<i32*>
-_test 8; sizeof box.get() // should get size of pointer, not size of int
+_test 8; sizeof (box.get()) // should get size of pointer, not size of int
 
 @TEST_CASE(bug_poly_sizeof)
 

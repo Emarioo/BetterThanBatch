@@ -322,7 +322,7 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
         return null
     }
 
-    glfwSetWindowPos(glfw_window, 0, 0)
+    // glfwSetWindowPos(glfw_window, 0, 0)
 
     glfwMakeContextCurrent(glfw_window)
 

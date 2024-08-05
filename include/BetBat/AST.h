@@ -168,11 +168,17 @@ struct PolyVersions {
     // TODO: Allocations are should be controlled by AST.
     // Using heap for now to make things simple.
 
-    DynamicArray<T> _array{};
-
+    int size() const {
+        // return _array.size();
+        return _array.size() + has_first ? 1 : 0;
+    }
     // automatically allocates
     T& get(u32 index) {
-        if(index >= _array.used) {
+        if(index == 0) {
+            has_first = true;
+            return first_elem;
+        }
+        if(index >= _array.size()) {
             Assert(("Probably a bug",index < 1000));
             bool yes = _array.resize(index + 1);
             Assert(yes);
@@ -183,6 +189,12 @@ struct PolyVersions {
     T& operator[](u32 index) {
         return get(index);
     }
+
+private:
+    // An optimization where first element is stored in struct. This means that node AST's that use PolyVersions won't allocate memory as long as less than one element is needed. Since most code isn't polymorphic and doesn't need more than one element, this is perfect.
+    bool has_first = false;
+    T first_elem{};
+    DynamicArray<T> _array{};
 };
 struct TypeId {
     TypeId() = default;

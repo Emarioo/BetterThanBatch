@@ -173,6 +173,7 @@ na := 23
 na /= 1.0 // <- at one point, resulting float was put into na which is wrong, it should be converted to integer first
 _test 23; na
 
+#import "Lang"
 // char + i32 should return char
 _test typeid char; typeid ('A' + 2);
 // std_print('0' + hex) would print integer instead of char otherwise

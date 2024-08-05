@@ -481,7 +481,7 @@ SignalIO PreprocContext::parseIf(){
     
     std::string name = lexer->getStdStringFromToken(tok);
     if(evaluateTokens) {
-        active = preprocessor->matchMacro(import_id, name);
+        active = preprocessor->matchMacro(import_id, name, this);
         if(not_modifier)
             active = !active;
         not_modifier = false; // reset, we use it later
@@ -560,7 +560,7 @@ SignalIO PreprocContext::parseIf(){
                         if(!active && !complete_inactive) {
                             // if a previous if/elif matched we don't want to check this one
                             if(evaluateTokens){
-                                active = preprocessor->matchMacro(import_id, name);
+                                active = preprocessor->matchMacro(import_id, name, this);
                                 if(not_modifier)
                                     active = !active;
                             }
@@ -724,7 +724,6 @@ SignalIO PreprocContext::parseImport() {
 }
 SignalIO PreprocContext::parseMacroEvaluation() {
     using namespace engone;
-    ZoneScopedC(tracy::Color::Goldenrod2);
     
     Assert(evaluateTokens); // We shouldn't call this function unless it's to evaluate macros, it's just waste of CPU time
     
@@ -742,114 +741,56 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     // if(!early_match_table[macro_name[0]]) return SIGNAL_NO_MATCH;
 
     std::string macro_name = lexer->getStdStringFromToken(macro_token);
-    MacroRoot* root = preprocessor->matchMacro(import_id,macro_name);
+    MacroRoot* root = preprocessor->matchMacro(import_id,macro_name, this);
     if(!root)
         return SIGNAL_NO_MATCH;
     advance();
+
+    ZoneScopedC(tracy::Color::Goldenrod2); // we start profiling here, when we actually are matching macro, that way the count stat in profiler represents the number of evaluated macros instead of the number of tries.
     
     LOG(LOG_PREPROCESSOR, 
         log::LIME << "Eval " << macro_name<<"\n";
     )
     
+    // @DEBUG CODE
+    // static APIFile file = {};
+    // if(!file) {
+    //     file = FileOpen("out.txt", FILE_CLEAR_AND_WRITE);
+    // }
+    // std::string txt = macro_name + "\n";
+    // FileWrite(file, txt.c_str(), txt.size());
 
-    typedef DynamicArray<lexer::Token> TokenList;
-    
     // TODO: Optimize by not allocating tokens on the heap.
     //  Linear or some form of stack allocator would be better.
     //  Perhaps an array of arrays that you can reuse?
     
     u32 origin_import_id = import_id;
     
-    struct Layer {
-        Layer(bool eval_content) : eval_content(eval_content) {
-            // Assert(eval_content);
-            specific = nullptr;
-            root = nullptr;
-            // if(eval_content) {
-                // new(&input_arguments)DynamicArray<TokenList>();
-            // } else {
-                import_id = 0;
-                top_caller = nullptr;
-                paren_depth = 0;
-            // }
-        }
-        ~Layer() {
-            // if(eval_content) {
-                for(auto& l : input_arguments) {
-                    l.cleanup();
-                }
-                input_arguments.cleanup();
-            // } else {
-                
-            // }
-        }
-        u32 _head = 0;
-        u32 start_head = 0;
-        u32* ref_head = nullptr;
-        u16 ending_suffix = 0;
-        bool eval_content = true;
-        bool unwrapped = false;
-        bool concat_next_token = false;
-        bool quote_next_token = false;
-        MacroSpecific* specific;
-        MacroRoot* root;
-        // union {
-        //     struct {
-                DynamicArray<TokenList> input_arguments{};
-            // };
-            // struct {
-                u32 import_id = 0;
-                Layer* top_caller=nullptr; // the parent macro that called this macro (used by argument parsing or body parsing)
-                Layer* adjacent_callee=nullptr; // when this layer is parsing arguments, callee refers to the layer (macro) that uses the arguments
-                int paren_depth=0;
-            // };
-        // };
-        
-        lexer::Token get(lexer::Lexer* lexer, int off = 0, StringView* string = nullptr) {
-            if(import_id!=0 && !eval_content) {
-                u32 index = *ref_head + off;
-                return lexer->getTokenFromImport(import_id, *ref_head + off, string);
-            } else {
-                auto spec = specific;
-                if(top_caller)
-                    spec = top_caller->specific; // for arguments
-                Assert(specific);
-                u32 index = spec->content.token_index_start + *ref_head + off;
-                if(index >= spec->content.token_index_end)
-                    return {lexer::TOKEN_EOF};
-                return lexer->getTokenFromImport(spec->content.importId, index, string);
-            }
-        }
-        bool is_last(lexer::Lexer* lexer, int off = 0) {
-            return get(lexer,off).type == lexer::TOKEN_EOF;
-        }
-        void step(int n = 1) {
-            *ref_head+=n;
-        }
-        void sethead(u32 head) {
-            _head = head;
-            start_head = head;
-            ref_head = &_head;
-        }
-        void sethead(u32* phead) {
-            this->ref_head = phead;
-            this->start_head = *phead;
-        }
-        u32 gethead() {
-            return *ref_head;
-        }
-    };
+    // static int allocs_in_here = 0;
+    // int allocs = GetTotalNumberAllocations();
+    // defer {
+    //     int now = GetTotalNumberAllocations();
+    //     allocs_in_here += now - allocs;
+    //     log::out << "allocs " << allocs_in_here <<"\n";
+    // };
+
+    if(!scratch_allocator.initialized())
+        scratch_allocator.init(0x100000);
+    scratch_allocator.reset();
+    
     auto createLayer = [&](bool eval_content) {
-        auto ptr = TRACK_ALLOC(Layer);
+        auto ptr = scratch_allocator.create_no_init<Layer>();
         new(ptr)Layer(eval_content);
+        ptr->input_arguments.init(&scratch_allocator);
         return ptr;
     };
     auto deleteLayer = [&](Layer* layer) {
+        scratch_allocator.destroy(layer);
         layer->~Layer();
-        // memset(layer, 0, sizeof (Layer));
-        TRACK_FREE(layer,Layer);
     };
     DynamicArray<Layer*> layers{};
+    layers.init(&scratch_allocator);
+
     defer {
         for(auto& l : layers)
             deleteLayer(l);
@@ -934,7 +875,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
             lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, macro_source->line, macro_source->column);
         } else if(layer->concat_next_token) {
-            MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, new_data);
+            MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, new_data, this);
             if (macroroot) {
                 // layer->step(); // name
                 
@@ -999,7 +940,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             if(layer->paren_depth==0 && (token.type == ',' || token.type == ')')) {
                 if(token.type == ',') {
                     layer->step();
-                    layer->adjacent_callee->input_arguments.add({});
+                    layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                    // layer->adjacent_callee->input_arguments.add({});
                     if(layer->unwrapped) {
                         // unused unwrap, would this be a feature? or an error?
                     }
@@ -1081,17 +1023,19 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                             for(int j=0;j<list.size();j++) {
                                 auto& token = list[j];
                                 if(layer->adjacent_callee->input_arguments.size() == 0)
-                                    layer->adjacent_callee->input_arguments.add({});
+                                    layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                                    // layer->adjacent_callee->input_arguments.add({});
                                 layer->adjacent_callee->input_arguments.last().add(token);
                             }
                             if(i != real_index + real_count - 1)
-                                layer->adjacent_callee->input_arguments.add({});
+                                layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                                // layer->adjacent_callee->input_arguments.add({});
                         }
                         continue;
                     }
                 }
                 std::string name = lexer->getStdStringFromToken(token);
-                MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
+                MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name, this);
                 if (macroroot) {
                     layer->step(); // name
                     
@@ -1125,7 +1069,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             
             layer->step();
             if(layer->adjacent_callee->input_arguments.size() == 0)
-                layer->adjacent_callee->input_arguments.add({});
+                layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                // layer->adjacent_callee->input_arguments.add({});
             layer->adjacent_callee->input_arguments.last().add(token);
         } else {
             if(!layer->specific) {
@@ -1187,10 +1132,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                             
                             if(layer->adjacent_callee) {
                                 if (layer->unwrapped && list[j].type == ',') {
-                                    layer->adjacent_callee->input_arguments.add({});
+                                    layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                                    // layer->adjacent_callee->input_arguments.add({});
                                 } else {
                                     if(layer->adjacent_callee->input_arguments.size() == 0)
-                                        layer->adjacent_callee->input_arguments.add({});
+                                        layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                                        // layer->adjacent_callee->input_arguments.add({});
                                     layer->adjacent_callee->input_arguments.last().add(list[j]);
                                 }
                             } else {
@@ -1302,7 +1249,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                 com.origin = 0; // no origin, is this fine?
                                 // TODO: What about commas
                                 if(layer->adjacent_callee->input_arguments.size() == 0)
-                                    layer->adjacent_callee->input_arguments.add({});
+                                    layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                                    // layer->adjacent_callee->input_arguments.add({});
                                 layer->adjacent_callee->input_arguments.last().add(com);
                             } else {
                                 lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
@@ -1319,7 +1267,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 MacroRoot* macroroot = nullptr;
                 if(!layer->quote_next_token) {
                     std::string name = lexer->getStdStringFromToken(token);
-                    macroroot = preprocessor->matchMacro(origin_import_id, name);
+                    macroroot = preprocessor->matchMacro(origin_import_id, name, this);
                 }
                 if (macroroot) {
                     layer->step(); // name
@@ -1432,14 +1380,16 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     if(layer->adjacent_callee) {
                         if(is_line_or_column) {
                             if(layer->adjacent_callee->input_arguments.size() == 0)
-                                layer->adjacent_callee->input_arguments.add({});
+                                layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                                // layer->adjacent_callee->input_arguments.add({});
                             layer->adjacent_callee->input_arguments.last().add(some_tok);
                         } else {
                             // TODO: We can't pass custom text such as file name as input_argument.
                             //    We would need another array to store that information.
                             Assert(("can't use directives like #line as arguments to macros",false));
                             if(layer->adjacent_callee->input_arguments.size() == 0)
-                                layer->adjacent_callee->input_arguments.add({});
+                                layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                                // layer->adjacent_callee->input_arguments.add({});
                             layer->adjacent_callee->input_arguments.last().add(token);
                         }
                     } else {
@@ -1467,10 +1417,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             }
             if(layer->adjacent_callee) {
                 if (layer->unwrapped && token.type == ',') {
-                    layer->adjacent_callee->input_arguments.add({});
+                    layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                    // layer->adjacent_callee->input_arguments.add({});
                 } else {
                     if(layer->adjacent_callee->input_arguments.size() == 0)
-                        layer->adjacent_callee->input_arguments.add({});
+                        layer->adjacent_callee->add_input_arg(&scratch_allocator);
+                        // layer->adjacent_callee->input_arguments.add({});
                     layer->adjacent_callee->input_arguments.last().add(token);
                 }
             } else {
@@ -1925,47 +1877,122 @@ bool Preprocessor::removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int a
     }
     return removed;
 }
-MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name) {
-    DynamicArray<u32> checked_ids{}; // necessary to prevent infinite loop with circular dependencies
-    DynamicArray<u32> ids_to_check{};
-    ids_to_check.add(import_id);
-    while(ids_to_check.size()>0) {
-        u32 id = ids_to_check.last();
-        ids_to_check.pop();
-        
-        lock_imports.lock();
-        Import* imp = imports.get(id-1);
-        lock_imports.unlock();
-        
-        // lock_imports.lock(); // TODO: lock
-        CompilerImport* cimp = compiler->imports.get(id-1);
-        // lock_imports.unlock();
-        // may happen if import wasn't preprocessed and added to 'imports'
-        // it was added to Compiler.imports but didn't process it before being
-        // here.
-        Assert(imp);
-        Assert(cimp);
-        
-        auto pair = imp->rootMacros.find(name);
-        if(pair != imp->rootMacros.end()){
-            _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
-            return pair->second;
-        }
-        checked_ids.add(id);
-        
-        // TODO: Optimize
-        FOR(cimp->dependencies) {
-            if(it.disabled)
-                continue;
-            bool already_checked = false;
-            for(int i=0;i<checked_ids.size();i++) {
-                if(checked_ids[i] == it.id) {
-                    already_checked=true;
-                    break;   
+MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, PreprocContext* context) {
+    using namespace engone;
+    ZoneScopedC(tracy::Color::DarkGoldenrod2);
+
+    Assert(context);
+
+    auto& ids_to_check = context->ids_to_check;
+
+    // NOTE: In testing, caching macro names has been slow with one macro definition and many evaluations.
+    Assert(context->evaluateTokens);
+    Assert(context->import_id == import_id);
+
+    // NOTE: We pre-compute a list of imports we should check for macros because it's time consuming to through each import and it's dependencies, and then those imports' dependencies.
+    if(!context->has_computed_deps) {
+        context->has_computed_deps = true;
+
+        ids_to_check.clear();
+        ids_to_check.add(import_id);
+
+        int head = 0;
+        while(head < ids_to_check.size()) {
+            u32 id = ids_to_check[head];
+            head++;
+            
+            // lock_imports.lock(); // TODO: lock
+            Import* imp = imports.get(id-1);
+            // lock_imports.unlock();
+            
+            // lock_imports.lock(); // TODO: lock
+            CompilerImport* cimp = compiler->imports.get(id-1);
+            // lock_imports.unlock();
+            // may happen if import wasn't preprocessed and added to 'imports'
+            // it was added to Compiler.imports but didn't process it before being
+            // here.
+            Assert(imp);
+            Assert(cimp);
+            
+            // TODO: Optimize
+            FOR(cimp->dependencies) {
+                if(it.disabled)
+                    continue;
+                bool already_checked = false;
+                for(int i=0;i<ids_to_check.size();i++) {
+                    if(ids_to_check[i] == it.id) {
+                        already_checked=true;
+                        break;
+                    }
+                }
+                if(!already_checked) {
+                    ids_to_check.add(it.id);
                 }
             }
-            if(!already_checked) {
-                ids_to_check.add(it.id);
+        }
+    }
+    
+    auto pair = context->cached_macro_names.find(name);
+    if(pair != context->cached_macro_names.end()) {
+        return pair->second.root;
+    }
+
+    // TODO: We pre-calculate which imports we check macros from. If we #import a file with macros after pre-calculation then we won't see those macros. We need to check if new imports were added. How would this work with multithreading?
+    
+    if(context->has_computed_deps) {
+        FOR(ids_to_check) {
+            auto id = it;
+            Import* imp = imports.get(id-1);
+
+            auto pair = imp->rootMacros.find(name);
+            if(pair != imp->rootMacros.end()){
+                // _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
+                context->cached_macro_names[name] = { pair->second };
+                return pair->second;
+            }
+        }
+    } else {
+        ids_to_check.clear();
+        ids_to_check.add(import_id);
+        int head = 0;
+        while(head < ids_to_check.size()) {
+            u32 id = ids_to_check[head];
+            head++;
+            
+            // lock_imports.lock(); // TODO: lock
+            Import* imp = imports.get(id-1);
+            // lock_imports.unlock();
+            
+            // lock_imports.lock(); // TODO: lock
+            CompilerImport* cimp = compiler->imports.get(id-1);
+            // lock_imports.unlock();
+            // may happen if import wasn't preprocessed and added to 'imports'
+            // it was added to Compiler.imports but didn't process it before being
+            // here.
+            Assert(imp);
+            Assert(cimp);
+            
+            auto pair = imp->rootMacros.find(name);
+            if(pair != imp->rootMacros.end()){
+                _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
+                context->cached_macro_names[name] = { pair->second };
+                return pair->second;
+            }
+            
+            // TODO: Optimize
+            FOR(cimp->dependencies) {
+                if(it.disabled)
+                    continue;
+                bool already_checked = false;
+                for(int i=0;i<ids_to_check.size();i++) {
+                    if(ids_to_check[i] == it.id) {
+                        already_checked=true;
+                        break;   
+                    }
+                }
+                if(!already_checked) {
+                    ids_to_check.add(it.id);
+                }
             }
         }
     }

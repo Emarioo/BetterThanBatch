@@ -1,53 +1,93 @@
 // With hotreloading
 // #import "examples/crawler/main"
 // Without hotreloading
-// #import "examples/crawler/GameCore"
+#import "examples/crawler/GameCore"
 
 
-/*
-    Today's quest: Inferred initializers.
+// #macro OK 1 23 "damjioajdoajdo" "jajdo" "jaod" "joaj" "odj" 6 623
 
-    Below are some scenarios
-*/
-#import "Logger"
 
-struct A {
-    x: i32
-}
-// Declarations
-arr: A = { 1 }
 
-// Assignments
-arr = { 5 }
-log(&arr)
-
-// // Default members
-struct B {
-    a: A =  { 3 };
-}
-b: B
-
-// // Initializers
-b = { { 2 } }
-log(&b)
-
-// Function calls
-fn okay(a: A) { log(&a)}
-okay({ 2 })
-
-// // Default args
-fn hi(a: A = { 1 }) {}
-hi()
-
-// Named arguments with default arg
-fn okaye(a: A = { 1 }) { log(&a) }
-okaye(a = { 2 })
-
-// Named argument WITHOUT default arg (doesn't work because named args don't work without default args)
-// fn okayed(a: i32) {}
-// okayed(a = {})
-
-// // operators
-// added := get_a() + { 1 }
-// Should we allow this?
-
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK  OK OK OK OK OK OK 
+// OK 
+// OK 
+// OK 
+// OK 
+// OK  OK OK OK OK OK 
+// OK 
+// OK 
+// OK  OK OK OK OK OK 
+// OK 
+// OK 
+// OK 

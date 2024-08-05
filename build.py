@@ -7,6 +7,7 @@
 
 import glob, os, sys, time, platform, threading, shutil, multiprocessing
 
+global global_config
 global_config = {}
 def enabled(what):
     global global_config
@@ -35,7 +36,7 @@ def main():
     config["use_compiler"] = "msvc"
 
     config["use_debug"] = True
-    # config["use_tracy"] = True
+    config["use_tracy"] = True
     # config["use_optimizations"] = True
     # config["run_when_finished"] = True
 
@@ -48,11 +49,18 @@ def main():
     # config["use_opengl"] = True # rarely used
     # config["thread_count"] = 8
     config["thread_count"] = multiprocessing.cpu_count()
-
     yes = compile(config)
 
     if not yes:
         print("Compilation failed")
+    else:
+        filepath = config["output"]
+        filepath = filepath.replace("\\","/")
+        ind = filepath.rfind("/")
+        filename = filepath
+        if ind != -1:
+            filename = filepath[ind+1:]
+        shutil.copy(config["output"], filename)
 
     if yes and enabled("run_when_finished"):
         # cmd("bin/btb -dev")
@@ -85,11 +93,12 @@ def compile(config):
 
     if len(sys.argv) > 1:
         # clean config, use settings from command line instead of those specified above
-        new_config = {}
-        new_config["output"] = config["output"]
-        new_config["use_compiler"] = config["use_compiler"]
-        new_config["thread_count"] = config["thread_count"]
-        config = new_config
+        # YO! this is strange, perhaps skip it completly?
+        #new_config = {}
+        #new_config["output"] = config["output"]
+        #new_config["use_compiler"] = config["use_compiler"]
+        #new_config["thread_count"] = config["thread_count"]
+        #config = new_config
         global_config = config
 
     # parse command line arguments
@@ -123,6 +132,10 @@ def compile(config):
             return True
         else:
             config[arg] = True
+            # this allows use to write
+            #   py build.py use_tracy
+            # instead of
+            #   py build.py use_tracy=true
 
         # print(config)
     # return False
@@ -135,6 +148,8 @@ def compile(config):
 
     if config["use_compiler"] == "msvc" and platform.system() == "Linux":
         config["use_compiler"] == "gcc"
+
+    # print(config)
 
     if not "output" in config:
         print("config does not specify output path")
@@ -151,8 +166,15 @@ def compile(config):
         file = file.replace("\\","/")
         if file.find("__") != -1:
             continue
-        if not enabled("use_opengl") and file.find("UIModule") != -1:
+        if file.find("UIModule") != -1:
             continue
+
+        if platform.system() == "Windows":
+            if file.find("Linux.cpp") != -1:
+                continue
+        elif platform.system() == "Linux":
+            if file.find("Win32.cpp") != -1:
+                continue
 
         if file.find("/BetBat/") == -1 and file.find("/Engone/") == -1:
             continue
@@ -188,35 +210,22 @@ def compile(config):
         os.mkdir("bin")
 
     if platform.system() == "Windows" and config["use_compiler"] == "msvc":
-        MSVC_COMPILE_OPTIONS    = "/std:c++14 /nologo /EHsc /TP /wd4129"
+        MSVC_COMPILE_OPTIONS    = "/std:c++17 /nologo /EHsc /TP /wd4129"
         MSVC_LINK_OPTIONS       = "/nologo /ignore:4099 Advapi32.lib shell32.lib"
-        MSVC_INCLUDE_DIRS       = "/Iinclude /Ilibs/stb/include"
+        MSVC_INCLUDE_DIRS       = "/Iinclude /Ilibs/tracy-0.10/public"
         MSVC_DEFINITIONS        = "/DOS_WINDOWS /DCOMPILER_MSVC"
-
-
-        if enabled("use_optimizations"):
-            MSVC_COMPILE_OPTIONS += " /O2"
 
         if enabled("use_debug"):
             MSVC_COMPILE_OPTIONS += " /Zi"
             MSVC_LINK_OPTIONS += " /DEBUG" # /PROFILE
-        
-        if enabled("use_opengl"):
-            MSVC_COMPILE_OPTIONS += " /Zi"
-            MSVC_LINK_OPTIONS    += " /DEBUG" # /PROFILE
-            MSVC_INCLUDE_DIRS    += " /Ilibs/glfw-3.3.9/include /Ilibs/glad/include"
-            
-            cmd("cl /c /nologo /std:c++14 /Ilibs/glad/include libs/glad/src/glad.c /Fobin/glad.obj")
-            MSVC_LINK_OPTIONS += " gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.9/lib-vc2022/glfw3_mt.lib bin/glad.obj"
-        else:
-            MSVC_DEFINITIONS += " /DNO_UIMODULE"
-        
-        MSVC_INCLUDE_DIRS += " /Ilibs/tracy-0.10/public"
 
+        if enabled("use_optimizations"):
+            MSVC_COMPILE_OPTIONS += " /O2"
+        
         if enabled("use_tracy"):
             MSVC_DEFINITIONS  += " /DTRACY_ENABLE"
             MSVC_LINK_OPTIONS += " bin/tracy.obj"
-            if not os.path.exists("bin/tracy.obj"):
+            if not os.path.exists("bin/tracy.obj") or True:
                 cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+ MSVC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp /Fobin/tracy.obj")
 
         MSVC_COMPILE_OPTIONS += " /FI pch.h"
@@ -226,6 +235,9 @@ def compile(config):
 
         if len(modified_files) == 0 and os.path.exists(config["output"]):
             compile_success = True
+            # print("files up to date, skipping")
+            # skipping like this won't work if compile flags change
+            # because we should recompile if so.
         else:
             # With MSVC we do a unity build, compile on source file that includes all other source files
             srcfile = "bin/all.cpp"
@@ -234,7 +246,8 @@ def compile(config):
                 fd.write("#include \"" + os.path.abspath(file) + "\"\n")
             fd.close()
 
-            err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
+            err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
+            # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
             # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
 
             compile_success = err == 0
@@ -243,8 +256,8 @@ def compile(config):
 
     elif config["use_compiler"] == "gcc":
         GCC_COMPILE_OPTIONS = "-std=c++14"
-        GCC_INCLUDE_DIRS    = "-Iinclude -Ilibs/stb/include -Ilibs/glfw-3.3.8/include -Ilibs/glew-2.1.0/include -Ilibs/tracy-0.10/public -include include/pch.h "
-        GCC_DEFINITIONS     = "-DNO_UIMODULE  -DCOMPILER_GNU"
+        GCC_INCLUDE_DIRS    = "-Iinclude -Ilibs/tracy-0.10/public -include include/pch.h "
+        GCC_DEFINITIONS     = "-DCOMPILER_GNU"
         GCC_LINK_OPTIONS    = ""
         if platform.system() == "Windows":
             GCC_DEFINITIONS += " -DOS_WINDOWS"
@@ -257,10 +270,11 @@ def compile(config):
 
         if enabled("use_debug"):
             GCC_COMPILE_OPTIONS += " -g"
+
         if enabled("use_optimizations"):
             GCC_COMPILE_OPTIONS += " -O3"
+
         if enabled("use_tracy"):
-            # tracy have not been tested on Linux
             if platform.system() == "Windows":
                 GCC_DEFINITIONS += " -DTRACY_ENABLE"
                 GCC_LINK_OPTIONS += " bin/tracy.o"
@@ -268,18 +282,8 @@ def compile(config):
                     cmd("g++ -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10\public\TracyClient.cpp -o bin/tracy.o")
                 
             else:
-                print("build.py doesn't support opengl on Linux")
+                print("build.py doesn't support tracy on Linux, needs testing")
             
-        if enabled("use_opengl"):
-            # opengl have not been tested on Linux
-            if platform.system() == "Windows":
-                if not os.path.exists("bin/glad.o"):
-                    cmd("gcc -c -std=c11 -Ilibs/glad/include libs\glad\src\glad.c -o bin/glad.o")
-                GCC_INCLUDE_DIRS += " -Ilibs/glfw-3.3.9/include -Ilibs/glad/include"
-                GCC_LINK_OPTIONS += " -lgdi32 -luser32 -lOpenGL32 -Llibs/glfw-3.3.9/lib-mingw-w64 -lglfw3 bin\glad.o"
-            else:
-                print("build.py doesn't support opengl on Linux")
-        
         # Code below compiles the necessary object files
       
         if platform.system() == "Windows":

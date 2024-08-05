@@ -5,34 +5,16 @@
 
 #include "BetBat/Help.h"
 
+#include "tracy/Tracy.hpp"
+
 #include <math.h>
 
 #include "BetBat/Fuzzer.h"
 #include "BetBat/Lexer.h"
 
-// I was experimenting GLFW and OpenGL which is why STB_IMAGE is here. It should probably be removed in the future.
-// #include "BetBat/glfwtest.h"
-
-#ifdef USE_GRAPHICS
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb/stb_image.h"
-#include "stb/stb_image_write.h"
-#undef STB_IMAGE_IMPLEMENTATION
-#undef STB_IMAGE_WRITE_IMPLEMENTATION
-#endif
-
-// #include "fcntl.h"
-
-// #include "Engone/Win32Includes.h"
 #undef FILE_READ_ONLY // bye bye Windows defined flag
 #undef IMAGE_REL_AMD64_REL32
 #undef coff
-
-void garbage() {
-    // int a[20];
-    // int b = a[1] + (a[2] + (a[3] + (a[4] + (hm() + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (hm() + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
-}
 
 bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions* out_options);
 
@@ -43,40 +25,7 @@ int main(int argc, const char** argv){
 
     auto main_start = StartMeasure();
 
-    // log::out << sizeof(pthread_mutex_t) << "\n";
-
-    // // auto cmd = GetCommandLineA();
-    // // int cmd_len = 0;
-    // // int arg_count = 0;
-    // // for(int i=0;i<)
-    
-    // // int len = strlen(cmd);
-    // // malloc(len + )
-    
-    // // 10
-    // // 5 5*8 40
-    // // btb -a -r -t -y -i -i
-
-    // int num = 0;
-    // auto args = CommandLineToArgvW((const wchar_t*)cmd, &num);
-    // log::out << num<<"\n";
-    // for(int i=0;i<num;i++) {
-    //     const char* ok = (const char*)args[i];
-    //     log::out << ok << "\n";
-    // }
-
     ProfilerInitialize();
-    
-    // auto lib = LoadDynamicLibrary("Kernel32.dll");
-    // UnloadDynamicLibrary(lib);
-    // return 0;
-
-    // int n = 020;
-
-    // int fd = open("examples", O_DIRECTORY);
-    // log::out << fd << "\n";
-
-    // return 0;
     
     DynamicArray<std::string> arguments{};
     for(int i=1;i<argc;i++) // is the first argument always the executable?
@@ -89,7 +38,6 @@ int main(int argc, const char** argv){
     //   I would rather implement the real solution than mess around with compile options here.
     CompileOptions options{};
     bool valid = InterpretCommands(arguments, &options);
-
 
     int exit_code = EXIT_CODE_SUCCESS;
 
@@ -216,6 +164,8 @@ int main(int argc, const char** argv){
     }
 
     // ###### CLEANUP STUFF ######
+
+    // log::out << "allocs "<<GetTotalNumberAllocations()<<"\n";
 
     options.cleanup();
     ProfilerCleanup();
@@ -388,7 +338,7 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
                 invalidArguments = true;
                 log::out << log::RED << "You must specify a pattern after '"<<arg<<"'.\n";
             }
-        } else if(arg == "--user-args" || arg == "-ua") {
+        } else if(arg == "--user-args" || arg == "-ua" || arg == "--") {
             i++;
             for(;i<commands.size();i++) {
                 options->userArguments.add(commands[i]);

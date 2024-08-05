@@ -1,22 +1,14 @@
 #pragma once
 
-#ifndef NO_PERF
 #include "tracy/Tracy.hpp"
+
+// Enable/disable Mutex tracing (the whole codebase doesn't use MUTEX macro)
 // #define MUTEX(NAME) TracyLockable(engone::Mutex,NAME)
 #define MUTEX(NAME) engone::Mutex NAME
-#else
-// NativeLayer/Win32 needs this
+
+// Disable allocation tracing (used in Win32.cpp)
+#undef TracyAlloc
+#undef TracyFree
 #define TracyAlloc(...)
 #define TracyFree(...)
-#endif
-// #if !defined(NO_PERF) && defined(TRACY_ENABLE)
 
-// // #define MEASURE ZoneScoped;
-// // #define MEASURE_WHO(CSTR)
-
-// #else
-
-// // #define MEASURE
-// // #define MEASURE_WHO(CSTR)
-
-// #endif
