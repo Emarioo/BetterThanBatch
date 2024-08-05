@@ -35,6 +35,10 @@ namespace parser {
 
 #define SIGNAL_INVALID_DATATYPE(datatype) if(datatype.empty()) { ERR_DEFAULT(info.gettok(),"Token(s) do not conform to a data type.","bad type") return SIGNAL_COMPLETE_FAILURE; } Assert(signal == SIGNAL_SUCCESS);
 
+#undef TEMP_ARRAY
+// #define TEMP_ARRAY(TYPE,NAME) QuickArray<TYPE> NAME; NAME.init(&scratch_allocator);
+#define TEMP_ARRAY(TYPE,NAME) QuickArray<TYPE> NAME;
+
 /*#################################
     Convenient/utility functions
 ###################################*/
@@ -1504,14 +1508,13 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     
-    TINY_ARRAY(ASTExpression*, values, 5);
-    TINY_ARRAY(lexer::Token, extraTokens, 5); // ops, assignOps and castTypes doesn't store the token so you know where it came from. We therefore use this array.
-    TINY_ARRAY(OperationType, ops, 5);
-    TINY_ARRAY(OperationType, assignOps, 5);
-    TINY_ARRAY(TypeId, castTypes, 5);
+    TEMP_ARRAY(ASTExpression*, values);
+    TEMP_ARRAY(lexer::Token, extraTokens); // ops, assignOps and castTypes doesn't store the token so you know where it came from. We therefore use this array.
+    TEMP_ARRAY(OperationType, ops);
+    TEMP_ARRAY(OperationType, assignOps);
+    TEMP_ARRAY(TypeId, castTypes);
+    TEMP_ARRAY(lexer::SourceLocation, saved_locations);
     DynamicArray<std::string> namespaceNames{};
-
-    DynamicArray<lexer::SourceLocation> saved_locations;
 
     bool prev_assign = allow_assignments;
 

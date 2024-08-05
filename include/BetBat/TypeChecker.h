@@ -39,6 +39,8 @@ struct TyperContext : public PhaseContext {
 
     TypeId inferred_type{};
 
+    engone::LinearAllocator scratch_allocator;
+
     FuncImpl* currentFuncImpl = nullptr;
     ASTFunction* currentAstFunc = nullptr;
     
@@ -75,9 +77,8 @@ struct TyperContext : public PhaseContext {
     SignalIO checkExpression(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length = nullptr);
     SignalIO checkFncall(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs = nullptr);
 
+    void init_context(Compiler* compiler);
 };
-
-int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);
 
 void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler);
 // may fail in which case we should try again

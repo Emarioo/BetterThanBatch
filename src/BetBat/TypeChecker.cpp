@@ -1,12 +1,22 @@
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Compiler.h"
 
+/* IMPORTANT: QuickArray DO NOT REPLACE quick array with dynamic array!
+    QuickArray is faster than DynamicArray, no destructor/constructors.
+*/
+
 // Old logging
 #undef WARN_HEAD3
 #define WARN_HEAD3(R,M) info.compileInfo->options->compileStats.warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
 
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION2(CONTENT)
+
+#undef TEMP_ARRAY
+#define TEMP_ARRAY(TYPE,NAME) QuickArray<TYPE> NAME; NAME.init(&scratch_allocator);
+#define TEMP_ARRAY_N(TYPE,NAME, N) QuickArray<TYPE> NAME; NAME.init(&scratch_allocator); NAME.reserve(N);
+
+// #define TEMP_ARRAY(TYPE,NAME) QuickArray<TYPE> NAME;
 
 // #define _TCLOG_ENTER(...) FUNC_ENTER_IF(global_loggingSection & LOG_TYPECHECKER)
 // #define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
@@ -112,7 +122,10 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
    
     structImpl->members.resize(astStruct->members.size());
 
-    TINY_ARRAY(TypeId, tempTypes, 4)
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
+    TEMP_ARRAY_N(TypeId, tempTypes, 5)
+    
     bool success = true;
     _TCLOG(log::out << "Check struct impl '"<<info.ast->typeToString(structInfo->id)<<"'\n";)
     //-- Check members
@@ -307,21 +320,23 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
     _TCLOG_ENTER(FUNC_ENTER)
     // _TCLOG(log::out << "check "<<typeString<<"\n";)
 
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
     // TODO: Log what type we thought it was
     TypeId typeId = {};
     u32 plevel=0;
-    QuickArray<StringView> polyTokens;
+    TEMP_ARRAY(StringView, polyTokens)
     StringView baseType{};
     std::string realTypeName{};
-    TINY_ARRAY(TypeId, polyArgs, 4);
+    TEMP_ARRAY(TypeId, polyArgs)
 
     std::string tmp = typeString;
     if (tmp.substr(0,3) == "fn(" || tmp.substr(0,3) == "fn@") {
         // This code is better
         // TODO: Polymorphic functions don't work, not tested at least.
         
-        DynamicArray<TypeId> args;
-        DynamicArray<TypeId> rets;
+        TEMP_ARRAY(TypeId, args);
+        TEMP_ARRAY(TypeId, rets);
         CallConvention convention = BETCALL;
         
         int head = 2;
@@ -703,14 +718,13 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
     #define FIX_NO_SPECIAL_ACTIONS for (auto& ent : possible_overload_groups) { ent.iden = nullptr; ent.set_implicit_this = false; }
 
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
 
     // fail should perhaps not output void as return type.
 
     //-- Get poly args from the function call
-    // DynamicArray<TypeId> fnPolyArgs;
-    TINY_ARRAY(TypeId, fnPolyArgs, 4);
-    // TINY_ARRAY(Token,polyTokens,4);
-    QuickArray<StringView> polyTypes{};
+    TEMP_ARRAY(TypeId, fnPolyArgs);
+    TEMP_ARRAY(StringView, polyTypes);
 
     // Token baseName{};
     StringView baseName{};
@@ -741,10 +755,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
     // DynamicArray<TypeId>& argTypes = expr->versions_argTypes[info.currentPolyVersion];
     // DynamicArray<TypeId> argTypes{};
-    TINY_ARRAY(TypeId, argTypes, 5);
-    TINY_ARRAY(TypeId, tempTypes, 2);
+    TEMP_ARRAY_N(TypeId, argTypes, 3);
+    TEMP_ARRAY_N(TypeId, tempTypes, 5);
+    // QuickArray<TypeId> tempTypes{};
 
-    DynamicArray<bool> inferred_args{}; // Inferred arguments are assumed to be initializers for structs. Variable should maybe be renamed to initializer arguments.
+    TEMP_ARRAY_N(bool, inferred_args, 5); // Inferred arguments are assumed to be initializers for structs. Variable should maybe be renamed to initializer arguments.
     struct Entry {
         FnOverloads* fn_overloads = nullptr;
         StructImpl* parentStructImpl = nullptr;
@@ -754,7 +769,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         bool set_implicit_this = false;
         Identifier* iden = nullptr;
     };
-    DynamicArray<Entry> possible_overload_groups{};
+    TEMP_ARRAY(Entry, possible_overload_groups)
     defer {
         // these asserts helps preventing mistakes
         // when finding function names we need to do certain things like setting
@@ -768,8 +783,6 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
     };
 
-    // TinyArray<TypeId> tempTypes{};
-    // TINY_ARRAY(TypeId, tempTypes, 2);
     if(operatorOverloadAttempt){
         Assert(operatorArgs);
         if(operatorArgs->size() != 2) {
@@ -779,8 +792,6 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         memcpy(argTypes.data(), operatorArgs->data(), operatorArgs->size() * sizeof(TypeId)); // TODO: Use TintArray::copyFrom() instead (function not implemented yet)
         inferred_args.resize(2);
         
-        // DynamicArray<TypeId> tempTypes{};
-        // tempTypes.resize(0);
         // NOTE: We pour out types into tempTypes instead of argTypes because
         //   we want to separate how many types we get from each expression.
         //   If an expression gives us more than one type then we throw away the other ones.
@@ -1201,7 +1212,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         // We add method as potential overload but we also need to find identifier since method might not match.   
         // Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName, nullptr);
 
-        DynamicArray<Identifier*> identifiers{};
+        TEMP_ARRAY(Identifier*, identifiers);
         info.ast->findIdentifiers(scopeId, info.getCurrentOrder(), baseName, identifiers, nullptr);
 
         // if(iden) {
@@ -1317,15 +1328,26 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
     }
 
-    #define FIX_SPECIAL_ACTIONS if(ent.set_implicit_this) {                     \
-                                    expr->setImplicitThis(true);                \
-                                    ent.set_implicit_this = false;              \
-                                }                                               \
-                                if(ent.iden) {                                  \
-                                    expr->identifier = ent.iden;                \
-                                    ent.iden = nullptr;                         \
-                                }\
-                                for (auto& ent2 : possible_overload_groups) { if (&ent == &ent2) continue; ent2.iden = nullptr; ent2.set_implicit_this = false; }
+    #define FIX_SPECIAL_ACTIONS \
+        if(ent.set_implicit_this) {                     \
+            expr->setImplicitThis(true);                \
+            ent.set_implicit_this = false;              \
+        }                                               \
+        if(ent.iden) {                                  \
+            expr->identifier = ent.iden;                \
+            ent.iden = nullptr;                         \
+        }                                               \
+        for (auto& ent2 : possible_overload_groups) {   \
+            if (&ent == &ent2)                          \
+                continue;                               \
+            ent2.iden = nullptr;                        \
+            ent2.set_implicit_this = false;             \
+        } 
+        // log::out << "WA "<<expr->name<<"\n";          \
+        // for (auto& ent2 : possible_overload_groups) {   \
+        //     log::out << " ent "<< (void*)ent2.iden << "\n";                      \
+        // } \
+        // log::out.flush();
 
     // IMPORTANT TODO: There is a bug with polymorphism and overloading. A function call in
     //   a polymoprhic function may match with a method with certain arguments
@@ -1411,6 +1433,13 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 FIX_SPECIAL_ACTIONS
 
                 FNCALL_SUCCESS
+
+                // log::out << "WA2 "<<expr->name<<"\n";
+                // for (auto& ent2 : possible_overload_groups) {
+                //     log::out << " ent "<< (void*)ent2.iden << "\n";
+                // }
+                // log::out.flush();
+
                 return SIGNAL_SUCCESS;
             }
         }
@@ -2118,10 +2147,13 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         )
     )
 
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
     // IMPORTANT NOTE: CheckExpression HAS to run for left and right expressions
     //  since they may require types to be checked. AST_SIZEOF needs to evalute for example
 
-    TINY_ARRAY(TypeId, typeArray, 1);
+    TEMP_ARRAY_N(TypeId, tempTypes, 5);
+    TEMP_ARRAY_N(TypeId, operatorArgs, 2);
 
     // switch
     if(expr->isValue) {
@@ -2324,9 +2356,9 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 }
                 if(!finalType.isValid()) {
                     // DynamicArray<TypeId> temps{};
-                    typeArray.resize(0);
-                    SignalIO result = checkExpression(scopeId, expr->left, &typeArray, attempt);
-                    finalType = typeArray.size()==0 ? AST_VOID : typeArray.last();
+                    tempTypes.resize(0);
+                    SignalIO result = checkExpression(scopeId, expr->left, &tempTypes, attempt);
+                    finalType = tempTypes.size()==0 ? AST_VOID : tempTypes.last();
                 }
             } else {
                 auto& name = expr->name;
@@ -2441,37 +2473,36 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         // if(str) {
 
         if(expr->typeId != AST_REFER && expr->typeId != AST_DEREF && expr->typeId != AST_MEMBER&& expr->typeId != AST_CAST && expr->typeId != AST_INITIALIZER) {
-            TINY_ARRAY(TypeId, operatorArgs, 2);
             // BREAK(expr->nodeId == 2606)
             
             if(expr->left) {
-                typeArray.resize(0);
-                checkExpression(scopeId, expr->left, &typeArray, attempt);
-                if(typeArray.size() > 1) {
+                tempTypes.resize(0);
+                checkExpression(scopeId, expr->left, &tempTypes, attempt);
+                if(tempTypes.size() > 1) {
                     // Error message for right expr is the same as below, DON'T
                     // forget to modify both when changing stuff!
                     ERR_SECTION(
                         ERR_HEAD2(expr->right->location)
                         ERR_MSG("Left expression produced more than one value which isn't allowed with the operation '"<<info.ast->typeToString(expr->typeId)<<"'.")
-                        ERR_LINE2(expr->right->location,typeArray.size() << " values");
+                        ERR_LINE2(expr->right->location,tempTypes.size() << " values");
                     )
                     return SIGNAL_FAILURE;
                 }
-                if(typeArray.size()>0) {
-                    leftType = typeArray.last();
-                    operatorArgs.add(typeArray.last());
+                if(tempTypes.size()>0) {
+                    leftType = tempTypes.last();
+                    operatorArgs.add(tempTypes.last());
                 }
             }
             if(expr->right) {
-                typeArray.resize(0);
+                tempTypes.resize(0);
                 bool is_assignment = (expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0);
                 if(is_assignment) {
                     inferred_type = leftType;
                 }
-                auto signal = checkExpression(scopeId, expr->right, &typeArray, attempt);
+                auto signal = checkExpression(scopeId, expr->right, &tempTypes, attempt);
                 inferred_type = {};
                 
-                if(typeArray.size() > 0 && typeArray[0] == AST_VOID) {
+                if(tempTypes.size() > 0 && tempTypes[0] == AST_VOID) {
                     if(hasAnyErrors()) {
                         return SIGNAL_FAILURE;
                     } else {
@@ -2485,9 +2516,9 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     //   But user may want to specify that you can't skip
                     //   values from certain functions (like error codes).
                     //   How do we do that here?
-                    if(typeArray.size()>0) {
-                        rightType = typeArray[0];
-                        operatorArgs.add(typeArray[0]);
+                    if(tempTypes.size()>0) {
+                        rightType = tempTypes[0];
+                        operatorArgs.add(tempTypes[0]);
                     } else {
                         ERR_SECTION(
                             ERR_HEAD2(expr->right->location)
@@ -2497,28 +2528,30 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                         return SIGNAL_FAILURE;
                     }
                 } else {
-                    if(typeArray.size() > 1) {
+                    if(tempTypes.size() > 1) {
                         // Error message for left expr is the same as above, DON'T
                         // forget to modify both when changing stuff!
                         ERR_SECTION(
                             ERR_HEAD2(expr->right->location)
                             ERR_MSG("Right expression produced more than one value which isn't allowed with the operation '"<<info.ast->typeToString(expr->typeId)<<"'.")
-                            ERR_LINE2(expr->right->location,typeArray.size() << " values");
+                            ERR_LINE2(expr->right->location,tempTypes.size() << " values");
                         )
                         return SIGNAL_FAILURE;
                     }
-                    if(typeArray.size()>0) {
-                        rightType = typeArray[0];
-                        operatorArgs.add(typeArray[0]);
+                    if(tempTypes.size()>0) {
+                        rightType = tempTypes[0];
+                        operatorArgs.add(tempTypes[0]);
                     }
                 }
             }
+            // TODO: Optimize operator overload check. checkExpression executes in 250 ms where checking operator overloading is responsible for 100 ms. If we could optimize then we may run checkExpression in 150 + 20 ms instead. The key is a fast determination of whether expression is operator overloaded.
+
             // TODO: You should not be allowed to overload all operators.
             //  Fix some sort of way to limit which ones you can.
             const char* str = OP_NAME(expr->typeId.getId());
-            // log::out << "Check " << str << "\n";
+            // // log::out << "Check " << str << "\n";
             if(str && operatorArgs.size() == 2) {
-                
+                ZoneScopedNC("check operator",tracy::Color::WebPurple);
                 int prev = expr->nonNamedArgs;
                 expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
                 SignalIO result = checkFncall(scopeId,expr, outTypes, attempt, true, &operatorArgs);
@@ -2537,6 +2570,9 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 expr->nonNamedArgs = prev;
             }
         }
+
+        ZoneScopedNC("check operation",tracy::Color::WebPurple);
+
         switch(expr->typeId.getId()) {
         case AST_REFER: {
             if(expr->left) {
@@ -2586,20 +2622,18 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     return SIGNAL_SUCCESS;
                 }
             }
-            // DynamicArray<TypeId> typeArray{};
-            // TINY_ARRAY(TypeId, typeArray, 1);
             int expr_array_length = 0;
             if(expr->left) {
                 // Operator overload checking does not run on AST_MEMBER since it can't be overloaded
                 // leftType has therefore note been set and expression not checked.
                 // We must check it here.
-                checkExpression(scopeId, expr->left, &typeArray, attempt, &expr_array_length);
-                if(typeArray.size()>0)  
-                    leftType = typeArray.last();
+                checkExpression(scopeId, expr->left, &tempTypes, attempt, &expr_array_length);
+                if(tempTypes.size()>0)  
+                    leftType = tempTypes.last();
             }
 
-            // if(typeArray.size()==0) 
-            //     typeArray.add(AST_VOID);
+            // if(tempTypes.size()==0) 
+            //     tempTypes.add(AST_VOID);
             // outType holds the type of expr->left
             TypeInfo* ti = info.ast->getTypeInfo(leftType.baseType());
             if(leftType.getPointerLevel() >= 2) {
@@ -2688,7 +2722,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             } else {
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
-                    ERR_MSG("Member access only works on variable with a struct type and enums. The type '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).")
+                    ERR_MSG("Member access only works on variable with a struct type and enums. The type '" << info.ast->typeToString(tempTypes.last()) << "' is neither (astStruct/astEnum were null).")
                     ERR_LINE2(expr->left->location,"cannot take a member from this")
                     ERR_LINE2(expr->location,"member to access")
                 )
@@ -2700,32 +2734,31 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         case AST_INDEX: {
             // TODO: THE COMMENTED CODE CAN BE REMOVED. IT'S OLD. SOMETHING WITH OPERATOR OVERLOADING
             // BUT WE DO THAT ABOVE.
-            // TINY_ARRAY(TypeId, operatorArgs, 2);
             
             // TypeId leftType = {}, rightType = {};
             // if(expr->left) {
-            //     typeArray.resize(0);
-            //     checkExpression(scopeId, expr->left, &typeArray, attempt);
-            //     Assert(typeArray.size()<2); // error message
-            //     if(typeArray.size()>0) {
-            //         leftType = typeArray.last();
-            //         operatorArgs.add(typeArray.last());
+            //     tempTypes.resize(0);
+            //     checkExpression(scopeId, expr->left, &tempTypes, attempt);
+            //     Assert(tempTypes.size()<2); // error message
+            //     if(tempTypes.size()>0) {
+            //         leftType = tempTypes.last();
+            //         operatorArgs.add(tempTypes.last());
             //     }
             // }
             // if(expr->right) {
-            //     typeArray.resize(0);
-            //     checkExpression(scopeId, expr->right, &typeArray, attempt);
-            //     Assert(typeArray.size()<2); // error message
-            //     if(typeArray.size()>0) {
-            //         rightType = typeArray.last();
-            //         operatorArgs.add(typeArray.last());
+            //     tempTypes.resize(0);
+            //     checkExpression(scopeId, expr->right, &tempTypes, attempt);
+            //     Assert(tempTypes.size()<2); // error message
+            //     if(tempTypes.size()>0) {
+            //         rightType = tempTypes.last();
+            //         operatorArgs.add(tempTypes.last());
             //     }
             // }
             // if(expr->left) {
-            //     checkExpression(scopeId, expr->left, &typeArray, attempt);
-            //     if(typeArray.)
-            //     // if(typeArray.size()==0){
-            //     //     typeArray.add(AST_VOID);
+            //     checkExpression(scopeId, expr->left, &tempTypes, attempt);
+            //     if(tempTypes.)
+            //     // if(tempTypes.size()==0){
+            //     //     tempTypes.add(AST_VOID);
             //     // }
             // }
             // if(expr->right) {
@@ -2741,7 +2774,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             //     if(result != SIGNAL_NO_MATCH)
             //         return result;
             // }
-            // DynamicArray<TypeId> typeArray{};
+            // DynamicArray<TypeId> tempTypes{};
             
             // if(outTypes) outTypes->add(AST_VOID);
             // DynamicArray<TypeId> temp{};
@@ -2831,8 +2864,8 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         case AST_CAST: {
             // DynamicArray<TypeId> temp{};
             Assert(expr->left);
-            checkExpression(scopeId, expr->left, &typeArray, attempt);
-            Assert(typeArray.size()==1);
+            checkExpression(scopeId, expr->left, &tempTypes, attempt);
+            Assert(tempTypes.size()==1);
 
             Assert(expr->castType.isString());
             bool printedError = false;
@@ -2852,9 +2885,9 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             
             if(expr->isUnsafeCast()) {
                 int ls = info.ast->getTypeSize(ti);
-                int rs = info.ast->getTypeSize(typeArray.last());
+                int rs = info.ast->getTypeSize(tempTypes.last());
                 if(ls != rs) {
-                    std::string strleft = info.ast->typeToString(typeArray.last()) + " ("+std::to_string(ls)+")";
+                    std::string strleft = info.ast->typeToString(tempTypes.last()) + " ("+std::to_string(ls)+")";
                     std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
                     ERR_SECTION(
                         ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
@@ -2864,8 +2897,8 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                         ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
                     )
                 }
-            } else if(!(typeArray.last().getPointerLevel() > 0 && ti.getPointerLevel() > 0) && !info.ast->castable(typeArray.last(),ti, true)){
-                std::string strleft = info.ast->typeToString(typeArray.last());
+            } else if(!(tempTypes.last().getPointerLevel() > 0 && ti.getPointerLevel() > 0) && !info.ast->castable(tempTypes.last(),ti, true)){
+                std::string strleft = info.ast->typeToString(tempTypes.last());
                 std::string strcast = info.ast->typeToString(ti);
                 ERR_SECTION(
                     ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
@@ -3192,6 +3225,8 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER)
     
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
     // log::out << "CheckFunction "<<function->name<<"\n";
     if(parentStruct){
         for(int i=0;i<(int)parentStruct->polyArgs.size();i++){
@@ -3281,7 +3316,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
     if(function->polyArgs.size()==0 && (!parentStruct || parentStruct->polyArgs.size() == 0)){
         // The code below is used to 
         // Acquire identifiable arguments
-        DynamicArray<TypeId> argTypes{};
+        TEMP_ARRAY(TypeId, argTypes);
         for(int i=0;i<(int)function->arguments.size();i++){
             // info.ast->printTypesFromScope(function->scopeId);
 
@@ -3636,9 +3671,13 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
         }
     }
 
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
+    TEMP_ARRAY_N(TypeId, tempTypes, 5)
+
     auto& poly_typeArray = now->versions_expressionTypes[info.currentPolyVersion];
     poly_typeArray.resize(0);
-    // typeArray.resize(0);
+    // tempTypes.resize(0);
     if(now->firstExpression){
         // may not exist, meaning just a declaration, no assignment
         // if(Equal(now->firstExpression->name, "reserve")) {
@@ -3917,7 +3956,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                             //   we don't really need to optimize, probably.
                             bool has_default_values = false;
                             
-                            DynamicArray<TypeInfo*> stack{};
+                            TEMP_ARRAY(TypeInfo*, stack);
                             stack.add(typeinfo);
                             int head = 0;
                             while(head < stack.size()) {
@@ -3974,17 +4013,17 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                 )
             } else {
                 TypeId elementType = arrTypeInfo->structImpl->polyArgs[0];
-                QuickArray<TypeId> typeArray{};
+                
                 for(int j=0;j<now->arrayValues.size();j++){
                     ASTExpression* value = now->arrayValues[j];
-                    typeArray.resize(0);
-                    SignalIO result = checkExpression(scope->scopeId, value, &typeArray, false);
+                    tempTypes.resize(0);
+                    SignalIO result = checkExpression(scope->scopeId, value, &tempTypes, false);
                     if(result != SIGNAL_SUCCESS){
                         // continue;
                         return SIGNAL_FAILURE;
                     }
-                    if(typeArray.size()!=1) {
-                        if(typeArray.size()==0) {
+                    if(tempTypes.size()!=1) {
+                        if(tempTypes.size()==0) {
                             ERR_SECTION(
                                 ERR_HEAD2(value->location)
                                 ERR_MSG("Expressions in array initializers cannot consist of of no values. Did you call a function that returns void?")
@@ -4003,10 +4042,10 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                             // continue;
                         }
                     }
-                    if(!info.ast->castable(typeArray[0], elementType, false)) {
+                    if(!info.ast->castable(tempTypes[0], elementType, false)) {
                         ERR_SECTION(
                             ERR_HEAD2(value->location)
-                            ERR_MSG("Cannot cast '"<<info.ast->typeToString(typeArray[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
+                            ERR_MSG("Cannot cast '"<<info.ast->typeToString(tempTypes[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
                             ERR_LINE2(value->location, "cannot cast")
                         )
                     }
@@ -4047,11 +4086,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
         info.ignoreErrors = errorsWasIgnored;
     };
 
-    // DynamicArray<std::string> vars;
-    // for (auto now : scope->statements){
-    
-    // DynamicArray<TypeId> typeArray{};
-    TINY_ARRAY(TypeId, typeArray, 4)
+    TEMP_ARRAY_N(TypeId, tempTypes, 5)
 
     bool perform_global_check = true;
     perform_global_check = !info.do_not_check_global_globals;
@@ -4077,7 +4112,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
             if(now->type != ASTStatement::DECLARATION || !now->globalDeclaration)
                 continue;
         }
-        typeArray.resize(0);
+        tempTypes.resize(0);
         info.ignoreErrors = errorsWasIgnored;
         if(now->isNoCode()) {
             info.ignoreErrors = true;
@@ -4122,16 +4157,16 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
         } else if(now->type == ASTStatement::BODY || now->type == ASTStatement::DEFER){
             SignalIO result = checkRest(now->firstBody);
         } else if(now->type == ASTStatement::EXPRESSION){
-            checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
-            // if(typeArray.size()==0)
-            //     typeArray.add(AST_VOID);
+            checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
+            // if(tempTypes.size()==0)
+            //     tempTypes.add(AST_VOID);
         } else if(now->type == ASTStatement::RETURN){
             for(auto ret : now->arrayValues){
-                typeArray.resize(0);
-                SignalIO result = checkExpression(scope->scopeId, ret, &typeArray, false);
+                tempTypes.resize(0);
+                SignalIO result = checkExpression(scope->scopeId, ret, &tempTypes, false);
             }
         } else if(now->type == ASTStatement::IF){
-            SignalIO result1 = checkExpression(scope->scopeId,now->firstExpression,&typeArray, false);
+            SignalIO result1 = checkExpression(scope->scopeId,now->firstExpression,&tempTypes, false);
             SignalIO result = checkRest(now->firstBody);
             if(now->secondBody){
                 result = checkRest(now->secondBody);
@@ -4150,12 +4185,12 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
         } else if(now->type == ASTStatement::WHILE){
             if(now->firstExpression) {
                 // no expresion represents infinite loop
-                SignalIO result1 = checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
+                SignalIO result1 = checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             }
             SignalIO result = checkRest(now->firstBody);
         } else if(now->type == ASTStatement::FOR){
             // DynamicArray<TypeId> temp{};
-            SignalIO result1 = checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
+            SignalIO result1 = checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             SignalIO result=SIGNAL_FAILURE;
 
             Assert(now->varnames.size()==2);
@@ -4177,7 +4212,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
             bool reused_index = false;
             bool reused_item = false;
             
-            auto iterinfo = info.ast->getTypeInfo(typeArray.last());
+            auto iterinfo = info.ast->getTypeInfo(tempTypes.last());
 
             if(iterinfo&&iterinfo->astStruct){
                 if(iterinfo->astStruct->name == "Slice"){
@@ -4244,7 +4279,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     }
                 }
             }
-            std::string strtype = info.ast->typeToString(typeArray.last());
+            std::string strtype = info.ast->typeToString(tempTypes.last());
             ERR_SECTION(
                 ERR_HEAD2(now->firstExpression->location)
                 ERR_MSG("The expression in for loop must be a Slice or Range.")
@@ -4345,18 +4380,18 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
             }
             #endif
         } else if(now->type == ASTStatement::TEST) {
-            checkExpression(scope->scopeId, now->testValue, &typeArray, false);
-            typeArray.resize(0);
-            checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
-            typeArray.resize(0);
+            checkExpression(scope->scopeId, now->testValue, &tempTypes, false);
+            tempTypes.resize(0);
+            checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
+            tempTypes.resize(0);
         } else if(now->type == ASTStatement::SWITCH) {
             // check switch expression
-            checkExpression(scope->scopeId, now->firstExpression, &typeArray, false);
+            checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             
             ASTEnum* astEnum = nullptr;
-            Assert(typeArray.size() == 1);
-            if(typeArray[0].isValid()) {
-                auto typeInfo = info.ast->getTypeInfo(typeArray[0]);
+            Assert(tempTypes.size() == 1);
+            if(tempTypes[0].isValid()) {
+                auto typeInfo = info.ast->getTypeInfo(tempTypes[0]);
                 Assert(typeInfo);
                 if(typeInfo->astEnum) {
                     astEnum = typeInfo->astEnum;
@@ -4364,11 +4399,11 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                 }
             }
             now->versions_expressionTypes[info.currentPolyVersion] = {};
-            now->versions_expressionTypes[info.currentPolyVersion].add(typeArray.last());
-            typeArray.resize(0);
+            now->versions_expressionTypes[info.currentPolyVersion].add(tempTypes.last());
+            tempTypes.resize(0);
             
             int usedMemberCount = 0;
-            QuickArray<ASTExpression*> usedMembers{};
+            TEMP_ARRAY(ASTExpression*, usedMembers);
             if(astEnum) {
                 usedMembers.resize(astEnum->members.size());
             }
@@ -4405,8 +4440,8 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     allCasesUseEnumType = false;   
                 }
                 if(!wasMember){
-                    checkExpression(scope->scopeId, it.caseExpr, &typeArray, false);
-                    typeArray.resize(0);
+                    checkExpression(scope->scopeId, it.caseExpr, &tempTypes, false);
+                    tempTypes.resize(0);
                 }
                 
                 checkRest(it.caseBody);
@@ -4458,10 +4493,7 @@ void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     TyperContext info = {};
-    info.ast = ast;
-    info.compiler = compiler;
-    info.reporter = &compiler->reporter;
-    info.typeChecker = &compiler->typeChecker;
+    info.init_context(compiler);
 
     _VLOG(log::out << log::BLUE << "Type check enums:\n";)
     // Check enums first since they don't depend on anything.
@@ -4472,12 +4504,8 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     TyperContext info = {};
-    info.ast = ast;
-    info.compiler = compiler;
-    info.reporter = &compiler->reporter;
-    info.typeChecker = &compiler->typeChecker;
+    info.init_context(compiler);
     _VLOG(log::out << log::BLUE << "Type check structs:\n";)
-
     
     *changed = false;
     // An improvement here might be to create empty struct types first.
@@ -4495,7 +4523,6 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     info.ignoreErrors = !info.showErrors;
     info.checkStructs(scope);
 
-    
     // if(!info.showErrors)
     if(info.showErrors)
         info.compiler->options->compileStats.errors += info.errors;
@@ -4513,10 +4540,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     TyperContext info = {};
-    info.ast = ast;
-    info.compiler = compiler;
-    info.reporter = &compiler->reporter;
-    info.typeChecker = &compiler->typeChecker;
+    info.init_context(compiler);
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 
     
@@ -4580,10 +4604,8 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     TyperContext info = {};
-    info.compiler = compiler;
-    info.ast = compiler->ast;
-    info.reporter = &compiler->reporter;
-    info.typeChecker = &compiler->typeChecker;
+    info.init_context(compiler);
+    
     info.do_not_check_global_globals = true;
     
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
@@ -4607,4 +4629,11 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
 
     info.compiler->options->compileStats.errors += info.errors;
     // return info.errors;
+}
+void TyperContext::init_context(Compiler* compiler) {
+    this->compiler = compiler;
+    ast = compiler->ast;
+    reporter = &compiler->reporter;
+    typeChecker = &compiler->typeChecker;
+    scratch_allocator.init(0x10000);
 }

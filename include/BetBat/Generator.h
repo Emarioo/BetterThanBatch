@@ -24,6 +24,8 @@ struct GenContext : public PhaseContext {
 
     void popInstructions(u32 count);
 
+    engone::LinearAllocator scratch_allocator{};
+
     QuickArray<ASTNode*> nodeStack; // kind of like a stack trace
     
     u32 lastLine = 0;
@@ -94,10 +96,10 @@ struct GenContext : public PhaseContext {
     
     SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);
     SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr, int* array_length = nullptr);
-    SignalIO generateFncall(ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator);
+    SignalIO generateFncall(ASTExpression* expression, QuickArray<TypeId>* outTypeIds, bool isOperator);
     SignalIO generateSpecialFncall(ASTExpression* expression);
     SignalIO generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope = -1);
-    SignalIO generateExpression(ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope = -1);
+    SignalIO generateExpression(ASTExpression *expression, QuickArray<TypeId> *outTypeIds, ScopeId idScope = -1);
     SignalIO generateFunction(ASTFunction* function, ASTStruct* astStruct = nullptr);
     SignalIO generateFunctions(ASTScope* body);
     SignalIO generateBody(ASTScope *body);
@@ -107,6 +109,8 @@ struct GenContext : public PhaseContext {
     SignalIO generateGlobalData(); // runs after all functions have been generated, that way we know that applyRelocations won't fail because of missing tinycodes.
     
     bool performSafeCast(TypeId from, TypeId to, bool less_strict = false);
+
+    void init_context(Compiler* compiler);
 };
 struct NodeScope {
     NodeScope(GenContext* info) : info(info) {}

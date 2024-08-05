@@ -21,6 +21,12 @@
 
 #define MAKE_NODE_SCOPE(X) info.pushNode(dynamic_cast<ASTNode*>(X));NodeScope nodeScope{&info};
 
+#undef TEMP_ARRAY
+// #define TEMP_ARRAY(TYPE,NAME) QuickArray<TYPE> NAME;
+// #define TEMP_ARRAY_N(TYPE,NAME,N) QuickArray<TYPE> NAME;
+#define TEMP_ARRAY(TYPE,NAME) QuickArray<TYPE> NAME; NAME.init(&scratch_allocator);
+#define TEMP_ARRAY_N(TYPE,NAME, N) QuickArray<TYPE> NAME; NAME.init(&scratch_allocator); NAME.reserve(N);
+
 /* #region  */
 GenContext::LoopScope* GenContext::pushLoop(){
     LoopScope* ptr = TRACK_ALLOC(LoopScope);
@@ -666,7 +672,7 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
                 }
             } else if (member.defaultValue) {
                 // TypeId tempTypeId = {};
-                DynamicArray<TypeId> tempTypes{};
+                TEMP_ARRAY_N(TypeId, tempTypes, 5);
                 SignalIO result = generateExpression(member.defaultValue, &tempTypes);
                 
                 if(tempTypes.size() == 1){
@@ -830,8 +836,11 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
     if(array_length)
         *array_length = 0;
 
-    DynamicArray<ASTExpression*> exprs;
-    DynamicArray<TypeId> tempTypes;
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
+    TEMP_ARRAY(ASTExpression*, exprs);
+    TEMP_ARRAY_N(TypeId, tempTypes, 5);
+    
     TypeId endType = {};
     bool pointerType=false; // if the value on the stack is a direct pointer, false means a pointer to a pointer
     int arrayLength = 0;
@@ -1387,8 +1396,10 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
         // )
         return SIGNAL_FAILURE;
     }
-    DynamicArray<TypeId> types{};
-    types.reserve(1);
+
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
+    TEMP_ARRAY_N(TypeId, types, 5);
     auto signal = generateExpression(expression->args[0], &types, currentScopeId);
 
     if(signal != SIGNAL_SUCCESS)
@@ -1492,11 +1503,12 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
                 int size_of_pointer = 8;
                 builder.emit_set_arg(BC_REG_B, signature->argumentTypes[0].offset, size_of_pointer, false);
 
+                TEMP_ARRAY_N(TypeId, tempTypes, 5);
                 // Code copied from generateFncall
                 for(int i=1;i<overload->astFunc->arguments.size();i++) {
                     auto arg = overload->astFunc->arguments[i].defaultValue;
                     Assert(arg);
-                    DynamicArray<TypeId> tempTypes{};
+                    tempTypes.resize(0);
                     auto result = generateExpression(arg, &tempTypes);
                     if(result == SIGNAL_SUCCESS) {
                         if(tempTypes.size() == 0) {
@@ -1551,7 +1563,7 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
 
     return SIGNAL_SUCCESS;
 }
-SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator){
+SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId>* outTypeIds, bool isOperator){
     using namespace engone;
 
     if(expression->name == "construct" || expression->name == "destruct") {
@@ -1585,9 +1597,13 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
     } else {
         _GLOG(log::out << "Overload: ";funcImpl->print(info.ast,nullptr);log::out << "\n";)
     }
-    TINY_ARRAY(ASTExpression*,all_arguments,5);
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
+    TEMP_ARRAY(ASTExpression*,all_arguments);
     all_arguments.resize(signature->argumentTypes.size());
     
+    TEMP_ARRAY_N(TypeId,tempTypes, 5);
+
     if(isOperator) {
         all_arguments[0] = expression->left;
         all_arguments[1] = expression->right;
@@ -1752,8 +1768,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
                 builder.emit_empty_alloc_args(&off_alloc_args);
             }
             // TODO: if alloc args isn't used, we may have problems.
-
-            DynamicArray<TypeId> tempTypes{};
+            tempTypes.resize(0);
             result = generateExpression(arg, &tempTypes);
             if(result == SIGNAL_SUCCESS) {
                 if(tempTypes.size() == 0) {
@@ -2091,12 +2106,12 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, DynamicArray<Type
 }
 SignalIO GenContext::generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope) {
     *outTypeIds = AST_VOID;
-    DynamicArray<TypeId> tmp_types{};
-    auto signal = generateExpression(expression, &tmp_types, idScope);
-    if(tmp_types.size()) *outTypeIds = tmp_types.last();
+    TEMP_ARRAY_N(TypeId, tempTypes, 5)
+    auto signal = generateExpression(expression, &tempTypes, idScope);
+    if(tempTypes.size()) *outTypeIds = tempTypes.last();
     return signal;
 }
-SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope) {
+SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<TypeId> *outTypeIds, ScopeId idScope) {
     using namespace engone;
     TRACE_FUNC()
 
@@ -2107,6 +2122,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
     
     MAKE_NODE_SCOPE(expression);
     Assert(expression);
+
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
+    TEMP_ARRAY_N(TypeId, tempTypes, 5)
 
     // IMPORTANT: This DOES NOT work duudeeee. you must use poly versions
     // TypeId castType = expression->castType;
@@ -2502,8 +2521,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             
             int off = builder.get_virtual_sp();
             for(auto a : expression->args) {
-                DynamicArray<TypeId> types{};
-                auto signal = generateExpression(a, &types);
+                tempTypes.resize(0);
+                auto signal = generateExpression(a, &tempTypes);
                 if(signal != SIGNAL_SUCCESS)
                     return SIGNAL_FAILURE;
             }
@@ -2830,7 +2849,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
         if(expression->versions_overload.size()>0)
             operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
         TypeId ltype = AST_VOID;
-        DynamicArray<TypeId> tmp_types{};
+        
         if(operatorImpl){
             return generateFncall(expression, outTypeIds, true);
         } else if (expression->typeId == AST_REFER) {
@@ -2853,16 +2872,17 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             }
             outTypeIds->add(ltype); 
         } else if (expression->typeId == AST_DEREF) {
-            DynamicArray<TypeId> ltypes{};
             
-            SignalIO result = generateExpression(expression->left, &ltypes);
+            tempTypes.resize(0);
+            
+            SignalIO result = generateExpression(expression->left, &tempTypes);
             if (result != SIGNAL_SUCCESS)
                 return result;
             
-            if(ltypes.size()!=1) {
+            if(tempTypes.size()!=1) {
                 StringBuilder values = {};
-                FORN(ltypes) {
-                    auto& it = ltypes[nr];
+                FORN(tempTypes) {
+                    auto& it = tempTypes[nr];
                     if(nr != 0)
                         values += ", ";
                     values += info.ast->typeToString(it);
@@ -2874,7 +2894,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 )
                 return SIGNAL_FAILURE;
             }
-            ltype = ltypes[0];
+            ltype = tempTypes[0];
 
             if (!ltype.isPointer()) {
                 ERR_SECTION(
@@ -2913,9 +2933,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             outTypeIds->add(outId);
         }
         else if (expression->typeId == AST_NOT) {
-            SignalIO result = generateExpression(expression->left, &tmp_types);
-            if(tmp_types.size())
-                ltype = tmp_types.last();
+            tempTypes.clear();
+            SignalIO result = generateExpression(expression->left, &tempTypes);
+            if(tempTypes.size())
+                ltype = tempTypes.last();
             if (result != SIGNAL_SUCCESS)
                 return result;
             // TypeInfo *ti = info.ast->getTypeInfo(ltype);
@@ -2933,9 +2954,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             outTypeIds->add(AST_BOOL);
         }
         else if (expression->typeId == AST_BNOT) {
-            SignalIO result = generateExpression(expression->left, &tmp_types);
-            if(tmp_types.size())
-                ltype = tmp_types.last();
+            tempTypes.clear();
+            SignalIO result = generateExpression(expression->left, &tempTypes);
+            if(tempTypes.size())
+                ltype = tempTypes.last();
             if (result != SIGNAL_SUCCESS)
                 return result;
             // TypeInfo *ti = info.ast->getTypeInfo(ltype);
@@ -2949,9 +2971,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             outTypeIds->add(ltype);
         }
         else if (expression->typeId == AST_CAST) {
-            SignalIO result = generateExpression(expression->left, &tmp_types);
-            if(tmp_types.size())
-                ltype = tmp_types.last();
+            tempTypes.clear();
+            SignalIO result = generateExpression(expression->left, &tempTypes);
+            if(tempTypes.size())
+                ltype = tempTypes.last();
             if (result != SIGNAL_SUCCESS)
                 return result;
 
@@ -2990,11 +3013,11 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
         }
         else if (expression->typeId == AST_FROM_NAMESPACE) {
             // bytecode->addDebugText("ast-namespaced expr\n");
-
+            tempTypes.clear();
             auto si = info.ast->findScope(expression->name, info.currentScopeId, true);
-            SignalIO result = generateExpression(expression->left, &tmp_types, si->id);
-            if(tmp_types.size())
-                ltype = tmp_types.last();
+            SignalIO result = generateExpression(expression->left, &tempTypes, si->id);
+            if(tempTypes.size())
+                ltype = tempTypes.last();
             if (result != SIGNAL_SUCCESS)
                 return result;
 
@@ -3298,7 +3321,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 //   it would probably be easier since it constructs the nodes
                 //   and has a little more context and control over it.
                 // std::vector<ASTExpression *> exprs;
-                TINY_ARRAY(ASTExpression*,exprs,6);
+                TEMP_ARRAY(ASTExpression*,exprs);
                 exprs.resize(ast_struct->members.size());
 
                 // Assert(expression->args);
@@ -3367,8 +3390,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                         // )
                         // continue;
                     } else {
-                        SignalIO result = generateExpression(expr, &tmp_types);
-                        if(tmp_types.size()) exprId = tmp_types.last();
+                        tempTypes.clear();
+                        SignalIO result = generateExpression(expr, &tempTypes);
+                        if(tempTypes.size()) exprId = tempTypes.last();
                         if (result != SIGNAL_SUCCESS)
                             return result;
                     }
@@ -3389,8 +3413,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 if(expression->args.size()>0) {
                     ASTExpression* expr = expression->args[0];
                     TypeId expr_type{};
-                    SignalIO result = generateExpression(expr, &tmp_types);
-                     if(tmp_types.size()) expr_type = tmp_types.last();
+                    tempTypes.clear();
+                    SignalIO result = generateExpression(expr, &tempTypes);
+                     if(tempTypes.size()) expr_type = tempTypes.last();
                     if (result != SIGNAL_SUCCESS)
                         return result;
                         
@@ -3529,14 +3554,16 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             if(operatorImpl){
                 return generateFncall(expression, outTypeIds, true);
             }
-            SignalIO err = generateExpression(expression->left, &tmp_types);
-            if(tmp_types.size()) ltype = tmp_types.last();
+            tempTypes.clear();
+            SignalIO err = generateExpression(expression->left, &tempTypes);
+            if(tempTypes.size()) ltype = tempTypes.last();
             if (err != SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
 
+            tempTypes.clear();
             TypeId rtype;
-            err = generateExpression(expression->right, &tmp_types);
-            if(tmp_types.size()) rtype = tmp_types.last();
+            err = generateExpression(expression->right, &tempTypes);
+            if(tempTypes.size()) rtype = tempTypes.last();
             if (err != SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
 
@@ -3670,8 +3697,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             outTypeIds->add(ltype);
         }
         else if(expression->typeId == AST_UNARY_SUB){
-            SignalIO result = generateExpression(expression->left, &tmp_types, idScope);
-            if(tmp_types.size()) ltype = tmp_types.last();
+            tempTypes.clear();
+            SignalIO result = generateExpression(expression->left, &tempTypes, idScope);
+            if(tempTypes.size()) ltype = tempTypes.last();
             if(result != SIGNAL_SUCCESS){
                 return SIGNAL_FAILURE;
             }
@@ -3732,13 +3760,14 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 //     WARN_LINE(expression->right->location,"generated first");
                 //     WARN_LINE(expression->left->location,"then this");
                 // )
+                tempTypes.clear();
                 TypeId rtype{};
-                SignalIO result = generateExpression(expression->right, &tmp_types, idScope);
-                if(tmp_types.size())
-                    rtype = tmp_types[0];
+                SignalIO result = generateExpression(expression->right, &tempTypes, idScope);
+                if(tempTypes.size())
+                    rtype = tempTypes[0];
 
-                for(int i=tmp_types.size()-1; i >= 1;i--) {
-                    generatePop(BC_REG_INVALID, 0, tmp_types[i]);
+                for(int i=tempTypes.size()-1; i >= 1;i--) {
+                    generatePop(BC_REG_INVALID, 0, tempTypes[i]);
                 }
 
                 if(result!=SIGNAL_SUCCESS)
@@ -3784,14 +3813,15 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     
                 // basic operations
                 // BREAK(expression->nodeId == 1365)
+                tempTypes.clear();
                 TypeId ltype{}, rtype{};
-                SignalIO err = generateExpression(expression->left, &tmp_types);
-                if(tmp_types.size()) ltype = tmp_types.last();
+                SignalIO err = generateExpression(expression->left, &tempTypes);
+                if(tempTypes.size()) ltype = tempTypes.last();
                 if (err != SIGNAL_SUCCESS)
                     return err;
-                tmp_types.resize(0);
-                err = generateExpression(expression->right, &tmp_types);
-                if(tmp_types.size()) rtype = tmp_types.last();
+                tempTypes.clear();
+                err = generateExpression(expression->right, &tempTypes);
+                if(tempTypes.size()) rtype = tempTypes.last();
                 if (err != SIGNAL_SUCCESS)
                     return err;
                 if(!ltype.isValid() || !rtype.isValid())
@@ -4695,6 +4725,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
     int lastOffset = info.currentFrameOffset;
 
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
     defer {
         info.disableCodeGeneration = codeWasDisabled;
         builder.disable_builder(info.disableCodeGeneration);
@@ -4723,17 +4755,18 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         }
     };
 
-    // for(auto it : body->namespaces) {
-    //     SignalIO result = generateBody(it);
-    // }
+    const bool disabled_debug = false;
 
     for (auto statement : body->statements) {
         MAKE_NODE_SCOPE(statement);
 
         // TODO: Debug information is very slow.
-        auto srcinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
-        debugFunction->addLine(srcinfo->line, builder.get_pc(), statement->location.tok.origin);
-        
+        lexer::TokenSource* srcinfo = nullptr;
+        if(compiler->options->useDebugInformation && !disabled_debug) {
+            srcinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
+            debugFunction->addLine(srcinfo->line, builder.get_pc(), statement->location.tok.origin);
+        }
+
         info.disableCodeGeneration = codeWasDisabled;
         builder.disable_builder(info.disableCodeGeneration);
         info.ignoreErrors = errorsWasIgnored;
@@ -4746,8 +4779,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             builder.disable_builder(info.disableCodeGeneration);
             info.ignoreErrors = true;
         } else {
-            std::string line = compiler->lexer.getline(statement->location);
-            builder.push_line(srcinfo->line, line);
+            if(compiler->options->useDebugInformation && !disabled_debug) {
+                std::string line = compiler->lexer.getline(statement->location);
+                builder.push_line(srcinfo->line, line);
+            }
         }
 
         defer {
@@ -4978,8 +5013,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     _GLOG(log::out << " " << varname.name << " : " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << "\n";)
                 }
             }
-            // TINY_ARRAY(TypeId, rightTypes, 3)
-            DynamicArray<TypeId> rightTypes{};
+            TEMP_ARRAY_N(TypeId, rightTypes, 5);
             if (statement->arrayValues.size()){
                 auto& varname = statement->varnames.last();
                 TypeInfo* sometypeInfo = info.ast->getTypeInfo(varname.versions_assignType[info.currentPolyVersion].baseType());
@@ -5168,9 +5202,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             // BREAK(statement->firstExpression->nodeId == 67)
             TypeId dtype = {};
-            DynamicArray<TypeId> tmp_types{};
-            SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
-            if(tmp_types.size()) dtype = tmp_types.last();
+            TEMP_ARRAY_N(TypeId, tempTypes, 5);
+            
+            SignalIO result = generateExpression(statement->firstExpression, &tempTypes);
+            if(tempTypes.size()) dtype = tempTypes.last();
             if (result != SIGNAL_SUCCESS) {
                 // generate body anyway or not?
                 continue;
@@ -5239,9 +5274,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             framePush(exprType, &switchValueOffset,false, false);
             
             TypeId dtype = {};
-            DynamicArray<TypeId> tmp_types{};
-            SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
-            if(tmp_types.size()) dtype = tmp_types.last();
+            TEMP_ARRAY_N(TypeId, tempTypes, 5);
+            SignalIO result = generateExpression(statement->firstExpression, &tempTypes);
+            if(tempTypes.size()) dtype = tempTypes.last();
             if (result != SIGNAL_SUCCESS) {
                 continue;
             }
@@ -5307,9 +5342,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 bool touched_switch_reg = false;
                 if(!wasMember) {
                     touched_switch_reg = true; // generateExpression might have modified the switch register
-                    DynamicArray<TypeId> tmp_types{};
-                    SignalIO result = generateExpression(it->caseExpr, &tmp_types);
-                    if(tmp_types.size()) dtype = tmp_types.last();
+                    TEMP_ARRAY_N(TypeId, tempTypes, 5)
+                    SignalIO result = generateExpression(it->caseExpr, &tempTypes);
+                    if(tempTypes.size()) dtype = tempTypes.last();
                     if (result != SIGNAL_SUCCESS) {
                         continue;
                     }
@@ -5411,9 +5446,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             SignalIO result{};
             if(statement->firstExpression) {
                 TypeId dtype = {};
-                DynamicArray<TypeId> tmp_types{};
-                result = generateExpression(statement->firstExpression, &tmp_types);
-                if(tmp_types.size()) dtype = tmp_types.last();
+                TEMP_ARRAY_N(TypeId, tempTypes, 5)
+                result = generateExpression(statement->firstExpression, &tempTypes);
+                if(tempTypes.size()) dtype = tempTypes.last();
                 if (result != SIGNAL_SUCCESS) {
                     // generate body anyway or not?
                     continue;
@@ -5521,9 +5556,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 loopScope->continueAddress = builder.get_pc();
 
                 TypeId dtype = {};
-                DynamicArray<TypeId> tmp_types;
-                SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
-                if(tmp_types.size()) dtype = tmp_types.last();
+                TEMP_ARRAY_N(TypeId, tempTypes, 5)
+                SignalIO result = generateExpression(statement->firstExpression, &tempTypes);
+                if(tempTypes.size()) dtype = tempTypes.last();
                 if (result != SIGNAL_SUCCESS) {
                     continue;
                 }
@@ -5624,9 +5659,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // TODO: don't generate ptr and length everytime.
                 // put them in a temporary variable or something.
                 TypeId dtype = {};
-                DynamicArray<TypeId> tmp_types{};
-                SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
-                if(tmp_types.size()) dtype = tmp_types.last();
+                TEMP_ARRAY_N(TypeId, tempTypes, 5)
+                SignalIO result = generateExpression(statement->firstExpression, &tempTypes);
+                if(tempTypes.size()) dtype = tempTypes.last();
                 if (result != SIGNAL_SUCCESS) {
                     continue;
                 }
@@ -5847,7 +5882,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         else if (statement->type == ASTStatement::EXPRESSION) {
             _GLOG(SCOPE_LOG("EXPRESSION"))
 
-            DynamicArray<TypeId> exprTypes{};
+            TEMP_ARRAY_N(TypeId, exprTypes, 5);
+            // IMPORTANT: There is a bug here if expression returns more than 5 expressions, the scratch allocator would mess things up
             SignalIO result = generateExpression(statement->firstExpression, &exprTypes);
             if (result != SIGNAL_SUCCESS) {
                 continue;
@@ -5897,17 +5933,17 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         } else if (statement->type == ASTStatement::TEST) {
             int moment = currentFrameOffset;
             // int moment = builder.saveStackMoment();
-            DynamicArray<TypeId> exprTypes{};
-            SignalIO result = generateExpression(statement->testValue, &exprTypes);
-            if(exprTypes.size() != 1) {
+            TEMP_ARRAY_N(TypeId, tempTypes, 5)
+            SignalIO result = generateExpression(statement->testValue, &tempTypes);
+            if(tempTypes.size() != 1) {
                 ERR_SECTION(
                     ERR_HEAD2(statement->testValue->location)
                     ERR_MSG("The expression in test statements must consist of 1 type.")
-                    ERR_LINE2(statement->testValue->location,exprTypes.size()<<" types")
+                    ERR_LINE2(statement->testValue->location,tempTypes.size()<<" types")
                 )
                 continue;
             }
-            int size = info.ast->getTypeSize(exprTypes.last());
+            int size = info.ast->getTypeSize(tempTypes.last());
             if(size > 8 ) {
                 ERR_SECTION(
                     ERR_HEAD2(statement->testValue->location)
@@ -5916,17 +5952,17 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 )
                 continue;
             }
-            exprTypes.resize(0);
-            result = generateExpression(statement->firstExpression, &exprTypes);
-            if(exprTypes.size() != 1) {
+            tempTypes.clear();
+            result = generateExpression(statement->firstExpression, &tempTypes);
+            if(tempTypes.size() != 1) {
                 ERR_SECTION(
                     ERR_HEAD2(statement->firstExpression->location)
                     ERR_MSG("The expression in test statements must consist of 1 type.")
-                    ERR_LINE2(statement->firstExpression->location,exprTypes.size()<<" types")
+                    ERR_LINE2(statement->firstExpression->location,tempTypes.size()<<" types")
                 )
                 continue;
             }
-            size = info.ast->getTypeSize(exprTypes.last());
+            size = info.ast->getTypeSize(tempTypes.last());
             if(size > 8) {
                 ERR_SECTION(
                     ERR_HEAD2(statement->firstExpression->location)
@@ -6277,8 +6313,8 @@ SignalIO GenContext::generateGlobalData() {
 
             generateDefaultValue(BC_REG_INVALID, 0, type, &stmt->location);
         } else {
-            DynamicArray<TypeId> types{};
-            auto result = generateExpression(stmt->firstExpression, &types, 0);
+            TEMP_ARRAY_N(TypeId, tempTypes, 5)
+            auto result = generateExpression(stmt->firstExpression, &tempTypes, 0);
             // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
             if (result != SIGNAL_SUCCESS) {
                 if (!info.hasForeignErrors()) {
@@ -6290,7 +6326,7 @@ SignalIO GenContext::generateGlobalData() {
                 }
                 continue;
             }
-            if (types.size() == 0 || !types[0].isValid()) {
+            if (tempTypes.size() == 0 || !tempTypes[0].isValid()) {
                 if (!info.hasForeignErrors()) {
                     ERR_SECTION(
                         ERR_HEAD2(stmt->location)
@@ -6300,7 +6336,7 @@ SignalIO GenContext::generateGlobalData() {
                 }
                 continue;
             }
-            type = types[0];
+            type = tempTypes[0];
         }
 
         // TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
@@ -6338,11 +6374,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     // _VLOG(log::out <<log::BLUE<<  "##   Generator   ##\n";)
 
     GenContext context{};
-    // 
-    context.ast = compiler->ast;
-    context.bytecode = compiler->bytecode;
-    context.compiler = compiler;
-    context.reporter = &compiler->reporter;
+    context.init_context(compiler);
     context.imp = imp;
     context.out_codes = out_codes;
 
@@ -6410,6 +6442,13 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
 
     // return tb_main;
     return true;
+}
+void GenContext::init_context(Compiler* compiler) {
+    this->compiler = compiler;
+    ast = compiler->ast;
+    bytecode = compiler->bytecode;
+    reporter = &compiler->reporter;
+    scratch_allocator.init(0x10000);
 }
 
 void TestGenerate(BytecodeBuilder& b) {

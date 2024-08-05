@@ -289,57 +289,72 @@ IdentifierFunction *AST::addFunction(ScopeId scopeId, const StringView &name, Co
 }
 Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes, bool searchSharedScopes){
     using namespace engone;
+    ZoneScopedC(tracy::Color::Purple);
     // Assert(crossed_function_boundary); // crossed function boundary is only valid for local variables, if we search for function identifier then argument will be null so we can't assert it
 
     if(crossed_function_boundary)
         *crossed_function_boundary = false;
 
-    if(searchParentScopes){
-        StringView ns;
-        StringView real_name;
-        DecomposeNamespace(name, &ns, &real_name);
+    Assert(searchParentScopes); // we always search parent scopes
+
+    auto& real_name = name;
+    
+    // TODO: Namespaces
+    // StringView ns;
+    // StringView real_name;
+    // DecomposeNamespace(name, &ns, &real_name);
+    // if(ns.len == 0) {
+    //     log::out << log::RED << "Namespaces are incomplete. Don't type ::\n";
+    //     Assert(false); // namespace broken
+    //     // return nullptr;
+    // }
+
+    if(!searchSharedScopes) {
+        // When searchSharedScopes is false, we usually search for the 'main' function.
+        // log::out << "find in not shared scope "<<name<<"\n";
         lock_variables.lock();
         defer { lock_variables.unlock(); };
-        if(ns.len == 0) {
-            auto iterator = createScopeIterator(startScopeId, contentOrder);
-            while(iterate(iterator, searchSharedScopes)) {
-                auto scope = iterator.next_scope;
-                auto order = iterator.next_order;
+        auto iterator = createScopeIterator(startScopeId, contentOrder);
+        while(iterate(iterator, searchSharedScopes)) {
+            auto scope = iterator.next_scope;
+            auto order = iterator.next_order;
 
-                auto pair = scope->identifierMap.find(real_name);
-                if (pair == scope->identifierMap.end())
-                    continue;
-                    
-                // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
-                if (pair->second->order <= order) {
-                    if(crossed_function_boundary)
-                        *crossed_function_boundary = iterator.next_crossed_function_boundary;
-                    return pair->second;
-                }
+            auto pair = scope->identifierMap.find(real_name);
+            if (pair == scope->identifierMap.end())
+                continue;
+                
+            // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+            if (pair->second->order <= order) {
+                if(crossed_function_boundary)
+                    *crossed_function_boundary = iterator.next_crossed_function_boundary;
+                return pair->second;
             }
-        } else {
-            log::out << log::RED << "Namespaces are incomplete. Don't type ::\n";
-            return nullptr;
-            // Assert(false); // namespace broken
         }
     } else {
-        ScopeInfo* si = getScope(startScopeId);
-        Assert(si);
-        lock_variables.lock();
-        defer { lock_variables.unlock(); };
-        auto pair = si->identifierMap.find(name);
-        if(pair == si->identifierMap.end()){
-            return nullptr;
+        // TODO: Don't create search scope if we have a tiny scope
+        // NOTE: computing search scopes doesn't give us noticable better performance.
+        //   It seems to be a little bit faster (10%) in an optimized build so we might as well
+        //   keep this.
+        auto search_scope = find_or_compute_search_scope(startScopeId);
+        for(auto& entry : search_scope->scopes) {
+            auto& scope = entry.scope;
+            auto& order = entry.order;
+            auto& crossed = entry.crossed_function_boundary;
+            auto pair = scope->identifierMap.find(real_name);
+            if (pair == scope->identifierMap.end())
+                continue;
+                
+            // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+            if (pair->second->order <= order) {
+                if(crossed_function_boundary)
+                    *crossed_function_boundary = crossed;
+                return pair->second;
+            }
         }
-        // if(pair->second.type == Identifier::VARIABLE && pair->second.order < contentOrder) {
-        if(pair->second->order <= contentOrder) {
-            return pair->second;
-        }
-        return nullptr;
     }
     return nullptr;
 }
-void AST::findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, DynamicArray<Identifier*>& out_identifiers, bool* crossed_function_boundary, bool searchParentScopes) {
+void AST::findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, QuickArray<Identifier*>& out_identifiers, bool* crossed_function_boundary, bool searchParentScopes) {
     using namespace engone;
     // Assert(crossed_function_boundary); // crossed function boundary is only valid for local variables, if we search for function identifier then argument will be null so we can't assert it
 
@@ -347,52 +362,50 @@ void AST::findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const
         *crossed_function_boundary = false;
 
     Assert(!crossed_function_boundary); // Not handled, we need to return boundary for each identifier
+    Assert(searchParentScopes);
 
-    if(searchParentScopes){
-        StringView ns;
-        StringView real_name;
-        DecomposeNamespace(name, &ns, &real_name);
-        lock_variables.lock();
-        defer { lock_variables.unlock(); };
-        if(ns.len == 0) {
-            auto iterator = createScopeIterator(startScopeId, contentOrder);
-            while(iterate(iterator)) {
-                auto scope = iterator.next_scope;
-                auto order = iterator.next_order;
+    // StringView ns;
+    // StringView real_name;
+    // DecomposeNamespace(name, &ns, &real_name);
+    auto& real_name = name;
 
-                auto pair = scope->identifierMap.find(real_name);
-                if (pair == scope->identifierMap.end())
-                    continue;
-                    
-                // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
-                if (pair->second->order <= order) {
-                    if(crossed_function_boundary)
-                        *crossed_function_boundary = iterator.next_crossed_function_boundary;
-                    out_identifiers.add(pair->second);
-                    // return pair->second;
-                }
-            }
-        } else {
-            log::out << log::RED << "Namespaces are incomplete. Don't type ::\n";
-            // return nullptr;
-            // Assert(false); // namespace broken
-        }
-    } else {
-        ScopeInfo* si = getScope(startScopeId);
-        Assert(si);
-        lock_variables.lock();
-        defer { lock_variables.unlock(); };
-        auto pair = si->identifierMap.find(name);
-        if(pair == si->identifierMap.end()){
-            return;
-        }
-        // if(pair->second.type == Identifier::VARIABLE && pair->second.order < contentOrder) {
-        if(pair->second->order <= contentOrder) {
+    auto search_scope = find_or_compute_search_scope(startScopeId);
+    for(auto& entry : search_scope->scopes) {
+        auto& scope = entry.scope;
+        auto& order = entry.order;
+        auto& crossed = entry.crossed_function_boundary;
+        auto pair = scope->identifierMap.find(real_name);
+        if (pair == scope->identifierMap.end())
+            continue;
+            
+        // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+        if (pair->second->order <= order) {
+            if(crossed_function_boundary)
+                *crossed_function_boundary = crossed;
             out_identifiers.add(pair->second);
-            return;
+            // return pair->second;
         }
-        return;
     }
+
+    // lock_variables.lock();
+    // defer { lock_variables.unlock(); };
+    // auto iterator = createScopeIterator(startScopeId, contentOrder);
+    // while(iterate(iterator)) {
+    //     auto scope = iterator.next_scope;
+    //     auto order = iterator.next_order;
+
+    //     auto pair = scope->identifierMap.find(real_name);
+    //     if (pair == scope->identifierMap.end())
+    //         continue;
+            
+    //     // if(pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
+    //     if (pair->second->order <= order) {
+    //         if(crossed_function_boundary)
+    //             *crossed_function_boundary = iterator.next_crossed_function_boundary;
+    //         out_identifiers.add(pair->second);
+    //         // return pair->second;
+    //     }
+    // }
     return;
 }
 bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, FnOverloads::Overload* overload) {
@@ -429,6 +442,25 @@ bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, Fn
         }
     }
     return false;
+}
+AST::SearchScope* AST::find_or_compute_search_scope(ScopeId start_scopeId) {
+    auto pair = search_scope_map.find(start_scopeId);
+    if(pair != search_scope_map.end()) {
+        return pair->second;
+    }
+    AST::SearchScope* search_scope = new SearchScope();
+
+    // lock_variables.lock();
+    // defer { lock_variables.unlock(); };
+    auto iterator = createScopeIterator(start_scopeId, CONTENT_ORDER_MAX);
+    while(iterate(iterator, true)) { // NOTE: We always search shared scopes
+        auto scope = iterator.next_scope;
+        auto order = iterator.next_order;
+        
+        search_scope->scopes.add({scope, order, iterator.next_crossed_function_boundary});
+    }
+    search_scope_map[start_scopeId] = search_scope;
+    return search_scope;
 }
 AST::ScopeIterator AST::createScopeIterator(ScopeId scopeId, ContentOrder order){
     ScopeIterator iter{};
@@ -644,7 +676,7 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
 
 }
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, DynamicArray<bool>* inferred_args){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -785,7 +817,7 @@ void AST::declareUsageOfOverload(FnOverloads::Overload* overload) {
     overload->funcImpl->usages++;
 }
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, DynamicArray<bool>* inferred_args){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
     // That means that we match if two parent structs have different args.
@@ -912,7 +944,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
     }
     return outOverload;
 }
-// void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, QuickArray<TypeId>* structPolyArgs){
+// void ASTFunction::pushPolyState(DynamicArray<TypeId>* funcPolyArgs, DynamicArray<TypeId>* structPolyArgs){
 void ASTFunction::pushPolyState(FuncImpl* funcImpl) {
     pushPolyState(&funcImpl->signature.polyArgs, funcImpl->structImpl);
 }
@@ -1241,6 +1273,12 @@ AST::ConstString& AST::getConstString(u32 index){
 }
 void AST::cleanup() {
     using namespace engone;
+
+    for (auto &scope : search_scope_map) {
+        scope.second->~SearchScope();
+        delete scope.second;
+    }
+    search_scope_map.clear();
 
     for (auto &scope : _scopeInfos) {
         if(!scope) continue;
@@ -1797,7 +1835,7 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
     }
 }
 
-TypeInfo* AST::findOrAddFunctionSignature(DynamicArray<TypeId>& args, DynamicArray<TypeId>& rets, CallConvention conv) {
+TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const BaseArray<TypeId>& rets, CallConvention conv) {
     // find type
     for(auto type : function_types) {
         Assert(type->funcType);

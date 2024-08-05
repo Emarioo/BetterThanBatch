@@ -13,8 +13,11 @@
 
 #include "Engone/Asserts.h"
 
+#define IS_PRIMITIVE(T) std::is_fundamental_v<T>
+// #define IS_PRIMITIVE(T) false
+
 // #define TINY_ARRAY(TYPE,NAME,SIZE) TYPE arr_##NAME[SIZE]; memset((void*)arr_##NAME,0,SIZE*sizeof(TYPE)); TinyArray<TYPE> NAME={}; NAME.initFixedSize(arr_##NAME, SIZE);
-#define TINY_ARRAY(TYPE,NAME,SIZE) QuickArray<TYPE> NAME{};
+// #define TINY_ARRAY(TYPE,NAME,SIZE) QuickArray<TYPE> NAME{};
 // The purpose of this array is speed.
 // It will not call constructors or destructors
 // Few allocations
@@ -174,12 +177,60 @@ struct TinyArray {
 };
 #endif
 
+// The base of DynamicArray or QuickArray.
+// Functions taking arrays as input can use BaseArray as an abstraced view
+// of dynamic or quick arrays. BaseArray only has read-only methods.
+// I DO NOT RECOMMEND MODIFYING THE FIELDS since BaseArray may be passed
+// by value. A change wouldn't affect the original array which could be confusing.
+template<typename T>
+struct BaseArray {
+    T* _ptr = nullptr;
+    u32 used = 0;
+    u32 max = 0;
+    engone::Allocator* allocator = nullptr;
+public:
+    T* getPtr(u32 index) const {
+        if(index >= used)
+            return nullptr;
+        return (_ptr + index);
+    }
+    T& get(u32 index) const {
+        TRACE_FUNC()
+
+        Assert(index < used);
+        return *(_ptr + index);
+    }
+    T& operator[](u32 index) const {
+        Assert(index < used);
+        return *(_ptr + index);
+    }
+    T& last() const {
+        TRACE_FUNC()
+        
+        Assert(used>0);
+        return *(_ptr + used - 1);
+    }
+    T* data() const { return _ptr; }
+    u32 size() const { return used; }
+    u32 capacity() const { return max; }
+    T* begin() const { return _ptr; }
+    T* end() const { return _ptr + used; }
+
+    BaseArray to_view() const {
+        return *this;
+    }
+
+    operator const BaseArray&() {
+        return *this;
+    }
+};
+
 // global variable?
 // extern engone::Allocator* global_array_allocator;
 // Do not pop or add elements while iterating.
 // Be careful at least.
 template<typename T>
-struct DynamicArray {
+struct DynamicArray : public BaseArray<T> {
     DynamicArray() {
         // This is bad and confusing design, you may have
         // dynamic arrays, deep down in function calls which inits an array which you didn't expect. If allocator is a linear allocator/scratch allocator while the code requires a permanent storage then you've got problems.
@@ -207,8 +258,12 @@ struct DynamicArray {
         // bool yes = reserve(arr.max);
         bool yes = resize(arr.used);
         Assert(yes);
-        for(u32 i=0;i<used;i++){
-            _ptr[i] = arr._ptr[i];
+        if(IS_PRIMITIVE(T)) {
+            memcpy(_ptr, arr._ptr, arr.used * sizeof(T));
+        } else {
+            for(u32 i=0;i<used;i++){
+                _ptr[i] = arr._ptr[i];
+            }
         }
         return *this;
     }
@@ -225,24 +280,50 @@ struct DynamicArray {
         // bool yes = reserve(arr.max);
         bool yes = resize(arr.used);
         Assert(yes);
-        for(u32 i=0;i<used;i++){
-            _ptr[i] = arr._ptr[i];
+        if(IS_PRIMITIVE(T)) {
+            memcpy(_ptr, arr._ptr, arr.used * sizeof(T));
+        } else {
+            for(u32 i=0;i<used;i++){
+                _ptr[i] = arr._ptr[i];
+            }
         }
     }
 
     bool add(const T& t){
         TRACE_FUNC()
-
+        
         if(used + 1 > max){
             if(!reserve(1 + max * 1.5)){
                 return false;
             }
         }
         T* ptr = _ptr + used++;
-        Assert(((u64)ptr % alignof(T)) == 0); // TODO: alignment for placement new?
-        new(ptr)T(t);
+        Assert(((u64)ptr % alignof(T)) == 0);
+        
+        if(IS_PRIMITIVE(T)) {
+            *ptr = t;
+        } else {
+            new(ptr)T(t);
+        }
 
         return true;
+    }
+    // added data is uninitialized, no constructors are called
+    bool add_data(int count) {
+        TRACE_FUNC()
+        if(used + count > max){
+            if(!reserve(count + max * 1.5)){
+                return false;
+            }
+        }
+        used += count;
+        return true;
+    }
+    // destructors are not called
+    void remove_data(int count) {
+        TRACE_FUNC()
+        Assert(used >= count);
+        used -= count;
     }
     bool insert(int index, const T& t){
         TRACE_FUNC()
@@ -256,33 +337,42 @@ struct DynamicArray {
 
         Assert(index <= used);
         T* ptr = _ptr + index;
-        if(index != used){ 
-            for(u32 i = used; i >= index + 1; i--){
-                T* a = _ptr + i;
-                T* b = _ptr + i - 1;
-                *(a) = std::move(*(b));
+        Assert(((u64)ptr % alignof(T)) == 0);
+        if(IS_PRIMITIVE(T)) {
+            if(index != used){ 
+                memmove(_ptr + index + 1, _ptr + index, sizeof(T) * (used - index));
+            }
+            used++;
+            *ptr = t;
+        } else {
+            if(index != used){ 
+                for(u32 i = used; i >= index + 1; i--){
+                    T* a = _ptr + i;
+                    T* b = _ptr + i - 1;
+                    *(a) = std::move(*(b));
+                }
+
+                // doesn't work with std::string
+                // memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
             }
 
-            // doesn't work with std::string
-            // memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
+            used++;
+            new(ptr)T(t);
         }
-
-        used++;
-        Assert(((u64)ptr % alignof(T)) == 0); // TODO: alignment for placement new?
-        new(ptr)T(t);
 
         return true;
     }
-    // bool add(T t){
-    //     return add(*(const T*)&t);
-    // }
     bool pop(){
         TRACE_FUNC()
 
         if(used==0)
             return false;
-        T* ptr = _ptr + --used;
-        ptr->~T();
+        if(IS_PRIMITIVE(T)) {
+            used--;
+        } else {
+            T* ptr = _ptr + --used;
+            ptr->~T();
+        }
         return true;
     }
     // Shifts all elements to the right one step to the left
@@ -292,57 +382,38 @@ struct DynamicArray {
 
         Assert(index < used);
         T* ptr = _ptr + index;
-        ptr->~T();
-        // PROBABLY BUG HERE
-        if(index != used - 1){ // if we didn't remove the last element
-            // this is not beautiful but required for std::string to work
-            new(ptr)T();
-            for(u32 i = index; i < used - 1; i++){
-                T* a = _ptr + i;
-                T* b = _ptr + i + 1;
-                *(a) = std::move(*(b));
+        if(IS_PRIMITIVE(T)) {
+            if(index != used - 1){
+                memmove(ptr, ptr + 1, (used - 1 - index) * sizeof T);
             }
-            T* lastPtr = _ptr + used - 1;
-            lastPtr->~T();
-            // doesn't work with std::string
-            // memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
+        } else {
+            ptr->~T();
+            // PROBABLY BUG HERE
+            if(index != used - 1){ // if we didn't remove the last element
+                // this is not beautiful but required for std::string to work
+                new(ptr)T();
+                for(u32 i = index; i < used - 1; i++){
+                    T* a = _ptr + i;
+                    T* b = _ptr + i + 1;
+                    *(a) = std::move(*(b));
+                }
+                T* lastPtr = _ptr + used - 1;
+                lastPtr->~T();
+                // doesn't work with std::string
+                // memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
+            }
         }
         --used;
         return true;
-    }
-    T* getPtr(u32 index) const {
-        if(index >= used)
-            return nullptr;
-        return (_ptr + index);
-    }
-    T& get(u32 index) const {
-        TRACE_FUNC()
-
-        Assert(index < used);
-        return *(_ptr + index);
-    }
-    T& operator[](u32 index) const{
-        Assert(index < used);
-        return *(_ptr + index);
-    }
-    T& last() const {
-        TRACE_FUNC()
-        
-        Assert(used>0);
-        return *(_ptr + used - 1);
-    }
-    u32 size() const {
-        return used;
-    }
-    T* data() const {
-        return _ptr;
     }
     bool reserve(u32 newMax){
         // MEASURE
         if(newMax==0){
             if(max!=0){
-                for(u32 i = 0; i < used; i++){
-                    (_ptr + i)->~T();
+                if(!IS_PRIMITIVE(T)) {
+                    for(u32 i = 0; i < used; i++){
+                        (_ptr + i)->~T();
+                    }
                 }
                 if(allocator) {
                     allocator->allocate(0, _ptr, max * sizeof(T));
@@ -393,10 +464,14 @@ struct DynamicArray {
             // TODO: Optimize, this operation is expensive (copying each element, 
             // possible allocating and deallocating stuff for no reason depending 
             // on the allocations owned by each element)
-            for(u32 i = 0; i < used; i++){
-                new(newPtr + i)T();
-                *(newPtr + i) = std::move(*(_ptr + i));
-                (_ptr + i)->~T();
+            if(IS_PRIMITIVE(T)) {
+                memcpy(newPtr, _ptr, used * sizeof(T));
+            } else {
+                for(u32 i = 0; i < used; i++){
+                    new(newPtr + i)T();
+                    *(newPtr + i) = std::move(*(_ptr + i));
+                    (_ptr + i)->~T();
+                }
             }
             
             if(allocator) {
@@ -434,22 +509,24 @@ struct DynamicArray {
                 return false;
         }
         if(newSize > used) {
-            for(u32 i = used; i<newSize;i++){
-                new(_ptr+i)T();
+            if(IS_PRIMITIVE(T)) {
+                memset(_ptr + used, 0, (newSize - used)  * sizeof(T));
+            } else {
+                for(u32 i = used; i<newSize;i++){
+                    new(_ptr+i)T();
+                }
             }
         } else if(newSize < used){
-            for(u32 i = newSize; i<used;i++){
-                (_ptr + i)->~T();
+            if(IS_PRIMITIVE(T)) {
+                memset(_ptr + newSize, 0, (used - newSize) * sizeof(T));
+            } else {
+                for(u32 i = newSize; i<used;i++){
+                    (_ptr + i)->~T();
+                }
             }
         }
         used = newSize;
         return true;
-    }
-    T* begin() const {
-        return _ptr;
-    }
-    T* end() const {
-        return _ptr + used;
     }
     void stealFrom(DynamicArray<T>& arr){
         cleanup();
@@ -460,39 +537,20 @@ struct DynamicArray {
         arr.used = 0;
         arr.max = 0;
     }
-    // void stealFrom(TinyArray<T>& arr){
-    //     cleanup();
-    //     if(!arr.owner) {
-    //         // _ptr = (T*)engone::Allocate(arr.used * sizeof(T));
-    //         _ptr = TRACK_ARRAY_ALLOC(T, arr.used);
-    //         used = arr.used;
-    //         max = arr.used;
-    //         arr.used = 0;
-    //     } else {
-    //         _ptr = arr._ptr;
-    //         used = arr.used;
-    //         max = arr.max;
-    //         arr._ptr = nullptr;
-    //         arr.used = 0;
-    //         arr.max = 0;
-    //     }
-    // }
-
-private:
-    T* _ptr = nullptr;
-    u32 used = 0;
-    u32 max = 0;
-    engone::Allocator* allocator = nullptr;
 };
 
 // Does not call any constructors or destructors.
 // good when using integers, floats, pointers...
 template<typename T>
-struct QuickArray {
+struct QuickArray : public BaseArray<T> {
     QuickArray() = default;
     ~QuickArray() { cleanup(); }
     void cleanup(){
         reserve(0);
+    }
+    void init(engone::Allocator* allocator) {
+        Assert(!_ptr);
+        this->allocator = allocator;
     }
 
     QuickArray(const QuickArray<T>& arr) {
@@ -500,10 +558,7 @@ struct QuickArray {
         Assert(yes);
         yes = resize(arr.used);
         Assert(yes);
-        for(int i=0;i<used;i++){
-            // don't use quick array with items that need constructing and destructing
-            _ptr[i] = arr._ptr[i];
-        }
+        memcpy(_ptr, arr._ptr, arr.used * sizeof(T));
     }
     QuickArray(QuickArray<T>& arr) {
         stealFrom(arr);
@@ -547,10 +602,6 @@ struct QuickArray {
     //     }
     // }
 
-    T* _ptr = nullptr;
-    u32 used = 0;
-    u32 max = 0;
-
     bool add(const T& t){
         if(used + 1 > max){
             if(!reserve(5 + max * 1.5)){
@@ -559,19 +610,14 @@ struct QuickArray {
         }
         T* ptr = _ptr + used++;
         // Assert(((u64)ptr % alignof(T)) == 0); // TODO: alignment for placement new?
-        // new(ptr)T(t);
-
         *ptr = t;
 
         return true;
     }
-    // bool add(T t){
-    //     return add(*(const T*)&t);
-    // }
     bool pop(){
-        if(!used) return false;
-        T* ptr = _ptr + --used;
-        // ptr->~T();
+        if(!used)
+            return false;
+        --used;
         return true;
     }
     // Shifts all elements to the right one step to the left
@@ -579,46 +625,22 @@ struct QuickArray {
     bool removeAt(u32 index){
         Assert(index < used);
         T* ptr = _ptr + index;
-        // ptr->~T();
         --used;
         if(index != used){
             memcpy(_ptr + index, _ptr + index + 1, (used-index) * sizeof(T));
         }
         return true;
     }
-    T* getPtr(u32 index) const {
-        if(index >= used)
-            return nullptr;
-        return (_ptr + index);
-    }
-    T& get(u32 index) const {
-        Assert(index < used);
-        return *(_ptr + index);
-    }
-    T& operator[](u32 index) const{
-        Assert(index < used);
-        return *(_ptr + index);
-    }
-    T& last() const {
-        Assert(used>0);
-        return *(_ptr + used - 1);
-    }
-    u32 size() const {
-        return used;
-    }
-    T* data() const {
-        return _ptr;
-    }
 
     bool reserve(u32 newMax){
         // MEASURE
         if(newMax==0){
             if(max!=0){
-                // for(u32 i = 0; i < used; i++){
-                //     (_ptr + i)->~T();
-                // }
-                TRACK_ARRAY_FREE(_ptr, T, max);
-                // engone::Free(_ptr, max * sizeof(T));
+                if(allocator) {
+                    allocator->allocate(0, _ptr, max * sizeof(T));
+                } else {
+                    TRACK_ARRAY_FREE(_ptr, T, max);
+                }
             }
             _ptr = nullptr;
             max = 0;
@@ -626,24 +648,23 @@ struct QuickArray {
             return true;
         }
         if(!_ptr){
-            _ptr = TRACK_ARRAY_ALLOC(T, newMax);
-            // _ptr = (T*)engone::Allocate(sizeof(T) * newMax);
+            if(allocator) {
+                _ptr = (T*)allocator->allocate(newMax * sizeof(T));
+            } else {
+                _ptr = TRACK_ARRAY_ALLOC(T, newMax);
+            }
             Assert(_ptr);
-            // initialization of elements is done when adding them
             if(!_ptr)
                 return false;
             max = newMax;
             return true;
         } else {
-            // if(newMax < max) {
-            //     for(u32 i = newMax; i < used; i++){
-            //         (_ptr + i)->~T();
-            //     }
-            // }
-            T* newPtr = TRACK_ARRAY_REALLOC(_ptr, T, max, newMax);
-            // TRACK_DELS(T, max);
-            // T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
-            // TRACK_ADDS(T, newMax);
+            T* newPtr = nullptr;
+            if(allocator) {
+                newPtr = (T*)allocator->allocate(newMax * sizeof(T), _ptr, max * sizeof(T));
+            } else {
+                newPtr = TRACK_ARRAY_REALLOC(_ptr, T, max, newMax);
+            }
             Assert(newPtr);
             if(!newPtr)
                 return false;
@@ -656,6 +677,9 @@ struct QuickArray {
         }
         return false;
     }
+    void clear() {
+        resize(0);
+    }
     // Will not shrink alloction to fit the new size
     // New elements are zero initialized
     bool resize(u32 newSize){
@@ -667,24 +691,10 @@ struct QuickArray {
         if(newSize > used) {
             memset((void*)(_ptr+used),0,(newSize-used) * sizeof(T));
         }
-        // if(newSize > used) {
-        //     for(u32 i = used; i<newSize;i++){
-        //         new(_ptr+i)T();
-        //     }
-        // } else if(newSize < used){
-        //     for(u32 i = newSize; i<used;i++){
-        //         (_ptr + i)->~T();
-        //     }
-        // }
         used = newSize;
         return true;
     }
-    T* begin() const {
-        return _ptr;
-    }
-    T* end() const {
-        return _ptr + used;
-    }
+    
     void stealFrom(QuickArray<T>& arr){
         cleanup();
         _ptr = arr._ptr;
@@ -694,20 +704,4 @@ struct QuickArray {
         arr.used = 0;
         arr.max = 0;
     }
-    // void stealFrom(TinyArray<T>& arr){
-    //     cleanup();
-    //     if(!arr.owner) {
-    //         _ptr = (T*)engone::Allocate(arr.used * sizeof(T));
-    //         used = arr.used;
-    //         max = arr.used;
-    //         arr.used = 0;
-    //     } else {
-    //         _ptr = arr._ptr;
-    //         used = arr.used;
-    //         max = arr.max;
-    //         arr._ptr = nullptr;
-    //         arr.used = 0;
-    //         arr.max = 0;
-    //     }
-    // }
 };

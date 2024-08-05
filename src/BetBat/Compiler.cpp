@@ -1075,10 +1075,7 @@ void Compiler::processImports() {
                     lock_miscellaneous.lock();
                     if(!have_generated_comp_time_global_data) { // thread safe check
                         GenContext c{};
-                        c.ast = ast;
-                        c.bytecode = bytecode;
-                        c.reporter = &reporter;
-                        c.compiler = this;
+                        c.init_context(this);
                         c.generateGlobalData(); // make sure this function doesn't call lock_miscellaneous
                         have_generated_comp_time_global_data = true;
                     }

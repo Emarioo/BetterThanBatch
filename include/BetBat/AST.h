@@ -298,9 +298,9 @@ struct FnOverloads {
     QuickArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, DynamicArray<bool>* inferred_args = nullptr);
+    Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
     // Note that this function becomes complex if parentStruct is polymorphic.
-    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this,ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, DynamicArray<bool>* inferred_args = nullptr);
+    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this,ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
     
     // FuncImpl can be null and probably will be most of the time
     // when you call this.
@@ -378,16 +378,7 @@ struct FuncImpl {
     bool isUsed() { return usages!=0; }
     
     FunctionSignature signature;
-    // struct Spot {
-    //     TypeId typeId{};
-    //     int offset=0;
-    // };
-    // QuickArray<Spot> argumentTypes;
-    // QuickArray<Spot> returnTypes;
-    // int argSize=0;
-    // int returnSize=0;
-    // QuickArray<TypeId> polyArgs;
-    
+   
     int tinycode_id = 0; // 0 is invalid, set by generator
     u32 polyVersion=-1; // We can catch mistakes if we use -1 as default value
     StructImpl* structImpl = nullptr;
@@ -964,11 +955,23 @@ struct AST {
 
     // static const u32 NEXT_ID = 0x100;
     
+    // void find_or_compute_search_scope(ScopeId start_scopeId, ContentOrder contentOrder);
+    struct SearchScope {
+        struct Entry {
+            ScopeInfo* scope;
+            ContentOrder order;
+            bool crossed_function_boundary;
+        };
+        DynamicArray<Entry> scopes;
+    };
+    // search scope for shared scopes
+    SearchScope* find_or_compute_search_scope(ScopeId start_scopeId);
+    std::unordered_map<ScopeId, SearchScope*> search_scope_map;
 
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
     Identifier* findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool* crossed_function_boundary, bool searchParentScopes = true, bool searchSharedScopes = true);
-    void findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, DynamicArray<Identifier*>& out_identifiers, bool* crossed_function_boundary, bool searchParentScopes = true);
+    void findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, QuickArray<Identifier*>& out_identifiers, bool* crossed_function_boundary, bool searchParentScopes = true);
     // Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool searchParentScopes = true);
     // VariableInfo* identifierToVariable(Identifier* identifier);
 
@@ -1111,7 +1114,7 @@ struct AST {
     QuickArray<TypeInfo*> function_types;
     
     // TODO: annotations
-    TypeInfo* findOrAddFunctionSignature(DynamicArray<TypeId>& args, DynamicArray<TypeId>& rets, CallConvention conv);
+    TypeInfo* findOrAddFunctionSignature(const BaseArray<TypeId>& args, const BaseArray<TypeId>& rets, CallConvention conv);
     TypeInfo* findOrAddFunctionSignature(FunctionSignature* signature);
 
     MUTEX(lock_scopes);

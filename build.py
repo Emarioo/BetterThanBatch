@@ -53,7 +53,7 @@ def main():
 
     if not yes:
         print("Compilation failed")
-    else:
+    elif os.path.exists(config["output"]):
         filepath = config["output"]
         filepath = filepath.replace("\\","/")
         ind = filepath.rfind("/")
@@ -62,7 +62,7 @@ def main():
             filename = filepath[ind+1:]
         shutil.copy(config["output"], filename)
 
-    if yes and enabled("run_when_finished"):
+    if yes and os.path.exists(config["output"]) and enabled("run_when_finished"):
         # cmd("bin/btb -dev")
         cmd("./bin/btb -dev")
 

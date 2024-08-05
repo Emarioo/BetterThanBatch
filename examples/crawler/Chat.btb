@@ -121,7 +121,7 @@ struct ChatWidget {
                 stream.write(sender.data(), header.sender_len)
                 stream.write(input_message.data(), header.text_len)
 
-                FileWrite("bin.txt", stream.sliced_unsafe())
+                // FileWrite("bin.txt", stream.sliced_unsafe())
 
                 if is_server {
                     server.send(stream.sliced_unsafe())

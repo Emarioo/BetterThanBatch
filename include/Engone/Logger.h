@@ -147,7 +147,6 @@ namespace engone {
 
 			std::string logReport;
 
-			// QuickArray<char> lineBuffer{};
             char* line_buffer_data = nullptr;
             int line_buffer_max = 0;
             int line_buffer_used = 0;
