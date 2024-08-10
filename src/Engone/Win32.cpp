@@ -719,6 +719,18 @@ namespace engone {
 	// using with in engone::Free. A pointer is fine
 	std::unordered_map<void*,int>* my_ptr_map = new std::unordered_map<void*,int>();
 	#define ptr_map (*my_ptr_map)
+	static engone::DepthMutex lock_ptr_map{};
+
+	#define ENABLE_PTR_MAP
+	#define ENABLE_PTR_MAP_LOCK
+
+	#ifdef ENABLE_PTR_MAP_LOCK
+	#define LOCK_PTR_MAP lock_ptr_map.lock();
+	#define UNLOCK_PTR_MAP lock_ptr_map.unlock();
+	#else
+	#define LOCK_PTR_MAP
+	#define UNLOCK_PTR_MAP
+	#endif
 
 	// #define ENABLE_MEMORY_CORRUPTION_DETECTION
 
@@ -858,7 +870,11 @@ namespace engone {
 		s_totalNumberAllocations++;			
 		// s_allocStatsMutex.unlock();
 
+		#ifdef ENABLE_PTR_MAP
+		LOCK_PTR_MAP
 		ptr_map[ptr] = bytes;
+		UNLOCK_PTR_MAP
+		#endif
 
 		#ifdef LOG_ALLOCATIONS
 		printf("%p - Allocate %lld\n",ptr,bytes);
@@ -880,7 +896,8 @@ namespace engone {
                     PL_PRINTF("Reallocate : oldBytes is zero while the ptr isn't!?\n");   
                 }
 				
-
+			#ifdef ENABLE_PTR_MAP
+			LOCK_PTR_MAP
 				auto pair = ptr_map.find(ptr);
 				if(pair == ptr_map.end()) {
 					Assert(("pointer does not exist",false));
@@ -888,16 +905,18 @@ namespace engone {
 					Assert(pair->second == oldBytes);
 					ptr_map.erase(ptr);
 				}
+				UNLOCK_PTR_MAP
+			#endif
 
                 // void* newPtr = HeapReAlloc(GetProcessHeap(),0,ptr,newBytes);
-				#ifdef ENABLE_MEMORY_CORRUPTION_DETECTION
+			#ifdef ENABLE_MEMORY_CORRUPTION_DETECTION
 				void* newPtr = AllocHeap(newBytes, ptr, oldBytes);
-				#else
+			#else
                 void* newPtr = realloc(ptr,newBytes);
-				#endif
-				#ifdef LOG_ALLOCATIONS
+			#endif
+			#ifdef LOG_ALLOCATIONS
 				printf("%p -> %p - Reallocate %lld -> %lld\n",ptr,newPtr, oldBytes, newBytes);
-				#endif
+			#endif
 
 				if(!newPtr) {
 					printf("Err %d\n",errno);
@@ -906,9 +925,11 @@ namespace engone {
                 TracyFree(ptr);
                 TracyAlloc(newPtr,newBytes);
 
-				
+			#ifdef ENABLE_PTR_MAP
+				LOCK_PTR_MAP
 				ptr_map[newPtr] = newBytes;
-
+				UNLOCK_PTR_MAP
+			#endif
 				// PrintTracking(newBytes,ENGONE_TRACK_REALLOC);
                 // s_allocStatsMutex.lock();
                 s_allocatedBytes+=newBytes-oldBytes;
@@ -924,23 +945,27 @@ namespace engone {
 	
 	void Free(void* ptr, u64 bytes){
 		if(!ptr) return;
-		#ifndef NO_PERF
-		// MEASURE
-		#endif
-		#ifdef LOG_ALLOCATIONS
+	#ifndef NO_PERF
+			// MEASURE
+	#endif
+	#ifdef LOG_ALLOCATIONS
 		printf("%p - Free %lld\n",ptr,bytes);
-		#endif
+	#endif
 
+	#ifdef ENABLE_PTR_MAP
+		LOCK_PTR_MAP
 		auto pair = ptr_map.find(ptr);
 		Assert(pair != ptr_map.end());
 		Assert(pair->second == bytes);
 		ptr_map.erase(ptr);
+		UNLOCK_PTR_MAP
+	#endif
 	
-		#ifdef ENABLE_MEMORY_CORRUPTION_DETECTION
+	#ifdef ENABLE_MEMORY_CORRUPTION_DETECTION
 		AllocHeap(0, ptr, bytes);
-		#else
+	#else
 		free(ptr);
-		#endif
+	#endif
         // TracyFree(ptr);
 
 		// HeapFree(GetProcessHeap(),0,ptr);
@@ -972,6 +997,11 @@ namespace engone {
 	}
 	u64 GetNumberAllocations(){
 		return s_numberAllocations;
+	}
+	int GetCPUCoreCount() {
+		SYSTEM_INFO info;
+		GetSystemInfo(&info);
+		return info.dwNumberOfProcessors;
 	}
 	// void PrintRemainingTrackTypes(){
     //     log::out << log::GOLD << "Dangling memory:\n";
@@ -1042,11 +1072,15 @@ namespace engone {
 		FillConsoleOutputCharacter(h, ' ', length, pos, &garb);
 	}
 
-
     i32 atomic_add(volatile i32* ptr, i32 value) {
         i32 res = InterlockedAdd((volatile long*)ptr, value);
         return res;
     }
+	int atomic_compare_swap(volatile i32* ptr, i32 expected_value, i32 new_value) {
+		int result = InterlockedCompareExchange((volatile long*)ptr, new_value, expected_value);
+		return result == expected_value;
+	}
+
     Semaphore::Semaphore(u32 initial, u32 max) {
 		Assert(!m_internalHandle);
 		m_initial = initial;
@@ -1116,15 +1150,41 @@ namespace engone {
 			m_internalHandle=0;
         }
 	}
-	void Mutex::lock() {
-		// MEASURE
+	void Mutex::init() {
 		if (m_internalHandle == 0) {
 			HANDLE handle = CreateMutex(NULL, false, NULL);
 			if (handle == INVALID_HANDLE_VALUE) {
 				DWORD err = GetLastError();
 				PL_PRINTF("[WinError %lu] CreateMutex\n",err);
-			}else
+			} else {
                 m_internalHandle = TO_INTERNAL(handle);
+			}
+		}
+	}
+	void Mutex::lock() {
+		// MEASURE
+		// NOTE: A spinlock using compare and exchange atomic instruction. If mutex wasn't created then we automatically create it. The compare and exchange plus spinlock makes sure only one thread creates a mutex. If two creates mutex then one may overwrite the other which would be bad.
+
+		static volatile int global_value = 0;
+		static volatile int spins = 0;
+		while(m_internalHandle == 0) {
+
+			int old = atomic_compare_swap(&global_value, 0, 1);
+			if(old == 0) {
+				// success
+				HANDLE handle = CreateMutex(NULL, false, NULL);
+				if (handle == INVALID_HANDLE_VALUE) {
+					DWORD err = GetLastError();
+					PL_PRINTF("[WinError %lu] CreateMutex\n",err);
+					return;
+				} else {
+					Assert(m_internalHandle == 0);
+					m_internalHandle = TO_INTERNAL(handle);
+				}
+				global_value = 0;
+				break;
+			}
+			atomic_add(&spins, 1);
 		}
 		if (m_internalHandle != 0) {
 			DWORD res = WaitForSingleObject(TO_HANDLE(m_internalHandle), INFINITE);
@@ -1155,6 +1215,98 @@ namespace engone {
 		}
 	}
 	ThreadId Mutex::getOwner() {
+		return m_ownerThread;
+	}
+	void DepthMutex::cleanup() {
+        if (m_internalHandle != 0){
+            BOOL yes = CloseHandle(TO_HANDLE(m_internalHandle));
+            if(!yes){
+                DWORD err = GetLastError();
+                PL_PRINTF("[WinError %lu] CloseHandle\n",err);
+            }
+			m_internalHandle = 0;
+			m_ownerThread = 0;
+			depth = 0;
+        }
+	}
+	void DepthMutex::init() {
+		if (m_internalHandle == 0) {
+			HANDLE handle = CreateMutex(NULL, false, NULL);
+			if (handle == INVALID_HANDLE_VALUE) {
+				DWORD err = GetLastError();
+				PL_PRINTF("[WinError %lu] CreateMutex\n",err);
+			} else {
+                m_internalHandle = TO_INTERNAL(handle);
+			}
+		}
+	}
+	void DepthMutex::lock() {
+		// MEASURE
+		// NOTE: A spinlock using compare and exchange atomic instruction. If mutex wasn't created then we automatically create it. The compare and exchange plus spinlock makes sure only one thread creates a mutex. If two creates mutex then one may overwrite the other which would be bad.
+
+		static volatile int global_value = 0;
+		static volatile int spins = 0;
+		while(m_internalHandle == 0) {
+
+			int old = atomic_compare_swap(&global_value, 0, 1);
+			if(old == 0) {
+				// success
+				HANDLE handle = CreateMutex(NULL, false, NULL);
+				if (handle == INVALID_HANDLE_VALUE) {
+					DWORD err = GetLastError();
+					PL_PRINTF("[WinError %lu] CreateMutex\n",err);
+					return;
+				} else {
+					Assert(m_internalHandle == 0);
+					m_internalHandle = TO_INTERNAL(handle);
+				}
+				global_value = 0;
+				break;
+			}
+			atomic_add(&spins, 1);
+		}
+		if (m_internalHandle != 0) {
+			uint32 newId = Thread::GetThisThreadId();
+			if(m_ownerThread == newId) {
+				depth++;
+				return;
+			}
+
+			DWORD res = WaitForSingleObject(TO_HANDLE(m_internalHandle), INFINITE);
+			depth++;
+			auto owner = m_ownerThread;
+			// printf("Lock %d %d\n",newId, (int)m_internalHandle);
+			if (owner != 0) {
+				PL_PRINTF("Mutex : Locking twice, old owner: %llu, new owner: %u\n",owner,newId);
+			}
+			m_ownerThread = newId;
+			if (res == WAIT_FAILED) {
+                // TODO: What happened do the old thread who locked the mutex. Was it okay to ownerThread = newId
+				DWORD err = GetLastError();
+                PL_PRINTF("[WinError %lu] WaitForSingleObject\n",err);
+			}
+		}
+	}
+	void DepthMutex::unlock() {
+		// MEASURE
+		if (m_internalHandle != 0) {
+			// printf("Unlock %d %d\n",m_ownerThread, (int)m_internalHandle);
+			if(Thread::GetThisThreadId() == m_ownerThread) {
+				depth--;
+				if(depth > 0)
+					return;
+				m_ownerThread = 0;
+			} else {
+				return; // error, unlocking even though thread doesn't own mutex
+			}
+			BOOL yes = ReleaseMutex(TO_HANDLE(m_internalHandle));
+			if (!yes) {
+				DWORD err = GetLastError();
+                PL_PRINTF("[WinError %lu] ReleaseMutex\n",err);
+			}
+		}
+	}
+	ThreadId DepthMutex::getOwner() {
 		return m_ownerThread;
 	}
 	void Thread::cleanup() {

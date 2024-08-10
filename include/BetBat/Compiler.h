@@ -129,6 +129,7 @@ struct CompileOptions {
     bool incremental_build = false;
     bool stable_global_data = false; // I though about disallowing stable globals when using executable and mostly allowing it for dlls and libs but then I thought, "I dont know how users will use it so why should I limit the possibilities.".
 
+    bool disable_multithreading = true; // TODO: Should be false
     bool disable_preload = false;
 
     bool quit = false;
@@ -146,7 +147,7 @@ struct CompileOptions {
     DynamicArray<std::string> userArguments; // Ignored if output isn't executed. Arguments to pass to the interpreter or executable
 
     DynamicArray<Path> importDirectories; // Directories to look for imports (source files)
-    int threadCount=1;
+    int threadCount=0; // zero will use the CPU's number of core
 
     struct TestLocation {
         // TODO: store file name elsewhere, duplicated data
@@ -267,7 +268,7 @@ struct Compiler {
     bool output_is_up_to_date = false;
 
     bool have_prepared_global_data = false;
-    bool have_generated_comp_time_global_data = false;
+    volatile bool have_generated_comp_time_global_data = false; // this variable should be volatile to prevent compiler from rearraning it in dangerous ways when multiple threads modify it.
     bool compiler_got_stuck = false;
 
     int struct_tasks_since_last_change = 0;
@@ -345,8 +346,8 @@ struct Compiler {
     int dataOffset_members = -1;
     int dataOffset_strings = -1;
 
-private:
     engone::Mutex lock_imports;
+private:
     engone::Semaphore lock_wait_for_imports;
     bool signaled = true;
     volatile int waiting_threads = 0;

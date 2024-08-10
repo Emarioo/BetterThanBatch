@@ -85,6 +85,8 @@ namespace engone {
 	u64 GetAllocatedBytes();
 	// Current allocations
 	u64 GetNumberAllocations();
+
+	int GetCPUCoreCount();
 	
 	// void PrintRemainingTrackTypes();
 	
@@ -249,13 +251,30 @@ namespace engone {
 		~Mutex(){cleanup();}
 		void cleanup();
 
+		void init();
 		void lock();
 		void unlock();
 
 		ThreadId getOwner();
 	private:
-		ThreadId m_ownerThread = 0;
-		u64 m_internalHandle = 0;
+		volatile ThreadId m_ownerThread = 0;
+		volatile u64 m_internalHandle = 0;
+	};
+	class DepthMutex {
+	public:
+		DepthMutex() = default;
+		~DepthMutex(){cleanup();}
+		void cleanup();
+
+		void init();
+		void lock();
+		void unlock();
+
+		ThreadId getOwner();
+	private:
+		volatile ThreadId m_ownerThread = 0;
+		volatile u64 m_internalHandle = 0;
+		volatile int depth = 0;
 	};
 	
 	#define PROGRAM_NEW_CONSOLE 1
@@ -313,10 +332,11 @@ namespace engone {
 	// calls AllocConsole and sets stdin and stdout
 	void CreateConsole();
 
+	// these should be intrinsics
     // returns the result
 	i32 atomic_add(volatile i32* ptr, i32 value);
-	// these should be intrinsics
-	// bool atomic_compare_swap(i32* ptr, i32 oldValue, i32 newValue);
+	// returns the old value, if old value is equals to expected then new_value will replace the old value at the pointer.
+	i32 atomic_compare_swap(volatile i32* ptr, i32 expected_value, i32 new_value);
     
 	// #define atomic_compare_swap(ptr, oldValue, newValue)
 	// #define atomic_add

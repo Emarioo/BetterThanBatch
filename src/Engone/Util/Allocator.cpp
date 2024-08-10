@@ -22,7 +22,7 @@
 namespace engone {
     
     
-    void Tracker::add(void* ptr, int bytes, const DebugLocation& debug) {
+    void Tracker::add(void* ptr, int bytes, const DebugLocation& debug, bool skip_mutex) {
         auto id = debug.type.hash_code();
         int alloc_id = engone::atomic_add(&allocation_id, 1) - 1;
 
@@ -41,10 +41,11 @@ namespace engone {
             BREAK(alloc_id == alloc_ids[i]);
         }
 
-        mutex.lock();
-
         bool prev = m_enableTracking;
-        m_enableTracking = false;
+        if(!skip_mutex) {
+            mutex.lock();
+            m_enableTracking = false;
+        }
         
         int count = debug.type_size == 0 ? bytes : bytes / debug.type_size;
         TrackerType* tracked_type = nullptr;
@@ -75,16 +76,19 @@ namespace engone {
                 loc->line = debug.line;
             }
         }
-        m_enableTracking = prev;
-        mutex.unlock();
+        if(!skip_mutex) {
+            m_enableTracking = prev;
+            mutex.unlock();
+        }
     }
-    void Tracker::del(void* ptr, int bytes, const DebugLocation& debug) {
+    void Tracker::del(void* ptr, int bytes, const DebugLocation& debug, bool skip_mutex) {
         auto id = debug.type.hash_code();
 
-        mutex.lock();
-
         bool prev = m_enableTracking;
-        m_enableTracking = false;
+        if(!skip_mutex) {
+            mutex.lock();
+            m_enableTracking = false;
+        }
         
         int count = debug.type_size == 0 ? bytes : bytes / debug.type_size;
         TrackerType* tracked_type = nullptr;
@@ -115,6 +119,19 @@ namespace engone {
                 Assert(false); // double free?
             }
         }
+        if(!skip_mutex) {
+            m_enableTracking = prev;
+            mutex.unlock();
+        }
+    }
+    void Tracker::del_add(void* old_ptr, int old_bytes, void* new_ptr, int new_bytes, const DebugLocation& debug) {
+        mutex.lock();
+        bool prev = m_enableTracking;
+        m_enableTracking = false;
+
+        del(old_ptr, old_bytes, debug, true);
+        add(new_ptr, new_bytes, debug, true);
+
         m_enableTracking = prev;
         mutex.unlock();
     }

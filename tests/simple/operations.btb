@@ -175,7 +175,9 @@ _test 23; na
 
 #import "Lang"
 // char + i32 should return char
-_test typeid char; typeid ('A' + 2);
+x0 := typeid char
+x1 := typeid ('A' + 2)
+_test x0.index(); x1.index();
 // std_print('0' + hex) would print integer instead of char otherwise
 
 @TEST_CASE(overflow)

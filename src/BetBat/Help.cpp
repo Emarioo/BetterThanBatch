@@ -81,7 +81,7 @@ void print_help(){
     END
 
     USAGE("--incremental")
-    DESC("Compiles source code if any file changed since last compilation.\n")
+    DESC("Compiles source code if any file changed since last compilation. Mostly used with hotreloading.\n")
     END
 
     USAGE("--stable-globals")
@@ -89,7 +89,15 @@ void print_help(){
     END
 
     USAGE("-m,--macro")
-    DESC("Defines an empty macro visible in all source files\n")
+    DESC("Defines an empty macro visible from all source files.\n")
+    END
+
+    USAGE("-nothreads")
+    DESC("Disables multithreading. This is useful if you encounter a bug with multithreading.\n")
+    END
+
+    USAGE("-threads")
+    DESC("Enables multithreading (the default if the compiler doesn't have bugs). The compiler uses a thread pool with a number of threads equal to the number of cores on your CPU.\n")
     END
 
     HEADER("Debugging")
@@ -104,16 +112,17 @@ void print_help(){
     END
 
     USAGE("--silent")
-    DESC("reserved.\n")
+    DESC("Prevents the compiler from printing unnecessary information such as the linker command, compiled lines, compile time, and options. Errors will still be printed.\n")
     END
-    
     
     USAGE("--verbose")
     DESC("reserved.\n")
     END
 
     USAGE("--profiling")
-    DESC("Displays time measurements of the internal parts of the compiler.\n")
+    DESC("reserved.\n")
+    // NOTE: I seem to have disabled or ruined this.
+    // DESC("Displays time measurements of the internal parts of the compiler.\n")
     END
 
     HEADER("Testing")
@@ -122,9 +131,10 @@ void print_help(){
     DESC("Will run tests on all files that matched the [pattern]. Some default files will be chosen if a pattern wasn't supplied. See '--pattern-match' for syntax of pattern.\n")
     END
     
-    USAGE("-twe,--test-with-errors [pattern]")
-    DESC("Same as '--test' but error messages will be printed to stdout. In the future, stderr may be more convenient.\n")
-    END
+    // I don't know if this still works?
+    // USAGE("-twe,--test-with-errors [pattern]")
+    // DESC("Same as '--test' but error messages will be printed to stdout. In the future, stderr may be more convenient.\n")
+    // END
 
     #undef HEADER
     #undef USAGE

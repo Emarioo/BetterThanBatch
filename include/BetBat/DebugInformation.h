@@ -110,11 +110,13 @@ struct DebugInformation {
     DynamicArray<std::string> files;
 
     // file should be absolute path
-    u32 addOrGetFile(const std::string& file);
+    u32 addOrGetFile(const std::string& file, bool skip_mutex = false);
     // TODO: Thread safety
     DebugFunction* addFunction(FuncImpl* impl, TinyBytecode* tinycode, const std::string& from_file, int declared_at_line);
 
     void print();
+
+    MUTEX(mutex);
 
     AST* ast = nullptr;
 };

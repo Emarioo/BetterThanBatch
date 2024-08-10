@@ -528,7 +528,7 @@ struct DynamicArray : public BaseArray<T> {
         used = newSize;
         return true;
     }
-    void stealFrom(DynamicArray<T>& arr){
+    void steal_from(DynamicArray<T>& arr){
         cleanup();
         _ptr = arr._ptr;
         used = arr.used;
@@ -695,7 +695,7 @@ struct QuickArray : public BaseArray<T> {
         return true;
     }
     
-    void stealFrom(QuickArray<T>& arr){
+    void steal_from(QuickArray<T>& arr){
         cleanup();
         _ptr = arr._ptr;
         used = arr.used;

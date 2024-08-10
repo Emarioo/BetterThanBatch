@@ -48,6 +48,27 @@ fn @import(Kernel) GetExitCodeProcess(
 fn @import(Kernel) ExitProcess(
   uExitCode: u32
 );
+fn @import(Kernel) GetSystemInfo(
+   lpSystemInfo: SYSTEM_INFO*
+);
+struct SYSTEM_INFO {
+  // union { // The language doesn't support unions yet
+  //   u32 dwOemId;
+    // struct {
+      wProcessorArchitecture: u16;
+      wReserved: u16;
+  //   } DUMMYSTRUCTNAME;
+  // } DUMMYUNIONNAME;
+  dwPageSize:                  u32;
+  lpMinimumApplicationAddress: void*;
+  lpMaximumApplicationAddress: void*;
+  dwActiveProcessorMask:       u64;
+  dwNumberOfProcessors:        u32;
+  dwProcessorType:             u32;
+  dwAllocationGranularity:     u32;
+  wProcessorLevel:             u16;
+  wProcessorRevision:          u16;
+}
 
 struct SECURITY_ATTRIBUTES {
   nLength:              i32;

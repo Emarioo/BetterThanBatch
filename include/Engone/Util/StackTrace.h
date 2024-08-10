@@ -15,6 +15,9 @@
 
 #include <functional>
 
+#define ENABLE_ASSERT_HANDLER
+
+
 #define defer_2 DeferStruct_2 COMBINE(defer_2,__LINE__){};COMBINE(defer_2,__LINE__)._func=[&]()
 struct DeferStruct_2 {
     DeferStruct_2() = default;
@@ -34,8 +37,9 @@ struct DeferStruct_2 {
 
 #define POP_LAST_CALLBACK() PopLastCallback();
 
-// TODO: NOTHING HERE IS THREAD SAFE!
-
+// Caller once per thread
+// InitAssetHandler must be called by a SINGLE thread the first time because we initialize global information.
+void InitAssertHandler();
 void PushStackTrace(const char* name, const char* file = nullptr, int line = 0);
 void PopStackTrace();
 // sets callback for last trace

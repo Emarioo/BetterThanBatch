@@ -1438,7 +1438,7 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
         if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
             builder.emit_pop(BC_REG_B); // pop pointer to data object
 
-            FnOverloads::Overload* overload = &expression->versions_overload[currentPolyVersion];
+            OverloadGroup::Overload* overload = &expression->versions_overload[currentPolyVersion];
 
             if(!overload || !overload->astFunc || !overload->funcImpl) {
                 generateDefaultValue(BC_REG_B, 0, arg_type, &expression->location);
@@ -1575,7 +1575,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
     FunctionSignature* signature = expression->versions_func_type[currentPolyVersion];
     bool is_function_pointer = signature;
     if (!is_function_pointer) {
-        FnOverloads::Overload overload = expression->versions_overload[info.currentPolyVersion];
+        OverloadGroup::Overload overload = expression->versions_overload[info.currentPolyVersion];
         astFunc = overload.astFunc;
         funcImpl = overload.funcImpl;
         if(funcImpl)
@@ -1780,7 +1780,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
                     if(!wasSafelyCasted && i < astFunc->nonDefaults) {
                         // cast operator isn't supported with non named arguments at the moment
                         Assert(expression->uses_cast_operator);
-                        FnOverloads::Overload cast_overload;
+                        OverloadGroup::Overload cast_overload;
                         wasSafelyCasted = ast->findCastOperator(currentScopeId, argType, signature->argumentTypes[i].typeId, &cast_overload);
                         Assert(cast_overload.astFunc && cast_overload.funcImpl);
 
@@ -3235,7 +3235,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                             if(exprId.getPointerLevel() == 0) {
                                 ERR_SECTION(
                                     ERR_HEAD2(expression->location)
-                                    ERR_MSG("Accessing a member of a returned struct or a struct that is considered a value and not a reference is not possible. (with exception to slices for convenience)")
+                                    ERR_MSG("Accessing a member of a returned struct or a struct that is considered a value and not a reference is not possible, for now. (with exception to slices)")
                                     ERR_LINE2(expression->location,"here")
                                 )
                             } else if(exprId.getPointerLevel() > 1) {
@@ -4213,7 +4213,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
     for(auto& typ : *outTypeIds){
         TypeInfo* ti = info.ast->getTypeInfo(typ.baseType());
         if(ti){
-            Assert(("Leaking virtual type!",ti->id == typ.baseType()));
+            Assert(("Expression should not evaluate to raw virtual type!",ti->id == typ.baseType()));
         }
     }
     // To avoid ensuring non virtual type everywhere all the entry point where virtual type can enter
@@ -4226,6 +4226,32 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue2);
 
+    // TODO: THIS IS TEMPORARY CODE!
+    WHILE_TRUE_N(1000) {
+        // In processImports we use 'lock_imports' mutex when checking is_being_checked.
+        // This would mean that all threads must use the same mutex 'lock_imports' when checking 'is_being_checked', HOWEVER, we are not in a different phase and no thread will check is_being_checked with a different mutex except for the code right here. SOOO, we can use whichever mutex we'd like.
+        ast->lock_globalScope.lock(); // TODO: use a different mutex named more appropriately
+        bool is_being_checked = function->is_being_checked || (astStruct && astStruct->is_being_checked);
+        if(!is_being_checked) {
+            function->is_being_checked = true;
+            if(astStruct)
+                astStruct->is_being_checked = true;
+            ast->lock_globalScope.unlock();
+            break;
+        }
+        ast->lock_globalScope.unlock();
+
+        engone::Sleep(0.001); // TODO: Don't sleep, try generating another function instead. Move responsibility to compiler instead of generator, currently the generator goes through all functions and generates stuff, perhaps the compiler loop should instead. We can add "generate function" tasks.
+    }
+
+    defer {
+        ast->lock_globalScope.lock(); // TODO: use a different mutex named more appropriately
+        function->is_being_checked = false;
+        if(astStruct)
+            astStruct->is_being_checked = false;
+        ast->lock_globalScope.unlock();
+    };
+    
     _GLOG(FUNC_ENTER_IF(function->linkConvention == LinkConvention::NONE)) // no need to log
     
     MAKE_NODE_SCOPE(function);
@@ -5944,7 +5970,18 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 continue;
             }
             int size = info.ast->getTypeSize(tempTypes.last());
-            if(size > 8 ) {
+            TypeInfo* info_testvalue = nullptr;
+            if(tempTypes.last().isNormalType())
+                info_testvalue = info.ast->getTypeInfo(tempTypes.last());
+            if(info_testvalue && info_testvalue->astStruct) {
+                ERR_SECTION(
+                    ERR_HEAD2(statement->testValue->location)
+                    ERR_MSG("Types passed to _test cannot be a structs. They must be a primitive value like an integer.")
+                    ERR_LINE2(statement->testValue->location,"bad")
+                )
+                continue;
+            }
+            if(size > 8) {
                 ERR_SECTION(
                     ERR_HEAD2(statement->testValue->location)
                     ERR_MSG("Type cannot be larger than 8 bytes. Test statement doesn't handle larger structs.")
@@ -5952,6 +5989,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 )
                 continue;
             }
+
             tempTypes.clear();
             result = generateExpression(statement->firstExpression, &tempTypes);
             if(tempTypes.size() != 1) {
@@ -5963,27 +6001,39 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 continue;
             }
             size = info.ast->getTypeSize(tempTypes.last());
+            TypeInfo* info_expr = nullptr;
+            if(tempTypes.last().isNormalType())
+                info_expr = info.ast->getTypeInfo(tempTypes.last());
+            if(info_expr && info_expr->astStruct) {
+                ERR_SECTION(
+                    ERR_HEAD2(statement->firstExpression->location)
+                    ERR_MSG("Types passed to _test cannot be a structs. They must be a primitive value like an integer.")
+                    ERR_LINE2(statement->firstExpression->location,"bad")
+                )
+                continue;
+            }
             if(size > 8) {
                 ERR_SECTION(
                     ERR_HEAD2(statement->firstExpression->location)
                     ERR_MSG("Type cannot be larger than 8 bytes. Test statement doesn't handle larger structs.")
-                    ERR_LINE2(statement->testValue->location,"bad")
+                    ERR_LINE2(statement->firstExpression->location,"bad")
                 )
                 continue;
             }
-            // TODO: Should the types match? u16 - i32 might be fine but f32 - u16 shouldn't be okay.
+            // TODO: Should the types match? u16 - i32 might be fine but f32 - u16 shouldn't be okay, or?
             builder.emit_pop(BC_REG_A);
             builder.emit_pop(BC_REG_D);
             
+            // NOTE: Alignment is handled in x64 generator.
             // TEST_VALUE calls stdcall functions which needs 16-byte alignment
-            int alignment = (16 - (currentFrameOffset % 16)) % 16;
-            if(alignment != 0)
-                builder.emit_alloc_local(BC_REG_INVALID, alignment);
+            // int alignment = (16 - (currentFrameOffset % 16)) % 16;
+            // if(alignment != 0)
+            //     builder.emit_alloc_local(BC_REG_INVALID, alignment);
             // Assert(currentFrameOffset % 16 == 0);
             int loc = compiler->options->addTestLocation(statement->location, &compiler->lexer);
             builder.emit_test(BC_REG_D, BC_REG_A, 8, loc);
-            if(alignment != 0)
-                builder.emit_free_local(alignment);
+            // if(alignment != 0)
+            //     builder.emit_free_local(alignment);
         } else {
             Assert(("You forgot to implement statement type!",false));
         }

@@ -60,8 +60,11 @@ namespace engone{
 
         volatile int allocation_id = 1;
         
-        void add(void* ptr, int bytes, const DebugLocation& debug);
-        void del(void* ptr, int bytes, const DebugLocation& debug);
+        // These are atomic operation (locked with mutex)
+        // You can't del and then add because threads may allocate and free pointers in between which the tracker would see as incorrect.
+        void add(void* ptr, int bytes, const DebugLocation& debug, bool skip_mutex = false);
+        void del(void* ptr, int bytes, const DebugLocation& debug, bool skip_mutex = false);
+        void del_add(void* old_ptr, int old_bytes, void* new_ptr, int new_bytes, const DebugLocation& debug);
         int getMemoryUsage();
         void printAllocations();
     };
@@ -123,10 +126,11 @@ namespace engone{
             // if(ptr && bytes != 0) {
             //     engone::log::out << engone::log::GRAY<<" "<<ptr<<"->"<<new_ptr<<"\n";
             // }
-            if(ptr) {
+            if(ptr && bytes != 0) {
+                allocator->tracker.del_add(ptr, old_bytes, new_ptr, bytes, debug);
+            } else if(ptr) {
                 allocator->tracker.del(ptr, old_bytes, debug);
-            }
-            if(bytes != 0)
+            } else if(bytes != 0)
                 allocator->tracker.add(new_ptr, bytes, debug);
             return new_ptr;
             // return allocator->allocate(bytes, ptr, old_bytes);

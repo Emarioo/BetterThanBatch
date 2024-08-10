@@ -25,12 +25,12 @@ int main(int argc, const char** argv){
 
     auto main_start = StartMeasure();
 
+    InitAssertHandler();
     ProfilerInitialize();
     
     DynamicArray<std::string> arguments{};
     for(int i=1;i<argc;i++) // is the first argument always the executable?
         arguments.add(argv[i]);
-
 
     // NOTE: I have not moved InterpretCommands and compiler option parsing to it's own file
     //   it's rather temporary. In the future, you will specify compile options such as
@@ -60,6 +60,8 @@ int main(int argc, const char** argv){
 
         options.output_file = "main.exe";
         options.source_file = "examples/dev.btb";
+        options.threadCount = 2;
+        // options.disable_multithreading = true;
         // options.target = TARGET_BYTECODE;
         // options.target = TARGET_WINDOWS_x64;
         // options.linker = LINKER_MSVC;
@@ -343,6 +345,10 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
             for(;i<commands.size();i++) {
                 options->userArguments.add(commands[i]);
             }
+        } else if(arg == "-nothreads") {
+            options->disable_multithreading = true;
+        } else if(arg == "-threads") {
+            options->disable_multithreading = false;
         } else if(arg == "-nopreload") {
             options->disable_preload = true;
         } else {

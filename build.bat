@@ -25,8 +25,8 @@ SET compileSuccess=!errorlevel!
 if !compileSuccess! == 0 if !RUN_AT_END!==1 (
 :RUN_COMPILER
     rem
-    @REM bin\btb -dev
-    bin\btb examples/dev
+    bin\btb -dev
+    @REM bin\btb examples/dev
 
     @REM bin\btb examples/crawler/GameCore -d -o main.exe -r
     @REM bin\btb examples/crawler/GameCore -d -o bin/code.dll

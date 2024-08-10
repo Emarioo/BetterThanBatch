@@ -761,7 +761,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
     TEMP_ARRAY_N(bool, inferred_args, 5); // Inferred arguments are assumed to be initializers for structs. Variable should maybe be renamed to initializer arguments.
     struct Entry {
-        FnOverloads* fn_overloads = nullptr;
+        OverloadGroup* fn_overloads = nullptr;
         StructImpl* parentStructImpl = nullptr;
         ASTStruct* parentAstStruct = nullptr;
 
@@ -1009,7 +1009,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     for(auto& ret : f->returnTypes)
                         outTypes->add(ret.typeId);
             }
-            expr->versions_func_type[info.currentPolyVersion] = f;
+            expr->versions_func_type.set(info.currentPolyVersion, f);
             return SIGNAL_SUCCESS;
         } else {
             if (possible_overload_groups.size())
@@ -1073,8 +1073,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
                 if(arg_type.getPointerLevel() == 0 && typeinfo->astStruct) {
 
-                    FnOverloads::Overload* overload = nullptr;
-                    FnOverloads* overloads = nullptr;
+                    OverloadGroup::Overload* overload = nullptr;
+                    OverloadGroup* overloads = nullptr;
                     if(!is_destruct)
                         overloads = typeinfo->astStruct->getMethod("init");
                     else
@@ -1164,10 +1164,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                                     //     funcImpl->signature.polyArgs[i] = id;
                                     // }
 
+                                    // IMPORTANT TODO: checkFunctionImpl with multi-threading will break stuff! We need to check 'is_being_checked'.
                                     // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
                                     SignalIO result = checkFunctionImpl(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
 
-                                    overload = overloads->addPolyImplOverload(polyFunc, funcImpl);
+                                    overload = ast->addPolyImplOverload(overloads, polyFunc, funcImpl);
                                     
                                     info.compiler->addTask_type_body(polyFunc, funcImpl);
 
@@ -1322,7 +1323,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         for(auto& ret : f->returnTypes)
                             outTypes->add(ret.typeId);
                 }
-                expr->versions_func_type[info.currentPolyVersion] = f;
+                expr->versions_func_type.set(currentPolyVersion, f);
                 return SIGNAL_SUCCESS;
             }
         }
@@ -1363,9 +1364,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
             // match args with normal impls
             
-            FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, scopeId, argTypes, ent.set_implicit_this, expr, fnOverloads->overloads.size()==1, &inferred_args);
+            OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, expr, fnOverloads->overloads.size()==1, &inferred_args);
             if(!overload)
-                overload = fnOverloads->getOverload(info.ast, scopeId, argTypes, ent.set_implicit_this, expr, true, &inferred_args);
+                overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, expr, true, &inferred_args);
 
 
             if(operatorOverloadAttempt && !overload) {
@@ -1463,7 +1464,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         bool implicitPoly = (fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0));
         // TODO: Optimize by checking what in the overloads didn't match. If all parent structs are a bad match then
         //  we don't have we don't need to getOverload the second time with canCast=true
-        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, &inferred_args);
+        OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
@@ -1473,7 +1474,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             return SIGNAL_SUCCESS;
         }
         // bool useCanCast = false;
-        overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true, &inferred_args);
+        overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
 
@@ -1500,9 +1501,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             // This can get complicated fn size<T>(a: Slice<T*>)
             DynamicArray<TypeId> choosenTypes{};
             DynamicArray<TypeId> realChoosenTypes{};
-            FnOverloads::PolyOverload* polyOverload = nullptr;
+            OverloadGroup::PolyOverload* polyOverload = nullptr;
             for(int i=0;i<(int)fnOverloads->polyOverloads.size();i++){
-                FnOverloads::PolyOverload& overload = fnOverloads->polyOverloads[i];
+                OverloadGroup::PolyOverload& overload = fnOverloads->polyOverloads[i];
 
                 // if(parentStructImpl) {
                 //     if(overload.funcImpl->structImpl->polyArgs.size() != polyArgs.size() /* && !implicitPoly */)
@@ -1811,7 +1812,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     }
                     polyFunc = overload.astFunc;
                     polyOverload = &overload;
-                    realChoosenTypes.stealFrom(choosenTypes);
+                    realChoosenTypes.steal_from(choosenTypes);
                     //break;
                 }
             }
@@ -1882,7 +1883,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 lessArguments = 1;
             // // Find possible polymorphic type and later create implementation for it
             for(int i=0;i<(int)fnOverloads->polyOverloads.size();i++){
-                FnOverloads::PolyOverload& overload = fnOverloads->polyOverloads[i];
+                OverloadGroup::PolyOverload& overload = fnOverloads->polyOverloads[i];
                 if(overload.astFunc->polyArgs.size() != fnPolyArgs.size())
                     continue;
                 // continue if more args than possible
@@ -1977,11 +1978,39 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             TypeId id = fnPolyArgs[i];
             funcImpl->signature.polyArgs[i] = id;
         }
+
+        // TODO: THIS IS TEMPORARY CODE!
+        WHILE_TRUE_N(1000) {
+            // In processImports we use 'lock_imports' mutex when checking is_being_checked.
+            // This would mean that all threads must use the same mutex 'lock_imports' when checking 'is_being_checked', HOWEVER, we are not in a different phase and no thread will check is_being_checked with a different mutex except for the code right here. SOOO, we can use whichever mutex we'd like.
+            compiler->lock_imports.lock(); // TODO: use a different mutex named more appropriately
+            bool is_being_checked = polyFunc->is_being_checked || (
+                (!currentAstFunc || currentAstFunc->parentStruct != parentAstStruct) &&  // if the function we check with checkFunctionImpl is a method and the parent struct of the method is the same struct as the current parent struct THEN we don't mind that the parent struct is being checked because this thread we are currently doing that.
+                parentAstStruct && parentAstStruct->is_being_checked);
+            if(!is_being_checked) {
+                polyFunc->is_being_checked = true;
+                if(parentAstStruct)
+                    parentAstStruct->is_being_checked = true;
+                compiler->lock_imports.unlock();
+                break;
+            }
+            compiler->lock_imports.unlock();
+
+            engone::Sleep(0.001); // TODO: Don't sleep, try generating another function instead. Move responsibility to compiler instead of generator, currently the generator goes through all functions and generates stuff, perhaps the compiler loop should instead. We can add "generate function" tasks.
+        }
+
         // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
         SignalIO result = checkFunctionImpl(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
         // outTypes->used = 0; // FNCALL_SUCCESS will fix the types later, we don't want to add them twice
 
-        FnOverloads::Overload* newOverload = fnOverloads->addPolyImplOverload(polyFunc, funcImpl);
+        compiler->lock_imports.lock();
+        polyFunc->is_being_checked = false;
+        if(parentAstStruct)
+            parentAstStruct->is_being_checked = false;
+        compiler->lock_imports.unlock();
+
+
+        OverloadGroup::Overload* newOverload = ast->addPolyImplOverload(fnOverloads, polyFunc, funcImpl);
         
         // TypeChecker::CheckImpl checkImpl{};
         // checkImpl.astFunc = polyFunc;
@@ -1993,9 +2022,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         funcImpl->usages++;
 
         // Can overload be null since we generate a new func impl?
-        overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr);
+        overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr);
         if(!overload)
-            overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, false, true);
+            overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, false, true);
         Assert(overload == newOverload);
         if(!overload){
             ERR_SECTION(
@@ -2323,7 +2352,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             auto constString = info.ast->getConstString(expr->name,&index);
             // Assert(constString);
             // log::out << " "<<expr->name << " "<<index<<"\n";
-            expr->versions_constStrIndex[info.currentPolyVersion] = index;
+            expr->versions_constStrIndex.set(currentPolyVersion, index);
 
             if(expr->flags & ASTNode::NULL_TERMINATED) {
                 TypeId theType = checkType(scopeId, "char*", expr->location, nullptr);
@@ -2385,21 +2414,21 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             
             if(finalType.isValid()) {
                 if(expr->typeId == AST_SIZEOF) {
-                    expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
+                    expr->versions_outTypeSizeof.set(currentPolyVersion, finalType);
                     if(outTypes)  outTypes->add(AST_INT32);
                 } else if(expr->typeId == AST_NAMEOF) {
                     std::string name = info.ast->typeToString(finalType);
                     u32 index=0;
                     auto constString = info.ast->getConstString(name,&index);
                     // Assert(constString);
-                    expr->versions_constStrIndex[info.currentPolyVersion] = index;
+                    expr->versions_constStrIndex.set(currentPolyVersion, index);
                     // expr->constStrIndex = index;
 
                     TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
                     if(outTypes)  outTypes->add(theType);
                 } else if(expr->typeId == AST_TYPEID) {
                     
-                    expr->versions_outTypeTypeid[info.currentPolyVersion] = finalType;
+                    expr->versions_outTypeTypeid.set(currentPolyVersion, finalType);
                     
                     const char* tname = "lang_TypeId";
                     TypeId theType = checkType(scopeId, tname, expr->location, nullptr);
@@ -2425,7 +2454,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             
             if(!expr->asmTypeString.isString()) {
                 // asm has not type
-                expr->versions_asmType[info.currentPolyVersion] = AST_VOID;
+                expr->versions_asmType.set(currentPolyVersion, AST_VOID);
                 if(outTypes)
                     outTypes->add(AST_VOID);   
             } else {
@@ -2434,7 +2463,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 if (ti.isValid()) {
                     if(outTypes)
                         outTypes->add(ti);
-                    expr->versions_asmType[info.currentPolyVersion] = ti;
+                    expr->versions_asmType.set(currentPolyVersion, ti);
                 } else {
                     if(!printedError){
                         ERR_SECTION(
@@ -2859,7 +2888,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             }
             if(outTypes)
                 outTypes->add(ti);
-            expr->versions_castType[info.currentPolyVersion] = ti;
+            expr->versions_castType.set(currentPolyVersion, ti);
         } break;
         case AST_CAST: {
             // DynamicArray<TypeId> temp{};
@@ -2881,7 +2910,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             }
             if(outTypes)
                 outTypes->add(ti);
-            expr->versions_castType[info.currentPolyVersion] = ti;
+            expr->versions_castType.set(currentPolyVersion, ti);
             
             if(expr->isUnsafeCast()) {
                 int ls = info.ast->getTypeSize(ti);
@@ -3250,7 +3279,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
         // _TCLOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
     }
     // _TCLOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
-    FnOverloads* fnOverloads = nullptr;
+    OverloadGroup* fnOverloads = nullptr;
     IdentifierFunction* iden = nullptr;
     if(parentStruct){
         fnOverloads = parentStruct->getMethod(function->name, true);
@@ -3342,7 +3371,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
             }
             argTypes.add(typeId);
         }
-        FnOverloads::Overload* ambiguousOverload = nullptr;
+        OverloadGroup::Overload* ambiguousOverload = nullptr;
         for(int i=0;i<(int)fnOverloads->overloads.size();i++){
             auto& overload = fnOverloads->overloads[i];
             bool found = true;
@@ -3420,7 +3449,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
                 // FuncImpl* funcImpl = function->createImpl();
                 // funcImpl->name = function->name;
                 funcImpl->usages = 0;
-                fnOverloads->addOverload(function, funcImpl);
+                ast->addOverload(fnOverloads, function, funcImpl);
                 int overload_i = fnOverloads->overloads.size()-1;
                 if(parentStruct)
                     funcImpl->structImpl = parentStruct->nonPolyStruct;
@@ -3471,7 +3500,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
         // }
 
         // Base poly overload is added without regard for ambiguity. It's hard to check ambiguity so to it later.
-        fnOverloads->addPolyOverload(function);
+        ast->addPolyOverload(fnOverloads, function);
     }
     return SIGNAL_SUCCESS;
 }
@@ -3611,7 +3640,7 @@ SignalIO TyperContext::checkFuncImplScope(ASTFunction* func, FuncImpl* funcImpl)
         auto& arg = func->arguments[i];
         auto& argImpl = funcImpl->signature.argumentTypes[i];
         _TCLOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
-        arg.identifier->versions_typeId[info.currentPolyVersion] = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate the same type as the generator.
+        arg.identifier->versions_typeId.set(currentPolyVersion, argImpl.typeId); // typeId comes from CheckExpression which may or may not evaluate the same type as the generator.
     }
     // _TCLOG(log::out << "ret:\n";)
     // for (int i=0;i<(int)func->returnValues.size();i++) {
@@ -3633,7 +3662,7 @@ SignalIO TyperContext::checkFuncImplScope(ASTFunction* func, FuncImpl* funcImpl)
             if(!iden) continue; // happens if an argument has the same name as the member. If so the arg is prioritised and the member ignored.
             auto& memImpl = funcImpl->structImpl->members[i];
             _TCLOG(log::out << " " << iden->name<<": "<< info.ast->typeToString(memImpl.typeId) <<"\n";)
-            iden->versions_typeId[info.currentPolyVersion] = memImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate the same type as the generator.
+            iden->versions_typeId.set(currentPolyVersion, memImpl.typeId); // typeId comes from CheckExpression which may or may not evaluate the same type as the generator.
         }
     }
     _TCLOG(log::out << "\n";)
@@ -3675,7 +3704,12 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
 
     TEMP_ARRAY_N(TypeId, tempTypes, 5)
 
-    auto& poly_typeArray = now->versions_expressionTypes[info.currentPolyVersion];
+    // auto poly_typeArray = now->versions_expressionTypes[info.currentPolyVersion];
+    QuickArray<TypeId> poly_typeArray{};
+    now->versions_expressionTypes.steal_element_into(info.currentPolyVersion, poly_typeArray);
+    defer {
+        now->versions_expressionTypes.set(info.currentPolyVersion, poly_typeArray);
+    };
     poly_typeArray.resize(0);
     // tempTypes.resize(0);
     if(now->firstExpression){
@@ -3785,7 +3819,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             // Infer type
             if(!varname.assignString.isValid()) {
                 if(vi < poly_typeArray.size()){
-                    varname.versions_assignType[info.currentPolyVersion] = poly_typeArray[vi];
+                    varname.versions_assignType.set(currentPolyVersion, poly_typeArray[vi]);
                 } else {
                     Assert(hadError);
                     // Do we need this err section? do we not always check the out of bounds above
@@ -3909,7 +3943,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             }
 
             // FINALLY we can set the declaration type
-            varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
+            varinfo->versions_typeId.set(currentPolyVersion, varname.versions_assignType[info.currentPolyVersion]);
         }
 
         // if(varname.declaration) {
@@ -3939,7 +3973,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             if(!now->isImported()) {
                 u32 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
                 u32 offset = info.ast->aquireGlobalSpace(size);
-                varinfo->versions_dataOffset[info.currentPolyVersion] = offset;
+                varinfo->versions_dataOffset.set(currentPolyVersion, offset);
 
                 if (now->firstExpression) {
                     info.ast->globals_to_evaluate.add({now, scope->scopeId});
@@ -4146,7 +4180,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                         // If typeid is invalid we don't want to replace the invalid one with the type
                         // with the string. The generator won't see the names of the invalid types.
                         // now->typeId = ti;
-                        varname.versions_assignType[info.currentPolyVersion] = ti;
+                        varname.versions_assignType.set(currentPolyVersion, ti);
                     // }
                 }
             }
@@ -4234,19 +4268,19 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     bad_var(varinfo_index, varnameNr.name);
                     
                     // Identifier* nrId = nullptr;
-                    varinfo_index->versions_typeId[info.currentPolyVersion] = AST_INT64;
-                    varnameNr.versions_assignType[info.currentPolyVersion] = AST_INT64;
+                    varinfo_index->versions_typeId.set(currentPolyVersion, AST_INT64);
+                    varnameNr.versions_assignType.set(info.currentPolyVersion, AST_INT64);
                     
                     auto memdata = iterinfo->getMember("ptr");
                     auto itemtype = memdata.typeId;
                     itemtype.setPointerLevel(itemtype.getPointerLevel()-1);
-                    varnameIt.versions_assignType[info.currentPolyVersion] = itemtype;
+                    varnameIt.versions_assignType.set(currentPolyVersion, itemtype);
                     
                     auto vartype = memdata.typeId;
                     if(!now->isPointer()){
                         vartype.setPointerLevel(vartype.getPointerLevel()-1);
                     }
-                    varinfo_item->versions_typeId[info.currentPolyVersion] = vartype;
+                    varinfo_item->versions_typeId.set(currentPolyVersion, vartype);
 
                     SignalIO result = checkRest(now->firstBody);
                     continue;
@@ -4271,8 +4305,8 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                         }
                         TypeId inttype = mem0.typeId;
                         now->rangedForLoop = true;
-                        varnameNr.versions_assignType[info.currentPolyVersion] = inttype;
-                        varinfo_index->versions_typeId[info.currentPolyVersion] = inttype;
+                        varnameNr.versions_assignType.set(currentPolyVersion, inttype);
+                        varinfo_index->versions_typeId.set(currentPolyVersion, inttype);
 
                         SignalIO result = checkRest(now->firstBody);
                         continue;
@@ -4398,8 +4432,13 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     // TODO: What happens if type is virtual or aliased? Will this code work?
                 }
             }
-            now->versions_expressionTypes[info.currentPolyVersion] = {};
-            now->versions_expressionTypes[info.currentPolyVersion].add(tempTypes.last());
+            // TODO: This is scuffed...
+            QuickArray<TypeId> tmp{};
+            now->versions_expressionTypes.steal_element_into(currentPolyVersion, tmp);
+            tmp.add(tempTypes.last());
+            now->versions_expressionTypes.steal_element_from(currentPolyVersion, tmp);
+
+            // now->versions_expressionTypes[info.currentPolyVersion].add(tempTypes.last());
             tempTypes.resize(0);
             
             int usedMemberCount = 0;

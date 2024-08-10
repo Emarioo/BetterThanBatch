@@ -382,7 +382,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         options.silent = true;
         options.target = TARGET_BYTECODE;
         // options.executeOutput = false;
-        options.threadCount = 1;
+        options.threadCount = 1; // TODO: We should use more than one thread but multithreading is crashing at the moment.
         options.instant_report = user_options->instant_report;
         options.linker = user_options->linker;
         options.verbose = user_options->verbose;
@@ -556,7 +556,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
 
         result.totalTests = totalTests;
         result.failedTests = failedTests;
-        result.testLocations.stealFrom(options.testLocations);
+        result.testLocations.steal_from(options.testLocations);
     }
     
     auto test_endTime = engone::StopMeasure(test_startTime);

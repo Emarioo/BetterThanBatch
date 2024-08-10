@@ -1,6 +1,8 @@
 #include "BetBat/AST.h"
 #include "BetBat/Compiler.h"
 
+#define AST_LOCK(X) lock_astnodes.lock(); X; lock_astnodes.unlock();
+
 const char* ToString(CallConvention stuff){
     #define CASE(X,N) case X: return N;
     switch(stuff){
@@ -170,7 +172,8 @@ AST *AST::Create(Compiler* compiler) {
 
     ast->globalScope = ast->createBody();
 
-    ast->_scopeInfos.resize(0x10000);
+    ast->_scopeInfos.resize(0x100000);
+    ast->_typeInfos.resize(0x1000);
 
     ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO, ast->globalScope)->id;
     ast->globalScopeId = scopeId;
@@ -257,7 +260,9 @@ IdentifierVariable* AST::addVariable(Identifier::Type type, ScopeId scopeId, con
     iden->scopeId = scopeId;
     iden->order = contentOrder;
 
-    identifiers.add(iden);
+    AST_LOCK(
+        identifiers.add(iden);
+    )
 
     return iden;
 }
@@ -283,7 +288,9 @@ IdentifierFunction *AST::addFunction(ScopeId scopeId, const StringView &name, Co
     iden->scopeId = scopeId;
     iden->order = contentOrder;
 
-    identifiers.add(iden);
+    AST_LOCK(
+        identifiers.add(iden);
+    )
 
     return iden;
 }
@@ -408,7 +415,7 @@ void AST::findIdentifiers(ScopeId startScopeId, ContentOrder contentOrder, const
     // }
     return;
 }
-bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, FnOverloads::Overload* overload) {
+bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, OverloadGroup::Overload* overload) {
     using namespace engone;
     auto iter = createScopeIterator(scopeId, CONTENT_ORDER_MAX);
     while(iterate(iter)) {
@@ -444,6 +451,9 @@ bool AST::findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, Fn
     return false;
 }
 AST::SearchScope* AST::find_or_compute_search_scope(ScopeId start_scopeId) {
+    lock_scopes.lock();
+    defer { lock_scopes.unlock(); };
+    
     auto pair = search_scope_map.find(start_scopeId);
     if(pair != search_scope_map.end()) {
         return pair->second;
@@ -675,8 +685,8 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
     return false;
 
 }
-// FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, const BaseArray<bool>* inferred_args){
+// OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
+OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -688,16 +698,20 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall,
     // if(overloads.size()==1)
     //     return &overloads[0];
 
-    FnOverloads::Overload* lastOverload = nullptr;
-    FnOverloads::Overload* intOverload = nullptr;
-    FnOverloads::Overload* uintOverload = nullptr;
-    FnOverloads::Overload* sintOverload = nullptr;
+    auto ast = this;
+    lock_overloads.lock();
+    defer { lock_overloads.unlock(); };
+
+    OverloadGroup::Overload* lastOverload = nullptr;
+    OverloadGroup::Overload* intOverload = nullptr;
+    OverloadGroup::Overload* uintOverload = nullptr;
+    OverloadGroup::Overload* sintOverload = nullptr;
     int validOverloads = 0;
     int intOverloads = 0;
     int uintOverloads = 0;
     int sintOverloads = 0;
-    for(int i=0;i<(int)overloads.size();i++){
-        auto& overload = overloads[i];
+    for(int i=0;i<(int)group->overloads.size();i++){
+        auto& overload = group->overloads[i];
         bool found = true;
         bool found_int = true; // any signedness
         bool found_sint = true; // signed
@@ -730,7 +744,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall,
                 if(!is_castable){
                     // Not castable with normal conversion
                     // Check hard conversions
-                    FnOverloads::Overload cast_overload;
+                    OverloadGroup::Overload cast_overload;
                     is_castable = ast->findCastOperator(scopeOfFncall, argTypes[j], implArgType, &cast_overload);
                     if(is_castable) {
                         ast->declareUsageOfOverload(&cast_overload);
@@ -810,25 +824,30 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, ScopeId scopeOfFncall,
         return intOverload;
     return nullptr;
 }
-void AST::declareUsageOfOverload(FnOverloads::Overload* overload) {
+void AST::declareUsageOfOverload(OverloadGroup::Overload* overload) {
     if(overload->astFunc->body && overload->funcImpl->usages == 0){
         compiler->addTask_type_body(overload->astFunc, overload->funcImpl);
     }
     overload->funcImpl->usages++;
 }
-// FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
+// OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
+OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
     // That means that we match if two parent structs have different args.
 
+    auto ast = this;
+
+    lock_overloads.lock();
+    defer { lock_overloads.unlock(); };
+
     // Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
-    FnOverloads::Overload* outOverload = nullptr;
+    OverloadGroup::Overload* outOverload = nullptr;
     // TODO: Check all overloads in case there are more than one match.
     //  Good way of finding a bug in the compiler.
     //  An optimised build would not do this.
-    for(int i=0;i<(int)polyImplOverloads.size();i++){
-        auto& overload = polyImplOverloads[i];
+    for(int i=0;i<(int)group->polyImplOverloads.size();i++){
+        auto& overload = group->polyImplOverloads[i];
         bool doesPolyArgsMatch = true;
         // The number of poly args must match. Using 1 poly arg when referring to a function with 2
         // does not make sense.
@@ -948,10 +967,13 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
 void ASTFunction::pushPolyState(FuncImpl* funcImpl) {
     pushPolyState(&funcImpl->signature.polyArgs, funcImpl->structImpl);
 }
-void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* structParent) {
+void ASTFunction::pushPolyState(const BaseArray<TypeId>* funcPolyArgs, StructImpl* structParent) {
+    using namespace engone;
     if(polyArgs.size() == 0 && (!parentStruct || parentStruct->polyArgs.size() == 0))
         return;
     Assert((parentStruct == nullptr) == (structParent == nullptr));
+    // log::out << "push "<< (parentStruct?parentStruct->name+":":std::string("")) << name << "\n";
+    // TODO: Multithreading does not work here. polyStates needs to exist per thread. virtualType can only be set by one thread at a time. Two threads cannot check the same function at the same time.
     polyStates.add({});
     auto& state = polyStates.last();
     if(parentStruct){
@@ -970,9 +992,11 @@ void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* st
     }
 }
 void ASTFunction::popPolyState(){
+    using namespace engone;
     if(polyArgs.size() == 0 && (!parentStruct || parentStruct->polyArgs.size() == 0))
         return;
     Assert(polyStates.size()>0);
+    // log::out << "pop "<< (parentStruct?parentStruct->name+":":std::string("")) << name << "\n";
     auto& state = polyStates.last();
     for(int j=0;j<(int)polyArgs.size();j++){
         polyArgs[j].virtualType->id = state.argTypes[j];
@@ -1002,7 +1026,7 @@ void ASTStruct::popPolyState(){
     }
     polyStates.pop();
 }
-// ASTFunction* FnOverloads::getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes){
+// ASTFunction* OverloadGroup::getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes){
 //     using namespace engone;
 //     ASTFunction* outFunc = nullptr;
 //     for(int i=0;i<(int)polyOverloads.size();i++){
@@ -1047,20 +1071,27 @@ void ASTStruct::popPolyState(){
 //     return outFunc;
 // }
 
-void FnOverloads::addOverload(ASTFunction* astFunc, FuncImpl* funcImpl){
-    overloads.add({astFunc,funcImpl});
+void AST::addOverload(OverloadGroup* group, ASTFunction* astFunc, FuncImpl* funcImpl){
+    lock_overloads.lock();
+    group->overloads.add({astFunc,funcImpl});
+    lock_overloads.unlock();
 }
-FnOverloads::Overload* FnOverloads::addPolyImplOverload(ASTFunction* astFunc, FuncImpl* funcImpl){
-    polyImplOverloads.add({astFunc,funcImpl});
-    return &polyImplOverloads[polyImplOverloads.size()-1];
+OverloadGroup::Overload* AST::addPolyImplOverload(OverloadGroup* group, ASTFunction* astFunc, FuncImpl* funcImpl){
+    lock_overloads.lock();
+    group->polyImplOverloads.add({astFunc,funcImpl});
+    auto ptr = &group->polyImplOverloads[group->polyImplOverloads.size()-1];
+    lock_overloads.unlock();
+    return ptr;
 }
-void FnOverloads::addPolyOverload(ASTFunction* astFunc){
-    polyOverloads.add({astFunc});
+void AST::addPolyOverload(OverloadGroup* group, ASTFunction* astFunc){
+    lock_overloads.lock();
+    group->polyOverloads.add({astFunc});
     // auto& po = polyOverloads[polyOverloads.size()-1];
     // po.argTypes.stealFrom(typeIds);
+    lock_overloads.unlock();
 }
 
-FnOverloads* ASTStruct::getMethod(const std::string& name, bool create){
+OverloadGroup* ASTStruct::getMethod(const std::string& name, bool create){
     auto pair = _methods.find(name);
     if(pair == _methods.end()){
         if(create)
@@ -1077,7 +1108,7 @@ ASTScope *AST::createBody() {
     new(ptr) ASTScope();
     ptr->nodeId = getNextNodeId();
     ptr->isNamespace = false;
-    bodies.add(ptr);
+    AST_LOCK( bodies.add(ptr); )
     return ptr;
 }
 ASTStatement *AST::createStatement(ASTStatement::Type type) {
@@ -1086,7 +1117,7 @@ ASTStatement *AST::createStatement(ASTStatement::Type type) {
     new(ptr) ASTStatement();
     ptr->nodeId = getNextNodeId();
     ptr->type = type;
-    statements.add(ptr);
+    AST_LOCK( statements.add(ptr); )
     return ptr;
 }
 ASTStruct *AST::createStruct(const StringView& name) {
@@ -1094,7 +1125,7 @@ ASTStruct *AST::createStruct(const StringView& name) {
     new(ptr) ASTStruct();
     ptr->nodeId = getNextNodeId();
     ptr->name = name;
-    structures.add(ptr);
+    AST_LOCK( structures.add(ptr); )
     return ptr;
 }
 ASTEnum *AST::createEnum(const StringView &name) {
@@ -1102,14 +1133,14 @@ ASTEnum *AST::createEnum(const StringView &name) {
     new(ptr) ASTEnum();
     ptr->nodeId = getNextNodeId();
     ptr->name = name;
-    enums.add(ptr);
+    AST_LOCK( enums.add(ptr); )
     return ptr;
 }
 ASTFunction *AST::createFunction() {
     auto ptr = (ASTFunction *)allocate(sizeof(ASTFunction));
     new(ptr) ASTFunction();
     ptr->nodeId = getNextNodeId();
-    functions.add(ptr);
+    AST_LOCK( functions.add(ptr); )
     return ptr;
 }
 ASTExpression *AST::createExpression(TypeId type) {
@@ -1119,7 +1150,7 @@ ASTExpression *AST::createExpression(TypeId type) {
     ptr->nodeId = getNextNodeId();
     ptr->isValue = (u32)type.getId() < AST_PRIMITIVE_COUNT;
     ptr->typeId = type;
-    expressions.add(ptr);
+    AST_LOCK( expressions.add(ptr); )
     return ptr;
 }
 ASTScope *AST::createNamespace(const StringView& name) {
@@ -1128,7 +1159,7 @@ ASTScope *AST::createNamespace(const StringView& name) {
     ptr->nodeId = getNextNodeId();
     ptr->isNamespace = true;
     ptr->name = name; 
-    bodies.add(ptr);
+    AST_LOCK( bodies.add(ptr); )
     
     // (std::string*)allocate(sizeof(std::string));
     // new(ptr->name)std::string(name);
@@ -1550,6 +1581,8 @@ TypeInfo* AST::createType(StringView name, ScopeId scopeId){
     // You could check if name already exists in parent
     // scopes to but I think it is fine for now.
 
+    lock_variables.lock();
+
     auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
     // Assert(ptr);
     new(ptr) TypeInfo{name, TypeId::Create(nextTypeId++)};
@@ -1559,6 +1592,8 @@ TypeInfo* AST::createType(StringView name, ScopeId scopeId){
         _typeInfos.resize(ptr->id.getId() + AST_PRIMITIVE_COUNT);
     }
     _typeInfos[ptr->id.getId()] = ptr;
+
+    lock_variables.unlock();
     // ll(this);
     return ptr;
 }

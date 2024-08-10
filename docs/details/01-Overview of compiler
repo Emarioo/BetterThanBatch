@@ -31,3 +31,30 @@ The first step in the compiler parses the command line arguments.
 - Should the executable (or bytecode) be executed after compilation?
 - How much log information? (verbose, silent)
 
+
+## My idea how the usage of the compiler works
+All that is shown does not work.
+```c++
+// main.cpp
+
+// Decide how you want to compile your source.
+CompileOptions options;
+options.source = "src/main.btb";
+options.output = "bin/main.exe";
+options.optimizations = OPTIM_SPEED;
+
+// Compile the source.
+Compiler compiler;
+compiler.run(&options)
+
+// If you want to compile again with in-memory caching
+// then just compile again. You would probably have a loop
+// and a tcp server or inter process communication to tell the
+// compiler when to compile again.
+compiler.run(&options)
+
+// here you can access stats, lines and bytes of source code.
+compiler.stats
+
+compiler.cleanup(); // clean things up if you need to.
+```

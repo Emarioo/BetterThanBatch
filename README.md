@@ -1,5 +1,5 @@
 # BetterThanBatch
-A compiler for a new programming language.
+A compiler for a programming language.
 
 - Good for your every day scripting needs.
 - Useful for visualizing data structures, programs...?
@@ -7,9 +7,11 @@ A compiler for a new programming language.
 - Fast compiler, good error messages, no external build system.
 
 Inspiration from:
-- Jai (by Jonathan Blow)
 - C/C++
+- Jai by Jonathan Blow
 - and a bit of Rust
+
+Also, many thanks to Jonathan Blow for his amazing and motivating content.
 
 Example of errors with named arguments
 ![](/docs/img/err-named-arg.png)
@@ -33,6 +35,7 @@ Example of unfinished multiplayer game
 |-|-|
 |Preprocessor|Yes, #macro, #if, #line, #file|
 |Polymorphism|Yes, but some issues with matching overloaded functions|
+|Multi-threading in the compiler|Work in progress|
 |Function overloading|Yes|
 |Operator overloading|Yes|
 |Namespaces|No, incomplete|

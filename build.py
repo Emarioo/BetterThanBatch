@@ -225,7 +225,7 @@ def compile(config):
         if enabled("use_tracy"):
             MSVC_DEFINITIONS  += " /DTRACY_ENABLE"
             MSVC_LINK_OPTIONS += " bin/tracy.obj"
-            if not os.path.exists("bin/tracy.obj") or True:
+            if not os.path.exists("bin/tracy.obj"):
                 cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+ MSVC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp /Fobin/tracy.obj")
 
         MSVC_COMPILE_OPTIONS += " /FI pch.h"

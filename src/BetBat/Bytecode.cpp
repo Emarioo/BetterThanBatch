@@ -1211,7 +1211,11 @@ const char* register_names[] {
     // "xmm3", // BC_REG_XMM3
 };
 engone::Logger& operator<<(engone::Logger& l, InstructionOpcode t) {
-    return l << instruction_names[t];
+    int len = sizeof(instruction_names)/sizeof(*instruction_names);
+    if((int)t < len)
+        return l << instruction_names[t];
+    else
+        return l << "{" << (int)t << "}";
 }
 engone::Logger& operator<<(engone::Logger& l, BCRegister r){
     return l << register_names[r];
@@ -1269,7 +1273,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         
         char buf[8];
         sprintf(buf, "%3d", prev_pc);
-        log::out << log::GRAY << " " << buf << log::PURPLE << " " << instruction_names[opcode];
+        log::out << log::GRAY << " " << buf << log::PURPLE << " " << opcode;
         log::out << log::NO_COLOR;
         
         switch(opcode) {

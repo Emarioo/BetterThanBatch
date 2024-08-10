@@ -161,6 +161,7 @@ struct ASTNode {
     SET_FLAG(NoCode,NO_CODE)
     #undef SET_FLAG
 };
+
 template<class T>
 struct PolyVersions {
     PolyVersions() = default;
@@ -168,14 +169,19 @@ struct PolyVersions {
     // TODO: Allocations are should be controlled by AST.
     // Using heap for now to make things simple.
 
+
     int size() const {
         // return _array.size();
         return _array.size() + has_first ? 1 : 0;
     }
     // automatically allocates
-    T& get(u32 index) {
+    T& get(u32 index, bool skip_mutex = false) {
+        if(!skip_mutex)
+            poly_mutex.lock();
         if(index == 0) {
             has_first = true;
+            if(!skip_mutex)
+                poly_mutex.unlock();
             return first_elem;
         }
         if(index >= _array.size()) {
@@ -183,13 +189,45 @@ struct PolyVersions {
             bool yes = _array.resize(index + 1);
             Assert(yes);
         }
-        return _array.get(index);
+        auto elem = &_array.get(index);
+        if(!skip_mutex)
+            poly_mutex.unlock();
+        return *elem;
+    }
+    void set(u32 index, const T& elem) {
+        poly_mutex.lock();
+        auto& thing = get(index, true);
+        thing = elem;
+        poly_mutex.unlock();
     }
     // automatically allocates
     T& operator[](u32 index) {
-        return get(index);
+    // const T& operator[](u32 index) {
+        auto ptr = &get(index);
+        return *ptr;
     }
+    // only works on types that have method 'steal_from'
+    void steal_element_into(u32 index, T& stealer) {
+        poly_mutex.lock();
+        auto& elem = get(index, true);
+        stealer.steal_from(elem);
+        poly_mutex.unlock();
+    }
+    void steal_element_from(u32 index, T& from) {
+        poly_mutex.lock();
+        auto& elem = get(index, true);
+        elem.steal_from(from);
+        poly_mutex.unlock();
+    }
+    // T steal_element(u32 index) {
+    //     poly_mutex.lock();
+    //     auto elem = get(index, true);
+    //     get(index, true)
+    //     poly_mutex.unlock();
+    //     return elem;
+    // }
 
+    inline static engone::Mutex poly_mutex{}; // TODO: FIX THIS! I added it because two threads may check the same polymorphic scope with different poly versions. When they resize the array for polyversion types we crash.
 private:
     // An optimization where first element is stored in struct. This means that node AST's that use PolyVersions won't allocate memory as long as less than one element is needed. Since most code isn't polymorphic and doesn't need more than one element, this is perfect.
     bool has_first = false;
@@ -284,7 +322,7 @@ struct TypeId {
 };
 engone::Logger& operator <<(engone::Logger&, TypeId typeId);
 struct StructImpl;
-struct FnOverloads {
+struct OverloadGroup {
     struct Overload {
         ASTFunction* astFunc=nullptr;
         FuncImpl* funcImpl = nullptr;
@@ -298,15 +336,15 @@ struct FnOverloads {
     QuickArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
-    // Note that this function becomes complex if parentStruct is polymorphic.
-    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this,ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    // Overload* getOverload(AST* ast, ScopeId scopeOfFncall, QuickArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    // // Note that this function becomes complex if parentStruct is polymorphic.
+    // Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this,ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
     
-    // FuncImpl can be null and probably will be most of the time
-    // when you call this.
-    void addOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
-    Overload* addPolyImplOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
-    void addPolyOverload(ASTFunction* astFunc);
+    // // FuncImpl can be null and probably will be most of the time
+    // // when you call this.
+    // void addOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
+    // Overload* addPolyImplOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
+    // void addPolyOverload(ASTFunction* astFunc);
 
     // FuncImpl* createImpl();
 };
@@ -424,7 +462,7 @@ struct IdentifierVariable : public Identifier {
     bool isMember() { return type == MEMBER_VARIABLE; }
 };
 struct IdentifierFunction : public Identifier {
-    FnOverloads funcOverloads{};
+    OverloadGroup funcOverloads{};
 };
 struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}
@@ -568,7 +606,7 @@ struct ASTExpression : ASTNode {
 
     // The contents of overload is stored here. This is not a pointer since
     // the array containing the overload may be resized.
-    PolyVersions<FnOverloads::Overload> versions_overload{};
+    PolyVersions<OverloadGroup::Overload> versions_overload{};
     PolyVersions<FunctionSignature*> versions_func_type{};
 
     // you could use a union with some of these to save memory
@@ -710,10 +748,10 @@ struct ASTStruct : ASTNode {
 
     ScopeId scopeId=0;
 
-    std::unordered_map<std::string, FnOverloads> _methods;
+    std::unordered_map<std::string, OverloadGroup> _methods;
     
-    // FnOverloads* addMethod(const std::string& name);
-    FnOverloads* getMethod(const std::string& name, bool create = false);
+    // OverloadGroup* addMethod(const std::string& name);
+    OverloadGroup* getMethod(const std::string& name, bool create = false);
     // void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
 
     // TODO: Be more efficient with allocations. You don't have to pop the poly states once allocated. Use an integer to know which depth you are at. Then once the compiler is done it can clean up the arrays.
@@ -725,6 +763,8 @@ struct ASTStruct : ASTNode {
     // void pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* structParent);
     void pushPolyState(StructImpl* structImpl);
     void popPolyState();
+
+    volatile bool is_being_checked = false; // only one thread can check function at any one time.
 
     QuickArray<ASTFunction*> functions{};
     // ASTFunction* functions = 0;
@@ -816,6 +856,8 @@ struct ASTFunction : ASTNode {
         return _impls;
     }
 
+    volatile bool is_being_checked = false; // only one thread can check function at any one time.
+
     // one function name can link to multiple functions from different libraries
     // if they use different aliases (or real names)
     // linked_alias and -library should be PER FuncImpl instead of PER ASTFunction
@@ -826,13 +868,14 @@ struct ASTFunction : ASTNode {
 
     bool is_compiler_func = false;
 
+
     struct PolyState {
         DynamicArray<TypeId> argTypes;
         DynamicArray<TypeId> structTypes;
     };
     DynamicArray<PolyState> polyStates;
     void pushPolyState(FuncImpl* funcImpl);
-    void pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* structParent);
+    void pushPolyState(const BaseArray<TypeId>* funcPolyArgs, StructImpl* structParent);
     void popPolyState();
 
     u32 polyVersionCount=0;
@@ -1010,9 +1053,9 @@ struct AST {
     // less_strict will allow u64 -> i32* conversions, integer to pointer is otherwise only allowed with void pointers.
     bool castable(TypeId from, TypeId to, bool less_strict = false);
 
-    bool findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, FnOverloads::Overload* overload = nullptr);
+    bool findCastOperator(ScopeId scopeId, TypeId from_type, TypeId to_type, OverloadGroup::Overload* overload = nullptr);
 
-    void declareUsageOfOverload(FnOverloads::Overload* overload);
+    void declareUsageOfOverload(OverloadGroup::Overload* overload);
 
     u32 aquireGlobalSpace(int size) {
         u32 offset = globalDataOffset;
@@ -1041,7 +1084,7 @@ struct AST {
         // if(diff) {
         //     engone::log::out << "dif "<<diff<<"\n";
         // }
-
+        lock_linearAllocation.lock();
         // TODO: If we don't have enough space then create a new linear allocator
         //  and allocate stuff there. Buckets of linear allocators basically.
         Assert(linearAllocationUsed + size < linearAllocationMax);
@@ -1054,6 +1097,7 @@ struct AST {
 
         u32 new_index = linearAllocationUsed; // TODO: Bad
         linearAllocationUsed += size;
+        lock_linearAllocation.unlock();
         
         void* ptr = linearAllocation + new_index;
         return ptr;
@@ -1132,7 +1176,22 @@ struct AST {
     };
     QuickArray<GlobalItem> globals_to_evaluate;
 
+    
+    // NOTE: These functions are methods of the AST instead of OverloadGroup because it's easier to synchronize with multi-threading. (we would need individual mutex for each group or a global variable, it's better to have mutex in the AST)
+    OverloadGroup::Overload* getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    // Note that this function becomes complex if parentStruct is polymorphic.
+    OverloadGroup::Overload* getOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    
+    // FuncImpl can be null and probably will be most of the time
+    // when you call this.
+    void addOverload(OverloadGroup* group, ASTFunction* astFunc, FuncImpl* funcImpl);
+    OverloadGroup::Overload* addPolyImplOverload(OverloadGroup* group, ASTFunction* astFunc, FuncImpl* funcImpl);
+    void addPolyOverload(OverloadGroup* group, ASTFunction* astFunc);
+
+
 private:
+    MUTEX(lock_overloads);
+
     MUTEX(lock_linearAllocation);
     char* linearAllocation = nullptr;
     u32 linearAllocationMax = 0;
@@ -1146,6 +1205,7 @@ private:
     QuickArray<ASTScope*> bodies;
     QuickArray<Identifier*> identifiers;
 
+    MUTEX(lock_astnodes);
 
     u32 globalDataOffset = 0;
 
