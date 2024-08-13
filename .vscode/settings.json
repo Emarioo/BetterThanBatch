@@ -85,6 +85,7 @@
         "xloctime": "cpp",
         "xstddef": "cpp",
         "xtr1common": "cpp",
-        "glad.h": "c"
+        "glad.h": "c",
+        "excpt.h": "c"
     }
 }

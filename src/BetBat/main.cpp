@@ -61,7 +61,7 @@ int main(int argc, const char** argv){
         options.output_file = "main.exe";
         options.source_file = "examples/dev.btb";
         options.threadCount = 2;
-        // options.disable_multithreading = true;
+        // options.disable_multithreading = false;
         // options.target = TARGET_BYTECODE;
         // options.target = TARGET_WINDOWS_x64;
         // options.linker = LINKER_MSVC;

@@ -3451,6 +3451,43 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
             info.advance();
         
         return SIGNAL_SUCCESS;  
+    } else if(token->type == lexer::TOKEN_TRY) {
+        info.advance();
+        
+        statement = info.ast->createStatement(ASTStatement::TRY);
+
+        auto signal = parseBody(statement->firstBody, currentScopeId);
+        if(signal != SIGNAL_SUCCESS)
+            return signal;
+
+        while(true) {
+            auto tok = info.gettok();
+            if(tok.type != lexer::TOKEN_CATCH)
+                break;
+            info.advance();
+
+            ASTStatement::SwitchCase catch_part{};
+
+            signal = parseExpression(catch_part.caseExpr);
+            if(signal != SIGNAL_SUCCESS)
+                return signal;
+
+            signal = parseBody(catch_part.caseBody, currentScopeId);
+            if(signal != SIGNAL_SUCCESS)
+                return signal;
+
+            statement->switchCases.add(catch_part);
+        }
+
+        auto tok = info.gettok();
+        if(tok.type == lexer::TOKEN_FINALLY){
+            info.advance();
+            signal = parseBody(statement->secondBody, currentScopeId);
+            if(signal != SIGNAL_SUCCESS)
+                return signal;
+        }
+
+        return SIGNAL_SUCCESS;  
     }
     return SIGNAL_NO_MATCH;
 }

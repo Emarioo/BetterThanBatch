@@ -73,7 +73,11 @@ namespace lexer {
         TOKEN_NAMESPACE,
         TOKEN_UNION,
         TOKEN_ASM,
-        TOKEN_TEST, TOKEN_KEYWORD_END = TOKEN_TEST, // inclusive
+        TOKEN_TEST, 
+        TOKEN_TRY,
+        TOKEN_CATCH,
+        TOKEN_FINALLY,
+        TOKEN_KEYWORD_END = TOKEN_FINALLY, // inclusive
 
         TOKEN_NAMESPACE_DELIM,
 

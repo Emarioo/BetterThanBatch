@@ -4418,6 +4418,50 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
             tempTypes.resize(0);
             checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             tempTypes.resize(0);
+        } else if(now->type == ASTStatement::TRY) {
+            checkRest(now->firstBody);
+            
+            for(int i=0;i<now->switchCases.size();i++) {
+                auto catch_expr = now->switchCases[i].caseExpr;
+                auto catch_body = now->switchCases[i].caseBody;
+
+                auto result = checkExpression(scope->scopeId, catch_expr, &tempTypes, false);
+                if(result != SIGNAL_SUCCESS)
+                    return result;
+
+                if(tempTypes.size() != 1) {
+                    ERR_SECTION(
+                        ERR_HEAD2(catch_expr->location)
+                        ERR_MSG("Expression should evaluate to one type.")
+                        ERR_LINE2(catch_expr->location,"here")
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                TypeId catch_type = tempTypes.last();
+                TypeInfo* typeinfo = ast->getTypeInfo(catch_type);
+                if(!AST::IsInteger(catch_type) && !typeinfo->astEnum) {
+                    ERR_SECTION(
+                        ERR_HEAD2(catch_expr->location)
+                        ERR_MSG_COLORED("Type in catch was '"<<log::LIME<<ast->typeToString(catch_type)<<log::NO_COLOR<<"' but integer was expected. Although integers are accepted, using members from the '"<<log::LIME<<"ExceptionType"<<log::NO_COLOR<<"' enum is recommended.")
+                        ERR_LINE2(catch_expr->location,"here")
+                    )
+                }
+
+                // TODO: steal_element_into is thread safe (mutex behind the scenes)
+                //    and we need it here when modifying types of AST from threads.
+                //   BUT it would be nice if we could fix it up a little.
+                QuickArray<TypeId> tmp{};
+                now->versions_expressionTypes.steal_element_into(currentPolyVersion, tmp);
+                tmp.add(tempTypes.last());
+                now->versions_expressionTypes.steal_element_from(currentPolyVersion, tmp);
+
+                tempTypes.resize(0);
+
+                checkRest(catch_body);
+            }
+            if(now->secondBody) // finally body is optional
+                checkRest(now->secondBody);
+
         } else if(now->type == ASTStatement::SWITCH) {
             // check switch expression
             checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);

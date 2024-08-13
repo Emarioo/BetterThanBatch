@@ -641,72 +641,91 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 char f = *(text+str_start);
                 temp.ptr++; // not need to check first character
                 temp.len--;
-                if(f == 'n') {
-                    CASE(4, "null",        TOKEN_NULL)
-                    else CASE(9, "namespace",   TOKEN_NAMESPACE)
-                    else CASE(6, "nameof",      TOKEN_NAMEOF)
-                } else if(f == 't') {
-                    CASE(4, "true",        TOKEN_TRUE)
-                    else CASE(6, "typeid",      TOKEN_TYPEID)
-                } else if(f == 'f') {
-                    CASE(5, "false",       TOKEN_FALSE)
-                    else CASE(3, "for",         TOKEN_FOR)
-                    else CASE(2, "fn",          TOKEN_FUNCTION)
-                } else if(f == 'i') {
-                    CASE(2, "if",          TOKEN_IF)
-                } else if(f == 'e') {
-                    CASE(4, "else",        TOKEN_ELSE)
-                    else CASE(4, "enum",        TOKEN_ENUM)
-                } else if(f == 'w') {
-                    CASE(5, "while",       TOKEN_WHILE)
-                } else if(f == 's') {
-                    CASE(6, "switch",      TOKEN_SWITCH)
-                    else CASE(6, "struct",      TOKEN_STRUCT)
-                    else CASE(6, "sizeof",      TOKEN_SIZEOF)
-                } else if(f == 'd') {
-                    CASE(5, "defer",       TOKEN_DEFER)
-                } else if(f == 'r') {
-                    CASE(6, "return",      TOKEN_RETURN)
-                } else if(f == 'b') {
-                    CASE(5, "break",       TOKEN_BREAK)
-                } else if(f == 'c') {
-                    CASE(8, "continue",    TOKEN_CONTINUE)
-                } else if(f == 'u') {
-                    CASE(5, "using",       TOKEN_USING)
-                    else CASE(5, "union",       TOKEN_UNION)
-                } else if(f == 'o') {
-                    CASE(8, "operator",    TOKEN_OPERATOR)
-                } else if(f == 'a') {
-                    CASE(3, "asm",         TOKEN_ASM)
-                } else if(f == '_') {
-                    CASE(5, "_test",         TOKEN_TEST)
+                switch(f){
+                    case 'n': {
+                        CASE(4, "null",        TOKEN_NULL)
+                        else CASE(9, "namespace",   TOKEN_NAMESPACE)
+                        else CASE(6, "nameof",      TOKEN_NAMEOF)
+                    } break;
+                    case 't': {
+                        CASE(4, "true",        TOKEN_TRUE)
+                        else CASE(6, "typeid",      TOKEN_TYPEID)
+                        else CASE(3, "try",      TOKEN_TRY)
+                    } break;
+                    case 'f': {
+                        CASE(5, "false",       TOKEN_FALSE)
+                        else CASE(3, "for",         TOKEN_FOR)
+                        else CASE(2, "fn",          TOKEN_FUNCTION)
+                        else CASE(7, "finally",          TOKEN_FINALLY)
+                    } break;
+                    case 'i': {
+                        CASE(2, "if",          TOKEN_IF)
+                    } break;
+                    case 'e': {
+                        CASE(4, "else",        TOKEN_ELSE)
+                        else CASE(4, "enum",        TOKEN_ENUM)
+                    } break;
+                    case 'w': {
+                        CASE(5, "while",       TOKEN_WHILE)
+                    } break;
+                    case 's': {
+                        CASE(6, "switch",      TOKEN_SWITCH)
+                        else CASE(6, "struct",      TOKEN_STRUCT)
+                        else CASE(6, "sizeof",      TOKEN_SIZEOF)
+                    } break;
+                    case 'd': {
+                        CASE(5, "defer",       TOKEN_DEFER)
+                    } break;
+                    case 'r': {
+                        CASE(6, "return",      TOKEN_RETURN)
+                    } break;
+                    case 'b': {
+                        CASE(5, "break",       TOKEN_BREAK)
+                    } break;
+                    case 'c': {
+                        CASE(8, "continue",    TOKEN_CONTINUE)
+                        CASE(5, "catch",    TOKEN_CATCH)
+                    } break;
+                    case 'u': {
+                        CASE(5, "using",       TOKEN_USING)
+                        else CASE(5, "union",       TOKEN_UNION)
+                    } break;
+                    case 'o': {
+                        CASE(8, "operator",    TOKEN_OPERATOR)
+                    } break;
+                    case 'a': {
+                        CASE(3, "asm",         TOKEN_ASM)
+                    } break;
+                    case '_': {
+                        CASE(5, "_test",         TOKEN_TEST)
+                    } break;
+                    // Non-optimize version
+                    // #define CASE(STR, TOK)  if(temp == STR) { new_tokens->type = TOK; has_data = false; }
+                    // CASE("null",        TOKEN_NULL)
+                    // else CASE("true",        TOKEN_TRUE)
+                    // else CASE("false",       TOKEN_FALSE)
+                    // else CASE("if",          TOKEN_IF)
+                    // else CASE("else",        TOKEN_ELSE)
+                    // else CASE("while",       TOKEN_WHILE)
+                    // else CASE("for",         TOKEN_FOR)
+                    // else CASE("switch",      TOKEN_SWITCH)
+                    // else CASE("defer",       TOKEN_DEFER)
+                    // else CASE("return",      TOKEN_RETURN)
+                    // else CASE("break",       TOKEN_BREAK)
+                    // else CASE("continue",    TOKEN_CONTINUE)
+                    // else CASE("using",       TOKEN_USING)
+                    // else CASE("struct",      TOKEN_STRUCT)
+                    // else CASE("fn",          TOKEN_FUNCTION)
+                    // else CASE("operator",    TOKEN_OPERATOR)
+                    // else CASE("enum",        TOKEN_ENUM)
+                    // else CASE("namespace",   TOKEN_NAMESPACE)
+                    // else CASE("union",       TOKEN_UNION)
+                    // else CASE("sizeof",      TOKEN_SIZEOF)
+                    // else CASE("nameof",      TOKEN_NAMEOF)
+                    // else CASE("typeid",      TOKEN_TYPEID)
+                    // else CASE("asm",         TOKEN_ASM)
+                    #undef CASE
                 }
-                // Non-optimize version
-                // #define CASE(STR, TOK)  if(temp == STR) { new_tokens->type = TOK; has_data = false; }
-                // CASE("null",        TOKEN_NULL)
-                // else CASE("true",        TOKEN_TRUE)
-                // else CASE("false",       TOKEN_FALSE)
-                // else CASE("if",          TOKEN_IF)
-                // else CASE("else",        TOKEN_ELSE)
-                // else CASE("while",       TOKEN_WHILE)
-                // else CASE("for",         TOKEN_FOR)
-                // else CASE("switch",      TOKEN_SWITCH)
-                // else CASE("defer",       TOKEN_DEFER)
-                // else CASE("return",      TOKEN_RETURN)
-                // else CASE("break",       TOKEN_BREAK)
-                // else CASE("continue",    TOKEN_CONTINUE)
-                // else CASE("using",       TOKEN_USING)
-                // else CASE("struct",      TOKEN_STRUCT)
-                // else CASE("fn",          TOKEN_FUNCTION)
-                // else CASE("operator",    TOKEN_OPERATOR)
-                // else CASE("enum",        TOKEN_ENUM)
-                // else CASE("namespace",   TOKEN_NAMESPACE)
-                // else CASE("union",       TOKEN_UNION)
-                // else CASE("sizeof",      TOKEN_SIZEOF)
-                // else CASE("nameof",      TOKEN_NAMEOF)
-                // else CASE("typeid",      TOKEN_TYPEID)
-                // else CASE("asm",         TOKEN_ASM)
-                #undef CASE
             }
             // if(nextLiteralSuffix) {
             //     index++;
@@ -942,6 +961,7 @@ Tokenize_END:
     // log::out << "Last: "<<outStream->get(outStream->length()-1)<<"\n";
     return file_id;
 }
+
 void Lexer::appendToken(Import* imp, Token tok, StringView* string) {
     // ZoneScoped;
     Assert(imp);
@@ -1656,6 +1676,9 @@ const char* token_type_names[] {
     "union", // TOKEN_UNION,
     "asm", // TOKEN_ASM,
     "_test", // TOKEN_TEST,
+    "try", // TOKEN_TRY,
+    "catch", // TOKEN_CATCH,
+    "finally", // TOKEN_FINALLY,
 
     "::", // TOKEN_NAMESPACE_DELIM,
 

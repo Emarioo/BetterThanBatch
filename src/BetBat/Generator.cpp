@@ -6034,6 +6034,32 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             builder.emit_test(BC_REG_D, BC_REG_A, 8, loc);
             // if(alignment != 0)
             //     builder.emit_free_local(alignment);
+        } else if (statement->type == ASTStatement::TRY) {
+            _GLOG(SCOPE_LOG("TRY-CATCH"))
+
+            // generate try
+            generateBody(statement->firstBody);
+            int offset_jmp;
+            builder.emit_jmp(&offset_jmp); // jump to finally
+
+            // TODO: What do we do with catch?
+            // TEMP_ARRAY_N(TypeId, tempTypes, 5);
+            // for(int i=0;i<statement->switchCases.size();i++) {
+            //     auto catch_expr = statement->switchCases[i].caseExpr;
+            //     auto catch_body = statement->switchCases[i].caseBody;
+
+            //     auto result = generateExpression(statement->firstExpression, &tempTypes);
+
+            //     auto expr_type = statement->versions_expressionTypes[currentPolyVersion][i];
+            //     Assert(expr_type == tempTypes[0]);
+
+            //     result = generateBody(catch_body);
+            // }
+
+            builder.fix_jump_imm32_here(offset_jmp);
+            if(statement->secondBody)
+                generateBody(statement->secondBody);
+            
         } else {
             Assert(("You forgot to implement statement type!",false));
         }

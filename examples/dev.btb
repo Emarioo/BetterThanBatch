@@ -1,5 +1,21 @@
-// With hotreloading
-// #import "examples/crawler/main"
-// Without hotreloading
-#import "examples/crawler/GameCore"
+// #import "examples/crawler/main" // With hotreloading
+// #import "examples/crawler/GameCore" // Without hotreloading
 
+/*  
+    Today's quest: Hardware/software exceptions
+*/
+
+#import "Logger"
+
+enum ExceptionType {
+    EXCEPTION_MEMORY,
+    EXCEPTION_ZERO_DIVISION,
+}
+
+try {
+    log("try")
+    *cast<i32*>cast<i64>0 = 0
+} catch EXCEPTION_MEMORY {
+    log("caught")
+}
+log("Finish")

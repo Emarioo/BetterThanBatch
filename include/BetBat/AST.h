@@ -641,6 +641,7 @@ struct ASTStatement : ASTNode {
         BODY,
         DEFER,
         TEST,
+        TRY,
 
         STATEMENT_COUNT,
     };
