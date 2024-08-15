@@ -5,6 +5,10 @@
 #include "BetBat/COFF.h"
 #include "BetBat/Compiler.h"
 
+ObjectFile::SectionFlags operator |(ObjectFile::SectionFlags a, ObjectFile::SectionFlags b) {
+    return (ObjectFile::SectionFlags)((int)a | (int)b);
+}
+
 bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64Program* program, Compiler* compiler, u32 from, u32 to) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue4);
@@ -25,6 +29,16 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         // Sections have symbols that should be local with the ELF formats.
         // All local symbols MUST be added first (that's how elf works).
         dwarf::ProvideSections(&objectFile, program, compiler, false);
+    }
+    bool has_exceptions = false;
+    // has_exceptions = true;
+    SectionNr section_xdata = -1;
+    SectionNr section_pdata = -1;
+    // SectionNr section_pdata2 = -1;
+    if(has_exceptions) {
+        section_xdata = objectFile.createSection(".xdata", FLAG_NONE, 4);
+        section_pdata = objectFile.createSection(".pdata", FLAG_NONE | FLAG_READ_ONLY, 4);
+        // section_pdata2 = objectFile.createSection(".pdata", FLAG_NONE | FLAG_READ_ONLY, 4);
     }
 
     DynamicArray<u32> tinyprogram_offsets;
@@ -93,6 +107,64 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
     //         }
     //     }
     // }
+
+    if(has_exceptions)
+    {
+        objectFile.addSymbol(SymbolType::SYM_ABS, "@feat.00", 0, 0x8000'0000);
+
+        auto xdata_stream = objectFile.getStreamFromSection(section_xdata);
+        auto pdata_stream = objectFile.getStreamFromSection(section_pdata);
+        // auto pdata2_stream = objectFile.getStreamFromSection(section_pdata2);
+
+        // for each function, create unwindinfo in xdata
+        coff::UNWIND_INFO* unwind_info = nullptr;
+        xdata_stream->write_late((void**)&unwind_info, sizeof(*unwind_info));
+
+        unwind_info->Version = 1;
+        unwind_info->Flags = coff::UNW_FLAG_NHANDLER; // no handler
+        unwind_info->SizeOfProlog = 5; // TODO: Non-volatile registers should be included.
+        // unwind_info->FrameRegister
+        // unwind_info->FrameRegisterOffset
+        unwind_info->CountOfUnwindCodes = 1;
+        // TODO: set values
+
+        if(unwind_info->CountOfUnwindCodes > 0) {
+            coff::UNWIND_CODE* codes = nullptr;
+            xdata_stream->write_late((void**)&codes, unwind_info->CountOfUnwindCodes * sizeof(*codes));
+            // TODO: set codes
+            codes[0].OffsetInProlog = 0;
+            codes[0].UnwindOperationCode = coff::UWOP_PUSH_NONVOL;
+            codes[0].OperationInfo = coff::UWOP_RBP;
+            codes[1].OffsetInProlog = 0;
+            codes[1].UnwindOperationCode = coff::UWOP_SAVE_NONVOL;
+            codes[1].OffsetInProlog = coff::UWOP_RSP;
+            // codes[1]
+        }
+
+        int func_count = compiler->bytecode->tinyBytecodes.size(); // more like try-catch count
+        if(func_count > 0) {
+            coff::RUNTIME_FUNCTION* functions = nullptr;
+            pdata_stream->write_late((void**)&functions, func_count * sizeof(*functions));
+
+            auto text_symbol = objectFile.getSectionSymbol(section_text);
+            auto xdata_symbol = objectFile.getSectionSymbol(section_xdata);
+            for(int i=0;i<func_count;i++) {
+                auto tinycode = compiler->bytecode->tinyBytecodes[i];
+                functions[i].StartAddress = tinycode->debugFunction->asm_start;
+                functions[i].EndAddress = tinycode->debugFunction->asm_end;
+                functions[i].UnwindInfoAddress = 0; // TODO: Set address
+
+                #undef ADDR
+                #define ADDR(X) ((u64)functions - (u64)&functions[i].StartAddress) + X
+
+                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(0), text_symbol, 0);
+                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(4), text_symbol, 0);
+                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(8), xdata_symbol, 0);
+                #undef ADDR
+            }
+        }
+
+    }
     
     for(int i=0;i<program->dataRelocations.size();i++){
         auto& rel = program->dataRelocations[i];
@@ -225,7 +297,7 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
         
         if(section->flags == FLAG_READ_ONLY) {
             sheader->Characteristics = (Section_Flags)(sheader->Characteristics
-            | IMAGE_SCN_MEM_READ);
+            | IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
         } else if(section->flags == FLAG_CODE) {
             //   CONTENTS, ALLOC, LOAD, RELOC, READONLY, CODE
             sheader->Characteristics = (Section_Flags)(sheader->Characteristics | 0x60500020);
@@ -244,9 +316,9 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
             | (IMAGE_SCN_ALIGN_1BYTES * (u32)(1 + log2(section->alignment))));
     }
 
-    // #######################
+    // #################################
     //    SECTION DATA and RELOCATIONS
-    // ###############3
+    // ##################################
     
     DynamicArray<std::unordered_map<i32, i32>> sections_dataSymbolMap;
     sections_dataSymbolMap.resize(_sections.size() + 1);
@@ -299,6 +371,8 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
                 else if(rel.type == RELOCA_ADDR64)
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_ADDR64;
+                else if(rel.type == RELOCA_ADDR32NB)
+                    coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_ADDR32NB;
                 else if(rel.type == RELOCA_SECREL)
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_SECREL;
                 else

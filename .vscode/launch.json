@@ -164,7 +164,19 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "C/C++: gcc.exe build active file"
+            // "preLaunchTask": "C/C++: gcc.exe build active file"
+        },
+        {
+            "name": "C/C++: cl.exe build and debug active file",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceRoot}/wa.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceRoot}",
+            "environment": [],
+            "console": "integratedTerminal"
+            // "preLaunchTask": "C/C++: cl.exe build active file"
         }
     ]
 }

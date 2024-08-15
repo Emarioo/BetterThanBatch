@@ -27,6 +27,10 @@ int main(int argc, const char** argv){
 
     InitAssertHandler();
     ProfilerInitialize();
+
+    // FileCOFF::Destroy(FileCOFF::DeconstructFile("wa.o", false));
+
+    // return 0;
     
     DynamicArray<std::string> arguments{};
     for(int i=1;i<argc;i++) // is the first argument always the executable?
@@ -70,7 +74,7 @@ int main(int argc, const char** argv){
         // options.incremental_build = true;
         // options.disable_preload = true;
         // options.only_preprocess = true;
-        options.useDebugInformation = true;
+        // options.useDebugInformation = true;
         Compiler compiler{};
         compiler.run(&options);
 

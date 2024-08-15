@@ -3481,6 +3481,12 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
 
         auto tok = info.gettok();
         if(tok.type == lexer::TOKEN_FINALLY){
+            ERR_SECTION(
+                ERR_HEAD2(tok)
+                ERR_MSG("Exception handling (try-catch) does not support 'finally' (termination handler) because all platforms do not support it. Windows does but not Linux. However, if I am mistaken about this please give me resources and I will implement it.")
+                ERR_LINE2(tok, "here")
+            )
+
             info.advance();
             signal = parseBody(statement->secondBody, currentScopeId);
             if(signal != SIGNAL_SUCCESS)

@@ -280,7 +280,26 @@ void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
 
     has_return_values = false;
     // pushed_offset = 0;
-    virtual_stack_pointer -= size;
+    // virtual_stack_pointer -= size;
+}
+void BytecodeBuilder::emit_alloc_local(BCRegister reg, int* index_to_size) {
+    if(disable_code_gen) return;
+    if(compiler->options->compileStats.errors == 0) {
+        // We would need an array of pushed offsets
+        // Assert(pushed_offset == 0);
+    }
+    emit_opcode(BC_ALLOC_LOCAL);
+    emit_operand(reg);
+    *index_to_size = get_pc();
+    emit_imm16(0);
+
+    has_return_values = false;
+    // pushed_offset = 0;
+    // virtual_stack_pointer -= size;
+}
+void BytecodeBuilder::fix_local_imm(int index, u16 size) {
+    if(disable_code_gen) return;
+    *(u16*)&tinycode->instructionSegment[index] = size;
 }
 void BytecodeBuilder::emit_free_local(u16 size) {
     if(disable_code_gen) return;
@@ -296,7 +315,23 @@ void BytecodeBuilder::emit_free_local(u16 size) {
 
     if(has_return_values)
         ret_offset -= size;
-    virtual_stack_pointer += size;
+    // virtual_stack_pointer += size;
+}
+void BytecodeBuilder::emit_free_local(int* index_to_size) {
+    if(disable_code_gen) return;
+
+    if(compiler->options->compileStats.errors == 0) {
+        // Assert(pushed_offset == 0); // We have some pushed values in the way and can't free local variables
+    }
+    // If size=0 is passed then it's probably a bug.
+    // We should not do "if(size==0) return;" because then we won't catch those bugs.
+    emit_opcode(BC_FREE_LOCAL);
+    *index_to_size = get_pc();
+    emit_imm16(0);
+
+    // if(has_return_values)
+    //     ret_offset -= size;
+    // virtual_stack_pointer += size;
 }
 void BytecodeBuilder::emit_alloc_args(BCRegister reg, u16 size) {
     if(disable_code_gen) return;
@@ -311,7 +346,7 @@ void BytecodeBuilder::emit_alloc_args(BCRegister reg, u16 size) {
 
     has_return_values = false;
     // pushed_offset = 0;
-    virtual_stack_pointer -= size;
+    // virtual_stack_pointer -= size;
 }
 void BytecodeBuilder::emit_empty_alloc_args(int* out_size_offset) {
     if(disable_code_gen) return;
@@ -341,7 +376,7 @@ void BytecodeBuilder::fix_alloc_args(int index, u16 size) {
     *(u8*)(ptr + index - 1) = BC_REG_INVALID;
     *(u16*)(ptr + index) = size;
     
-    virtual_stack_pointer -= size;
+    // virtual_stack_pointer -= size;
 }
 void BytecodeBuilder::emit_free_args(u16 size) {
     if(disable_code_gen) return;
@@ -354,7 +389,7 @@ void BytecodeBuilder::emit_free_args(u16 size) {
 
     if(has_return_values)
         ret_offset -= size;
-    virtual_stack_pointer += size;
+    // virtual_stack_pointer += size;
 }
 
 void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float) {
@@ -389,6 +424,10 @@ void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_
     emit_imm16(imm);
 }
 void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float){
+    if(tinycode->call_convention == CallConvention::STDCALL||tinycode->call_convention == CallConvention::UNIXCALL) {
+        Assert(imm == -8);
+    }
+    
     emit_opcode(BC_SET_RET);
     emit_operand(reg);
     
@@ -406,7 +445,7 @@ void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_fl
 void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_float){
     Assert(has_return_values);
     const int FRAME_SIZE = 16;
-    int off = imm + ret_offset - FRAME_SIZE;
+    // int off = imm + ret_offset - FRAME_SIZE;
     // off = -24
     // push = -8 (ok) -16 (ok) -24 (not ok)
     // engone::log::out << (pushed_offset_max) << " " << (off)<<".."<<(off+size) << "\n";
@@ -417,7 +456,7 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
     // structs can have 3 members without value being overwritten while multiple return values can only have 2.
     // TODO: This is obviously a flaw in the BETBAT calling convention. How do we fix it?
     if(compiler->options->compileStats.errors == 0) {
-        Assert(("Multiple return values has limits (at least 3 8-byte values will work). BC_PUSH can overwrite the return values in the frame of the callee.",pushed_offset_max >= off + size)); // Asserts if return value we try to access was overwritten by pushed values
+        // Assert(("Multiple return values has limits (at least 3 8-byte values will work). BC_PUSH can overwrite the return values in the frame of the callee.",pushed_offset_max >= off + size)); // Asserts if return value we try to access was overwritten by pushed values
     }
 
     emit_opcode(BC_GET_VAL);
@@ -523,7 +562,10 @@ void BytecodeBuilder::emit_mov_rr(BCRegister to, BCRegister from){
     emit_operand(to);
     emit_operand(from);
 }
+
 void BytecodeBuilder::emit_mov_rm(BCRegister to, BCRegister from, int size){
+    Assert(from != BC_REG_LOCALS);
+
     emit_opcode(BC_MOV_RM);
     emit_operand(to);
     emit_operand(from);
@@ -535,6 +577,8 @@ void BytecodeBuilder::emit_mov_rm(BCRegister to, BCRegister from, int size){
     else Assert(false);
 }
 void BytecodeBuilder::emit_mov_mr(BCRegister to, BCRegister from, int size){
+    Assert(to != BC_REG_LOCALS);
+
     emit_opcode(BC_MOV_MR);
     emit_operand(to);
     emit_operand(from);
@@ -546,7 +590,8 @@ void BytecodeBuilder::emit_mov_mr(BCRegister to, BCRegister from, int size){
 }
 
 void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size, int displacement){
-    Assert(to != BC_REG_T1 && from != BC_REG_T1);
+    Assert(!(from == BC_REG_LOCALS && displacement == 0));
+    // Assert(to != BC_REG_T1 && from != BC_REG_T1); // Is this important?
     if(displacement == 0) {
         emit_mov_rm(to, from, size);
         return;
@@ -566,7 +611,8 @@ void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size,
     emit_imm16(displacement);
 }
 void BytecodeBuilder::emit_mov_mr_disp(BCRegister to, BCRegister from, int size, int displacement){
-    Assert(to != BC_REG_T1 && from != BC_REG_T1);
+    Assert(!(to == BC_REG_LOCALS && displacement == 0));
+    // Assert(to != BC_REG_T1 && from != BC_REG_T1); // Is this important?
     if(displacement == 0) {
         emit_mov_mr(to, from, size);
         return;
@@ -597,6 +643,10 @@ void BytecodeBuilder::emit_add(BCRegister to, BCRegister from, bool is_float, in
     else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
     else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
     emit_control(control);
+}
+void BytecodeBuilder::emit_add_imm32(BCRegister to, BCRegister from, int imm, int size) {
+    emit_li32(to, imm);
+    emit_add(to, from, false, size);
 }
 void BytecodeBuilder::emit_sub(BCRegister to, BCRegister from, bool is_float, int size) {
     emit_opcode(BC_SUB);
@@ -848,6 +898,8 @@ void BytecodeBuilder::emit_codeptr(BCRegister reg, i32 imm) {
     emit_imm32(imm);
 }
 void BytecodeBuilder::emit_memzero(BCRegister ptr_reg, BCRegister size_reg, u8 batch) {
+    Assert(ptr_reg != BC_REG_LOCALS);
+    Assert(ptr_reg != size_reg);
     emit_opcode(BC_MEMZERO);
     emit_operand(ptr_reg);
     emit_operand(size_reg);   

@@ -86,6 +86,7 @@
         "xstddef": "cpp",
         "xtr1common": "cpp",
         "glad.h": "c",
-        "excpt.h": "c"
+        "excpt.h": "c",
+        "windows.h": "c"
     }
 }

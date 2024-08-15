@@ -207,6 +207,64 @@ namespace coff {
     };
     #pragma pack(pop)
 
+    // Below are some structs for exceptions on Windows.
+    // Definitions can be found here: https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64?view=msvc-170
+    struct RUNTIME_FUNCTION {
+        u32 StartAddress;
+        u32 EndAddress;
+        u32 UnwindInfoAddress;
+    };
+    enum UnwindInfoFlags {
+        UNW_FLAG_NHANDLER = 0x0,
+        UNW_FLAG_EHANDLER = 0x1, // The function has an exception handler that should be called when looking for functions that need to examine exceptions.
+        UNW_FLAG_UHANDLER = 0x2, // The function has a termination handler that should be called when unwinding an exception.
+        UNW_FLAG_CHAININFO = 0x4, //This unwind info structure is not the primary one for the procedure. Instead, the chained unwind info entry is the contents of a previous RUNTIME_FUNCTION entry. For information, see Chained unwind info structures. If this flag is set, then the UNW_FLAG_EHANDLER and UNW_FLAG_UHANDLER flags must be cleared. Also, the frame register and fixed-stack allocation fields must have the same values as in the primary unwind info.
+    };
+    struct UNWIND_INFO {
+        u8 Version : 3;
+        u8 Flags : 5;
+        u8 SizeOfProlog;
+        u8 CountOfUnwindCodes;
+        u8 FrameRegister : 4;
+        u8 FrameRegisterOffset : 4; // (scaled)
+        // u16 UnwindCodesArray[CountOfUnwindCodes];
+
+        // variable	Can either be of form (1):
+            // u32 AddressOfExceptionHandler;
+            // variable	Language-specific handler data (optional)
+        // or (2):
+            // RUNTIME_FUNCTION ChainedUnwindInfo;
+    };
+    struct UNWIND_CODE {
+        u8 OffsetInProlog;
+        u8 UnwindOperationCode : 4;
+        u8 OperationInfo : 4;
+    };
+    // Read about the operations here: https://learn.microsoft.com/en-us/cpp/build/exception-handling-x64?view=msvc-170#unwind-operation-code
+    enum UnwindOperation {
+        UWOP_PUSH_NONVOL = 0, // 1 node
+        UWOP_ALLOC_LARGE = 1, // 2 or 3 nodes
+        UWOP_ALLOC_SMALL = 2, // 1 node
+        UWOP_SET_FPREG = 3, // 1 node
+        UWOP_SAVE_NONVOL = 4, // 2 nodes
+        UWOP_SAVE_NONVOL_FAR = 5, // 3 nodes
+        UWOP_SAVE_XMM128 = 8, // 2 nodes
+        UWOP_SAVE_XMM128_FAR = 9, // 3 nodes
+        UWOP_PUSH_MACHFRAME = 10, // 1 node
+    };
+    enum UnwindOpRegister {
+    	UWOP_RAX = 0,
+    	UWOP_RCX = 1,
+    	UWOP_RDX = 2,
+    	UWOP_RBX = 3,
+    	UWOP_RSP = 4,
+    	UWOP_RBP = 5,
+    	UWOP_RSI = 6,
+    	UWOP_RDI = 7,
+        UWOP_R8 = 8, // To get R13 do: UWOP_R8 + (8 - N), where N = 13
+        // 8 to 15	R8 to R15
+    };
+
     // #######################
     //   NOT DEFINED BY COFF
     // ######################
@@ -247,3 +305,6 @@ struct FileCOFF {
     static void Destroy(FileCOFF* objectFile);
     static bool WriteFile(const std::string& name, X64Program* program, u32 from = 0, u32 to = (u32)-1);
 };
+
+void DeconstructPData(u8* buffer, u32 size);
+void DeconstructXData(u8* buffer, u32 size);

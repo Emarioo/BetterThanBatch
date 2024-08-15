@@ -258,6 +258,14 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
             u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
             // DeconstructDebugTypes(data, sectionHeader->SizeOfRawData);
         }
+        if(objectFile->getSectionName(i) == ".pdata") {
+            u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
+            DeconstructPData(data, sectionHeader->SizeOfRawData);
+        }
+        if(objectFile->getSectionName(i) == ".xdata") {
+            u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
+            DeconstructXData(data, sectionHeader->SizeOfRawData);
+        }
         bool is_text = false;
         if (objectFile->getSectionName(i).compare(0, 5, ".text") == 0) {
           is_text = true;
@@ -1450,4 +1458,130 @@ bool FileCOFF::WriteFile(const std::string& path, X64Program* program, u32 from,
     #undef CHECK
     #endif
     return true;
+}
+
+
+void DeconstructPData(u8* buffer, u32 size) {
+    using namespace engone;
+    log::out << "PData " << size<<"\n";
+    auto entries = (coff::RUNTIME_FUNCTION*)buffer;
+    int entry_length = size / sizeof(*entries);
+    for(int i=0;i<entry_length;i++){
+        auto entry = entries + i;
+        auto number = i + 1;
+        log::out << " Entry "<<number<<"\n";
+        log::out << "  Start addr: "<<entry->StartAddress<<"\n";
+        log::out << "  End addr: "<<entry->EndAddress<<"\n";
+        log::out << "  Unwind info: "<<entry->UnwindInfoAddress<<"\n";
+    }
+}
+void DeconstructXData(u8* buffer, u32 size) {
+    using namespace engone;
+    log::out << "XData " << size<<"\n";
+
+    int head = 0;
+    int count = 0;
+    int skipped_bytes = 0;
+    while(head < size) {
+        auto entry = (coff::UNWIND_INFO*)(buffer + head);
+
+        if(entry->Version != 1) {
+            // log::out << log::RED << "Version in unwind info should be 1.\n";
+            head++;
+            skipped_bytes++;
+            continue;
+        }
+        if((head & 0x3) != 0) {
+            head++;
+            skipped_bytes++;
+            continue;
+        }
+
+        // Assert((head & 0x3) == 0);
+        if(skipped_bytes > 0) {
+            log::out << log::RED << "Skipped " << skipped_bytes<<"\n";
+            skipped_bytes = 0;
+        }
+        head += sizeof(*entry);
+
+        count++;
+        log::out << " Unwind info "<<count<<"\n";
+
+
+        log::out << "  Version: "<<entry->Version<<"\n";
+        log::out << "  Flags: ";
+        if(entry->Flags == 0)
+            log::out << "none";
+        else {
+            if(entry->Flags & coff::UNW_FLAG_EHANDLER)
+                log::out << "ehandler ";
+            if(entry->Flags & coff::UNW_FLAG_UHANDLER)
+                log::out << "uhandler ";
+            if(entry->Flags == coff::UNW_FLAG_CHAININFO)
+                log::out << "chaininfo ";
+            if((entry->Flags & (coff::UNW_FLAG_EHANDLER | coff::UNW_FLAG_UHANDLER)) && (entry->Flags & coff::UNW_FLAG_CHAININFO)) {
+                log::out << log::RED << "XDATA IS INVALID, or parsed incorrectly. UNW_FLAG_CHAININFO cannot coexist with other flags.\n";
+                return;
+            }
+        }
+        log::out << "\n";
+
+        log::out << "  Size of prolog: "<<entry->SizeOfProlog<<"\n";
+        log::out << "  Count unwind codes: "<<entry->CountOfUnwindCodes<<"\n";
+        log::out << "  Frame reg: "<<entry->FrameRegister<<"\n";
+        log::out << "  Frame reg offset: "<<entry->FrameRegisterOffset<<"\n";
+
+        auto codes = (coff::UNWIND_CODE*)(buffer + head);
+        head += entry->CountOfUnwindCodes * sizeof(*codes);
+        for(int j=0;j<entry->CountOfUnwindCodes;j++) {
+            auto code = codes + j;
+            log::out << "  Unwind code " << j<<"\n";
+            log::out << "   Offset: "<<code->OffsetInProlog<<"\n";
+            log::out << "   UnwindOpCode: ";
+            int extra_nodes = 0;
+            switch(code->UnwindOperationCode) {
+                #undef CASE
+                #define CASE(X, N) case coff::X: log::out << #X; extra_nodes = (N)-1; break;
+                CASE(UWOP_PUSH_NONVOL, 1)
+                CASE(UWOP_ALLOC_LARGE, code->OperationInfo == 0 ? 2 : 3)
+                CASE(UWOP_ALLOC_SMALL, 1)
+                CASE(UWOP_SET_FPREG, 1)
+                CASE(UWOP_SAVE_NONVOL, 2)
+                CASE(UWOP_SAVE_NONVOL_FAR, 3)
+                CASE(UWOP_SAVE_XMM128, 2)
+                CASE(UWOP_SAVE_XMM128_FAR, 3)
+                CASE(UWOP_PUSH_MACHFRAME, 1)
+                #undef CASE
+            }
+            log::out << "\n";
+            log::out << "   OperationInfo: "<<code->OperationInfo<<"\n";
+
+            if (extra_nodes > 0) {
+                int value = 0;
+                if(extra_nodes == 1)
+                    value = *(u16*)(codes + j + 1);
+                if(extra_nodes == 2)
+                    value = *(u32*)(codes + j + 1);
+
+                log::out << "  Extra node: " << value<<"\n";
+                
+                j += extra_nodes;
+            }
+        }
+        
+        // Align to 4 bytes if number of unwind codes is uneven.
+        if(head & 0x3)
+            head += 4 - (head & 0x3);
+
+        // TODO: Decode chain info
+        Assert((entry->Flags & coff::UNW_FLAG_CHAININFO) == 0);
+
+        if(entry->Flags & (coff::UNW_FLAG_EHANDLER | coff::UNW_FLAG_UHANDLER)) {
+            auto address_of_handler = *(u32*)(buffer + head);
+            head += sizeof(u32);
+            log::out << " EHandler: "<<address_of_handler<<"\n";
+
+            // NOTE: Language specific handler data
+        }
+    }
 }

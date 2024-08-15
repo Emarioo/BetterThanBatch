@@ -3,19 +3,76 @@
 
 /*  
     Today's quest: Hardware/software exceptions
+
+    Stuff to consider when implementing exceptions:
+        Windows and Linux does it differently.
+        On Windows we need to:
+            Create three additional sections (.xdata, .pdata, .text$x)
+            Fill them with function entries, unwind info? code of exception handlers.
+        On Linux we need to:
+            Emit function call to sigaction before "try", and fill the sigaction data structure that is passed, also store previous sigaction structure.
+            Emit function call to sigaction at the end of try to
 */
 
-#import "Logger"
 
-enum ExceptionType {
-    EXCEPTION_MEMORY,
-    EXCEPTION_ZERO_DIVISION,
+// #import "OS"
+#import "Memory"
+
+global num: i32;
+main();
+fn main() -> i32{
+    // Bug 0: The address of global variables must be set before they are used in
+    //  functions. Functions were evaluated before everything including globals which cause the issue.
+    return num;
 }
 
-try {
-    log("try")
-    *cast<i32*>cast<i64>0 = 0
-} catch EXCEPTION_MEMORY {
-    log("caught")
-}
-log("Finish")
+global str: char*;
+str = Allocate(16);
+*str; // This caused a crash at some point in time
+
+
+
+
+// #import "Logger"
+
+// @dumpbc
+
+// return real()
+// // return 5
+
+// fn @export @betcall real() -> i32 {
+//     @dumpbc
+//     x: i32 = 2
+//     y: i32 = 3
+//     z: i64
+
+//     z = x + y
+
+//     a, b := func(x,y)
+
+//     // prints("yes")
+//     return a + b + z
+// }
+
+// fn @export @betcall func(x: i32, y: i32) -> i32, i32 {
+//     return 2*x , 2*y
+// }
+
+// // enum ExceptionType {
+// //     EXCEPTION_MEMORY,
+// //     EXCEPTION_ZERO_DIVISION,
+// // }
+
+// // try {
+// //     // log("try")
+// //     *cast<i32*>cast<i64>0 = 0
+// // } catch EXCEPTION_MEMORY {
+// //     ok := 0xfafafafa
+// //     // log("caught")
+// // }
+// // // log("Finish")
+
+
+// // fn @oscall exception_handler() {
+
+// // }

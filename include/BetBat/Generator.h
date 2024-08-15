@@ -72,6 +72,16 @@ struct GenContext : public PhaseContext {
     LoopScope* getLoop(int index);
     bool popLoop();
 
+    DynamicArray<int> frame_size_fixes{};
+    // int max_size_of_function_arguments = 0;
+    // int sum_frame_size = 0;
+    // void alloc_local(int size) {
+    //     sum_frame_size += size;
+    // }
+    void add_frame_fix(int index) {
+        frame_size_fixes.add(index);
+    }
+
     struct ResolveCall {
         int bcIndex = 0;
         FuncImpl* funcImpl = nullptr;
@@ -91,7 +101,7 @@ struct GenContext : public PhaseContext {
     SignalIO generateArtificialPush(TypeId typeId);
     // Generate a push from pointer (baseReg) where a list of pushed values are stored. generatePush reads memory from a struct layout while this function "copies" pushed values from a pointer.
     SignalIO generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr);
-    void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size);
+    void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, int offset);
     void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
     
     SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);

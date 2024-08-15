@@ -2,6 +2,7 @@
 // #include "BetBat/Tokenizer.h"
 #include "BetBat/NativeRegistry.h"
 #include "BetBat/DebugInformation.h"
+#include "BetBat/ExceptionInformation.h"
 
 #include "BetBat/AST.h"
 
@@ -338,6 +339,7 @@ struct TinyBytecode {
     };
     DynamicArray<Line> lines{};
     DebugFunction* debugFunction = nullptr;
+    DynamicArray<TryBlock> try_blocks{};
     DynamicArray<int> required_asm_instances; // x64 gen needs to know what inline assembly to generate
 
     // bool is_used_as_function_pointer = false; // used in x64 gen for enabling/disabling callee saved registers
@@ -509,6 +511,9 @@ struct BytecodeBuilder {
     // reg may be invalid
     void emit_alloc_local(BCRegister reg, u16 size);
     void emit_free_local(u16 size);
+    void emit_free_local(int* index_to_size);
+    void emit_alloc_local(BCRegister reg, int* index_to_size);
+    void fix_local_imm(int index, u16 size);
     // allocates space on stack for arguments but ensures 16-byte alignment DURING EXECUTION or final x64 gen
     void emit_alloc_args(BCRegister reg, u16 size);
     void emit_empty_alloc_args(int* out_size);
@@ -545,6 +550,8 @@ struct BytecodeBuilder {
     void emit_mul(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     void emit_div(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     void emit_mod(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
+    // This cannot be a float operation
+    void emit_add_imm32(BCRegister to, BCRegister from, int imm, int size);
     
     void emit_band(BCRegister to, BCRegister from, int size);
     void emit_bor(BCRegister to, BCRegister from, int size);
@@ -589,12 +596,13 @@ struct BytecodeBuilder {
     
     void emit_test(BCRegister to, BCRegister from, u8 size, i32 test_location);
     
+    // virual stack pointer is affected by push and pop
     int get_virtual_sp() { return virtual_stack_pointer; }
     // 16-byte alignment
-    int get_required_alignment() {
-        // return (16 - (virtual_stack_pointer % 16)) % 16;
-        return (0x10 - virtual_stack_pointer) & 0xF;
-    }
+    // int get_required_alignment() {
+    //     // return (16 - (virtual_stack_pointer % 16)) % 16;
+    //     return (0x10 - virtual_stack_pointer) & 0xF;
+    // }
 
     int get_pc() { return tinycode->instructionSegment.size(); }
     void fix_jump_imm32_here(int imm_index);

@@ -584,14 +584,18 @@ SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
     return SIGNAL_SUCCESS;
 }
 // static memzero with a fixed size
-void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
+void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, int offset) {
     // TODO: Move this logic into BytecodeBuilder? (emit_memzero)
     if(size <= 8) {
         if (hasAnyErrors())
             return;
         Assert(size == 1 || size == 2 || size == 4 || size == 8);
         builder.emit_bxor(size_reg, size_reg, size);
-        builder.emit_mov_mr(ptr_reg, size_reg, size);
+        if(offset != 0) {
+            builder.emit_mov_mr_disp(ptr_reg, size_reg, size, offset);
+        } else {
+            builder.emit_mov_mr(ptr_reg, size_reg, size);
+        }
     } else {
         int batch = 1;
         if(size % 8 == 0)
@@ -601,7 +605,22 @@ void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
         else if(size % 2 == 0)
             batch = 2;
         builder.emit_li32(size_reg, size);
-        builder.emit_memzero(ptr_reg, size_reg, batch);
+
+        // The x64 implementation of memzero needs to allocate 2 registers.
+        // ptr_reg and size_reg is the registers we choose to be allocated.
+        // If ptr_reg is reg_locals then only one register will be allocated automatically.
+        // To avoid having to manually allocate a register in the x64 generator we
+        // don't allow BC_REG_LOCALS as a register (well, we do but we swap it out for another register below)
+        BCRegister reg = ptr_reg;
+        if(ptr_reg == BC_REG_LOCALS) {
+            reg = BC_REG_T0;
+            if(offset > 0){
+                builder.emit_mov_rr(reg, ptr_reg);
+            } else {
+                builder.emit_add_imm32(reg, ptr_reg, offset, 8);
+            }
+        }
+        builder.emit_memzero(reg, size_reg, batch);
     }
 }
 void GenContext::genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size) {
@@ -631,6 +650,9 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
     // }
     // MAKE_NODE_SCOPE(_expression);
     // Assert(typeInfo)
+
+    Assert(!(baseReg == BC_REG_LOCALS && offset == 0));
+
     TypeInfo* typeInfo = 0;
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
@@ -638,9 +660,9 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
     if(baseReg != BC_REG_INVALID && zeroInitialize) {
         #ifndef DISABLE_ZERO_INITIALIZATION
         
-        builder.emit_li32(BC_REG_T1, offset);
-        builder.emit_add(BC_REG_T1, baseReg, false, 8);
-        genMemzero(BC_REG_T1, BC_REG_T0, size);
+        // builder.emit_li32(BC_REG_T1, offset);
+        // builder.emit_add(BC_REG_T1, baseReg, false, 8);
+        genMemzero(baseReg, BC_REG_T1, size, offset);
         
         #endif
     }
@@ -662,10 +684,10 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
             
             if(member.array_length) {
                 if(baseReg != BC_REG_INVALID) {
-                    builder.emit_li32(BC_REG_T1, offset + memdata.offset);
-                    builder.emit_add(BC_REG_T1, baseReg, false, 8);
+                    // builder.emit_li32(BC_REG_T1, offset + memdata.offset);
+                    // builder.emit_add(BC_REG_T1, baseReg, false, 8);
                     int size = ast->getTypeSize(memdata.typeId);
-                    genMemzero(BC_REG_T1, BC_REG_T0, size * member.array_length);
+                    genMemzero(baseReg, BC_REG_T1, size * member.array_length, offset + memdata.offset);
                 } else {
                     // default value of array is zero even if struct has defaults because going through each element in the array is expensive
                     // SignalIO result = generateDefaultValue(baseReg, offset + memdata.offset, memdata.typeId, location, false);
@@ -773,18 +795,19 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
         int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
         if (diff != asize) {
             info.currentFrameOffset -= diff; // align
-            builder.emit_alloc_local(BC_REG_INVALID, diff);
-            // info.builder.emit_incr(BC_REG_SP, -diff);
+            // builder.emit_alloc_local(BC_REG_INVALID, diff);
+            currentFuncImpl->alloc_frame_space(diff);
+        
         }
         info.currentFrameOffset -= size;
         *outFrameOffset = info.currentFrameOffset;
         
+        // builder.emit_alloc_local(reg, size);
+        currentFuncImpl->alloc_frame_space(size);
         BCRegister reg = genDefault ? BC_REG_F : BC_REG_INVALID; // TODO: Is F register in use?
-        builder.emit_alloc_local(reg, size);
-        // builder.emit_incr(BC_REG_SP, -size);
-
+        
         if(genDefault){
-            SignalIO result = info.generateDefaultValue(reg, 0, typeId);
+            SignalIO result = generateDefaultValue(BC_REG_LOCALS, info.currentFrameOffset, typeId);
             if(result!=SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
         }
@@ -1497,6 +1520,7 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
                 }
                 
                 if(call_convention != INTRINSIC) {
+                    currentFuncImpl->update_max_arguments(allocated_stack_space);
                     builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
                 }
 
@@ -1547,7 +1571,7 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
 
             int size = ast->getTypeSize(arg_type);
             Assert(size <= 8); // only structs can be bigger than 8
-            genMemzero(BC_REG_B, BC_REG_A, size);
+            genMemzero(BC_REG_B, BC_REG_A, size, 0);
         } else {
             auto loc = expression->args[0]->location;
             ERR_SECTION(
@@ -1708,6 +1732,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
         // we should always emit alloc_args even if we don't have any arguments to ensure 16-byte alignment
         // The x64 generator (and virtual machine) ensures 16-byte alignment on alloc_args instructions
         builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
+        currentFuncImpl->update_max_arguments(allocated_stack_space);
     }
 
     // Evaluate arguments and push the values to stack
@@ -1791,6 +1816,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
                         // we must emit alloc args before we generate pushed values!
                         // builder.emit_alloc_args(BC_REG_INVALID, arg_space);
                         builder.fix_alloc_args(off_alloc_args, arg_space);
+                        currentFuncImpl->update_max_arguments(arg_space);
                         Assert(cast_sig->argumentTypes.size() == 1);
                         generatePop_set_arg(cast_sig->argumentTypes[0].offset, cast_sig->argumentTypes[0].typeId);
 
@@ -4481,7 +4507,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                             dfun->localVariables.last().frameOffset = OFFSET;\
                             dfun->localVariables.last().typeId = TYPE;
 
-        int allocated_stack_space = 0;
+        // int allocated_stack_space = 0;
 
         if(function->callConvention != BETCALL) {
             Assert(!function->parentStruct);
@@ -4530,7 +4556,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 identifier->versions_dataOffset[info.currentPolyVersion] = memImpl.offset;
             }
         }
-        
+        int index_of_frame_size = 0;
+        builder.emit_alloc_local(BC_REG_INVALID, &index_of_frame_size);
+        add_frame_fix(index_of_frame_size);
+
         if (funcImpl->signature.returnTypes.size() != 0) {
             // We don't need to zero initialize return value.
             // You cannot return without specifying what to return.
@@ -4543,10 +4572,12 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // #endif
 
             if(!function->blank_body) {
-                builder.emit_alloc_local(BC_REG_INVALID, funcImpl->signature.returnSize);
+                // builder.emit_alloc_local(BC_REG_INVALID, funcImpl->signature.returnSize);
+                
 
-                allocated_stack_space += funcImpl->signature.returnSize;
+                // allocated_stack_space += funcImpl->signature.returnSize;
                 info.currentFrameOffset -= funcImpl->signature.returnSize;
+                currentFuncImpl->alloc_frame_space(funcImpl->signature.returnSize);
             }
 
             _GLOG(log::out << "Return values:\n";)
@@ -4668,12 +4699,20 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         if(builder.get_last_opcode() != BC_RET) {
             // add return with no return values if it doesn't exist
             // this is only fine if the function doesn't return values
-            if(allocated_stack_space != 0) {
-                Assert(!function->blank_body); // we should not have allocated stack space
-                builder.emit_free_local(allocated_stack_space);
+            if(!function->blank_body) {
+                int index;
+                builder.emit_free_local(&index);
+                add_frame_fix(index);
             }
             builder.emit_ret();
         }
+
+        int frame_size = funcImpl->get_frame_size();
+        for(auto index : frame_size_fixes) {
+            builder.fix_local_imm(index, frame_size);
+        }
+
+        frame_size_fixes.clear();
         
         // TODO: Assert that we haven't allocated more stack space than we freed!
     }
@@ -4759,9 +4798,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
         if (lastOffset != info.currentFrameOffset) {
             _GLOG(log::out << "fix sp when exiting body\n";)
-            builder.emit_free_local(lastOffset - info.currentFrameOffset);
-            // builder.restoreStackMoment(savedMoment); // -8 to not include BC_REG_BP
-            // bytecode->addDebugText("fix sp when exiting body\n");
+            // builder.emit_free_local(lastOffset - info.currentFrameOffset);
+            currentFuncImpl->free_frame_space(lastOffset - info.currentFrameOffset);
             
             info.currentFrameOffset = lastOffset;
         } else {
@@ -4959,34 +4997,34 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     
                     info.currentFrameOffset -= arraySize;
                     arrayFrameOffset = info.currentFrameOffset;
-                    BCRegister reg_data = BC_REG_C;
-                    builder.emit_alloc_local(reg_data, arraySize);
-                    // builder.emit_incr(BC_REG_SP, -arraySize);
+                    currentFuncImpl->alloc_frame_space(arraySize);
+                    // BCRegister reg_data = BC_REG_C;
+                    // builder.emit_alloc_local(reg_data, arraySize);
+                    
                     if(i == (int)statement->varnames.size()-1){
                         frameOffsetOfLastVarname = arrayFrameOffset;
                     }
 
-                    #ifndef DISABLE_ZERO_INITIALIZATION
-                    // builder.emit_li32(BC_REG_RDX,arraySize);
-                    // builder.emit_({BC_MEMZERO, BC_REG_SP, BC_REG_RDX});
-                    // builder.emit_mov_rr(BC_REG_D, BC_REG_SP);
-                    // builder.emit_mov_rr(BC_REG_D, BC_REG_ARGS);
-                    genMemzero(reg_data, BC_REG_B, arraySize);
-                    #endif
-
+                    bool set_defaults = false;
                     if(elementType.isNormalType()) {
                         TypeInfo* elementInfo = info.ast->getTypeInfo(elementType);
                         if(elementInfo->astStruct) {
+                            set_defaults = true;
                             // TODO: Annotation to disable this
                             // TODO: Create a loop with cmp, je, jmp instructions instead of
                             //  "unrolling" the loop like this. We generate a lot of instructions from this.
                             for(int j = 0;j<varname.arrayLength;j++) {
-                                SignalIO result = generateDefaultValue(reg_data, elementSize * j, elementType);
+                                SignalIO result = generateDefaultValue(BC_REG_LOCALS, arrayFrameOffset + elementSize * j, elementType);
                                 // SignalIO result = generateDefaultValue(BC_REG_BP, arrayFrameOffset + elementSize * j, elementType);
                                 if(result!=SIGNAL_SUCCESS)
                                     return SIGNAL_FAILURE;
                             }
                         }
+                    }
+                    if(!set_defaults) {
+                        #ifndef DISABLE_ZERO_INITIALIZATION
+                        genMemzero(BC_REG_LOCALS, BC_REG_B, arraySize, arrayFrameOffset);
+                        #endif DISABLE_ZERO_INITIALIZATION
                     }
                     // data type may be zero if it wasn't specified during initial assignment
                     // a = 9  <-  implicit / explicit  ->  a : i32 = 9
@@ -5443,7 +5481,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }
 
             if(loopScope->stackMoment != currentFrameOffset) {
-                builder.emit_free_local(loopScope->stackMoment - currentFrameOffset);
+                // builder.emit_free_local(loopScope->stackMoment - currentFrameOffset);
+                currentFuncImpl->free_frame_space(loopScope->stackMoment - currentFrameOffset);
                 currentFrameOffset = loopScope->stackMoment;
             }
             
@@ -5781,8 +5820,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     varnameNr.identifier->scopeId);
             }
             
-            builder.emit_free_local(stackBeforeLoop - info.currentFrameOffset);
-            info.currentFrameOffset = stackBeforeLoop;
+            // builder.emit_free_local(stackBeforeLoop - info.currentFrameOffset);
+            currentFuncImpl->free_frame_space(stackBeforeLoop - currentFrameOffset);
+            currentFrameOffset = stackBeforeLoop;
             
             // pop loop happens in defer
         } else if(statement->type == ASTStatement::BREAK) {
@@ -5796,8 +5836,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 continue;
             }
             // builder.restoreStackMoment(loop->stackMoment, true);
-            if(loop->stackMoment != currentFrameOffset)
-                builder.emit_free_local(loop->stackMoment - currentFrameOffset); // freeing local variables without modifying currentFrameOffset
+            if(loop->stackMoment != currentFrameOffset) {
+                // builder.emit_free_local(loop->stackMoment - currentFrameOffset); // freeing local variables without modifying currentFrameOffset
+                currentFuncImpl->free_frame_space(loop->stackMoment - currentFrameOffset);
+            }
             
             loop->resolveBreaks.add(0);
             builder.emit_jmp(&loop->resolveBreaks.last());
@@ -5812,8 +5854,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 continue;
             }
             // builder.restoreStackMoment(loop->stackMoment, true);
-            if(loop->stackMoment != currentFrameOffset)
-                builder.emit_free_local(loop->stackMoment - currentFrameOffset);
+            if(loop->stackMoment != currentFrameOffset) {
+                // builder.emit_free_local(loop->stackMoment - currentFrameOffset);
+                currentFuncImpl->free_frame_space(loop->stackMoment - currentFrameOffset);
+            }
 
             builder.emit_jmp(loop->continueAddress);
         } else if (statement->type == ASTStatement::RETURN) {
@@ -5900,8 +5944,12 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     }
                 }
             }
-            if(currentFrameOffset != 0)
-                builder.emit_free_local(-currentFrameOffset);
+            if(currentFrameOffset != 0) {
+                // builder.emit_free_local(-currentFrameOffset);
+                int index;
+                builder.emit_free_local(&index);
+                add_frame_fix(index);
+            }
             builder.emit_ret();
             info.currentFrameOffset = lastOffset; // nochecking TODO: Should we reset frame like this? If so, should we not break this loop and skip the rest of the statements too?
         }
@@ -6040,7 +6088,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // generate try
             generateBody(statement->firstBody);
             int offset_jmp;
-            builder.emit_jmp(&offset_jmp); // jump to finally
+            // builder.emit_jmp(&offset_jmp); // jump to finally
 
             // TODO: What do we do with catch?
             // TEMP_ARRAY_N(TypeId, tempTypes, 5);
@@ -6056,9 +6104,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             //     result = generateBody(catch_body);
             // }
 
-            builder.fix_jump_imm32_here(offset_jmp);
-            if(statement->secondBody)
-                generateBody(statement->secondBody);
+            // NOTE: I don't know how to implement 'finally' on Linux so we don't support it at all. Also, the implementation for it is harder than just generateBody. It's a termination handler, we need to add information about it in .pdata, .xdata and such.
+            // builder.fix_jump_imm32_here(offset_jmp);
+            // if(statement->secondBody)
+            //     generateBody(statement->secondBody);
             
         } else {
             Assert(("You forgot to implement statement type!",false));
@@ -6374,6 +6423,8 @@ SignalIO GenContext::generateGlobalData() {
         // we do 16 because of 16-byte alignment rule in calling conventions
         builder.emit_alloc_local(BC_REG_INVALID, 16);
 
+        // nocheckin TOOD: I changed how locals and stack pointer works, stack pointer is modified once at the top and bottom of functions, will emit_alloc_local mess that up? Should be fine if we're just generating expressions.
+
         TypeId type{};
         if(!stmt->firstExpression) {
             type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
@@ -6494,29 +6545,47 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 context.debugFunction = dfun;
                 context.bytecode->addExportedFunction(tb_main->name, context.tinycode->index);
 
+                Assert(!context.currentFuncImpl);
+                FuncImpl temp{};
+                context.currentFuncImpl = &temp;
+                temp.polyVersion = 0;
+                temp.signature.returnTypes.add({});
+                temp.signature.returnTypes.last().typeId = AST_INT32;
+                temp.signature.returnTypes.last().offset = -8;
+
+                int index_of_frame_size = 0;
+                context.builder.emit_alloc_local(BC_REG_INVALID, &index_of_frame_size);
+                context.add_frame_fix(index_of_frame_size);
+
                 context.generatePreload();
 
                 context.generateBody(scope);
                 // TestGenerate(context.builder);
                 
                 if(context.builder.get_last_opcode() != BC_RET) {
-                    if(context.currentFrameOffset != 0)
-                        context.builder.emit_free_local(-context.currentFrameOffset);
-                    // context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, true);
+                    if(context.currentFrameOffset != 0) {
+                        int index;
+                        context.builder.emit_free_local(&index);
+                        context.add_frame_fix(index);
+                    }
+                    
                     context.builder.emit_ret();
                 } else {
-                    // context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
+                    
                 }
+
+                int frame_size = context.currentFuncImpl->get_frame_size();
+                for(auto index : context.frame_size_fixes) {
+                    context.builder.fix_local_imm(index, frame_size);
+                }
+
+                context.frame_size_fixes.clear();
             }
         }
     }
     
-    
-    // TODO: Relocations?
-    
     context.compiler->options->compileStats.errors += context.errors;
 
-    // return tb_main;
     return true;
 }
 void GenContext::init_context(Compiler* compiler) {

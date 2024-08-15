@@ -10,7 +10,6 @@ enum ObjectFileType {
     OBJ_ELF,
     OBJ_COFF,
 };
-
 typedef u32 SectionNr; // 0 = invalid/null
 struct ObjectFile {
     enum SectionFlags : u32 {
@@ -32,6 +31,7 @@ struct ObjectFile {
 
         // Windows x64, COFF
         RELOCA_ADDR64,
+        RELOCA_ADDR32NB,
         RELOCA_SECREL,
         RELOCA_REL32, // used when refering to external functions
 
@@ -77,6 +77,7 @@ struct ObjectFile {
         SYM_FUNCTION,
         SYM_DATA, // data/object/value in the section?
         SYM_EMPTY,
+        SYM_ABS,
     };
     struct Symbol {
         SymbolType type;
@@ -142,3 +143,4 @@ private:
     std::unordered_map<std::string, int> _symbolMap;
     ObjectFileType _objType = OBJ_NONE;
 };
+ObjectFile::SectionFlags operator |(ObjectFile::SectionFlags a, ObjectFile::SectionFlags b);

@@ -69,8 +69,8 @@ struct TyperContext : public PhaseContext {
 
     SignalIO checkFunctions(ASTScope* scope);
     SignalIO checkFunction(ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope);
-    SignalIO checkFunctionImpl(ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl = nullptr);
-    SignalIO checkFuncImplScope(ASTFunction* func, FuncImpl* funcImpl);
+    SignalIO checkFunctionSignature(ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl = nullptr);
+    SignalIO checkFunctionScope(ASTFunction* func, FuncImpl* funcImpl);
 
     SignalIO checkDeclaration(ASTStatement* now, ContentOrder contentOrder, ASTScope* scope);
     SignalIO checkRest(ASTScope* scope);

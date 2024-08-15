@@ -1164,9 +1164,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                                     //     funcImpl->signature.polyArgs[i] = id;
                                     // }
 
-                                    // IMPORTANT TODO: checkFunctionImpl with multi-threading will break stuff! We need to check 'is_being_checked'.
+                                    // IMPORTANT TODO: checkFunctionSignature with multi-threading will break stuff! We need to check 'is_being_checked'.
                                     // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-                                    SignalIO result = checkFunctionImpl(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
+                                    SignalIO result = checkFunctionSignature(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
 
                                     overload = ast->addPolyImplOverload(overloads, polyFunc, funcImpl);
                                     
@@ -1985,7 +1985,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             // This would mean that all threads must use the same mutex 'lock_imports' when checking 'is_being_checked', HOWEVER, we are not in a different phase and no thread will check is_being_checked with a different mutex except for the code right here. SOOO, we can use whichever mutex we'd like.
             compiler->lock_imports.lock(); // TODO: use a different mutex named more appropriately
             bool is_being_checked = polyFunc->is_being_checked || (
-                (!currentAstFunc || currentAstFunc->parentStruct != parentAstStruct) &&  // if the function we check with checkFunctionImpl is a method and the parent struct of the method is the same struct as the current parent struct THEN we don't mind that the parent struct is being checked because this thread we are currently doing that.
+                (!currentAstFunc || currentAstFunc->parentStruct != parentAstStruct) &&  // if the function we check with checkFunctionSignature is a method and the parent struct of the method is the same struct as the current parent struct THEN we don't mind that the parent struct is being checked because this thread we are currently doing that.
                 parentAstStruct && parentAstStruct->is_being_checked);
             if(!is_being_checked) {
                 polyFunc->is_being_checked = true;
@@ -2000,7 +2000,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
 
         // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-        SignalIO result = checkFunctionImpl(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
+        SignalIO result = checkFunctionSignature(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
         // outTypes->used = 0; // FNCALL_SUCCESS will fix the types later, we don't want to add them twice
 
         compiler->lock_imports.lock();
@@ -3055,7 +3055,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
 
 // Evaluates types and offset for the given function implementation
 // It does not modify ast func
-SignalIO TyperContext::checkFunctionImpl(ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl){
+SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes, StructImpl* parentStructImpl){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -3454,7 +3454,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
                 if(parentStruct)
                     funcImpl->structImpl = parentStruct->nonPolyStruct;
                 // DynamicArray<TypeId> retTypes{}; // @unused
-                SignalIO yes = checkFunctionImpl( function, funcImpl, parentStruct, nullptr);
+                SignalIO yes = checkFunctionSignature( function, funcImpl, parentStruct, nullptr);
 
                 // TODO: Implement a list of functions to forcefully generate
                 if(function->name == compiler->entry_point) {
@@ -3589,52 +3589,25 @@ SignalIO TyperContext::checkFunctions(ASTScope* scope){
     return SIGNAL_SUCCESS;
 }
 
-SignalIO TyperContext::checkFuncImplScope(ASTFunction* func, FuncImpl* funcImpl){
+SignalIO TyperContext::checkFunctionScope(ASTFunction* func, FuncImpl* funcImpl){
     using namespace engone;
-    _TCLOG_ENTER(FUNC_ENTER) // if(func->body->nativeCode)
-    //     return true;
-
+    _TCLOG_ENTER(FUNC_ENTER)
     
     info.currentPolyVersion = funcImpl->polyVersion;
-    // log::out << log::YELLOW << __FILE__<<":"<<__LINE__ << ": Fix methods\n";
-    // Where does ASTStruct come from. Arguments? FuncImpl?
-    // log::out << " " <<funcImpl->polyVersion << " " << func->polyVersionCount<<"\n";
     info.currentFuncImpl = funcImpl;
     info.currentAstFunc = func;
 
+    // There is a bug if these aren't zero, indicating that we have already checked the scope before which would be strange.
+    Assert(funcImpl->_size_of_locals == 0 && funcImpl->_max_size_of_arguments == 0);
+
     _TCLOG(log::out << "Impl scope: "<<funcImpl->astFunction->name<<"\n";)
 
-    // if(func->parentStruct){
-    //     for(int i=0;i<(int)func->parentStruct->polyArgs.size();i++){
-    //         auto& arg = func->parentStruct->polyArgs[i];
-    //         arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
-    //     }
-    // }
-    // for(int i=0;i<(int)func->polyArgs.size();i++){
-    //     auto& arg = func->polyArgs[i];
-    //     arg.virtualType->id = funcImpl->polyArgs[i];
-    // }
-    // BREAK(func->name == "add")
+    // Set polymorphic types
     func->pushPolyState(funcImpl);
     defer {
         func->popPolyState();
-        // if(func->parentStruct){
-        //     for(int i=0;i<(int)func->parentStruct->polyArgs.size();i++){
-        //         auto& arg = func->parentStruct->polyArgs[i];
-        //         arg.virtualType->id = {};
-        //     }
-        // }
-        // for(int i=0;i<(int)func->polyArgs.size();i++){
-        //     auto& arg = func->polyArgs[i];
-        //     arg.virtualType->id = {};
-        // }
     };
 
-    // Assert(false);
-    // TODO: Add arguments as variables
-    // This shouldn't be necessary since variables are added once in the new
-    // system and will remain to the end.
-    // DynamicArray<std::string> vars;
     _TCLOG(log::out << "arg:\n";)
     for (int i=0;i<(int)func->arguments.size();i++) {
         auto& arg = func->arguments[i];
@@ -3642,19 +3615,6 @@ SignalIO TyperContext::checkFuncImplScope(ASTFunction* func, FuncImpl* funcImpl)
         _TCLOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
         arg.identifier->versions_typeId.set(currentPolyVersion, argImpl.typeId); // typeId comes from CheckExpression which may or may not evaluate the same type as the generator.
     }
-    // _TCLOG(log::out << "ret:\n";)
-    // for (int i=0;i<(int)func->returnValues.size();i++) {
-    //     auto& ret = func->returnValues[i];
-    //     auto& retImpl = funcImpl->signature.returnTypes[i];
-    //     _TCLOG(log::out << " [" <<i <<"] : "<< info.ast->typeToString(retImpl.typeId) <<"\n";)
-    //     // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
-    //     // auto varinfo = info.ast->identifierToVariable(arg.identifier);
-    //     // if(varinfo){
-    //     //     varinfo->versions_typeId[info.currentPolyVersion] = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
-    //         // the same type as the generator.
-    //         // vars.add(std::string(arg.name));
-    //     // }   
-    // }
     _TCLOG(log::out << "Struct members:\n";)
     if(func->parentStruct) {
         for (int i=0;i<(int)func->memberIdentifiers.size();i++) {
@@ -3714,10 +3674,6 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
     // tempTypes.resize(0);
     if(now->firstExpression){
         // may not exist, meaning just a declaration, no assignment
-        // if(Equal(now->firstExpression->name, "reserve")) {
-            // __debugbreak();
-            // log::out << "okay\n";
-        // }
         if (now->varnames.size() > 0) {
             auto& last_varname = now->varnames.last();
             if(last_varname.assignString.isValid()) {
@@ -4707,7 +4663,7 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
         // 1. ast_func may be nullptr if no main function was specified, the global scope is the main function if so.
         // 2. Native, imported or intrinsic functions does not have bodies and we cannot and should not check them.
         // log::out << "check "<<ast_func->name<<"\n";
-        auto result = info.checkFuncImplScope(ast_func, func_impl);
+        auto result = info.checkFunctionScope(ast_func, func_impl);
     }
 
     info.compiler->options->compileStats.errors += info.errors;

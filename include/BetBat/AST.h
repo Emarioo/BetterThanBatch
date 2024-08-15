@@ -371,8 +371,8 @@ struct FunctionSignature {
     };
     QuickArray<Spot> argumentTypes;
     QuickArray<Spot> returnTypes;
-    int argSize=0;
-    int returnSize=0;
+    int argSize=0; // always divisible by 8
+    int returnSize=0; // always divisible by 8
     QuickArray<TypeId> polyArgs;
     CallConvention convention=BETCALL;
 };
@@ -416,9 +416,31 @@ struct FuncImpl {
     bool isUsed() { return usages!=0; }
     
     FunctionSignature signature;
+
+    int _size_of_locals = 0; // These two fields are mostly private, don't access them directly
+    int _max_size_of_locals = 0;
+    int _max_size_of_arguments = 0; // size of the arguments of the function call with the biggest size for function arguments
+    void update_max_arguments(int size) {
+        if(_max_size_of_arguments < size)
+            _max_size_of_arguments = size;
+    }
+    void alloc_frame_space(int size) {
+        _size_of_locals += size;
+        if(_max_size_of_locals < _size_of_locals)
+            _max_size_of_locals = _size_of_locals;
+    }
+    void free_frame_space(int size) {
+        _size_of_locals -= size;
+    }
+    int get_frame_size() const {
+        // TODO: 8-byte alignment
+        // NOTE: I disabled arguments for now, they are not included in stack frame for now.
+        // return signature.returnSize + _max_size_of_locals + _max_size_of_arguments;
+        return signature.returnSize + _max_size_of_locals;
+    }
    
     int tinycode_id = 0; // 0 is invalid, set by generator
-    u32 polyVersion=-1; // We can catch mistakes if we use -1 as default value
+    int polyVersion = -1; // We can catch mistakes if we use -1 as default value
     StructImpl* structImpl = nullptr;
     void print(AST* ast, ASTFunction* astFunc);
 };
