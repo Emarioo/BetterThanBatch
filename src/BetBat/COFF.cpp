@@ -173,6 +173,7 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
 
     if(!silent){
         #define LOGIT(X) log::out << " "#X": "<< baselog->X<<"\n";
+        #define STRIT(X) #X": "<< baselog->X<<"\n";
         {
             auto baselog = coffHeader;
             log::out << log::LIME << "COFF HEADER\n";
@@ -204,6 +205,45 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
         objectFile->stringTableData = stringTablePointer;
     }
 
+    Section_Header* sectionHeaders_start = (Section_Header*)(filedata + fileOffset);
+    #define GET_SECTION(I) (Section_Header*)((u8*)sectionHeaders_start + (I) * Section_Header::SIZE)
+
+    auto log_section_name = [&](Section_Header* section) {
+        auto baselog = section;
+        if(baselog->Name[0]=='/'){
+            u32 offset = 0;
+            for(int i=1;i<8;i++) {
+                if(baselog->Name[i]==0)
+                    break;
+                Assert(baselog->Name[i]>='0'&&baselog->Name[i]<='9');
+                offset = offset*10 + baselog->Name[i] - '0';
+            }
+            
+            if(!silent)
+                log::out <<((char*)stringTablePointer + offset);
+        } else {
+            for(int j=0;j<8;j++) {
+                if(0==baselog->Name[j])
+                    break; 
+                if(!silent)
+                    log::out << baselog->Name[j];
+            }
+        }
+    };
+    
+    auto log_symbol_name = [&](Symbol_Record* symbol) {
+        auto baselog = symbol;
+        if(baselog->Name.zero==0){
+            log::out << ((char*)stringTablePointer + baselog->Name.offset);
+        } else {
+            for(int i=0;i<8;i++) {
+                if(0==baselog->Name.ShortName[i])
+                    break;
+                log::out << baselog->Name.ShortName[i];
+            }
+        }
+    };
+
     for(int i=0;i<coffHeader->NumberOfSections;i++){
         Assert(fileSize-fileOffset>=Section_Header::SIZE);
         Section_Header* sectionHeader = (Section_Header*)(filedata + fileOffset);
@@ -217,27 +257,9 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
             if(!silent) {
                 log::out << log::LIME<<"SECTION HEADER: ";
             }
-            if(baselog->Name[0]=='/'){
-                u32 offset = 0;
-                for(int i=1;8;i++) {
-                    if(baselog->Name[i]==0)
-                        break;
-                    Assert(baselog->Name[i]>='0'&&baselog->Name[i]<='9');
-                    offset = offset*10 + baselog->Name[i] - '0';
-                }
-                
-                if(!silent)
-                    log::out <<((char*)stringTablePointer + offset)<<"\n";
-            } else {
-                for(int j=0;j<8;j++) {
-                    if(0==baselog->Name[j])
-                        break; 
-                    if(!silent)
-                        log::out << baselog->Name[j];
-                }
-                if(!silent)
-                    log::out << " \n";
-            }
+            log_section_name(baselog);
+            log::out << "\n";
+
             if(!silent) {
                 LOGIT(VirtualSize)
                 LOGIT(VirtualAddress)
@@ -280,9 +302,35 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
             if(!silent) {
                 auto baselog = relocation;
                 log::out << log::LIME << " relocation "<<i<<"\n";
-                LOGIT(VirtualAddress)
-                LOGIT(SymbolTableIndex)
-                LOGIT(Type)
+                log::out << "  " STRIT(VirtualAddress)
+                log::out << "  " STRIT(SymbolTableIndex)
+                log::out << "  " STRIT(Type)
+                
+                u32 symbolOffset = coffHeader->PointerToSymbolTable + baselog->SymbolTableIndex * Symbol_Record::SIZE;
+                Symbol_Record* symbolRecord = (Symbol_Record*)(filedata + symbolOffset);
+
+                {
+                    log::out << log::GOLD <<"  Symbol info\n";
+                    auto baselog = symbolRecord;
+                    log::out << "   Name: ";
+                    log_symbol_name(baselog);
+                    log::out << "\n";
+                    log::out << "   " STRIT(Value)
+                    log::out << "   SectionNumber: "<< baselog->SectionNumber;
+                    log::out.flush();
+                    if(baselog->SectionNumber > 0) {
+                        log::out << " (";
+                        auto section = GET_SECTION(baselog->SectionNumber-1);
+                        log_section_name(section);
+                        log::out << ")\n";
+                    } else{
+                        log::out << "\n";
+                    }
+
+                    log::out << "   " STRIT(Type)
+                    log::out << "   " STRIT(StorageClass)
+                    log::out << "   " STRIT(NumberOfAuxSymbols)
+                }
             }
         }
     }
@@ -300,20 +348,20 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
             if(!silent) {
                 log::out << log::LIME << "Symbol "<<i<<"\n";
                 auto baselog = symbolRecord;
-                if(baselog->Name.zero==0){
-                    // log::out << " Name (offset): "<<baselog->Name.offset<<"\n";
-                    log::out << " Name (long): "<<((char*)stringTablePointer + baselog->Name.offset)<<"\n";
+                log::out << " Name: ";
+                log_symbol_name(baselog);
+                log::out << "\n";
+                LOGIT(Value)
+                log::out << " SectionNumber: " << baselog->SectionNumber;
+                log::out.flush();
+                if(baselog->SectionNumber > 0) {
+                    log::out << " (";
+                    auto section = GET_SECTION(baselog->SectionNumber-1);
+                    log_section_name(section);
+                    log::out << ")\n";
                 } else {
-                    log::out << " Name: ";
-                    for(int i=0;i<8;i++) {
-                        if(0==baselog->Name.ShortName[i])
-                            break;
-                        log::out << baselog->Name.ShortName[i];
-                    }
                     log::out << "\n";
                 }
-                LOGIT(Value)
-                LOGIT(SectionNumber)
                 LOGIT(Type)
                 LOGIT(StorageClass)
                 LOGIT(NumberOfAuxSymbols)
@@ -325,12 +373,12 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
                 auto baselog = (Aux_Format_5*)symbolRecord;
                 if(!silent){
                     log::out << log::LIME << " Auxilary Format 5 (index "<<i<<")\n";
-                    LOGIT(Length)
-                    LOGIT(NumberOfRelocations)
-                    LOGIT(NumberOfLineNumbers)
-                    LOGIT(CheckSum)
-                    LOGIT(Number)
-                    LOGIT(Selection)
+                    log::out << "  " STRIT(Length)
+                    log::out << "  " STRIT(NumberOfRelocations)
+                    log::out << "  " STRIT(NumberOfLineNumbers)
+                    log::out << "  " STRIT(CheckSum)
+                    log::out << "  " STRIT(Number)
+                    log::out << "  " STRIT(Selection)
                 }
             }
             skipAux--;
@@ -1469,7 +1517,7 @@ void DeconstructPData(u8* buffer, u32 size) {
     for(int i=0;i<entry_length;i++){
         auto entry = entries + i;
         auto number = i + 1;
-        log::out << " Entry "<<number<<"\n";
+        log::out << log::LIME << " Entry "<<number<<"\n";
         log::out << "  Start addr: "<<entry->StartAddress<<"\n";
         log::out << "  End addr: "<<entry->EndAddress<<"\n";
         log::out << "  Unwind info: "<<entry->UnwindInfoAddress<<"\n";
@@ -1485,7 +1533,12 @@ void DeconstructXData(u8* buffer, u32 size) {
     while(head < size) {
         auto entry = (coff::UNWIND_INFO*)(buffer + head);
 
-        if(entry->Version != 1) {
+        if(entry->Version != 1 || (
+            entry->Flags != coff::UNW_FLAG_CHAININFO &&
+            entry->Flags != coff::UNW_FLAG_NHANDLER &&
+            entry->Flags != coff::UNW_FLAG_EHANDLER &&
+            entry->Flags != coff::UNW_FLAG_UHANDLER
+        )) {
             // log::out << log::RED << "Version in unwind info should be 1.\n";
             head++;
             skipped_bytes++;

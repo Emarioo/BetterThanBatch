@@ -77,7 +77,10 @@ struct ObjectFile {
         SYM_FUNCTION,
         SYM_DATA, // data/object/value in the section?
         SYM_EMPTY,
+        
+        // Windows specific?
         SYM_ABS,
+        SYM_LABEL, 
     };
     struct Symbol {
         SymbolType type;

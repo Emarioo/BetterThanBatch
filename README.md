@@ -45,6 +45,7 @@ Example of unfinished multiplayer game
 |x64 backend|Yes|
 |Debug information|Only DWARF|
 |x64 inline assembly|Yes|
+|Software/hardware exception handling|Work in progress|
 
 # How to get started
 **NOTE**: There are no releases yet so you have to compile it yourself. The compiler is just not stable enough yet.

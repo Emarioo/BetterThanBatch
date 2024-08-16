@@ -14,20 +14,24 @@
             Emit function call to sigaction at the end of try to
 */
 
-// #import "Logger"
-
 enum ExceptionType {
     EXCEPTION_MEMORY,
     EXCEPTION_ZERO_DIVISION,
 }
 
 try {
-    // *cast<i32*>cast<i64>0 = 0
+    // x := 0;
+    *cast<i32*>cast<i64>0 = 0
 } catch EXCEPTION_MEMORY {
+    // y := 2
     prints("caught\n")
 }
 prints("done\n")
 
-fn @oscall exception_handler() {
-
+fn @export @oscall exception_handler() {
+    prints("hit\n")
 }
+
+// fn @export @oscall exception_filter() -> i32 {
+
+// }

@@ -16,7 +16,11 @@
 #undef IMAGE_REL_AMD64_REL32
 #undef coff
 
+// returns false if failure, error message is printed, you just have to exit the program
 bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions* out_options);
+// returns true if no command was matched or if command should be executed together with the compiler
+// returns false if program should quit, or if something failed
+bool CheckDeveloperCommand(const BaseArray<std::string>& args);
 
 int main(int argc, const char** argv){
     using namespace engone;
@@ -28,13 +32,18 @@ int main(int argc, const char** argv){
     InitAssertHandler();
     ProfilerInitialize();
 
-    // FileCOFF::Destroy(FileCOFF::DeconstructFile("wa.o", false));
-
-    // return 0;
-    
     DynamicArray<std::string> arguments{};
     for(int i=1;i<argc;i++) // is the first argument always the executable?
         arguments.add(argv[i]);
+
+    // arguments.add("decode");
+    // arguments.add("wa.o");
+
+    bool dev_cmd_success = CheckDeveloperCommand(arguments);
+    if(!dev_cmd_success) {
+        // error message should have been printed
+        return 1;
+    }
 
     // NOTE: I have not moved InterpretCommands and compiler option parsing to it's own file
     //   it's rather temporary. In the future, you will specify compile options such as
@@ -74,7 +83,7 @@ int main(int argc, const char** argv){
         // options.incremental_build = true;
         // options.disable_preload = true;
         // options.only_preprocess = true;
-        options.useDebugInformation = true;
+        // options.useDebugInformation = true;
         Compiler compiler{};
         compiler.run(&options);
 
@@ -403,6 +412,38 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
         // this should never run because we detect missing source file earlier
         log::out << log::RED << "You must specify a file when using --preproc\n";
     }
+
+    return true;
+}
+
+bool CheckDeveloperCommand(const BaseArray<std::string>& args) {
+    using namespace engone;
+    auto contains = [&](const BaseArray<std::string>& arr, const std::string& str) {
+        int index = -1;
+        for(int i=0;i<arr.size();i++) {
+            if(arr[i] == str) {
+                index = i;
+                break;
+            }
+        }
+        return index;
+    };
+    
+
+    // TODO: Should developer commands be described in help messages?
+    int index = contains(args, "decode");
+    if(index != -1) {
+        if(args.size() > index + 1) {
+            std::string path = args[index + 1];
+            FileCOFF::Destroy(FileCOFF::DeconstructFile(path, false));
+            return false;
+        } else {
+            log::out << log::RED << "You forgot an argument after 'decode'. If this message comes as a suprise, 'decode' is a special command for developers which deconstructs and prints the content of COFF files. \n";
+            return false;
+        }
+    }
+
+    // args do not contain a developer command
 
     return true;
 }

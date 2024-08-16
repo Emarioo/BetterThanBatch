@@ -1,3 +1,10 @@
+/*
+    Common mistakes
+
+    If you get "relocation truncated to fit ..." then it may be because you used the wrong type for a symbol.
+    For example, using ADDR32NB relocation and IMAGE_SYM_CLASS_EXTERNAL symbol type will not work while IMAGE_SYM_CLASS_LABEL will.
+*/
+
 #include "BetBat/ObjectFile.h"
 
 #include "BetBat/DWARF.h"
@@ -30,14 +37,14 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         // All local symbols MUST be added first (that's how elf works).
         dwarf::ProvideSections(&objectFile, program, compiler, false);
     }
-    bool has_exceptions = false;
+    bool has_exceptions = compiler->code_has_exceptions;
     // has_exceptions = true;
     SectionNr section_xdata = -1;
     SectionNr section_pdata = -1;
     // SectionNr section_pdata2 = -1;
     if(has_exceptions) {
-        section_xdata = objectFile.createSection(".xdata", FLAG_NONE, 4);
-        section_pdata = objectFile.createSection(".pdata", FLAG_NONE | FLAG_READ_ONLY, 4);
+        section_xdata = objectFile.createSection(".xdata", FLAG_READ_ONLY, 4);
+        section_pdata = objectFile.createSection(".pdata", FLAG_READ_ONLY, 4);
         // section_pdata2 = objectFile.createSection(".pdata", FLAG_NONE | FLAG_READ_ONLY, 4);
     }
 
@@ -108,8 +115,22 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
     //     }
     // }
 
-    if(has_exceptions)
-    {
+    if(has_exceptions) {
+        // TinyBytecode* tiny_handler = nullptr;
+        // const char* handler_name = "exception_handler"; // TODO: Don't hardcode name of exception handler
+        // for(int i=0;i<compiler->bytecode->tinyBytecodes.size();i++) {
+        //     auto tc = compiler->bytecode->tinyBytecodes[i];
+        //     if(tc->name == handler_name) {
+        //         tiny_handler = tc;
+        //         break;
+        //     }
+        // }
+        // if(!tiny_handler) {
+        //     log::out << log::RED << "Compiler could not find the exception handler when creating sections (in object file) for exceptions. Was the exception handler not exported? Is the handler not named '"<<handler_name<<"'\n";
+        //     return false;
+        // }
+        
+
         objectFile.addSymbol(SymbolType::SYM_ABS, "@feat.00", 0, 0x8000'0000);
 
         auto xdata_stream = objectFile.getStreamFromSection(section_xdata);
@@ -117,49 +138,80 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         // auto pdata2_stream = objectFile.getStreamFromSection(section_pdata2);
 
         // for each function, create unwindinfo in xdata
+
         coff::UNWIND_INFO* unwind_info = nullptr;
         xdata_stream->write_late((void**)&unwind_info, sizeof(*unwind_info));
 
         unwind_info->Version = 1;
-        unwind_info->Flags = coff::UNW_FLAG_NHANDLER; // no handler
-        unwind_info->SizeOfProlog = 5; // TODO: Non-volatile registers should be included.
+        // unwind_info->Flags = coff::UNW_FLAG_NHANDLER; // no handler
+        unwind_info->Flags = coff::UNW_FLAG_EHANDLER; // no handler
+        // unwind_info->SizeOfProlog = 1*3 + 6*2; // 1*3 for one 'mov rbp, rsp' and 6*2 for six 'push reg'
+        unwind_info->SizeOfProlog = 1*3 + 2*2; // 1*3 for one 'mov rbp, rsp' and 2*2 for six 'push reg'
         // unwind_info->FrameRegister
         // unwind_info->FrameRegisterOffset
-        unwind_info->CountOfUnwindCodes = 1;
+        unwind_info->CountOfUnwindCodes = 2;
         // TODO: set values
 
         if(unwind_info->CountOfUnwindCodes > 0) {
             coff::UNWIND_CODE* codes = nullptr;
             xdata_stream->write_late((void**)&codes, unwind_info->CountOfUnwindCodes * sizeof(*codes));
-            // TODO: set codes
-            codes[0].OffsetInProlog = 0;
-            codes[0].UnwindOperationCode = coff::UWOP_PUSH_NONVOL;
-            codes[0].OperationInfo = coff::UWOP_RBP;
-            codes[1].OffsetInProlog = 0;
-            codes[1].UnwindOperationCode = coff::UWOP_SAVE_NONVOL;
-            codes[1].OffsetInProlog = coff::UWOP_RSP;
-            // codes[1]
+            
+            const coff::UnwindOpRegister ops[]{
+                coff::UWOP_RSP,
+                coff::UWOP_RBP,
+            };
+            const int ops_offset[]{
+                5,
+                0,
+            };
+            int ops_len = sizeof(ops)/sizeof(*ops);
+            for(int i=0;i<ops_len;i++) {
+                codes[i].OffsetInProlog = ops_offset[i];
+                codes[i].UnwindOperationCode = coff::UWOP_PUSH_NONVOL;
+                codes[i].OperationInfo = ops[i];
+            }
         }
+
+        if(unwind_info->Flags & coff::UNW_FLAG_EHANDLER) {
+            xdata_stream->write_align(4);
+
+            // int offset = tinyprogram_offsets[tiny_handler->index];
+            // xdata_stream->write4(offset);
+            xdata_stream->write4(0); // relocation is added further down when exported functions have been added as symbols
+            // TODO: Data for handler
+        }
+        
 
         int func_count = compiler->bytecode->tinyBytecodes.size(); // more like try-catch count
         if(func_count > 0) {
             coff::RUNTIME_FUNCTION* functions = nullptr;
             pdata_stream->write_late((void**)&functions, func_count * sizeof(*functions));
 
+            int eh_number = 0;
+
+            // base unwind, TODO: In future each function needs there own unwind
+            int sym_unwind = objectFile.addSymbol(SYM_EMPTY, "$unwind$base", section_xdata, 0);
+
             auto text_symbol = objectFile.getSectionSymbol(section_text);
             auto xdata_symbol = objectFile.getSectionSymbol(section_xdata);
             for(int i=0;i<func_count;i++) {
                 auto tinycode = compiler->bytecode->tinyBytecodes[i];
-                functions[i].StartAddress = tinycode->debugFunction->asm_start;
-                functions[i].EndAddress = tinycode->debugFunction->asm_end;
-                functions[i].UnwindInfoAddress = 0; // TODO: Set address
+                int asm_size = tinycode->debugFunction->asm_end - tinycode->debugFunction->asm_start;
+                functions[i].StartAddress = 0;
+                functions[i].EndAddress = asm_size;
+                functions[i].UnwindInfoAddress = 0; // TODO: Set address of unwind info (for now we use the first one for all)
 
                 #undef ADDR
-                #define ADDR(X) ((u64)functions - (u64)&functions[i].StartAddress) + X
+                #define ADDR(X) ((u64)&functions[i] - (u64)functions) + X
 
-                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(0), text_symbol, 0);
-                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(4), text_symbol, 0);
-                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(8), xdata_symbol, 0);
+                std::string sym_func_name = "$EH" + std::to_string(eh_number);
+                eh_number++;
+                // objectFile.addSymbol(SYM_EMPTY, sym_func_name, section_text, 0);
+                int sym_index = objectFile.addSymbol(SYM_LABEL, sym_func_name, section_text, tinycode->debugFunction->asm_start);
+
+                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(0), sym_index, 0);
+                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(4), sym_index, 0);
+                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(8), sym_unwind, 0);
                 #undef ADDR
             }
         }
@@ -214,6 +266,12 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         Assert(sym.tinyprog_index != -1); // may happen if function wasn't generated before we exported it or something?
         u32 real_offset = tinyprogram_offsets[sym.tinyprog_index];
         objectFile.addSymbol(SYM_FUNCTION, sym.name, section_text, real_offset);
+    }
+
+    if(has_exceptions) {
+        int index = objectFile.findSymbol("exception_handler");
+        objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, 8, index, 0);
+        // TODO: Relocations for language-specific data
     }
 
     // Useful resource when figuring out how linking and calls work.
@@ -408,10 +466,14 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
         if(sym.type == SYM_SECTION) {
             symbol->Value = 0; // must be zero for sections
             symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_STATIC;
+        } else if (sym.type == SYM_ABS) {
+            symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_STATIC;
         } else if(sym.type == SYM_FUNCTION) {
             symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
         } else if(sym.type == SYM_DATA) {
             symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_STATIC;
+        } else if(sym.type == SYM_LABEL) {
+            symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_LABEL;
         } else {
             symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
             // Assert(false); // TODO: global variables
