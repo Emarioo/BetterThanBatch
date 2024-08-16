@@ -16,6 +16,15 @@ u32 Bytecode::getMemoryUsage(){
     // return sum;
 }
 
+InstructionControl apply_size(InstructionControl c, int size) {
+         if(size == 1) return c | CONTROL_8B;
+    else if(size == 2) return c | CONTROL_16B;
+    else if(size == 4) return c | CONTROL_32B;
+    else if(size == 8) return c | CONTROL_64B;
+    else Assert(false);
+    return c;
+}
+
 bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index) {
     for(int i=0;i<exportedFunctions.size();i++) {
         if(exportedFunctions[i].name == name) {
@@ -392,38 +401,30 @@ void BytecodeBuilder::emit_free_args(u16 size) {
     // virtual_stack_pointer += size;
 }
 
-void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float) {
+void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed) {
     emit_opcode(BC_SET_ARG);
     emit_operand(reg);
     
     InstructionControl control=CONTROL_NONE;
-    if(is_float)
-        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(size == 1)      control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
-    else Assert(false);
+    if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
+    control = apply_size(control, size);
     emit_control(control);
     
     emit_imm16(imm);
 }
-void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_float){
+void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed){
     emit_opcode(BC_GET_PARAM);
     emit_operand(reg);
     
     InstructionControl control=CONTROL_NONE;
-    if(is_float)
-        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(size == 1)      control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
-    else Assert(false);
+    if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
+    control = apply_size(control, size);
     emit_control(control);
     emit_imm16(imm);
 }
-void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float){
+void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed){
     if(tinycode->call_convention == CallConvention::STDCALL||tinycode->call_convention == CallConvention::UNIXCALL) {
         Assert(imm == -8);
     }
@@ -432,17 +433,13 @@ void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_fl
     emit_operand(reg);
     
     InstructionControl control=CONTROL_NONE;
-    if(is_float)
-        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(size == 1)      control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
-    else Assert(false);
+    if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
+    control = apply_size(control, size);
     emit_control(control);
     emit_imm16(imm);
 }
-void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_float){
+void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed){
     Assert(has_return_values);
     const int FRAME_SIZE = 16;
     // int off = imm + ret_offset - FRAME_SIZE;
@@ -463,13 +460,9 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
     emit_operand(reg);
     
     InstructionControl control=CONTROL_NONE;
-    if(is_float)
-        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(size == 1)      control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
-    else Assert(false);
+    if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
+    control = apply_size(control, size);
     emit_control(control);
     emit_imm16(imm);
 }
@@ -570,11 +563,9 @@ void BytecodeBuilder::emit_mov_rm(BCRegister to, BCRegister from, int size){
     emit_operand(to);
     emit_operand(from);
     
-    if(size == 1) emit_control(CONTROL_8B);
-    else if(size == 2) emit_control(CONTROL_16B);
-    else if(size == 4) emit_control(CONTROL_32B);
-    else if(size == 8) emit_control(CONTROL_64B);
-    else Assert(false);
+    InstructionControl control = CONTROL_NONE;
+    control = apply_size(control, size);
+    emit_control(control);
 }
 void BytecodeBuilder::emit_mov_mr(BCRegister to, BCRegister from, int size){
     Assert(to != BC_REG_LOCALS);
@@ -582,11 +573,9 @@ void BytecodeBuilder::emit_mov_mr(BCRegister to, BCRegister from, int size){
     emit_opcode(BC_MOV_MR);
     emit_operand(to);
     emit_operand(from);
-    if(size == 1) emit_control(CONTROL_8B);
-    else if(size == 2) emit_control(CONTROL_16B);
-    else if(size == 4) emit_control(CONTROL_32B);
-    else if(size == 8) emit_control(CONTROL_64B);
-    else Assert(false);
+    InstructionControl control = CONTROL_NONE;
+    control = apply_size(control, size);
+    emit_control(control);
 }
 
 void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size, int displacement){
@@ -601,11 +590,9 @@ void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size,
     emit_operand(to);
     emit_operand(from);
     
-    if(size == 1) emit_control(CONTROL_8B);
-    else if(size == 2) emit_control(CONTROL_16B);
-    else if(size == 4) emit_control(CONTROL_32B);
-    else if(size == 8) emit_control(CONTROL_64B);
-    else Assert(false);
+    InstructionControl control = CONTROL_NONE;
+    control = apply_size(control, size);
+    emit_control(control);
     
     Assert(displacement < 0x8000 && displacement >= -0x8000);
     emit_imm16(displacement);
@@ -622,81 +609,69 @@ void BytecodeBuilder::emit_mov_mr_disp(BCRegister to, BCRegister from, int size,
     emit_operand(to);
     emit_operand(from);
      
-    if(size == 1) emit_control(CONTROL_8B);
-    else if(size == 2) emit_control(CONTROL_16B);
-    else if(size == 4) emit_control(CONTROL_32B);
-    else if(size == 8) emit_control(CONTROL_64B);
-    else Assert(false);
+    InstructionControl control = CONTROL_NONE;
+    control = apply_size(control, size);
+    emit_control(control);
     
     Assert(displacement < 0x8000 && displacement >= -0x8000);
     emit_imm16(displacement);
 }
 
-void BytecodeBuilder::emit_add(BCRegister to, BCRegister from, bool is_float, int size) {
+void BytecodeBuilder::emit_add(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed) {
     emit_opcode(BC_ADD);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_add_imm32(BCRegister to, BCRegister from, int imm, int size) {
-    emit_li32(to, imm);
-    emit_add(to, from, false, size);
+    if(size == 8)
+        emit_li64(to, imm);
+    else
+        emit_li32(to, imm);
+    emit_add(to, from, size, false, true);
 }
-void BytecodeBuilder::emit_sub(BCRegister to, BCRegister from, bool is_float, int size) {
+void BytecodeBuilder::emit_sub(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed) {
     emit_opcode(BC_SUB);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
+    control = apply_size(control, size);
     emit_control(control);
 }
-void BytecodeBuilder::emit_mul(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed) {
+void BytecodeBuilder::emit_mul(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed) {
     emit_opcode(BC_MUL);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
     if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
-void BytecodeBuilder::emit_div(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed) {
+void BytecodeBuilder::emit_div(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed) {
     emit_opcode(BC_DIV);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
     if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
-void BytecodeBuilder::emit_mod(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed) {
+void BytecodeBuilder::emit_mod(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed) {
     emit_opcode(BC_MOD);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
     if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 
@@ -705,10 +680,7 @@ void BytecodeBuilder::emit_band(BCRegister to, BCRegister from, int size) {
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_bor(BCRegister to, BCRegister from, int size) {
@@ -717,10 +689,7 @@ void BytecodeBuilder::emit_bor(BCRegister to, BCRegister from, int size) {
     emit_operand(from);   
     
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_bxor(BCRegister to, BCRegister from, int size) {
@@ -728,10 +697,7 @@ void BytecodeBuilder::emit_bxor(BCRegister to, BCRegister from, int size) {
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_bnot(BCRegister to, BCRegister from, int size) {
@@ -739,10 +705,7 @@ void BytecodeBuilder::emit_bnot(BCRegister to, BCRegister from, int size) {
     emit_operand(to);
     emit_operand(from);   
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_blshift(BCRegister to, BCRegister from, int size) {
@@ -750,10 +713,7 @@ void BytecodeBuilder::emit_blshift(BCRegister to, BCRegister from, int size) {
     emit_operand(to);
     emit_operand(from);   
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_brshift(BCRegister to, BCRegister from, int size) {
@@ -761,87 +721,66 @@ void BytecodeBuilder::emit_brshift(BCRegister to, BCRegister from, int size) {
     emit_operand(to);
     emit_operand(from);   
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 
-void BytecodeBuilder::emit_eq(BCRegister to, BCRegister from, bool is_float,int size){
+void BytecodeBuilder::emit_eq(BCRegister to, BCRegister from, int size, bool is_float){
     emit_opcode(BC_EQ);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
-void BytecodeBuilder::emit_neq(BCRegister to, BCRegister from, bool is_float,int size){
+void BytecodeBuilder::emit_neq(BCRegister to, BCRegister from, int size, bool is_float){
     emit_opcode(BC_NEQ);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
-void BytecodeBuilder::emit_lt(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed){
+void BytecodeBuilder::emit_lt(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed){
     emit_opcode(BC_LT);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
     if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
-void BytecodeBuilder::emit_lte(BCRegister to, BCRegister from, bool is_float,int size, bool is_signed){
+void BytecodeBuilder::emit_lte(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed){
     emit_opcode(BC_LTE);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
     if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
-void BytecodeBuilder::emit_gt(BCRegister to, BCRegister from, bool is_float,int size, bool is_signed){
+void BytecodeBuilder::emit_gt(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed){
     emit_opcode(BC_GT);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
     if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
-void BytecodeBuilder::emit_gte(BCRegister to, BCRegister from, bool is_float,int size, bool is_signed){
+void BytecodeBuilder::emit_gte(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed){
     emit_opcode(BC_GTE);
     emit_operand(to);
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
     if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
  
@@ -851,10 +790,7 @@ void BytecodeBuilder::emit_land(BCRegister to, BCRegister from, int size) {
     emit_operand(from);
     
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_lor(BCRegister to, BCRegister from, int size) {
@@ -863,10 +799,7 @@ void BytecodeBuilder::emit_lor(BCRegister to, BCRegister from, int size) {
     emit_operand(from);
     
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_lnot(BCRegister to, BCRegister from, int size) {
@@ -875,10 +808,7 @@ void BytecodeBuilder::emit_lnot(BCRegister to, BCRegister from, int size) {
     emit_operand(from);
     
     InstructionControl control = CONTROL_NONE;
-    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
-    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
-    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
-    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    control = apply_size(control, size);
     emit_control(control);
 }
 void BytecodeBuilder::emit_dataptr(BCRegister reg, i32 imm) {
@@ -987,6 +917,15 @@ void BytecodeBuilder::emit_operand(BCRegister reg) {
 void BytecodeBuilder::emit_control(InstructionControl control) {
     if(disable_code_gen) return;
     tinycode->instructionSegment.add((u8)control);
+    bool is_float = IS_CONTROL_FLOAT(control);
+    bool is_signed = IS_CONTROL_SIGNED(control);
+    Assert((!is_float && !is_signed) || (!is_float || !is_signed));
+    Assert(!is_float || (GET_CONTROL_SIZE(control) == CONTROL_32B || GET_CONTROL_SIZE(control) == CONTROL_64B));
+
+    is_float = IS_CONTROL_CONVERT_FLOAT(control);
+    is_signed = IS_CONTROL_CONVERT_SIGNED(control);
+    Assert((!is_float && !is_signed) || (!is_float || !is_signed));
+    Assert(!is_float || (GET_CONTROL_CONVERT_SIZE(control) == CONTROL_32B || GET_CONTROL_CONVERT_SIZE(control) == CONTROL_64B));
 }
 
 void BytecodeBuilder::emit_imm8(i8 imm) {

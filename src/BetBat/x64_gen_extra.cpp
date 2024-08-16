@@ -334,6 +334,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     // one artifical register can't store how the value changed and was casted over  time. We must cast from one artifical to another.
                     // Actually, same BC register is fine, we just create a new artifical register
                 }
+                if(IS_CONTROL_CONVERT_SIGNED(base->control)) {
+                    suggest_artifical_signed(n->reg0);
+                }
 
                 if(IS_START(n->base->opcode)) {
                     // TODO: Handle mov_rr, delete it if it isn't necessary
@@ -355,6 +358,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 if(IS_CONTROL_FLOAT(base->control)) {
                     suggest_artifical_float(n->reg1);
                     suggest_artifical_size(n->reg1, 1 << GET_CONTROL_SIZE(base->control));
+                }
+                if(IS_CONTROL_SIGNED(base->control)) {
+                    suggest_artifical_signed(n->reg1);
                 }
                 map_reg(n,1);
             }
@@ -520,7 +526,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             if(instruction_contents[n->base->opcode] & BASE_op3)
                 off++;
             InstructionControl control = (InstructionControl)*((u8*)n->base + off);
-            if(control & CONTROL_FLOAT_OP) {
+            auto add_base = (InstBase_op2_ctrl*)n->base;
+            if(IS_CONTROL_FLOAT(control)) {
                 // TODO: Is this fine? Should we suggest float for all registers if control is float?
                 int size = 1 << GET_CONTROL_SIZE(control);
                 if(instruction_contents[n->base->opcode] & BASE_op1) {
@@ -535,6 +542,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     suggest_artifical_float(n->reg2);
                     suggest_artifical_size(n->reg2, size);
                 }
+            }
+            if(IS_CONTROL_SIGNED(control)) {
+                suggest_artifical_signed(n->reg0);
             }
         }
     }
@@ -637,12 +647,22 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     //   But if a user returns in the inline assembly
     //   they might forget to restore the stack and free
     //   allocated memory so there are bigger problems.
+
     const X64Register stdcall_callee_saved_regs[]{
         X64_REG_B,
         X64_REG_DI,
         X64_REG_SI,
         X64_REG_R12,
     };
+    const X64Register stdcall_callee_saved_regs_with_rsp[]{
+        X64_REG_SP,
+        X64_REG_B,
+        X64_REG_DI,
+        X64_REG_SI,
+        X64_REG_R12,
+        // X64_REG_R13,
+    };
+
     const X64Register unixcall_callee_saved_regs[]{
         X64_REG_B,
         X64_REG_R12,
@@ -654,8 +674,16 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     bool enable_callee_saved_registers = false;
     if(tinycode->call_convention == STDCALL) {
         enable_callee_saved_registers = true;
-        callee_saved_regs = stdcall_callee_saved_regs;
-        callee_saved_regs_len = sizeof(stdcall_callee_saved_regs)/sizeof(*stdcall_callee_saved_regs);
+        if(compiler->code_has_exceptions) {
+            // NOTE: When exceptions are enabled we need to be able to unwind the stack.
+            //   To do this, the thing unwinding needs to be able to restore RSP.
+            //   Therefore, we save RSP on the stack.
+            callee_saved_regs = stdcall_callee_saved_regs_with_rsp;
+            callee_saved_regs_len = sizeof(stdcall_callee_saved_regs_with_rsp)/sizeof(*stdcall_callee_saved_regs_with_rsp);
+        } else {
+            callee_saved_regs = stdcall_callee_saved_regs;
+            callee_saved_regs_len = sizeof(stdcall_callee_saved_regs)/sizeof(*stdcall_callee_saved_regs);
+        }
 
     } else if (tinycode->call_convention == UNIXCALL) {
         enable_callee_saved_registers = true;
@@ -716,9 +744,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         // BC_REG_XMM7,
     };
 
-
     DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
     int virtual_stack_pointer = 0; // TODO: abstract into X64Builder?
+    virtual_stack_pointer -= callee_saved_space; // if callee saved space is misaligned then we need to consider that when 16-byte alignment is required. (BC_ALLOC_ARGS)
 
     // use these when calling intrinsics with call instructions that need 16-byte alignment
     auto push_alignment = [&]() {
@@ -1020,6 +1048,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit_prefix(0, X64_REG_INVALID, reg0->reg);
                     emit1((u8)(OPCODE_MOV_REG_IMM_RD | reg_field));
                     emit4((u32)base->imm32);
+
+                    // if(reg0->is_signed) {
+                    //     emit_movsx(reg0->reg, reg0->reg, CONTROL_32B | CONTROL_SIGNED_OP);
+                    // } else {
+                    //     // if(GET_CONTROL_SIZE(base->control) != CONTROL_32B)
+                    //     //     emit_movzx(reg0->reg,reg0->reg,base->control);
+                    // }
                 }
                 
                 FIX_POST_OUT_OPERAND(0)
@@ -1809,6 +1844,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
                 bool is_signed = IS_CONTROL_SIGNED(control);
                 
+                if(reg1->reg == X64_REG_BP && (opcode != BC_ADD && opcode != BC_SUB)) {
+                    Assert(("Bug in generator, BP is only allowed with add and sub arithmetic operations", false));
+                }
+
                 if(IS_CONTROL_FLOAT(control)) {
                     switch(opcode) {
                         case BC_ADD: {
@@ -1928,9 +1967,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             //   reserve a general register. There may be scenarios I haven't thought about.
                             //   Things might break?
                             free_register(reg0->reg);
-                            reg0->reg = X64_REG_INVALID;
-                            reg0->floaty = false;
-                            reg0->size = 0;
+                            reg0->reset();
+                            // reg0->reg = X64_REG_INVALID;
+                            // reg0->floaty = false;
+                            // reg0->size = 0;
                             FIX_PRE_OUT_OPERAND(0);
                             
                             // WE NEED REX TO SET SIL, DIL and not DH, BH
@@ -2258,6 +2298,30 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                             emit_movzx(reg0->reg, reg0->reg, CONTROL_8B);
                         } break;
                         default: Assert(false);
+                    }
+                }
+
+                if(reg1->reg == X64_REG_BP && (opcode == BC_ADD || opcode == BC_SUB)) {
+                    u8 x64_opcode = OPCODE_ADD_RM_IMM_SLASH_0;
+                    u8 x64_opcode_8bit = OPCODE_ADD_RM_IMM8_SLASH_0;
+
+                    X64Register rm = reg0->reg;
+                    Assert(size == 8);
+
+                    int imm = -callee_saved_space;
+
+                    bool is_8 = imm <= 0x7F && imm >= -0x80;
+                    emit_prefix(PREFIX_REXW, X64_REG_INVALID, rm);
+                    if (is_8) {
+                        emit1(x64_opcode_8bit);
+                    } else if (size == 8) {
+                        emit1(x64_opcode);
+                    } else Assert(false);
+                    emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(rm));
+                    if(is_8) {
+                        emit1((u8)imm);
+                    } else {
+                        emit4((u32)imm);
                     }
                 }
                 

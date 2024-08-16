@@ -242,7 +242,7 @@ struct X64Builder {
     };
     std::unordered_map<X64Register, RegisterInfo> registers;
     
-    X64Register alloc_register(int artifical, X64Register reg = X64_REG_INVALID, bool is_float = false);
+    X64Register alloc_register(int artifical, X64Register reg = X64_REG_INVALID, bool is_float = false, bool is_signed = false);
     bool is_register_free(X64Register reg);
     void free_register(X64Register reg);
     void free_all_registers();
@@ -348,10 +348,18 @@ struct X64Builder {
         X64Register reg = X64_REG_INVALID; // may be invalid until it's time to generate x64, or some instruction could suggest a register to reserve
         // bool stacked = false;
         bool floaty = false;
+        bool is_signed = false;
         u8 size = 0;
         int started_by_bc_index = false; // responsible for freeing register
         
         bool freed = false;
+
+        void reset() {
+            reg = X64_REG_INVALID;
+            floaty = false;
+            is_signed = false;
+            size = 0;
+        }
     };
     DynamicArray<ArtificalValue> artificalRegisters{};
     // int alloc_artifical_stack() {
@@ -370,9 +378,10 @@ struct X64Builder {
         // TODO: Don't alloc new register, we can reuse artifical register for BP.
         artificalRegisters.last().reg = reg;
         artificalRegisters.last().started_by_bc_index = bc_index;
-        // artificalRegisters.last().floaty = false;
-        // artificalRegisters.last().size = 0;
-        // artificalRegisters.last().freed = 0;
+        artificalRegisters.last().floaty = false;
+        artificalRegisters.last().is_signed = false;
+        artificalRegisters.last().size = 0;
+        artificalRegisters.last().freed = 0;
 
         return artificalRegisters.size()-1;
     }
@@ -380,20 +389,29 @@ struct X64Builder {
         artificalRegisters[id].reg = reg;
     }
     void suggest_artifical_float(int id) {
-        artificalRegisters[id].floaty = true;
+        auto& reg = artificalRegisters[id];
+        Assert(!reg.is_signed); // can't be both signed and float
+        reg.floaty = true;
+    }
+    void suggest_artifical_signed(int id) {
+        auto& reg = artificalRegisters[id];
+        Assert(!reg.floaty); // can't be both float and signed
+        reg.is_signed = true;
     }
     void suggest_artifical_size(int id, u8 size) {
-        artificalRegisters[id].floaty = true;
-        Assert(artificalRegisters[id].size == 0 || artificalRegisters[id].size == size); // suggesting contradictory sizes indicates a bug
-        artificalRegisters[id].size = size;
+        auto& reg = artificalRegisters[id];
+        // artificalRegisters[id].floaty = true;
+        Assert(reg.size == 0 || reg.size == size); // suggesting contradictory sizes indicates a bug
+        reg.size = size;
     }
     ArtificalValue* get_and_alloc_artifical_reg(int id) {
+        auto& reg = artificalRegisters[id];
         lock_register_resize = true;
-        if(artificalRegisters[id].reg == X64_REG_INVALID) {
-            artificalRegisters[id].reg = alloc_register(id, X64_REG_INVALID, artificalRegisters[id].floaty);
-            Assert(artificalRegisters[id].reg != X64_REG_INVALID);
+        if(reg.reg == X64_REG_INVALID) {
+            reg.reg = alloc_register(id, X64_REG_INVALID, reg.floaty);
+            Assert(reg.reg != X64_REG_INVALID);
         }
-        return &artificalRegisters[id];
+        return &reg;
     }
     ArtificalValue* get_artifical_reg(int id) {
         lock_register_resize = true;

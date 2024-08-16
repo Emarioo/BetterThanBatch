@@ -267,6 +267,7 @@ struct Compiler {
     double last_modified_time = 0.0;
     bool output_is_up_to_date = false;
 
+    bool code_has_exceptions = false; // true if source code contains at least one try-catch
     bool have_prepared_global_data = false;
     volatile bool have_generated_comp_time_global_data = false; // this variable should be volatile to prevent compiler from rearraning it in dangerous ways when multiple threads modify it.
     bool compiler_got_stuck = false;

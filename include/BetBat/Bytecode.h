@@ -52,6 +52,10 @@ struct DebugInformation;
 #define IS_CONTROL_CONVERT_FLOAT(x) (CONTROL_CONVERT_FLOAT_OP & x)
 // from -> to (CAST_FROM_TO)
 
+static InstructionControl operator |(InstructionControl a, InstructionControl b) {
+    return (InstructionControl)((int)a | (int)b);
+}
+
 enum InstructionOpcode : u8 {
     // DO NOT REARRAGNE THESE INSTRUCTIONS, instructions_names and instruction_contents depend on the order!
     BC_HALT = 0,
@@ -520,10 +524,10 @@ struct BytecodeBuilder {
     void fix_alloc_args(int index, u16 size);
     void emit_free_args(u16 size);
 
-    void emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float);
-    void emit_get_param(BCRegister reg, i16 imm, int size, bool is_float);
-    void emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float);
-    void emit_get_val(BCRegister reg, i16 imm, int size, bool is_float); // get return value
+    void emit_set_arg  (BCRegister reg, i16 imm, int size, bool is_float, bool is_signed = true);
+    void emit_get_param(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed = true);
+    void emit_set_ret  (BCRegister reg, i16 imm, int size, bool is_float, bool is_signed = true);
+    void emit_get_val  (BCRegister reg, i16 imm, int size, bool is_float, bool is_signed = true); // get return value
     
     void emit_ptr_to_locals(BCRegister reg, int imm16);
     void emit_ptr_to_params(BCRegister reg, int imm16);
@@ -534,8 +538,8 @@ struct BytecodeBuilder {
     
     void emit_jmp(int pc);
     void emit_jmp(int* out_imm_offset);
-    void emit_jz(BCRegister reg, int pc);
-    void emit_jz(BCRegister reg, int* out_imm_offset);
+    void emit_jz (BCRegister reg, int pc);
+    void emit_jz (BCRegister reg, int* out_imm_offset);
     void emit_jnz(BCRegister reg, int pc);
     void emit_jnz(BCRegister reg, int* out_imm_offset);
     
@@ -545,28 +549,28 @@ struct BytecodeBuilder {
     void emit_mov_rm_disp(BCRegister to, BCRegister from, int size, int displacement);
     void emit_mov_mr_disp(BCRegister to, BCRegister from, int size, int displacement);
     
-    void emit_add(BCRegister to, BCRegister from, bool is_float, int size);
-    void emit_sub(BCRegister to, BCRegister from, bool is_float, int size);
-    void emit_mul(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
-    void emit_div(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
-    void emit_mod(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
+    void emit_add(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed = true);
+    void emit_sub(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed = true);
+    void emit_mul(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed);
+    void emit_div(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed);
+    void emit_mod(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed);
     // This cannot be a float operation
     void emit_add_imm32(BCRegister to, BCRegister from, int imm, int size);
-    
-    void emit_band(BCRegister to, BCRegister from, int size);
-    void emit_bor(BCRegister to, BCRegister from, int size);
-    void emit_bxor(BCRegister to, BCRegister from, int size);
-    void emit_bnot(BCRegister to, BCRegister from, int size);
+
+    void emit_band   (BCRegister to, BCRegister from, int size);
+    void emit_bor    (BCRegister to, BCRegister from, int size);
+    void emit_bxor   (BCRegister to, BCRegister from, int size);
+    void emit_bnot   (BCRegister to, BCRegister from, int size);
     void emit_blshift(BCRegister to, BCRegister from, int size);
     void emit_brshift(BCRegister to, BCRegister from, int size);
     
-    void emit_eq    (BCRegister to, BCRegister from, bool is_float, int size);
-    void emit_neq   (BCRegister to, BCRegister from, bool is_float, int size);
-    void emit_lt    (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
-    void emit_lte   (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
-    void emit_gt    (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
-    void emit_gte   (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
-    
+    void emit_eq    (BCRegister to, BCRegister from, int size, bool is_float);
+    void emit_neq   (BCRegister to, BCRegister from, int size, bool is_float);
+    void emit_lt    (BCRegister to, BCRegister from, int size, bool is_float, bool is_signed);
+    void emit_lte   (BCRegister to, BCRegister from, int size, bool is_float, bool is_signed);
+    void emit_gt    (BCRegister to, BCRegister from, int size, bool is_float, bool is_signed);
+    void emit_gte   (BCRegister to, BCRegister from, int size, bool is_float, bool is_signed);
+
     void emit_land(BCRegister to, BCRegister from, int size);
     void emit_lor (BCRegister to, BCRegister from, int size);
     void emit_lnot(BCRegister to, BCRegister from, int size);
