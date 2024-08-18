@@ -14,22 +14,32 @@
             Emit function call to sigaction at the end of try to
 */
 
+#import "Windows"
+#import "Logger"
+
 enum ExceptionType {
     EXCEPTION_MEMORY,
     EXCEPTION_ZERO_DIVISION,
 }
 
 try {
-    // x := 0;
-    *cast<i32*>cast<i64>0 = 0
+    *cast<i32*>cast<i64>0 = 9
 } catch EXCEPTION_MEMORY {
-    // y := 2
     prints("caught\n")
 }
 prints("done\n")
 
-fn @export @oscall exception_handler() {
+
+fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {
     prints("hit\n")
+
+    context.Rip += 2 + 5 // catch block, hopefully
+
+    RtlRestoreContext(context, null)
+
+    prints("Late\n") // does not get called because RtlRestoreContext doesn't return, after all, it modifies the thread context and changes the instruction pointer.
+
+    return EXCEPTION_DISPOSITION.ExceptionContinueExecution
 }
 
 // fn @export @oscall exception_filter() -> i32 {

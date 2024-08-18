@@ -527,7 +527,6 @@ struct ScopeInfo {
 struct AST;
 struct ASTExpression : ASTNode {
     ASTExpression() {
-        // printf("hum\n");
         // engone::log::out << "default init\n";
         // *(char*)0 = 9;
     }

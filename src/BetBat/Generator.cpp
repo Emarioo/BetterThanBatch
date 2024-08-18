@@ -4174,9 +4174,14 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                 } else if(ltype == AST_BOOL && rtype == AST_BOOL) {
                     outSize = 1;
                     operand_size = 1;
-
                 } else {
-                    Assert(false);
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG("You cannot perform an operation on these types.")
+                        ERR_LINE2(expression->left->location,"here")
+                        ERR_LINE2(expression->right->location,"here")
+                    )
+                    return SIGNAL_FAILURE;
                 }
                 
                 if(is_comparison || is_equality) {

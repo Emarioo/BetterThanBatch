@@ -256,9 +256,9 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
             // LOGIT(Name)
             if(!silent) {
                 log::out << log::LIME<<"SECTION HEADER: ";
+                log_section_name(baselog);
+                log::out << "\n";
             }
-            log_section_name(baselog);
-            log::out << "\n";
 
             if(!silent) {
                 LOGIT(VirtualSize)

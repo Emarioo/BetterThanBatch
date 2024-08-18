@@ -481,7 +481,7 @@ struct GameCore {
         }
         
         for 0..GLFW_JOYSTICK_LAST+1 {
-            is_present := glfwJoystickPresent(nr)
+            is_present := cast<bool>glfwJoystickPresent(nr)
             if is_present == prev_present_joysticks[nr]
                 continue
             prev_present_joysticks.ptr[nr] = is_present

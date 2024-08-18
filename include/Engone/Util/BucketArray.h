@@ -372,7 +372,6 @@ void FrameArrayTest();
 // 	struct Apple {
 // 		float x, y, size;
 // 		void print() {
-// 			printf("{%f, %f, %f}\n", x,y,size);
 // 		}
 // 	};
 // 	FrameArray arr(sizeof(Apple),80,ALLOC_TYPE_HEAP);
@@ -385,11 +384,9 @@ void FrameArrayTest();
 
 // 	Apple* first = (Apple*)arr.get(0);
 
-// 	printf("%p\n", first);
 // 	tmp = { 92,61,22 };
 // 	int id_c = arr.add(&tmp);
 
-// 	//printf("%d\n", id_c);
 // 	//a->print();
 // 	//b->print();
     

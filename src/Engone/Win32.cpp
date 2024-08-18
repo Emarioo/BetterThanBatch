@@ -945,6 +945,7 @@ namespace engone {
 	
 	void Free(void* ptr, u64 bytes){
 		if(!ptr) return;
+		
 	#ifndef NO_PERF
 			// MEASURE
 	#endif
@@ -1191,6 +1192,7 @@ namespace engone {
 			uint32 newId = Thread::GetThisThreadId();
 			auto owner = m_ownerThread;
 			// printf("Lock %d %d\n",newId, (int)m_internalHandle);
+			
 			if (owner != 0) {
 				PL_PRINTF("Mutex : Locking twice, old owner: %llu, new owner: %u\n",owner,newId);
 			}
