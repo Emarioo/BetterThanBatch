@@ -22,6 +22,10 @@
 #macro DLL_THREAD_DETACH    3
 #macro DLL_PROCESS_DETACH   0
 
+#macro STD_INPUT_HANDLE (-10)	// The standard input device. Initially, this is the console input buffer, CONIN$.
+#macro STD_OUTPUT_HANDLE (-11)	// The standard output device. Initially, this is the active console screen buffer, CONOUT$.
+#macro STD_ERROR_HANDLE (-12)
+
 // https://learn.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
 fn @import(Kernel) CloseHandle(
   hObject: HANDLE
@@ -231,7 +235,10 @@ fn @import(Kernel) WriteFile(
   lpNumberOfBytesWritten: i32*,
   lpOverlapped: void* // optional, TODO: Don't be void?
 ) -> bool;
-
+fn @import(Kernel) GetStdHandle(nStdHandle: u32) -> HANDLE;
+fn @import(Kernel) FlushFileBuffers(
+  hFile: HANDLE
+) -> bool;
 // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findfirstfilea
 fn @import(Kernel) FindFirstFileA(
   lpFileName: char*,

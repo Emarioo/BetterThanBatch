@@ -4009,7 +4009,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                         operand_size = outSize;
                     }
                     if(operationType == AST_BLSHIFT || operationType == AST_BRSHIFT) {
-                        
+                        outSize = lsize;
+                        operand_size = lsize;
+                        outType = ltype;
                     } else {
                         if(lsize != outSize || (!AST::IsSigned(ltype) && AST::IsSigned(rtype))) {
                             if(!AST::IsSigned(ltype) && !AST::IsSigned(rtype))
@@ -4032,12 +4034,12 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                                 builder.emit_cast(right_reg,right_reg, CAST_SINT_SINT, rsize, outSize);
                         }
                     }
-                    if(lsize < rsize) {
-                        outType = rtype;
-                    } else {
-                        outType = ltype;
-                    }
                     if(operationType != AST_BLSHIFT && operationType != AST_BRSHIFT) {
+                        if(lsize < rsize) {
+                            outType = rtype;
+                        } else {
+                            outType = ltype;
+                        }
                         if(AST::IsSigned(ltype) || AST::IsSigned(rtype)) {
                             if(!AST::IsSigned(outType))
                                 outType._infoIndex0 += 4;

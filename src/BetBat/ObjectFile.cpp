@@ -115,6 +115,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
     //     }
     // }
 
+    DynamicArray<int> func_to_unwind{};
     if(has_exceptions) {
         // TinyBytecode* tiny_handler = nullptr;
         // const char* handler_name = "exception_handler"; // TODO: Don't hardcode name of exception handler
@@ -139,80 +140,138 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
 
         // for each function, create unwindinfo in xdata
 
-        coff::UNWIND_INFO* unwind_info = nullptr;
-        xdata_stream->write_late((void**)&unwind_info, sizeof(*unwind_info));
+        int func_count = compiler->bytecode->tinyBytecodes.size();
+        func_to_unwind.resize(func_count);
 
-        unwind_info->Version = 1;
-        // unwind_info->Flags = coff::UNW_FLAG_NHANDLER; // no handler
-        unwind_info->Flags = coff::UNW_FLAG_EHANDLER; // no handler
-        // unwind_info->SizeOfProlog = 1*3 + 6*2; // 1*3 for one 'mov rbp, rsp' and 6*2 for six 'push reg'
-        unwind_info->SizeOfProlog = 1*3 + 2*2; // 1*3 for one 'mov rbp, rsp' and 2*2 for six 'push reg'
-        // unwind_info->FrameRegister
-        // unwind_info->FrameRegisterOffset
-        unwind_info->CountOfUnwindCodes = 2;
-        // TODO: set values
+        int sym_text_base = objectFile.addSymbol(SYM_LABEL, "$text$base", section_text, 0);
 
-        if(unwind_info->CountOfUnwindCodes > 0) {
-            coff::UNWIND_CODE* codes = nullptr;
-            xdata_stream->write_late((void**)&codes, unwind_info->CountOfUnwindCodes * sizeof(*codes));
-            
-            const coff::UnwindOpRegister ops[]{
-                coff::UWOP_RSP,
-                coff::UWOP_RBP,
-            };
-            const int ops_offset[]{
-                5,
-                0,
-            };
-            int ops_len = sizeof(ops)/sizeof(*ops);
-            for(int i=0;i<ops_len;i++) {
-                codes[i].OffsetInProlog = ops_offset[i];
-                codes[i].UnwindOperationCode = coff::UWOP_PUSH_NONVOL;
-                codes[i].OperationInfo = ops[i];
+        for(int ci=0;ci<func_count;ci++) {
+            auto tinycode = compiler->bytecode->tinyBytecodes[ci];
+            func_to_unwind[ci] = xdata_stream->getWriteHead();
+
+            // log::out << tinycode->name << " : " << tinycode->index<<"\n";
+
+            coff::UNWIND_INFO* unwind_info = nullptr;
+            xdata_stream->write_late((void**)&unwind_info, sizeof(*unwind_info));
+
+            unwind_info->Version = 1;
+            // unwind_info->Flags = coff::UNW_FLAG_NHANDLER; // no handler
+            unwind_info->Flags = coff::UNW_FLAG_EHANDLER; // no handler
+            // unwind_info->SizeOfProlog = 1*3 + 6*2; // 1*3 for one 'mov rbp, rsp' and 6*2 for six 'push reg'
+            unwind_info->SizeOfProlog = 1*3 + 2*2; // 1*3 for one 'mov rbp, rsp' and 2*2 for six 'push reg'
+            unwind_info->FrameRegister = 0;
+            unwind_info->FrameRegisterOffset = 0;
+            unwind_info->CountOfUnwindCodes = 2;
+            // TODO: set values
+
+            if(unwind_info->CountOfUnwindCodes > 0) {
+                coff::UNWIND_CODE* codes = nullptr;
+                xdata_stream->write_late((void**)&codes, unwind_info->CountOfUnwindCodes * sizeof(*codes));
+                
+                const coff::UnwindOpRegister ops[]{
+                    coff::UWOP_RSP,
+                    coff::UWOP_RBP,
+                };
+                const int ops_offset[]{
+                    5,
+                    0,
+                };
+                int ops_len = sizeof(ops)/sizeof(*ops);
+                for(int i=0;i<ops_len;i++) {
+                    codes[i].OffsetInProlog = ops_offset[i];
+                    codes[i].UnwindOperationCode = coff::UWOP_PUSH_NONVOL;
+                    codes[i].OperationInfo = ops[i];
+                }
             }
-        }
 
-        if(unwind_info->Flags & coff::UNW_FLAG_EHANDLER) {
+            if(unwind_info->Flags & coff::UNW_FLAG_EHANDLER) {
+                xdata_stream->write_align(4);
+
+                // int offset = tinyprogram_offsets[tiny_handler->index];
+                // xdata_stream->write4(offset);
+                xdata_stream->write4(0); // relocation is added further down when exported functions have been added as symbols
+
+                // Language handler data
+                /*
+                    // ALSO DEFINED IN Exception.btb
+                    struct TryBlock {
+                        u32 asm_start;
+                        u32 asm_end;
+                        u32 asm_catch_start;
+                    };
+                    struct HandlerData {
+                        u32 length;
+                        TryBlock blocks[length];
+                    }
+                */
+                xdata_stream->write4(tinycode->try_blocks.size());
+                for(int j=0;j<tinycode->try_blocks.size();j++) {
+                    auto& block = tinycode->try_blocks[j];
+
+
+                    int offset = xdata_stream->getWriteHead();
+                    int func_start = tinyprogram_offsets[ci];
+                    xdata_stream->write4(func_start + block.asm_start);
+                    xdata_stream->write4(func_start + block.asm_end);
+                    xdata_stream->write4(func_start + block.asm_catch_start);
+
+                    objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, offset + 0, sym_text_base, 0);
+                    objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, offset + 4, sym_text_base, 0);
+                    objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, offset + 8, sym_text_base, 0);
+                }
+                // xdata_stream->write4(2 + ci);
+            }
+
             xdata_stream->write_align(4);
-
-            // int offset = tinyprogram_offsets[tiny_handler->index];
-            // xdata_stream->write4(offset);
-            xdata_stream->write4(0); // relocation is added further down when exported functions have been added as symbols
-            // TODO: Data for handler
         }
-        
 
-        int func_count = compiler->bytecode->tinyBytecodes.size(); // more like try-catch count
         if(func_count > 0) {
             coff::RUNTIME_FUNCTION* functions = nullptr;
             pdata_stream->write_late((void**)&functions, func_count * sizeof(*functions));
 
             int eh_number = 0;
+            int eh_unwind = 0;
 
             // base unwind, TODO: In future each function needs there own unwind
             int sym_unwind = objectFile.addSymbol(SYM_EMPTY, "$unwind$base", section_xdata, 0);
 
-            auto text_symbol = objectFile.getSectionSymbol(section_text);
-            auto xdata_symbol = objectFile.getSectionSymbol(section_xdata);
-            for(int i=0;i<func_count;i++) {
+            auto gen_entry = [&](int i) {
                 auto tinycode = compiler->bytecode->tinyBytecodes[i];
                 int asm_size = tinycode->debugFunction->asm_end - tinycode->debugFunction->asm_start;
-                functions[i].StartAddress = 0;
-                functions[i].EndAddress = asm_size;
-                functions[i].UnwindInfoAddress = 0; // TODO: Set address of unwind info (for now we use the first one for all)
+                // functions[i].StartAddress = 0;
+                // functions[i].EndAddress = asm_size;
+                functions[i].StartAddress = tinycode->debugFunction->asm_start;
+                functions[i].EndAddress = tinycode->debugFunction->asm_end;
+                functions[i].UnwindInfoAddress = func_to_unwind[i];
+                // functions[i].UnwindInfoAddress = 0; // TODO: Set address of unwind info (for now we use the first one for all)
+
+                // std::string sym_name = "$unwind" + std::to_string(eh_unwind);
+                // eh_unwind++;
+                // int sym_unwind = objectFile.addSymbol(SYM_EMPTY, sym_name, section_xdata, func_to_unwind[i]);
 
                 #undef ADDR
                 #define ADDR(X) ((u64)&functions[i] - (u64)functions) + X
 
-                std::string sym_func_name = "$EH" + std::to_string(eh_number);
-                eh_number++;
+                // std::string sym_func_name = "$EH" + std::to_string(eh_number);
+                // eh_number++;
                 // objectFile.addSymbol(SYM_EMPTY, sym_func_name, section_text, 0);
-                int sym_index = objectFile.addSymbol(SYM_LABEL, sym_func_name, section_text, tinycode->debugFunction->asm_start);
+                // int sym_index = objectFile.addSymbol(SYM_LABEL, sym_func_name, section_text, tinycode->debugFunction->asm_start);
+                int sym_index = sym_text_base;
+
+                // log::out << tinycode->name << " " << tinycode->debugFunction->asm_start<<"\n";
 
                 objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(0), sym_index, 0);
                 objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(4), sym_index, 0);
                 objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(8), sym_unwind, 0);
                 #undef ADDR
+            };
+            // main is first
+            gen_entry(program->index_of_main);
+            for(int i=0;i<func_count;i++) {
+                if(program->index_of_main == i)
+                    continue;
+
+                gen_entry(i);
             }
         }
 
@@ -270,8 +329,11 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
 
     if(has_exceptions) {
         int index = objectFile.findSymbol("exception_handler");
-        objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, 8, index, 0);
-        // TODO: Relocations for language-specific data
+        for(int i=0;i<func_to_unwind.size();i++) {
+            int unwind_offset = func_to_unwind[i];
+            objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, unwind_offset + 8, index, 0);
+            // TODO: Relocations for language-specific data
+        }
     }
 
     // Useful resource when figuring out how linking and calls work.

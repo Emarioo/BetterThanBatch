@@ -1635,6 +1635,11 @@ void DeconstructXData(u8* buffer, u32 size) {
             log::out << " EHandler: "<<address_of_handler<<"\n";
 
             // NOTE: Language specific handler data
+
+            // SPECIFIC TO BTB LANGUAGE!
+            int len = *(u32*)(buffer + head);
+            head += 4; // sizeof TryBlock
+            head += len * 12; // sizeof TryBlock
         }
     }
 }

@@ -3719,6 +3719,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         }
     }
 
+    for(int i=0;i<tinycode->try_blocks.size();i++) {
+        auto& block = tinycode->try_blocks[i];
+        block.asm_start = get_map_translation(block.bc_start);
+        block.asm_end = get_map_translation(block.bc_end);
+        block.asm_catch_start = get_map_translation(block.bc_catch_start);
+    }
+
     // TODO: Don't iterate like this
     auto di = bytecode->debugInformation;
     DebugFunction* fun = nullptr;

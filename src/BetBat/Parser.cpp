@@ -3349,7 +3349,17 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
             
             return SIGNAL_SUCCESS;
         } else if(token->type == lexer::TOKEN_DEFER){
+            auto loc = info.getloc();
             info.advance();
+
+            if(is_inside_try_block) {
+                ERR_SECTION(
+                    ERR_HEAD2(loc)
+                    ERR_MSG("defer statements are not allowed in try-catch blocks. This is to prevent mistakes, when programming you may expect a defer to be called when it isn't. Altough, if you have an exception such as null pointer dereference, you have more important things to worry about than the thing defer would have cleaned up.")
+                    ERR_LINE2(loc, "here")
+                )
+                return SIGNAL_FAILURE;
+            }
 
             ASTScope* body = nullptr;
             auto signal = parseBody(body, info.currentScopeId);
@@ -3452,12 +3462,26 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
         
         return SIGNAL_SUCCESS;  
     } else if(token->type == lexer::TOKEN_TRY) {
+        auto loc = info.getloc();
         info.advance();
         
         statement = info.ast->createStatement(ASTStatement::TRY);
 
+        if(is_inside_try_block) {
+            ERR_SECTION(
+                ERR_HEAD2(loc)
+                ERR_MSG("You cannot have nested try-catch blocks. The exception handler is very simple and cannot determine wheter the inner or outer catch should be executed. (should be fixed in the future)")
+                ERR_LINE2(loc, "here")
+            )
+            return SIGNAL_FAILURE;
+        }
+
+        bool prev_inside_try = is_inside_try_block;
+        is_inside_try_block = true;
         auto signal = parseBody(statement->firstBody, currentScopeId);
-        if(signal != SIGNAL_SUCCESS)
+        is_inside_try_block = prev_inside_try;
+
+        if(signal != SIGNAL_SUCCESS) 
             return signal;
 
         while(true) {
@@ -3468,6 +3492,7 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
 
             ASTStatement::SwitchCase catch_part{};
 
+            // NOTE: Expression is ignored for now.
             signal = parseExpression(catch_part.caseExpr);
             if(signal != SIGNAL_SUCCESS)
                 return signal;

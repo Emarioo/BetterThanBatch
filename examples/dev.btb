@@ -12,36 +12,53 @@
         On Linux we need to:
             Emit function call to sigaction before "try", and fill the sigaction data structure that is passed, also store previous sigaction structure.
             Emit function call to sigaction at the end of try to
+
+
+    nocheckin TODO: 
+        Catch crash from function call
+        Restore stack before catch
+        Handle catch expression filter
+        Add exception information inside catch blow, either implicit variable or something like 'catch except_var : EXCEPTION_MEMORY {'
 */
 
-#import "Windows"
+#import "Exception"
 #import "Logger"
 
-enum ExceptionType {
-    EXCEPTION_MEMORY,
-    EXCEPTION_ZERO_DIVISION,
-}
-
+/*
+    Case 1: Crash directly inside try-block
+*/
 try {
     *cast<i32*>cast<i64>0 = 9
 } catch EXCEPTION_MEMORY {
     prints("caught\n")
 }
-prints("done\n")
 
-
-fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {
-    prints("hit\n")
-
-    context.Rip += 2 + 5 // catch block, hopefully
-
-    RtlRestoreContext(context, null)
-
-    prints("Late\n") // does not get called because RtlRestoreContext doesn't return, after all, it modifies the thread context and changes the instruction pointer.
-
-    return EXCEPTION_DISPOSITION.ExceptionContinueExecution
-}
-
-// fn @export @oscall exception_filter() -> i32 {
-
+/*
+    Case 2: Crash from function
+*/
+// fn crash() {
+//     *cast<i32*>cast<i64>0 = 9
 // }
+// try {
+//     crash()
+// } catch EXCEPTION_MEMORY {
+//     prints("caught\n")
+// }
+
+/*
+    Case 3: Restoration of stack pointer.
+*/
+// x: i32 = 5
+// try {
+//     y: i32 = 2
+//     *cast<i32*>cast<i64>0 = 9
+// } catch EXCEPTION_MEMORY {
+//     prints("caught outer\n")
+// }
+// log("x: ",x)
+// If stack is messed up then when 'ret' should pop the wrong value from stack (not the return address) and crash.
+
+/*
+    Case 4: Fixing of stack pointer if crash comes from function
+*/
+// TODO:

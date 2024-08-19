@@ -43,6 +43,7 @@ struct ParseContext : public PhaseContext {
     bool ignoreErrors = false;
     bool showErrors = true;
 
+    bool is_inside_try_block = false; // defer is not allowed in try blocks since we may crash and then the defer won't be called. We may want to change this behaviour in the future but we do this just to be safe and prevent simple stupid mistakes.
     bool allow_inferred_initializers = false;
     
     bool allow_assignments = false; // THIS SHOULD BE FALSE BY DEFAULT in while, if, for... EVERYWHERE okay!! if you set it to true then remember to switch it back after the scope, see usages of allow_assignments to see what I mean.

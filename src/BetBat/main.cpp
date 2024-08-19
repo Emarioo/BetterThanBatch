@@ -83,7 +83,7 @@ int main(int argc, const char** argv){
         // options.incremental_build = true;
         // options.disable_preload = true;
         // options.only_preprocess = true;
-        // options.useDebugInformation = true;
+        options.useDebugInformation = true;
         Compiler compiler{};
         compiler.run(&options);
 

@@ -60,6 +60,7 @@ def main():
         filename = filepath
         if ind != -1:
             filename = filepath[ind+1:]
+        # print("cp ", config["output"], filename)
         shutil.copy(config["output"], filename)
 
     if yes and os.path.exists(config["output"]) and enabled("run_when_finished"):

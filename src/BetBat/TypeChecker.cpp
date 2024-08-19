@@ -2443,7 +2443,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     if(outTypes)  outTypes->add(theType);
                 }
             } else {
-                Assert(hasForeignErrors());
+                Assert(hasAnyErrors());
                 if(outTypes) outTypes->add(AST_VOID);
             }
         } else if(expr->typeId == AST_ASM){

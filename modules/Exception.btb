@@ -1,0 +1,100 @@
+
+#import "Logger"
+
+#if OS_WINDOWS
+
+#import "Windows"
+
+enum ExceptionType {
+    EXCEPTION_MEMORY,
+    EXCEPTION_ZERO_DIVISION,
+}
+
+#if !DISABLE_DEFAULT_EXCEPTION_HANDLER
+fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {
+    global handling_exception: bool;
+    // prints("hit\n")
+    // FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE))
+    if handling_exception
+        return ExceptionContinueSearch
+
+    if !dispatcherContext {
+        prints("EXCEPTION: Why is dispatcher context null?\n")
+        // FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE))
+        return ExceptionContinueSearch
+    }
+
+    handling_exception = true
+
+
+    // The purpose of the exception handler is to find the appropriate catch block.
+    
+    // We can use the instruction pointer to do this.
+
+    // This requires a list of try-catch blocks per function.
+
+    // We need find a the try-catch that matches the instruction pointer.
+    // then we need to restore context and the instruction pointer to point to the start of the catch block.
+
+    // Additionally we may need to restore the stack pointer to something reasonable.
+
+    // log(cast<void*>dispatcherContext)
+    // log(cast<void*>dispatcherContext.HandlerData)
+
+    data := cast<void*>dispatcherContext.HandlerData
+
+    /* Definition of handler data (ALSO DEFINED IN ObjectFile.cpp)
+    */
+        struct TryBlock {
+            asm_start: u32;
+            asm_end: u32;
+            asm_catch_start: u32;
+        }
+    /*
+        struct HandlerData {
+            length: u32;
+            blocks: TryBlock[length]; // structs doesn't support dynamic arrays, hence we can't use this struct in the code
+        }
+    */
+    len := *cast<i32*>data
+    blocks := cast<TryBlock*>data + 4
+    
+    // log("len: ", len)
+
+    rip := dispatcherContext.ControlPc
+    found_catch: bool = false
+    new_rip_address: u64
+    for 0..len {
+        block := blocks + nr * sizeof TryBlock
+        asm_start       := block.asm_start       + dispatcherContext.ImageBase
+        asm_end         := block.asm_end         + dispatcherContext.ImageBase
+        asm_catch_start := block.asm_catch_start + dispatcherContext.ImageBase
+
+        // log(block)
+
+        if rip >= asm_start && rip < asm_end {
+            // log("inside")
+            new_rip_address = asm_catch_start
+            found_catch = true
+            break
+        }
+    }
+
+    handling_exception = false
+
+    if !found_catch {
+        // Exception did not occur in try-catch block
+        return EXCEPTION_DISPOSITION.ExceptionContinueSearch
+    }
+
+    // TODO: Fix the stack
+
+    context.Rip = new_rip_address // catch block, hopefully
+    RtlRestoreContext(context, null)
+
+    // UNREACHABLE
+    return EXCEPTION_DISPOSITION.ExceptionContinueSearch
+}
+#endif
+
+#endif

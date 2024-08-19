@@ -56,6 +56,7 @@ struct ByteStream {
         memcpy(reserved_ptr, ptr, size);
         return true;
     }
+    // DO NOT FORGET TO ZERO THE MEMORY, it's not done by default!
     bool write_late(void** out_ptr, u32 size) {
         Assert(size != 0);
         Assert(size < 0x10000000); // probably a bug if it's this large

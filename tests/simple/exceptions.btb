@@ -1,0 +1,28 @@
+@TEST_CASE(basic_exceptions)
+
+#import "Exception"
+
+global counter: i32
+
+
+counter++;
+
+try {
+    counter++;
+    *cast<i32*>cast<i64>0 = 9
+} catch EXCEPTION_MEMORY {
+    counter++
+    // prints("caught\n")
+}
+counter++;
+try {
+    counter++;
+    *cast<i32*>cast<i64>0 = 5
+} catch EXCEPTION_MEMORY {
+    counter++;
+    // prints("caught2\n")
+}
+counter++;
+// prints("done\n")
+
+_test 7; counter
