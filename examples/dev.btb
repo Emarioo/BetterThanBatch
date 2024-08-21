@@ -67,29 +67,52 @@
 /*
     Case 4: Handling exception filter, nested try-blocks
 */
-try {
-    try {
-        a := 1 / 0
-    } catch EXCEPTION_ZERO_DIVISION {
-        prints("caught div\n");
-    }
-    *cast<i32*>cast<i64>0 = 9
-} catch EXCEPTION_MEMORY_VIOLATION {
-    prints("caught access\n");
-}
-try {
-    try {
-        a := 1 / 0
-    } catch EXCEPTION_MEMORY_VIOLATION {
-        prints("caught inner access\n");
-    }
-    // *cast<i32*>cast<i64>0 = 9
-} catch EXCEPTION_ZERO_DIVISION {
-    prints("caught outer div\n");
-}
-
+// try {
+//     try {
+//         a := 1 / 0
+//     } catch EXCEPTION_ZERO_DIVISION {
+//         prints("caught div\n");
+//     }
+//     *cast<i32*>cast<i64>0 = 9
+// } catch EXCEPTION_MEMORY_VIOLATION {
+//     prints("caught access\n");
+// }
+// try {
+//     try {
+//         a := 1 / 0
+//     } catch EXCEPTION_MEMORY_VIOLATION {
+//         prints("caught inner access\n");
+//     }
+//     // *cast<i32*>cast<i64>0 = 9
+// } catch EXCEPTION_ZERO_DIVISION {
+//     prints("caught outer div\n");
+// }
 
 /*
     Case 5: Multiple catch
 */
-// TODO:
+// try {
+//     a := 1 / 0;
+//     *cast<i32*>cast<i64>0 = 9
+// } catch EXCEPTION_MEMORY_VIOLATION {
+//     prints("caught access\n");
+// } catch EXCEPTION_ZERO_DIVISION {
+//     prints("caught div\n");
+// }
+// try {
+//     *cast<i32*>cast<i64>0 = 9
+// } catch EXCEPTION_MEMORY_VIOLATION {
+//     prints("caught access 1\n");
+// } catch EXCEPTION_MEMORY_VIOLATION {
+//     prints("caught access 2\n");
+// }
+
+/*
+    Case 6: Extra information
+*/
+try {
+    n := 1/0
+} catch e: EXCEPTION_ANY {
+    // prints("why")
+    log(e)
+}

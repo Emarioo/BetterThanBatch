@@ -717,8 +717,12 @@ struct ASTStatement : ASTNode {
         ASTExpression* caseExpr = nullptr;
         ASTScope* caseBody = nullptr;
         bool fall = false;
+        // TODO: Optimize by not having these fields for switch case, they are only used for catch cases.
+        IdentifierVariable* variable = nullptr;
+        lexer::SourceLocation location{};
+        std::string catch_exception_name{}; // only for exceptions
     };
-    DynamicArray<SwitchCase> switchCases; // used with switch statement
+    DynamicArray<SwitchCase> switchCases; // used with switch statement and try-catch
     
     // IMPORTANT: If you put an array in a union then you must explicitly
     // do cleanup in the destructor. Destructor in unions isn't called since

@@ -133,8 +133,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         //     return false;
         // }
         
-
-        objectFile.addSymbol(SymbolType::SYM_ABS, "@feat.00", 0, 0x8000'0000);
+        // Is this symbol necessary? exceptions seems to work anyway.
+        // objectFile.addSymbol(SymbolType::SYM_ABS, "@feat.00", 0, 0x8000'0000);
 
         auto xdata_stream = objectFile.getStreamFromSection(section_xdata);
         auto pdata_stream = objectFile.getStreamFromSection(section_pdata);
@@ -211,10 +211,11 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
                         u32 asm_end;
                         u32 asm_catch_start;
                         u32 filter_code;
+                        i32 frame_offset;
                     };
                     struct HandlerData {
                         u32 length;
-                        u32 frame_offset;
+                        i32 frame_offset;
                         TryBlock blocks[length];
                     }
                 */
@@ -234,6 +235,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
                     xdata_stream->write4(func_start + block.asm_end);
                     xdata_stream->write4(func_start + block.asm_catch_start);
                     xdata_stream->write4(block.filter_exception_code);
+                    xdata_stream->write4(block.offset_to_exception_info);
 
                     objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, offset + 0, sym_text_base, 0);
                     objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, offset + 4, sym_text_base, 0);

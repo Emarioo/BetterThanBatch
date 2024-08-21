@@ -6102,48 +6102,68 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         } else if (statement->type == ASTStatement::TRY) {
             _GLOG(SCOPE_LOG("TRY-CATCH"))
 
-            compiler->code_has_exceptions = true;
+            int stackBeforeLoop = currentFrameOffset;
+            defer {
+                currentFrameOffset = stackBeforeLoop;
+            };
 
-            TryBlock block{}; // we can't add try block to try_blocks yet because the body we generate may modifie the array.
-            block.bc_start = builder.get_pc();
-            // block.frame_offset_before_try = ; // fixed later when we know the max size of the stack frame
-            // TODO: We don't need to store the frame offset per TryBlock, just per function. It would save memory and I don't think it will change in the near future.
+            compiler->code_has_exceptions = true;
+            
+            int data_offset = 0;
+            TypeId vartype{};
+            for(int i=0;i<statement->switchCases.size();i++) {
+                if(statement->switchCases[i].variable) {
+                    vartype = statement->switchCases[i].variable->versions_typeId[currentPolyVersion];
+                    break;
+                }
+            }
+            if(vartype.isValid()) {
+                SignalIO result = framePush(vartype, &data_offset, false, false);
+                Assert(result == SIGNAL_SUCCESS || hasAnyErrors());
+
+                for(int i=0;i<statement->switchCases.size();i++) {
+                    if(statement->switchCases[i].variable) {
+                        statement->switchCases[i].variable->versions_dataOffset[currentPolyVersion] = data_offset;
+                    }
+                }
+            }
+
+            int bc_start = builder.get_pc();
 
             // Generate try
             generateBody(statement->firstBody);
 
-            block.bc_end = builder.get_pc();
-
-            defer {
-                tinycode->try_blocks.add(block);
-
-            };
+            int bc_end = builder.get_pc();
 
             int offset_jmp;
             builder.emit_jmp(&offset_jmp); // jump over catch
 
             // Generate catch
-            if(statement->switchCases.size() > 1) {
-                ERR_SECTION(
-                    ERR_HEAD2(statement->location)
-                    ERR_MSG("Only one catch is allowed in try-catch blocks.")
-                    for(int i=1;i<statement->switchCases.size();i++) {
-                        ERR_LINE2(statement->switchCases[i].caseExpr->location, "remove")
-                    }
-                )
-            }
+
+            DynamicArray<int> catch_end_jumps{};
 
             TEMP_ARRAY_N(TypeId, tempTypes, 5);
             for(int i=0;i<statement->switchCases.size();i++) {
-                auto catch_expr = statement->switchCases[i].caseExpr;
-                auto catch_body = statement->switchCases[i].caseBody;
+                auto& catch_part = statement->switchCases[i];
+                auto catch_expr = catch_part.caseExpr;
+                auto catch_body = catch_part.caseBody;
                 SignalIO result = SIGNAL_NO_MATCH;
+
+                // NOTE: One try-block for each catch. We can minimize size of the object file we we are a little smarter but I don't think we would gain much. We might as well keep it simple instead.
+                TryBlock block{}; // we can't add try block to try_blocks yet because the body we generate may modifiy the array.
+                block.bc_start = bc_start;
+                block.bc_end = bc_end;
+                if(catch_part.variable)
+                    block.offset_to_exception_info = data_offset;
+                // block.frame_offset_before_try = ; // fixed later when we know the max size of the stack frame
+                // TODO: We don't need to store the frame offset per TryBlock, just per function. It would save memory and I don't think it will change in the near future.
 
                 block.bc_catch_start = builder.get_pc();
                 result = generateBody(catch_body);
 
                 auto temp_tinycode = compiler->get_temp_tinycode();
                 
+                // Calculate expression at compile time
                 GenContext context{};
                 context.init_context(compiler);
                 context.builder.init(bytecode, temp_tinycode, compiler);
@@ -6173,21 +6193,30 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 VirtualMachine vm{};
                 vm.silent = true;
                 vm.init_stack();
-
                 vm.execute(bytecode, temp_tinycode->name, true);
 
                 int* value = (int*)(vm.stack_pointer);
-
-                // log::out << "filter expr " << *value << "\n";
-                // log::out << "filter expr:\n";
-                // for(int j=0;j<16;j++){
-                //     log::out << " " << vm.stack[vm.stack.capacity() - 1 - j];
-                // }
-                // log::out << "\n";
-
                 block.filter_exception_code = *value;
-                                
                 temp_tinycode->restore_to_empty();
+
+                tinycode->try_blocks.add(block);
+
+                if(i < statement->switchCases.size() - 1) {
+                    int off = 0;
+                    builder.emit_jmp(&off);
+                    catch_end_jumps.add(off);
+                }
+
+                // TODO: Add catch variable to debug info
+                // debugFunction->addVar(varnameIt.name,
+                //     varinfo_item->versions_dataOffset[info.currentPolyVersion],
+                //     varinfo_item->versions_typeId[info.currentPolyVersion],
+                //     info.currentScopeDepth + 1, // +1 because variables exist within stmt->firstBody, not the current scope
+                //     varnameIt.identifier->scopeId);
+            }
+
+            for(auto off : catch_end_jumps) {
+                builder.fix_jump_imm32_here(off);
             }
 
             builder.fix_jump_imm32_here(offset_jmp);
@@ -6196,6 +6225,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // if(statement->secondBody)
             //     generateBody(statement->secondBody);
             
+            currentFuncImpl->free_frame_space(stackBeforeLoop - currentFrameOffset);
+            currentFrameOffset = stackBeforeLoop;
         } else {
             Assert(("You forgot to implement statement type!",false));
         }

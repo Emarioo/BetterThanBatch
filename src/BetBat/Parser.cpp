@@ -3492,7 +3492,15 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
 
             ASTStatement::SwitchCase catch_part{};
 
-            // NOTE: Expression is ignored for now.
+            StringView varname{};
+            auto tok_first = info.gettok(&varname);
+            auto tok_second = info.gettok(1);
+            if(tok_first.type == lexer::TOKEN_IDENTIFIER && tok_second.type == ':') {
+                catch_part.location = info.getloc();
+                catch_part.catch_exception_name = varname;
+                info.advance(2);
+            }
+
             signal = parseExpression(catch_part.caseExpr);
             if(signal != SIGNAL_SUCCESS)
                 return signal;
@@ -3508,7 +3516,7 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
         if(tok.type == lexer::TOKEN_FINALLY){
             ERR_SECTION(
                 ERR_HEAD2(tok)
-                ERR_MSG("Exception handling (try-catch) does not support 'finally' (termination handler) because all platforms do not support it. Windows does but not Linux. However, if I am mistaken about this please give me resources and I will implement it.")
+                ERR_MSG("Exception handling (try-catch) does not support 'finally' (termination handler). Might be implemented in  the future.")
                 ERR_LINE2(tok, "here")
             )
 

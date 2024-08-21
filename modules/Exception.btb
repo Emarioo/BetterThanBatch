@@ -21,6 +21,13 @@ enum ExceptionType {
     EXCEPTION_ANY = 0x3F,
 }
 
+// The name of this struct is hardcoded in TypeChecker.cpp, if you change the name here then you must change the name in the cpp file.
+struct ExceptionInfo {
+    code: ExceptionType;
+    os_code: u32; // code from operating system
+    pc_address: u64; // address in the code where exception occured
+}
+
 #if !DISABLE_DEFAULT_EXCEPTION_HANDLER
 // fn @export @oscall exception_handler(records: EXCEPTION_POINTERS*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {
 fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {
@@ -45,6 +52,7 @@ fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame
             asm_end: u32;
             asm_catch_start: u32;
             filter_code: i32;
+            offset_of_exception_info: i32;
         }
     /*
         struct HandlerData {
@@ -67,6 +75,9 @@ fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame
 
     found_catch: bool = false
 
+    caught_code: ExceptionType
+    offset_of_exception_info: i32 = 0
+
     while !found_catch {
         try_catch_count := *cast<i32*>data
         frame_offset := *(cast<i32*>data + 4)
@@ -82,26 +93,51 @@ fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame
             filtered_yes := false
             code := record.ExceptionCode
 
-            if block.filter_code == EXCEPTION_ANY {
+            maybe_caught_code: ExceptionType = EXCEPTION_OTHER;
+            switch code {
+                case WIN_EXCEPTION_ACCESS_VIOLATION: maybe_caught_code = EXCEPTION_MEMORY_VIOLATION
+                case WIN_EXCEPTION_ILLEGAL_INSTRUCTION: maybe_caught_code = EXCEPTION_INVALID_INSTRUCTION
+                case WIN_EXCEPTION_PRIV_INSTRUCTION:  maybe_caught_code = EXCEPTION_INVALID_INSTRUCTION
+                case WIN_EXCEPTION_STACK_OVERFLOW: maybe_caught_code = EXCEPTION_STACK_OVERFLOW
+                case WIN_EXCEPTION_INT_DIVIDE_BY_ZERO: maybe_caught_code = EXCEPTION_INT_ZERO_DIVISION
+                case WIN_EXCEPTION_FLT_DIVIDE_BY_ZERO: maybe_caught_code = EXCEPTION_FLOAT_ZERO_DIVISION
+                case: maybe_caught_code = EXCEPTION_OTHER
+            }
+
+            if block.filter_code == cast<i32>EXCEPTION_ANY {
                 filtered_yes = true
             } else if block.filter_code & cast<i32>~EXCEPTION_ANY == 0 {
                 filter := block.filter_code
-                if block.filter_code == EXCEPTION_OTHER {
+                if block.filter_code == cast<i32>EXCEPTION_OTHER {
                     filter = EXCEPTION_ANY
                 }
 
-                if filter & cast<i32>EXCEPTION_MEMORY_VIOLATION
-                    filtered_yes |= code == WIN_EXCEPTION_ACCESS_VIOLATION
-                if filter & cast<i32>EXCEPTION_INVALID_INSTRUCTION
-                    filtered_yes |= code == WIN_EXCEPTION_ILLEGAL_INSTRUCTION || code == WIN_EXCEPTION_PRIV_INSTRUCTION
-                if filter & cast<i32>EXCEPTION_STACK_OVERFLOW
-                    filtered_yes |= code == WIN_EXCEPTION_STACK_OVERFLOW
-                if filter & cast<i32>EXCEPTION_INT_ZERO_DIVISION
-                    filtered_yes |= code == WIN_EXCEPTION_INT_DIVIDE_BY_ZERO
-                if filter & cast<i32>EXCEPTION_FLOAT_ZERO_DIVISION
-                    filtered_yes |= code == WIN_EXCEPTION_FLT_DIVIDE_BY_ZERO
-
-                if block.filter_code == EXCEPTION_OTHER {
+                if filter & cast<i32>EXCEPTION_MEMORY_VIOLATION {
+                    if code == WIN_EXCEPTION_ACCESS_VIOLATION {
+                        filtered_yes = true
+                    }
+                }
+                if filter & cast<i32>EXCEPTION_INVALID_INSTRUCTION {
+                    if code == WIN_EXCEPTION_ILLEGAL_INSTRUCTION || code == WIN_EXCEPTION_PRIV_INSTRUCTION {
+                        filtered_yes = true
+                    }
+                }
+                if filter & cast<i32>EXCEPTION_STACK_OVERFLOW {
+                    if code == WIN_EXCEPTION_STACK_OVERFLOW {
+                        filtered_yes = true
+                    }
+                }
+                if filter & cast<i32>EXCEPTION_INT_ZERO_DIVISION {
+                    if code == WIN_EXCEPTION_INT_DIVIDE_BY_ZERO {
+                        filtered_yes = true
+                    }
+                }
+                if filter & cast<i32>EXCEPTION_FLOAT_ZERO_DIVISION {
+                    if code == WIN_EXCEPTION_FLT_DIVIDE_BY_ZERO {
+                        filtered_yes = true 
+                    }
+                }
+                if block.filter_code == cast<i32>EXCEPTION_OTHER {
                     filtered_yes = !filtered_yes
                 }
                 // TODO: Add compile time error if we forget to check a newly added exception?
@@ -123,6 +159,10 @@ fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame
                 // we additionally set these
                 context.Rsp = cur_rbp + frame_offset // fix stack, there may be some remaining push, pop or argument allocation which could mess things up.
                 context.Rbp = cur_rbp
+                // log("rbp: ",cur_rbp," off: ", frame_offset)
+
+                caught_code = maybe_caught_code
+                offset_of_exception_info = block.offset_of_exception_info
                 break
             }
         }
@@ -157,6 +197,16 @@ fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame
     if !found_catch {
         // Exception did not occur in try-catch block
         return EXCEPTION_DISPOSITION.ExceptionContinueSearch
+    }
+
+    global should_not_be_global: ExceptionInfo
+
+    if offset_of_exception_info != 0 {
+        should_not_be_global.code = caught_code
+        should_not_be_global.os_code = record.ExceptionCode
+        should_not_be_global.pc_address = record.ExceptionAddress;
+
+        *cast_unsafe<void**>(context.Rbp + cast<i64>offset_of_exception_info) = &should_not_be_global
     }
 
     RtlRestoreContext(context, null)

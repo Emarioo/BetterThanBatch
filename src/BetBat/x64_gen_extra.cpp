@@ -3742,6 +3742,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         block.asm_catch_start = get_map_translation(block.bc_catch_start);
 
         block.frame_offset_before_try -= callee_saved_space;
+        if(block.offset_to_exception_info != 0) // 0 indicates no variable
+            block.offset_to_exception_info -= callee_saved_space;
     }
 
     // TODO: Don't iterate like this

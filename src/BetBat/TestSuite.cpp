@@ -264,6 +264,7 @@ u32 TestSuite(CompileOptions* options){
 
     tests.add("tests/simple/operations.btb");
     tests.add("tests/simple/assignment.btb");
+    tests.add("tests/simple/exceptions.btb");
         
     tests.add("tests/flow/loops.btb");
     tests.add("tests/flow/switch.btb");

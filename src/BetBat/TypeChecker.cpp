@@ -4378,8 +4378,9 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
             checkRest(now->firstBody);
             
             for(int i=0;i<now->switchCases.size();i++) {
-                auto catch_expr = now->switchCases[i].caseExpr;
-                auto catch_body = now->switchCases[i].caseBody;
+                auto& catch_part = now->switchCases[i];
+                auto catch_expr = catch_part.caseExpr;
+                auto catch_body = catch_part.caseBody;
 
                 auto result = checkExpression(scope->scopeId, catch_expr, &tempTypes, false);
                 if(result != SIGNAL_SUCCESS)
@@ -4402,7 +4403,32 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                         ERR_LINE2(catch_expr->location,"here")
                     )
                 }
+                if(catch_part.catch_exception_name.size() > 0) {
+                    auto varinfo = info.ast->addVariable(Identifier::LOCAL_VARIABLE, catch_body->scopeId, catch_part.catch_exception_name, CONTENT_ORDER_ZERO, nullptr);
+                    catch_part.variable = varinfo;
+                    
+                    if(!varinfo) {
+                        ERR_SECTION(
+                            ERR_HEAD2(catch_part.location)
+                            ERR_MSG("Cannot add variable '"<<catch_part.catch_exception_name<<"'. Is it already defined?")
+                            ERR_LINE2(catch_part.location,"")
+                        )
+                    }
 
+                    StringView var_type_name = "ExceptionInfo*"; // TODO: Don't hardcode like this. Where should we put it instead?
+                    TypeId var_type = checkType(scope->scopeId, var_type_name, catch_part.location, nullptr);
+                    // TODO: Optimize by reusing var_type, if it's been checked once then no need to do it again. We can do it once per import, once per function, or once per try-statement.
+                    if(!var_type.isValid()) {
+                        ERR_SECTION(
+                            ERR_HEAD2(catch_part.location)
+                            ERR_MSG("Type error in variable for exception information! You must import '"<<log::LIME<<"Exception.btb"<<log::NO_COLOR<<"'.")
+                            ERR_LINE2(catch_part.location,"here")
+                        )
+                    }
+                    
+                    varinfo->versions_typeId.set(currentPolyVersion, var_type);
+                }
+                
                 // TODO: steal_element_into is thread safe (mutex behind the scenes)
                 //    and we need it here when modifying types of AST from threads.
                 //   BUT it would be nice if we could fix it up a little.

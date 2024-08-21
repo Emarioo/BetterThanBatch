@@ -12,4 +12,5 @@ struct TryBlock {
 
     int frame_offset_before_try; // a negative number, rbp + frame_offset
     int filter_exception_code;
+    int offset_to_exception_info = 0; // offset to this variable: 'catch ex_info : EXCEPTION_ANY'
 };

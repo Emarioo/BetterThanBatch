@@ -1,16 +1,17 @@
 @TEST_CASE(basic_exceptions)
+/*
+    Case 1: Crash directly inside try-block
+*/
 
 #import "Exception"
 
 global counter: i32
-
-
 counter++;
 
 try {
     counter++;
     *cast<i32*>cast<i64>0 = 9
-} catch EXCEPTION_MEMORY {
+} catch EXCEPTION_MEMORY_VIOLATION {
     counter++
     // prints("caught\n")
 }
@@ -18,11 +19,139 @@ counter++;
 try {
     counter++;
     *cast<i32*>cast<i64>0 = 5
-} catch EXCEPTION_MEMORY {
+} catch EXCEPTION_MEMORY_VIOLATION {
     counter++;
     // prints("caught2\n")
 }
 counter++;
 // prints("done\n")
 
-_test 7; counter
+_test counter; 7
+
+
+@TEST_CASE(func_exceptions)
+/*
+    Case 2: Crash from function, this includes fixing stack pointer since try block puts arguments on the stack and they must be cleaned up before catch block can be executed.
+*/
+
+#import "Exception"
+
+global counter: i32
+
+fn crash(n: i32 = 5) {
+    if n == 0{
+        counter++;
+        *cast<i32*>cast<i64>0 = 9
+        return
+    }
+    crash(n-1)
+}
+try {
+    counter++
+    crash()
+} catch EXCEPTION_MEMORY_VIOLATION {
+    counter++
+    // prints("caught\n")
+}
+_test counter; 3
+
+@TEST_CASE(stack_exceptions)
+/*
+    Case 3: Restoration of stack pointer.
+*/
+
+#import "Exception"
+
+global counter: i32
+
+// If stack is messed up then when 'ret' should pop the wrong value from stack (not the return address) and crash.
+x: i32 = 5
+try {
+    counter++
+    y: i32 = 2;
+    *cast<i32*>cast<i64>0 = 9
+    counter--
+} catch EXCEPTION_MEMORY_VIOLATION {
+    counter++
+    // prints("caught outer\n")
+}
+counter++
+_test counter; 3
+// log("x: ", x)
+// log("y: ", *(&x - 8))
+
+@TEST_CASE(filter_exceptions)
+/*
+    Case 4: Handling exception filter, nested try-blocks
+*/
+
+#import "Logger"
+#import "Exception"
+
+global counter: i32
+try {
+    try {
+        a := 1 / 0
+    } catch EXCEPTION_ZERO_DIVISION {
+        counter++
+        // prints("caught div\n");
+    }
+    counter++;
+    *cast<i32*>cast<i64>0 = 9
+} catch EXCEPTION_MEMORY_VIOLATION {
+    counter++
+    // prints("caught access\n");
+}
+counter++
+try {
+    try {
+        a := 1 / 0
+    } catch EXCEPTION_MEMORY_VIOLATION { // NOTE: this does not catch zero division
+        counter++
+        // prints("caught inner access\n");
+    }
+    // *cast<i32*>cast<i64>0 = 9
+    counter++
+} catch EXCEPTION_ZERO_DIVISION { // this catches the zero division
+    counter--
+    // prints("caught outer div\n");
+}
+counter++
+_test counter; 4
+
+@TEST_CASE(catches_exceptions)
+/*
+    Case 5: Multiple catch
+*/
+#import "Exception"
+global counter: i32
+
+try {
+    a := 1 / 0;
+    *cast<i32*>cast<i64>0 = 9
+} catch EXCEPTION_MEMORY_VIOLATION {
+    // prints("caught access\n");
+} catch EXCEPTION_ZERO_DIVISION {
+    counter++
+    // prints("caught div\n");
+}
+try {
+    *cast<i32*>cast<i64>0 = 9
+} catch EXCEPTION_MEMORY_VIOLATION {
+    counter++
+    // prints("caught access 1\n");
+} catch EXCEPTION_MEMORY_VIOLATION {
+    // prints("caught access 2\n");
+}
+
+_test counter; 2
+
+/*
+    Case 6: Extra information
+*/
+try {
+    n := 1/0
+} catch e: EXCEPTION_ANY {
+    _test EXCEPTION_INT_ZERO_DIVISION; e.code
+    _test WIN_EXCEPTION_INT_DIVIDE_BY_ZERO; e.os_code
+}

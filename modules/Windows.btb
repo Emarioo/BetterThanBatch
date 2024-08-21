@@ -439,17 +439,6 @@ struct CONTEXT {
   LastExceptionFromRip: u64;
 }
 
-
-
-#macro EXCEPTION_NONCONTINUABLE 0x1    // Noncontinuable exception
-#macro EXCEPTION_UNWINDING 0x2         // Unwind is in progress
-#macro EXCEPTION_EXIT_UNWIND 0x4       // Exit unwind is in progress
-#macro EXCEPTION_STACK_INVALID 0x8     // Stack out of limits or unaligned
-#macro EXCEPTION_NESTED_CALL 0x10      // Nested exception handler call
-#macro EXCEPTION_TARGET_UNWIND 0x20    // Target unwind in progress
-#macro EXCEPTION_COLLIDED_UNWIND 0x40  // Collided exception handler call
-
-
 #macro EXCEPTION_MAXIMUM_PARAMETERS 15
 struct EXCEPTION_RECORD {
     ExceptionCode: u32;
@@ -518,9 +507,9 @@ fn @import(Kernel) RaiseException(
   lpArguments: u64* // can be null
 );
 
-// TODO: RtlRestoreContext should use cdecl convention, since betcall and cdecl pass both pass arguments to the stack, and RtlRestoreContext won't return (argument cleanup logic not required), we can actually use @betcall here
+// TODO: RtlRestoreContext is described to use cdecl convention but in practise, that's not the case beacuse it crashes. stdcall is actually the right convention. Perhaps it depends on the version of Windows.
 // https://learn.microsoft.com/en-us/windows/win32/api/winnt/nf-winnt-rtlrestorecontext
-fn @import(Kernel) @betcall RtlRestoreContext(
+fn @import(Kernel) RtlRestoreContext(
   ContextRecord: CONTEXT*,
   ExceptionRecord: EXCEPTION_RECORD*
 );
