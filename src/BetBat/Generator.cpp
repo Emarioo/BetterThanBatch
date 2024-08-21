@@ -946,7 +946,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 case Identifier::MEMBER_VARIABLE: {
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
                     Assert(info.currentFunction->callConvention == BETCALL);
-                    builder.emit_get_param(BC_REG_B, 0, 8, false, false);
+                    builder.emit_get_param(BC_REG_B, 0, 8, false, true);
                     
                     auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
                     if (mem.array_length) {
@@ -4019,7 +4019,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                             if(!AST::IsSigned(ltype) && AST::IsSigned(rtype))
                                 builder.emit_cast(left_reg,left_reg, CAST_UINT_SINT, lsize, outSize);
                             if(AST::IsSigned(ltype) && !AST::IsSigned(rtype))
-                                builder.emit_cast(left_reg,left_reg, CAST_SINT_UINT, lsize, outSize);
+                                builder.emit_cast(left_reg,left_reg, CAST_SINT_SINT, lsize, outSize);
                             if(AST::IsSigned(ltype) && AST::IsSigned(rtype))
                                 builder.emit_cast(left_reg,left_reg, CAST_SINT_SINT, lsize, outSize);
                         }
@@ -4029,7 +4029,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                             if(!AST::IsSigned(rtype) && AST::IsSigned(ltype))
                                 builder.emit_cast(right_reg,right_reg, CAST_UINT_SINT, rsize, outSize);
                             if(AST::IsSigned(rtype) && !AST::IsSigned(ltype))
-                                builder.emit_cast(right_reg,right_reg, CAST_SINT_UINT, rsize, outSize);
+                                builder.emit_cast(right_reg,right_reg, CAST_SINT_SINT, rsize, outSize);
                             if(AST::IsSigned(rtype) && AST::IsSigned(ltype))
                                 builder.emit_cast(right_reg,right_reg, CAST_SINT_SINT, rsize, outSize);
                         }
@@ -4725,13 +4725,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
             builder.emit_ret();
         }
-
-        int frame_size = funcImpl->get_frame_size();
-        for(auto index : frame_size_fixes) {
-            builder.fix_local_imm(index, frame_size);
-        }
-
-        frame_size_fixes.clear();
+        fix_frame_values(funcImpl, tinycode);
         
         // TODO: Assert that we haven't allocated more stack space than we freed!
     }
@@ -5081,6 +5075,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         // address of global variables is managed in type checker
                         SignalIO result = framePush(varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
                             !statement->firstExpression, false);
+                        // log::out << "decl " << varname.name << " " << varinfo->versions_dataOffset[info.currentPolyVersion] << " "<<currentFuncImpl->_max_size_of_locals << " "<<currentFuncImpl->_size_of_locals<<"\n";
 
                         debugFunction->addVar(varname.name,
                             varinfo->versions_dataOffset[info.currentPolyVersion],
@@ -5592,7 +5587,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
             };
 
-            int stackBeforeLoop = currentFrameOffset;
+            int stackBeforeLoop = currentFrameOffset; // loopScope->stackMoment is used by break and continue to restore stack allocated variables in the scope of the loop. However, stack management has been changed where we allocate all stack space at start of function so break and continue doesn't clean it up anywhere. We could therefore use loopScope->stackMoment instead of a stackBeforeLoop but this might once again change in the future so we'll keep it as it is.
 
             // body scope is used since the for loop's variables
             // shouldn't collide with the variables in the current scope.
@@ -5636,7 +5631,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
 
                 _GLOG(log::out << "push loop\n");
-                loopScope->stackMoment = currentFrameOffset;
+                // loopScope->stackMoment = currentFrameOffset;
                 loopScope->continueAddress = builder.get_pc();
 
                 TypeId dtype = {};
@@ -5737,7 +5732,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
 
                 _GLOG(log::out << "push loop\n");
-                loopScope->stackMoment = currentFrameOffset;
+                // loopScope->stackMoment = currentFrameOffset;
                 loopScope->continueAddress = builder.get_pc();
 
                 // TODO: don't generate ptr and length everytime.
@@ -5854,14 +5849,15 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 )
                 continue;
             }
-            // builder.restoreStackMoment(loop->stackMoment, true);
             if(loop->stackMoment != currentFrameOffset) {
                 // builder.emit_free_local(loop->stackMoment - currentFrameOffset); // freeing local variables without modifying currentFrameOffset
-                currentFuncImpl->free_frame_space(loop->stackMoment - currentFrameOffset);
+                // currentFuncImpl->free_frame_space(loop->stackMoment - currentFrameOffset);
             }
             
             loop->resolveBreaks.add(0);
             builder.emit_jmp(&loop->resolveBreaks.last());
+
+            break; // don't continue, we'll break things
         } else if(statement->type == ASTStatement::CONTINUE) {
             GenContext::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
@@ -5872,13 +5868,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 )
                 continue;
             }
-            // builder.restoreStackMoment(loop->stackMoment, true);
             if(loop->stackMoment != currentFrameOffset) {
                 // builder.emit_free_local(loop->stackMoment - currentFrameOffset);
-                currentFuncImpl->free_frame_space(loop->stackMoment - currentFrameOffset);
+                // currentFuncImpl->free_frame_space(loop->stackMoment - currentFrameOffset);
             }
 
             builder.emit_jmp(loop->continueAddress);
+
+            break; // don't continue, we'll break things
         } else if (statement->type == ASTStatement::RETURN) {
             _GLOG(SCOPE_LOG("RETURN"))
 
@@ -5970,7 +5967,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 add_frame_fix(index);
             // }
             builder.emit_ret();
-            info.currentFrameOffset = lastOffset; // nochecking TODO: Should we reset frame like this? If so, should we not break this loop and skip the rest of the statements too?
+            // info.currentFrameOffset = lastOffset; // nochecking TODO: Should we reset frame like this? If so, should we not break this loop and skip the rest of the statements too?
+            // break; // Let's try?
         }
         else if (statement->type == ASTStatement::EXPRESSION) {
             _GLOG(SCOPE_LOG("EXPRESSION"))
@@ -6106,12 +6104,21 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             compiler->code_has_exceptions = true;
 
-            tinycode->try_blocks.add({});
-            auto& block = tinycode->try_blocks.last();
+            TryBlock block{}; // we can't add try block to try_blocks yet because the body we generate may modifie the array.
             block.bc_start = builder.get_pc();
+            // block.frame_offset_before_try = ; // fixed later when we know the max size of the stack frame
+            // TODO: We don't need to store the frame offset per TryBlock, just per function. It would save memory and I don't think it will change in the near future.
 
             // Generate try
             generateBody(statement->firstBody);
+
+            block.bc_end = builder.get_pc();
+
+            defer {
+                tinycode->try_blocks.add(block);
+
+            };
+
             int offset_jmp;
             builder.emit_jmp(&offset_jmp); // jump over catch
 
@@ -6126,19 +6133,61 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 )
             }
 
-            // TEMP_ARRAY_N(TypeId, tempTypes, 5);
+            TEMP_ARRAY_N(TypeId, tempTypes, 5);
             for(int i=0;i<statement->switchCases.size();i++) {
                 auto catch_expr = statement->switchCases[i].caseExpr;
                 auto catch_body = statement->switchCases[i].caseBody;
                 SignalIO result = SIGNAL_NO_MATCH;
 
-                // TODO: Where do we put catch filter expression?
-                // auto result = generateExpression(statement->firstExpression, &tempTypes);
-                // auto expr_type = statement->versions_expressionTypes[currentPolyVersion][i];
-                // Assert(expr_type == tempTypes[0]);
-
                 block.bc_catch_start = builder.get_pc();
                 result = generateBody(catch_body);
+
+                auto temp_tinycode = compiler->get_temp_tinycode();
+                
+                GenContext context{};
+                context.init_context(compiler);
+                context.builder.init(bytecode, temp_tinycode, compiler);
+
+                context.currentScopeId = ast->globalScopeId;
+                context.currentFrameOffset = 0;
+                context.currentScopeDepth = -1;
+                context.currentPolyVersion = 0;
+                
+                result = context.generateExpression(catch_expr, &tempTypes, 0);
+                if (result != SIGNAL_SUCCESS) {
+                    if (!info.hasForeignErrors()) {
+                        ERR_SECTION(
+                            ERR_HEAD2(catch_expr->location)
+                            ERR_MSG("Cannot evaluate expression for catch at compile time. TODO: Provide better error message.")
+                            ERR_LINE2(catch_expr->location, "here")
+                        )
+                    }
+                    continue;
+                }
+                auto expr_type = statement->versions_expressionTypes[currentPolyVersion][i];
+                Assert(expr_type == tempTypes[0]);
+
+                // log::out << log::GOLD <<"catch filter\n";
+                // temp_tinycode->print(0,-1,bytecode);
+                
+                VirtualMachine vm{};
+                vm.silent = true;
+                vm.init_stack();
+
+                vm.execute(bytecode, temp_tinycode->name, true);
+
+                int* value = (int*)(vm.stack_pointer);
+
+                // log::out << "filter expr " << *value << "\n";
+                // log::out << "filter expr:\n";
+                // for(int j=0;j<16;j++){
+                //     log::out << " " << vm.stack[vm.stack.capacity() - 1 - j];
+                // }
+                // log::out << "\n";
+
+                block.filter_exception_code = *value;
+                                
+                temp_tinycode->restore_to_empty();
             }
 
             builder.fix_jump_imm32_here(offset_jmp);
@@ -6147,7 +6196,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // if(statement->secondBody)
             //     generateBody(statement->secondBody);
             
-            block.bc_end = builder.get_pc();
         } else {
             Assert(("You forgot to implement statement type!",false));
         }
@@ -6419,11 +6467,6 @@ SignalIO GenContext::generateGlobalData() {
     TRACE_FUNC()
 
     // TODO: Polymorphism is not considered for globals inside functions, we need to set poly version for that
-    const char* const TEMP_TINYCODE_NAME = "_comp_time_";
-    TinyBytecode* temp_tinycode = nullptr;
-    if(ast->globals_to_evaluate.size()) {
-        temp_tinycode = bytecode->createTiny(TEMP_TINYCODE_NAME, BETCALL);
-    }
 
     ASTStatement* last_stmt = nullptr;
     CALLBACK_ON_ASSERT(
@@ -6446,7 +6489,7 @@ SignalIO GenContext::generateGlobalData() {
         //   If we change the code in generateFunction but forget to here then
         //   we will be in trouble. So, how do we combine the code?
 
-        temp_tinycode->restore_to_empty();
+        auto temp_tinycode = compiler->get_temp_tinycode();
 
         tinycode = temp_tinycode;
         builder.init(bytecode, tinycode, compiler);
@@ -6524,7 +6567,7 @@ SignalIO GenContext::generateGlobalData() {
         *((void**)(vm.stack.data() + vm.stack.max - 8)) = ptr_to_global_data;
 
         // let VM evaluate expression and put into global data
-        vm.execute(bytecode, TEMP_TINYCODE_NAME, true);
+        vm.execute(bytecode, temp_tinycode->name, true);
     }
 
     POP_LAST_CALLBACK()
@@ -6611,12 +6654,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                     
                 }
 
-                int frame_size = context.currentFuncImpl->get_frame_size();
-                for(auto index : context.frame_size_fixes) {
-                    context.builder.fix_local_imm(index, frame_size);
-                }
-
-                context.frame_size_fixes.clear();
+                context.fix_frame_values(context.currentFuncImpl, tb_main);
             }
         }
     }

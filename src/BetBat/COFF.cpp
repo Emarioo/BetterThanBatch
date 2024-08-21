@@ -1636,10 +1636,12 @@ void DeconstructXData(u8* buffer, u32 size) {
 
             // NOTE: Language specific handler data
 
+            Assert(("DeconstructXData in COFF.cpp is not up to date with ObjectFile.cpp when decoding handler data",false));
+
             // SPECIFIC TO BTB LANGUAGE!
             int len = *(u32*)(buffer + head);
             head += 4; // sizeof TryBlock
-            head += len * 12; // sizeof TryBlock
+            head += len * 16; // sizeof TryBlock
         }
     }
 }

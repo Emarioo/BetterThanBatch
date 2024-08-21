@@ -1504,7 +1504,11 @@ void Compiler::run(CompileOptions* options) {
     }
     
     if(!obj_write_success) {
-        log::out << log::RED << "Could not write object file '"<<object_path<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
+        // error message should have been printed.
+        // TODO: We should return error codes and print messages here. the ObjectFile functions shouldn't decide how and what we print.
+        options->compileStats.errors++;
+        return;
+        // log::out << log::RED << "Could not write object file '"<<object_path<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
     } else if((output_type == OUTPUT_EXE || output_type == OUTPUT_DLL || output_type == OUTPUT_LIB) && options->target != TARGET_BYTECODE) {
         bool has_winmain = false;
         if (output_type == OUTPUT_EXE) {
@@ -1807,7 +1811,7 @@ void Compiler::run(CompileOptions* options) {
     // }
 JUMP_TO_EXEC:
     
-    if(options->executeOutput && output_type == OUTPUT_EXE) {
+    if(options->compileStats.errors == 0 && options->executeOutput && output_type == OUTPUT_EXE) {
         switch(options->target) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS

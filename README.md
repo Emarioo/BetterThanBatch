@@ -22,7 +22,7 @@ Example of unfinished multiplayer game
 **DISCLAIMER**: The compiler is not ready for serious projects. Both because the bug list isn't empty but also because the language isn't complete. New features will be added and old features will be removed.
 
 ## State of the compiler/language
-|Project|Status|
+|Part|Status|
 |-|-|
 |Windows build|Yes|
 |Linux (Ubuntu) build|Mostly works, still fixing things|
@@ -31,7 +31,7 @@ Example of unfinished multiplayer game
 |ARM-64|No|
 |Test cases|Covers simple cases|
 
-|Features|Status|
+|Feature|Status|
 |-|-|
 |Preprocessor|Yes, #macro, #if, #line, #file|
 |Polymorphism|Yes, but some issues with matching overloaded functions|
@@ -40,12 +40,12 @@ Example of unfinished multiplayer game
 |Operator overloading|Yes|
 |Namespaces|No, incomplete|
 |Linking with external functions|Yes, with #load and @import but could be better|
-|Type information|Yes, but needs a refactor/redesign|
+|Type information|Yes, but needs a redesign|
 |Compile time execution|Global variables are computed at compile time, nothing else yet|
-|x64 backend|Yes|
+|Custom x64 backend|Yes, llvm is not used resulting in a fast but unoptimized compilation|
 |Debug information|Only DWARF|
 |x64 inline assembly|Yes|
-|Software/hardware exception handling|Work in progress|
+|Software/hardware exception handling|Only Windows, Linux is WIP|
 
 # How to get started
 **NOTE**: There are no releases yet so you have to compile it yourself. The compiler is just not stable enough yet.

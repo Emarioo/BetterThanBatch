@@ -81,6 +81,16 @@ struct GenContext : public PhaseContext {
     void add_frame_fix(int index) {
         frame_size_fixes.add(index);
     }
+    void fix_frame_values(FuncImpl* funcImpl, TinyBytecode* tinycode) {
+        int frame_size = funcImpl->get_frame_size();
+        for(auto index : frame_size_fixes) {
+            builder.fix_local_imm(index, frame_size);
+        }
+        for(auto& block : tinycode->try_blocks) {
+            block.frame_offset_before_try = -frame_size; // it should be -frame_size
+        }
+        frame_size_fixes.clear();
+    }
 
     struct ResolveCall {
         int bcIndex = 0;

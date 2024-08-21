@@ -9,4 +9,7 @@ struct TryBlock {
     
     int bc_catch_start;
     int asm_catch_start;
+
+    int frame_offset_before_try; // a negative number, rbp + frame_offset
+    int filter_exception_code;
 };

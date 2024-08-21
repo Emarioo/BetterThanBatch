@@ -348,6 +348,18 @@ struct Compiler {
     int dataOffset_strings = -1;
 
     engone::Mutex lock_imports;
+
+    
+    const char* const TEMP_TINYCODE_NAME = "_comp_time_";
+    TinyBytecode* temp_tinycode = nullptr;
+    TinyBytecode* get_temp_tinycode() {
+        if(!temp_tinycode) {
+            temp_tinycode = bytecode->createTiny(TEMP_TINYCODE_NAME, BETCALL);
+        }
+        temp_tinycode->restore_to_empty();
+        return temp_tinycode;
+    }
+
 private:
     engone::Semaphore lock_wait_for_imports;
     bool signaled = true;

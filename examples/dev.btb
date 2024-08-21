@@ -27,17 +27,22 @@
 /*
     Case 1: Crash directly inside try-block
 */
-try {
-    *cast<i32*>cast<i64>0 = 9
-} catch EXCEPTION_MEMORY {
-    prints("caught\n")
-}
+// try {
+//     *cast<i32*>cast<i64>0 = 9
+// } catch EXCEPTION_MEMORY {
+//     prints("caught\n")
+// }
 
 /*
-    Case 2: Crash from function
+    Case 2: Crash from function, this includes fixing stack pointer since try block puts arguments on the stack and they must be cleaned up before catch block can be executed.
 */
-// fn crash() {
-//     *cast<i32*>cast<i64>0 = 9
+
+// fn crash(n: i32 = 5) {
+//     if n == 0{
+//         *cast<i32*>cast<i64>0 = 9
+//         return
+//     }
+//     crash(n-1)
 // }
 // try {
 //     crash()
@@ -50,15 +55,41 @@ try {
 */
 // x: i32 = 5
 // try {
-//     y: i32 = 2
+//     y: i32 = 2;
 //     *cast<i32*>cast<i64>0 = 9
 // } catch EXCEPTION_MEMORY {
 //     prints("caught outer\n")
 // }
-// log("x: ",x)
+// log("x: ", x)
+// log("y: ", *(&x - 8))
 // If stack is messed up then when 'ret' should pop the wrong value from stack (not the return address) and crash.
 
 /*
-    Case 4: Fixing of stack pointer if crash comes from function
+    Case 4: Handling exception filter, nested try-blocks
+*/
+try {
+    try {
+        a := 1 / 0
+    } catch EXCEPTION_ZERO_DIVISION {
+        prints("caught div\n");
+    }
+    *cast<i32*>cast<i64>0 = 9
+} catch EXCEPTION_MEMORY_VIOLATION {
+    prints("caught access\n");
+}
+try {
+    try {
+        a := 1 / 0
+    } catch EXCEPTION_MEMORY_VIOLATION {
+        prints("caught inner access\n");
+    }
+    // *cast<i32*>cast<i64>0 = 9
+} catch EXCEPTION_ZERO_DIVISION {
+    prints("caught outer div\n");
+}
+
+
+/*
+    Case 5: Multiple catch
 */
 // TODO:

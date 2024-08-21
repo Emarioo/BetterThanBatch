@@ -89,7 +89,18 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             if(param_index >= accessed_params.size()) {
                 accessed_params.resize(param_index+1);
             }
+            // log::out << "param "<<param_index<<" " << base->control<<"\n";
             accessed_params[param_index].control = base->control;
+        }
+        if(opcode == BC_PTR_TO_PARAMS) {
+            // nocheckin IMPORTANT TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
+            auto base = (InstBase_op1_imm16*)n->base;
+            int param_index = base->imm16 / 8;
+            if(param_index >= accessed_params.size()) {
+                accessed_params.resize(param_index+1);
+            }
+            // log::out << "param "<<param_index<<" " << base->control<<"\n";
+            accessed_params[param_index].control = CONTROL_64B; // we don't know the size, if it's float, if it's unsigned so we just assume unsigned 64-bit type.
         }
     }
 
@@ -674,16 +685,16 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     bool enable_callee_saved_registers = false;
     if(tinycode->call_convention == STDCALL) {
         enable_callee_saved_registers = true;
-        if(compiler->code_has_exceptions) {
-            // NOTE: When exceptions are enabled we need to be able to unwind the stack.
-            //   To do this, the thing unwinding needs to be able to restore RSP.
-            //   Therefore, we save RSP on the stack.
-            callee_saved_regs = stdcall_callee_saved_regs_with_rsp;
-            callee_saved_regs_len = sizeof(stdcall_callee_saved_regs_with_rsp)/sizeof(*stdcall_callee_saved_regs_with_rsp);
-        } else {
+        // if(compiler->code_has_exceptions) {
+        //     // NOTE: When exceptions are enabled we need to be able to unwind the stack.
+        //     //   To do this, the thing unwinding needs to be able to restore RSP.
+        //     //   Therefore, we save RSP on the stack.
+        //     callee_saved_regs = stdcall_callee_saved_regs_with_rsp;
+        //     callee_saved_regs_len = sizeof(stdcall_callee_saved_regs_with_rsp)/sizeof(*stdcall_callee_saved_regs_with_rsp);
+        // } else {
             callee_saved_regs = stdcall_callee_saved_regs;
             callee_saved_regs_len = sizeof(stdcall_callee_saved_regs)/sizeof(*stdcall_callee_saved_regs);
-        }
+        // }
 
     } else if (tinycode->call_convention == UNIXCALL) {
         enable_callee_saved_registers = true;
@@ -775,6 +786,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     // TODO: If the function (tinycode) has parameters and is stdcall or unixcall
     //   then we need the args will be passed through registers and we must
     //   move them to the stack space.
+    #define DECL_SIZED_PARAM(CONTROL) InstructionControl control = (InstructionControl)(((CONTROL) & ~CONTROL_MASK_SIZE) | CONTROL_64B);
     int unixcall_args_offset = 0;
     if(tinycode->call_convention == STDCALL) {
         // Assert(false);
@@ -789,7 +801,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             if(IS_CONTROL_FLOAT(param.control))
                 reg = stdcall_float_regs[i];
 
-            emit_mov_mem_reg(reg_args,reg,param.control,param.offset_from_rbp);
+            // stdcall always use 64-bit registers, well, not really but kind of.
+            DECL_SIZED_PARAM(param.control)
+
+            emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
         }
     } else if(tinycode->call_convention == UNIXCALL) {
         unixcall_args_offset = callee_saved_space;
@@ -818,13 +833,15 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             }
             if(accessed_params.size() > 1) {
                 auto& param = accessed_params[1];
+                DECL_SIZED_PARAM(param.control)
                 param.offset_from_rbp = -8;
                 emit_mov_reg_reg(tmp_reg, X64_REG_BP);
                 emit_add_imm32(tmp_reg, 8);
-                emit_mov_mem_reg(X64_REG_BP,tmp_reg,param.control,param.offset_from_rbp);
+                emit_mov_mem_reg(X64_REG_BP,tmp_reg,control,param.offset_from_rbp);
             }
             if(accessed_params.size() > 2) {
                 auto& param = accessed_params[2];
+                DECL_SIZED_PARAM(param.control)
                 param.offset_from_rbp = -16;
                 // emit_mov_reg_reg(tmp_reg, X64_REG_BP); reuse rax from second param
                 emit_add_imm32(tmp_reg, 8); // +8 (null of argv)
@@ -843,7 +860,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit1(OPCODE_ADD_REG_RM);
                 emit_modrm(MODE_REG, tmp_reg, extra_reg);
 
-                emit_mov_mem_reg(X64_REG_BP,tmp_reg,param.control,param.offset_from_rbp);
+                emit_mov_mem_reg(X64_REG_BP,tmp_reg,control,param.offset_from_rbp);
             }
         } else {
             int count = accessed_params.size();
@@ -854,7 +871,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             }
             for(int i=0;i<accessed_params.size() && i < 6; i++) {
                 auto& param = accessed_params[i];
-                auto control = param.control;
+                DECL_SIZED_PARAM(param.control)
 
                 size_of_saved_args += 8;
 
@@ -867,8 +884,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     Assert(false); // double check how floats are passed
                     reg = unixcall_normal_regs[i];
                 }
-
-                emit_mov_mem_reg(reg_args,reg,param.control,param.offset_from_rbp);
+                emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
             }
         }
     }
@@ -3724,6 +3740,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         block.asm_start = get_map_translation(block.bc_start);
         block.asm_end = get_map_translation(block.bc_end);
         block.asm_catch_start = get_map_translation(block.bc_catch_start);
+
+        block.frame_offset_before_try -= callee_saved_space;
     }
 
     // TODO: Don't iterate like this

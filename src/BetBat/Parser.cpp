@@ -3467,14 +3467,14 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
         
         statement = info.ast->createStatement(ASTStatement::TRY);
 
-        if(is_inside_try_block) {
-            ERR_SECTION(
-                ERR_HEAD2(loc)
-                ERR_MSG("You cannot have nested try-catch blocks. The exception handler is very simple and cannot determine wheter the inner or outer catch should be executed. (should be fixed in the future)")
-                ERR_LINE2(loc, "here")
-            )
-            return SIGNAL_FAILURE;
-        }
+        // if(is_inside_try_block) {
+        //     ERR_SECTION(
+        //         ERR_HEAD2(loc)
+        //         ERR_MSG("You cannot have nested try-catch blocks. The exception handler is very simple and cannot determine wheter the inner or outer catch should be executed. (should be fixed in the future)")
+        //         ERR_LINE2(loc, "here")
+        //     )
+        //     return SIGNAL_FAILURE;
+        // }
 
         bool prev_inside_try = is_inside_try_block;
         is_inside_try_block = true;

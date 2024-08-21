@@ -377,6 +377,7 @@ struct TinyBytecode {
         lines.resize(0);
         required_asm_instances.resize(0);
         call_relocations.resize(0);
+        try_blocks.resize(0);
     }
 };
 struct BytecodeLocation {

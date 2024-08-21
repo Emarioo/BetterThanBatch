@@ -5,43 +5,38 @@
 
 #import "Windows"
 
+// This enum is used in the catch filter expression
+// try { ... } catch EXCEPTION_MEMORY_VIOLATION { ... }
 enum ExceptionType {
-    EXCEPTION_MEMORY,
-    EXCEPTION_ZERO_DIVISION,
+    EXCEPTION_NONE = 0,
+    EXCEPTION_MEMORY_VIOLATION = 0x1,
+    EXCEPTION_FLOAT_ZERO_DIVISION = 0x2,
+    EXCEPTION_INT_ZERO_DIVISION = 0x4,
+    EXCEPTION_INVALID_INSTRUCTION = 0x8, // illegal or privelage instruction
+    EXCEPTION_STACK_OVERFLOW = 0x10,
+    EXCEPTION_OTHER = 0x20, // any other exception than the specific ones
+
+    EXCEPTION_ZERO_DIVISION = 0x6, // 0x4|0x2 // enum values don't support calculations
+
+    EXCEPTION_ANY = 0x3F,
 }
 
 #if !DISABLE_DEFAULT_EXCEPTION_HANDLER
+// fn @export @oscall exception_handler(records: EXCEPTION_POINTERS*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {
 fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {
-    global handling_exception: bool;
+    global handling_exception: bool; // TODO: global variable, not thread safe
     // prints("hit\n")
-    // FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE))
     if handling_exception
-        return ExceptionContinueSearch
+        return ExceptionContinueSearch // if we're handling an exception and crash then we want to prevent an infinite loop 
 
     if !dispatcherContext {
+        // Is this possible? Shouldn't be, in the debugger I saw it be null at one point.
+        // Maybe that was a fluke?
         prints("EXCEPTION: Why is dispatcher context null?\n")
-        // FlushFileBuffers(GetStdHandle(STD_OUTPUT_HANDLE))
         return ExceptionContinueSearch
     }
 
     handling_exception = true
-
-
-    // The purpose of the exception handler is to find the appropriate catch block.
-    
-    // We can use the instruction pointer to do this.
-
-    // This requires a list of try-catch blocks per function.
-
-    // We need find a the try-catch that matches the instruction pointer.
-    // then we need to restore context and the instruction pointer to point to the start of the catch block.
-
-    // Additionally we may need to restore the stack pointer to something reasonable.
-
-    // log(cast<void*>dispatcherContext)
-    // log(cast<void*>dispatcherContext.HandlerData)
-
-    data := cast<void*>dispatcherContext.HandlerData
 
     /* Definition of handler data (ALSO DEFINED IN ObjectFile.cpp)
     */
@@ -49,35 +44,112 @@ fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame
             asm_start: u32;
             asm_end: u32;
             asm_catch_start: u32;
+            filter_code: i32;
         }
     /*
         struct HandlerData {
             length: u32;
+            frame_offset: i32; // a negative number, offset before try-block, rbp + frame_offset
             blocks: TryBlock[length]; // structs doesn't support dynamic arrays, hence we can't use this struct in the code
         }
     */
-    len := *cast<i32*>data
-    blocks := cast<TryBlock*>data + 4
-    
-    // log("len: ", len)
 
-    rip := dispatcherContext.ControlPc
+    // TODO: THIS UWNIND CODE WILL NOT WORK if a foreign function calls us.
+    //   If this happens, then we should not find the foreign function in the
+    //   function entry table so we should be fine, I think.
+
+    cur_rbp: u64 = context.Rbp
+    cur_rip: u64 = dispatcherContext.ControlPc
+
+    data: u8* = dispatcherContext.HandlerData
+    image_base: u64 = dispatcherContext.ImageBase
+    func_entry: RUNTIME_FUNCTION* = dispatcherContext.FunctionEntry
+
     found_catch: bool = false
-    new_rip_address: u64
-    for 0..len {
-        block := blocks + nr * sizeof TryBlock
-        asm_start       := block.asm_start       + dispatcherContext.ImageBase
-        asm_end         := block.asm_end         + dispatcherContext.ImageBase
-        asm_catch_start := block.asm_catch_start + dispatcherContext.ImageBase
 
-        // log(block)
+    while !found_catch {
+        try_catch_count := *cast<i32*>data
+        frame_offset := *(cast<i32*>data + 4)
+        blocks := (cast<TryBlock*>data + 8)
+        for 0..try_catch_count {
+            block := blocks + nr * sizeof TryBlock
+            asm_start       := cast<u64>block.asm_start       + image_base
+            asm_end         := cast<u64>block.asm_end         + image_base
+            asm_catch_start := cast<u64>block.asm_catch_start + image_base
 
-        if rip >= asm_start && rip < asm_end {
-            // log("inside")
-            new_rip_address = asm_catch_start
-            found_catch = true
+            // log(block)
+
+            filtered_yes := false
+            code := record.ExceptionCode
+
+            if block.filter_code == EXCEPTION_ANY {
+                filtered_yes = true
+            } else if block.filter_code & cast<i32>~EXCEPTION_ANY == 0 {
+                filter := block.filter_code
+                if block.filter_code == EXCEPTION_OTHER {
+                    filter = EXCEPTION_ANY
+                }
+
+                if filter & cast<i32>EXCEPTION_MEMORY_VIOLATION
+                    filtered_yes |= code == WIN_EXCEPTION_ACCESS_VIOLATION
+                if filter & cast<i32>EXCEPTION_INVALID_INSTRUCTION
+                    filtered_yes |= code == WIN_EXCEPTION_ILLEGAL_INSTRUCTION || code == WIN_EXCEPTION_PRIV_INSTRUCTION
+                if filter & cast<i32>EXCEPTION_STACK_OVERFLOW
+                    filtered_yes |= code == WIN_EXCEPTION_STACK_OVERFLOW
+                if filter & cast<i32>EXCEPTION_INT_ZERO_DIVISION
+                    filtered_yes |= code == WIN_EXCEPTION_INT_DIVIDE_BY_ZERO
+                if filter & cast<i32>EXCEPTION_FLOAT_ZERO_DIVISION
+                    filtered_yes |= code == WIN_EXCEPTION_FLT_DIVIDE_BY_ZERO
+
+                if block.filter_code == EXCEPTION_OTHER {
+                    filtered_yes = !filtered_yes
+                }
+                // TODO: Add compile time error if we forget to check a newly added exception?
+                // TODO: Add Assert that checks if filter code is 0, if so maybe print something useful?
+            } else {
+                filtered_yes |= code == block.filter_code
+            }
+
+            // log("filter ", block.filter_code, " & ", code, " = ", filtered_yes)
+
+            if !filtered_yes
+                continue
+
+            if cur_rip >= asm_start && cur_rip < asm_end {
+                // log("inside")
+                context.Rip = asm_catch_start
+                found_catch = true
+                
+                // we additionally set these
+                context.Rsp = cur_rbp + frame_offset // fix stack, there may be some remaining push, pop or argument allocation which could mess things up.
+                context.Rbp = cur_rbp
+                break
+            }
+        }
+        if found_catch
+            break
+
+        // Execution in this function is not wrapped in try-catch.
+        // Find parent function and check for try-catch there.
+
+        new_rbp := *cast<u64*>cur_rbp
+        cur_rip = *(cast<u64*>cur_rbp + 8) - 1  // -1 to make sure rip is inside try-block and not precisely on the edge which happens if the last instruction in the block throws an exception
+
+        cur_rbp = new_rbp
+
+        func_entry = RtlLookupFunctionEntry(cur_rip, &image_base, null)
+
+        if !func_entry {
+            // not found, do nothing
             break
         }
+        unwind_info := cast<UNWIND_INFO*>(cast<u64>func_entry.UnwindInfoAddress + image_base)
+
+        offset := sizeof UNWIND_INFO + unwind_info.CountOfUnwindCodes * 2u +4 //  +4 exception handler
+        if offset & 3 { // fix 4-byte alignment
+            offset += 4 - (offset & 3) // UNRELATED NOTE: Bitwise operands have higher operator precedence than subtraction, BUT I have been cursed by C/C++ operator precedence and do not trust it.
+        }
+        data = cast<u8*>unwind_info + offset
     }
 
     handling_exception = false
@@ -87,9 +159,6 @@ fn @export @oscall exception_handler(record: EXCEPTION_RECORD*, establisherFrame
         return EXCEPTION_DISPOSITION.ExceptionContinueSearch
     }
 
-    // TODO: Fix the stack
-
-    context.Rip = new_rip_address // catch block, hopefully
     RtlRestoreContext(context, null)
 
     // UNREACHABLE

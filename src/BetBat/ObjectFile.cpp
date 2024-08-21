@@ -65,6 +65,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
                 auto tinycode = compiler->bytecode->tinyBytecodes[i];
 
                 if(tinyprog->head == 0) {
+                    MSG_CODE_LOCATION;
                     log::out << engone::log::RED<< "COMPILER BUG:"<<engone::log::NO_COLOR<<" Function '"<<log::GREEN << tinycode->name<<log::NO_COLOR<<"' did not have any instructions (x64 generator did not create any).\n";
                     return false;
                 }
@@ -95,6 +96,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
 
             if(text_stream->getWriteHead() > 0x4000'0000 && !messaged) {
                 messaged = true;
+                MSG_CODE_LOCATION;
                 engone::log::out << engone::log::RED << "ABOUT TO REACH 4 GB LIMIT IN TEXT SECTION. THE COMPILER ASSUMES THAT 32-bit INTEGERS IS ENOUGH.\n";
             }
         }
@@ -139,14 +141,23 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         // auto pdata2_stream = objectFile.getStreamFromSection(section_pdata2);
 
         // for each function, create unwindinfo in xdata
+        
+        DynamicArray<TinyBytecode*> valid_tinycodes{};
+        for(auto t : compiler->bytecode->tinyBytecodes) {
+            if(program->tinyPrograms.size() <= t->index)
+                continue;
+            auto tinyprog = program->tinyPrograms[t->index];
+            if(!tinyprog)
+                continue; // the index (i) may have been a temporary tinycode for compile time, that is why no tinyprogram was created
 
-        int func_count = compiler->bytecode->tinyBytecodes.size();
-        func_to_unwind.resize(func_count);
+            valid_tinycodes.add(t);
+        }
+        func_to_unwind.resize(valid_tinycodes.size());
 
         int sym_text_base = objectFile.addSymbol(SYM_LABEL, "$text$base", section_text, 0);
 
-        for(int ci=0;ci<func_count;ci++) {
-            auto tinycode = compiler->bytecode->tinyBytecodes[ci];
+        for(int ci=0;ci<valid_tinycodes.size();ci++) {
+            auto tinycode = valid_tinycodes[ci];
             func_to_unwind[ci] = xdata_stream->getWriteHead();
 
             // log::out << tinycode->name << " : " << tinycode->index<<"\n";
@@ -161,28 +172,29 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
             unwind_info->SizeOfProlog = 1*3 + 2*2; // 1*3 for one 'mov rbp, rsp' and 2*2 for six 'push reg'
             unwind_info->FrameRegister = 0;
             unwind_info->FrameRegisterOffset = 0;
-            unwind_info->CountOfUnwindCodes = 2;
+            unwind_info->CountOfUnwindCodes = 0;
+            // unwind_info->CountOfUnwindCodes = 2;
             // TODO: set values
 
-            if(unwind_info->CountOfUnwindCodes > 0) {
-                coff::UNWIND_CODE* codes = nullptr;
-                xdata_stream->write_late((void**)&codes, unwind_info->CountOfUnwindCodes * sizeof(*codes));
+            // if(unwind_info->CountOfUnwindCodes > 0) {
+            //     coff::UNWIND_CODE* codes = nullptr;
+            //     xdata_stream->write_late((void**)&codes, unwind_info->CountOfUnwindCodes * sizeof(*codes));
                 
-                const coff::UnwindOpRegister ops[]{
-                    coff::UWOP_RSP,
-                    coff::UWOP_RBP,
-                };
-                const int ops_offset[]{
-                    5,
-                    0,
-                };
-                int ops_len = sizeof(ops)/sizeof(*ops);
-                for(int i=0;i<ops_len;i++) {
-                    codes[i].OffsetInProlog = ops_offset[i];
-                    codes[i].UnwindOperationCode = coff::UWOP_PUSH_NONVOL;
-                    codes[i].OperationInfo = ops[i];
-                }
-            }
+            //     const coff::UnwindOpRegister ops[]{
+            //         coff::UWOP_RSP,
+            //         coff::UWOP_RBP,
+            //     };
+            //     const int ops_offset[]{
+            //         5,
+            //         0,
+            //     };
+            //     int ops_len = sizeof(ops)/sizeof(*ops);
+            //     for(int i=0;i<ops_len;i++) {
+            //         codes[i].OffsetInProlog = ops_offset[i];
+            //         codes[i].UnwindOperationCode = coff::UWOP_PUSH_NONVOL;
+            //         codes[i].OperationInfo = ops[i];
+            //     }
+            // }
 
             if(unwind_info->Flags & coff::UNW_FLAG_EHANDLER) {
                 xdata_stream->write_align(4);
@@ -198,80 +210,80 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
                         u32 asm_start;
                         u32 asm_end;
                         u32 asm_catch_start;
+                        u32 filter_code;
                     };
                     struct HandlerData {
                         u32 length;
+                        u32 frame_offset;
                         TryBlock blocks[length];
                     }
                 */
-                xdata_stream->write4(tinycode->try_blocks.size());
+                xdata_stream->write4((int)tinycode->try_blocks.size());
+                if(tinycode->try_blocks.size() > 0) {
+                    xdata_stream->write4(tinycode->try_blocks[0].frame_offset_before_try); // every frame offset is the same
+                } else {
+                    xdata_stream->write4(0);
+                }
+
                 for(int j=0;j<tinycode->try_blocks.size();j++) {
                     auto& block = tinycode->try_blocks[j];
 
-
                     int offset = xdata_stream->getWriteHead();
-                    int func_start = tinyprogram_offsets[ci];
+                    int func_start = tinyprogram_offsets[tinycode->index];
                     xdata_stream->write4(func_start + block.asm_start);
                     xdata_stream->write4(func_start + block.asm_end);
                     xdata_stream->write4(func_start + block.asm_catch_start);
+                    xdata_stream->write4(block.filter_exception_code);
 
                     objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, offset + 0, sym_text_base, 0);
                     objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, offset + 4, sym_text_base, 0);
                     objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, offset + 8, sym_text_base, 0);
                 }
-                // xdata_stream->write4(2 + ci);
             }
 
             xdata_stream->write_align(4);
         }
 
-        if(func_count > 0) {
+        if(valid_tinycodes.size() > 0) {
             coff::RUNTIME_FUNCTION* functions = nullptr;
-            pdata_stream->write_late((void**)&functions, func_count * sizeof(*functions));
+            pdata_stream->write_late((void**)&functions, valid_tinycodes.size() * sizeof(*functions));
 
             int eh_number = 0;
             int eh_unwind = 0;
 
             // base unwind, TODO: In future each function needs there own unwind
             int sym_unwind = objectFile.addSymbol(SYM_EMPTY, "$unwind$base", section_xdata, 0);
-
+            int func_index = 0;
             auto gen_entry = [&](int i) {
-                auto tinycode = compiler->bytecode->tinyBytecodes[i];
-                int asm_size = tinycode->debugFunction->asm_end - tinycode->debugFunction->asm_start;
-                // functions[i].StartAddress = 0;
-                // functions[i].EndAddress = asm_size;
-                functions[i].StartAddress = tinycode->debugFunction->asm_start;
-                functions[i].EndAddress = tinycode->debugFunction->asm_end;
-                functions[i].UnwindInfoAddress = func_to_unwind[i];
-                // functions[i].UnwindInfoAddress = 0; // TODO: Set address of unwind info (for now we use the first one for all)
+                auto tinycode = valid_tinycodes[i];
+                auto& func = functions[func_index];
+                func_index++;
+                memset(&func, 0, sizeof(func));
+                if(!tinycode->debugFunction) {
+                    return;
+                }
 
-                // std::string sym_name = "$unwind" + std::to_string(eh_unwind);
-                // eh_unwind++;
-                // int sym_unwind = objectFile.addSymbol(SYM_EMPTY, sym_name, section_xdata, func_to_unwind[i]);
+                func.StartAddress = tinycode->debugFunction->asm_start;
+                func.EndAddress = tinycode->debugFunction->asm_end;
+                func.UnwindInfoAddress = func_to_unwind[i];
 
                 #undef ADDR
-                #define ADDR(X) ((u64)&functions[i] - (u64)functions) + X
-
-                // std::string sym_func_name = "$EH" + std::to_string(eh_number);
-                // eh_number++;
-                // objectFile.addSymbol(SYM_EMPTY, sym_func_name, section_text, 0);
-                // int sym_index = objectFile.addSymbol(SYM_LABEL, sym_func_name, section_text, tinycode->debugFunction->asm_start);
-                int sym_index = sym_text_base;
+                #define ADDR(X) ((u64)&func - (u64)functions) + X
 
                 // log::out << tinycode->name << " " << tinycode->debugFunction->asm_start<<"\n";
 
-                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(0), sym_index, 0);
-                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(4), sym_index, 0);
+                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(0), sym_text_base, 0);
+                objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(4), sym_text_base, 0);
                 objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(8), sym_unwind, 0);
                 #undef ADDR
             };
             // main is first
             gen_entry(program->index_of_main);
-            for(int i=0;i<func_count;i++) {
-                if(program->index_of_main == i)
+            for(int ci=0;ci<valid_tinycodes.size();ci++) {
+                if(program->index_of_main == valid_tinycodes[ci]->index)
                     continue;
 
-                gen_entry(i);
+                gen_entry(ci);
             }
         }
 
@@ -329,10 +341,15 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
 
     if(has_exceptions) {
         int index = objectFile.findSymbol("exception_handler");
+        if(index == -1) {
+            MSG_CODE_LOCATION;
+            log::out << log::RED << "ERROR (compiler bug): The code to compile contains try-catch blocks but the source code does not contain an 'exception_handler'. The default handler exists in Exception.btb. You can define your own by passing the macro DISABLE_DEFAULT_EXCEPTION_HANDLER to the compiler, it will disable the default exception.\n";
+            return false;
+        }
         for(int i=0;i<func_to_unwind.size();i++) {
             int unwind_offset = func_to_unwind[i];
-            objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, unwind_offset + 8, index, 0);
-            // TODO: Relocations for language-specific data
+            // objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, unwind_offset + 8, index, 0);
+            objectFile.addRelocation(section_xdata, RELOCA_ADDR32NB, unwind_offset + 4, index, 0);
         }
     }
 
@@ -345,6 +362,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         CHECK
 
         if(program->globalSize > 8000'0000) {
+            MSG_CODE_LOCATION;
             engone::log::out << engone::log::RED << "THE COMPILER CANNOT HANDLE GLOBAL DATA OF MORE THAN 2 GB\n";
         }
     }
@@ -363,6 +381,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
 }
 bool ObjectFile::writeFile_coff(const std::string& path) {
     using namespace coff;
+    using namespace engone;
     ZoneScopedC(tracy::Color::Blue4);
     ByteStream stream{nullptr};
     ByteStream* obj_stream = &stream;
@@ -558,18 +577,29 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
     Assert(_strings_offset == cur_offset);
 
     auto file = engone::FileOpen(path, engone::FILE_CLEAR_AND_WRITE);
-    Assert(file);
+    if(!file) {
+        MSG_CODE_LOCATION;
+        log::out << log::RED << "Cannot open file '"<<path<<"'\n";
+        return false;
+    }
+    defer { engone::FileClose(file); };
+
     ByteStream::Iterator iter{};
     while(obj_stream->iterate(iter)) {
-        engone::FileWrite(file, (void*)iter.ptr, iter.size);
+        bool yes = engone::FileWrite(file, (void*)iter.ptr, iter.size);
+        if(!yes) {
+            MSG_CODE_LOCATION;
+            log::out << log::RED << "Cannot write to file '"<<path<<"'\n";
+            return false;
+        }
     }
-    engone::FileClose(file);
 
     #undef CHECK
     return true;
 }
 bool ObjectFile::writeFile_elf(const std::string& path) {
     using namespace elf;
+    using namespace engone;
     ZoneScopedC(tracy::Color::Blue4);
     ByteStream stream{nullptr};
     ByteStream* obj_stream = &stream;
@@ -972,12 +1002,22 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
     }
 
     auto file = engone::FileOpen(path, engone::FILE_CLEAR_AND_WRITE);
-    if(!file)  return false;
+    defer { engone::FileClose(file); };
+
+    if(!file) {
+        MSG_CODE_LOCATION;
+        log::out << log::RED << "Cannot open file '"<<path<<"'\n";
+        return false;
+    }
     ByteStream::Iterator iter{};
     while(obj_stream->iterate(iter)) {
-        engone::FileWrite(file, (void*)iter.ptr, iter.size);
+        bool yes = engone::FileWrite(file, (void*)iter.ptr, iter.size);
+        if(!yes) {
+            MSG_CODE_LOCATION;
+            log::out << log::RED << "Cannot write to file '"<<path<<"'\n";
+            return false;
+        }
     }
-    engone::FileClose(file);
 
     #undef CHECK
     return true;
@@ -1079,6 +1119,7 @@ bool ObjectFile::writeFile(const std::string& path) {
     default:
         Assert(false);
     }
+    // UNREACHABLE
     return false;
 }
 void ObjectFile::cleanup() {

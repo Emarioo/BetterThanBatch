@@ -459,6 +459,10 @@ struct EXCEPTION_RECORD {
     NumberParameters: u32;
     ExceptionInformation: u64[EXCEPTION_MAXIMUM_PARAMETERS];
 }
+struct EXCEPTION_POINTERS {
+  ExceptionRecord: EXCEPTION_RECORD*;
+  ContextRecord: CONTEXT*;
+}
 enum EXCEPTION_DISPOSITION {
     ExceptionContinueExecution,
     ExceptionContinueSearch,
@@ -470,6 +474,19 @@ struct RUNTIME_FUNCTION {
     EndAddress: u32;
     UnwindInfoAddress: u32;
 };
+struct UNWIND_INFO {
+  Version_Flags: u8; // 3 bits version, 5 bits flags
+  SizeOfProlog: u8;
+  CountOfUnwindCodes: u8;
+  FrameRegister_Offset: u8; // 4 bits frame register, 4 bits scaled frame offset
+  // u16 UnwindCodesArray[CountOfUnwindCodes];
+
+  // variable	Can either be of form (1):
+        // u32 AddressOfExceptionHandler;
+        // variable	Language-specific handler data (optional)
+      // or (2):
+          // RUNTIME_FUNCTION ChainedUnwindInfo;
+  };
 #macro EXCEPTION_ROUTINE
 fn(
     ExceptionRecord: EXCEPTION_RECORD*, // in
@@ -488,6 +505,11 @@ struct DISPATCHER_CONTEXT {
     LanguageHandler: EXCEPTION_ROUTINE;
     HandlerData: void*;
 }
+fn @import(Kernel) RtlLookupFunctionEntry(
+  ControlPc: u64,
+  ImageBase: u64*,
+  HistoryTable: void* // PUNWIND_HISTORY_TABLE
+) -> RUNTIME_FUNCTION*;
 
 fn @import(Kernel) RaiseException(
   dwExceptionCode: u32,
@@ -502,6 +524,37 @@ fn @import(Kernel) @betcall RtlRestoreContext(
   ContextRecord: CONTEXT*,
   ExceptionRecord: EXCEPTION_RECORD*
 );
+
+// Prefix with WIN since user may use these names. Exception.btb uses some of them.
+#macro WIN_EXCEPTION_ACCESS_VIOLATION         0xC0000005 // The thread tried to read from or write to a virtual address for which it does not have the appropriate access.
+#macro WIN_EXCEPTION_ARRAY_BOUNDS_EXCEEDED    0xC000008C // The thread tried to access an array element that is out of bounds and the underlying hardware supports bounds checking.
+#macro WIN_EXCEPTION_BREAKPOINT               0x80000003 // A breakpoint was encountered.
+#macro WIN_EXCEPTION_DATATYPE_MISALIGNMENT    0x80000002 // The thread tried to read or write data that is misaligned on hardware that does not provide alignment. For example, 16-bit values must be aligned on 2-byte boundaries; 32-bit values on 4-byte boundaries, and so on.
+#macro WIN_EXCEPTION_FLT_DENORMAL_OPERAND     0xC000008D // One of the operands in a floating-point operation is denormal. A denormal value is one that is too small to represent as a standard floating-point value.
+#macro WIN_EXCEPTION_FLT_DIVIDE_BY_ZERO       0xC000008E // The thread tried to divide a floating-point value by a floating-point divisor of zero.
+#macro WIN_EXCEPTION_FLT_INEXACT_RESULT       0xC000008F // The result of a floating-point operation cannot be represented exactly as a decimal fraction.
+#macro WIN_EXCEPTION_FLT_INVALID_OPERATION    0xC0000090 // This exception represents any floating-point exception not included in this list.
+#macro WIN_EXCEPTION_FLT_OVERFLOW             0xC0000091 // The exponent of a floating-point operation is greater than the magnitude allowed by the corresponding type.
+#macro WIN_EXCEPTION_FLT_STACK_CHECK          0xC0000092 // The stack overflowed or underflowed as the result of a floating-point operation.
+#macro WIN_EXCEPTION_FLT_UNDERFLOW            0xC0000093 // The exponent of a floating-point operation is less than the magnitude allowed by the corresponding type.
+#macro WIN_EXCEPTION_ILLEGAL_INSTRUCTION      0xC000001D // The thread tried to execute an invalid instruction.
+#macro WIN_EXCEPTION_IN_PAGE_ERROR            0xC0000006 // The thread tried to access a page that was not present, and the system was unable to load the page. For example, this exception might occur if a network connection is lost while running a program over the network.
+#macro WIN_EXCEPTION_INT_DIVIDE_BY_ZERO       0xC0000094 // The thread tried to divide an integer value by an integer divisor of zero.
+#macro WIN_EXCEPTION_INT_OVERFLOW             0xC0000095 // The result of an integer operation caused a carry out of the most significant bit of the result.
+#macro WIN_EXCEPTION_INVALID_DISPOSITION      0xC0000026 // An exception handler returned an invalid disposition to the exception dispatcher. Programmers using a high-level language such as C should never encounter this exception.
+#macro WIN_EXCEPTION_NONCONTINUABLE_EXCEPTION 0xC0000025 // The thread tried to continue execution after a noncontinuable exception occurred.
+#macro WIN_EXCEPTION_PRIV_INSTRUCTION         0xC0000096 // The thread tried to execute an instruction whose operation is not allowed in the current machine mode.
+#macro WIN_EXCEPTION_SINGLE_STEP              0x80000004 // A trace trap or other single-instruction mechanism signaled that one instruction has been executed.
+#macro WIN_EXCEPTION_STACK_OVERFLOW           0xC00000FD // The thread used up its stack.
+
+#macro WIN_EXCEPTION_NONCONTINUABLE           0x1        // Noncontinuable exception
+#macro WIN_EXCEPTION_UNWINDING                0x2        // Unwind is in progress
+#macro WIN_EXCEPTION_EXIT_UNWIND              0x4        // Exit unwind is in progress
+#macro WIN_EXCEPTION_STACK_INVALID            0x8        // Stack out of limits or unaligned
+#macro WIN_EXCEPTION_NESTED_CALL              0x10       // Nested exception handler call
+#macro WIN_EXCEPTION_TARGET_UNWIND            0x20       // Target unwind in progress
+#macro WIN_EXCEPTION_COLLIDED_UNWIND          0x40       // Collided exception handler call
+#macro WIN_EXCEPTION_SOFTWARE_ORIGINATE       0x80       // Exception originated in software
 
 /*#############
     SOCKETS

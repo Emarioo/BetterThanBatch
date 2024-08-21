@@ -155,6 +155,12 @@ _test 1; cast<f64>cast<u16>0x8100_ > 0.0;
 _test 1; cast<f64>cast<u32>0x8100_0000 > 0.0;
 _test 1; cast<f64>cast<u64>0x8100_0000_0000_0011 > 0.0;
 
+
+a: u64 = 0x5_0000_0000
+n: i32 = -32
+f: u64 = a + n
+_test 0x4_FFFF_FFE0; f
+
 // these conversions, divisions don't work properly
 // sample0 = 47627486
 // sample1 = 53253632
