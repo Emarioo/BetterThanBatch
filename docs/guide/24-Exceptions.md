@@ -1,5 +1,9 @@
 The language does not support user-made exceptions where a keyword like 'throw' is used to manually cause exceptions. Software and hardware exceptions from the operating system are supported.
 
+**DISCLAIMER:** Exception will not be caught if it occured in an external C library (static or dynamic). It will also not be caught if BTB code has a try catch over a C function but where the C function calls bac to BTB code that crashes. This is because the exception handler doesn't know how to unwind the C function.
+
+**DISCLAIMER:** Try/catch will not work on Linux.
+
 # Exceptions
 Note that even if you can catch exceptions and continue executing it may not be a good idea. An exception may occur in the middle of the try-block causing memory leaks and files to remain open. You need to take special care when using exceptions to avoid such scenarios. The reason Exceptions are supported is to give the user a neat reason as to why the program crashed instead of a sudden termination with no information at all.
 
