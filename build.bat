@@ -9,6 +9,11 @@
 @REM python build.py clean
 @REM goto END
 
+
+website
+
+exit
+
 if "%~1"=="run" (
     @REM Run compiler without compiling it
     @REM btb -dev

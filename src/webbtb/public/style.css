@@ -1,0 +1,32 @@
+body {
+    /* font-family: Verdana, Geneva, Tahoma, sans-serif; */
+    /* color: rgb(19, 72, 93); */
+    margin: 0;
+    padding: 0;
+    /* font-size: 1.5em; */
+    /* letter-spacing: .00em; */
+    /* height: 100%; */
+}
+
+.code_div {
+    background-color: #00609011;
+    padding: 0.5em;
+    margin: 0.5em;
+    width: auto;
+}
+code {
+    color:rgb(0, 0, 0);
+    white-space:pre;
+    font-family: monospace;
+    width: auto;
+}
+tiny_code {
+    white-space: pre;
+    font-family: monospace;
+    color:rgb(78, 40, 0);
+    background-color: #e4b77c3a;
+    font-weight: bold;
+    font-size: 1.1em;
+    padding: 0.15em;
+    border-radius: 0.4em;
+}

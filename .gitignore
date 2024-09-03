@@ -31,3 +31,6 @@ logs
 /*.c
 /*.s
 /*.asm
+
+# Stats from the webserver which we don't want to commit
+src/webbtb/stats.json
