@@ -321,7 +321,10 @@ function ModifyContent(data, options) {
 }
 
 // Code to manually test conversions
-console.log(ConvertMDToHTML("well [link](hey.png) hum"))
+// console.log(ConvertMDToHTML("well\n- A\n- B\nMore text"))
+// console.log(ConvertMDToHTML("yes<!-- no -->yes"))
+// console.log(ConvertMDToHTML(" also the *Slice* type which "))
+// console.log(ConvertMDToHTML("well [link](hey.png) hum"))
 // console.log(ConvertMDToHTML("Text is\nvery close"))
 // console.log(ConvertMDToHTML("but this is\n\nseparated"))
 // console.log(ConvertMDToHTML("This is just.  \nA new line"))
@@ -350,6 +353,7 @@ function ConvertMDPathToWebPath(path) {
 }
 
 // takes in string, returns string
+// Converts markdown to html
 function ConvertMDToHTML(data) {
     data = data.toString()
     let text = "";
@@ -387,12 +391,15 @@ function ConvertMDToHTML(data) {
         let chr_prev = '\0'
         let chr_next = '\0'
         let chr_next2 = '\0'
+        let chr_next3 = '\0'
         if (head-1 >= 0)
             chr_prev = data[head-1]
         if (head+1 < data.length)
             chr_next = data[head+1]
         if (head+2 < data.length)
             chr_next2 = data[head+2]
+        if (head+3 < data.length)
+            chr_next3 = data[head+3]
         head++
 
         // TODO: Code block conversion does not follow the standard for edge cases. We may not care though.
@@ -416,13 +423,34 @@ function ConvertMDToHTML(data) {
             continue
         }
 
-        if(inside_code_block) {
-            text += chr
+        if(inside_code_block || inside_tiny_code) {
+            // TODO: Apply syntax highlighting. For this we should append characters to a temporary string.
+            //   Apply highlighting to that string (wrap words in <span> with colors) then convert arrows to &lt/&gt
+            //   and finally add it to 'text'
+            if(chr == '<')
+                text += "&lt;"
+            else if(chr == '>')
+                text += "&gt;"
+            else
+                text += chr
             continue
         }
-        if(inside_tiny_code) {
-            text += chr
-            continue
+        if(chr == '<' && chr_next=='!'&&chr_next2=='-'&&chr_next3=='-') {
+            // skip comment
+            head += 3;
+            // TODO: This is BUGGY, most of the code is buggy actually because
+            //   it doesn't handle end of file... it won't crash because 'head<data.length'
+            //   but it won't emit correct text either
+            
+            while(head < data.length) {
+                let tmp = data[head]
+                if(tmp == '-' && head + 2 < data.length && data[head+1] == '-' && data[head+2] == '>') {
+                    head+=3
+                    break
+                }
+                head++
+            }
+            continue;
         }
 
         if(chr == '\\' && head < data.length) {
@@ -467,7 +495,7 @@ function ConvertMDToHTML(data) {
         
         // TODO: Styling is not handled according to the standard. We need to fix this. But perhaps we don't care.
         // TODO: Markdown that write about pointer types such as 'char*' will cause problems with italics in certain cases. It was worse but i fixed it cheaply by checking for trailing alphanumeric.
-        if((chr == '*' && (chr_next == '*' || is_alphanum(chr_next))) || (is_whitespace(chr_prev) && is_whitespace(chr_next) && chr == '_')) {
+        if((chr == '*' && (chr_next == '*' || (is_alphanum(chr_next) || style_stack.length > 0))) || (is_whitespace(chr_prev) && is_whitespace(chr_next) && chr == '_')) {
             let style_level = 1;
             
             // calculate style level
@@ -497,8 +525,53 @@ function ConvertMDToHTML(data) {
             }
             continue
         }
-
-        if (inside_header) {
+        // console.log(chr, inside_paragraph, inside_header, chr_next)
+        // if(!inside_header && !inside_paragraph && chr == '-' && chr_next == ' ') {
+        //     console.log("hi yoo dude")
+        //     head++; // skip space
+        //     inside_list = true;
+        //     text += "<ul>"
+        //     text += "<li>"
+        //     continue;
+        // }
+        
+        if(inside_list) {
+            if(chr == '\n') {
+                text += "</li>"
+                // newline indicates end of list item, however, we can't emit </ul> yet
+                // because the following line may be another list item. Those items needs to exist
+                // within the same <ul>. We could just emit <li> but they don't have the proper indentation (can be fixed with CSS, margin-left)
+                // and there may be other problems.
+                let found = false;
+                while(head < data.length) {
+                    let tmp = data[head];
+                    let tmp2 = '\0'
+                    if(head+1 < data.length)
+                        tmp2 = data[head + 1];
+                        
+                    if(tmp == ' ' || tmp == '\t') { // skip whitespace except for new line
+                        head++
+                        continue
+                    }
+                    
+                    if(tmp == '-' && tmp2 == ' ') {
+                        head+=2
+                        found = true;
+                    }
+                    break;
+                }
+                if(found) {
+                    text += "<li>"
+                    continue;
+                }
+                
+                inside_list = false;
+                text += "</ul>"
+                continue;   
+            }
+            text += chr;
+            continue;
+        } else if (inside_header) {
             if(chr == '\n') {
                 text += "</h"+header_level+">\n";
                 inside_header = false;
@@ -529,8 +602,12 @@ function ConvertMDToHTML(data) {
 
                 }
             }
-            if(chr == '-') {
-                // lists
+            if(chr == '-' && chr_next == ' ') {
+                head++; // skip space
+                inside_list = true;
+                text += "<ul>"
+                text += "<li>"
+                continue;
             }
             if(chr == '[') {
                 // links

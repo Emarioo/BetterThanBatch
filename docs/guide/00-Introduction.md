@@ -18,7 +18,7 @@ Your next step is here [Chapter 1: Variables and operations](/docs/guide/01-Vari
 
 Also, if you want a challange, purpose or project to work on, have a look at [Suggestions](/docs/suggestions.md).
 
-**NOTE*: You may want to start with a test file where you write random throw away code for learning purposes when following the guide.
+**NOTE**: You may want to start with a test file where you write random throw away code for learning purposes when following the guide.
 
 ## Quality of life
 When programming you want a couple of other things such as syntax highlighting, debugger and the ability to easily look at the standard library to see the available functions.
