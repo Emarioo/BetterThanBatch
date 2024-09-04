@@ -320,17 +320,9 @@ function ModifyContent(data, options) {
     // return pre + text + post
 }
 
-// Code to manually test conversions
-// console.log(ConvertMDToHTML("well\n- A\n- B\nMore text"))
-// console.log(ConvertMDToHTML("yes<!-- no -->yes"))
-// console.log(ConvertMDToHTML(" also the *Slice* type which "))
-// console.log(ConvertMDToHTML("well [link](hey.png) hum"))
-// console.log(ConvertMDToHTML("Text is\nvery close"))
-// console.log(ConvertMDToHTML("but this is\n\nseparated"))
-// console.log(ConvertMDToHTML("This is just.  \nA new line"))
-// console.log(ConvertMDToHTML("no \n```\nyes\ndude!\n```\n haha"))
-// console.log(ConvertMDToHTML("okay *lier* bro"))
-// console.log(ConvertMDToHTML("yes\n# okay dude\nhey bro"))
+// #########################
+//  Markdown to HTML code
+// #########################
 
 function ConvertMDPathToWebPath(path) {
     if(path.length < 2)
@@ -352,10 +344,191 @@ function ConvertMDPathToWebPath(path) {
     return path
 }
 
+function is_whitespace(c) {
+    return c == ' ' || c == '\t' || c == '\n'
+}
+function is_alphanum(c) {
+    let n = c.charCodeAt(0)
+    return (n >= 'A'.charCodeAt(0) && n <= 'Z'.charCodeAt(0))
+        || (n >= 'a'.charCodeAt(0) && n <= 'z'.charCodeAt(0))
+        || (n >= '0'.charCodeAt(0) && n <= '9'.charCodeAt(0))
+        || c == '_'
+}
+function is_alpha(c) {
+    let n = c.charCodeAt(0)
+    return (n >= 'A'.charCodeAt(0) && n <= 'Z'.charCodeAt(0))
+        || (n >= 'a'.charCodeAt(0) && n <= 'z'.charCodeAt(0))
+        || c == '_'
+}
+
+const LANG_COLOR_NONE = 0
+const LANG_COLOR_CPP = 1
+// const LANG_COLOR_C = 2
+// const LANG_COLOR_BASH = 3 // any shell?
+
+// Takes in a string (data) and language type (lang_type)
+// Returns a string where words are wrapped in html with color
+// Color is based on 'lang_type'
+// Languages are hard to parse to the function just applies the most useful syntax highlighting.
+function ApplyHighlighting(data, lang_type) {
+    if(lang_type == LANG_COLOR_NONE)
+        return data; // do nothing
+        
+    // Assert(lang_type == LANG_COLOR_CPP)
+    // We force c++ highlighting for now
+    
+    // TODO: Option to change which colors are used?
+
+    let text = "";
+    
+    let keywords = [
+        "void", "int", "float", "double", "char", "bool", "nullptr", "false", "true",
+        "if", "else", "for", "while", "return", "switch", "enum", "struct", "class", "operator", "sizeof",
+        
+        // btb specific (not related to c++ but we add them anyway because it's nice)
+        "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "null",
+        "cast", "unsafe_cast", "fn", "global", "nameof", "typeid", "asm", "_test",
+        "construct", "destruct", 
+    ]
+    const COLOR_KEYWORD      = "rgb(20, 130, 179)" // cyan
+    const COLOR_STRING       = "rgb(169, 129, 35)" // brownish
+    const COLOR_COMMENT      = "rgb(9, 147, 56)" // dark green
+    const COLOR_MACRO        = "rgb(124, 124, 124)" // dark gray
+    const COLOR_ANNOTATION   = "rgb(171, 44, 174)" // low saturated pink/purple
+    
+    function pre_html(color) {
+        return "<span style='color:"+color+"'>"
+    }
+    function post_html() {
+        return "</span>"
+    }
+    // console.log(data.length)
+    let head = 0
+    while (head < data.length) {
+        let chr = data[head]
+        head++
+        
+        // parse string
+        if(chr == '"') {
+            text += pre_html(COLOR_STRING)
+            text += '"'
+            while(head < data.length) {
+                let tmp = data[head]
+                if(data[head] == '"') {
+                    head++;
+                    text += tmp
+                    break;
+                }
+                head++;
+                text += tmp
+            }
+            text += post_html()
+            continue
+        }
+        
+        // parse commment
+        if(chr == '/' && (head < data.length) && data[head] == '/') {
+            head++
+            text += pre_html(COLOR_COMMENT)
+            text += "//"
+            while(head < data.length) {
+                let tmp = data[head]
+                if(tmp == '\n') {
+                    head++;
+                    text += tmp
+                    break;
+                }
+                head++;
+                text += tmp
+            }
+            text += post_html()
+            continue
+        }
+        if(chr == '/' && (head < data.length) && data[head] == '*') {
+            head++
+            text += pre_html(COLOR_COMMENT)
+            text += "/*"
+            while(head < data.length) {
+                let tmp = data[head]
+                if(tmp == '*' && (head+1 < data.length) && data[head+1] == '/') {
+                    head+=2;
+                    text += "*/"
+                    break;
+                }
+                head++;
+                text += tmp
+            }
+            text += post_html()
+            continue
+        }
+        // macros
+        // TODO: HANDLE backslash in #define content, there are probably other stuff with macros we need to handle
+        if(chr == '#' && (head < data.length) && is_alpha(data[head])) {
+            text += pre_html(COLOR_MACRO)
+            text += "#"
+            while(head < data.length) {
+                let tmp = data[head]
+                if(!is_alphanum(tmp)) {
+                    break;
+                }
+                head++;
+                text += tmp
+            }
+            text += post_html()
+            continue
+        }
+        
+        // annotations (btb specific)
+        if(chr == '@' && (head < data.length) && is_alpha(data[head])) {
+            text += pre_html(COLOR_ANNOTATION)
+            text += "@"
+            while(head < data.length) {
+                let tmp = data[head]
+                if(!is_alphanum(tmp)) {
+                    break;
+                }
+                head++;
+                text += tmp
+            }
+            text += post_html()
+            continue
+        }
+        
+        // parse words
+        if(is_alpha(chr)) {
+            let start = head-1
+            
+            while(head < data.length) {
+                let tmp = data[head]
+                if(!is_alphanum(tmp)) {
+                    break;
+                }
+                head++;
+            }
+            
+            let word = data.substring(start, head)
+            
+            if (keywords.includes(word)) {
+                text += pre_html(COLOR_KEYWORD)
+                text += word
+                text += post_html()
+            } else {
+                text += word
+            }
+            
+            continue
+        }
+        
+        
+        text += chr
+    }
+    return text
+}
+
 // takes in string, returns string
 // Converts markdown to html
 function ConvertMDToHTML(data) {
-    data = data.toString()
+    data = data.toString().replaceAll('\r','') // I actually hate return carriage characters, Windows is evil for using them. They are useful in CLI programs but they are little devils otherwise.
     let text = "";
 
     let head = 0;
@@ -367,21 +540,10 @@ function ConvertMDToHTML(data) {
     let inside_header = false;
     let inside_paragraph = false;
     let inside_list = false;
-    let inside_code_block = false;
-    let inside_tiny_code = false;
 
     let style_stack = []
 
-    function is_whitespace(c) {
-        return c == ' ' || c == '\t' || c == '\n' || c == '\r' // carriage return to prevent unforseen problems
-    }
-    function is_alphanum(c) {
-        let n = c.charCodeAt(0)
-        return (n >= 'A'.charCodeAt(0) && n <= 'Z'.charCodeAt(0))
-            || (n >= 'a'.charCodeAt(0) && n <= 'z'.charCodeAt(0))
-            || (n >= '0'.charCodeAt(0) && n <= '9'.charCodeAt(0))
-            || c == '_'
-    }
+   
 
     // TODO: Parsing assumes that the markdown is syntactically correct.
     //   If it's not then odd stuff will be printed.
@@ -405,36 +567,72 @@ function ConvertMDToHTML(data) {
         // TODO: Code block conversion does not follow the standard for edge cases. We may not care though.
         if(chr == '`' && chr_next == '`' && chr_next2 == '`') {
             // TODO: Parse language hint and apply syntax highlighting
-            head += 2
-            if(!inside_code_block) {
-                text += "<div class='code_div'><code>"
-            } else {
-                text += "</code></div>"
-            }
-            inside_code_block = !inside_code_block
-            continue
-        } else if (chr == '`') {
-            if(!inside_tiny_code) {
-                text += "<tiny_code>"
-            } else {
-                text += "</tiny_code>"
-            }
-            inside_tiny_code = !inside_tiny_code
-            continue
-        }
-
-        if(inside_code_block || inside_tiny_code) {
             // TODO: Apply syntax highlighting. For this we should append characters to a temporary string.
             //   Apply highlighting to that string (wrap words in <span> with colors) then convert arrows to &lt/&gt
             //   and finally add it to 'text'
-            if(chr == '<')
-                text += "&lt;"
-            else if(chr == '>')
-                text += "&gt;"
-            else
-                text += chr
+            head += 2
+            
+            let lang_hint = "";
+            while(head < data.length) {
+                let tmp = data[head]
+                head++;
+                if(tmp == '\n')
+                    break
+                lang_hint += tmp
+            }
+            // console.log("hint",lang_hint)
+            
+            let text_tmp = ""
+            while(head < data.length) {
+                let tmp = data[head]
+                if(tmp == '`' && head + 2 < data.length && data[head+1] == '`' && data[head+2] == '`') {
+                    head+=3
+                    break
+                }
+                head++
+                
+                // Converting arrows now could ruin the parsing for syntax highlighting
+                // Waiting until after application of highlighting won't work since that
+                // text will have html code with arrows in it which shouldn't be escaped.
+                // Performing conversion in ApplyHighlighting might be easiest but
+                // what if you disable syntax highlightning. Then you would need to escape arrows manually anyway.
+                if(tmp == '<')
+                    text_tmp += "&lt;"
+                else if(tmp == '>')
+                    text_tmp += "&gt;"
+                else
+                    text_tmp += tmp
+            }
+            let lang_type = LANG_COLOR_NONE
+            if(lang_hint == "c++" || lang_hint == "cpp")
+                lang_type = LANG_COLOR_CPP
+            // console.log("Code",text_tmp.length, lang_type, lang_hint.length)
+            text_tmp = ApplyHighlighting(text_tmp, lang_type)
+            
+            text += "<div class='code_div'><code>"
+            text += text_tmp
+            text += "</code></div>"
+            continue
+        } else if (chr == '`') {
+            text += "<tiny_code>"
+            while(head < data.length) {
+                let tmp = data[head]
+                head++
+                
+                if(tmp == '`')
+                    break
+                
+                if(tmp == '<')
+                    text += "&lt;"
+                else if(tmp == '>')
+                    text += "&gt;"
+                else
+                    text += tmp
+            }
+            text += "</tiny_code>"
             continue
         }
+
         if(chr == '<' && chr_next=='!'&&chr_next2=='-'&&chr_next3=='-') {
             // skip comment
             head += 3;
@@ -570,14 +768,18 @@ function ConvertMDToHTML(data) {
                 continue;   
             }
             text += chr;
+            if(head == data.length) {
+                text += "</li></ul>"
+            }
             continue;
         } else if (inside_header) {
-            if(chr == '\n') {
+            if(chr != '\n') {
+                text += chr
+            }
+            if(chr == '\n' || head == data.length) {
                 text += "</h"+header_level+">\n";
                 inside_header = false;
                 header_level = 0
-            } else {
-                text += chr
             }
         } else if (inside_paragraph) {
             if(chr == '\n') {
@@ -662,3 +864,19 @@ function ConvertMDToHTML(data) {
     // lists, check boxes
     return text
 }
+
+// #####################################
+//  Code to manually test conversions
+// #####################################
+// console.log(ConvertMDToHTML("```c++\nvoid main() { int hi = 2; }```"))
+// console.log(ConvertMDToHTML("```c++\nint a = 0; // comment```"))
+// console.log(ConvertMDToHTML("well\n- A\n- B\nMore text"))
+// console.log(ConvertMDToHTML("yes<!-- no -->yes"))
+// console.log(ConvertMDToHTML(" also the *Slice* type which "))
+// console.log(ConvertMDToHTML("well [link](hey.png) hum"))
+// console.log(ConvertMDToHTML("Text is\nvery close"))
+// console.log(ConvertMDToHTML("but this is\n\nseparated"))
+// console.log(ConvertMDToHTML("This is just.  \nA new line"))
+// console.log(ConvertMDToHTML("no \n```\nyes\ndude!\n```\n haha"))
+// console.log(ConvertMDToHTML("okay *lier* bro"))
+// console.log(ConvertMDToHTML("yes\n# okay dude\nhey bro"))

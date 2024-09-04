@@ -15,6 +15,7 @@ body {
     width: auto;
 }
 code {
+    /* color:rgb(131, 74, 124); */
     color:rgb(0, 0, 0);
     white-space:pre;
     font-family: monospace;
