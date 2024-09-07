@@ -12,18 +12,18 @@ fn da() -> u8, u8 { return 1, 2 }
 da();
 
 // arguments give more space for pushed values
-fn n(a: i32, b: i32) -> u8, u8, u8 { return 1, 2, 4 }
-n(1,2);
+fn nf(a: i32, b: i32) -> u8, u8, u8 { return 1, 2, 4 }
+nf(1,2);
 
 // more complications
-struct Big {
+struct Big2 {
     a: i8;
     b: i8;
     c: i8;
 }
-fn n(a: i32, b: i32) -> Big { return Big{5,8,3} }
+fn nd(a: i32, b: i32) -> Big2 { return Big2{5,8,3} }
 
-n(1,2);
+nd(1,2);
 
 
 // fn n() -> u8, u8, u8 { return 1, 2, 3 }
@@ -57,7 +57,7 @@ struct A {
     n: i32 = 3;
     fn fun() {
         fn okay() {
-            @TEST_ERROR(E0) _test 3; n; // okay is not a method, n is not available
+            @TEST_ERROR(ERROR_ANY) _test 3; n; // okay is not a method, n is not available
         }
         okay()
     }
@@ -70,7 +70,18 @@ outer(9)
 fn outer(arg: i32) {
     inner()
     fn inner() {
-        @TEST_ERROR(E0) a := arg // arg should not be accesible from inner function
-        @TEST_ERROR(E0) a := sizeof arg
+        @TEST_ERROR(ERROR_ANY) a := arg // arg should not be accesible from inner function
+        @TEST_ERROR(ERROR_ANY) a := sizeof arg
     }
 }
+
+@TEST_CASE(if_problems)
+
+fn func() {
+    if(0) {
+        // hi dude
+        return
+    }
+}
+
+func()

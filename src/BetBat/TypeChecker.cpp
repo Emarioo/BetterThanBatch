@@ -601,14 +601,21 @@ SignalIO TyperContext::checkStructs(ASTScope* scope) {
         //-- Get struct info
         TypeInfo* structInfo = nullptr;
         if(astStruct->state==ASTStruct::TYPE_EMPTY){
-            // structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name,false,true);
             structInfo = info.ast->createType(astStruct->name, scope->scopeId);
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
+                // ignoreErors and showErrors stop us from printing error so we have to ensure we can print errors first
+                bool prev_ignore = ignoreErrors;
+                bool prev_show = showErrors;
+                ignoreErrors = false;
+                showErrors = true;
                 ERR_SECTION(
                     ERR_HEAD2(astStruct->location)
                     ERR_MSG("'"<<astStruct->name<<"' is already defined.")
+                    ERR_LINE2(astStruct->location,"here") // NOTE: We don't really need to show the content of the line where struct was defined, it spams the terminal with unnecesary information. (user already know which file and line)
                 )
+                ignoreErrors = prev_ignore; // also don't forget to switch them back
+                showErrors = prev_show;
                 // TODO: Provide information (file, line, column) of the first definition.
                 // We don't care about another turn. We failed but we don't set
                 // completedStructs to false since this will always fail.
@@ -1344,10 +1351,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             ent2.iden = nullptr;                        \
             ent2.set_implicit_this = false;             \
         } 
-        // log::out << "WA "<<expr->name<<"\n";          \
-        // for (auto& ent2 : possible_overload_groups) {   \
-        //     log::out << " ent "<< (void*)ent2.iden << "\n";                      \
-        // } \
+
+        // log::out << "WA "<<expr->name<<"\n";          
+        // for (auto& ent2 : possible_overload_groups) {   
+        //     log::out << " ent "<< (void*)ent2.iden << "\n";                      
+        // } 
         // log::out.flush();
 
     // IMPORTANT TODO: There is a bug with polymorphism and overloading. A function call in
@@ -2443,7 +2451,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     if(outTypes)  outTypes->add(theType);
                 }
             } else {
-                Assert(hasAnyErrors());
+                // We may use @TEST_ERROR in which case we expect something to go wrong,
+                // but we don't expect an error from, hence no assert.
+                // We should have provided some message from checkType. (see usage of finalType above)
+                // Assert(hasAnyErrors());
                 if(outTypes) outTypes->add(AST_VOID);
             }
         } else if(expr->typeId == AST_ASM){

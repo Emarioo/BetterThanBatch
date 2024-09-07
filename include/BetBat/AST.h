@@ -162,6 +162,8 @@ struct ASTNode {
     #undef SET_FLAG
 };
 
+extern engone::Mutex g_polyVersions_mutex; // TODO: FIX THIS! I added it because two threads may check the same polymorphic scope with different poly versions. When they resize the array for polyversion types we crash.
+
 template<class T>
 struct PolyVersions {
     PolyVersions() = default;
@@ -177,11 +179,11 @@ struct PolyVersions {
     // automatically allocates
     T& get(u32 index, bool skip_mutex = false) {
         if(!skip_mutex)
-            poly_mutex.lock();
+            g_polyVersions_mutex.lock();
         if(index == 0) {
             has_first = true;
             if(!skip_mutex)
-                poly_mutex.unlock();
+                g_polyVersions_mutex.unlock();
             return first_elem;
         }
         if(index >= _array.size()) {
@@ -191,14 +193,14 @@ struct PolyVersions {
         }
         auto elem = &_array.get(index);
         if(!skip_mutex)
-            poly_mutex.unlock();
+            g_polyVersions_mutex.unlock();
         return *elem;
     }
     void set(u32 index, const T& elem) {
-        poly_mutex.lock();
+        g_polyVersions_mutex.lock();
         auto& thing = get(index, true);
         thing = elem;
-        poly_mutex.unlock();
+        g_polyVersions_mutex.unlock();
     }
     // automatically allocates
     T& operator[](u32 index) {
@@ -208,26 +210,25 @@ struct PolyVersions {
     }
     // only works on types that have method 'steal_from'
     void steal_element_into(u32 index, T& stealer) {
-        poly_mutex.lock();
+        g_polyVersions_mutex.lock();
         auto& elem = get(index, true);
         stealer.steal_from(elem);
-        poly_mutex.unlock();
+        g_polyVersions_mutex.unlock();
     }
     void steal_element_from(u32 index, T& from) {
-        poly_mutex.lock();
+        g_polyVersions_mutex.lock();
         auto& elem = get(index, true);
         elem.steal_from(from);
-        poly_mutex.unlock();
+        g_polyVersions_mutex.unlock();
     }
     // T steal_element(u32 index) {
-    //     poly_mutex.lock();
+    //     g_polyVersions_mutex.lock();
     //     auto elem = get(index, true);
     //     get(index, true)
-    //     poly_mutex.unlock();
+    //     g_polyVersions_mutex.unlock();
     //     return elem;
     // }
 
-    inline static engone::Mutex poly_mutex{}; // TODO: FIX THIS! I added it because two threads may check the same polymorphic scope with different poly versions. When they resize the array for polyversion types we crash.
 private:
     // An optimization where first element is stored in struct. This means that node AST's that use PolyVersions won't allocate memory as long as less than one element is needed. Since most code isn't polymorphic and doesn't need more than one element, this is perfect.
     bool has_first = false;

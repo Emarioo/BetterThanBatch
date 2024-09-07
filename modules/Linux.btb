@@ -226,6 +226,8 @@
 #macro SYS_mprotect 10
 #macro SYS_munmap   11
 
+#macro SYS_sigaction   13 // sometimes named rt_sigaction
+
 #macro SYS_access   21
 #macro SYS_pipe   22
 
@@ -325,6 +327,8 @@ SYSCALL(lseek, i32,  fd: i32, offset: i32, whence: i32)
 SYSCALL(mmap,  void*, addr: void*, length: i32, prot: i32, flags: i32, fd: i32, offset: i32)
 SYSCALL(mprotect,  i32, addr: void*, len: i32, prot: i32);
 SYSCALL(munmap,    i32, addr: void*, length: i32)
+
+SYSCALL(sigaction, i32, signum: i32, act: sigaction_t*, old_act: sigaction_t*)
 
 SYSCALL(access,  i32, path: char*, mode: i32)
 SYSCALL(pipe,  i32, fildes: i32*)
@@ -520,6 +524,17 @@ struct siginfo {
 struct timespec {
     tv_sec: i64;
     tv_nsec: i64;
+}
+
+struct sigset_t {
+    n: i32[16]; // (1024 / (8 * sizeof (unsigned long int)))
+}
+struct sigaction_t {
+    sa_handler: fn(i32);
+    sa_sigaction: fn(i32, siginfo_t*, void*);
+    sa_mask: sigset_t;
+    sa_flags: i32;
+    sa_restorer: fn(void);
 }
 
 // from netinet/in.h

@@ -26,12 +26,12 @@ if !compileSuccess! == 0 if !RUN_AT_END!==1 (
 :RUN_COMPILER
     rem
 
-    cl /nologo /TC wa.c /Fo:wa.o /link /nologo /OUT:wa.exe
+    @REM cl /nologo /TC wa.c /Fo:wa.o /link /nologo /OUT:wa.exe
 
     bin\btb -dev
 
-    dumpbin bin/main.o /all > outm
-    dumpbin wa.o /all > outw
+    @REM dumpbin bin/main.o /all > outm
+    @REM dumpbin wa.o /all > outw
 
     @REM bin\btb examples/dev
 

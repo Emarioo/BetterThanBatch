@@ -6,6 +6,10 @@
 
 #define ENABLE_BYTECODE_OPTIMIZATIONS
 
+InstructionControl operator |(InstructionControl a, InstructionControl b) {
+    return (InstructionControl)((int)a | (int)b);
+}
+
 u32 Bytecode::getMemoryUsage(){
     Assert(false);
     return 0;
@@ -549,6 +553,7 @@ void BytecodeBuilder::fix_jump_imm32_here(int imm_index) {
     if(disable_code_gen) return;
 
     *(int*)&tinycode->instructionSegment[imm_index] = get_pc() - (imm_index + 4); // +4 because immediate should be relative to the end of the instruction, not relative to the offset within the instruction
+    // engone::log::out << "fixed "<< (*(int*)&tinycode->instructionSegment[imm_index])<<"\n";
 }
 void BytecodeBuilder::emit_mov_rr(BCRegister to, BCRegister from){
     emit_opcode(BC_MOV_RR);
@@ -1430,7 +1435,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             
             int addr = pc + imm;
             
-            log::out << log::GRAY << " :"<< addr;
+            log::out << log::GRAY << " :"<< addr << " ("<<imm<<")";
         } break;
         case BC_JNZ:
         case BC_JZ: {
@@ -1440,7 +1445,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             
             int addr = pc + imm;
             
-            log::out << " "<<register_names[op0] <<", "<< log::GRAY << ":"<< addr;
+            log::out << " "<<register_names[op0] <<", "<< log::GRAY << ":"<< addr << " ("<<imm<<")";
         } break;
         case BC_ADD:
         case BC_SUB:

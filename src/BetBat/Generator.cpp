@@ -45,6 +45,8 @@ LinkConvention DetermineLinkConvention(const std::string& lib_path) {
         return LinkConvention::IMPORT;
 
     int dot_index = lib_path.find_last_of(".");
+    if(dot_index == -1)
+        return LinkConvention::STATIC_IMPORT;
     auto format = lib_path.substr(dot_index);
     if (format == ".dll" || format == ".so") {
         return LinkConvention::DYNAMIC_IMPORT;
@@ -2358,16 +2360,19 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                             // NOTE: Is member variable/argument 'this' always at this offset with all calling conventions?
                             // type = varinfo->versions_typeId[info.currentPolyVersion];
                             builder.emit_get_param(BC_REG_B, 0, 8, false); // pointer
-
-                            auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
-                            if (mem.array_length) {
-                                type.setPointerLevel(type.getPointerLevel()+1);
-                                builder.emit_li32(BC_REG_T0, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                                builder.emit_add(BC_REG_B, BC_REG_T0, 8, false);
-                                builder.emit_push(BC_REG_B);
+                            if(currentFunction->parentStruct) {
+                                auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                                if (mem.array_length) {
+                                    type.setPointerLevel(type.getPointerLevel()+1);
+                                    builder.emit_li32(BC_REG_T0, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                                    builder.emit_add(BC_REG_B, BC_REG_T0, 8, false);
+                                    builder.emit_push(BC_REG_B);
+                                } else {
+                                    generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
+                                    type);
+                                }
                             } else {
-                                generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
-                                type);
+                                // This happend because of @TEST_ERROR in tests/funcs/stuff.btb at one point.
                             }
                         } break;
                         default: {
@@ -3362,6 +3367,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                             ERR_SECTION(
                                 ERR_HEAD2(expr->location)
                                 ERR_MSG("To many members for struct " << ast_struct->name << " (" << ast_struct->members.size() << " member(s) allowed).")
+                                ERR_LINE2(expr->location, "here")
                             )
                             continue;
                         }
@@ -4576,8 +4582,13 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
         }
         int index_of_frame_size = 0;
-        builder.emit_alloc_local(BC_REG_INVALID, &index_of_frame_size);
-        add_frame_fix(index_of_frame_size);
+        
+        if(function->blank_body) {
+            // builder.emit_alloc_local(BC_REG_INVALID, (u16)0);
+        } else {
+            builder.emit_alloc_local(BC_REG_INVALID, &index_of_frame_size);
+            add_frame_fix(index_of_frame_size);
+        }
 
         if (funcImpl->signature.returnTypes.size() != 0) {
             // We don't need to zero initialize return value.
@@ -4715,16 +4726,21 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 }
             }
         }
-        if(builder.get_last_opcode() != BC_RET) {
-            // add return with no return values if it doesn't exist
-            // this is only fine if the function doesn't return values
-            if(!function->blank_body) {
-                int index;
-                builder.emit_free_local(&index);
-                add_frame_fix(index);
-            }
-            builder.emit_ret();
+        // We can't skip ret like this the last ret may exist in a
+        // if-block. That if block will jump to the instruction after the ret 
+        // so WE MUST emit an extra ret.
+        // TODO: We could optimize a bit if the last instruction doesn't come from
+        //   an if, while, for, switch or whatever else we might have. This makes it hard.
+        // if(builder.get_last_opcode() != BC_RET) { }
+            
+        // add return with no return values if it doesn't exist
+        // this is only fine if the function doesn't return values
+        if(!function->blank_body) {
+            int index;
+            builder.emit_free_local(&index);
+            add_frame_fix(index);
         }
+        builder.emit_ret();
         fix_frame_values(funcImpl, tinycode);
         
         // TODO: Assert that we haven't allocated more stack space than we freed!
@@ -5037,7 +5053,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     if(!set_defaults) {
                         #ifndef DISABLE_ZERO_INITIALIZATION
                         genMemzero(BC_REG_LOCALS, BC_REG_B, arraySize, arrayFrameOffset);
-                        #endif DISABLE_ZERO_INITIALIZATION
+                        #endif // DISABLE_ZERO_INITIALIZATION
                     }
                     // data type may be zero if it wasn't specified during initial assignment
                     // a = 9  <-  implicit / explicit  ->  a : i32 = 9
@@ -5303,6 +5319,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             builder.emit_pop(reg);
             int skipIfBodyIndex;
+            // log::out << "beg pc " << builder.get_pc()<<"\n";
             builder.emit_jz(reg, &skipIfBodyIndex);
 
             result = generateBody(statement->firstBody);
@@ -5315,6 +5332,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }
 
             // fix address for jump instruction
+            // log::out << "end pc " << builder.get_pc()<<"\n";
             builder.fix_jump_imm32_here(skipIfBodyIndex);
 
             if (statement->secondBody) {
@@ -6675,15 +6693,16 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 context.generateBody(scope);
                 // TestGenerate(context.builder);
                 
-                if(context.builder.get_last_opcode() != BC_RET) {
-                    int index;
-                    context.builder.emit_free_local(&index);
-                    context.add_frame_fix(index);
-                    
-                    context.builder.emit_ret();
-                } else {
-                    
-                }
+                // We can't skip ret like this the last ret may exist in a
+                // if-block. That if block will jump to the instruction after the ret 
+                // so WE MUST emit an extra ret.
+                // TODO: We could optimize a bit if the last instruction doesn't come from
+                //   an if, while, for, switch or whatever else we might have. This makes it hard.
+                // if(context.builder.get_last_opcode() != BC_RET) { }
+                int index;
+                context.builder.emit_free_local(&index);
+                context.add_frame_fix(index);
+                context.builder.emit_ret();
 
                 context.fix_frame_values(context.currentFuncImpl, tb_main);
             }

@@ -3464,6 +3464,14 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
     } else if(token->type == lexer::TOKEN_TRY) {
         auto loc = info.getloc();
         info.advance();
+
+        if(compiler->options->target != TARGET_WINDOWS_x64) {
+            ERR_SECTION(
+                ERR_HEAD2(loc)
+                ERR_MSG_COLORED("Try-catch is not supported on "<<log::LIME << ToString(compiler->options->target) <<log::NO_COLOR<<". Use sigaction instead. In the future we will rethink try-catch because Windows has support for it (Structured Exception Handling) while Linux handles exceptions differently with signals. The language will support platform independent exception handling.")
+                ERR_LINE2(loc, "here")
+            ) 
+        }
         
         statement = info.ast->createStatement(ASTStatement::TRY);
 

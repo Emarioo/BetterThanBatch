@@ -1,9 +1,14 @@
+// NOTE: Exception handling is only supported on Windows.
+//   Because of this, we don't test exceptions on Linux.
+
 @TEST_CASE(basic_exceptions)
 /*
     Case 1: Crash directly inside try-block
 */
-
 #import "Exception"
+
+#if OS_WINDOWS
+
 
 global counter: i32
 counter++;
@@ -28,13 +33,16 @@ counter++;
 
 _test counter; 7
 
+#endif // OS_WINDOWS
 
 @TEST_CASE(func_exceptions)
 /*
     Case 2: Crash from function, this includes fixing stack pointer since try block puts arguments on the stack and they must be cleaned up before catch block can be executed.
 */
-
 #import "Exception"
+
+#if OS_WINDOWS
+
 
 global counter: i32
 
@@ -55,12 +63,15 @@ try {
 }
 _test counter; 3
 
+#endif
+
 @TEST_CASE(stack_exceptions)
 /*
     Case 3: Restoration of stack pointer.
 */
-
 #import "Exception"
+
+#if OS_WINDOWS
 
 global counter: i32
 
@@ -80,6 +91,8 @@ _test counter; 3
 // log("x: ", x)
 // log("y: ", *(&x - 8))
 
+#endif
+
 @TEST_CASE(filter_exceptions)
 /*
     Case 4: Handling exception filter, nested try-blocks
@@ -87,6 +100,8 @@ _test counter; 3
 
 #import "Logger"
 #import "Exception"
+
+#if OS_WINDOWS
 
 global counter: i32
 try {
@@ -119,11 +134,16 @@ try {
 counter++
 _test counter; 4
 
+#endif
+
 @TEST_CASE(catches_exceptions)
 /*
     Case 5: Multiple catch
 */
 #import "Exception"
+
+#if OS_WINDOWS
+
 global counter: i32
 
 try {
@@ -155,3 +175,4 @@ try {
     _test EXCEPTION_INT_ZERO_DIVISION; e.code
     _test WIN_EXCEPTION_INT_DIVIDE_BY_ZERO; e.os_code
 }
+#endif

@@ -408,9 +408,48 @@ namespace engone {
 		}
 		return position;
 	}
-	bool FileCopy(const std::string& src, const std::string& dst){
-		Assert(("FileCopy function not implemented",false));
-		return false;
+	int GetCPUCoreCount() {
+		return sysconf(_SC_NPROCESSORS_ONLN);
+	}	
+    bool FileLastWriteSeconds(const std::string& path, double* seconds, bool log_error){
+		struct stat buffer;
+		int err = stat(path.c_str(), &buffer);
+		if(err != 0)
+			return false;
+
+        // return ( == 0) && (buffer.st_mode & S_IFDIR);
+
+		auto& ts = buffer.st_mtim;
+		*seconds = (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec))/(double)NS;
+        return true;
+    }
+	bool FileCopy(const std::string& src, const std::string& dst, bool log_error){
+		// Assert(("FileCopy function not implemented",false));
+		 
+		int from = open(src.c_str(), O_RDONLY);
+		if(from < 0)
+			return false;
+		int to = open(src.c_str(), O_WRONLY | O_CREAT);
+		if(to < 0) {
+			close(to);
+			return false;
+		}
+		#define BUFFER_SIZE 0x100'000
+		void* ptr = malloc(BUFFER_SIZE);
+		if(!ptr)
+			return false;
+
+		int n;
+		while ((n = read(from, ptr, BUFFER_SIZE)) > 0) {
+			write(to, ptr, n);
+		}
+
+		close(from);
+		close(to);
+
+		free(ptr);
+
+		return true;
 	}
 	bool FileMove(const std::string& src, const std::string& dst){
 		int err = rename(src.c_str(),dst.c_str());
@@ -781,7 +820,7 @@ namespace engone {
 	}
 	void Mutex::lock() {
 		if(m_internalHandle == 0) {
-			auto ptr = (pthread_mutex_t*)malloc(sizeof (pthread_mutex_t));
+			auto ptr = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
 			m_internalHandle = (u64)ptr;
 			int res = pthread_mutex_init(ptr, nullptr);
 			if(res != 0) {

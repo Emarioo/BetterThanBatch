@@ -161,6 +161,13 @@ struct Tuf {
 t: Tuf
 t.hi()
 
+struct Dup {
+    bc: i32
+}
+@TEST_ERROR(ERROR_ANY) struct Dup {
+    a: f32
+}
+
 @TEST_CASE(circular_structs)
 
 #import "./struct2"

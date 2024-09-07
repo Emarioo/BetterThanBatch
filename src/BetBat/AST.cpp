@@ -3,6 +3,8 @@
 
 #define AST_LOCK(X) lock_astnodes.lock(); X; lock_astnodes.unlock();
 
+engone::Mutex g_polyVersions_mutex{};
+
 const char* ToString(CallConvention stuff){
     #define CASE(X,N) case X: return N;
     switch(stuff){
@@ -2690,9 +2692,8 @@ TypeInfo::MemberData TypeInfo::getMember(const std::string &name) {
     return {{}, -1};
 }
 TypeInfo::MemberData TypeInfo::getMember(int index) {
-    if (astStruct) {
-        StructImpl* impl = structImpl;
-        return {impl->members[index].typeId, index, impl->members[index].offset};
+    if (astStruct && structImpl && index < structImpl->members.size()) {
+        return {structImpl->members[index].typeId, index, structImpl->members[index].offset};
     } else {
         return {{}, -1};
     }

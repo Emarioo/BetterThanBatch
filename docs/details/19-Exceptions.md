@@ -72,3 +72,4 @@ _c_specific_handler in https://github.com/killvxk/DisPg/blob/7aaf8861fb6b28987e9
 
 ## Linux (DWARF/GCC)
 https://gcc.gnu.org/legacy-ml/gcc/2002-07/msg00391.html
+https://refspecs.linuxfoundation.org/LSB_3.0.0/LSB-Core-generic/LSB-Core-generic/ehframechpt.html

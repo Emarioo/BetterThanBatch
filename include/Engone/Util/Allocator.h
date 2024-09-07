@@ -99,19 +99,19 @@ namespace engone{
 
         template <class T>
         inline T* create(const DebugLocation& debug = {}) {
-            auto obj = (T*)m_func(this, sizeof (T), nullptr, 0, debug);
+            auto obj = (T*)m_func(this, sizeof(T), nullptr, 0, debug);
             new(obj)T();
             return obj;
         }
         template <class T>
         inline T* create_no_init(const DebugLocation& debug = {}) {
-            auto obj = (T*)m_func(this, sizeof (T), nullptr, 0, debug);
+            auto obj = (T*)m_func(this, sizeof(T), nullptr, 0, debug);
             return obj;
         }
         template <class T>
         inline void destroy(T* obj, const DebugLocation& debug = {}) {
             obj->~T();
-            m_func(this, 0, obj, sizeof T, debug);
+            m_func(this, 0, obj, sizeof(T), debug);
         }
 
         Tracker tracker;

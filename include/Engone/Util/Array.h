@@ -13,7 +13,7 @@
 
 #include "Engone/Asserts.h"
 
-#define IS_PRIMITIVE(T) std::is_fundamental_v<T>
+#define IS_PRIMITIVE(T) std::is_fundamental<T>::value
 // #define IS_PRIMITIVE(T) false
 
 // #define TINY_ARRAY(TYPE,NAME,SIZE) TYPE arr_##NAME[SIZE]; memset((void*)arr_##NAME,0,SIZE*sizeof(TYPE)); TinyArray<TYPE> NAME={}; NAME.initFixedSize(arr_##NAME, SIZE);
@@ -225,6 +225,8 @@ public:
     }
 };
 
+// Dude, I have to prefix access to all fields with 'this->' because gcc is afraid of specializations. MSVC isn't so it compiles totally fine there but of course GCC wants to make things difficult *sigh*
+#define YES_THESE_FIELDS auto& _ptr = this->_ptr; auto& used = this->used; auto& max = this->max; auto& allocator = this->allocator;
 // global variable?
 // extern engone::Allocator* global_array_allocator;
 // Do not pop or add elements while iterating.
@@ -241,13 +243,16 @@ struct DynamicArray : public BaseArray<T> {
         reserve(0);
     }
 
-    void init(engone::Allocator* allocator) {
+    void init(engone::Allocator* in_allocator) {
+        YES_THESE_FIELDS
+
         Assert(!_ptr);
-        this->allocator = allocator;
+        allocator = in_allocator;
     }
 
     DynamicArray(DynamicArray<T>& arr) = delete;
     DynamicArray<T>& operator=(const DynamicArray<T>& arr) {
+        YES_THESE_FIELDS
         // if(arr.used>0){
             // engone::log::out << "copy "<<arr.used<<"\n";
         // }
@@ -259,7 +264,7 @@ struct DynamicArray : public BaseArray<T> {
         bool yes = resize(arr.used);
         Assert(yes);
         if(IS_PRIMITIVE(T)) {
-            memcpy(_ptr, arr._ptr, arr.used * sizeof(T));
+            memcpy((void*)(_ptr), arr._ptr, arr.used * sizeof(T));
         } else {
             for(u32 i=0;i<used;i++){
                 _ptr[i] = arr._ptr[i];
@@ -270,6 +275,7 @@ struct DynamicArray : public BaseArray<T> {
 
     // DynamicArray(const DynamicArray<T>& arr) = delete;
     DynamicArray(const DynamicArray<T>& arr){
+        YES_THESE_FIELDS
         // if(arr.used>0){
             // engone::log::out << "copy "<<arr.used<<"\n";
         // }
@@ -281,7 +287,7 @@ struct DynamicArray : public BaseArray<T> {
         bool yes = resize(arr.used);
         Assert(yes);
         if(IS_PRIMITIVE(T)) {
-            memcpy(_ptr, arr._ptr, arr.used * sizeof(T));
+            memcpy((void*)_ptr, arr._ptr, arr.used * sizeof(T));
         } else {
             for(u32 i=0;i<used;i++){
                 _ptr[i] = arr._ptr[i];
@@ -290,6 +296,7 @@ struct DynamicArray : public BaseArray<T> {
     }
 
     bool add(const T& t){
+        YES_THESE_FIELDS
         TRACE_FUNC()
         
         if(used + 1 > max){
@@ -310,6 +317,7 @@ struct DynamicArray : public BaseArray<T> {
     }
     // added data is uninitialized, no constructors are called
     bool add_data(int count) {
+        YES_THESE_FIELDS
         TRACE_FUNC()
         if(used + count > max){
             if(!reserve(count + max * 1.5)){
@@ -321,11 +329,13 @@ struct DynamicArray : public BaseArray<T> {
     }
     // destructors are not called
     void remove_data(int count) {
+        YES_THESE_FIELDS
         TRACE_FUNC()
         Assert(used >= count);
         used -= count;
     }
     bool insert(int index, const T& t){
+        YES_THESE_FIELDS
         TRACE_FUNC()
 
         if(used + 1 > max){
@@ -363,6 +373,7 @@ struct DynamicArray : public BaseArray<T> {
         return true;
     }
     bool pop(){
+        YES_THESE_FIELDS
         TRACE_FUNC()
 
         if(used==0)
@@ -378,13 +389,14 @@ struct DynamicArray : public BaseArray<T> {
     // Shifts all elements to the right one step to the left
     // It isn't recommended to use this function.
     bool removeAt(u32 index){
+        YES_THESE_FIELDS
         TRACE_FUNC()
 
         Assert(index < used);
         T* ptr = _ptr + index;
         if(IS_PRIMITIVE(T)) {
             if(index != used - 1){
-                memmove(ptr, ptr + 1, (used - 1 - index) * sizeof T);
+                memmove((void*)(ptr), ptr + 1, (used - 1 - index) * sizeof(T));
             }
         } else {
             ptr->~T();
@@ -407,6 +419,7 @@ struct DynamicArray : public BaseArray<T> {
         return true;
     }
     bool reserve(u32 newMax){
+        YES_THESE_FIELDS
         // MEASURE
         if(newMax==0){
             if(max!=0){
@@ -430,7 +443,7 @@ struct DynamicArray : public BaseArray<T> {
         if(!_ptr){
             // _ptr = (T*)engone::Allocate(sizeof(T) * newMax);
             if(allocator) {
-                _ptr = (T*)allocator->allocate(newMax * sizeof T);
+                _ptr = (T*)allocator->allocate(newMax * sizeof(T));
             } else {
                 _ptr = TRACK_ARRAY_ALLOC(T, newMax);
             }
@@ -454,7 +467,7 @@ struct DynamicArray : public BaseArray<T> {
             // T* newPtr = (T*)engone::Allocate(sizeof(T) * newMax);
             T* newPtr = nullptr;
             if(allocator) {
-                newPtr = (T*)allocator->allocate(newMax * sizeof T);
+                newPtr = (T*)allocator->allocate(newMax * sizeof(T));
             } else {
                 newPtr = TRACK_ARRAY_ALLOC(T, newMax);
             }
@@ -465,7 +478,7 @@ struct DynamicArray : public BaseArray<T> {
             // possible allocating and deallocating stuff for no reason depending 
             // on the allocations owned by each element)
             if(IS_PRIMITIVE(T)) {
-                memcpy(newPtr, _ptr, used * sizeof(T));
+                memcpy((void*)newPtr, _ptr, used * sizeof(T));
             } else {
                 for(u32 i = 0; i < used; i++){
                     new(newPtr + i)T();
@@ -475,7 +488,7 @@ struct DynamicArray : public BaseArray<T> {
             }
             
             if(allocator) {
-                allocator->allocate(0, _ptr, max * sizeof T);
+                allocator->allocate(0, _ptr, max * sizeof(T));
             } else {
                 TRACK_ARRAY_FREE(_ptr, T, max);
             }
@@ -499,10 +512,12 @@ struct DynamicArray : public BaseArray<T> {
         return false;
     }
     void clear() {
+        YES_THESE_FIELDS
         resize(0);
     }
     // Will not shrink alloction to fit the new size
     bool resize(u32 newSize){
+        YES_THESE_FIELDS
         if(newSize>max){
             bool yes = reserve(newSize);
             if(!yes)
@@ -510,7 +525,7 @@ struct DynamicArray : public BaseArray<T> {
         }
         if(newSize > used) {
             if(IS_PRIMITIVE(T)) {
-                memset(_ptr + used, 0, (newSize - used)  * sizeof(T));
+                memset((void*)(_ptr + used), 0, (newSize - used)  * sizeof(T));
             } else {
                 for(u32 i = used; i<newSize;i++){
                     new(_ptr+i)T();
@@ -518,7 +533,7 @@ struct DynamicArray : public BaseArray<T> {
             }
         } else if(newSize < used){
             if(IS_PRIMITIVE(T)) {
-                memset(_ptr + newSize, 0, (used - newSize) * sizeof(T));
+                memset((void*)(_ptr + newSize), 0, (used - newSize) * sizeof(T));
             } else {
                 for(u32 i = newSize; i<used;i++){
                     (_ptr + i)->~T();
@@ -529,6 +544,7 @@ struct DynamicArray : public BaseArray<T> {
         return true;
     }
     void steal_from(DynamicArray<T>& arr){
+        YES_THESE_FIELDS
         cleanup();
         _ptr = arr._ptr;
         used = arr.used;
@@ -548,22 +564,26 @@ struct QuickArray : public BaseArray<T> {
     void cleanup(){
         reserve(0);
     }
-    void init(engone::Allocator* allocator) {
+    void init(engone::Allocator* in_allocator) {
+        YES_THESE_FIELDS
         Assert(!_ptr);
-        this->allocator = allocator;
+        allocator = in_allocator;
     }
 
     QuickArray(const QuickArray<T>& arr) {
+        YES_THESE_FIELDS
         bool yes = reserve(arr.max);
         Assert(yes);
         yes = resize(arr.used);
         Assert(yes);
-        memcpy(_ptr, arr._ptr, arr.used * sizeof(T));
+        memcpy((void*)_ptr, arr._ptr, arr.used * sizeof(T));
     }
     QuickArray(QuickArray<T>& arr) {
+        YES_THESE_FIELDS
         stealFrom(arr);
     }
     QuickArray<T>& operator=(QuickArray<T>& arr) {
+        YES_THESE_FIELDS
         stealFrom(arr);
         return *this;
     }
@@ -572,6 +592,7 @@ struct QuickArray : public BaseArray<T> {
     // }
 
     QuickArray<T>& operator=(const QuickArray<T>& arr) {
+        YES_THESE_FIELDS
         if(arr.used>0){
         // engone::log::out << "copy "<<arr.used<<"\n";
         }
@@ -603,6 +624,7 @@ struct QuickArray : public BaseArray<T> {
     // }
 
     bool add(const T& t){
+        YES_THESE_FIELDS
         if(used + 1 > max){
             if(!reserve(5 + max * 1.5)){
                 return false;
@@ -615,6 +637,7 @@ struct QuickArray : public BaseArray<T> {
         return true;
     }
     bool pop(){
+        YES_THESE_FIELDS
         if(!used)
             return false;
         --used;
@@ -623,16 +646,18 @@ struct QuickArray : public BaseArray<T> {
     // Shifts all elements to the right one step to the left
     // It isn't recommended to use this function.
     bool removeAt(u32 index){
+        YES_THESE_FIELDS
         Assert(index < used);
         T* ptr = _ptr + index;
         --used;
         if(index != used){
-            memcpy(_ptr + index, _ptr + index + 1, (used-index) * sizeof(T));
+            memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
         }
         return true;
     }
 
     bool reserve(u32 newMax){
+        YES_THESE_FIELDS
         // MEASURE
         if(newMax==0){
             if(max!=0){
@@ -678,11 +703,13 @@ struct QuickArray : public BaseArray<T> {
         return false;
     }
     void clear() {
+        YES_THESE_FIELDS
         resize(0);
     }
     // Will not shrink alloction to fit the new size
     // New elements are zero initialized
     bool resize(u32 newSize){
+        YES_THESE_FIELDS
         if(newSize>max){
             bool yes = reserve(newSize);
             if(!yes)
@@ -696,6 +723,7 @@ struct QuickArray : public BaseArray<T> {
     }
     
     void steal_from(QuickArray<T>& arr){
+        YES_THESE_FIELDS
         cleanup();
         _ptr = arr._ptr;
         used = arr.used;

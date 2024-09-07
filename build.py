@@ -146,9 +146,8 @@ def compile(config):
     #         print("NOTE: Using gcc instead of msvc because 'cl' compiler isn't available.")
     #         config["use_compiler"] = "gcc"
     #         # TODO: Find and run vcvars64.bat
-
     if config["use_compiler"] == "msvc" and platform.system() == "Linux":
-        config["use_compiler"] == "gcc"
+        config["use_compiler"] = "gcc"
 
     # print(config)
 
@@ -265,12 +264,13 @@ def compile(config):
         else:
             GCC_DEFINITIONS += " -DOS_LINUX"
 
-        GCC_WARN = "-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unknown-warning-option -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point"
+        GCC_WARN = "-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point -Wno-class-conversion -Wno-address"
         # GCC complains about dereferencing nullptr (-Wsequence-point)
         GCC_WARN += " -Wno-sign-compare"
 
         if enabled("use_debug"):
             GCC_COMPILE_OPTIONS += " -g"
+            GCC_LINK_OPTIONS += " -g"
 
         if enabled("use_optimizations"):
             GCC_COMPILE_OPTIONS += " -O3"
@@ -280,10 +280,10 @@ def compile(config):
                 GCC_DEFINITIONS += " -DTRACY_ENABLE"
                 GCC_LINK_OPTIONS += " bin/tracy.o"
                 if not os.path.exists("bin/tracy.o"):
-                    cmd("g++ -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10\public\TracyClient.cpp -o bin/tracy.o")
+                    cmd("g++ -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp -o bin/tracy.o")
                 
             else:
-                print("build.py doesn't support tracy on Linux, needs testing")
+                print("build.py doesn't support tracy on Linux, tracy is ignored")
             
         # Code below compiles the necessary object files
       

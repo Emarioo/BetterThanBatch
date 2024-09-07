@@ -781,7 +781,9 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     auto createLayer = [&](bool eval_content) {
         auto ptr = scratch_allocator.create_no_init<Layer>();
         new(ptr)Layer(eval_content);
-        ptr->input_arguments.init(&scratch_allocator);
+
+        // ptr->input_arguments.init(&scratch_allocator); // we run into trouble with large macros, scratch allocator would need more memory
+
         return ptr;
     };
     auto deleteLayer = [&](Layer* layer) {

@@ -316,6 +316,7 @@ CompileError ToCompileError(const char* str){
     }
     #define CASE(ERR) if(!strcmp(str, #ERR)) return ERR;
     CASE(ERROR_NONE)
+    CASE(ERROR_ANY)
     CASE(ERROR_UNSPECIFIED)
     CASE(ERROR_CASTING_TYPES)
     CASE(ERROR_UNDECLARED)
@@ -347,6 +348,7 @@ std::string ToCompileErrorString(temp_compile_error stuff) {
         #define CASE(ERR) if(stuff.err == ERR) return #ERR;
         CASE(ERROR_NONE)
         CASE(ERROR_UNSPECIFIED)
+        CASE(ERROR_ANY)
         
         CASE(ERROR_CASTING_TYPES)
         CASE(ERROR_UNDECLARED)
