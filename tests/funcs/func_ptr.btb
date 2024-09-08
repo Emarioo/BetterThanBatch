@@ -23,9 +23,15 @@ h := hi
 
 _test 12; h(4, 3)
 
+struct mo {
+    x: f32   
+}
+struct poe<T> {
+    x: T 
+}
 
-var3: fn (i32, mo[]) -> i32, i32
-var3: fn (i32, i64<i64>*, mo[]) -> i32, i32
+var3: fn (i32, mo[]) -> (i32, i32)
+var4: fn (i32, poe<i64>*, mo[]) -> (i32, i32)
 
 
 fun: fn @unixcall (Slice<i32>) -> void*
@@ -51,3 +57,21 @@ fn act(i: i32, x: i32) {
 map(list,act)
 
 _test 164; sum
+
+
+fn @oscall okay() { }
+fn call(f: fn@oscall()) { // At one point, the convention of function pointer types was ignored or forgotten.
+    f()   
+}
+call(okay)
+
+
+var3: fn () -> (i32, i32)
+fn dub() -> i32, i32 {
+    return 5, 9
+}
+var3 = dub
+
+a, b : i32 = var3()
+_test 5; a
+_test 9; b

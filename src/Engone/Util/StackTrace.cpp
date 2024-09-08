@@ -16,7 +16,7 @@ struct AssertHandler {
     };
     // we use std::vector instead of DynamicArray because it has asserts in it, infinite loop would happen
     std::vector<Trace> traces;
-
+    bool is_printing = false;
     void print_trace();
 };
 
@@ -124,6 +124,10 @@ void FireAssertHandler() {
     using namespace engone;
     DEF_HANDLER
 
+    if(handler->is_printing)
+        return;
+    handler->is_printing = true;
+
     bool has_any_callback = false;
     for (auto& trace : handler->traces) {
         if(trace.funcs.size() != 0) {
@@ -153,5 +157,6 @@ void FireAssertHandler() {
     }
 
     handler->print_trace();
+    handler->is_printing = false;
 #endif
 }

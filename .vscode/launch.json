@@ -8,7 +8,7 @@
             "program": "${workspaceFolder}/bin/btb",
             "args": ["-dev"],
             // "args": ["--test"],
-            // "args": ["--test","*stuff*"],
+            // "args": ["--test"],
             // "args": ["examples/crawler/GameCore","-d","-o","bin/code.dll"],
             // "args": ["modules/Linux.btb","--preproc"],
             "stopAtEntry": false,

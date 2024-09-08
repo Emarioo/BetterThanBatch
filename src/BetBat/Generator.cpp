@@ -41,16 +41,54 @@ GenContext::LoopScope* GenContext::getLoop(int index){
     return loopScopes[index];
 }
 LinkConvention DetermineLinkConvention(const std::string& lib_path) {
+    using namespace engone;
     if (lib_path.size() == 0)
         return LinkConvention::IMPORT;
 
-    int dot_index = lib_path.find_last_of(".");
-    if(dot_index == -1)
+    // Examples:
+    //   file.so
+    //   file.so.1
+    //   .file.so.2.5
+    //   .file3.so
+    //   file.mp3
+    //   ok-1.2/file.so
+    //   ok-1.2/.file3.so.2.3
+
+    // Find the file extension, on Windows we can just lib_path.find_last_of(".") but on Linux there may be a version after the extension which we must skip first.
+    bool only_numbers = true;
+    int ext_end = lib_path.size();
+    int ext_beg = lib_path.size();
+    for(int i=lib_path.size()-1;i>=0;i--) {
+        char chr = lib_path[i];
+        if(only_numbers && ((chr >= '0' && chr <= '9') || chr == '.')) {
+            
+        } else {
+            only_numbers = false;
+        }
+        if(chr == '/')
+            break;
+        if(chr == '.') {
+            if(only_numbers) {
+                ext_beg = i + 1;
+                ext_end = i;
+            } else {
+                ext_beg = i + 1;
+                break;
+            }
+        }
+    }
+    
+    std::string format = "";
+    if(ext_end > ext_beg)
+        format = lib_path.substr(ext_beg, ext_end-ext_beg);
+    else
+        // assume static import, user may have linked with "c" or "m" which is math and C library.
         return LinkConvention::STATIC_IMPORT;
-    auto format = lib_path.substr(dot_index);
-    if (format == ".dll" || format == ".so") {
+    // log::out << format << "\n";
+        
+    if (format == "dll" || format == "so") {
         return LinkConvention::DYNAMIC_IMPORT;
-    } else if(format == ".lib" || format == ".a") { // TODO: Linux uses libNAME.a for static libraries, we only check .a here but we should perhaps check the prefix 'lib' too.
+    } else if(format == "lib" || format == "a") { // TODO: Linux uses libNAME.a for static libraries, we only check .a here but we should perhaps check the prefix 'lib' too.
         return LinkConvention::STATIC_IMPORT;
     }
     return LinkConvention::IMPORT;
@@ -304,6 +342,7 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         reporter->add_lib_error(varinfo->declaration->linked_library);
         if (errs >= Reporter::LIB_ERROR_LIMIT) {
             // log::out << "skip\n";
+            return;
         } else {
             ERR_SECTION(
                 ERR_HEAD2(varinfo->declaration->location)
@@ -317,6 +356,7 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
                 }
                 log::out << "\n";
             )
+            return;
         }
     }
     
@@ -324,8 +364,8 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         builder.emit_ext_dataptr(reg, LinkConvention::NONE); // emit to prevent triggering asserts to make sure we keep compiling and catch more errors
         ERR_SECTION(
             ERR_HEAD2(varinfo->declaration->location)
-            ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. This was the library name and path: '"<<log::LIME << varinfo->declaration->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'. You can always specify @importdll or @importlib manually.")
-            ERR_LINE2(varinfo->declaration->location,"this declaration")
+            ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. dll/lib can be determined automatically based on the of the library or you can manually specify @importdll or @importlib. The library name and path was this: '"<<log::LIME << varinfo->declaration->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'.")
+            ERR_LINE2(varinfo->declaration->location,"this function")
         )
     } else {
         builder.emit_ext_dataptr(reg, link_convention);
@@ -2049,6 +2089,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
         if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
             link_convention = DetermineLinkConvention(lib_path);
         }
+        // log::out << "Try " << lib_path << " -> " << link_convention<<"\n";
         if (lib_path.size() == 0) {
             if(astFunc->linked_library.size() != 0) {
                 // TODO: If many functions complain about GLAD then only display the first 5 or so.

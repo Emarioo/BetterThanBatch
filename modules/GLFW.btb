@@ -17,8 +17,11 @@
     #load "advapi32.lib"
     #load "shell32.lib"
 #else
-    // TODO: I don't have a Linux computer where I can test GLFW.
-    //   I am testing the Linux stuff on a server without a graphical interface.
+    // #load "libs/glfw-3.3.9/lib-ubuntu/libglfw3.a" as GLFW
+    #load "libs/glfw-3.3.9/lib-ubuntu/libglfw.so.3.3" as GLFW
+    #load "m.so" // math
+    #load "X11.so"
+    // #load "wayland-client.so"
 #endif
 
 #macro GLFWAPI @import(GLFW)

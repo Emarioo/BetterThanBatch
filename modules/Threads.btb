@@ -38,7 +38,7 @@ struct Thread {
             CloseHandle(os_handle);
         #else
             // Assert(sizeof(pthread) == sizeof(thread.os_handle));
-            err := pthread_join(cast<pthread_t>os_handle, cast<void**>null);
+            err := pthread_join(cast_unsafe<pthread_t>os_handle, cast<void**>null);
         #endif
         os_handle = 0
         id = 0
@@ -71,8 +71,8 @@ fn ThreadCreate(func: FnThread, param: void*) -> Thread {
         threadId: u32 = 0;
         temp: pthread_t;
         err := pthread_create(&temp, null, func, param);
-        thread.os_handle = cast<u64>temp;
-        thread.id = cast<u64>temp;
+        thread.os_handle = cast_unsafe<u64>temp;
+        thread.id = cast_unsafe<u64>temp;
     #endif
     return thread;
 }
@@ -83,7 +83,7 @@ fn ThreadSelfId() -> ThreadId {
     #if OS_WINDOWS
         return GetCurrentThreadId();
     #else
-        return cast<u64>pthread_self();
+        return cast_unsafe<u64>pthread_self();
     #endif
 }
 

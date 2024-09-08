@@ -232,11 +232,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
         // bool type_list = false;
         bool func_params = false;
         bool func_returns = false;
+        bool multiple_return_values = false;
         
         bool only_pointer = false;
         bool may_be_name = true;
         
-        bool expect_closing_paren = false;
+        // bool expect_closing_paren = false;
         // bool consume_closing_paren = false;
     };
     DynamicArray<Env> envs;
@@ -267,6 +268,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().func_returns = true;
                 envs.last().func_params = false;
                 envs.last().may_be_name = false;
+                auto token3 = info.getinfo();
+                if(token3->type == '(') {
+                    info.advance();
+                    envs.last().multiple_return_values = true;
+                    envs.last().buffer += "(";
+                }
                 envs.add({});
                 continue;
             } else {
@@ -333,7 +340,7 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().buffer.append("(");
                 envs.last().func_params = true;
                 envs.add({});
-                envs.last().expect_closing_paren = true;
+                // envs.last().expect_closing_paren = true;
                 // envs.last().consume_closing_paren = false;
                 continue;
             } else if (token->type == lexer::TOKEN_IDENTIFIER && envs.last().may_be_name) {
@@ -354,18 +361,19 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().may_be_name = false;
                 envs.add({});
                 continue;
-            } else if (token->type == '(' && envs.last().may_be_name) {
-                if(envs.size() == 1) {
-                    break;
-                }
-                info.advance();
-                envs.last().buffer += "(";
-                envs.last().may_be_name = false;
-                envs.add({});
-                envs.last().expect_closing_paren = true;
-                // envs.last().consume_closing_paren = false;
-                continue;
             }
+            //  else if (token->type == '(' && envs.last().may_be_name) {
+            //     if(envs.size() == 1) {
+            //         break;
+            //     }
+            //     info.advance();
+            //     envs.last().buffer += "(";
+            //     envs.last().may_be_name = false;
+            //     envs.add({});
+            //     envs.last().expect_closing_paren = true;
+            //     // envs.last().consume_closing_paren = false;
+            //     continue;
+            // }
         }
         if (token->type == '*') {
             if(envs.last().may_be_name) {
@@ -395,7 +403,9 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
-            if(envs[envs.size()-2].func_returns) {
+            if(envs[envs.size()-2].multiple_return_values) {
+                
+            } else if(envs[envs.size()-2].func_returns) {
                 // we break here because
                 //  func: fn ()->i32, param: i32
                 // should be treated as
@@ -426,7 +436,10 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
-            if(envs[envs.size()-2].func_returns) {
+            if(envs[envs.size()-2].multiple_return_values) {
+                info.advance();
+                envs.last().buffer += ")";
+            } else if(envs[envs.size()-2].func_returns) {
                 break; // in function pointers, we have 2 envs, not just one so we check function pointer too.
             }
             // if(envs.last().expect_closing_paren) {

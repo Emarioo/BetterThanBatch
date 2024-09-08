@@ -7,7 +7,7 @@
 # fi
 
 if [ "$1" = "run" ]; then
-    btb -dev
+    ./bin/btb -dev
     exit
 fi
 

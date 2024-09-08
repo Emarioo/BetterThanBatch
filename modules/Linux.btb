@@ -424,7 +424,10 @@ global @import(libc) environ: char**;
 
 #load "pthread" as pthreads
 
-#macro pthread_t u64
+// #macro pthread_t u64
+struct pthread_t {
+    data: u64
+}
 
 fn @import(pthreads) pthread_create(thread: pthread_t*,
     attr: pthread_attr_t*,
@@ -836,13 +839,5 @@ fn name_of_error(err: i64) -> char[] {
     }
     return "<unnamed>"
 }
-
-// TODO: Fix these
-// struct pthread_t {
-//     _data: u64;
-// }
-// fn @import @unixcall pthread_create(thread: pthread_t*, attr: void*, start_routine: fn_ref, arg: void*) -> i32;
-// fn @import @unixcall pthread_join(thread: pthread_t, retval: void**) -> i32;
-// fn @import @unixcall pthread_self() -> pthread_t;
 
 #endif // OS_LINUX
