@@ -1,18 +1,54 @@
 // #import "examples/crawler/main" // With hotreloading
 // #import "examples/crawler/GameCore" // Without hotreloading
 
+#import "GLFW"
+// #import "GLAD"
+// #import "Logger"
+// #import "OS"
 
-var3: fn () -> (i32, i32)
+fn main() {
+    glfwInit();
+    // yes := glfwInit();
+    // if !yes {
+    //     log("glfwInit failed");
+    //     return ;
+    // }
+    // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-#import "Logger"
+    // width := 800
+    // height := 600
+    // title := "hey"
+    // glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
+    // if !glfw_window {
+    //     log("window failed");
+    //     glfwTerminate();
+    //     return ;
+    // }
 
-fn dub() -> i32, i32 {
-    return 5, 9
+    // glfwMakeContextCurrent(glfw_window)
+
+    // yes = gladLoadGL()
+    // if !yes {
+    //     log("gladLoadGL failed")
+    //     glfwTerminate()
+    //     return ;
+    // }
+
+    // glViewport(0, 0, width, height)
+
+    // while (!glfwWindowShouldClose(glfw_window)) {
+    //     glViewport(0, 0, width, height)
+        
+    //     glClearColor(0.2, 0.2, 0.2, 1);
+    //     glClear(GL_COLOR_BUFFER_BIT);
+
+    //     // user may not always want this
+    //     glfwSwapBuffers(glfw_window);
+    //     glfwPollEvents();
+        
+    //     // temporary
+    //     ProcessSleep(0.002) // don't use up CPU resources
+    // }
 }
-
-var3 = dub
-
-a, b : i32 = var3()
-log(a,b)
-a, b = dub()
-log(a,b)

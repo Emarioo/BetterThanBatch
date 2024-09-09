@@ -3221,7 +3221,7 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
     if(outTypes){
         Assert(outTypes->size()==0);
     }
-    
+    // NOTE: We calculate return offsets in reverse
     for(int i=(int)funcImpl->signature.returnTypes.size()-1;i>=0;i--){
         auto& retImpl = funcImpl->signature.returnTypes[i];
         auto& retStringType = func->returnValues[i].stringType;

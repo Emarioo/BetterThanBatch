@@ -1948,8 +1948,9 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
     func_type->argSize = offset;
 
     offset = 0;
-    
-    for(auto& ret : func_type->returnTypes){
+    // NOTE: We calculate return offsets in reverse
+    for(int i = func_type->returnTypes.size()-1;i>=0;i--){
+        auto& ret = func_type->returnTypes[i];
         int size =  getTypeSize(ret.typeId);
         int asize = getTypeAlignedSize(ret.typeId);
         if(conv == STDCALL || conv == UNIXCALL)

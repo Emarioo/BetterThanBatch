@@ -66,12 +66,12 @@ fn call(f: fn@oscall()) { // At one point, the convention of function pointer ty
 call(okay)
 
 
-var3: fn () -> (i32, i32)
 fn dub() -> i32, i32 {
     return 5, 9
 }
-var3 = dub
+var3: fn () -> (i32, i32) = dub // At one point, the function pointer type's return values wasn't evaluated properly
+// var3 := dub    <- this would work fine
 
-a, b : i32 = var3()
+a, b : i32 = var3() // Return values where swapped
 _test 5; a
 _test 9; b

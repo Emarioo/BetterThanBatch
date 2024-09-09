@@ -4662,13 +4662,22 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
             if(expectEndingCurlyBrace) {
                 if (functionScopes.size()) {
                     auto func = functionScopes.last().function;
-                    auto loc = getloc();
-                    ERR_SECTION(
-                        ERR_HEAD2(loc)
-                        ERR_MSG("Sudden end of file. A curly brace was expected to end the scope. The scope here belongs to function '"<<func->name<<"'. Did you forget a curly brace in this function?")
-                        ERR_LINE2(loc, "sudden end here")
-                        ERR_LINE2(func->location, "this function")
-                    )
+                    if(func) {
+                        auto loc = getloc();
+                        ERR_SECTION(
+                            ERR_HEAD2(loc)
+                            ERR_MSG("Sudden end of file. A curly brace was expected to end the scope. The scope here belongs to function '"<<func->name<<"'. Did you forget a curly brace in this function?")
+                            ERR_LINE2(loc, "sudden end here")
+                            ERR_LINE2(func->location, "this function")
+                        )
+                    } else {
+                        auto loc = getloc();
+                        ERR_SECTION(
+                            ERR_HEAD2(loc)
+                            ERR_MSG("Sudden end of file. A curly brace was expected to end the scope.")
+                            ERR_LINE2(loc, "sudden end here")
+                        )
+                    }
                 }else {
                     ERR_DEFAULT(info.gettok(), "Sudden end of body. You are missing an ending curly brace '}'.", "here")
                 }

@@ -1506,9 +1506,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 if(base->link == LinkConvention::DYNAMIC_IMPORT) {
                     // log::out << log::RED << "@varimport is incomplete. It was specified in a function named '"<<tinycode->name<<"'\n";
                     // Assert(("incomplete @varimport",false));
-                    emit1(OPCODE_CALL_RM_SLASH_2);
-
-                    emit_modrm_rip32_slash((u8)2, 0);
+                    if(compiler->options->target == TARGET_LINUX_x64) {
+                        emit1(OPCODE_CALL_IMM);
+                        emit4((u32)0);
+                    } else {
+                        emit1(OPCODE_CALL_RM_SLASH_2);
+                        emit_modrm_rip32_slash((u8)2, 0);
+                    }
                     int offset = code_size() - 4;
 
                     map_strict_translation(n->bc_index + 3, offset);

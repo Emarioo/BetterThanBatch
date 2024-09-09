@@ -2168,6 +2168,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
         auto &ret = signature->returnTypes[i];
         TypeId typeId = ret.typeId;
 
+        // log::out << "ret "<<i<<" off: " << (ret.offset - signature->returnSize) << "\n";
         generatePush_get_val(ret.offset - signature->returnSize, typeId);
         outTypeIds->add(ret.typeId);
     }
