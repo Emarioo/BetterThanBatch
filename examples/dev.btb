@@ -42,28 +42,3 @@ fn main() {
     //     glViewport(0, 0, width, height)
                 
 // #import "Logger"
-
-fn @export check(n: i32 = 0) {
-    _test 0; cast<u64>&n & cast<u64>0x0F
-}
-
-{ 
-    n: i32
-        
-    //     glClearColor(0.2, 0.2, 0.2, 1);
-    //     glClear(GL_COLOR_BUFFER_BIT);
-
-    //     // user may not always want this
-    //     glfwSwapBuffers(glfw_window);
-    //     glfwPollEvents();
-
-    //     // temporary
-    //     ProcessSleep(0.002) // don't use up CPU resources
-    // }
-}    if(true) {
-
-    } else {
-        return;
-    }
-    check()
-}

@@ -5,12 +5,15 @@ fn @stdcall okay(a: i32, b: i32) -> i32 {
 }
 
 f := okay
+x: i32
 
 _test 27; asm<i32>(f) {
     pop rbx
     mov ecx, 19
     mov edx, 3
+    sub rsp, 32 // stdcall convention needs at least 32 bytes allocated for arguments, even if it's not used
     call rbx
+    add rsp, 32
     push rax
 }
 

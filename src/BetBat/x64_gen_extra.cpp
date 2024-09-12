@@ -784,14 +784,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         virtual_stack_pointer += imm;
     };
 
-    int size_of_saved_args = 0;
-
     // TODO: If the function (tinycode) has parameters and is stdcall or unixcall
     //   then we need the args will be passed through registers and we must
     //   move them to the stack space.
     #define DECL_SIZED_PARAM(CONTROL) InstructionControl control = (InstructionControl)(((CONTROL) & ~CONTROL_MASK_SIZE) | CONTROL_64B);
-    int unixcall_args_offset = 0;
+    int args_offset = 0;
     if(tinycode->call_convention == STDCALL) {
+        args_offset = callee_saved_space;
         // Assert(false);
         for(int i=0;i<accessed_params.size() && i < 4; i++) {
             auto& param = accessed_params[i];
@@ -810,7 +809,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
         }
     } else if(tinycode->call_convention == UNIXCALL) {
-        unixcall_args_offset = callee_saved_space;
+        args_offset = callee_saved_space;
         // If the function only accesses arguments through inline assembly then the user must save the registers manually.
         // unless we provide a special get_arg instruction in the inline assembly?
         if(is_blank && accessed_params.size()) {
@@ -879,9 +878,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 auto& param = accessed_params[i];
                 DECL_SIZED_PARAM(param.control)
 
-                size_of_saved_args += 8;
-
-                int off = -unixcall_args_offset - (1+i) * 8;
+                int off = -args_offset - (1+i) * 8;
                 param.offset_from_rbp = off;
 
                 X64Register reg_args = X64_REG_BP;
@@ -1384,7 +1381,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     } else {
                         // TODO: Is the hardcoded 6 okay?
                         if(base->imm16 < 6 * 8) {
-                            off = -unixcall_args_offset - base->imm16;
+                            off = -args_offset - base->imm16;
                         }
                     }
                 }
@@ -1733,10 +1730,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
                 
                 int total = 0;
-                if(callee_saved_space - unixcall_args_offset > 0) {
-                    total += callee_saved_space - unixcall_args_offset;
+                if(callee_saved_space - args_offset > 0) {
+                    total += callee_saved_space - args_offset;
                 }
-                // total += size_of_saved_args; // built into callee_saved_space
                 if(total != 0)
                     emit_add_imm32(X64_REG_SP, (i32)(total));
 
