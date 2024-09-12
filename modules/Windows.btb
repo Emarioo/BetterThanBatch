@@ -43,12 +43,18 @@ fn @import(Kernel) CreateProcessA(
   /* [in, optional]      LPCSTR                */ lpCurrentDirectory: char*,
   /* [in]                LPSTARTUPINFOA        */ lpStartupInfo: STARTUPINFOA*,
   /* [out]               LPPROCESS_INFORMATION */ lpProcessInformation: PROCESS_INFORMATION*
+) -> u32;
+fn @import(Kernel) GetProductInfo(
+  /*[in]  DWORD  */ dwOSMajorVersion: u32,
+  /*[in]  DWORD  */ dwOSMinorVersion: u32,
+  /*[in]  DWORD  */ dwSpMajorVersion: u32,
+  /*[in]  DWORD  */ dwSpMinorVersion: u32,
+  /*[out] PDWORD */ pdwReturnedProductType: u32*
 ) -> bool;
-
 fn @import(Kernel) GetExitCodeProcess(
   hProcess: HANDLE,
   lpExitCode: i32*
-) -> bool;
+) -> u32;
 fn @import(Kernel) ExitProcess(
   uExitCode: u32
 );
@@ -855,5 +861,41 @@ fn ntohs(netshort: u16) -> u16 {
 #macro WSANO_DATA                       11004
 
 #macro ERROR_PROC_NOT_FOUND 127
+
+// These are said to be deprecated but it's the easiest way to get information
+
+// major = RET & 0xFF, minor = (RET >> 8) & 0xFF, build = RET >> 16
+fn @import(Kernel) GetVersion() -> u32;
+
+fn @import(Kernel) GetVersionExA(
+  /* [in, out] LPOSVERSIONINFOA */ lpVersionInformation: OSVERSIONINFOA*
+) -> bool;
+struct OSVERSIONINFOA {
+  dwOSVersionInfoSize: u32 = sizeof OSVERSIONINFOA;
+  dwMajorVersion: u32;
+  dwMinorVersion: u32;
+  dwBuildNumber: u32;
+  dwPlatformId: u32;
+  szCSDVersion: char[128];
+}
+
+// Custom function
+fn DecodeWindowsVersion(major: u32*, minor: u32*, build: u32*) {
+    version := GetVersion()
+    
+    if major {
+        *major = version & 0xFF
+    }
+    if minor {
+        *minor = (version >> 8) & 0xFF
+    }
+    if build {
+        if version < 0x8000_0000u {
+            *build = (version >> 16)
+        } else {
+            *build = 0
+        }
+    }
+}
 
 #endif // OS_WINDOWS

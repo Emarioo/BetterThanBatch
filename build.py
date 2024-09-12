@@ -36,7 +36,7 @@ def main():
     config["use_compiler"] = "msvc"
 
     config["use_debug"] = True
-    config["use_tracy"] = True
+    # config["use_tracy"] = True
     # config["use_optimizations"] = True
     # config["run_when_finished"] = True
 

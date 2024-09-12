@@ -894,6 +894,16 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         int pop_at_bc_index;
     };
     DynamicArray<SPMoment> sp_moments{};
+    auto push_stack_moment = [&](int sp, int bc_addr) {
+        sp_moments.add({sp, bc_addr});
+        // log::out << "PUSH "<<sp <<" "<< bc_addr <<"\n";
+    };
+    // TODO: Stack pointers moments were used when the stack pointer changed a lot.
+    //   Especially between jumps and return statements in a if or while scope.
+    //   Now however, the stack pointer is fixed because we allocate space for local
+    //   variables at start of function. It's just push and pop for expressions and
+    //   arguments for functions that are allocated. BUT, we don't need stack moments
+    //   for that because jumps don't appear inside expressions.
     
     // NOTE: If the generator runs out of registers or X64_REG_INVALID
     //   appears then define the macro below.
@@ -923,10 +933,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         last_pc = code_size();
         
         for(int i=0;i<sp_moments.size();i++) {
-            if(n->bc_index == sp_moments[i].pop_at_bc_index) {
-                virtual_stack_pointer = sp_moments[i].virtual_sp;
+            auto& moment = sp_moments[i];
+            // log::out << "check " << moment.pop_at_bc_index<<"\n";
+            if(n->bc_index == moment.pop_at_bc_index) {
+                // log::out << "POP " << moment.virtual_sp << " " << moment.pop_at_bc_index << "\n";
+                virtual_stack_pointer = moment.virtual_sp;
+                sp_moments.removeAt(i);
                 i--;
-                sp_moments.pop();
                 break;
             }
         }
@@ -1356,16 +1369,6 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 FIX_POST_OUT_OPERAND(0);
             } break;
-            case BC_JMP: {
-                auto base = (InstBase_imm32*)n->base;
-
-                emit1(OPCODE_JMP_IMM32);
-                int imm_offset = code_size();
-                emit4((u32)0);
-                
-                const u8 BYTE_OF_BC_JMP = 1 + 4; // TODO: DON'T HARDCODE VALUES!
-                addRelocation32(imm_offset - 1, imm_offset, n->bc_index + BYTE_OF_BC_JMP + base->imm32);
-            } break;
             case BC_CALL:
             case BC_CALL_REG: {
                 auto base = (InstBase_link_call_imm32*)n->base;
@@ -1713,7 +1716,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JNZ + base->imm32;
                 addRelocation32(imm_offset - 2, imm_offset, jmp_bc_addr);
                 
-                sp_moments.add({virtual_stack_pointer, jmp_bc_addr});
+                push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
                 
                 FIX_POST_IN_OPERAND(0)
             } break;
@@ -1735,7 +1738,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JZ + base->imm32;
                 addRelocation32(imm_offset - 2, imm_offset, jmp_bc_addr);
                 
-                sp_moments.add({virtual_stack_pointer, jmp_bc_addr});
+                push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
                 
                 /*
                   Immediates in bytecode jump instructions are relative to
@@ -1754,6 +1757,19 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     unless the compiler does some optimizations on a static const table.
                 */
                 FIX_POST_IN_OPERAND(0)
+            } break;
+            case BC_JMP: {
+                auto base = (InstBase_imm32*)n->base;
+
+                emit1(OPCODE_JMP_IMM32);
+                int imm_offset = code_size();
+                emit4((u32)0);
+                
+                const u8 BYTE_OF_BC_JMP = 1 + 4; // TODO: DON'T HARDCODE VALUES!
+                int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JMP + base->imm32;
+                addRelocation32(imm_offset - 1, imm_offset, jmp_bc_addr);
+                
+                push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
             } break;
             case BC_DATAPTR: {
                 auto base = (InstBase_op1_imm32*)n->base;

@@ -4179,15 +4179,15 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                     } else if(lsize != finalSize) {
                         builder.emit_cast(left_reg,left_reg, CAST_FLOAT_FLOAT, lsize, finalSize);
                     }
-                } else if(ltype == AST_BOOL && rtype == AST_BOOL) {
+                } else if((ltype.isPointer() || ltype == AST_BOOL) && (rtype == AST_BOOL || rtype.isPointer())) {
                     outSize = 1;
                     operand_size = 1;
                 } else {
                     ERR_SECTION(
                         ERR_HEAD2(expression->location)
                         ERR_MSG("You cannot perform an operation on these types.")
-                        ERR_LINE2(expression->left->location,"here")
-                        ERR_LINE2(expression->right->location,"here")
+                        ERR_LINE2(expression->left->location, ast->typeToString(ltype))
+                        ERR_LINE2(expression->right->location, ast->typeToString(rtype))
                     )
                     return SIGNAL_FAILURE;
                 }

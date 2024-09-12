@@ -54,14 +54,12 @@ fn main() {
     DirectoryCreate(path_release.sliced())
 
     cmd: StringBuilder
+    cmd.append("python build.py use_optimizations use_debug=false use_tracy=false output=")
+    cmd.append(path_release)
     #if OS_WINDOWS
-        cmd.append("python build.py msvc use_optimizations output=")
-        cmd.append(path_release)
-        cmd.append("/btb.exe")
+        cmd.append("/btb.exe msvc")
     #else
-        cmd.append("python3 build.py gcc use_optimizations output=")
-        cmd.append(path_release)
-        cmd.append("/btb")
+        cmd.append("/btb gcc")
     #endif
     // log(cmd)
     ExecuteCommand(cmd.sliced(), null, true)
@@ -74,11 +72,11 @@ fn main() {
     }
     #endmacro
 
-    COPY_DIR("docs")
-    COPY_DIR("examples")
+    // COPY_DIR("docs")
+    // COPY_DIR("examples")
+    // COPY_DIR("assets") // not strictly necessary but there are some examples that rely on fonts
     COPY_DIR("modules")
     COPY_DIR("libs")
-    COPY_DIR("assets") // not strictly necessary but there are some examples that rely on fonts
 
     readme := @strbeg
 Hello curious programmer!

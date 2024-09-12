@@ -1,3 +1,19 @@
 // #import "examples/crawler/main" // With hotreloading
-#import "examples/crawler/GameCore" // Without hotreloading
+// #import "examples/crawler/GameCore" // Without hotreloading
 
+// #import "Logger"
+
+fn @export check(n: i32 = 0) {
+    _test 0; cast<u64>&n & cast<u64>0x0F
+}
+
+{ 
+    n: i32
+
+    if(true) {
+        
+    } else {
+        return;
+    }
+    check()
+}

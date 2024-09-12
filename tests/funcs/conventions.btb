@@ -8,10 +8,17 @@ check()
 n: i32
 check()
 
+
+if(true) {
+    
+} else {
+    return; // caused problems at one point
+}
+check()
+
 #import "Math"
 
 random64(); // BCryptGenRandom crashes without 16-byte alignment
-
 
 // This caused issues were we put arg on the stack since
 // sys V abi passes args in registers, but we forgot to
