@@ -22,9 +22,13 @@ enum @enclosed FileHandle : i64 { INVALID }
 #macro OS_TO_API_HANDLE(N) (cast_unsafe<i64>(N) + 1)
 #macro API_TO_OS_HANDLE(N) (cast_unsafe<void*>((N) - 1))
 
-#macro OS_TO_FILE_HANDLE(N) (cast_unsafe<FileHandle>(cast_unsafe<i64>(N) + 1))
-#macro FILE_TO_OS_HANDLE(N) (cast_unsafe<void*>(cast_unsafe<i64>(N) - 1))
-
+#if OS_WINDOWS
+    #macro FILE_TO_OS_HANDLE(N) (cast_unsafe<void*>(cast_unsafe<i64>(N) - 1))
+    #macro OS_TO_FILE_HANDLE(N) (cast_unsafe<i64>(cast_unsafe<i64>(N) + 1))
+#else
+    #macro FILE_TO_OS_HANDLE(N) (cast<i32>(cast_unsafe<i64>(N) - 1))
+    #macro OS_TO_FILE_HANDLE(N) (cast_unsafe<FileHandle>(cast<i64>(N) + 1))
+#endif
 enum @specified FileOpenFlags {
     FILE_READ_ONLY          = 0x1,
     FILE_CLEAR_AND_WRITE    = 0x2,

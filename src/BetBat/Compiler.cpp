@@ -1641,6 +1641,10 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case LINKER_CLANG:
         case LINKER_GCC: {
+            // TODO: If on Linux, we need to provide paths to shared libraries somehow. How does linux know where to
+            //   find them. We can't just put them in /usr/lib. We can't just modify LD_LIBRARY_PATH because user may
+            //   compile restart the terminal (resetting variable) and then run executable which will fail cause it can't find libraries.
+            
             if(output_type == OUTPUT_LIB) {
                 cmd += "ar rcs ";
                 cmd += output_path + " ";
@@ -1662,11 +1666,12 @@ void Compiler::run(CompileOptions* options) {
                             // parsing command line arguments is though.
                             // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
                         } else {
-                            cmd += "-nostdlib ";
-                            if (entry_point == "main")
-                                cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
+                            // cmd += "-nostdlib ";
+                            // if (entry_point == "main")
+                            //     cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
                         }
                     }
+                    
                     if (entry_point != "main") // no need to set entry if main is used since it is the default
                         cmd += "--entry " + entry_point + " ";
                     

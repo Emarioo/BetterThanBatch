@@ -856,6 +856,8 @@ void X64Builder::emit_mov_mem_reg(X64Register rm, X64Register reg, InstructionCo
     }
 }
 void X64Builder::emit_mov_reg_reg(X64Register reg, X64Register rm, int size) {
+    // TODO: movd can be used to move xmm registers to and from general registers.
+    //   I didn't know that so the generator moves values to stack first which uses two instructions. Whoopsie.
     if (IS_REG_XMM(reg) && IS_REG_XMM(rm)) {
         if (size == 4)
             emit3(OPCODE_3_MOVSS_REG_RM);

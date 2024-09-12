@@ -800,7 +800,7 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], color:
     INTERNAL (user input)
 ###########################*/
 
-#macro GLFW_CALLBACK_API @stdcall
+#macro GLFW_CALLBACK_API @oscall
 
 // Useful with hotreloading
 fn SaveGraphicsGlobals() -> void* {

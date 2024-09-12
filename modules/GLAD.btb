@@ -11,7 +11,8 @@
         #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
     #endif
 #else
-    // Linux?
+    // #load "libs/glad/lib-ubuntu/libglad.a" as GLAD
+    #load "libs/glad/lib-ubuntu/libglad.so" as GLAD
 #endif
 
 global glErrCode: bool = false;

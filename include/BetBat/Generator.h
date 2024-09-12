@@ -141,3 +141,5 @@ struct NodeScope {
 };
 // Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
 bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import);
+
+LinkConvention DetermineLinkConvention(const std::string& lib_path);

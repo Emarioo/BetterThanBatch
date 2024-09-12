@@ -54,6 +54,8 @@ struct DebugInformation;
 
 InstructionControl operator |(InstructionControl a, InstructionControl b);
 
+engone::Logger& operator <<(engone::Logger& logger, InstructionControl c);
+
 enum InstructionOpcode : u8 {
     // DO NOT REARRAGNE THESE INSTRUCTIONS, instructions_names and instruction_contents depend on the order!
     BC_HALT = 0,

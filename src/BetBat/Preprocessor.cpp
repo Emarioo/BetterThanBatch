@@ -934,9 +934,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 layer->specific = layer->top_caller->specific;
             lexer::Token token = layer->get(lexer);
             if(token.type == lexer::TOKEN_EOF) {
-                // TODO: Assert happens if ) wasn't found
-                // this can happen at the end of the file
-                Assert(false);
+                ERR_SECTION(
+                    ERR_HEAD2(macro_token)
+                    ERR_MSG("Sudden end of file, expected closing parenthesis.")
+                    ERR_LINE2(macro_token, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
             }
             
             if(layer->paren_depth==0 && (token.type == ',' || token.type == ')')) {

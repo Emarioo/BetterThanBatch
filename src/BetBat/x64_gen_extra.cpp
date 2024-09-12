@@ -749,7 +749,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         X64_REG_XMM1,
         X64_REG_XMM2,
         X64_REG_XMM3,
-        // BC_REG_XMM4,
+        // Some instructions assume use temporary registers (xmm4-xmm7). If we want to 
+        // allow these instructions here then we may need to rewrite those instructions
+        // to save xmm7 before it is used as a temporary register.
+        // BC_REG_XMM4, 
         // BC_REG_XMM5,
         // BC_REG_XMM6,
         // BC_REG_XMM7,
@@ -869,7 +872,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 callee_saved_space += count * 8;
                 virtual_stack_pointer -= 8 * count;
             }
-            for(int i=0;i<accessed_params.size() && i < 6; i++) {
+            int normal_count = 0;
+            int float_count = 0;
+            int stacked_count = 0;
+            for(int i=0;i<accessed_params.size();i++) {
                 auto& param = accessed_params[i];
                 DECL_SIZED_PARAM(param.control)
 
@@ -879,12 +885,35 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 param.offset_from_rbp = off;
 
                 X64Register reg_args = X64_REG_BP;
-                X64Register reg = unixcall_normal_regs[i];
+                X64Register reg = X64_REG_INVALID;
                 if(IS_CONTROL_FLOAT(control)) {
-                    Assert(false); // double check how floats are passed
-                    reg = unixcall_normal_regs[i];
+                    if(float_count < 8) {
+                        // NOTE: Type checker provides a better error, this assert is here as a reminder to fix this code.
+                        Assert(("x64 generator can't handle more than 4 floats",float_count < 4));
+                        reg = unixcall_float_regs[float_count];
+                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                    } else {
+                        Assert(("x64 generator can't handle more than 8 floats",false));
+                        reg = X64_REG_XMM7; // is it safe to use xmm7 register?
+                        int src_off = FRAME_SIZE + stacked_count * 8;
+                        emit_mov_reg_mem(reg,reg_args,control,src_off);
+                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                        stacked_count++;
+                    }
+                    float_count++;
+                } else {
+                    if(normal_count < 6) {
+                        reg = unixcall_normal_regs[normal_count];
+                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                    } else {
+                        reg = X64_REG_A;
+                        int src_off = FRAME_SIZE + stacked_count * 8;
+                        emit_mov_reg_mem(reg,reg_args,control,src_off);
+                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                        stacked_count++;
+                    }
+                    normal_count++;
                 }
-                emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
             }
         }
     }
@@ -1353,6 +1382,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     if(is_entry_point) {
                         off -= 16; // args on stack, no return address or previous rbp
                     } else {
+                        // TODO: Is the hardcoded 6 okay?
                         if(base->imm16 < 6 * 8) {
                             off = -unixcall_args_offset - base->imm16;
                         }
@@ -1415,24 +1445,52 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         }
                     } break;
                     case UNIXCALL: {
-                        if(recent_set_args.size() > 6) {
-                            Assert(("x64 gen can't handle Sys V ABI with more than 6 arguments.", false));
-                        }
-                        for(int i=0;i<recent_set_args.size() && i < 6;i++) {
+                        // if(recent_set_args.size() > 6) {
+                        //     Assert(("x64 gen can't handle Sys V ABI with more than 6 arguments.", false));
+                        // }
+                        int normal_count = 0;
+                        int float_count = 0;
+                        int stacked_count = 0;
+                        for(int i=0;i<recent_set_args.size();i++) {
                             auto& arg = recent_set_args[i];
                             auto control = arg.control;
 
                             int off = i * 8;
                             X64Register reg_args = X64_REG_SP;
-                            X64Register reg = unixcall_normal_regs[i];
-                            if(IS_CONTROL_FLOAT(control))
-                                reg = unixcall_float_regs[i];
-                            else {
-                                emit_prefix(0, reg, reg);
-                                emit1(OPCODE_XOR_REG_RM);
-                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(reg));
+                            // log::out << "control " <<(InstructionControl)control << "\n";
+                            
+                            if(IS_CONTROL_FLOAT(control)) {
+                                if(float_count < 8) {
+                                    // NOTE: We provide a better error message in the type checker.
+                                    Assert(("x64 generator doesn't support more than 4 float arguments",float_count < 4));
+                                    
+                                    X64Register reg = unixcall_float_regs[float_count];
+                                    emit_mov_reg_mem(reg,reg_args,control,off);
+                                } else {
+                                    X64Register tmp = X64_REG_A;
+                                    emit_mov_reg_mem(X64_REG_A,reg_args,control, off);
+                                    int dst_off = stacked_count * 8;
+                                    emit_mov_mem_reg(reg_args,X64_REG_A,control, dst_off);
+                                    stacked_count++;
+                                }
+                                float_count++;
+                            } else {
+                                if(normal_count < 6) {
+                                    X64Register reg = unixcall_normal_regs[normal_count];
+                                    
+                                    emit_prefix(0, reg, reg);
+                                    emit1(OPCODE_XOR_REG_RM);
+                                    emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(reg));
+                                    emit_mov_reg_mem(reg,reg_args,control,off);
+                                } else {
+                                    X64Register tmp = X64_REG_A;
+                                    emit_mov_reg_mem(X64_REG_A,reg_args,control, off);
+                                    int dst_off = stacked_count * 8;
+                                    emit_mov_mem_reg(reg_args,X64_REG_A,control, dst_off);
+                                    stacked_count++;
+                                }
+                                normal_count++;
                             }
-                            emit_mov_reg_mem(reg,reg_args,control,off);
                         }
                     } break;
                     default: Assert(false);
@@ -1451,9 +1509,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 if(base->link == LinkConvention::DYNAMIC_IMPORT) {
                     // log::out << log::RED << "@varimport is incomplete. It was specified in a function named '"<<tinycode->name<<"'\n";
                     // Assert(("incomplete @varimport",false));
-                    emit1(OPCODE_CALL_RM_SLASH_2);
-
-                    emit_modrm_rip32_slash((u8)2, 0);
+                    if(compiler->options->target == TARGET_LINUX_x64) {
+                        emit1(OPCODE_CALL_IMM);
+                        emit4((u32)0);
+                    } else {
+                        emit1(OPCODE_CALL_RM_SLASH_2);
+                        emit_modrm_rip32_slash((u8)2, 0);
+                    }
                     int offset = code_size() - 4;
 
                     map_strict_translation(n->bc_index + 3, offset);
@@ -1671,10 +1733,10 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
                 
                 int total = 0;
-                if(callee_saved_space - callee_saved_regs_len*8  - unixcall_args_offset > 0) {
-                    total += callee_saved_space - callee_saved_regs_len*8 - unixcall_args_offset;
+                if(callee_saved_space - unixcall_args_offset > 0) {
+                    total += callee_saved_space - unixcall_args_offset;
                 }
-                total += size_of_saved_args;
+                // total += size_of_saved_args; // built into callee_saved_space
                 if(total != 0)
                     emit_add_imm32(X64_REG_SP, (i32)(total));
 

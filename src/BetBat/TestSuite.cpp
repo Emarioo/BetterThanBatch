@@ -281,6 +281,7 @@ u32 TestSuite(CompileOptions* options){
     tests.add("tests/funcs/overloading.btb");
     tests.add("tests/funcs/constructor.btb");
     tests.add("tests/funcs/conventions.btb");
+    tests.add("tests/funcs/func_ptr.btb");
     
     return VerifyTests(options, tests);
 }
