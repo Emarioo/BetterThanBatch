@@ -306,15 +306,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
     /*
         Evaluate poly types
     */
-
-    if(typeString == "int") {
-        ERR_SECTION(
-            ERR_HEAD2(err_location)
-            ERR_MSG("Type '"<<typeString<<"' does not exist. Did you mean i32.")
-            ERR_LINE2(err_location,"here somewhere")
-        )
-        return {};
-    } 
+   
 
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -344,17 +336,25 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
         int depth = 0;
         bool process_args = true;
         bool process_anot = false;
+        // bool multiple_return_values = false;
         while(head < tmp.size()) {
             char chr = tmp[head];
             char next_chr = 0;
             if (head+1 < tmp.size())
                 next_chr = tmp[head+1];
+            // char next2_chr = 0;
+            // if (head+2 < tmp.size())
+            //     next2_chr = tmp[head+2];
             head++;
             
             if(depth == 0) {
                 if(chr == '-' && next_chr == '>') {
                     head++;
                     process_args = false;
+                    // if(next2_chr == '(') {
+                    //     head++;
+                    //     multiple_return_values = true;
+                    // }
                     continue;
                 }
             }
@@ -380,8 +380,15 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
                         else if(inner_type == "oscall") {
                             if(info.compiler->options->target == TARGET_WINDOWS_x64) {
                                 convention = STDCALL;
-                            } else if(info.compiler->options->target == TARGET_WINDOWS_x64) {
+                            } else if(info.compiler->options->target == TARGET_LINUX_x64) {
                                 convention = UNIXCALL;
+                            } else {
+                                // If target is neither Windows or Linux then we use the call convention of the host platform.
+                                #if OS_WINDOWS
+                                convention = STDCALL;
+                                #else
+                                convention = UNIXCALL;
+                                #endif
                             }
                         } else {
                             // do we just ignore?
@@ -401,12 +408,12 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
                 depth--;
             }
             
-            if(( depth == 1 && chr == ',') || ( depth == 0 && chr == ')') || (head == tmp.size() && !process_args)) {
+            if(( depth == 1 && chr == ',') || (depth == 0 && chr == ')') || (head == tmp.size() && !process_args)) {
                 if(str_start == 0) {
                     continue;
                 }
                 int str_end = head-1;
-                if(head == tmp.size() && !process_args)
+                if(!(depth == 0 && chr == ')') && head == tmp.size() && !process_args)
                     str_end = head;
                 std::string inner_type = std::string(tmp.data() + str_start, str_end - str_start);
                 bool printedError = false;
@@ -527,6 +534,23 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
     }
 
     if(polyTokens.size() == 0) {
+        // Errors when mistaking types from C/C++.
+        if(typeString == "int") {
+            ERR_SECTION(
+                ERR_HEAD2(err_location)
+                ERR_MSG("Type '"<<typeString<<"' does not exist. Did you mean i32.")
+                ERR_LINE2(err_location,"here somewhere")
+            )
+            return {};
+        }
+        if(typeString == "float") {
+            ERR_SECTION(
+                ERR_HEAD2(err_location)
+                ERR_MSG("Type '"<<typeString<<"' does not exist. Did you mean i32.")
+                ERR_LINE2(err_location,"here somewhere")
+            )
+            return {};
+        } 
         // ERR_SECTION(
         // ERR_HEAD2(err_location) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // type isn't polymorphic and does just not exist
@@ -601,14 +625,21 @@ SignalIO TyperContext::checkStructs(ASTScope* scope) {
         //-- Get struct info
         TypeInfo* structInfo = nullptr;
         if(astStruct->state==ASTStruct::TYPE_EMPTY){
-            // structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name,false,true);
             structInfo = info.ast->createType(astStruct->name, scope->scopeId);
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
+                // ignoreErors and showErrors stop us from printing error so we have to ensure we can print errors first
+                bool prev_ignore = ignoreErrors;
+                bool prev_show = showErrors;
+                ignoreErrors = false;
+                showErrors = true;
                 ERR_SECTION(
                     ERR_HEAD2(astStruct->location)
                     ERR_MSG("'"<<astStruct->name<<"' is already defined.")
+                    ERR_LINE2(astStruct->location,"here") // NOTE: We don't really need to show the content of the line where struct was defined, it spams the terminal with unnecesary information. (user already know which file and line)
                 )
+                ignoreErrors = prev_ignore; // also don't forget to switch them back
+                showErrors = prev_show;
                 // TODO: Provide information (file, line, column) of the first definition.
                 // We don't care about another turn. We failed but we don't set
                 // completedStructs to false since this will always fail.
@@ -1344,10 +1375,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             ent2.iden = nullptr;                        \
             ent2.set_implicit_this = false;             \
         } 
-        // log::out << "WA "<<expr->name<<"\n";          \
-        // for (auto& ent2 : possible_overload_groups) {   \
-        //     log::out << " ent "<< (void*)ent2.iden << "\n";                      \
-        // } \
+
+        // log::out << "WA "<<expr->name<<"\n";          
+        // for (auto& ent2 : possible_overload_groups) {   
+        //     log::out << " ent "<< (void*)ent2.iden << "\n";                      
+        // } 
         // log::out.flush();
 
     // IMPORTANT TODO: There is a bug with polymorphism and overloading. A function call in
@@ -2443,7 +2475,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     if(outTypes)  outTypes->add(theType);
                 }
             } else {
-                Assert(hasAnyErrors());
+                // We may use @TEST_ERROR in which case we expect something to go wrong,
+                // but we don't expect an error from, hence no assert.
+                // We should have provided some message from checkType. (see usage of finalType above)
+                // Assert(hasAnyErrors());
                 if(outTypes) outTypes->add(AST_VOID);
             }
         } else if(expr->typeId == AST_ASM){
@@ -3186,7 +3221,7 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
     if(outTypes){
         Assert(outTypes->size()==0);
     }
-    
+    // NOTE: We calculate return offsets in reverse
     for(int i=(int)funcImpl->signature.returnTypes.size()-1;i>=0;i--){
         auto& retImpl = funcImpl->signature.returnTypes[i];
         auto& retStringType = func->returnValues[i].stringType;
@@ -3245,6 +3280,28 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
     if(outTypes && funcImpl->signature.returnTypes.size()==0){
         outTypes->add(AST_VOID);
     }
+    
+    if (func->callConvention == UNIXCALL) {
+        int fcount = 0;
+        int ncount = 0;
+        for(int i = 0; i < funcImpl->signature.argumentTypes.size();i++) {
+            auto& arg = funcImpl->signature.argumentTypes[i];
+            if(AST::IsDecimal(arg.typeId)) {
+                fcount++;
+            } else {
+                ncount++;
+            }
+        }
+        if(fcount > 4) {
+            ERR_SECTION(
+                ERR_HEAD2(func->location)
+                ERR_MSG_COLORED("The compiler does not support "<<log::LIME << " 4 "<<log::NO_COLOR << " floats with @unixcall (Sys V ABI calling convention). Decrease amount of float arguments by putting them in a struct and passing a pointer or annoy the developer to fix this.")
+                ERR_LINE2(func->location, "too many floats for unixcall")
+            )
+            return SIGNAL_FAILURE;
+        }
+    }
+    
     return SIGNAL_SUCCESS;
 }
 // Ensures that the function identifier exists.
@@ -3307,14 +3364,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
         // TODO: Fix overloads
         // log::out << log::YELLOW << path <<":"<<line<<":"<<column<< " (warning): Type conversions (operator cast) is experimental and incomplete.\n";
     }
-    if (function->callConvention == UNIXCALL && function->arguments.size() > 6) {
-        ERR_SECTION(
-            ERR_HEAD2(function->location)
-            ERR_MSG_LOG("The compiler does not support unixcall (Sys V ABI) calling convention with more than "<<log::LIME << " 6 "<<log::NO_COLOR << " arguments. (it needs testing)\n\n")
-            ERR_LINE2(function->location, "too many arguments for unixcall")
-        )
-        return SIGNAL_FAILURE;
-    }
+   
     if(parentStruct) {
         function->memberIdentifiers.resize(parentStruct->members.size());
         for(int i=0;i<(int)parentStruct->members.size();i++){

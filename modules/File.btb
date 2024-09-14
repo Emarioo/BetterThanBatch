@@ -22,9 +22,13 @@ enum @enclosed FileHandle : i64 { INVALID }
 #macro OS_TO_API_HANDLE(N) (cast_unsafe<i64>(N) + 1)
 #macro API_TO_OS_HANDLE(N) (cast_unsafe<void*>((N) - 1))
 
-#macro OS_TO_FILE_HANDLE(N) (cast_unsafe<FileHandle>(cast_unsafe<i64>(N) + 1))
-#macro FILE_TO_OS_HANDLE(N) (cast_unsafe<void*>(cast_unsafe<i64>(N) - 1))
-
+#if OS_WINDOWS
+    #macro FILE_TO_OS_HANDLE(N) (cast_unsafe<void*>(cast_unsafe<i64>(N) - 1))
+    #macro OS_TO_FILE_HANDLE(N) (cast_unsafe<FileHandle>(cast_unsafe<i64>(N) + 1))
+#else
+    #macro FILE_TO_OS_HANDLE(N) (cast<i32>(cast_unsafe<i64>(N) - 1))
+    #macro OS_TO_FILE_HANDLE(N) (cast_unsafe<FileHandle>(cast<i64>(N) + 1))
+#endif
 enum @specified FileOpenFlags {
     FILE_READ_ONLY          = 0x1,
     FILE_CLEAR_AND_WRITE    = 0x2,
@@ -315,11 +319,19 @@ fn DirectoryCopy(src: char[], dst: char[]) {
         start_index := cmd.len
 
         cmd.append(src)
-        if src[src.len-1] != '/'
+        
+        major, minor, build : u32
+        DecodeWindowsVersion(&major, &minor, &build)
+        // log(major," ", minor, " ", build)
+        min_windows_10 := major > 6u
+        
+        if min_windows_10 && src[src.len-1] != '/'
             cmd.append("/") // path should have a trailing slash to indicate that it's a directory and not a file, xcopy will prompt the user otherwise
+            // haha, turns out Windows 10 does but not Windows 8.1
+            // that's fun...
         cmd.append(" ")
         cmd.append(dst)
-        if dst[dst.len-1] != '/'
+        if dst[dst.len-1] != '/' // should have slash not matter the Windows version, okay xcopy, whatever you say
             cmd.append("/")
 
         // xcopy requires backslash in file name
@@ -327,7 +339,8 @@ fn DirectoryCopy(src: char[], dst: char[]) {
             if cmd.ptr[nr] == '/'
                 cmd.ptr[nr] = '\\'
         
-        // log(cmd)
+        log(cmd)
+        // xcopy /Y /Q /S /D assets\ bin\btb-win_x64-2024-09\assets\
 
         // TODO: redirect stdout to nul
         ExecuteCommand(cmd.sliced(), null, true)

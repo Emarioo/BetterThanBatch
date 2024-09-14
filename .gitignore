@@ -10,6 +10,10 @@ bin
 *.def
 *.lib
 *.dll
+*.a
+*.so
+# we want to match with glfw.so.3.3.9 too
+*.so.*
 .vs
 *.ilk
 *.obj

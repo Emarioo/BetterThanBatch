@@ -51,7 +51,7 @@ enum NetProtocol {
 
     // Protocols and behaviour relevant to the networking library. They have nothing to do with tcp/ip.
     NET_PROTO_STREAM  = 0x0, // library lets you handle the logic for separating messages, use this when implementing HTTP or other protocols
-    NET_PROTO_MESSAGE = 0x1, // library sends distinct messages that are length prefixed, use this when implementing multiplayer for a game
+    NET_PROTO_MESSAGE = 0x2, // library sends distinct messages that are length prefixed, use this when implementing multiplayer for a game
 }
 #macro ConnectionID i32
 #macro EventCallback fn(e: Event, user_data: void*)

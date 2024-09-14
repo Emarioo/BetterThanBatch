@@ -93,11 +93,13 @@ void PrintExample(int line, const StringBuilder& stringBuilder);
 #define WARN_DEFAULT_R(R,NAME,NUM) WARN_CUSTOM(R.tokenStream()?R.tokenStream()->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
 
 // IMPORTANT: DO NOT, UNDER ANY CIRCUMSTANCES, CHANGE THE ID/NUMBER OF THE ERRORS. THEY MAY BE USED IN TEST CASES.
+// NOTE: When adding a new error type, don't forget to add string conversion in ToCompileError
 enum CompileError : u32 {
     ERROR_NONE = 0,
     ERROR_UNSPECIFIED = 1, // This is used for old errors which didn't have error types. New errors should not use this. Or if you are lazy i guess?
+    ERROR_ANY = 2, // Matches with any error. (used with @TEST_ERROR)
     ERROR_CASTING_TYPES = 1001,
-    ERROR_UNDECLARED = 1002,
+    ERROR_UNDECLARED = 1002, // undeclared variable/identifier
     ERROR_TYPE_MISMATCH = 1003, // generic type mismatch
     ERROR_INVALID_TYPE = 1004, // generic invalid type, usually void being used when it can't
     ERROR_TOO_MANY_VARIABLES = 1005, // usually with more assignment variables than return values resulting in some variables missing a type

@@ -5,12 +5,15 @@ fn @stdcall okay(a: i32, b: i32) -> i32 {
 }
 
 f := okay
+x: i32
 
 _test 27; asm<i32>(f) {
     pop rbx
     mov ecx, 19
     mov edx, 3
+    sub rsp, 32 // stdcall convention needs at least 32 bytes allocated for arguments, even if it's not used
     call rbx
+    add rsp, 32
     push rax
 }
 
@@ -23,9 +26,15 @@ h := hi
 
 _test 12; h(4, 3)
 
+struct mo {
+    x: f32   
+}
+struct poe<T> {
+    x: T 
+}
 
-var3: fn (i32, mo[]) -> i32, i32
-var3: fn (i32, i64<i64>*, mo[]) -> i32, i32
+var3: fn (i32, mo[]) -> (i32, i32)
+var4: fn (i32, poe<i64>*, mo[]) -> (i32, i32)
 
 
 fun: fn @unixcall (Slice<i32>) -> void*
@@ -51,3 +60,21 @@ fn act(i: i32, x: i32) {
 map(list,act)
 
 _test 164; sum
+
+
+fn @oscall okay() { }
+fn call(f: fn@oscall()) { // At one point, the convention of function pointer types was ignored or forgotten.
+    f()   
+}
+call(okay)
+
+
+fn dub() -> i32, i32 {
+    return 5, 9
+}
+var3: fn () -> (i32, i32) = dub // At one point, the function pointer type's return values wasn't evaluated properly
+// var3 := dub    <- this would work fine
+
+a, b : i32 = var3() // Return values where swapped
+_test 5; a
+_test 9; b

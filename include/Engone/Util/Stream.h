@@ -464,7 +464,7 @@ struct ByteStream {
         // don't pass by value is type is bigger than 8?
         Assert(sizeof(T) <= 8);
 
-        bool yes = write_at(offset, &value, sizeof (T));
+        bool yes = write_at(offset, &value, sizeof(T));
         Assert(yes);
 
         // memcpy(ptr,&value,sizeof(T));

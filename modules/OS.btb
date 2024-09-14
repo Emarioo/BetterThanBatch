@@ -433,7 +433,9 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
             }
         }
     } else {
-        *exit_code = 0 // perhaps we shouldn't set exit code at all?
+        if exit_code {
+            *exit_code = 0 // perhaps we shouldn't set exit code at all?
+        }
     }
     
     CloseHandle(pi.hThread);

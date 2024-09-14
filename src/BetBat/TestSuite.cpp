@@ -281,6 +281,7 @@ u32 TestSuite(CompileOptions* options){
     tests.add("tests/funcs/overloading.btb");
     tests.add("tests/funcs/constructor.btb");
     tests.add("tests/funcs/conventions.btb");
+    tests.add("tests/funcs/func_ptr.btb");
     
     return VerifyTests(options, tests);
 }
@@ -425,6 +426,8 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         i64 failedTests = 0;
         i64 totalTests = 0;
         
+        #define match_err(A,B) ((A) == (B) || A == ERROR_ANY)
+        
         totalTests += testcase.expectedErrors.size();            
         for(int k=0;k<testcase.expectedErrors.size();k++){
             auto& expectedError = testcase.expectedErrors[k];
@@ -432,7 +435,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             bool found = false;
             for(int j=0;j<compiler.errorTypes.size();j++){
                 auto& actualError = compiler.errorTypes[j];
-                if(expectedError.errorType == actualError.errorType
+                if(match_err(expectedError.errorType, actualError.errorType)
                 && expectedError.line == actualError.line) {
                     found = true;
                     break;
@@ -450,7 +453,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             bool found = false;
             for(int k=0;k<testcase.expectedErrors.size();k++){
                 auto& expectedError = testcase.expectedErrors[k];
-                if(expectedError.errorType == actualError.errorType
+                if(match_err(expectedError.errorType, actualError.errorType)
                 && expectedError.line == actualError.line) {
                     found = true;
                     break;
@@ -589,6 +592,22 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         } else {
             log::out << log::RED << "NO ";
         }
+        
+        /* TODO: The way we print a case failed because we didn't receive
+             the expected error is confusing. It looks like the case
+             failed because there was an error, see below and fix it.
+             
+            tests/structs/struct.btb
+             OK assign_add (0/0)
+             OK array_in_struct (7/7)
+             OK indexing_slice (1/1)
+             OK methods (1/1)
+             OK methods_poly (0/0)
+             NO nested_struct 50.00% (1/2)
+              LN 167: ERROR_ANY
+             OK circular_structs (0/0)
+            Summary: 92.86% (13/14)
+        */
         log::out << log::NO_COLOR << testCase.testName << " ";
         if(result.failedTests != 0) {
             log::out << log::RED;

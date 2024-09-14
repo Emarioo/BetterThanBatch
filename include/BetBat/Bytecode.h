@@ -52,9 +52,9 @@ struct DebugInformation;
 #define IS_CONTROL_CONVERT_FLOAT(x) (CONTROL_CONVERT_FLOAT_OP & x)
 // from -> to (CAST_FROM_TO)
 
-static InstructionControl operator |(InstructionControl a, InstructionControl b) {
-    return (InstructionControl)((int)a | (int)b);
-}
+InstructionControl operator |(InstructionControl a, InstructionControl b);
+
+engone::Logger& operator <<(engone::Logger& logger, InstructionControl c);
 
 enum InstructionOpcode : u8 {
     // DO NOT REARRAGNE THESE INSTRUCTIONS, instructions_names and instruction_contents depend on the order!

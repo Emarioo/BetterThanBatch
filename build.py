@@ -36,7 +36,7 @@ def main():
     config["use_compiler"] = "msvc"
 
     config["use_debug"] = True
-    config["use_tracy"] = True
+    # config["use_tracy"] = True
     # config["use_optimizations"] = True
     # config["run_when_finished"] = True
 
@@ -146,9 +146,8 @@ def compile(config):
     #         print("NOTE: Using gcc instead of msvc because 'cl' compiler isn't available.")
     #         config["use_compiler"] = "gcc"
     #         # TODO: Find and run vcvars64.bat
-
     if config["use_compiler"] == "msvc" and platform.system() == "Linux":
-        config["use_compiler"] == "gcc"
+        config["use_compiler"] = "gcc"
 
     # print(config)
 
@@ -265,12 +264,13 @@ def compile(config):
         else:
             GCC_DEFINITIONS += " -DOS_LINUX"
 
-        GCC_WARN = "-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unknown-warning-option -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point"
+        GCC_WARN = "-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point -Wno-class-conversion -Wno-address"
         # GCC complains about dereferencing nullptr (-Wsequence-point)
         GCC_WARN += " -Wno-sign-compare"
 
         if enabled("use_debug"):
             GCC_COMPILE_OPTIONS += " -g"
+            GCC_LINK_OPTIONS += " -g"
 
         if enabled("use_optimizations"):
             GCC_COMPILE_OPTIONS += " -O3"
@@ -280,10 +280,10 @@ def compile(config):
                 GCC_DEFINITIONS += " -DTRACY_ENABLE"
                 GCC_LINK_OPTIONS += " bin/tracy.o"
                 if not os.path.exists("bin/tracy.o"):
-                    cmd("g++ -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10\public\TracyClient.cpp -o bin/tracy.o")
+                    cmd("g++ -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp -o bin/tracy.o")
                 
             else:
-                print("build.py doesn't support tracy on Linux, needs testing")
+                print("build.py doesn't support tracy on Linux, tracy is ignored")
             
         # Code below compiles the necessary object files
       
@@ -386,53 +386,80 @@ def compile(config):
     ################################
     #   COMPILE VENDOR LIBRARIES
     ################################
-
     if platform.system() == "Windows":
-      
         compile_vendor("glad","glad.c", "glad", "GLAD_GLAPI_EXPORT GLAD_GLAPI_EXPORT_BUILD")
         # NOTE: stb_image was modified to support STB_IMAGE_BUILD_DLL.
         compile_vendor("stb","stb_image.c", "stb_image", "STB_IMAGE_BUILD_DLL")
-
+        
+    elif platform.system() == "Linux":
+        compile_vendor("glad","glad.c", "glad", "GLAD_GLAPI_EXPORT GLAD_GLAPI_EXPORT_BUILD")
+        # NOTE: stb_image was modified to support STB_IMAGE_BUILD_DLL.
+        compile_vendor("stb","stb_image.c", "stb_image", "STB_IMAGE_BUILD_DLL")
+        
+    
     return compile_success
 
 def compile_vendor(vendor, src, bin_name, dll_defs = ""):
-    GCC_PATHS = "-Llibs/glfw-3.3.9/lib-mingw-w64 -Ilibs/glfw-3.3.9/include -Ilibs/glad/include -Lbin -Ilibs/stb/include"
-    MSVC_PATHS = "/Ilibs/glfw-3.3.9/include /Ilibs/glad/include /Ilibs/stb/include"
+    # GCC_PATHS = "-Llibs/glfw-3.3.9/lib-mingw-w64 -Ilibs/glfw-3.3.9/include -Ilibs/glad/include -Lbin -Ilibs/stb/include"
+    GCC_PATHS = "-Ilibs/glad/include -Lbin -Ilibs/stb/include"
+    # MSVC_PATHS = "/Ilibs/glfw-3.3.9/include /Ilibs/glad/include /Ilibs/stb/include"
+    MSVC_PATHS = "/Ilibs/glad/include /Ilibs/stb/include"
 
     src = "libs/"+vendor+"/src/" + src
-    path_mingw = "libs/"+vendor+"/lib-mingw-w64/"
-    path_vc = "libs/"+vendor+"/lib-vc2022/"
-    mingw_lib = path_mingw + bin_name + ".lib"
-    mingw_dll = path_mingw + bin_name + ".dll"
+    
+    mingw_path = "libs/"+vendor+"/lib-mingw-w64/"
+    mingw_lib = mingw_path + bin_name + ".lib"
+    mingw_dll = mingw_path + bin_name + ".dll"
     mingw_obj = "bin/" + bin_name + ".o"
-    vc_lib = path_vc + bin_name + ".lib"
-    vc_dll = path_vc + bin_name + ".dll"
-    vc_dlllib = path_vc + bin_name + "dll.lib"
+    
+    vc_path = "libs/"+vendor+"/lib-vc2022/"
+    vc_lib = vc_path + bin_name + ".lib"
+    vc_dll = vc_path + bin_name + ".dll"
+    vc_dlllib = vc_path + bin_name + "dll.lib"
     vc_obj = "bin/" + bin_name + ".obj"
+    
+    ubuntu_path = "libs/"+vendor+"/lib-ubuntu/"
+    ubuntu_lib = ubuntu_path + "lib" + bin_name + ".a"
+    ubuntu_dll = ubuntu_path + "lib" +bin_name + ".so"
+    ubuntu_obj = "bin/" + bin_name + ".o"
 
     mingw_dll_defs = ""
     vc_dll_defs = ""
+    ubuntu_dll_defs = ""
     for v in dll_defs.split(" "):
         mingw_dll_defs += "-D"+v + " "
         vc_dll_defs += "/D"+v + " "
+        ubuntu_dll_defs += "-D"+v + " "
 
-    if not os.path.exists(path_mingw):
-        os.mkdir(path_mingw)
-    if not os.path.exists(path_vc):
-        os.mkdir(path_vc)
+    if platform.system() == "Windows":
+        if not os.path.exists(mingw_path):
+            os.mkdir(mingw_path)
+        if not os.path.exists(vc_path):
+            os.mkdir(vc_path)
+            
 
-    if not os.path.exists(mingw_lib):
-        cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ mingw_obj)
-        cmd("ar rcs "+mingw_lib+" " + mingw_obj)
-    if not os.path.exists(mingw_dll):
-        cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ mingw_dll_defs + " " + src + " -o "+mingw_dll)
-    
-    if not os.path.exists(vc_lib):
-        cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
-        cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
-    
-    if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
-        cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
+        if not os.path.exists(mingw_lib):
+            cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ mingw_obj)
+            cmd("ar rcs "+mingw_lib+" " + mingw_obj)
+        if not os.path.exists(mingw_dll):
+            cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ mingw_dll_defs + " " + src + " -o "+mingw_dll)
+        
+        if not os.path.exists(vc_lib):
+            cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
+            cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
+        
+        if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
+            cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
+        
+    if platform.system() == "Linux":
+        if not os.path.exists(ubuntu_path):
+            os.mkdir(ubuntu_path)
+            
+        if not os.path.exists(ubuntu_lib):
+            cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ ubuntu_obj)
+            cmd("ar rcs "+ubuntu_lib+" " + ubuntu_obj)
+        if not os.path.exists(ubuntu_dll):
+            cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ ubuntu_dll_defs + " " + src + " -o "+ubuntu_dll)
 
 # returns a list of object files to compile
 def compute_modified_files(source_files, object_files, exe_file):

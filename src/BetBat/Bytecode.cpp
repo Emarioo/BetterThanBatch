@@ -6,6 +6,10 @@
 
 #define ENABLE_BYTECODE_OPTIMIZATIONS
 
+InstructionControl operator |(InstructionControl a, InstructionControl b) {
+    return (InstructionControl)((int)a | (int)b);
+}
+
 u32 Bytecode::getMemoryUsage(){
     Assert(false);
     return 0;
@@ -549,6 +553,7 @@ void BytecodeBuilder::fix_jump_imm32_here(int imm_index) {
     if(disable_code_gen) return;
 
     *(int*)&tinycode->instructionSegment[imm_index] = get_pc() - (imm_index + 4); // +4 because immediate should be relative to the end of the instruction, not relative to the offset within the instruction
+    // engone::log::out << "fixed "<< (*(int*)&tinycode->instructionSegment[imm_index])<<"\n";
 }
 void BytecodeBuilder::emit_mov_rr(BCRegister to, BCRegister from){
     emit_opcode(BC_MOV_RR);
@@ -1211,7 +1216,23 @@ engone::Logger& operator<<(engone::Logger& l, InstructionOpcode t) {
 engone::Logger& operator<<(engone::Logger& l, BCRegister r){
     return l << register_names[r];
 }
-
+engone::Logger& operator <<(engone::Logger& logger, InstructionControl c) {
+    logger << "{";
+    int size = GET_CONTROL_SIZE(c);
+         if(size == CONTROL_8B)  logger << "1";
+    else if(size == CONTROL_16B) logger << "2";
+    else if(size == CONTROL_32B) logger << "4";
+    else if(size == CONTROL_64B) logger << "8";
+    if(IS_CONTROL_FLOAT(c))
+        logger << "f";
+    else if (IS_CONTROL_UNSIGNED(c))
+        logger << "u";
+    else
+        logger << "s";
+    
+    logger << "}";
+    return logger;
+}
 void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicArray<std::string>* dll_functions, bool force_newline) {
     using namespace engone;
     bool print_one_inst = high_index - low_index == 1;
@@ -1225,6 +1246,21 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
     auto tiny_index = index;
     int prev_tinyindex = -1;
     int prev_line = -1;
+    
+    auto print_control = [](InstructionControl control) {
+        auto prev_color = log::out.getColor();
+        log::out << log::CYAN;
+        int size = GET_CONTROL_SIZE(control);
+        if(size == CONTROL_8B)       log::out << ", byte";
+        else if(size == CONTROL_16B) log::out << ", word";
+        else if(size == CONTROL_32B) log::out << ", dword";
+        else if(size == CONTROL_64B) log::out << ", qword";
+        if(IS_CONTROL_FLOAT(control))
+            log::out << ", float";
+        if(IS_CONTROL_UNSIGNED(control))
+            log::out << ", unsigned";
+        log::out << prev_color;
+    };
 
     int pc=low_index;
     while(pc<high_index) {
@@ -1298,11 +1334,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 default: Assert(false);
             }
             
-            int size = GET_CONTROL_SIZE(control);
-            if(size == CONTROL_8B)       log::out << ", byte";
-            else if(size == CONTROL_16B) log::out << ", word";
-            else if(size == CONTROL_32B) log::out << ", dword";
-            else if(size == CONTROL_64B) log::out << ", qword";
+            print_control(control);
         } break;
         case BC_SET_ARG:
         case BC_GET_PARAM:
@@ -1328,11 +1360,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 default: Assert(false);
             }
             
-            int size = GET_CONTROL_SIZE(control);
-            if(size == CONTROL_8B)       log::out << ", byte";
-            else if(size == CONTROL_16B) log::out << ", word";
-            else if(size == CONTROL_32B) log::out << ", dword";
-            else if(size == CONTROL_64B) log::out << ", qword";
+            print_control(control);
+                
         } break;
         case BC_PTR_TO_LOCALS:
         case BC_PTR_TO_PARAMS: {
@@ -1430,7 +1459,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             
             int addr = pc + imm;
             
-            log::out << log::GRAY << " :"<< addr;
+            log::out << log::GRAY << " :"<< addr << " ("<<imm<<")";
         } break;
         case BC_JNZ:
         case BC_JZ: {
@@ -1440,7 +1469,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             
             int addr = pc + imm;
             
-            log::out << " "<<register_names[op0] <<", "<< log::GRAY << ":"<< addr;
+            log::out << " "<<register_names[op0] <<", "<< log::GRAY << ":"<< addr << " ("<<imm<<")";
         } break;
         case BC_ADD:
         case BC_SUB:
@@ -1459,19 +1488,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             control = (InstructionControl)instructions[pc++];
             
             log::out << " "<<register_names[op0] <<", "<< register_names[op1];
-            // we don't care about sizes
-            auto c = log::out.getColor();
-            log::out << log::CYAN;
-            if(IS_CONTROL_FLOAT(control))
-                log::out << ", float";
-            if(IS_CONTROL_UNSIGNED(control))
-                log::out << ", unsigned";
-            int size = GET_CONTROL_SIZE(control);
-            if(size == CONTROL_8B)       log::out << ", byte";
-            else if(size == CONTROL_16B) log::out << ", word";
-            else if(size == CONTROL_32B) log::out << ", dword";
-            else if(size == CONTROL_64B) log::out << ", qword";
-            log::out << c;
+            
+            print_control(control);
         } break;
         case BC_BAND:
         case BC_BOR:
@@ -1499,6 +1517,11 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             imm = *(i32*)&instructions[pc];
             pc+=4;
             log::out << " " << register_names[op0] << ", "<<log::GREEN<<imm;
+        } break;
+        case BC_EXT_DATAPTR: {
+            op0 = (BCRegister)instructions[pc++];
+            LinkConvention link = *(LinkConvention*)&instructions[pc++];
+            log::out << " " << register_names[op0] << ", "<<link;
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];

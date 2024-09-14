@@ -41,14 +41,54 @@ GenContext::LoopScope* GenContext::getLoop(int index){
     return loopScopes[index];
 }
 LinkConvention DetermineLinkConvention(const std::string& lib_path) {
+    using namespace engone;
     if (lib_path.size() == 0)
         return LinkConvention::IMPORT;
 
-    int dot_index = lib_path.find_last_of(".");
-    auto format = lib_path.substr(dot_index);
-    if (format == ".dll" || format == ".so") {
+    // Examples:
+    //   file.so
+    //   file.so.1
+    //   .file.so.2.5
+    //   .file3.so
+    //   file.mp3
+    //   ok-1.2/file.so
+    //   ok-1.2/.file3.so.2.3
+
+    // Find the file extension, on Windows we can just lib_path.find_last_of(".") but on Linux there may be a version after the extension which we must skip first.
+    bool only_numbers = true;
+    int ext_end = lib_path.size();
+    int ext_beg = lib_path.size();
+    for(int i=lib_path.size()-1;i>=0;i--) {
+        char chr = lib_path[i];
+        if(only_numbers && ((chr >= '0' && chr <= '9') || chr == '.')) {
+            
+        } else {
+            only_numbers = false;
+        }
+        if(chr == '/')
+            break;
+        if(chr == '.') {
+            if(only_numbers) {
+                ext_beg = i + 1;
+                ext_end = i;
+            } else {
+                ext_beg = i + 1;
+                break;
+            }
+        }
+    }
+    
+    std::string format = "";
+    if(ext_end > ext_beg)
+        format = lib_path.substr(ext_beg, ext_end-ext_beg);
+    else
+        // assume static import, user may have linked with "c" or "m" which is math and C library.
+        return LinkConvention::STATIC_IMPORT;
+    // log::out << format << "\n";
+        
+    if (format == "dll" || format == "so") {
         return LinkConvention::DYNAMIC_IMPORT;
-    } else if(format == ".lib" || format == ".a") { // TODO: Linux uses libNAME.a for static libraries, we only check .a here but we should perhaps check the prefix 'lib' too.
+    } else if(format == "lib" || format == "a") { // TODO: Linux uses libNAME.a for static libraries, we only check .a here but we should perhaps check the prefix 'lib' too.
         return LinkConvention::STATIC_IMPORT;
     }
     return LinkConvention::IMPORT;
@@ -302,6 +342,7 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         reporter->add_lib_error(varinfo->declaration->linked_library);
         if (errs >= Reporter::LIB_ERROR_LIMIT) {
             // log::out << "skip\n";
+            return;
         } else {
             ERR_SECTION(
                 ERR_HEAD2(varinfo->declaration->location)
@@ -315,6 +356,7 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
                 }
                 log::out << "\n";
             )
+            return;
         }
     }
     
@@ -322,8 +364,8 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         builder.emit_ext_dataptr(reg, LinkConvention::NONE); // emit to prevent triggering asserts to make sure we keep compiling and catch more errors
         ERR_SECTION(
             ERR_HEAD2(varinfo->declaration->location)
-            ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. This was the library name and path: '"<<log::LIME << varinfo->declaration->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'. You can always specify @importdll or @importlib manually.")
-            ERR_LINE2(varinfo->declaration->location,"this declaration")
+            ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. dll/lib can be determined automatically based on the of the library or you can manually specify @importdll or @importlib. The library name and path was this: '"<<log::LIME << varinfo->declaration->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'.")
+            ERR_LINE2(varinfo->declaration->location,"this function")
         )
     } else {
         builder.emit_ext_dataptr(reg, link_convention);
@@ -2047,6 +2089,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
         if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
             link_convention = DetermineLinkConvention(lib_path);
         }
+        // log::out << "Try " << lib_path << " -> " << link_convention<<"\n";
         if (lib_path.size() == 0) {
             if(astFunc->linked_library.size() != 0) {
                 // TODO: If many functions complain about GLAD then only display the first 5 or so.
@@ -2125,6 +2168,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
         auto &ret = signature->returnTypes[i];
         TypeId typeId = ret.typeId;
 
+        // log::out << "ret "<<i<<" off: " << (ret.offset - signature->returnSize) << "\n";
         generatePush_get_val(ret.offset - signature->returnSize, typeId);
         outTypeIds->add(ret.typeId);
     }
@@ -2358,16 +2402,19 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                             // NOTE: Is member variable/argument 'this' always at this offset with all calling conventions?
                             // type = varinfo->versions_typeId[info.currentPolyVersion];
                             builder.emit_get_param(BC_REG_B, 0, 8, false); // pointer
-
-                            auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
-                            if (mem.array_length) {
-                                type.setPointerLevel(type.getPointerLevel()+1);
-                                builder.emit_li32(BC_REG_T0, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                                builder.emit_add(BC_REG_B, BC_REG_T0, 8, false);
-                                builder.emit_push(BC_REG_B);
+                            if(currentFunction->parentStruct) {
+                                auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                                if (mem.array_length) {
+                                    type.setPointerLevel(type.getPointerLevel()+1);
+                                    builder.emit_li32(BC_REG_T0, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                                    builder.emit_add(BC_REG_B, BC_REG_T0, 8, false);
+                                    builder.emit_push(BC_REG_B);
+                                } else {
+                                    generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
+                                    type);
+                                }
                             } else {
-                                generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
-                                type);
+                                // This happend because of @TEST_ERROR in tests/funcs/stuff.btb at one point.
                             }
                         } break;
                         default: {
@@ -3362,6 +3409,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                             ERR_SECTION(
                                 ERR_HEAD2(expr->location)
                                 ERR_MSG("To many members for struct " << ast_struct->name << " (" << ast_struct->members.size() << " member(s) allowed).")
+                                ERR_LINE2(expr->location, "here")
                             )
                             continue;
                         }
@@ -4173,15 +4221,15 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                     } else if(lsize != finalSize) {
                         builder.emit_cast(left_reg,left_reg, CAST_FLOAT_FLOAT, lsize, finalSize);
                     }
-                } else if(ltype == AST_BOOL && rtype == AST_BOOL) {
+                } else if((ltype.isPointer() || ltype == AST_BOOL) && (rtype == AST_BOOL || rtype.isPointer())) {
                     outSize = 1;
                     operand_size = 1;
                 } else {
                     ERR_SECTION(
                         ERR_HEAD2(expression->location)
                         ERR_MSG("You cannot perform an operation on these types.")
-                        ERR_LINE2(expression->left->location,"here")
-                        ERR_LINE2(expression->right->location,"here")
+                        ERR_LINE2(expression->left->location, ast->typeToString(ltype))
+                        ERR_LINE2(expression->right->location, ast->typeToString(rtype))
                     )
                     return SIGNAL_FAILURE;
                 }
@@ -4576,8 +4624,13 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
         }
         int index_of_frame_size = 0;
-        builder.emit_alloc_local(BC_REG_INVALID, &index_of_frame_size);
-        add_frame_fix(index_of_frame_size);
+        
+        if(function->blank_body) {
+            // builder.emit_alloc_local(BC_REG_INVALID, (u16)0);
+        } else {
+            builder.emit_alloc_local(BC_REG_INVALID, &index_of_frame_size);
+            add_frame_fix(index_of_frame_size);
+        }
 
         if (funcImpl->signature.returnTypes.size() != 0) {
             // We don't need to zero initialize return value.
@@ -4715,16 +4768,21 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 }
             }
         }
-        if(builder.get_last_opcode() != BC_RET) {
-            // add return with no return values if it doesn't exist
-            // this is only fine if the function doesn't return values
-            if(!function->blank_body) {
-                int index;
-                builder.emit_free_local(&index);
-                add_frame_fix(index);
-            }
-            builder.emit_ret();
+        // We can't skip ret like this the last ret may exist in a
+        // if-block. That if block will jump to the instruction after the ret 
+        // so WE MUST emit an extra ret.
+        // TODO: We could optimize a bit if the last instruction doesn't come from
+        //   an if, while, for, switch or whatever else we might have. This makes it hard.
+        // if(builder.get_last_opcode() != BC_RET) { }
+            
+        // add return with no return values if it doesn't exist
+        // this is only fine if the function doesn't return values
+        if(!function->blank_body) {
+            int index;
+            builder.emit_free_local(&index);
+            add_frame_fix(index);
         }
+        builder.emit_ret();
         fix_frame_values(funcImpl, tinycode);
         
         // TODO: Assert that we haven't allocated more stack space than we freed!
@@ -5037,7 +5095,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     if(!set_defaults) {
                         #ifndef DISABLE_ZERO_INITIALIZATION
                         genMemzero(BC_REG_LOCALS, BC_REG_B, arraySize, arrayFrameOffset);
-                        #endif DISABLE_ZERO_INITIALIZATION
+                        #endif // DISABLE_ZERO_INITIALIZATION
                     }
                     // data type may be zero if it wasn't specified during initial assignment
                     // a = 9  <-  implicit / explicit  ->  a : i32 = 9
@@ -5303,6 +5361,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             builder.emit_pop(reg);
             int skipIfBodyIndex;
+            // log::out << "beg pc " << builder.get_pc()<<"\n";
             builder.emit_jz(reg, &skipIfBodyIndex);
 
             result = generateBody(statement->firstBody);
@@ -5315,6 +5374,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }
 
             // fix address for jump instruction
+            // log::out << "end pc " << builder.get_pc()<<"\n";
             builder.fix_jump_imm32_here(skipIfBodyIndex);
 
             if (statement->secondBody) {
@@ -6675,15 +6735,16 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 context.generateBody(scope);
                 // TestGenerate(context.builder);
                 
-                if(context.builder.get_last_opcode() != BC_RET) {
-                    int index;
-                    context.builder.emit_free_local(&index);
-                    context.add_frame_fix(index);
-                    
-                    context.builder.emit_ret();
-                } else {
-                    
-                }
+                // We can't skip ret like this the last ret may exist in a
+                // if-block. That if block will jump to the instruction after the ret 
+                // so WE MUST emit an extra ret.
+                // TODO: We could optimize a bit if the last instruction doesn't come from
+                //   an if, while, for, switch or whatever else we might have. This makes it hard.
+                // if(context.builder.get_last_opcode() != BC_RET) { }
+                int index;
+                context.builder.emit_free_local(&index);
+                context.add_frame_fix(index);
+                context.builder.emit_ret();
 
                 context.fix_frame_values(context.currentFuncImpl, tb_main);
             }

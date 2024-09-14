@@ -232,11 +232,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
         // bool type_list = false;
         bool func_params = false;
         bool func_returns = false;
+        bool multiple_return_values = false;
         
         bool only_pointer = false;
         bool may_be_name = true;
         
-        bool expect_closing_paren = false;
+        // bool expect_closing_paren = false;
         // bool consume_closing_paren = false;
     };
     DynamicArray<Env> envs;
@@ -267,6 +268,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().func_returns = true;
                 envs.last().func_params = false;
                 envs.last().may_be_name = false;
+                auto token3 = info.getinfo();
+                if(token3->type == '(') {
+                    info.advance();
+                    envs.last().multiple_return_values = true;
+                    envs.last().buffer += "(";
+                }
                 envs.add({});
                 continue;
             } else {
@@ -333,7 +340,7 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().buffer.append("(");
                 envs.last().func_params = true;
                 envs.add({});
-                envs.last().expect_closing_paren = true;
+                // envs.last().expect_closing_paren = true;
                 // envs.last().consume_closing_paren = false;
                 continue;
             } else if (token->type == lexer::TOKEN_IDENTIFIER && envs.last().may_be_name) {
@@ -354,18 +361,19 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().may_be_name = false;
                 envs.add({});
                 continue;
-            } else if (token->type == '(' && envs.last().may_be_name) {
-                if(envs.size() == 1) {
-                    break;
-                }
-                info.advance();
-                envs.last().buffer += "(";
-                envs.last().may_be_name = false;
-                envs.add({});
-                envs.last().expect_closing_paren = true;
-                // envs.last().consume_closing_paren = false;
-                continue;
             }
+            //  else if (token->type == '(' && envs.last().may_be_name) {
+            //     if(envs.size() == 1) {
+            //         break;
+            //     }
+            //     info.advance();
+            //     envs.last().buffer += "(";
+            //     envs.last().may_be_name = false;
+            //     envs.add({});
+            //     envs.last().expect_closing_paren = true;
+            //     // envs.last().consume_closing_paren = false;
+            //     continue;
+            // }
         }
         if (token->type == '*') {
             if(envs.last().may_be_name) {
@@ -395,7 +403,9 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
-            if(envs[envs.size()-2].func_returns) {
+            if(envs[envs.size()-2].multiple_return_values) {
+                
+            } else if(envs[envs.size()-2].func_returns) {
                 // we break here because
                 //  func: fn ()->i32, param: i32
                 // should be treated as
@@ -426,7 +436,10 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
-            if(envs[envs.size()-2].func_returns) {
+            if(envs[envs.size()-2].multiple_return_values) {
+                info.advance();
+                envs.last().buffer += ")";
+            } else if(envs[envs.size()-2].func_returns) {
                 break; // in function pointers, we have 2 envs, not just one so we check function pointer too.
             }
             // if(envs.last().expect_closing_paren) {
@@ -3464,6 +3477,14 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
     } else if(token->type == lexer::TOKEN_TRY) {
         auto loc = info.getloc();
         info.advance();
+
+        if(compiler->options->target != TARGET_WINDOWS_x64) {
+            ERR_SECTION(
+                ERR_HEAD2(loc)
+                ERR_MSG_COLORED("Try-catch is not supported on "<<log::LIME << ToString(compiler->options->target) <<log::NO_COLOR<<". Use sigaction instead. In the future we will rethink try-catch because Windows has support for it (Structured Exception Handling) while Linux handles exceptions differently with signals. The language will support platform independent exception handling.")
+                ERR_LINE2(loc, "here")
+            ) 
+        }
         
         statement = info.ast->createStatement(ASTStatement::TRY);
 
@@ -4641,13 +4662,22 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
             if(expectEndingCurlyBrace) {
                 if (functionScopes.size()) {
                     auto func = functionScopes.last().function;
-                    auto loc = getloc();
-                    ERR_SECTION(
-                        ERR_HEAD2(loc)
-                        ERR_MSG("Sudden end of file. A curly brace was expected to end the scope. The scope here belongs to function '"<<func->name<<"'. Did you forget a curly brace in this function?")
-                        ERR_LINE2(loc, "sudden end here")
-                        ERR_LINE2(func->location, "this function")
-                    )
+                    if(func) {
+                        auto loc = getloc();
+                        ERR_SECTION(
+                            ERR_HEAD2(loc)
+                            ERR_MSG("Sudden end of file. A curly brace was expected to end the scope. The scope here belongs to function '"<<func->name<<"'. Did you forget a curly brace in this function?")
+                            ERR_LINE2(loc, "sudden end here")
+                            ERR_LINE2(func->location, "this function")
+                        )
+                    } else {
+                        auto loc = getloc();
+                        ERR_SECTION(
+                            ERR_HEAD2(loc)
+                            ERR_MSG("Sudden end of file. A curly brace was expected to end the scope.")
+                            ERR_LINE2(loc, "sudden end here")
+                        )
+                    }
                 }else {
                     ERR_DEFAULT(info.gettok(), "Sudden end of body. You are missing an ending curly brace '}'.", "here")
                 }

@@ -226,6 +226,8 @@
 #macro SYS_mprotect 10
 #macro SYS_munmap   11
 
+#macro SYS_sigaction   13 // sometimes named rt_sigaction
+
 #macro SYS_access   21
 #macro SYS_pipe   22
 
@@ -326,6 +328,8 @@ SYSCALL(mmap,  void*, addr: void*, length: i32, prot: i32, flags: i32, fd: i32, 
 SYSCALL(mprotect,  i32, addr: void*, len: i32, prot: i32);
 SYSCALL(munmap,    i32, addr: void*, length: i32)
 
+SYSCALL(sigaction, i32, signum: i32, act: sigaction_t*, old_act: sigaction_t*)
+
 SYSCALL(access,  i32, path: char*, mode: i32)
 SYSCALL(pipe,  i32, fildes: i32*)
 
@@ -420,7 +424,10 @@ global @import(libc) environ: char**;
 
 #load "pthread" as pthreads
 
-#macro pthread_t u64
+// #macro pthread_t u64
+struct pthread_t {
+    data: u64
+}
 
 fn @import(pthreads) pthread_create(thread: pthread_t*,
     attr: pthread_attr_t*,
@@ -520,6 +527,17 @@ struct siginfo {
 struct timespec {
     tv_sec: i64;
     tv_nsec: i64;
+}
+
+struct sigset_t {
+    n: i32[16]; // (1024 / (8 * sizeof (unsigned long int)))
+}
+struct sigaction_t {
+    sa_handler: fn(i32);
+    sa_sigaction: fn(i32, siginfo_t*, void*);
+    sa_mask: sigset_t;
+    sa_flags: i32;
+    sa_restorer: fn(void);
 }
 
 // from netinet/in.h
@@ -821,13 +839,5 @@ fn name_of_error(err: i64) -> char[] {
     }
     return "<unnamed>"
 }
-
-// TODO: Fix these
-// struct pthread_t {
-//     _data: u64;
-// }
-// fn @import @unixcall pthread_create(thread: pthread_t*, attr: void*, start_routine: fn_ref, arg: void*) -> i32;
-// fn @import @unixcall pthread_join(thread: pthread_t, retval: void**) -> i32;
-// fn @import @unixcall pthread_self() -> pthread_t;
 
 #endif // OS_LINUX

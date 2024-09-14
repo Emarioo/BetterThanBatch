@@ -1,10 +1,6 @@
 
 #import "Logger"
 
-#if OS_WINDOWS
-
-#import "Windows"
-
 // This enum is used in the catch filter expression
 // try { ... } catch EXCEPTION_MEMORY_VIOLATION { ... }
 enum ExceptionType {
@@ -27,6 +23,10 @@ struct ExceptionInfo {
     os_code: u32; // code from operating system
     pc_address: u64; // address in the code where exception occured
 }
+
+#if OS_WINDOWS
+
+#import "Windows"
 
 #if !DISABLE_DEFAULT_EXCEPTION_HANDLER
 // fn @export @oscall exception_handler(records: EXCEPTION_POINTERS*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {
