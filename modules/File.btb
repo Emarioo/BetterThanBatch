@@ -791,7 +791,26 @@ fn FileModifiedTime(file: FileHandle) -> i64 {
     log(t / cast<i64>1_000_000_000 / 60 / 60 / 24 / 365 + 1601) // should print the year the file was last modified
     */
 }
+fn FileExist(path: char[]) -> bool {
+    #if OS_WINDOWS
+        bits := GetFileAttributesA(path.ptr)
+        if bits == INVALID_FILE_ATTRIBUTES
+            return false;
+        return !(bits & FILE_ATTRIBUTE_DIRECTORY)
+    #else
+    
+    #endif
+}
+fn DirectoryExist(path: char[]) -> bool {
+    #if OS_WINDOWS
+        bits := GetFileAttributesA(path.ptr)
+        if bits == INVALID_FILE_ATTRIBUTES
+            return false;
+        return bits & FILE_ATTRIBUTE_DIRECTORY
+    #else
 
+    #endif
+}
 // returns absolute path to the found file, empty string if nothing was found
 // if multiple files match then any one can be picked (depends on DirectoryIterator)
 // if recursive then the specified directories (CWD, PATH, dirs) will be searched recursively (skipping those that start with '.')

@@ -36,6 +36,12 @@ hi()
 fn okaye(a: A = { 1 }) { }
 okaye(a = { 2 })
 
+// Return value with inferred initializer
+fn ok() -> A {
+    return {}
+}
+x := ok()
+
 // Named argument WITHOUT default arg (doesn't work because named args don't work without default args)
 // fn okayed(a: i32) {}
 // okayed(a = {})

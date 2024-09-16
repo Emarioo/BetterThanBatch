@@ -1,13 +1,24 @@
 // #import "examples/crawler/main" // With hotreloading
 // #import "examples/crawler/GameCore" // Without hotreloading
 
-#import "GLFW"
+#import "Logger"
+#import "Stream"
+
+// s : ByteStream
+
+// struct Header{
+    
+// }
+
+// s.write
+
+// #import "GLFW"
 // #import "GLAD"
 // #import "Logger"
 // #import "OS"
 
-fn main() {
-    glfwInit();
+// fn main() {
+//     glfwInit();
     // yes := glfwInit();
     // if !yes {
     //     log("glfwInit failed");

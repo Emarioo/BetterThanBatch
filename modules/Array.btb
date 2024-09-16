@@ -129,8 +129,8 @@ struct Array<T> {
                     destruct(&ptr[nr])
                 }
                 bytes := max * sizeof T
-                Free(ptr, bytes);
-                memory_tracker.remove(ptr, bytes, typeid T)
+                Free(cast_unsafe<void*>ptr, bytes);
+                memory_tracker.remove(cast_unsafe<void*>ptr, bytes, typeid T)
                 // log("nah")
             }
             ptr = null;
@@ -143,9 +143,9 @@ struct Array<T> {
             // log("huh")
             // log("Try reserve, sizeof T =",sizeof T)
             bytes := newMax * sizeof T
-            ptr = Allocate(bytes);
-            memory_tracker.add(ptr, bytes, typeid T)
-            memzero(ptr, bytes)
+            ptr = cast_unsafe<T*>Allocate(bytes);
+            memory_tracker.add(cast_unsafe<void*>ptr, bytes, typeid T)
+            memzero(cast_unsafe<void*>ptr, bytes)
             // log("allocSize",newMax * sizeof T)
             // log("ptr",ptr)
             // Assert(ptr);
@@ -164,14 +164,14 @@ struct Array<T> {
 
             new_size := newMax * sizeof T;
             old_size := max * sizeof T;
-            newPtr: T* = Reallocate(new_size, ptr, old_size);
-            memory_tracker.remove(ptr, old_size, typeid T)
-            memory_tracker.add(newPtr, new_size, typeid T)
+            newPtr: T* = cast_unsafe<T*>Reallocate(new_size, cast_unsafe<void*>ptr, old_size);
+            memory_tracker.remove(cast_unsafe<void*>ptr, old_size, typeid T)
+            memory_tracker.add(cast_unsafe<void*>newPtr, new_size, typeid T)
             // Assert(newPtr);
             if !newPtr
                 return false;
             if newMax > max
-                memzero(newPtr + len * sizeof T, (newMax - max) * sizeof T);
+                memzero(cast_unsafe<void*>newPtr + len * sizeof T, (newMax - max) * sizeof T);
             ptr = newPtr;
             max = newMax;
             if len > newMax {
@@ -186,7 +186,7 @@ struct Array<T> {
         new_array: Array<T>
         
         new_array.resize(len)
-        memcpy(new_array.ptr, ptr, len * sizeof T)
+        memcpy(cast_unsafe<void*>new_array.ptr, cast_unsafe<void*>ptr, len * sizeof T)
 
         return new_array
     }

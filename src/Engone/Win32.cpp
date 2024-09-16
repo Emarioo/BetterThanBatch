@@ -15,7 +15,6 @@
 
 // #define LOG_ALLOCATIONS
 // #define LOG_ALLOC(...) if(global_loggingSection&LOG_ALLOCATIONS) { __VA_ARGS__; }
-
 #include <unordered_map>
 #include <vector>
 #include <string>

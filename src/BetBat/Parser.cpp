@@ -777,7 +777,13 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
             //     // what do we do?
             // }
         } else if(name_token->type == lexer::TOKEN_STRUCT) {
-            Assert(("struct in struct not allowed",false)); // error instead
+            ERR_SECTION(
+                ERR_HEAD2(name_tok)
+                ERR_MSG("Structs are not allowed inside of structs.")
+                ERR_LINE2(name_tok, "here")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+            // Assert(("struct in struct not allowed",false)); // error instead
             // ERR_SECTION(
             //     ERR_HEAD2(name)
             //     ERR_MSG("Structs not allowed inside structs.")

@@ -627,19 +627,36 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
         if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
             from.getPointerLevel() - to.getPointerLevel() == 1 && (less_strict || from.baseType() == AST_VOID))
             return true;
-        // if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
-        //     return true;
-        if(to.baseType() == AST_VOID && to.getPointerLevel() > 0)
+        // We only allow explicit cast of pointers of the same level if one is void.
+        if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
             return true;
+        /* Example:
+            You may write code like this:
+                fn copy(p: i32*) { ... }
+                data: i32 = GetData()
+                copy(&n)
+
+            But then you realise you want to copy more numbers.
+                fn copy(p: i32*) { ... }
+                n: i32* = GetMoreData()
+                copy(&n)
+            
+            Oopsie, you forgot to remove the reference operator.
+                &n is of type 'i32**'. And n is 'i32*'.
+                This mistake would be caught if the same pointer level is required.
+                You can cast_unsafe if you know what you are doing.
+        */
+        // if(to.baseType() == AST_VOID && to.getPointerLevel() > 0)
+        //     return true;
     }
     if(to.isPointer()) {
         if ((from.baseType() == AST_UINT64 || from.baseType() == AST_INT64) && 
             to.getPointerLevel() - from.getPointerLevel() == 1 && (less_strict || to.baseType() == AST_VOID))
             return true;
-        // if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
-        //     return true;
-        if(from.baseType() == AST_VOID && from.getPointerLevel() > 0)
+        if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
             return true;
+        // if(from.baseType() == AST_VOID && from.getPointerLevel() > 0)
+        //     return true;
     }
     if (AST::IsDecimal(from) && AST::IsInteger(to)) {
         return true;

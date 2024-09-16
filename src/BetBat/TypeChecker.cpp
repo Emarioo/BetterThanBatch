@@ -151,10 +151,11 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
         implMem.typeId = tid;
         if(member.defaultValue){
             // TODO: Don't check default expression every time. Do check once and store type in AST.
+            auto prev = inferred_type;
             inferred_type = implMem.typeId;
             tempTypes.resize(0);
             checkExpression(structInfo->scopeId, member.defaultValue,&tempTypes, false);
-            inferred_type = {};
+            inferred_type = prev;
 
             if(tempTypes.size()==0)
                 tempTypes.add(AST_VOID);
@@ -1027,9 +1028,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 auto argExpr = expr->args[i];
                 if (inferred_args[i]) {
                     Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
+                    auto prev = inferred_type;
                     inferred_type = f->argumentTypes[i].typeId;
                     auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
-                    inferred_type = {};
+                    inferred_type = prev;
                 }
              }
             
@@ -1341,9 +1343,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
                         // nocheckin TODO: argTypes index is displaced if methods or implicit this.
                         argTypes[i] = f->argumentTypes[i].typeId;
+                        auto prev = inferred_type;
                         inferred_type = argTypes[i];
                         auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
-                        inferred_type = {};
+                        inferred_type = prev;
                     }
                 }
                 
@@ -1421,9 +1424,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                             continue;
                         // nocheckin TODO: Won't work with methods, implicit argument.
                         argTypes[i] = overload->funcImpl->signature.argumentTypes[i].typeId;
+                        auto prev = inferred_type;
                         inferred_type = argTypes[i];
                         SignalIO result = checkExpression(scopeId, exprArg, &tempTypes, false);
-                        inferred_type = {};
+                        inferred_type = prev;
                     }
                 }
                 // Check default values of function
@@ -1435,9 +1439,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     if(!arg.defaultValue)
                         continue;
                     tempTypes.resize(0);
+                    auto prev = inferred_type;
                     inferred_type = argImpl.typeId;
                     SignalIO result = checkExpression(scopeId, arg.defaultValue,&tempTypes,false);
-                    inferred_type = {};
+                    inferred_type = prev;
                     if(tempTypes.size()==0)
                         tempTypes.add(AST_VOID);
 
@@ -2560,11 +2565,12 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             if(expr->right) {
                 tempTypes.resize(0);
                 bool is_assignment = (expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0);
+                auto prev = inferred_type;
                 if(is_assignment) {
                     inferred_type = leftType;
                 }
                 auto signal = checkExpression(scopeId, expr->right, &tempTypes, attempt);
-                inferred_type = {};
+                inferred_type = prev;
                 
                 if(tempTypes.size() > 0 && tempTypes[0] == AST_VOID) {
                     if(hasAnyErrors()) {
@@ -2896,7 +2902,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     return SIGNAL_FAILURE;
                 } else {
                     ti = inferred_type;
-                    inferred_type = {};
+                    // inferred_type = {};
                 }
             }
             if(!ti.isValid())
@@ -2914,12 +2920,13 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 typeinfo = ast->getTypeInfo(ti);
             for(int i=0;i<expr->args.size();i++) {
                 auto arg_expr = expr->args[i];
+                auto prev = inferred_type;
                 if(typeinfo && typeinfo->structImpl) {
                     // getMember returns invalid type if 'i' is out of bounds
                     inferred_type = typeinfo->getMember(i).typeId;
                 }
                 checkExpression(scopeId, arg_expr, nullptr, attempt);
-                inferred_type = {};
+                inferred_type = prev;
             }
             if(outTypes)
                 outTypes->add(ti);
@@ -3723,6 +3730,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
     poly_typeArray.resize(0);
     // tempTypes.resize(0);
     if(now->firstExpression){
+        auto prev = inferred_type;
         // may not exist, meaning just a declaration, no assignment
         if (now->varnames.size() > 0) {
             auto& last_varname = now->varnames.last();
@@ -3734,7 +3742,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             }
         }
         SignalIO result = checkExpression(scope->scopeId,now->firstExpression, &poly_typeArray, false);
-        inferred_type = {};
+        inferred_type = prev;
         
         for(int i=0;i<poly_typeArray.size();i++){
             if(poly_typeArray[i].isValid() && poly_typeArray[i] != AST_VOID)
@@ -4201,9 +4209,16 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
             // if(tempTypes.size()==0)
             //     tempTypes.add(AST_VOID);
         } else if(now->type == ASTStatement::RETURN){
-            for(auto ret : now->arrayValues){
+            for(int i=0;i<now->arrayValues.size();i++) {
+                auto ret = now->arrayValues[i];
                 tempTypes.resize(0);
+                auto prev = inferred_type;
+                if (currentFuncImpl) {
+                    if (i < currentFuncImpl->signature.returnTypes.size())
+                        inferred_type = currentFuncImpl->signature.returnTypes[i].typeId;
+                }
                 SignalIO result = checkExpression(scope->scopeId, ret, &tempTypes, false);
+                inferred_type = prev;
             }
         } else if(now->type == ASTStatement::IF){
             SignalIO result1 = checkExpression(scope->scopeId,now->firstExpression,&tempTypes, false);
