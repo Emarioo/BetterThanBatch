@@ -1,0 +1,205 @@
+/*
+    Simple HTTP server
+*/
+#import "Net"
+
+#macro FnRequest fn(HTTPRequest*, Event, void*)
+
+enum HTTPMethod {
+    HTTP_GET,
+    HTTP_POST,
+    HTTP_INVALID, // request has incorrect format for HTTP
+}
+
+struct HTTPServer {
+    server: Server; // TCP server
+    user_data: void*;
+    callback: FnRequest;
+    
+    fn wait() {
+        server.wait()
+    }
+    
+    fn send(status: i32, data: char[], who: ConnectionID) {
+        response: StringBuilder
+        defer response.cleanup()
+        
+        build_response(&response, status, data.len)
+       
+        if data.len > 0
+            response.append(data)
+        
+        server.send(response.sliced(), who = who)
+    }
+    fn build_response(string: StringBuilder*, status: i32, content_length: i32) {
+        if status == 200 {
+            string.append("HTTP/1.1 200 OK\r\n")
+        } else if status == 404 {
+            string.append("HTTP/1.1 404 Not Found\r\n")
+        } else {
+            string.append("HTTP/1.1 ")
+            string.append(status)
+            string.append(" Error\r\n")
+        }
+        
+        string.append("Content-Length: ")
+        string.append(content_length)
+        string.append("\r\n")
+        string.append("Connection: close\r\n")
+        string.append("\r\n")
+    }
+    // NOTE: 'build_response' and 'send_built_response' allows you to append headers and content data to a StringBuilder directly.
+    //   The normal 'send' function will copy data to an internal temporary StringBuilder which is inconvenient (slow) when
+    //   sending large data. 
+    fn send_built_response(response: StringBuilder*, who: ConnectionID) {
+        server.send(response.sliced(), who = who)
+    }
+    fn send_built_response(response: char[], who: ConnectionID) {
+        server.send(response, who = who)
+    }
+}
+
+struct HTTPRequest {
+    method: HTTPMethod;
+    // TODO: HTTP version
+    url: char[]; // includes route and queries
+    route: char[]; // always begins with /
+    queries: Map<char[],char[]>; // queries after ? (http://localhost/get?id=23)
+    
+    headers: Map<char[],char[]>;
+    content: char[];
+}
+
+fn StartHTTPServer(port: i32, callback: FnRequest, user_data: void*, wait: bool = false) -> HTTPServer* {
+    http_server: HTTPServer* = Allocate(sizeof HTTPServer)
+    construct(http_server)
+    http_server.user_data = user_data
+    http_server.callback = callback
+    http_server.server.set_callback(handle_event, http_server)
+    http_server.server.start(port)
+    
+    if wait {
+        http_server.wait()
+        return null
+    }
+    
+    return http_server
+    
+    fn handle_event(event: Event, user_data: void*) {
+        server: HTTPServer* = user_data
+        
+        if event.type == EVENT_RECEIVE {
+            request: HTTPRequest
+            defer {
+                request.queries.cleanup()
+                request.headers.cleanup()
+            }
+            request.queries.init(10)
+            request.headers.init(40)
+            
+            msg := event.bytes
+            head := 0
+            
+            if substring(msg,0,4) == "GET " {
+                request.method = HTTP_GET
+                head += 4
+            } else if substring(msg,0,5) == "POST " {
+                request.method = HTTP_POST
+                head += 5
+            } else {
+                request.method = HTTP_INVALID
+                server.callback(&request, event, server.user_data)
+                return;
+            }
+            
+            path_start := head
+            while head < msg.len {
+                chr := msg[head]
+                head++
+                if chr == ' ' || chr == '\n' || chr == '\r' || chr == '\t'
+                    break
+            }
+            
+            request.url = substring(msg,path_start,head-1)
+            
+            index := find("?", request.url)
+
+            option_part := substring(request.url, index + 1)
+            
+            options_str := split("&", option_part)
+            defer options_str.cleanup()
+            for options_str.sliced() {
+                index_of_equal := find("=", it)
+                if index_of_equal == -1
+                    continue
+                key := substring(it, 0, index_of_equal)
+                val := substring(it, index_of_equal + 1)
+                request.queries.set(key, val)
+            }
+
+            request.route = substring(request.url, 0, index)
+            
+            version := "HTTP/1.1\r\n"
+            if substring(msg,head,head + version.len) != version {
+                // log("missing HTTP/1.1, or path was bad '",request.url,"'")
+                request.method = HTTP_INVALID
+                server.callback(&request, event, server.user_data)
+                return;
+            }
+            head += version.len
+            
+            field_start := head
+            while {
+                chr := msg[head]
+                chr2: char
+                if head+1 < msg.len
+                    chr2 = msg[head+1]
+                head++
+                
+                if chr == '\r' && chr2 ==  '\n' {
+                    if field_start + 1 == head {
+                        // reached final newline
+                        head++
+                        break
+                    }
+                    field := substring(msg, field_start, head)
+                    index_of_colon := find(":", field)
+                    
+                    if index_of_colon == -1
+                        continue
+                    key := substring(field, 0, index_of_colon)
+                    val := substring(field, index_of_colon+1)
+                    if val[0] == ' ' // skip space after colon (example: 'some-key: the value')
+                        val.ptr += 1
+                    request.headers.set(key, val)
+                    
+                    if key == "Content-Length" {
+                        request.content.len = parse_i64(val)
+                    }
+                    
+                    head++
+                    field_start = head
+                }
+            }
+            if request.content.len > 0
+                request.content.ptr = msg.ptr + head;
+            
+            server.callback(&request, event, server.user_data)
+        }
+    }
+}
+
+// #################
+//    TEST
+// #################
+
+fn Test() {
+    server := StartHTTPServer(8080, null, null)
+    
+    data := "This is some big data"
+    
+    tmp: StringBuilder
+    server.build_response(&tmp, 200, data.len)
+    tmp.append(data)
+    server.send_built_response(&tmp, who = -1)
+}

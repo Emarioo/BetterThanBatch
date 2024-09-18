@@ -3478,7 +3478,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                     TypeId tid = base_typeInfo->getMember(index).typeId;
                     if (!performSafeCast(exprId, tid)) {   // implicit conversion
                         // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                        ERRTYPE1(expr->location, exprId, tid, "(initializer)");
+                        ERRTYPE1(expr->location, exprId, tid, "(initializer of '"<<log::LIME<<ast->typeToString(base_typeInfo->id)<<log::NO_COLOR<<"')");
                         
                         continue;
                     }

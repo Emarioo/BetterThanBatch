@@ -2,6 +2,8 @@
 // uses a lot of stack space with some recursion
 // the test makes sure we don't crash
 
+// Hi, why would we crash (disregarding stack overflow)? - Emarioo, 2024-09-19
+
 fn rec(n: i32, sp: u64) {
     if n == 0
         return;
@@ -11,4 +13,4 @@ fn rec(n: i32, sp: u64) {
 }
 
 a: i32
-rec(6, &a)
+rec(6, cast<u64>&a)

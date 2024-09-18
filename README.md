@@ -90,3 +90,12 @@ All object files will still end up in `bin`, this cannot be changed at the momen
 
 <!-- incomplete [Binary viewer](/examples/binary_viewer/main.btb) parsing/reading binary files, lexing -->
 
+# TODO
+A temporary todo list because I don't have access to internet at the moment...
+
+- Write a script that takes out and compiles code snippets from .md files. Perhaps we can include it in `btb --test` somehow. We don't need to check that the snippets to what they are supposed to. It is enough to know that they compile without errors. The other tests should cover all functionality in the snippets.
+- The code below does not print a good error message:
+    ```c++
+    fn hi(a: i32, b: i32) {}
+    hi(5, b = 23) // named argument not allowed
+    ```

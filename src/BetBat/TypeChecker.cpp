@@ -429,11 +429,18 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
                             ERR_LINE2(err_location,"here somewhere")
                         )
                     }
-                    // return {};
                     // Even though type is invalid, we don't have to return here.
                     // We can continue evaluating types in case we find more invalid ones.
                     // Also, it could be bad to change the number of arguments since it could have
                     // cascading errors.
+                    // .... some time later
+                    // HAHA you doofus, you forgot to return {} at the end! You can't just write
+                    // that you keep going on errors to find more errors when you return the broken function type
+                    // like nothing happened. - Emarioo, 2024-09-18
+                    
+                    // Also, I don't care if it's good to find more types, the terminal is probably filled
+                    // with them anyway. Let's just return.
+                    return {};
                 }
 
                 if(process_args) {
@@ -862,7 +869,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 // function argument. Since we don't know the function to call,
                 // we can't check the expression yet.
                 // We still add something though.
-                argTypes.add({});
+                argTypes.add(AST_VOID);
                 inferred_args.add(true);
                 continue;
             } else
@@ -977,7 +984,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
-                    ERR_MSG("Named arguments is not possible when calling a function pointer that does not have parameter names.")
+                    ERR_MSG("Named arguments is not possible when calling a function pointer. (may be supported in the future)")
                     ERR_LINE2(expr->location, info.ast->typeToString(type))
                 )
                 FNCALL_FAIL
@@ -985,13 +992,15 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             }
             
             auto f = type_info->funcType;
-            
             bool matched = true;
 
             // first type is 'this' but this code should check
             // members that are function pointers and doesn't have 'this'
             argTypes.removeAt(0);
-
+            inferred_args.removeAt(0);
+            
+            // Assert(expr->nonNamedArgs == argTypes.size()); // IMPORTANT: You need to be careful with size and index if you allow non-named arguments.
+            
             if(f->argumentTypes.size() != argTypes.size()) {
                 matched = false;   
             } else {
@@ -1014,18 +1023,31 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     FIX_NO_SPECIAL_ACTIONS
                     return SIGNAL_NO_MATCH;
                 }
-
+                
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
-                    ERR_MSG("Args don't match with function pointer.")
+                    ERR_MSG_LOG("Argument types do not match the function pointer parameter types. These were the arguments: ")
+                    log::out << log::LIME;
+                    for(int i=0;i<argTypes.size();i++) {
+                        auto arg = argTypes[i];
+                        if (i!=0)
+                            log::out << ", ";
+                        if(inferred_args[i]) {
+                            log::out << ast->typeToString(f->argumentTypes[i].typeId);
+                        } else {
+                            log::out << ast->typeToString(arg);
+                        }
+                    }
+                    log::out << "\n\n";
                     ERR_LINE2(expr->location, info.ast->typeToString(type))
                 )
                 FNCALL_FAIL
                 return SIGNAL_FAILURE;
             }
 
-            for(int i=0;i<expr->args.size();i++) {
-                auto argExpr = expr->args[i];
+            // NOTE: expr->args[0] is the struct we call method on. We skip it because inferred_args and f->argumentTypes don't include it.
+            for(int i=0;i<expr->args.size() - 1;i++) {
+                auto argExpr = expr->args[i + 1];
                 if (inferred_args[i]) {
                     Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
                     auto prev = inferred_type;
@@ -1402,8 +1424,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, expr, fnOverloads->overloads.size()==1, &inferred_args);
             if(!overload)
                 overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, expr, true, &inferred_args);
-
-
+            
             if(operatorOverloadAttempt && !overload) {
                 // FIX_NO_SPECIAL_ACTIONS
                 // return SIGNAL_NO_MATCH;
@@ -2119,7 +2140,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
     ERR_SECTION(
         ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
         // custom code for error message
-        log::out << "Arguments for '"<<baseName <<"' does not match an overload.\n";
+        log::out << "Arguments for '"<<baseName <<"' does not match an overload. (note, named arguments is only allowed on default arguments)\n";
         ERR_LINE2(expr->location, "bad");
         log::out << "These were the arguments: ";
         if(argTypes.size()==0){
@@ -2894,7 +2915,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 if (!inferred_type.isValid()) {
                     ERR_SECTION(
                         ERR_HEAD2(expr->location)
-                        ERR_MSG_COLORED("Struct name was not specified for initializer. This requires that the type is inferred but the inferred type was '" << log::LIME << ast->typeToString(inferred_type) << log::NO_COLOR << "'. Types only be inferred from assignments and function arguments.")
+                        ERR_MSG_COLORED("Struct name was not specified for initializer. This requires that the type is inferred but the inferred type was '" << log::LIME << ast->typeToString(inferred_type) << log::NO_COLOR << "'. Types can only be inferred from assignments, function arguments, and return values.")
                         ERR_LINE2(expr->location, "here")
                         ERR_EXAMPLE(1, "a: vec2 = {1,2}")
                         ERR_EXAMPLE(1, "fn hi(a: vec2) {}\nhi({1,2})")

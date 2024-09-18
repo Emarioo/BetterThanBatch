@@ -298,6 +298,14 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
             log::out << log::RED << "Verbose option (--verbose) is not used anywhere yet\n";
         } else if (arg == "--profiling") {
             options->show_profiling = true;
+        } else if (arg == "--import") {
+            i++;
+            if(i<commands.size()) {
+                options->importDirectories.add(commands[i]);
+            } else {
+                invalidArguments = true;
+                log::out << log::RED << "You must specify an import directory after '"<<arg<<"'.\n";
+            }
         } else if (arg == "--target" || arg == "-t"){
             i++;
             bool print_targets = false;

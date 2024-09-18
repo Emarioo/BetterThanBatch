@@ -362,7 +362,7 @@ struct Server {
         m_is_initialized = false
     }
     fn wait() {
-        if m_listener_thread.valid() {
+        if m_listener_thread.valid() && m_listener_thread.id != ThreadSelfId() {
             m_listener_thread.join()
         }
         Assert(!m_socket.valid())

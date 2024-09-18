@@ -629,6 +629,7 @@ struct StringBuilder {
                 return false;
         }
         len = newLen;
+        ptr[len] = '\0';
         return true;
     }
     fn reserve(newMax: i32) -> bool {
@@ -731,7 +732,7 @@ fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
     // TODO: Parse negative number
     // TODO: Provide parsing errors, non-digit character, digit has no trailing whitespace (a number would still be returned in case you don't care, but if you do care, there you go)
     result: i64;
-    i: u32 = 0;
+    i: i32 = 0;
     while i < slice.len {
         chr := slice.ptr[i];
         if chr >= '0' && chr <= '9' {

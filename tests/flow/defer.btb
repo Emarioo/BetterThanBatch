@@ -107,3 +107,37 @@ while i < 10; {
 //     fun(i);
 // }
 // prints("END\n")
+
+/*
+@TEST_CASE(problem_defer)
+
+#import "Array"
+#import "Memory"
+#import "Logger"
+
+fn okay() {
+    numbers: Array<i32>
+    defer numbers.cleanup()
+    numbers.add(2)
+    numbers.add(6)
+
+    if numbers.size() == 2 {
+        numbers: Array<f32>
+        defer numbers.cleanup()
+        
+        numbers.add(5.98)
+        
+        return;
+    }
+}
+
+memory_tracker.init()
+okay()
+// We should no allocations right? We cleanup our arrays with defer right?
+memory_tracker.print_memory()
+
+// WRONG!!!
+// A defer is just a syntactic thing that breaks shit.
+
+
+*/

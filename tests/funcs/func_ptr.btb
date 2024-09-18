@@ -78,3 +78,37 @@ var3: fn () -> (i32, i32) = dub // At one point, the function pointer type's ret
 a, b : i32 = var3() // Return values where swapped
 _test 5; a
 _test 9; b
+
+
+// Code makes sure we deal with inferred initializer in call to function pointer from a struct
+struct HTTPRequest {
+    x: i32
+}
+struct Event {
+    x: i32   
+}
+struct Box {
+    call: fn(HTTPRequest*, Event, void*);
+}
+req: HTTPRequest
+
+boxx: Box
+if false { // call is null, we don't run it, we just type check it
+    boxx.call(&req, {}, null)
+}
+
+// This code checks that function pointer type is delayed until Item type is complete.
+// There was a bug where fn() appeared instead.
+struct Container {
+    call: fn(Item*);
+    call2: fn(Item);
+}
+struct Item {
+    x: i32   
+}
+conta: Container
+if false { // call/call2 is null, we just want to type check
+    conta.call(null)
+    conta.call2({})
+}
+

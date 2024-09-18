@@ -922,7 +922,15 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     DynamicArray<SPMoment> sp_moments{};
     auto push_stack_moment = [&](int sp, int bc_addr) {
         sp_moments.add({sp, bc_addr});
-        // log::out << "PUSH "<<sp <<" "<< bc_addr <<"\n";
+        // log::out << log::GRAY << "PUSH "<<sp <<" "<< bc_addr <<"\n";
+    };
+    auto pop_stack_moment = [&](int index = -1) {
+        if (index == -1)
+            index = sp_moments.size()-1;
+        auto& moment = sp_moments[index];
+        virtual_stack_pointer = moment.virtual_sp;
+        // log::out << log::GRAY << "POP " << index << "  sp:" << moment.virtual_sp << " " << moment.pop_at_bc_index << "\n";
+        sp_moments.removeAt(index);
     };
     // TODO: Stack pointers moments were used when the stack pointer changed a lot.
     //   Especially between jumps and return statements in a if or while scope.
@@ -952,6 +960,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     #ifdef DEBUG_REGISTER_USAGE
     log::out << log::CYAN << tinycode->name<<"\n";
     #endif
+    // log::out << log::CYAN << tinycode->name<<"\n";
     for(auto n : inst_list) {
         cur_node = n;
         auto opcode = n->base->opcode;
@@ -962,13 +971,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             auto& moment = sp_moments[i];
             // log::out << "check " << moment.pop_at_bc_index<<"\n";
             if(n->bc_index == moment.pop_at_bc_index) {
-                // log::out << "POP " << moment.virtual_sp << " " << moment.pop_at_bc_index << "\n";
-                virtual_stack_pointer = moment.virtual_sp;
-                sp_moments.removeAt(i);
+                pop_stack_moment(i);
                 i--;
-                break;
+                // break; do not break, there may be more moment to pop on the at the same bc index
             }
         }
+        
+        // log::out << opcode << "  sp:"<<virtual_stack_pointer<<"\n";
         
         #ifdef DEBUG_REGISTER_USAGE
         int log_start = log::out.get_written_bytes();
@@ -1827,7 +1836,21 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JMP + base->imm32;
                 addRelocation32(imm_offset - 1, imm_offset, jmp_bc_addr);
                 
-                push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
+                // Don't mess with moments if we jump back, aka continue and loop statements
+                if (base->imm32 > 0) {
+                    // Only mess with moments if we have an associated conditional jump (and if we have any moments at all)
+                    // We determine association if the jmp hops to an instruction after the on the conditional one
+                    // hops too.
+                    // There may be flaws, what if we have nested jmp in some sketchy configuration?
+                    // What about break statements. They don't jump backwards.
+                    if (sp_moments.size() > 0) {
+                        auto& last = sp_moments.last();
+                        if (jmp_bc_addr >= last.pop_at_bc_index) {
+                            pop_stack_moment();
+                            push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
+                        }
+                    }
+                }
             } break;
             case BC_DATAPTR: {
                 auto base = (InstBase_op1_imm32*)n->base;

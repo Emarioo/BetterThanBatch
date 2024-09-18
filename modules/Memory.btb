@@ -116,6 +116,7 @@ fn hash(v: lang_TypeId) -> u32 {
     // Assert(4 == sizeof lang_TypeId)
     return *cast<u32*>&v
 }
+// NOTE: Remember to initialize tracker
 struct MemoryTracker {
     allocations: Map<void*, i32>;
     map_types: Map<u32, MemoryTracker_Item>; // u32 is a hashed lang_TypeId
@@ -228,6 +229,8 @@ struct MemoryTracker {
     }
 
     fn print_memory() {
+        disabled = true
+        defer disabled = false
         {
             log("Allocations:")
             iter := allocations.create_iterator()
@@ -262,7 +265,7 @@ struct MemoryTracker {
                     if count == 0
                         continue
 
-                    log("  ",*iter.key, " count: ", count)
+                    log("   ",*iter.key, " count: ", count)
                 }
             }
             if !logged   log(" none")

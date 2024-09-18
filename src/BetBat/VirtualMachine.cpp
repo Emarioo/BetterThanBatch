@@ -311,7 +311,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     // TODO: x64 had a bug with push_offsets, ALLOC_ARGS and SET_ARG
     //   I applied the same here but didn't test it.
 
-    
+    // NOTE: We don't need to track relative stack pointer and stack moments like we do in x64 generator because
+    //   the VM is running in real time. We have the actual stack pointer and can align it to 16-bytes whenever we want.
 
     i64 prev_pc;
     InstructionOpcode opcode;

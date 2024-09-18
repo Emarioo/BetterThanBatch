@@ -1,16 +1,27 @@
 // #import "examples/crawler/main" // With hotreloading
 // #import "examples/crawler/GameCore" // Without hotreloading
 
-#import "Logger"
-#import "Stream"
 
-// s : ByteStream
+// #import "HTTP"
+// #import "Logger"
 
-// struct Header{
-    
+
+// StartHTTPServer(8080, handle, null, wait = true)
+
+// fn handle(req: HTTPRequest*, e: Event, ud: void*) {
+//     log(req)
 // }
 
-// s.write
+// #import "File"
+
+
+// struct Box {
+//     x: i32;
+//     fn method(s: char[], n: i32) {}
+// }
+// b: Box
+// b.method({}, n = 5)
+
 
 // #import "GLFW"
 // #import "GLAD"

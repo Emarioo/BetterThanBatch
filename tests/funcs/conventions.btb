@@ -36,3 +36,72 @@ fn @oscall func(a0: i32, a1:i32,a2: i32,a3: i32,a4: i32,a5: i32,a6: i32) -> i32 
 fn main() -> i32 {
     return func(1,2,3,4,5,6,7);
 }
+
+#if OS_WINDOWS
+    // We use Windows functions directly to generate as little bytecode as possible
+    #load "Kernel32.dll" as Kernel
+
+    fn @import(Kernel, alias="CreateFileA") tmp_win_create_file_a(
+        lpFileName: char*,
+        dwDesiredAccess: i32,
+        dwShareMode: i32,
+        lpSecurityAttributes: void*, // optional, TODO: Type should be LPSECURITY_ATTRIBUTES instead of void*
+        dwCreationDisposition: i32,
+        dwFlagsAndAttributes: i32,
+        hTemplateFile: void* // optional
+    ) -> void*;
+
+    #macro OPEN_EXISTING                   3
+    #macro GENERIC_READ                    0x80000000
+
+    fn func() {
+        // NOTE: There has been a lot of issues with 16-byte aligned stack pointer and crashes because of it.
+        //   We have a stack that stores a relative stack pointer when dealing with conditional jumps.
+        if false {
+            return
+        } else if false {
+            return
+        }
+        
+        handle := tmp_win_create_file_a("mymind".ptr,GENERIC_READ,0,null,OPEN_EXISTING,0, null);
+    }
+    func()
+#else
+    // I don't know if Linux will crash if the open file function is called
+    // with misaligned stack pointer.
+    #import "File"
+
+    fn func() {
+        if false {
+            return
+        } else if false {
+            return
+        } else if false {
+            return
+        }
+        // crashed because it ran CreateFileA at one point
+        // something with the if-else and return
+        f := FileOpen("d", FILE_READ_ONLY)
+    }
+    func()
+#endif
+
+
+// Function that crashes when misaligned. I put function here because I don't know where else to put it.
+// fn @blank crash_misaligned() {
+//     asm {
+//         // push and mov rbp because we produce debug information that specifiy it. Debugger will be confused otherwise.
+//         // (debug information for blank functions should have different info than other functions but it doesn't)
+//         push rbp
+//         mov rbp, rsp
+        
+//         test rsp, 0xF
+//         jz end_jmp
+//         mov rax, 0
+//         mov DWORD PTR [rax], 0
+//         end_jmp:
+        
+//         pop rbp
+//         ret
+//     }
+// }
