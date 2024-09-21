@@ -1,0 +1,60 @@
+#import "Sockets"
+#import "OpenSSL"
+#import "Logger"
+
+fn main() -> i32 {
+    socket := create_socket(AF_INET, SOCK_STREAM, 0)
+
+    addr: sockaddr_in = {
+        sin_family = AF_INET,
+        sin_port = htons(8080),
+        sin_addr = 0,
+    }
+
+    err := socket.bind(cast_unsafe<void*>&addr, sizeof(addr))
+    if err {
+        log("bind err")
+        return 1
+    }
+
+    err = socket.listen(5)
+    if err {
+        log("listen err")
+        return 1
+    }
+
+    client: Socket, err = socket.accept(null, null)
+    if err {
+        log("accept err")   
+        return 1
+    }
+
+    ctx := SSL_CTX_new(TLS_server_method())
+    ssl := SSL_new(ctx)
+    SSL_set_fd(ssl, client.get_fd())
+    SSL_use_certificate_file(ssl, "cert")
+    SSL_use_PrivateKey_file(ssl, "key", SSL_FILETYPE_PEM)
+    SSL_accept(ssl)
+    
+    buffer: char[1024]
+    read: i64
+    bytes := SSL_read_ex(ssl, buffer, 1023, &read)
+    
+    log("read ", bytes, " ",read)
+    
+    std_print(buffer, read) log()
+    
+    res := @strbeg
+HTTP/1.0 200 OK
+Content-Type: text/html
+
+Empty page here!
+    @strend
+    
+    SSL_write(ssl, res.ptr, res.len)
+    
+    SSL_shutdown(ssl)
+    socket.close()
+    
+    return 5
+}

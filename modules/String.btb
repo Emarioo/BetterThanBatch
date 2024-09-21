@@ -858,7 +858,9 @@ fn split(pattern: char[], text: char[]) -> Array<char[]> {
     arr: Array<char[]>;
     if pattern.len == 0
         return arr
-
+    if text.len == 0 {
+        return arr // TODO: Should the array have one or zero strings if text is zero?
+    }
     correct := 0
     split_start := 0
     for text {

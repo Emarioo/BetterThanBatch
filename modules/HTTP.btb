@@ -1,5 +1,7 @@
 /*
     Simple HTTP server
+    
+    TODO: Provide utility functions for sanitizing paths and text (for script injection).
 */
 #import "Net"
 
@@ -59,6 +61,7 @@ struct HTTPServer {
     }
 }
 
+// NOTE: Any field may be null/empty.
 struct HTTPRequest {
     method: HTTPMethod;
     // TODO: HTTP version
@@ -70,13 +73,13 @@ struct HTTPRequest {
     content: char[];
 }
 
-fn StartHTTPServer(port: i32, callback: FnRequest, user_data: void*, wait: bool = false) -> HTTPServer* {
+fn StartHTTPServer(port: i32, callback: FnRequest, user_data: void*, wait: bool = false, message_byte_limit: i32 = 0x100_000) -> HTTPServer* {
     http_server: HTTPServer* = Allocate(sizeof HTTPServer)
     construct(http_server)
-    http_server.user_data = user_data
     http_server.callback = callback
+    http_server.user_data = user_data
     http_server.server.set_callback(handle_event, http_server)
-    http_server.server.start(port)
+    http_server.server.start(port, message_byte_limit = message_byte_limit)
     
     if wait {
         http_server.wait()

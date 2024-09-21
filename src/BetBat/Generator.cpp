@@ -27,6 +27,9 @@
 #define TEMP_ARRAY(TYPE,NAME) QuickArray<TYPE> NAME; NAME.init(&scratch_allocator);
 #define TEMP_ARRAY_N(TYPE,NAME, N) QuickArray<TYPE> NAME; NAME.init(&scratch_allocator); NAME.reserve(N);
 
+
+#define SOURCE_TRACE(LOC) source_trace.add(LOC); defer { source_trace.pop(); };
+
 /* #region  */
 GenContext::LoopScope* GenContext::pushLoop(){
     LoopScope* ptr = TRACK_ALLOC(LoopScope);
@@ -2184,6 +2187,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, TypeId *outTy
 SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<TypeId> *outTypeIds, ScopeId idScope) {
     using namespace engone;
     TRACE_FUNC()
+    
+    
 
     ZoneScopedC(tracy::Color::Blue2);
     if(idScope==(ScopeId)-1)
@@ -2197,6 +2202,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
 
     TEMP_ARRAY_N(TypeId, tempTypes, 5)
 
+    SOURCE_TRACE(expression->location)
+    
     // IMPORTANT: This DOES NOT work duudeeee. you must use poly versions
     // TypeId castType = expression->castType;
     // if(castType.isString()){
@@ -2475,14 +2482,15 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                     INCOMPLETE
                 }
             } else {
-                Assert(info.hasForeignErrors());
-                // {
-                //     ERR_SECTION(
-                //         ERR_HEAD2(expression->location)
-                //         ERR_MSG("'"<<expression->tokenRange.firstToken<<"' is not declared.")
-                //         ERR_LINE2(expression->location,"undeclared")
-                //     )
-                // }
+                // Assert(info.hasForeignErrors());
+                ERR_SECTION(
+                    ERR_HEAD2(expression->location)
+                    ERR_MSG("Compiler bug! '"<<expression->name<<"' is not declared (expression->identifier was null). See trace.")
+                    // ERR_LINE2(expression->location,"undeclared")
+                    for(auto& loc : source_trace) {
+                        ERR_LINE2(loc,"")
+                    }
+                )
                 return SIGNAL_FAILURE;
             }
         } else if (expression->typeId == AST_FNCALL) {
@@ -4894,6 +4902,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
     for (auto statement : body->statements) {
         MAKE_NODE_SCOPE(statement);
+
+        SOURCE_TRACE(statement->location)
 
         // TODO: Debug information is very slow.
         lexer::TokenSource* srcinfo = nullptr;

@@ -85,3 +85,25 @@ fn func() {
 }
 
 func()
+
+@TEST_CASE(default_args_err)
+
+// at one point we got "Compiler bug IRON not defined"
+enum Dust {
+    RED,
+    IRON,
+}
+fn cravin(x: Dust = IRON, msg: i32 = 23) { }
+cravin(msg = 23)
+
+fn pcravin<T>(x: Dust = IRON, msg: T = 23) { }
+pcravin<i32>(msg = 23)
+
+struct dat {
+    xz: i32
+    fn cravin(x: Dust = IRON, msg: i32 = 23) { }
+    fn pcravin<T>(x: Dust = IRON, msg: T = 23) { }
+}
+d: dat
+d.cravin(msg = 23)
+d.pcravin<i32>(msg = 23)

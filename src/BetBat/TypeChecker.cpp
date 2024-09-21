@@ -733,6 +733,58 @@ SignalIO TyperContext::checkStructs(ASTScope* scope) {
     // }
     return SIGNAL_SUCCESS;
 }
+SignalIO TyperContext::checkDefaultArguments(ASTFunction* astFunc, FuncImpl* funcImpl, ASTExpression* expr, bool implicit_this, ScopeId scopeId) {
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+    TEMP_ARRAY(TypeId, tempTypes);
+    
+    int arg_start = (implicit_this?1:0);
+    for(int i = arg_start; i<astFunc->arguments.size();i++) {
+        auto& argImpl = funcImpl->signature.argumentTypes[i];
+        auto& arg = astFunc->arguments[i];
+        if(!arg.defaultValue)
+            continue;
+        bool has_checked = false;
+        for(int j=astFunc->nonDefaults - arg_start;j<expr->args.size();j++) {
+            auto& expr_arg = expr->args[j];
+            if (expr_arg->namedValue == arg.name) {
+                has_checked = true;
+                break;
+            }
+        }
+        if(has_checked)
+            continue;
+        tempTypes.resize(0);
+        auto prev = inferred_type;
+        inferred_type = argImpl.typeId;
+        SignalIO result = checkExpression(scopeId, arg.defaultValue,&tempTypes,false);
+        inferred_type = prev;
+        if(tempTypes.size()==0)
+            tempTypes.add(AST_VOID);
+
+        bool is_castable = info.ast->castable(tempTypes.last(),argImpl.typeId, false);
+        // if(!is_castable){
+        //     // Not castable with normal conversion
+        //     // Check hard conversions
+        //     is_castable = info.ast->findCastOperator(scopeId, tempTypes.last(), argImpl.typeId);
+        // }
+
+        if(!is_castable){
+        // if(temp.last() != argImpl.typeId){
+            // std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
+            std::string deftype = info.ast->typeToString(tempTypes.last());
+            std::string argtype = info.ast->typeToString(argImpl.typeId);
+            ERR_SECTION(
+                ERR_HEAD2(arg.defaultValue->location)
+                ERR_MSG("Type of default value does not match type of argument.")
+                ERR_LINE2(arg.defaultValue->location,deftype.c_str())
+                ERR_LINE2(arg.location,argtype.c_str())
+            )
+            continue; // continue when failing
+        }
+    }
+    return SIGNAL_SUCCESS;
+}
+
 SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs) {
     using namespace engone;
 
@@ -1451,44 +1503,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         inferred_type = prev;
                     }
                 }
-                // Check default values of function
-                for(int i=argTypes.size() + (ent.set_implicit_this?1:0); i<overload->astFunc->arguments.size();i++) {
-
-                // for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
-                    auto& argImpl = overload->funcImpl->signature.argumentTypes[i];
-                    auto& arg = overload->astFunc->arguments[i];
-                    if(!arg.defaultValue)
-                        continue;
-                    tempTypes.resize(0);
-                    auto prev = inferred_type;
-                    inferred_type = argImpl.typeId;
-                    SignalIO result = checkExpression(scopeId, arg.defaultValue,&tempTypes,false);
-                    inferred_type = prev;
-                    if(tempTypes.size()==0)
-                        tempTypes.add(AST_VOID);
-
-                    bool is_castable = info.ast->castable(tempTypes.last(),argImpl.typeId, false);
-                    // if(!is_castable){
-                    //     // Not castable with normal conversion
-                    //     // Check hard conversions
-                    //     is_castable = info.ast->findCastOperator(scopeId, tempTypes.last(), argImpl.typeId);
-                    // }
-
-                    if(!is_castable){
-                    // if(temp.last() != argImpl.typeId){
-                        // std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
-                        std::string deftype = info.ast->typeToString(tempTypes.last());
-                        std::string argtype = info.ast->typeToString(argImpl.typeId);
-                        ERR_SECTION(
-                            ERR_HEAD2(arg.defaultValue->location)
-                            ERR_MSG("Type of default value does not match type of argument.")
-                            ERR_LINE2(arg.defaultValue->location,deftype.c_str())
-                            ERR_LINE2(arg.location,argtype.c_str())
-                        )
-                        continue; // continue when failing
-                    }
-                }
-
+                checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
+                
                 FIX_SPECIAL_ACTIONS
 
                 FNCALL_SUCCESS
@@ -1526,6 +1542,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         if(overload){
             overload->funcImpl->usages++;
             
+            checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
+            
             FIX_SPECIAL_ACTIONS
 
             FNCALL_SUCCESS
@@ -1535,6 +1553,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
+            
+            checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
 
             FIX_SPECIAL_ACTIONS
 
@@ -2036,7 +2056,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             TypeId id = fnPolyArgs[i];
             funcImpl->signature.polyArgs[i] = id;
         }
-
+        
         // TODO: THIS IS TEMPORARY CODE!
         WHILE_TRUE_N(1000) {
             // In processImports we use 'lock_imports' mutex when checking is_being_checked.
@@ -2109,7 +2129,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             )
             FNCALL_FAIL
             return SIGNAL_FAILURE;
-        } 
+        }
+        
+        checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
 
         FIX_SPECIAL_ACTIONS
 

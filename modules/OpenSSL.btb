@@ -1,0 +1,44 @@
+/*
+    Some bindings for OpenSSL
+*/
+
+
+#load "D:/OpenSSL-3/bin/libssl-3-x64.dll" as OpenSSL
+#link "D:/OpenSSL-3/bin/libcrypto-3-x64.dll"
+
+#macro SSLAPI @import(OpenSSL)
+
+#macro X509_FILETYPE_PEM       1
+#macro SSL_FILETYPE_PEM        X509_FILETYPE_PEM
+
+#macro SSL void
+#macro SSL_CTX void
+#macro SSL_METHOD void
+
+fn SSLAPI TLS_method() -> SSL_METHOD*;
+fn SSLAPI TLS_server_method() -> SSL_METHOD*;
+fn SSLAPI TLS_client_method() -> SSL_METHOD*;
+
+fn SSLAPI SSL_CTX_new(meth: SSL_METHOD*) -> SSL_CTX*;
+fn SSLAPI SSL_CTX_free(ctx: SSL_CTX*);
+
+fn SSLAPI SSL_new(ctx: SSL_CTX*) -> SSL*;
+fn SSLAPI SSL_shutdown(s: SSL*) -> i32;
+
+// NOTE: fd is the internal value of Socket from Sockets.btb (the socket handle on Windows or the file descriptor on Linux)
+// https://docs.openssl.org/3.0/man3/SSL_set_fd/#notes
+fn SSLAPI SSL_set_fd(s: SSL*, fd: i32) -> i32;
+
+fn SSLAPI SSL_use_PrivateKey_file(ssl: SSL*, file: char*, type: i32) -> i32;
+fn SSLAPI SSL_use_certificate_file(ssl: SSL*, file: char*, type: i32) -> i32;
+
+fn SSLAPI SSL_accept(ssl: SSL*) -> i32;
+
+fn SSLAPI SSL_read(ssl: SSL*, buf: void*, num: i32) -> i32;
+fn SSLAPI SSL_read_ex(ssl: SSL*, buf: void*, num: i64, readbytes: i64*) -> i32;
+
+fn SSLAPI SSL_peek(ssl: SSL*, buf: void*, num: i32) -> i32;
+fn SSLAPI SSL_peek_ex(ssl: SSL*, buf: void*, num: i64, readbytes: i64*) -> i32;
+
+fn SSLAPI SSL_write(ssl: SSL*, buf: void*, num: i32) -> i32;
+fn SSLAPI SSL_write_ex(s: SSL*, buf: void*, num: i64, written: i64*) -> i32;

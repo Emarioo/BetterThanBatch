@@ -28,6 +28,8 @@ struct GenContext : public PhaseContext {
 
     QuickArray<ASTNode*> nodeStack; // kind of like a stack trace
     
+    DynamicArray<lexer::SourceLocation> source_trace{}; // printed when compiler bugs occur
+    
     u32 lastLine = 0;
     u32 lastLocationIndex = (u32)-1;
     void pushNode(ASTNode* node);

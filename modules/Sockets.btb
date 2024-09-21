@@ -29,6 +29,10 @@ struct Socket {
             return os_handle != 0
         #endif
     }
+    fn get_fd() -> i32 {
+        // on Windows, socket handles are in practise less than 32 bits.
+        return cast<i32>TO_INTERNAL(os_handle)
+    }
 
     fn bind(addr: sockaddr*, namelen: i32) -> SocketError {
         #if OS_WINDOWS

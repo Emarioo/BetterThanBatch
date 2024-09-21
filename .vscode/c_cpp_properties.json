@@ -8,7 +8,8 @@
                 "${workspaceFolder}/libs/glew-2.1.0/include/*",
                 "${workspaceFolder}/libs/glfw-3.3.9/include/*",
                 "${workspaceFolder}/libs/stb/include/*",
-                "${workspaceFolder}/libs/tracy-0.10/public/*"
+                "${workspaceFolder}/libs/tracy-0.10/public/*",
+                "D:/OpenSSL-3/include/*"
             ],
             "defines": [
                 "_DEBUG",

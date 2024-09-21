@@ -82,7 +82,7 @@ struct Server {
         close() // make sure connection is closed
     }
 
-	fn start(port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+	fn start(port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM, message_byte_limit: i32 = 0x100_000) -> NetError {
         if m_is_initialized
             return NET_FAILURE // already started, call close() first
 
@@ -91,6 +91,7 @@ struct Server {
         }
         m_port = port
         m_protocol = protocol
+        m_message_byte_limit = message_byte_limit;
 
         m_socket = create_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         if !m_socket.valid() {
@@ -222,7 +223,7 @@ struct Server {
                                 break
                             }
 
-                            if header.length > 0x1000000 { // more than 1 MB
+                            if header.length > server.m_message_byte_limit {
                                 log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
                                 break
                             }
@@ -481,6 +482,8 @@ struct Server {
 
     m_received_bytes: i32;
     m_sent_bytes: i32;
+    
+    m_message_byte_limit: i32 = 0x100_000;
 
 	mutex: Mutex;
 	m_send_mutex: Mutex;
@@ -496,7 +499,7 @@ struct Client {
         }
     }
 
-	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM, message_byte_limit: i32 = 0x100_000) -> NetError {
         if m_is_initialized
             return NET_FAILURE // already started
 
@@ -507,6 +510,7 @@ struct Client {
         m_ip.append(ip)
         m_port = port
         m_protocol = protocol
+        m_message_byte_limit = message_byte_limit;
 
         m_socket = create_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         if !m_socket.valid() {
@@ -590,7 +594,7 @@ struct Client {
                         break
                     }
 
-                    if header.length > 0x1000000 { // more than 1 MB
+                    if header.length > client.m_message_byte_limit {
                         log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
                         break
                     }
@@ -747,6 +751,7 @@ struct Client {
     
     m_received_bytes: i32;
     m_sent_bytes: i32;
+    m_message_byte_limit: i32;
 
     /*######################
         Internal functions
