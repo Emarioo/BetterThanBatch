@@ -695,12 +695,21 @@ SignalIO PreprocContext::parseImport() {
                     ERR_LINE2(str_token,"here")
                 )
             } else {
-                ERR_SECTION(
-                    ERR_HEAD2(str_token)   
-                    ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. Did you setup default modules directory correctly? Does the file exist in current working directory of the compiler or from import directories through command line options?")
-                    ERR_LINE2(str_token,"here")
-                    // TODO: List the import directories?
-                )
+                if(path.ptr[0] == '~') {
+                    ERR_SECTION(
+                        ERR_HEAD2(str_token)   
+                        ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' contains ~ which isn't allowed.could not be found. Did you setup default modules directory correctly? Does the file exist in current working directory of the compiler or from import directories through command line options?")
+                        ERR_LINE2(str_token,"here")
+                        // TODO: List the import directories?
+                    )
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(str_token)   
+                        ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. Did you setup default modules directory correctly? Does the file exist in current working directory of the compiler or from import directories through command line options?")
+                        ERR_LINE2(str_token,"here")
+                        // TODO: List the import directories?
+                    )
+                }
             }
             return SIGNAL_SUCCESS; // we failed semantically, but not syntactically
         } else {

@@ -389,8 +389,12 @@ namespace engone {
 		return false;
 	}
     bool FileExist(const std::string& path){
-        struct stat buffer;   
-        return (stat(path.c_str(), &buffer) == 0) && (buffer.st_mode & S_IFDIR) == 0;
+        struct stat buffer;  
+        int err = stat(path.c_str(), &buffer);
+        auto ok = errno;
+        if (err != 0)
+            return false;
+        return (buffer.st_mode & S_IFDIR) == 0;
     }
 	bool DirectoryExist(const std::string& path){
         struct stat buffer;   
@@ -478,6 +482,10 @@ namespace engone {
         path.resize(len);
 
         return path;
+	}
+    std::string EnvironmentVariable(const std::string& name){
+		char* value = getenv(name.c_str());
+        return value;
 	}
     // struct AllocInfo {
 	// 	std::string name;

@@ -44,3 +44,13 @@ struct Manager {
 m: Manager
 m.hum()
 m.poly("ok") // at one point, matching failed here
+
+
+struct Box<T> {
+    x: T
+}
+fn yes<T>(arr: Box<T>*) { }
+arr1: Box<i32>
+yes(&arr1)
+arr2: Box<i32*>
+yes(&arr2)

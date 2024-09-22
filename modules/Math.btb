@@ -58,10 +58,14 @@ fn random64() -> u64 {
     return num;
 #endif
 }
+fn random_range(min: i32, max: i32) -> i32 {
+    n := cast<i32>random64() & 0x7FFF_FFFF
+    return (cast<i64>(max - min) * cast<i64>n) / cast<i64>0x7FFF_FFFF + min
+}
 // random between 0.0 and 1.0
 fn random_f32() -> f32 {
     // x64 generator can't convert u64 to f32 so we do i64 instead.
-    // BUT, we don't want any negative numbers to we mask off the signed bit.
+    // BUT, we don't want any negative numbers so we mask off the signed bit.
     mask: i64 = 0x7FFF_FFFF_FFFF_FFFF;
     return cast<f32>(cast<i64>random64() & mask) / cast<f32>(0xFFFF_FFFF_FFFF_FFFF & mask);
 }

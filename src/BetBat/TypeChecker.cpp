@@ -1629,7 +1629,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     if(inferred_args[j]) {
                         ERR_SECTION(
                             ERR_HEAD2(expr->args[i]->location)
-                            ERR_MSG("Initializers is not allowed with polymorphic functions.")
+                            ERR_MSG("Inferred initializers are not allowed with polymorphic functions.")
                             ERR_LINE2(expr->args[i]->location, "here")
                         )
                         continue;
@@ -1645,29 +1645,31 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     ScopeId argScope = overload.astFunc->scopeId;
 
                     TypeId stringType = overload.astFunc->arguments[j + lessArguments].stringType;
-                    auto typeString = info.ast->getStringFromTypeString(stringType);
+                    auto param_typeString = info.ast->getStringFromTypeString(stringType);
 
                     u32 plevel=0;
-                    polyTypes.resize(0);
-                    StringView typeName, baseToken;
+                    TEMP_ARRAY(StringView, param_polyTypes);
+                    
+                    StringView param_typeString_no_pointer;
+                    StringView param_typeString_base;
                     // TODO: We need to decompose function pointers too.
-                    AST::DecomposePointer(typeString, &typeName, &plevel);
-                    AST::DecomposePolyTypes(typeName, &baseToken, &polyTypes);
+                    AST::DecomposePointer(param_typeString, &param_typeString_no_pointer, &plevel);
+                    AST::DecomposePolyTypes(param_typeString_no_pointer, &param_typeString_base, &param_polyTypes);
                     // namespace?
 
-                    TypeInfo* typeInfo = info.ast->convertToTypeInfo(baseToken, argScope, false);
-                    TypeId baseType = typeInfo->id;
+                    TypeInfo* param_baseTypeInfo = info.ast->convertToTypeInfo(param_typeString_base, argScope, false);
+                    TypeId param_baseType = param_baseTypeInfo->id;
                     // TypeInfo* typeInfo = info.ast->getTypeInfo(baseType);
                     // if(typeInfo->id != baseType) {
                     bool is_base_virtual = false;
                     bool is_poly_virtual = false;
                     for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
-                        if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
+                        if(overload.astFunc->polyArgs[k].virtualType->originalId == param_baseTypeInfo->originalId) {
                             is_base_virtual = true;
                             break;
                         }
-                        for (int pi=0;pi<polyTypes.size();pi++) {
-                            auto ptype = polyTypes[pi];
+                        for (int pi=0;pi<param_polyTypes.size();pi++) {
+                            auto ptype = param_polyTypes[pi];
                             
                             // WARNING, we assume no pointer
                             TypeInfo* typeInfo = info.ast->convertToTypeInfo(ptype, argScope, false);
@@ -1683,7 +1685,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
                     if(!is_base_virtual && !is_poly_virtual) {
                         // no virtual/polymorphic type
-                        TypeId real_type = info.ast->convertToTypeId(typeString, scopeId, true);
+                        TypeId real_type = info.ast->convertToTypeId(param_typeString, scopeId, true);
                         // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
                         //   Perhaps we should cast when some types are polmorphic too?
                         if(ast->castable(typeToMatch, real_type)){
@@ -1691,7 +1693,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         }
                         found = false;
                         break;
-                    } else if (is_base_virtual && polyTypes.size() == 0) {
+                    } else if (is_base_virtual && param_polyTypes.size() == 0) {
                         // Basic type matching with T, not anything complicated like T<K,V>
 
                         int typeIndex = -1;
@@ -1742,12 +1744,12 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
                         // NOTE: I am fairly certain there are bugs here and scenarios that aren't handled.
 
-                        TypeInfo* match_typeInfo = info.ast->getTypeInfo(typeToMatch.baseType());
-                        if(!match_typeInfo->astStruct) {
+                        TypeInfo* typeToMatch_typeInfo = info.ast->getTypeInfo(typeToMatch.baseType());
+                        if(!typeToMatch_typeInfo->astStruct) {
                             found = false;
                             break;
                         }
-                        TypeId match_baseType = match_typeInfo->astStruct->base_typeId;
+                        TypeId typeToMatch_baseType = typeToMatch_typeInfo->astStruct->base_typeId;
 
                         if(is_base_virtual) {
                             // polymorphic type! we must decide!
@@ -1757,7 +1759,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                             // get base of typetomatch
                             for(int k=0;k<choosenTypes.size();k++){
                                 // NOTE: The choosen poly type must match in full.
-                                if(choosenTypes[k].baseType() == match_baseType.baseType() &&
+                                if(choosenTypes[k].baseType() == typeToMatch_baseType &&
                                     choosenTypes[k].getPointerLevel() + plevel == typeToMatch.getPointerLevel()
                                 ) {
                                     typeIndex = k;
@@ -1778,7 +1780,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                                     found = false;
                                     break;
                                 }
-                                TypeId newChoosen = match_baseType;
+                                TypeId newChoosen = typeToMatch_baseType;
                                 newChoosen.setPointerLevel(typeToMatch.getPointerLevel() - plevel);
                                 choosenTypes.add(newChoosen);
 
@@ -1786,9 +1788,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                                 // size(u32**)
                             }
                         } else {
-                            TypeId real_type = info.ast->convertToTypeId(baseToken, scopeId, true);
+                            TypeId real_type = info.ast->convertToTypeId(param_typeString_base, scopeId, true);
                             
-                            if(real_type != match_baseType || plevel != typeToMatch.getPointerLevel()){
+                            if(real_type != typeToMatch_baseType || plevel != typeToMatch.getPointerLevel()){
                                 found = false;
                                 break;
                             }
@@ -1801,17 +1803,17 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                             // Also this: fn add<T>(a: Array<T>).
                             // Also this: fn add<T>(a: T<T>).
 
-                            if(!match_typeInfo->structImpl || match_typeInfo->structImpl->polyArgs.size() != polyTypes.size()) {
+                            if(!typeToMatch_typeInfo->structImpl || typeToMatch_typeInfo->structImpl->polyArgs.size() != param_polyTypes.size()) {
                                 found = false;
                                 break;
                             }
 
-                            for(int pti = 0; pti < polyTypes.size(); pti++){
-                                auto typeName = polyTypes[pti];
-                                TypeId arg_type = info.ast->convertToTypeId(typeName, argScope, false);
-                                TypeInfo* typeInfo = info.ast->getTypeInfo(arg_type.baseType());
+                            for(int pti = 0; pti < param_polyTypes.size(); pti++){
+                                auto param_poly_typeName = param_polyTypes[pti];
+                                TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, false);
+                                TypeInfo* typeInfo = info.ast->getTypeInfo(param_arg_type.baseType());
 
-                                auto polyarg = match_typeInfo->structImpl->polyArgs[pti];
+                                auto typeToMatch_polyarg = typeToMatch_typeInfo->structImpl->polyArgs[pti];
 
                                 bool is_poly = false;
                                 for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
@@ -1821,20 +1823,18 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                                     }
                                 }
                                 if (!is_poly) {
-                                    if (arg_type != polyarg) {
+                                    if (param_arg_type != typeToMatch_polyarg) {
                                         found = false;
                                         break;
                                     }
                                     continue; // type match, check next poly argument
                                 }
 
-                                // auto polytype = typeInfo->id;
-
                                 int typeIndex = -1;
                                 for(int k=0;k<choosenTypes.size();k++){
                                     // NOTE: The choosen poly type must match in full.
-                                    if(choosenTypes[k].baseType() == polyarg.baseType() &&
-                                        choosenTypes[k].getPointerLevel() == polyarg.getPointerLevel()
+                                    if(choosenTypes[k].baseType() == typeToMatch_polyarg.baseType() &&
+                                        choosenTypes[k].getPointerLevel() == typeToMatch_polyarg.getPointerLevel()
                                     ) {
                                         typeIndex = k;
                                         break;
@@ -1850,22 +1850,24 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                                         found = false;
                                         break;
                                     }
-                                    TypeId newChoosen = polyarg;
-                                    if(polyarg.getPointerLevel() < plevel) {
+                                    TypeId newChoosen = typeToMatch_polyarg;
+                                    if(typeToMatch_polyarg.getPointerLevel() < param_arg_type.getPointerLevel()) {
+                                    // if(polyarg.getPointerLevel() > plevel) {
                                         found = false;
                                         break;
                                     }
-                                    newChoosen.setPointerLevel(polyarg.getPointerLevel() - plevel);
+                                    newChoosen.setPointerLevel(typeToMatch_polyarg.getPointerLevel() - param_arg_type.getPointerLevel());
+                                    // newChoosen.setPointerLevel(plevel - polyarg.getPointerLevel());
                                     choosenTypes.add(newChoosen);
                                 }
                             }
                         } else {
-                            for(int pti = 0; pti < polyTypes.size(); pti++){
-                                auto typeName = polyTypes[pti];
+                            for(int pti = 0; pti < param_polyTypes.size(); pti++){
+                                auto typeName = param_polyTypes[pti];
                                 TypeId arg_type = info.ast->convertToTypeId(typeName, argScope, false);
                                 TypeInfo* typeInfo = info.ast->getTypeInfo(arg_type.baseType());
 
-                                auto polyarg = match_typeInfo->structImpl->polyArgs[pti];
+                                auto polyarg = typeToMatch_typeInfo->structImpl->polyArgs[pti];
 
                                 if(arg_type == polyarg)
                                     continue;
@@ -1943,9 +1945,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                             ERR_HEAD2(expr->location)
                             ERR_MSG("COMPILER BUG, when matching function overloads. The matching generated a polymorphic overload that was meant to match the arguments but which doesn't.")
                             
-                            for (int i=0;argTypes.size();i++) {
-                                if (expr->args.size() > i)
-                                ERR_LINE2(expr->args[i]->location, ast->typeToString(argTypes[i]))
+                            for (int i=0;i<argTypes.size();i++) {
+                                if (expr->args.size() > i) {
+                                    ERR_LINE2(expr->args[i]->location, ast->typeToString(argTypes[i]))
+                                }
                             }
                         )
                     }

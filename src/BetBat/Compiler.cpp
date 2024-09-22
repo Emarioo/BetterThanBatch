@@ -2030,6 +2030,16 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     } else {
         fullPath = path.text;
     }
+    #if OS_LINUX
+    if(fullPath.text.size() > 0 && fullPath.text[0] == '~') {
+        std::string value = EnvironmentVariable("HOME");
+        if(value.size() != 0) {
+            // log::out << "HOME="<<value<<"\n";
+            // check traling slashes, join them, make sure value and path is separated by ONE slash
+            fullPath.text = std::string(value) + fullPath.text.substr(1);
+        }
+    }
+    #endif
 
     bool keep_searching = true;
 

@@ -101,7 +101,8 @@ struct BucketArray<T> {
     // @param outElement A pointer to the newly added element. Optional.
     fn add(value: T*) -> i32, T* {
 		if (m_valuesPerBucket == 0) {
-            LOG_BUCKET( log(BUCKET_ERROR," valuesPerBucket is 0") )
+            log("BucketArray wasn't initialized.")
+            // LOG_BUCKET( log(BUCKET_ERROR," valuesPerBucket is 0") )
             
 			return -1, null;
 		}

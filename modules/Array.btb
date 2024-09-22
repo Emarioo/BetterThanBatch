@@ -195,7 +195,29 @@ struct Array<T> {
 operator []<T>(arr: Array<T>, index: i32) -> T {
     return arr.get(index)
 }
-
+// arguments: a, b, userdata
+#macro FnCmp fn(void*,void*,void*)->i32
+// Do not sort structs with this function. Integers, floats, pointers to structs are ideal
+// items to sort.
+// Compare function should return a positive number if a is bigger than b (negative otherwise, zero if equal).
+fn sort<T>(arr: Array<T>*, compare_callback: FnCmp, descending: bool = false, user_data: void* = null) {
+    data := arr.data()
+    // TODO: Don't use bubble sort (I just can't help it because it's soooo easy)
+    desc_factor := 1
+    if descending
+        desc_factor = -1
+    for j: 0..arr.len-1 {
+        for i: 0..arr.len-1-j {
+            a := data[i]
+            b := data[i+1]
+            
+            if desc_factor * compare_callback(a, b, user_data) > 0 {
+                data[i] = b
+                data[i+1] = a
+            }
+        }
+    }
+}
 // Some code to quickly test an array
 // #import "Logger"
 // #import "Array"

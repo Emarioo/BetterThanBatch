@@ -2482,15 +2482,16 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                     INCOMPLETE
                 }
             } else {
-                // Assert(info.hasForeignErrors());
-                ERR_SECTION(
-                    ERR_HEAD2(expression->location)
-                    ERR_MSG("Compiler bug! '"<<expression->name<<"' is not declared (expression->identifier was null). See trace.")
-                    // ERR_LINE2(expression->location,"undeclared")
-                    for(auto& loc : source_trace) {
-                        ERR_LINE2(loc,"")
-                    }
-                )
+                if(!info.hasForeignErrors()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG("Compiler bug! '"<<expression->name<<"' is not declared (expression->identifier was null). See trace.")
+                        // ERR_LINE2(expression->location,"undeclared")
+                        for(auto& loc : source_trace) {
+                            ERR_LINE2(loc,"")
+                        }
+                    )
+                }
                 return SIGNAL_FAILURE;
             }
         } else if (expression->typeId == AST_FNCALL) {
