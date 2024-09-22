@@ -1210,6 +1210,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     push_offsets.add(0); // needed for SET_ARG
                 } else {
                     Assert(base->op0 == BC_REG_INVALID); // we can't get pointer if we didn't allocate anything
+                    push_offsets.add(0); // needed for SET_ARG
                 }
             } break;
             case BC_FREE_LOCAL:
@@ -1385,15 +1386,19 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 int off = base->imm16 + FRAME_SIZE;
                 if(tinycode->call_convention == UNIXCALL) {
+                    // In STDCALL, caller makes space for args and they are put there.
+                    // Sys V ABI convention does not so we make space for them in this call frame.
+                    // The offset is therefore not 'imm+FRAME_SIZE'.
                     if(is_entry_point) {
                         off -= 16; // args on stack, no return address or previous rbp
                     } else {
                         // TODO: Is the hardcoded 6 okay?
                         if(base->imm16 < 6 * 8) {
-                            off = -args_offset - base->imm16;
+                            off = -args_offset - base->imm16 - 8;
                         }
                     }
                 }
+                
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
                 emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
                 emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));

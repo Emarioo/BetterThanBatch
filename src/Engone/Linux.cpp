@@ -211,7 +211,6 @@ namespace engone {
 			if(result->name[i]=='\\')
 				result->name[i] = '/';
 		}
-
 		return true;
 	}
 	void DirectoryIteratorSkip(DirectoryIterator iterator){

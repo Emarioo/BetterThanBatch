@@ -93,7 +93,7 @@ struct Server {
         m_protocol = protocol
         m_message_byte_limit = message_byte_limit;
 
-        m_socket = create_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+        m_socket = create_socket(AF_INET, SOCK_STREAM, 0)
         if !m_socket.valid() {
             log("socket failed")
             return NET_FAILURE
@@ -102,9 +102,10 @@ struct Server {
         addr: sockaddr_in
         addr.sin_family = AF_INET
         addr.sin_port = htons(m_port)
-        addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
+        addr.sin_addr = 0
+        // addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
         
-        err := m_socket.bind(cast<sockaddr*>&addr, sizeof addr)
+        err := m_socket.bind(cast<sockaddr*>&addr, sizeof(addr))
         if err != SOCKET_SUCCESS {
             log("bind failed")
             return NET_BAD_IP
@@ -129,10 +130,10 @@ struct Server {
                 // NOTE: If user sets server.m_event_callback to null at a bad timing then we may crash here
                 server.m_event_callback(e, server.m_user_data)
             }
-
             while {
                 // log("#waiting")
                 client_socket := server.m_socket.accept(null, null)
+                // log("ACCEPT")
                 if !client_socket.valid() {
                     // TODO: Handle error, normally accept fails because socket was closed but
                     //   There may have been an error which we should report.
@@ -683,6 +684,8 @@ struct Client {
         if m_receiver_thread.valid() {
             m_receiver_thread.join()
         }
+        if m_socket.valid() // should already be closed
+            m_socket.close()
         m_is_initialized = false
     }
     fn is_active() -> bool {

@@ -132,7 +132,7 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
     // log(c_path)
     fd := open(c_path, open_flags, mode)
     if fd < 0
-        return OS_TO_FILE_HANDLE(fd)
+        return OS_TO_FILE_HANDLE(-1)
 
     if outFileSize {
         info: stat
@@ -798,7 +798,11 @@ fn FileExist(path: char[]) -> bool {
             return false;
         return !(bits & FILE_ATTRIBUTE_DIRECTORY)
     #else
-    
+        buf: stat
+        err := stat(path.ptr, &buf);
+        if err != 0
+            return false
+        return buf.st_mode & S_IFDIR == 0
     #endif
 }
 fn DirectoryExist(path: char[]) -> bool {
@@ -808,7 +812,11 @@ fn DirectoryExist(path: char[]) -> bool {
             return false;
         return bits & FILE_ATTRIBUTE_DIRECTORY
     #else
-
+        buf: stat
+        err := stat(path.ptr, &buf);
+        if err != 0
+            return false
+        return buf.st_mode & S_IFDIR != 0
     #endif
 }
 // returns absolute path to the found file, empty string if nothing was found

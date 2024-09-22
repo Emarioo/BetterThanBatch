@@ -1,0 +1,60 @@
+@TEST_CASE(linux_stdlib_file)
+
+#if OS_LINUX
+
+#import "Linux"
+
+fd := open("LICENSE".ptr, 0, 0)
+if fd < 0
+    return 1
+
+safe: char[]
+extra: char[50]
+for @ptr extra {
+    *it = 'X'
+}
+safe = extra
+info: stat
+res := fstat(fd, &info)
+// log("sizeof stat: ",sizeof stat)
+overflow := 0
+for @ptr @rev safe {
+    if *it == 0 {
+        overflow++;
+        *it = '_';
+    }
+    // log("extra ",nr, " ", *it)
+}
+_test 0; overflow;
+// fn test_FileOpen(path: Slice<char>, flags: i32, outFileSize: i64* = null) -> i32 {
+//     @dumpbc
+//     c_path: char* = path.ptr;
+
+//     open_flags: i32 = O_RDONLY
+//     mode: i32
+    
+//     fd := open(c_path, open_flags, mode)
+//     if fd < 0
+//         return -1
+
+//     if outFileSize {
+//         info: stat
+//         res := fstat(fd, &info)
+//         if res == -1 {
+//             *outFileSize = 0 // TODO: handle error
+//         } else
+//             *outFileSize = info.st_size
+//     }
+//     return fd
+// }
+// f: i64
+// err := test_FileOpen("LICENSE",5, &f)
+
+// if err == 0 {
+//     _test 0; 1   
+// } else {
+//     _test 1; 1
+// }
+// return err
+
+#endif

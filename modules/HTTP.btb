@@ -18,8 +18,14 @@ struct HTTPServer {
     user_data: void*;
     callback: FnRequest;
     
+    fn cleanup() {
+        server.cleanup()
+    }
     fn wait() {
         server.wait()
+    }
+    fn close() {
+        server.close()
     }
     
     fn send(status: i32, data: char[], who: ConnectionID) {
@@ -90,7 +96,7 @@ fn StartHTTPServer(port: i32, callback: FnRequest, user_data: void*, wait: bool 
     
     fn handle_event(event: Event, user_data: void*) {
         server: HTTPServer* = user_data
-        
+        // log(&event)
         if event.type == EVENT_RECEIVE {
             request: HTTPRequest
             defer {
@@ -103,13 +109,18 @@ fn StartHTTPServer(port: i32, callback: FnRequest, user_data: void*, wait: bool 
             msg := event.bytes
             head := 0
             
+            // log(msg)
+            
             if substring(msg,0,4) == "GET " {
+                // log("get")
                 request.method = HTTP_GET
                 head += 4
             } else if substring(msg,0,5) == "POST " {
+                // log("post")
                 request.method = HTTP_POST
                 head += 5
             } else {
+                // log("other")
                 request.method = HTTP_INVALID
                 server.callback(&request, event, server.user_data)
                 return;
@@ -165,7 +176,7 @@ fn StartHTTPServer(port: i32, callback: FnRequest, user_data: void*, wait: bool 
                         head++
                         break
                     }
-                    field := substring(msg, field_start, head)
+                    field := substring(msg, field_start, head-2)
                     index_of_colon := find(":", field)
                     
                     if index_of_colon == -1

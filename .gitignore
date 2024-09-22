@@ -35,3 +35,6 @@ logs
 /*.c
 /*.s
 /*.asm
+
+# secret keys
+secure

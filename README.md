@@ -99,3 +99,5 @@ A temporary todo list because I don't have access to internet at the moment...
     fn hi(a: i32, b: i32) {}
     hi(5, b = 23) // named argument not allowed
     ```
+    
+- Tests that fail should print the expected value and the incorrect value (if possible). This could be hard but it's good information.

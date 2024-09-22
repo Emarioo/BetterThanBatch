@@ -2,14 +2,20 @@
     Some bindings for OpenSSL
 */
 
-
-#load "D:/OpenSSL-3/bin/libssl-3-x64.dll" as OpenSSL
-#link "D:/OpenSSL-3/bin/libcrypto-3-x64.dll"
+#if OS_WINDOWS
+    #load "D:/OpenSSL-3/bin/libssl-3-x64.dll" as OpenSSL
+    #link "D:/OpenSSL-3/bin/libcrypto-3-x64.dll"
+#else
+    #load "ssl.a" as OpenSSL
+    #link "-lcrypto"
+#endif
 
 #macro SSLAPI @import(OpenSSL)
 
 #macro X509_FILETYPE_PEM       1
+#macro X509_FILETYPE_ASN1      2
 #macro SSL_FILETYPE_PEM        X509_FILETYPE_PEM
+#macro SSL_FILETYPE_ASN1       X509_FILETYPE_ASN1
 
 #macro SSL void
 #macro SSL_CTX void
@@ -31,6 +37,7 @@ fn SSLAPI SSL_set_fd(s: SSL*, fd: i32) -> i32;
 
 fn SSLAPI SSL_use_PrivateKey_file(ssl: SSL*, file: char*, type: i32) -> i32;
 fn SSLAPI SSL_use_certificate_file(ssl: SSL*, file: char*, type: i32) -> i32;
+fn SSLAPI SSL_use_certificate_chain_file(ssl: SSL*, file: char*) -> i32;
 
 fn SSLAPI SSL_accept(ssl: SSL*) -> i32;
 

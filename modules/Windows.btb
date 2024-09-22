@@ -644,7 +644,20 @@ FN_WINSOCK(send)(
 #macro MSG_DONTROUTE   0x4      /* send without using routing tables */
 #macro MSG_WAITALL     0x8      /* do not complete until packet is completely filled */
 
-
+FN_WINSOCK(setsockopt)(
+  s: SOCKET,
+  level: i32,
+  optname: i32,
+  optval: char*,
+  optlen: i32
+) -> i32
+FN_WINSOCK(getsockopt)(
+  s: SOCKET,
+  level: i32,
+  optname: i32,
+  optval: char*,
+  optlen: i32
+) -> i32
 
 fn @import(Winsock) getaddrinfo(
   pNodeName: char*,

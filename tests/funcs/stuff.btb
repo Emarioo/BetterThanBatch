@@ -107,3 +107,14 @@ struct dat {
 d: dat
 d.cravin(msg = 23)
 d.pcravin<i32>(msg = 23)
+
+
+fn okay() -> i32 {
+    return 0
+}
+fn wrap(n: i32) {}
+
+if false {
+    
+}
+wrap(okay())

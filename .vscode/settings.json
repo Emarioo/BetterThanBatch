@@ -90,6 +90,8 @@
         "windows.h": "c",
         "signal.h": "c",
         "string.h": "c",
-        "sigaction.h": "c"
+        "sigaction.h": "c",
+        "wait.h": "c",
+        "unistd.h": "c"
     }
 }

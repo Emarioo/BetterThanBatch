@@ -14,9 +14,33 @@
 
 // #import "File"
 
-#import "./windows/sslserver"
+// #import "./windows/sslserver"
+// #import "./net/serverclient"
 
+#import "Logger"
+#import "Linux"
+// #import "OS"
 
+fd := open("LICENSE".ptr, 0, 0)
+if fd < 0
+    return 1
+
+safe: char[]
+extra: char[50]
+for @ptr extra {
+    *it = 'X'
+}
+safe = extra
+info: stat
+res := fstat(fd, &info)
+log("sizeof stat: ",sizeof stat)
+for @ptr @rev safe {
+    if *it == 0;
+        *it = '_'
+    log("extra ",nr, " ", *it)
+}
+
+return 0
 // #import "GLFW"
 // #import "GLAD"
 // #import "Logger"
