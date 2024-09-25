@@ -9,6 +9,8 @@ struct ByteStream_Allocation {
 }
 // TODO: Asserts
 // Note that memory is uninitialized
+// All read functions take a pointer to a 32-bit variable which is the offset.
+// This means that multiple threads can read from the stream at once.
 struct ByteStream {
     allocations: Array<ByteStream_Allocation>;
     written_bytes: i32 = 0; // next byte to write to
@@ -17,10 +19,6 @@ struct ByteStream {
     // TODO: m_allocator: Allocator*;
 
     // unknown_state: bool = false;
-
-    fn init_from_data(ptr: void*, size: i32) {
-
-    }
 
     fn cleanup() { reserve(0); }
 
@@ -34,6 +32,10 @@ struct ByteStream {
             return false
         memcpy(dst, ptr, len)
         return true;
+    }
+    // recommend writing things that fit in registers (64-bit), it's more efficicent
+    fn write<T>(value: T) -> bool {
+        return write(&value, sizeof T);
     }
     fn write_late(size: i32) -> void* {
         // Assert(size != 0);
@@ -108,20 +110,36 @@ struct ByteStream {
             return false;
         return true;
     }
+    fn write_alignment(alignment: i32) {
+        mis := alignment - (written_bytes % alignment)
+        if mis != 0 {
+            ptr := write_late(mis)
+            memzero(ptr, mis)
+        }
+    }
+  
     // fn write_slice<T>(slice: Slice<T>) -> bool {
     //     return write(slice.ptr, slice.len)
     // }
-    fn write_string(str: Slice<char>) -> bool {
+    fn write_string8(str: Slice<char>) -> bool {
+        if str.len > 0xFF
+            return false
+        yes := write<u8>(str.len)
+        if !yes  return false
+        yes = write(str.ptr, str.len)
+        if !yes  return false
+        return true
+    }
+    fn write_string16(str: Slice<char>) -> bool {
+        if str.len > 0xFFFF
+            return false
         yes := write<u16>(str.len)
         if !yes  return false
         yes = write(str.ptr, str.len)
         if !yes  return false
         return true
     }
-    // recommend writing things that fit in registers (64-bit), it's more efficicent
-    fn write<T>(value: T) -> bool {
-        return write(&value, sizeof T);
-    }
+  
     fn resetHead() {
         written_bytes = 0;
         last_allocation = 0;
@@ -129,13 +147,14 @@ struct ByteStream {
             allocations[i].written_bytes = 0;
         }
     }
-    fn read(offset: i32, ptr: void*, size: u64) -> bool {
+    fn read(offset: i32*, ptr: void*, size: i32) -> bool {
         // Assert(size != 0);
         head: i32 = 0;
+        size_left: i32 = size;
         for i: 0..allocations.size() {
             all: ByteStream_Allocation* = allocations.get_unsafe(i);
             
-            rel_off: i32 = offset - head; // relative offset in the allocation
+            rel_off: i32 = *offset - head; // relative offset in the allocation
             rem_size: i32 = all.written_bytes - rel_off; // remaining size of the allocation from the relative offset
             
             if(rem_size <= 0) {
@@ -143,35 +162,53 @@ struct ByteStream {
                 continue;
             }
             
-            real_size: i32 = size;
+            real_size: i32 = size_left;
             if(real_size > rem_size) {
                 real_size = rem_size;
             }
-            dst := ptr + offset - rel_off - head;
+            dst := ptr + *offset - rel_off - head;
             // Assert(cast<u64>dst >= cast<u64>ptr && cast<u64>dst < cast<u64>ptr + size);
             // Assert(rel_off < all.written_bytes);
             memcpy(dst, all.ptr + rel_off, real_size);
-            offset += real_size;
-            size -= real_size;
+            *offset += real_size;
+            size_left -= real_size;
             
             head += all.written_bytes;
 
-            if(size == 0)
+            if(size_left == 0)
                 break;
         }
-        
-        return size == 0;
+        if size_left == 0 {
+            *offset += size
+            return true
+        }
+        return false
     }
-    fn read_string(str: StringBuilder*) -> bool {
-        l: u16
-        read<u16>(&l)
-        str._reserve(l)
+    fn read<T>(offset: i32*, ptr: T*) -> bool {
+        return read(offset, ptr, sizeof T)
+    }
+    fn read_alignment(offset: i32*, alignment: i32) -> i32 {
+        mis := alignment - (offset % alignment)
+        if mis != 0 {
+            *offset += mis
+            return mis
+        }
+    }
+    fn read_string8(offset: i32*, str: StringBuilder*) -> bool {
+        l: u8
+        read<u8>(offset, &l)
+        str.reserve(l)
         str.len = l
-        return read(str.ptr, str.len)
+        return read(offset, str.ptr, str.len)
     }
-    fn read<T>(ptr: T*) -> bool {
-        return read(ptr, sizeof T)
+    fn read_string16(offset: i32*, str: StringBuilder*) -> bool {
+        l: u16
+        read<u16>(offset, &l)
+        str.reserve(l)
+        str.len = l
+        return read(offset, str.ptr, str.len)
     }
+
     // Marked unsafe because the pointer in the returned slice
     // may be invalidated if the stream is cleaned up.
     fn sliced_unsafe() -> Slice<u8> {
@@ -186,18 +223,66 @@ struct ByteStream {
     //     return true;
     // }
     fn reserve(newMax: u32) -> bool {
-        suc: bool = allocations.add({});
+        suc: bool = allocations.add();
         if(!suc)
             return false;
         
-        allocation := allocations.back();
-        allocation.max = size;
+        allocation := allocations.last();
+        allocation.max = newMax;
         // ENSURE_ALLOCATOR
         // allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
         allocation.ptr = Allocate(allocation.max);
         if(!allocation.ptr) {
             allocations.remove(allocations.size()-1);
             return false;   
+        }
+        return true;
+    }
+    // combines all allocations into one
+    // All previous pointers from write_late are invalidated.
+    fn finalize(out_ptr: void**, out_size: i32*) -> bool{
+        // Assert(out_ptr && out_size != 0);
+        if(out_ptr) {
+            *out_ptr = null;
+        }
+        if(out_size){
+            *out_size = 0;
+        }
+        
+        max: i32 = written_bytes;
+        // ENSURE_ALLOCATOR
+        // u8* ptr = (u8*)m_allocator->allocate(max);
+        ptr := Allocate(max);
+        if(!ptr) {
+            // Assert(false);
+            return false;
+        }
+            
+        // combine allocations into one
+        offset: i32 = 0;
+        for i: 0..allocations.size() {
+            a := allocations.get_unsafe(i);
+            Assert(a.written_bytes != 0 && a.ptr);
+            memcpy(ptr + offset, a.ptr, a.written_bytes);
+            offset += a.written_bytes;
+            
+            // m_allocator->allocate(0, a.ptr, a.max);
+            // Free(a.ptr)
+        }
+        // Assert(offset == written_bytes);
+        
+        allocations.resize(1);
+        last := allocations.last()
+        last.ptr = ptr;
+        last.max = max;
+        last.written_bytes = written_bytes;
+        last_allocation = allocations.size()-1;
+        
+        if(out_size) {
+            *out_size = written_bytes;
+        }
+        if(out_ptr) {
+            *out_ptr = ptr;
         }
         return true;
     }

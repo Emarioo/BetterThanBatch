@@ -493,12 +493,14 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
                             ERR_MSG("Type '"<<polyTokens[i]<<"' does not exist. Use i32.")
                             ERR_LINE2(err_location,"here somewhere")
                         )
+                        return {};
                     } else {
                         ERR_SECTION(
                             ERR_HEAD2(err_location)
                             ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
                             ERR_LINE2(err_location,"here somewhere")
                         )
+                        return {};
                     }
                 }
                 // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
@@ -608,6 +610,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
             ERR_HEAD2(err_location)
             ERR_MSG(__FUNCTION__ <<": structImpl for type "<<typeString << " failed.")
         )
+        return {};
     } else {
         _TCLOG(log::out <<"'"<< typeString << "' was evaluated to "<<typeInfo->structImpl->size<<" bytes\n";)
     }

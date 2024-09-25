@@ -289,6 +289,75 @@ fn @import(Kernel) FindClose(
   hFindFile: HANDLE
 ) -> bool;
 
+fn @import(Kernel) FindFirstChangeNotificationA(
+  lpPathName: char*,
+  bWatchSubtree: bool,
+  dwNotifyFilter: u32
+) -> HANDLE;
+fn @import(Kernel) FindNextChangeNotification(
+    hChangeHandle: HANDLE
+) -> bool;
+fn @import(Kernel) FindCloseChangeNotification(
+  hChangeHandle: HANDLE
+) -> bool;
+fn @import(Kernel) CancelSynchronousIo(
+  hThread: HANDLE
+) -> bool;
+fn @import(Kernel) ReadDirectoryChangesW(
+    hDirectory: HANDLE,
+    lpBuffer: void*,
+    nBufferLength: i32,
+    bWatchSubtree: bool,
+    dwNotifyFilter: i32,
+    lpBytesReturned: i32*, // optional
+    lpOverlapped: void*, // optional, LPOVERLAPPED
+    lpCompletionRoutine: void* // optional, LPOVERLAPPED_COMPLETION_ROUTINE 
+    ) -> i32;
+
+#macro STATUS_WAIT_0       (cast<u32>0x00000000)
+#macro WAIT_OBJECT_0       ((STATUS_WAIT_0 ) + 0 )
+
+struct FILE_NOTIFY_INFORMATION {
+    NextEntryOffset: i32;
+    Action: i32;
+    FileNameLength: i32;
+    FileName: u16[1]; // WCHAR
+}
+
+#macro FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
+#macro FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
+#macro FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
+#macro FILE_NOTIFY_CHANGE_SIZE         0x00000008   
+#macro FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
+#macro FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
+#macro FILE_NOTIFY_CHANGE_CREATION     0x00000040   
+#macro FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
+#macro FILE_ACTION_ADDED                   0x00000001   
+#macro FILE_ACTION_REMOVED                 0x00000002   
+#macro FILE_ACTION_MODIFIED                0x00000003   
+#macro FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
+#macro FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
+
+
+#macro FILE_FLAG_WRITE_THROUGH         0x80000000
+#macro FILE_FLAG_OVERLAPPED            0x40000000
+#macro FILE_FLAG_NO_BUFFERING          0x20000000
+#macro FILE_FLAG_RANDOM_ACCESS         0x10000000
+#macro FILE_FLAG_SEQUENTIAL_SCAN       0x08000000
+#macro FILE_FLAG_DELETE_ON_CLOSE       0x04000000
+#macro FILE_FLAG_BACKUP_SEMANTICS      0x02000000
+#macro FILE_FLAG_POSIX_SEMANTICS       0x01000000
+#macro FILE_FLAG_SESSION_AWARE         0x00800000
+#macro FILE_FLAG_OPEN_REPARSE_POINT    0x00200000
+#macro FILE_FLAG_OPEN_NO_RECALL        0x00100000
+#macro FILE_FLAG_FIRST_PIPE_INSTANCE   0x00080000
+
+#macro FILE_LIST_DIRECTORY       ( 0x0001 )    // directory
+
+#macro ERROR_OPERATION_ABORTED          995
+#macro ERROR_NOTIFY_ENUM_DIR            1022
+#macro ERROR_NOT_FOUND                  1168
+
 // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya
 fn @import(Kernel) LoadLibraryA(
   lpLibFileName: char*
@@ -365,8 +434,8 @@ fn @import(Kernel) ReleaseSemaphore(
   /* [out, optional] LPLONG */ lpPreviousCount: i32*
 ) -> bool;
 
-#macro INFINITE            0xFFFFFFFFu  // Infinite timeout
-#macro WAIT_FAILED         0xFFFFFFFFu
+#macro INFINITE            0xFFFF_FFFFu  // Infinite timeout
+#macro WAIT_FAILED         0xFFFF_FFFFu
 
 fn @import(Kernel) GetErrorMode() -> i32;
 fn @import(Kernel) SetErrorMode(n: i32) -> i32;
@@ -768,6 +837,7 @@ fn ntohs(netshort: u16) -> u16 {
     return htons(netlong)
     // return (netshort << 8) | (netshort >> 8)
 }
+
 
 
 /*###########################################

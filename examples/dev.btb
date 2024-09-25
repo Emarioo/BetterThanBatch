@@ -2,15 +2,7 @@
 // #import "examples/crawler/GameCore" // Without hotreloading
 
 
-// #import "HTTP"
-// #import "Logger"
 
-
-// StartHTTPServer(8080, handle, null, wait = true)
-
-// fn handle(req: HTTPRequest*, e: Event, ud: void*) {
-//     log(req)
-// }
 
 // #import "File"
 

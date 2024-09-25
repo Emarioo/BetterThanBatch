@@ -9,6 +9,7 @@
 #import "String"
 #import "OS"
 #import "Lang" // temporary
+#import "Threads"
 
 #if OS_WINDOWS
     #import "Windows"
@@ -936,6 +937,202 @@ fn FindFile(path: char[], search_env_path: bool = false, recursive: bool = false
 
     return result
     #endif
+}
+
+enum FileMonitorFlags {
+    
+}
+enum FileMonitorChangeType {
+    CHANGE_MODIFIED,
+    CHANGE_ADDED,
+    CHANGE_REMOVED,
+    CHANGE_RENAMED_OLD_NAME,
+    CHANGE_RENAMED_NEW_NAME,
+}
+struct FileMonitorChange {
+    path: char[];
+    type: FileMonitorChangeType;
+}
+#macro FnMonitor fn(FileMonitorChange*, void*)
+struct FileMonitor {
+    
+    fn cleanup() {
+        // Assert(m_thread.joinable())
+        #if OS_WINDOWS
+            if !m_thread.joinable() {
+                log("WARNING FILE MONITOR, A monitor thread cannot clean up it's own monitor.")
+                return // can't clean up own thread
+            }
+            m_running = false
+            
+            // Abort ReadDirectoryChangesW
+            
+            // Engone Win32.cpp uses this cancel function and FindCloseChangeNo... but I don't know why.
+            // yes := CancelSynchronousIo(m_thread.os_handle) // os_handle for threads doesn't need + or - one. (I'm not consistent I know, i need to fix up the OS layer modules)
+            // if !yes {
+            //     err := GetLastError()
+            //     if err != ERROR_NOT_FOUND {
+            //         log("Monitor, CancelSynchronousIo ", err)
+            //     }
+            // }
+            
+            if m_change_handle {
+                FindCloseChangeNotification(m_change_handle)
+                m_change_handle = null
+            }
+            m_thread.join()
+        #else
+        #endif
+    }
+    fn check(path: char[], callback: FnMonitor, flags: FileMonitorFlags, user_data: void*) -> bool {
+        if m_running {
+            log("Monitor is running, can't call 'check' again.")   
+            return false
+        }
+        m_root.append(path)
+        m_callback = callback
+        m_user_data = user_data
+        m_flags = flags
+        #if OS_WINDOWS
+            // if !FileExist(m_root)
+            //     return false
+            
+            dir_path := m_root
+            
+            m_change_handle = FindFirstChangeNotificationA(dir_path.ptr, true, FILE_NOTIFY_CHANGE_LAST_WRITE|FILE_NOTIFY_CHANGE_FILE_NAME|FILE_NOTIFY_CHANGE_DIR_NAME)
+            if m_change_handle == null {
+                m_change_handle = null
+                err := GetLastError()
+                log("Monitor, change notif. failed, bad path?, ",err)
+                
+                return false
+            }
+            
+            m_dir_handle = CreateFileA(dir_path.ptr, FILE_LIST_DIRECTORY, FILE_SHARE_DELETE |FILE_SHARE_READ | FILE_SHARE_WRITE, null, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, null)
+            
+            if m_dir_handle == INVALID_HANDLE_VALUE {
+                m_dir_handle = null
+                err := GetLastError()
+                log("Montor, CreateFileA failed, ",err)
+                FindCloseChangeNotification(m_change_handle)
+                m_change_handle = null
+                return false
+            }
+            m_running = true
+            
+            m_thread = ThreadCreate(_run_file_monitor, this)
+            
+            return true
+        #else
+        // https://man7.org/linux/man-pages/man7/inotify.7.html
+        #endif
+    }
+    
+    m_callback: FnMonitor;
+    m_user_data: void*;
+    m_root: StringBuilder;
+    m_flags: FileMonitorFlags;
+    
+    m_running: bool;
+    m_thread: Thread;
+    m_mutex: Mutex;
+    
+    // TODO: Windows specific, what about Linux?
+    m_change_handle: void*;
+    m_dir_handle: void*;
+}
+
+fn @oscall _run_file_monitor(arg: void*) -> i32 {
+    this := cast<FileMonitor*>arg
+    
+    buffer_max := 5 * (sizeof FILE_NOTIFY_INFORMATION + 500)
+    buffer := Allocate(buffer_max)
+    if !buffer {
+        log("Monitor, buffer allocation failed")
+        return false
+    }
+    defer Free(buffer)
+    
+    temp: StringBuilder
+    defer temp.cleanup()
+    while {
+        wait_status := WaitForSingleObject(this.m_change_handle, INFINITE)
+        
+        if !this.m_running
+            break
+        
+        if wait_status != WAIT_OBJECT_0 {
+            // Not sure why this happens but we should stop
+            break
+        }
+        
+        bytes: i32
+        cerr := ReadDirectoryChangesW(this.m_dir_handle, buffer, buffer_max, true, FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME, &bytes, null, null)
+        // TODO: We are not handling all errors from ReadDirectoryChangesW.
+        //   See remarks and return value here: https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-readdirectorychangesw
+        // log("Read")
+        if bytes == 0 {
+            // try to read changes again but with bigger buffer? while loop?
+            //log::out << log::RED << "FileMonitor::check - buffer to small or big\n";
+            // this could also mean that we cancelled the read.
+        }
+        if !cerr {
+            err := GetLastError()
+            if err != ERROR_OPERATION_ABORTED {
+                log("Monitor, ReadDIrectoryChanges failed, ",err)
+            } else {
+                // intentional exit
+            }
+            break
+        }
+        if cerr == ERROR_NOTIFY_ENUM_DIR {
+            log("Monitor, ReadDirectoryChanges failed, ERROR_NOTIFY_ENUM_DIR too many changes")
+            break
+        }
+        
+        offset: i32
+        limit := 1000 // limit is here to prevent infinite loops, not sure why it would happen
+        while limit-- {
+            info := cast<FILE_NOTIFY_INFORMATION*>(buffer + offset)
+            
+            length := info.FileNameLength / sizeof u16 // divide by WCHAR
+            temp.resize(length)
+            for 0..length {
+                temp.ptr[nr] = cast<char>info.FileName[nr]
+            }
+            
+            change: FileMonitorChange
+            change.path = temp.sliced()
+            switch info.Action {
+                case FILE_ACTION_ADDED: change.type = CHANGE_ADDED
+                case FILE_ACTION_REMOVED: change.type = CHANGE_REMOVED
+                case FILE_ACTION_MODIFIED: change.type = CHANGE_MODIFIED
+                case FILE_ACTION_RENAMED_OLD_NAME: change.type = CHANGE_RENAMED_OLD_NAME
+                case FILE_ACTION_RENAMED_NEW_NAME: change.type = CHANGE_RENAMED_NEW_NAME
+                case:
+                    log("Monitor, ReadDirectoryChange unknown action ",info.Action)
+            }
+            
+            this.m_callback(&change, this.m_user_data)
+            
+            if info.NextEntryOffset == 0
+                break
+            offset += info.NextEntryOffset
+        }
+        
+        cerr = FindNextChangeNotification(this.m_change_handle)
+        if !cerr
+            break // handle might have been closed
+    }
+    if this.m_change_handle {
+        FindCloseChangeNotification(this.m_change_handle)   
+        this.m_change_handle = null
+    }
+    if this.m_dir_handle {
+        CloseHandle(this.m_dir_handle)
+        this.m_dir_handle = null
+    }
+    return 0
 }
 
 // fix slashes

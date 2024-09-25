@@ -99,12 +99,12 @@ struct BucketArray<T> {
     // @return Index where element is. -1 if something failed.
     // @param value A pointer to the value of the new element. Note that a memcpy occurs. Value can be null for zero initialized data.
     // @param outElement A pointer to the newly added element. Optional.
-    fn add(value: T*) -> i32, T* {
+    fn add(value: T*) -> T*, i32 {
 		if (m_valuesPerBucket == 0) {
             log("BucketArray wasn't initialized.")
             // LOG_BUCKET( log(BUCKET_ERROR," valuesPerBucket is 0") )
             
-			return -1, null;
+			return null, -1;
 		}
 
 		//engone::log::out << "BucketArray: ADD "<<m_valuesPerBucket<<"\n";
@@ -128,7 +128,7 @@ struct BucketArray<T> {
 			if (!newBuckets) {
 				//engone::log::out >> engone::log::Disable;
                 log(BUCKET_ERROR," failed resize buckets")
-				return -1, null;
+				return null, -1;
 			}
             m_buckets = newBuckets;
             
@@ -151,7 +151,7 @@ struct BucketArray<T> {
 			if (!bucket.m_data) {
                 log(BUCKET_ERROR," failed resize bucket")
 				//engone::log::out >> engone::log::Disable; 
-				return -1, null;
+				return null, -1;
 			}
             bucket.m_max = newSize;
 
@@ -178,7 +178,7 @@ struct BucketArray<T> {
 		if (valueIndex == -1) {
             log(BUCKET_ERROR, "Impossible error adding value in bucket ", bucketIndex)
 			//engone::log::out >> engone::log::Disable;
-			return -1, null;
+			return null, -1;
 		}
 		bucket.m_amountOfUsedSpots++;
 		//engone::log::out << "Frame : New object count " << frame.count << "\n";
@@ -196,7 +196,7 @@ struct BucketArray<T> {
 		// 	*outElement = ptr;
         // }
 		// log("BucketArray: Add at ",bucketIndex, "*", m_valuesPerBucket, "+", valueIndex)
-		return bucketIndex * m_valuesPerBucket + valueIndex, ptr;
+		return ptr, bucketIndex * m_valuesPerBucket + valueIndex;
 	}
     /*
 	@return Pointer to the newly added element. null if spot wasn't available.
@@ -366,7 +366,7 @@ struct BucketArray<T> {
 			if (!yes)
 				continue;
 
-			iterator.ptr = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+			iterator.ptr = cast<T*>bucket.getValue(valueIndex, sizeof T, m_valuesPerBucket);
 			return true;
 		}
 		iterator.index = -1;

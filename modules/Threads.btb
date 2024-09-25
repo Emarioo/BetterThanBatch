@@ -31,6 +31,9 @@ struct Thread {
     fn valid() -> bool {
         return id != 0
     }
+    fn joinable() -> bool {
+        return id != 0 && ThreadSelfId() != id
+    }
     fn join() {
         // TODO: Handle error
         #if OS_WINDOWS
