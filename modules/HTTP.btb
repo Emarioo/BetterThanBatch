@@ -5,7 +5,7 @@
 */
 #import "Net"
 
-#macro FnRequest fn(HTTPRequest*, Event, void*)
+#macro FnRequest fn(HTTPRequest*, NetEvent, void*)
 
 enum HTTPMethod {
     HTTP_GET,
@@ -94,7 +94,7 @@ fn StartHTTPServer(port: i32, callback: FnRequest, user_data: void*, wait: bool 
     
     return http_server
     
-    fn handle_event(event: Event, user_data: void*) {
+    fn handle_event(event: NetEvent, user_data: void*) {
         server: HTTPServer* = user_data
         // log(&event)
         if event.type == EVENT_RECEIVE {

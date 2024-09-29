@@ -26,13 +26,13 @@
 #endif
 
 enum EventType {
-	EVENT_START, // server starts listening or client connects to server
-	EVENT_CLOSE, // server stops listening or client closes connections
-	EVENT_RECEIVE, // data is received, server or client
-	EVENT_CONNECT, // from server side, a client connected
-	EVENT_DISCONNECT, // from server side, a client disconnected
+	EVENT_START_LISTENING, // server starts listening, client will not receive this event
+	EVENT_STOP_LISTENING, // server stops listening, client will not receive this event
+	EVENT_RECEIVE, // server/client received data
+	EVENT_CONNECT, // server/client started connection
+	EVENT_DISCONNECT, // server/client closes connection
 }
-struct Event {
+struct NetEvent {
 	type: EventType;
 	who: ConnectionID; // only server
 	bytes: char[]; // only on receive
@@ -54,7 +54,7 @@ enum NetProtocol {
     NET_PROTO_MESSAGE = 0x2, // library sends distinct messages that are length prefixed, use this when implementing multiplayer for a game
 }
 #macro ConnectionID i32
-#macro EventCallback fn(e: Event, user_data: void*)
+#macro EventCallback fn(e: NetEvent, user_data: void*)
 
 struct Connection {
     receiver_thread: Thread;
@@ -124,8 +124,8 @@ struct Server {
             server: Server* = arg
 
             if server.m_event_callback {
-                e: Event
-                e.type = EVENT_START
+                e: NetEvent
+                e.type = EVENT_START_LISTENING
                 e.who = 0
                 // NOTE: If user sets server.m_event_callback to null at a bad timing then we may crash here
                 server.m_event_callback(e, server.m_user_data)
@@ -182,7 +182,7 @@ struct Server {
                     //  client connections and when it does, it iterates through all connections and locks server.mutex, if we try to lock it then we end up in a deadlock
 
                     if server.m_event_callback {
-                        e: Event
+                        e: NetEvent
                         e.type = EVENT_CONNECT
                         e.who = connection.conn_id
                         server.m_event_callback(e, server.m_user_data)
@@ -270,7 +270,7 @@ struct Server {
                         }
 
                         if connection.server.m_event_callback {
-                            e: Event
+                            e: NetEvent
                             e.type = EVENT_RECEIVE
                             e.who = connection.conn_id
                             e.bytes = Slice<char>{connection.message_data,bytes}
@@ -281,7 +281,7 @@ struct Server {
                     }
 
                     if server.m_event_callback {
-                        e: Event
+                        e: NetEvent
                         e.type = EVENT_DISCONNECT
                         e.who = connection.conn_id
                         server.m_event_callback(e, server.m_user_data)
@@ -335,8 +335,8 @@ struct Server {
 
             // Then trigger close event. We don't want the close event to trigger and then have stray disconnect events appear.
             if server.m_event_callback {
-                e: Event
-                e.type = EVENT_CLOSE
+                e: NetEvent
+                e.type = EVENT_STOP_LISTENING
                 server.m_event_callback(e, server.m_user_data)
             }
 
@@ -467,7 +467,7 @@ struct Server {
         m_event_callback = func
         m_user_data = user_data
     }
-	// fn pollEvents(blocking: bool) -> Event[] { }
+	// fn pollEvents(blocking: bool) -> NetEvent[] { }
 	
 	m_port: u32;
     m_protocol: NetProtocol;
@@ -480,7 +480,18 @@ struct Server {
 
     m_event_callback: EventCallback;
     m_user_data: void*;
-
+    
+    fn get_number_connections() -> i32 {
+        mutex.lock()
+        n := 0
+        for m_connections.sliced() {
+            if it.in_use
+                n++
+        }
+        mutex.unlock()
+        return n
+    }
+    
     m_received_bytes: i32;
     m_sent_bytes: i32;
     
@@ -558,8 +569,8 @@ struct Client {
             client: Client* = arg
 
             if client.m_event_callback {
-                e: Event
-                e.type = EVENT_START
+                e: NetEvent
+                e.type = EVENT_CONNECT
                 e.who = 0
                 client.m_event_callback(e, client.m_user_data)
             }
@@ -646,7 +657,7 @@ struct Client {
                 }
 
                 if client.m_event_callback {
-                    e: Event
+                    e: NetEvent
                     e.type = EVENT_RECEIVE
                     e.who = 0
                     e.bytes = Slice<char>{client.m_message_data,read_bytes}
@@ -659,8 +670,8 @@ struct Client {
             client.m_socket.close()
 
             if client.m_event_callback {
-                e: Event
-                e.type = EVENT_CLOSE
+                e: NetEvent
+                e.type = EVENT_DISCONNECT
                 e.who = 0
                 client.m_event_callback(e, client.m_user_data)
             }
@@ -730,7 +741,7 @@ struct Client {
         m_user_data = user_data
     }
 
-    // fn pollEvents(blocking: bool) -> Event[] { }
+    // fn pollEvents(blocking: bool) -> NetEvent[] { }
     
     /*######################
         Members
@@ -804,14 +815,14 @@ fn TestNetEvents() {
     client1.set_callback(c_callback, null)
     client2.set_callback(c_callback, null)
     global mutex: Mutex
-    fn s_callback(e: Event, ud: void*) {
+    fn s_callback(e: NetEvent, ud: void*) {
         mutex.lock()
         log("Server:")
         std_print_any(&e, true) log()
         // log(&e)
         mutex.unlock()
     }
-    fn c_callback(e: Event, ud: void*) {
+    fn c_callback(e: NetEvent, ud: void*) {
         mutex.lock()
         log("Client")
         std_print_any(&e, true) log()

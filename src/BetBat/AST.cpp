@@ -2591,15 +2591,15 @@ std::string AST::nameOfFuncImpl(FuncImpl* impl) {
     }
     return name;
 }
-u32 AST::getTypeSize(TypeId typeId){
+int AST::getTypeSize(TypeId typeId){
     if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
-    if(!typeId.isNormalType()) return 0;
+    if(!typeId.isNormalType()) return -1;
     auto ti = getTypeInfo(typeId);
     if(!ti)
-        return 0;
+        return -1;
     return ti->getSize();
 }
-u32 AST::getTypeAlignedSize(TypeId typeId) {
+int AST::getTypeAlignedSize(TypeId typeId) {
     if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
     if(!typeId.isNormalType()) return 0;
     auto ti = getTypeInfo(typeId);

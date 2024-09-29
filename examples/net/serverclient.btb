@@ -30,7 +30,7 @@ fn TestClient(user: char*) {
         ProcessSleep(1.0)
     }
     
-    fn handle_event(e: Event, ud: void*) {
+    fn handle_event(e: NetEvent, ud: void*) {
         // log_mutex.lock()
         log("#CLIENT#")
         // std_print_any(&e) log()
@@ -45,7 +45,7 @@ fn TestServer() {
     server.set_callback(handle_event, null)
     err := server.start(DEFAULT_PORT)
 
-    fn handle_event(e: Event, ud: void*) {
+    fn handle_event(e: NetEvent, ud: void*) {
         log_mutex.lock()
         // sem.wait()
         log("#SERVER#")
@@ -83,7 +83,7 @@ fn TestHTTPRequest() {
     msg.append("Connection: close\r\n\r\n")
     client.send(msg.sliced())
     
-    fn handle_event(e: Event, ud: void*) {
+    fn handle_event(e: NetEvent, ud: void*) {
         std_print_any(&e)
         log()
         std_print(e.bytes)

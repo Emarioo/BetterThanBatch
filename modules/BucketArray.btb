@@ -345,6 +345,9 @@ struct BucketArray<T> {
 		if iterator.index == -1 && iterator.started_at_index != -1 {
 			iterator.index = iterator.started_at_index - 1
 		}
+        if m_valuesPerBucket == 0 {
+            return false
+        }
 		while  {
             iterator.index++;
 			bucketIndex: i32 = iterator.index / m_valuesPerBucket;

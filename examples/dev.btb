@@ -1,7 +1,10 @@
 // #import "examples/crawler/main" // With hotreloading
 // #import "examples/crawler/GameCore" // Without hotreloading
 
+#import "Logger"
 
+v: void*
+log(sizeof (*v))
 
 
 // #import "File"

@@ -2547,7 +2547,16 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
             // Assert(typeId.isValid()); // Did type checker fix this? Maybe not on errors?
 
             TypeId typeId = expression->versions_outTypeSizeof[info.currentPolyVersion];
-            u32 size = info.ast->getTypeSize(typeId);
+            int size = info.ast->getTypeSize(typeId);
+            if (typeId == AST_VOID)
+                size = -1;
+            if (size < 0) {
+                ERR_SECTION(
+                    ERR_HEAD2(expression->location)
+                    ERR_MSG_COLORED("Type '"<<log::LIME<<ast->typeToString(typeId)<<log::NO_COLOR<<"' is not valid.")
+                    ERR_LINE2(expression->location, "here")
+                )   
+            }
 
             builder.emit_li32(BC_REG_A, size);
             builder.emit_push(BC_REG_A);
@@ -5439,8 +5448,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // TODO: Allow Slice<char> at some point
                 ERR_SECTION(
                     ERR_HEAD2(statement->location)
-                    ERR_MSG("You can only do switch on integers and enums. Strings are on the TODO list.")
-                    ERR_LINE2(statement->location, "bad")
+                    ERR_MSG_COLORED("You can only switch on integers and enums. Not '"<<log::LIME << ast->typeToString(dtype)<<log::NO_COLOR<<"'.")
+                    ERR_LINE2(statement->location, "invalid switch type")
                 )
                 continue;
             }

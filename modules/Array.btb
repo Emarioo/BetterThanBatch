@@ -63,12 +63,28 @@ struct Array<T> {
     fn sliced() -> Slice<T> {
         return Slice<T>{ptr, len};
     }
+    // destructs popped item
     fn pop() {
         if len > 0 {
             destruct(&ptr[len-1])
             len--
         }
     }
+    // Does not destroy item, it pops it off.
+    fn pop_item(index: i32) -> T {
+        // Assert(index < len)
+        if index >= len
+            return {}
+        temp := ptr[index]
+        // TODO: Move item directly into return value and implement named return values
+        for index..len-1 {
+            ptr[nr] = ptr[nr+1];
+        }
+        len--
+        return temp
+    }
+    // item will be destructed, do not use get(0) and remove(0) together.
+    // use pop_item(0) instead
     fn remove(index: i32) {
         if index >= len
             return;
@@ -130,7 +146,7 @@ struct Array<T> {
                 }
                 bytes := max * sizeof T
                 Free(cast_unsafe<void*>ptr, bytes);
-                memory_tracker.remove(cast_unsafe<void*>ptr, bytes, typeid T)
+                // memory_tracker.remove(cast_unsafe<void*>ptr, bytes, typeid T)
                 // log("nah")
             }
             ptr = null;
@@ -144,7 +160,7 @@ struct Array<T> {
             // log("Try reserve, sizeof T =",sizeof T)
             bytes := newMax * sizeof T
             ptr = cast_unsafe<T*>Allocate(bytes);
-            memory_tracker.add(cast_unsafe<void*>ptr, bytes, typeid T)
+            // memory_tracker.add(cast_unsafe<void*>ptr, bytes, typeid T)
             memzero(cast_unsafe<void*>ptr, bytes)
             // log("allocSize",newMax * sizeof T)
             // log("ptr",ptr)
@@ -165,8 +181,8 @@ struct Array<T> {
             new_size := newMax * sizeof T;
             old_size := max * sizeof T;
             newPtr: T* = cast_unsafe<T*>Reallocate(new_size, cast_unsafe<void*>ptr, old_size);
-            memory_tracker.remove(cast_unsafe<void*>ptr, old_size, typeid T)
-            memory_tracker.add(cast_unsafe<void*>newPtr, new_size, typeid T)
+            // memory_tracker.remove(cast_unsafe<void*>ptr, old_size, typeid T)
+            // memory_tracker.add(cast_unsafe<void*>newPtr, new_size, typeid T)
             // Assert(newPtr);
             if !newPtr
                 return false;

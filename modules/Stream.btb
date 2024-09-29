@@ -170,7 +170,6 @@ struct ByteStream {
             // Assert(cast<u64>dst >= cast<u64>ptr && cast<u64>dst < cast<u64>ptr + size);
             // Assert(rel_off < all.written_bytes);
             memcpy(dst, all.ptr + rel_off, real_size);
-            *offset += real_size;
             size_left -= real_size;
             
             head += all.written_bytes;
@@ -197,15 +196,13 @@ struct ByteStream {
     fn read_string8(offset: i32*, str: StringBuilder*) -> bool {
         l: u8
         read<u8>(offset, &l)
-        str.reserve(l)
-        str.len = l
+        str.resize(l)
         return read(offset, str.ptr, str.len)
     }
     fn read_string16(offset: i32*, str: StringBuilder*) -> bool {
         l: u16
         read<u16>(offset, &l)
-        str.reserve(l)
-        str.len = l
+        str.resize(l)
         return read(offset, str.ptr, str.len)
     }
 
@@ -238,9 +235,17 @@ struct ByteStream {
         }
         return true;
     }
+    fn finalize(out_slice: u8[]*) -> bool {
+        out: u8[]
+        len: i32
+        yes := finalize(cast<void**>&out.ptr, &len);
+        out.len = len;
+        *out_slice = out
+        return yes
+    }
     // combines all allocations into one
     // All previous pointers from write_late are invalidated.
-    fn finalize(out_ptr: void**, out_size: i32*) -> bool{
+    fn finalize(out_ptr: void**, out_size: i32*) -> bool {
         // Assert(out_ptr && out_size != 0);
         if(out_ptr) {
             *out_ptr = null;

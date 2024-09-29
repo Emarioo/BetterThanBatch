@@ -31,6 +31,7 @@ struct Thread {
     fn valid() -> bool {
         return id != 0
     }
+    // thread is considered joinable if active and current thread is different from this thread
     fn joinable() -> bool {
         return id != 0 && ThreadSelfId() != id
     }

@@ -629,7 +629,8 @@ struct StringBuilder {
                 return false;
         }
         len = newLen;
-        ptr[len] = '\0';
+        if len > 0
+            ptr[len] = '\0';
         return true;
     }
     fn reserve(newMax: i32) -> bool {

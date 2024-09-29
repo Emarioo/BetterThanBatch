@@ -84,11 +84,11 @@ _test 9; b
 struct HTTPRequest {
     x: i32
 }
-struct Event {
+struct NetEvent {
     x: i32   
 }
 struct Box {
-    call: fn(HTTPRequest*, Event, void*);
+    call: fn(HTTPRequest*, NetEvent, void*);
 }
 req: HTTPRequest
 

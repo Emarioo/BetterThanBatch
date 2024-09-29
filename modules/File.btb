@@ -439,14 +439,16 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
             }
         }
         index = nr
-        iter = AllocateHeap(sizeof DirIterator_impl)
-        memzero(iter, sizeof (*iter))
+        iter = Allocate(sizeof DirIterator_impl)
+        construct(iter)
         _directory_iterators.ptr[index] = iter
         break
     }
     if index == -1 {
-        it := AllocateHeap(sizeof DirIterator_impl)
-        memzero(it, sizeof (*it))
+        // global _tmp: DirIterator_impl
+        // it := &_tmp
+        it := cast<DirIterator_impl*>Allocate(sizeof DirIterator_impl)
+        construct(it)
         _directory_iterators.add(it)
         index = _directory_iterators.size()-1
     }
@@ -456,7 +458,7 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     iter.root.append(root_path)
     iter.remaining_directories.add(iter.root.copy())
     #if OS_WINDOWS
-    iter.handle = null
+    iter.handle = INVALID_HANDLE_VALUE
     #elif OS_LINUX
     iter.fd_current_dir = -1
     iter.head = 0
@@ -495,7 +497,7 @@ fn DirectoryIteratorDestroy(iterator: DirIterator) {
     AllocateHeap(0, iter)
     _directory_iterators.ptr[index] = null
 }
-fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> bool {
+fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**, relative_path: bool = false) -> bool {
     if iterator == DirIterator.INVALID
         return false
     index := IteratorToInternal(iterator)
@@ -511,8 +513,7 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
             }
             iter.current_dir.clear();
             
-            dir := iter.remaining_directories.get(0);
-            iter.remaining_directories.remove(0);
+            dir := iter.remaining_directories.pop_item(0); defer dir.cleanup()
             
             if(dir.size()!=0){
                 iter.current_dir.append(dir.sliced());
@@ -567,8 +568,13 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
     iter.item.name.clear()
     
     if iter.current_dir.size() {
-        iter.item.name.append(iter.current_dir.sliced())
-        iter.item.name.append("/")
+        if relative_path {
+            iter.item.name.append(substring(iter.current_dir.sliced(), iter.root.size()+ 1)) // +1 to skip slash
+        } else {
+            iter.item.name.append(iter.current_dir.sliced())
+        }
+        if iter.item.name.size() > 0
+            iter.item.name.append("/")
         iter.item.name.append(data.cFileName.ptr, cFileNameLen)
     } else {
         iter.item.name.append(data.cFileName.ptr, cFileNameLen)
@@ -578,9 +584,6 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
     iter.item.last_write_time = cast<u64>data.ftLastWriteTime.dwLowDateTime+cast<u64>data.ftLastWriteTime.dwHighDateTime*(MAXDWORD+1u);
     
     iter.item.is_directory = data.dwFileAttributes&cast<i32>FILE_ATTRIBUTE_DIRECTORY;
-    if(iter.item.is_directory){
-        iter.remaining_directories.add(iter.item.name.copy());
-    }
 
     for 0..iter.item.name.size() {
         if iter.item.name[nr] == '\\'
@@ -658,8 +661,13 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
     iter.item.name.clear()
     
     if iter.current_dir.size() {
-        iter.item.name.append(iter.current_dir.sliced())
-        iter.item.name.append("/")
+        if relative_path {
+            iter.item.name.append(substring(iter.current_dir.sliced(), iter.root.size() + 1)) // +1 to skip slash
+        } else {
+            iter.item.name.append(iter.current_dir.sliced())
+        }
+        if iter.item.name.size() > 0
+            iter.item.name.append("/")
         iter.item.name.append(file_name, file_name_len)
     } else {
         iter.item.name.append(file_name, file_name_len)
@@ -684,13 +692,20 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**) -> 
     }
     
     iter.item.is_directory = (entry.d_type & cast<u8>DT_DIR) != 0
-    if(iter.item.is_directory){
-        iter.remaining_directories.add(iter.item.name.copy());
-    }
 
     #else
     incomplete
     #endif
+    
+    if(iter.item.is_directory){
+        next_dir: StringBuilder
+        if iter.root.size() != 0 && relative_path {
+            next_dir.append(iter.root)
+            next_dir.append("/")
+        }
+        next_dir.append(iter.item.name)
+        iter.remaining_directories.add(next_dir);
+    }
 
     if out_item ;
         *out_item = &iter.item
@@ -940,7 +955,7 @@ fn FindFile(path: char[], search_env_path: bool = false, recursive: bool = false
 }
 
 enum FileMonitorFlags {
-    
+    MONITOR_DEFAULT,
 }
 enum FileMonitorChangeType {
     CHANGE_MODIFIED,
@@ -959,9 +974,9 @@ struct FileMonitor {
     fn cleanup() {
         // Assert(m_thread.joinable())
         #if OS_WINDOWS
-            if !m_thread.joinable() {
+            if ThreadSelfId() == m_thread.id {
                 log("WARNING FILE MONITOR, A monitor thread cannot clean up it's own monitor.")
-                return // can't clean up own thread
+                return; // can't clean up own thread
             }
             m_running = false
             

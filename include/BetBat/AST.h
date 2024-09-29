@@ -1074,8 +1074,8 @@ struct AST {
     ScopeIterator createScopeIterator(ScopeId scopeId, ContentOrder order);
     ScopeInfo* iterate(ScopeIterator& iterator, bool searchSharedScopes = true);
         
-    u32 getTypeSize(TypeId typeId);
-    u32 getTypeAlignedSize(TypeId typeId);
+    int getTypeSize(TypeId typeId);
+    int getTypeAlignedSize(TypeId typeId);
 
     // less_strict will allow u64 -> i32* conversions, integer to pointer is otherwise only allowed with void pointers.
     bool castable(TypeId from, TypeId to, bool less_strict = false);
@@ -1084,13 +1084,13 @@ struct AST {
 
     void declareUsageOfOverload(OverloadGroup::Overload* overload);
 
-    u32 aquireGlobalSpace(int size) {
-        u32 offset = globalDataOffset;
+    int aquireGlobalSpace(int size) {
+        int offset = globalDataOffset;
         globalDataOffset += size;
         return offset;
     }
     // from type checker
-    u32 preallocatedGlobalSpace() {
+    int preallocatedGlobalSpace() {
         return globalDataOffset;
     }
     
@@ -1234,7 +1234,7 @@ private:
 
     MUTEX(lock_astnodes);
 
-    u32 globalDataOffset = 0;
+    int globalDataOffset = 0;
 
     MUTEX(lock_variables);
 
