@@ -3137,7 +3137,7 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
             if(token->type == lexer::TOKEN_IDENTIFIER && tok1.type == ':'){
                 info.advance(2);
                 statement->varnames[0].name = view;
-            } else if(token->type == lexer::TOKEN_IDENTIFIER && tok1.type == ',' && tok1.type == lexer::TOKEN_IDENTIFIER && tok3.type == ':'){
+            } else if(token->type == lexer::TOKEN_IDENTIFIER && tok1.type == ',' && tok2.type == lexer::TOKEN_IDENTIFIER && tok3.type == ':'){
                 info.advance(4);
                 statement->varnames[0].name = view;
                 statement->varnames[1].name = view_nr;

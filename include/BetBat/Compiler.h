@@ -368,3 +368,10 @@ private:
     volatile int next_thread_id = 0;
     
 };
+
+// In custom iterator in for loops, this is the name of the field in the iterator
+// that it/nr variables in for loop will refer to.
+const char* const NAME_OF_CUSTOM_IT = "value";
+const char* const NAME_OF_CUSTOM_NR = "index";
+const char* const NAME_OF_CREATE_ITER = "create_iterator";
+const char* const NAME_OF_ITERATE = "iterate";

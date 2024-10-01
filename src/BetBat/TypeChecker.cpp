@@ -22,6 +22,8 @@
 // #define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
 #define _TCLOG_ENTER(X)
 
+#define BOLD(X) log::LIME << X << log::NO_COLOR
+
 SignalIO TyperContext::checkEnums(ASTScope* scope){
     using namespace engone;
     Assert(scope);
@@ -1541,7 +1543,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         bool implicitPoly = (fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0));
         // TODO: Optimize by checking what in the overloads didn't match. If all parent structs are a bad match then
         //  we don't have we don't need to getOverload the second time with canCast=true
-        OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, &inferred_args);
+        OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
@@ -1553,7 +1555,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             return SIGNAL_SUCCESS;
         }
         // bool useCanCast = false;
-        overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true, &inferred_args);
+        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
@@ -2106,9 +2108,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         funcImpl->usages++;
 
         // Can overload be null since we generate a new func impl?
-        overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr);
+        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr);
         if(!overload)
-            overload = ast->getOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, false, true);
+            overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, false, true);
         Assert(overload == newOverload);
         if(!overload){
             ERR_SECTION(
@@ -2239,6 +2241,446 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
     FNCALL_FAIL
     return SIGNAL_FAILURE;
+}
+
+OverloadGroup::Overload* TyperContext::computePolymorphicFunction(ASTFunction* polyFunc, StructImpl* parentStructImpl, const BaseArray<TypeId>& fnPolyArgs, OverloadGroup* fnOverloads) {
+    ScopeInfo* funcScope = info.ast->getScope(polyFunc->scopeId);
+    FuncImpl* funcImpl = info.ast->createFuncImpl(polyFunc);
+    funcImpl->structImpl = parentStructImpl;
+    
+    auto parentAstStruct = polyFunc->parentStruct;
+
+    funcImpl->signature.polyArgs.resize(fnPolyArgs.size());
+
+    for(int i=0;i<(int)fnPolyArgs.size();i++){
+        TypeId id = fnPolyArgs[i];
+        funcImpl->signature.polyArgs[i] = id;
+    }
+    
+    // TODO: THIS IS TEMPORARY CODE!
+    WHILE_TRUE_N(1000) {
+        // In processImports we use 'lock_imports' mutex when checking is_being_checked.
+        // This would mean that all threads must use the same mutex 'lock_imports' when checking 'is_being_checked', HOWEVER, we are not in a different phase and no thread will check is_being_checked with a different mutex except for the code right here. SOOO, we can use whichever mutex we'd like.
+        compiler->lock_imports.lock(); // TODO: use a different mutex named more appropriately
+        bool is_being_checked = polyFunc->is_being_checked || (
+            (!currentAstFunc || currentAstFunc->parentStruct != parentAstStruct) &&  // if the function we check with checkFunctionSignature is a method and the parent struct of the method is the same struct as the current parent struct THEN we don't mind that the parent struct is being checked because this thread we are currently doing that.
+            parentAstStruct && parentAstStruct->is_being_checked);
+        if(!is_being_checked) {
+            polyFunc->is_being_checked = true;
+            if(parentAstStruct)
+                parentAstStruct->is_being_checked = true;
+            compiler->lock_imports.unlock();
+            break;
+        }
+        compiler->lock_imports.unlock();
+
+        engone::Sleep(0.001); // TODO: Don't sleep, try generating another function instead. Move responsibility to compiler instead of generator, currently the generator goes through all functions and generates stuff, perhaps the compiler loop should instead. We can add "generate function" tasks.
+    }
+
+    // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
+    SignalIO result = checkFunctionSignature(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
+    // outTypes->used = 0; // FNCALL_SUCCESS will fix the types later, we don't want to add them twice
+
+    compiler->lock_imports.lock();
+    polyFunc->is_being_checked = false;
+    if(parentAstStruct)
+        parentAstStruct->is_being_checked = false;
+    compiler->lock_imports.unlock();
+
+    OverloadGroup::Overload* newOverload = ast->addPolyImplOverload(fnOverloads, polyFunc, funcImpl);
+    
+    info.compiler->addTask_type_body(polyFunc, funcImpl);
+
+    funcImpl->usages++;
+    return newOverload;
+}
+
+ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpression* expr, bool operatorOverloadAttempt) {
+    // log::out << "Poly overloads ("<<ent.iden->name<<"):\n";
+    // ERR_LINE2(expr->location,"here");
+
+    // IMPORTANT: Parent structs may not be handled properly.
+    // Assert(!parentStructImpl);
+
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
+    int lessArguments = 0;
+    if(implicit_this)
+        lessArguments = 1;
+    
+    ASTFunction* polyFunc = nullptr;
+    
+    // What needs to be done compared to other code paths is that fnPolyArgs is empty and needs to be decided.
+    // This can get complicated fn size<T>(a: Slice<T*>)
+    DynamicArray<TypeId> choosenTypes{};
+    DynamicArray<TypeId> realChoosenTypes{};
+    OverloadGroup::PolyOverload* polyOverload = nullptr;
+    for(int i=0;i<(int)fnOverloads->polyOverloads.size();i++){
+        OverloadGroup::PolyOverload& overload = fnOverloads->polyOverloads[i];
+
+        // continue if more args than possible
+        // continue if less args than minimally required
+        if(nonNamedArgs > overload.astFunc->arguments.size() - lessArguments || 
+            nonNamedArgs < overload.astFunc->nonDefaults - lessArguments ||
+            argTypes.size() > overload.astFunc->arguments.size() - lessArguments
+            )
+            continue;
+        
+        // What is the purpose of voiding virtual types?
+        // The loop of nonNamedArgs doesn't transform virtuals.
+        // If the type is a virtual then it handles it differently so
+        // in theory we won't ever access the value virtualType->id (just virtualType->originalId)
+        // It might do something important though.
+        // - Emarioo, 2024-01-03
+        // for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
+        //     overload.astFunc->polyArgs[j].virtualType->id = {};
+        // }
+        // if(parentAstStruct){
+        //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+        //         parentAstStruct->polyArgs[j].virtualType->id = {};
+        //     }
+        // }
+
+        choosenTypes.resize(0); // clear types from previous check that didn't work out
+
+        // IMPORTANT TODO: NAMESPACES ARE IGNORED AT THE MOMENT. HANDLE THEM!
+        // TODO: Fix this code it does not work properly. Some behaviour is missing.
+        bool found = true;
+        for (int j=0;j<nonNamedArgs;j++){
+            if(inferred_args && inferred_args->get(j)) {
+                ERR_SECTION(
+                    ERR_HEAD2(expr->args[i]->location)
+                    ERR_MSG("Inferred initializers are not allowed with polymorphic functions.")
+                    ERR_LINE2(expr->args[i]->location, "here")
+                )
+                continue;
+            }
+            TypeId typeToMatch = argTypes[j];
+            // Assert(typeToMatch.isValid());
+            // We begin by matching the first argument.
+            // We can't use CheckType because it will create types and we need some more fine tuned checking.
+            // We begin checking the base type (we ignore polymoprhism and pointer level)
+            // If the arguments match then we have a primitive type. We don't need to decide poly arguments here and everything is fine.
+            // If it didn't match then we check if the type is polymorphic. If so then we must decide now.
+
+            ScopeId argScope = overload.astFunc->scopeId;
+
+            TypeId stringType = overload.astFunc->arguments[j + lessArguments].stringType;
+            auto param_typeString = info.ast->getStringFromTypeString(stringType);
+
+            u32 plevel=0;
+            TEMP_ARRAY(StringView, param_polyTypes);
+            
+            StringView param_typeString_no_pointer;
+            StringView param_typeString_base;
+            // TODO: We need to decompose function pointers too.
+            AST::DecomposePointer(param_typeString, &param_typeString_no_pointer, &plevel);
+            AST::DecomposePolyTypes(param_typeString_no_pointer, &param_typeString_base, &param_polyTypes);
+            // namespace?
+
+            TypeInfo* param_baseTypeInfo = info.ast->convertToTypeInfo(param_typeString_base, argScope, false);
+            TypeId param_baseType = param_baseTypeInfo->id;
+            // TypeInfo* typeInfo = info.ast->getTypeInfo(baseType);
+            // if(typeInfo->id != baseType) {
+            bool is_base_virtual = false;
+            bool is_poly_virtual = false;
+            for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
+                if(overload.astFunc->polyArgs[k].virtualType->originalId == param_baseTypeInfo->originalId) {
+                    is_base_virtual = true;
+                    break;
+                }
+                for (int pi=0;pi<param_polyTypes.size();pi++) {
+                    auto ptype = param_polyTypes[pi];
+                    
+                    // WARNING, we assume no pointer
+                    TypeInfo* typeInfo = info.ast->convertToTypeInfo(ptype, argScope, false);
+                    // TypeId baseType = typeInfo->id;
+
+                    if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
+                        is_poly_virtual = true;
+                        break;
+                    }
+                }
+            }
+            // TODO: This code only matches certain types. Complicated ones like T<K,T<K,V>> is not handled (T<K,V> is handled though)
+
+            if(!is_base_virtual && !is_poly_virtual) {
+                // no virtual/polymorphic type
+                TypeId real_type = info.ast->convertToTypeId(param_typeString, scopeId, true);
+                // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
+                //   Perhaps we should cast when some types are polmorphic too?
+                if(ast->castable(typeToMatch, real_type)){
+                    continue;
+                }
+                found = false;
+                break;
+            } else if (is_base_virtual && param_polyTypes.size() == 0) {
+                // Basic type matching with T, not anything complicated like T<K,V>
+
+                int typeIndex = -1;
+                // get base of typetomatch
+                for(int k=0;k<choosenTypes.size();k++){
+                    // NOTE: The choosen poly type must match in full.
+                    if(choosenTypes[k].baseType() == typeToMatch.baseType() &&
+                        choosenTypes[k].getPointerLevel() + plevel == typeToMatch.getPointerLevel()
+                    ) {
+                        typeIndex = k;
+                        break;
+                    }
+                }
+                if(typeIndex !=-1){
+                    // one of the choosen types fulfill the type to match
+                    // no need to do anything
+                    continue;
+                } else {
+                    if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
+                        // no types remaining
+                        found = false;
+                        break;
+                    }
+                    TypeId newChoosen = typeToMatch;
+                    if(typeToMatch.getPointerLevel() < plevel) {
+                        found = false;
+                        break;
+                    }
+                    newChoosen.setPointerLevel(typeToMatch.getPointerLevel() - plevel);
+                    choosenTypes.add(newChoosen);
+
+                    // size<T,K>(T* <K>*)
+                    // size(u32**)
+                }
+            } else {
+                // Assert(is_base_virtual && is_poly_virtual);
+                // log::out << "Check "<<expr->name<< "\n";
+                // log::out << " match " << ast->typeToString(typeToMatch)<<"\n";
+                // log::out << " arg " << typeName<<"\n";
+
+                // Matching polymorphic parameter and argument is a little complex.
+                // A paramater may be of type T<K,V> while argument is Map<String,i32>
+                // The polymorphic argument T,K,V should then be matched with Map, String and i32
+
+                // We need to match it with the argument type of the caller
+                // first we check if base type matches (T)
+                // Then the individual ones
+
+                // NOTE: I am fairly certain there are bugs here and scenarios that aren't handled.
+
+                TypeInfo* typeToMatch_typeInfo = info.ast->getTypeInfo(typeToMatch.baseType());
+                if(!typeToMatch_typeInfo->astStruct) {
+                    found = false;
+                    break;
+                }
+                TypeId typeToMatch_baseType = typeToMatch_typeInfo->astStruct->base_typeId;
+
+                if(is_base_virtual) {
+                    // polymorphic type! we must decide!
+                    // check if type exists in choosen types
+                    // if so then reuse, if not then use up a time
+                    int typeIndex = -1;
+                    // get base of typetomatch
+                    for(int k=0;k<choosenTypes.size();k++){
+                        // NOTE: The choosen poly type must match in full.
+                        if(choosenTypes[k].baseType() == typeToMatch_baseType &&
+                            choosenTypes[k].getPointerLevel() + plevel == typeToMatch.getPointerLevel()
+                        ) {
+                            typeIndex = k;
+                            break;
+                        }
+                    }
+                    if(typeIndex !=-1){
+                        // one of the choosen types fulfill the type to match
+                        // no need to do anything
+                        continue;
+                    } else {
+                        if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
+                            // no types remaining
+                            found = false;
+                            break;
+                        }
+                        if(typeToMatch.getPointerLevel() < plevel) {
+                            found = false;
+                            break;
+                        }
+                        TypeId newChoosen = typeToMatch_baseType;
+                        newChoosen.setPointerLevel(typeToMatch.getPointerLevel() - plevel);
+                        choosenTypes.add(newChoosen);
+
+                        // size<T,K>(T* <K>*)
+                        // size(u32**)
+                    }
+                } else {
+                    TypeId real_type = info.ast->convertToTypeId(param_typeString_base, scopeId, true);
+                    
+                    if(real_type != typeToMatch_baseType || plevel != typeToMatch.getPointerLevel()){
+                        found = false;
+                        break;
+                    }
+                }
+
+                if(is_poly_virtual){
+                    // This code should allow implicit calculation of incomplete polymorphic types.
+                    // This sould be allowed: fn add<T>(a: T<i32>).
+                    // But it's not so we get this: fn add<T>(a: T), no polymorphic types
+                    // Also this: fn add<T>(a: Array<T>).
+                    // Also this: fn add<T>(a: T<T>).
+
+                    if(!typeToMatch_typeInfo->structImpl || typeToMatch_typeInfo->structImpl->polyArgs.size() != param_polyTypes.size()) {
+                        found = false;
+                        break;
+                    }
+
+                    for(int pti = 0; pti < param_polyTypes.size(); pti++){
+                        auto param_poly_typeName = param_polyTypes[pti];
+                        TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, false);
+                        TypeInfo* typeInfo = info.ast->getTypeInfo(param_arg_type.baseType());
+
+                        auto typeToMatch_polyarg = typeToMatch_typeInfo->structImpl->polyArgs[pti];
+
+                        bool is_poly = false;
+                        for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
+                            if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
+                                is_poly = true;
+                                break;
+                            }
+                        }
+                        if (!is_poly) {
+                            if (param_arg_type != typeToMatch_polyarg) {
+                                found = false;
+                                break;
+                            }
+                            continue; // type match, check next poly argument
+                        }
+
+                        int typeIndex = -1;
+                        for(int k=0;k<choosenTypes.size();k++){
+                            // NOTE: The choosen poly type must match in full.
+                            if(choosenTypes[k].baseType() == typeToMatch_polyarg.baseType() &&
+                                choosenTypes[k].getPointerLevel() == typeToMatch_polyarg.getPointerLevel()
+                            ) {
+                                typeIndex = k;
+                                break;
+                            }
+                        }
+                        if(typeIndex !=-1){
+                            // one of the choosen types fulfill the type to match
+                            // no need to do anything
+                            continue;
+                        } else {
+                            if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
+                                // no types remaining
+                                found = false;
+                                break;
+                            }
+                            TypeId newChoosen = typeToMatch_polyarg;
+                            if(typeToMatch_polyarg.getPointerLevel() < param_arg_type.getPointerLevel()) {
+                            // if(polyarg.getPointerLevel() > plevel) {
+                                found = false;
+                                break;
+                            }
+                            newChoosen.setPointerLevel(typeToMatch_polyarg.getPointerLevel() - param_arg_type.getPointerLevel());
+                            // newChoosen.setPointerLevel(plevel - polyarg.getPointerLevel());
+                            choosenTypes.add(newChoosen);
+                        }
+                    }
+                } else {
+                    for(int pti = 0; pti < param_polyTypes.size(); pti++){
+                        auto typeName = param_polyTypes[pti];
+                        TypeId arg_type = info.ast->convertToTypeId(typeName, argScope, false);
+                        TypeInfo* typeInfo = info.ast->getTypeInfo(arg_type.baseType());
+
+                        auto polyarg = typeToMatch_typeInfo->structImpl->polyArgs[pti];
+
+                        if(arg_type == polyarg)
+                            continue;
+                        
+                        found = false;
+                        break;
+                    }
+                }
+            }
+        }
+        // Now we have gone through all arguments, found indicates whether all types matched
+        // and whether we are good.
+        if(found){
+            // NOTE: You can break here because there should only be one matching overload.
+            // But we keep going in case we find more matches which would indicate
+            // a bug in the compiler. An optimised build would not do this.
+            if(polyFunc) {
+                // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+                Assert(("More than one match!",false));
+                // return outFunc;
+                break;
+            }
+            polyFunc = overload.astFunc;
+            polyOverload = &overload;
+            realChoosenTypes.steal_from(choosenTypes);
+            //break;
+        }
+    }
+    if(polyFunc) {
+        // We found a function
+        out_polyArgs.resize(polyFunc->polyArgs.size());
+        for(int i = 0; i < polyFunc->polyArgs.size();i++) {
+            if(i < realChoosenTypes.size()) {
+                out_polyArgs[i] = realChoosenTypes[i];
+            } else {
+                out_polyArgs[i] = AST_VOID;
+            }
+        }
+        //-- Double check so that the types we choose actually works.
+        // Just in case the code for implicit types has bugs.
+        
+        polyOverload->astFunc->pushPolyState(&out_polyArgs, parentStructImpl);
+        defer {
+            polyOverload->astFunc->popPolyState();
+        };
+        bool found = true;
+        int extra = implicit_this ? 1 : 0;
+        for (u32 j=0; j < nonNamedArgs;j++){
+            // IMPORTANT: We also run CheckType in case types needs to be created.
+            // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
+            TypeId argType = checkType(polyOverload->astFunc->scopeId,polyOverload->astFunc->arguments[j + extra].stringType,
+                polyOverload->astFunc->arguments[j + extra].location,nullptr);
+            // TypeId argType = checkType(scope->scopeId,overload.astFunc->arguments[j].stringType,
+            // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
+            if(!ast->castable(argTypes[j], argType)){
+            // if(argType != argTypes[j]){
+                found = false;
+                break;
+            }
+        }
+        if(found) {
+           return polyFunc; 
+        } else {
+            if (expr) {
+                if (operatorOverloadAttempt) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("COMPILER BUG, when matching operator overloads. Polymorphic overload was generated which didn't match the actual arguments. It's also possible that we shouldn't have generated one to begin with.")
+                        if (expr->left && argTypes.size() > 0) {
+                            ERR_LINE2(expr->left->location, ast->typeToString(argTypes[0]))
+                        }
+                        if (expr->right && argTypes.size() > 1) {
+                            ERR_LINE2(expr->right->location,ast->typeToString(argTypes[1]))
+                        }
+                    )
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("COMPILER BUG, when matching function overloads. The matching generated a polymorphic overload that was meant to match the arguments but which doesn't.")
+                        
+                        for (int i=0;i<argTypes.size();i++) {
+                            if (expr->args.size() > i) {
+                                ERR_LINE2(expr->args[i]->location, ast->typeToString(argTypes[i]))
+                            }
+                        }
+                    )
+                }
+                Assert(found); // If function we thought would match doesn't then the code is incorrect.
+            }
+        }
+    }
+    return nullptr;
 }
 SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length){
     using namespace engone;
@@ -4114,7 +4556,12 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                 for(int j=0;j<now->arrayValues.size();j++){
                     ASTExpression* value = now->arrayValues[j];
                     tempTypes.resize(0);
+                    
+                    auto prev = inferred_type;
+                    inferred_type = elementType;
                     SignalIO result = checkExpression(scope->scopeId, value, &tempTypes, false);
+                    inferred_type = prev;
+                    
                     if(result != SIGNAL_SUCCESS){
                         // continue;
                         return SIGNAL_FAILURE;
@@ -4320,6 +4767,8 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
 
             if(iterinfo&&iterinfo->astStruct){
                 if(iterinfo->astStruct->name == "Slice"){
+                    now->forLoopType = SLICED_FOR_LOOP;
+                    
                     if(now->varnames[0].name.size() == 0)
                         now->varnames[0].name = "it";
                     if(now->varnames[1].name.size() == 0)
@@ -4352,9 +4801,12 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     }
                     varinfo_item->versions_typeId.set(currentPolyVersion, vartype);
 
+
                     SignalIO result = checkRest(now->firstBody);
                     continue;
                 } else if(iterinfo->astStruct->name == "Range") {
+                    now->forLoopType = RANGED_FOR_LOOP;
+                    
                     if(now->varnames[0].name.size() == 0)
                         now->varnames[0].name = "nr";
                     auto& varnameNr = now->varnames[0];
@@ -4374,7 +4826,6 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                             )
                         }
                         TypeId inttype = mem0.typeId;
-                        now->rangedForLoop = true;
                         varnameNr.versions_assignType.set(currentPolyVersion, inttype);
                         varinfo_index->versions_typeId.set(currentPolyVersion, inttype);
 
@@ -4382,14 +4833,296 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                         continue;
                     }
                 }
+                else {
+                    now->forLoopType = CUSTOM_FOR_LOOP;
+                    auto create_overloads = iterinfo->astStruct->getMethod(NAME_OF_CREATE_ITER);
+                    auto iterate_overloads = iterinfo->astStruct->getMethod(NAME_OF_ITERATE);
+                    
+                    if (!create_overloads) {
+                        std::string strtype = info.ast->typeToString(iterinfo->id);
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG("The expression in for loop must be a Slice, Range, or struct with the methods '"<<NAME_OF_CREATE_ITER<<"' and '"<<NAME_OF_ITERATE<<"'. '"<<strtype<<"' does not have '"<<NAME_OF_CREATE_ITER<<"'.")
+                            ERR_LINE2(now->firstExpression->location, "type is '" << strtype << "'")
+                        )
+                        continue;
+                    }
+                    if (!iterate_overloads) {
+                        std::string strtype = info.ast->typeToString(iterinfo->id);
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG("The expression in for loop must be a Slice, Range, or struct with the methods '"<<NAME_OF_CREATE_ITER<<"' and '"<<NAME_OF_ITERATE<<"'. '"<<strtype<<"' does not have '"<<NAME_OF_ITERATE<<"'.")
+                            ERR_LINE2(now->firstExpression->location, "type is '"<<strtype << "'")
+                        )
+                        continue;
+                        // TODO: If on of the functions exist then print a message that says "HEY, you have iterate but you don't have create_iterator. To iterate you need both!"
+                        goto method_fail;
+                    }
+                    
+                    if(now->isReverse()) {
+                        // TODO: If reverse is used then 'iterate_reverse' method should be used instead.
+                        //   Or maybe the iterate function should take a boolean 'reverse' as an extra argument. Maybe an optional argument?
+                        ERR_SECTION(
+                            ERR_HEAD2(now->location)
+                            ERR_MSG("Reverse is not supported on user-defined iterators.")
+                            ERR_LINE2(now->location, "here")
+                        )
+                        continue;
+                    }
+                    if(now->isPointer()) {
+                        ERR_SECTION(
+                            ERR_HEAD2(now->location)
+                            ERR_MSG("@pointer annotation is not supported on user-defined iterators. The element in the iterator struct should already be a pointer but you can use which ever type you want.")
+                            ERR_LINE2(now->location, "here")
+                        )
+                        continue;
+                    }
+                    
+                    if(now->varnames[0].name.size() == 0)
+                        now->varnames[0].name = "it";
+                    if(now->varnames[1].name.size() == 0)
+                        now->varnames[1].name = "nr";
+                    auto& varnameIt = now->varnames[0];
+                    auto& varnameNr = now->varnames[1];
+    
+                    auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameIt.name, CONTENT_ORDER_ZERO, &reused_item);
+                    varnameIt.identifier = varinfo_item;
+                    
+                    bad_var(varinfo_item, varnameIt.name);
+                    
+                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameNr.name, CONTENT_ORDER_ZERO, &reused_index);
+                    varnameNr.identifier = varinfo_index;
+            
+                    bad_var(varinfo_index, varnameNr.name);
+                    
+                    QuickArray<TypeId> empty_args{};
+                    
+                    QuickArray<TypeId> create_arguments{};
+                    OverloadGroup::Overload* create_overload = ast->getOverload(create_overloads, scope->scopeId, create_arguments, true, nullptr);
+                    if (!create_overload)
+                        create_overload = ast->getPolyOverload(create_overloads, create_arguments, empty_args, iterinfo->structImpl, true, nullptr);
+                    
+                    // ast->getOverload(
+                    
+                    if (!create_overload) {
+                        
+                        // nocheckin, Calculate from existing polymorphic functions? is that what the getOverload above does? If so do we need to getOverload of non-polymorphic? Is that what we're missing.
+                        
+                        QuickArray<TypeId> calculated_poly_args{};
+                        ASTFunction* astFunc = findPolymorphicFunction(create_overloads, 0, create_arguments, true, scope->scopeId, iterinfo->structImpl, calculated_poly_args, nullptr, nullptr, false);
+                        if(astFunc) {
+                            create_overload = computePolymorphicFunction(astFunc, iterinfo->structImpl, calculated_poly_args, create_overloads);
+                        }
+                    }
+                    if(!create_overload) {
+                        // TODO: Say why the method didn't match.
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG_LOG("Struct to iterate through does not have a method '"<<NAME_OF_CREATE_ITER<<"' with a correct signature. These are the methods of '"<<ast->typeToString(iterinfo->id)<<"': ")
+                            for(auto& overload : create_overloads->overloads) {
+                                log::out << "(";
+                                for(int j=0;j<overload.funcImpl->signature.argumentTypes.size();j++){
+                                    auto& argType = overload.funcImpl->signature.argumentTypes[j];
+                                    if(j!=0)
+                                        log::out << ", ";
+                                    log::out << log::LIME << ast->typeToString(argType.typeId) << log::NO_COLOR;
+                                }
+                                log::out << ")->";
+                                if(overload.funcImpl->signature.returnTypes.size() == 0) {
+                                    log::out << "void";
+                                }else {
+                                    for(int j=0;j<overload.funcImpl->signature.returnTypes.size();j++){
+                                        auto& argType = overload.funcImpl->signature.returnTypes[j];
+                                        if(j!=0)
+                                            log::out << ", ";
+                                        log::out << log::LIME << ast->typeToString(argType.typeId) << log::NO_COLOR;
+                                    }
+                                }
+                                log::out << ", ";
+                            }
+                            for(auto& overload : create_overloads->polyOverloads) {
+                                log::out << "(";
+                                for(int j=0;j<overload.astFunc->arguments.size();j++){
+                                    auto& argType = overload.astFunc->arguments[j];
+                                    if(j!=0)
+                                        log::out << ", ";
+                                    log::out << log::LIME << argType.stringType << log::NO_COLOR;
+                                }
+                                log::out << ")->";
+                                if(overload.astFunc->returnValues.size() == 0) {
+                                    log::out << "void";
+                                } else {
+                                    for(int j=0;j<overload.astFunc->returnValues.size();j++){
+                                        auto& argType = overload.astFunc->returnValues[j];
+                                        if(j!=0)
+                                            log::out << ", ";
+                                        log::out << log::LIME << argType.stringType << log::NO_COLOR;
+                                    }
+                                }
+                            }
+                            
+                            log::out << "\n\n";
+                            ERR_LINE2(now->firstExpression->location,"here")
+                        )
+                        continue;
+                    }
+                    ast->declareUsageOfOverload(create_overload);
+                    
+                    QuickArray<TypeId> iterate_arguments{};
+                    if(create_overload->funcImpl->signature.returnTypes.size() == 0) {
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG_COLORED("The '"<<BOLD(NAME_OF_CREATE_ITER)<<"' method should return a struct meant for iteration. Not nothing.")
+                            ERR_LINE2(now->firstExpression->location,"this for loop")
+                            ERR_LINE2(create_overload->astFunc->location,"this function")
+                        )
+                        continue;
+                    }
+                    TypeId iterator_type = create_overload->funcImpl->signature.returnTypes[0].typeId;
+                    if(!iterator_type.isNormalType()) {
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG_COLORED("The '"<<BOLD(NAME_OF_CREATE_ITER)<<"' method should return a struct meant for iteration. '"<<BOLD(ast->typeToString(iterator_type))<<"' is not a struct. A pointer to a struct is not allowed")
+                            ERR_LINE2(now->firstExpression->location,"this for loop")
+                            ERR_LINE2(create_overload->astFunc->location,"this function")
+                        )
+                        continue;
+                    }
+                    TypeInfo* iterator_typeinfo = ast->getTypeInfo(iterator_type);
+                    if (!iterator_typeinfo->astStruct) {
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG_COLORED("The '"<<BOLD(NAME_OF_CREATE_ITER)<<"' method should return a struct meant for iteration. '"<<BOLD(ast->typeToString(iterator_type))<<"' is not a struct.")
+                            ERR_LINE2(now->firstExpression->location,"this for loop")
+                            ERR_LINE2(create_overload->astFunc->location,"this function")
+                        )
+                        continue;
+                    }
+                    TypeId iteratorPointer_type = iterator_type;
+                    iteratorPointer_type.setPointerLevel(1);
+                    // nocheckin, Verify iterator type. Maybe user returns an integer from create_iterator function. We shouldn't allow that.
+                    iterate_arguments.add(iteratorPointer_type);
+                    OverloadGroup::Overload* iterate_overload = ast->getOverload(iterate_overloads, scope->scopeId, iterate_arguments, true, nullptr);
+                    if (!iterate_overload)
+                        iterate_overload = ast->getPolyOverload(iterate_overloads, iterate_arguments, empty_args, iterinfo->structImpl, true, nullptr);
+                    
+                    if (!iterate_overload) {
+                        QuickArray<TypeId> calculated_poly_args{};
+                        ASTFunction* astFunc = findPolymorphicFunction(iterate_overloads, 0, iterate_arguments, true, scope->scopeId, iterinfo->structImpl, calculated_poly_args, nullptr, nullptr, false);
+                        
+                        if(astFunc) {
+                            iterate_overload = computePolymorphicFunction(astFunc, iterinfo->structImpl, calculated_poly_args, iterate_overloads);
+                        }
+                    }
+                    if (!iterate_overload) {
+                        // TODO: Say why the method didn't match.
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG_LOG("Struct to iterate through does not have a method '"<<NAME_OF_ITERATE<<"' with a correct signature. These are the methods of '"<<ast->typeToString(iterinfo->id)<<"': ")
+                            for(auto& overload : iterate_overloads->overloads) {
+                                log::out << "(";
+                                for(int j=0;j<overload.funcImpl->signature.argumentTypes.size();j++){
+                                    auto& argType = overload.funcImpl->signature.argumentTypes[j];
+                                    if(j!=0)
+                                        log::out << ", ";
+                                    log::out << log::LIME << ast->typeToString(argType.typeId) << log::NO_COLOR;
+                                }
+                                log::out << ")->";
+                                if(overload.funcImpl->signature.returnTypes.size() == 0) {
+                                    log::out << "void";
+                                }else {
+                                    for(int j=0;j<overload.funcImpl->signature.returnTypes.size();j++){
+                                        auto& argType = overload.funcImpl->signature.returnTypes[j];
+                                        if(j!=0)
+                                            log::out << ", ";
+                                        log::out << log::LIME << ast->typeToString(argType.typeId) << log::NO_COLOR;
+                                    }
+                                }
+                                log::out << ", ";
+                            }
+                            for(auto& overload : iterate_overloads->polyOverloads) {
+                                log::out << "(";
+                                for(int j=0;j<overload.astFunc->arguments.size();j++){
+                                    auto& argType = overload.astFunc->arguments[j];
+                                    if(j!=0)
+                                        log::out << ", ";
+                                    log::out << log::LIME << argType.stringType << log::NO_COLOR;
+                                }
+                                log::out << ")->";
+                                if(overload.astFunc->returnValues.size() == 0) {
+                                    log::out << "void";
+                                } else {
+                                    for(int j=0;j<overload.astFunc->returnValues.size();j++){
+                                        auto& argType = overload.astFunc->returnValues[j];
+                                        if(j!=0)
+                                            log::out << ", ";
+                                        log::out << log::LIME << argType.stringType << log::NO_COLOR;
+                                    }
+                                }
+                            }
+                            
+                            log::out << "\n\n";
+                            ERR_LINE2(now->firstExpression->location,"here")
+                        )
+                        continue;
+                    }
+                    ast->declareUsageOfOverload(iterate_overload);
+                    
+                    if(iterate_overload->funcImpl->signature.returnTypes.size() != 1 || iterate_overload->funcImpl->signature.returnTypes[0].typeId != AST_BOOL) {
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG_COLORED("The '"<<log::LIME<<NAME_OF_ITERATE<<log::NO_COLOR<<"' method when used in for loops should return a " << BOLD("boolean") << " to indicate whether iteration should continue.")
+                            ERR_LINE2(now->firstExpression->location, "this for loop")
+                            ERR_LINE2(iterate_overload->astFunc->location, "this iterate function")
+                        )
+                        return SIGNAL_FAILURE;
+                    }
+                    
+                    now->versions_create_overload.set(currentPolyVersion,*create_overload);
+                    now->versions_iterate_overload.set(currentPolyVersion,*iterate_overload);
+                    
+                    auto memdata = iterator_typeinfo->getMember(NAME_OF_CUSTOM_NR);
+                    if (memdata.index == -1) {
+                        std::string strtype = ast->typeToString(iterinfo->id);
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG_COLORED("Returned struct/iterator from '"<<BOLD(NAME_OF_CREATE_ITER)<<"' method requires the member '"<<BOLD(NAME_OF_CUSTOM_NR)<<"'. That's what 'nr' in the for loop will refer too.")
+                            ERR_LINE2(now->firstExpression->location,"type is '" + strtype+"'")
+                            ERR_LINE2(iterator_typeinfo->astStruct->location,"struct is here")
+                        )
+                    }
+                    
+                    varinfo_index->versions_typeId.set(currentPolyVersion, memdata.typeId);
+                    varnameNr.versions_assignType.set(info.currentPolyVersion, memdata.typeId);
+                    
+                    memdata = iterator_typeinfo->getMember(NAME_OF_CUSTOM_IT);
+                    if (memdata.index == -1) {
+                        std::string strtype = ast->typeToString(iterinfo->id);
+                        ERR_SECTION(
+                            ERR_HEAD2(now->firstExpression->location)
+                            ERR_MSG_COLORED("Returned struct/iterator from '"<<BOLD(NAME_OF_CREATE_ITER)<<"' method requires the member '"<<BOLD(NAME_OF_CUSTOM_IT)<<"'. That's what 'it' in the for loop will refer too.")
+                            ERR_LINE2(now->firstExpression->location,"type is '" + strtype+"'")
+                            ERR_LINE2(iterator_typeinfo->astStruct->location,"struct is here")
+                        )
+                    }
+                    
+                    auto vartype = memdata.typeId;
+                    
+                    varinfo_item->versions_typeId.set(currentPolyVersion, vartype);
+                    varnameIt.versions_assignType.set(currentPolyVersion, vartype);
+
+                    SignalIO result = checkRest(now->firstBody);
+                    continue;
+                }
             }
+        method_fail:
             std::string strtype = info.ast->typeToString(tempTypes.last());
             ERR_SECTION(
                 ERR_HEAD2(now->firstExpression->location)
-                ERR_MSG("The expression in for loop must be a Slice or Range.")
+                ERR_MSG("The expression in for loop must be a Slice, Range, or struct with methods '"<<NAME_OF_CREATE_ITER<<"' and '"<<NAME_OF_ITERATE<<"'.")
                 ERR_LINE2(now->firstExpression->location,strtype.c_str())
             )
-            continue;
+            return SIGNAL_FAILURE;
         } else 
         // Doing using after body so that continue can be used inside it without
         // messing things up. Using shouldn't have a body though so it doesn't matter.

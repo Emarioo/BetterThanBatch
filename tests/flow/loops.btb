@@ -41,3 +41,250 @@ for str {
 
 }
 // TODO: nested loops
+
+@TEST_CASE(iterator_basic)
+
+#import "Logger"
+#import "Memory"
+
+struct ListIterator {
+    value: i32* = null;
+    index: i32 = -1;
+}
+struct List {
+    data: i32*;
+    fn create_iterator() -> ListIterator {
+        return {}
+    }
+    fn iterate(iterator: ListIterator*) -> bool {
+        iterator.index++
+        if !data[iterator.index] {
+            iterator.value = null
+            return false
+        }
+        iterator.value = &data[iterator.index]
+        return true
+    }
+}
+
+list: List
+list.data = Allocate(8 * 4)
+len := 0
+list.data[len++] = 8
+list.data[len++] = 3
+list.data[len++] = 23
+list.data[len++] = 72
+list.data[len++] = 0
+
+facit: i32[]{
+    8,0,
+    3,1,
+    23,2,
+    72,3,
+}
+
+count := 0
+for list {
+    // log(it,"=",facit[2*count])
+    _test *it; facit[2*count]
+    _test nr; facit[2*count+1]
+    count++
+}
+
+@TEST_CASE(iterator_non_ptr)
+
+#import "Logger"
+#import "Memory"
+
+struct ListIterator {
+    value: i32 = 0;
+    index: i32 = -1;
+}
+struct List {
+    data: i32*;
+    fn create_iterator() -> ListIterator {
+        return {}
+    }
+    fn iterate(iterator: ListIterator*) -> bool {
+        iterator.index++
+        if !data[iterator.index] {
+            iterator.value = 0
+            return false
+        }
+        iterator.value = data[iterator.index]
+        return true
+    }
+}
+
+list: List
+list.data = Allocate(8 * 4)
+len := 0
+list.data[len++] = 8
+list.data[len++] = 3
+list.data[len++] = 23
+list.data[len++] = 72
+list.data[len++] = 0
+
+facit: i32[]{
+    8,0,
+    3,1,
+    23,2,
+    72,3,
+}
+
+count := 0
+for list {
+    // log(it,"=",facit[2*count])
+    _test it; facit[2*count]
+    _test nr; facit[2*count+1]
+    count++
+}
+
+
+// THIS FEATURE IS NOT IMPLEMENT YET
+// @TEST_CASE(iterator_secret_iter_variable)
+
+// #import "Logger"
+// #import "Memory"
+
+// struct ListIterator {
+//     value: i32 = 0;
+//     index: i32 = -1;
+//     list: List* = null
+// }
+// struct List {
+//     data: i32*;
+//     fn create_iterator() -> ListIterator {
+//         return { list = this }
+//     }
+//     fn iterate(iterator: ListIterator*) -> bool {
+//         iterator.index++
+//         if !data[iterator.index] {
+//             iterator.value = 0
+//             return false
+//         }
+//         iterator.value = data[iterator.index]
+//         return true
+//     }
+// }
+
+// list: List
+// list.data = Allocate(8 * 4)
+// len := 0
+// list.data[len++] = 8
+// list.data[len++] = 3
+// list.data[len++] = 23
+// list.data[len++] = 72
+// list.data[len++] = 0
+
+// facit: i32[]{
+//     8,0,
+//     3,1,
+//     23,2,
+//     72,3,
+// }
+
+// count := 0
+// for list {
+//     // log(it,"=",facit[2*count])
+//     _test it; facit[2*count]
+//     _test nr; facit[2*count+1]
+//     _test _iter_.list; facit[2*count]
+//     count++
+// }
+
+@TEST_CASE(iterator_not_structs)
+
+struct ListIterator {
+    value: i32 = 0;
+    index: i32 = -1;
+}
+struct List {
+    data: i32*;
+    fn create_iterator() -> i32 {
+        return {}
+    }
+    fn iterate(iterator: i32*) -> i32 {
+        // iterator.index++
+        // if !data[iterator.index] {
+        //     iterator.value = 0
+        //     return false
+        // }
+        // iterator.value = data[iterator.index]
+        return false
+    }
+}
+
+list: List
+
+@TEST_ERROR(E1) for list {}
+
+
+@TEST_CASE(iterator_missing_method)
+
+struct ListIterator {
+    value: i32 = 0;
+    index: i32 = -1;
+}
+struct List {
+    data: i32*;
+    fn create_iterator() -> ListIterator {
+        return {}
+    }
+}
+
+list: List
+
+@TEST_ERROR(E1) for list {}
+
+@TEST_CASE(iterator_not_structs)
+
+struct ListIterator {
+    value: i32 = 0;
+    index: i32 = -1;
+}
+struct List {
+    data: i32*;
+    fn create_iterator() -> ListIterator* {
+        return {}
+    }
+    fn iterate(iterator: i32*) -> i32 {
+        // iterator.index++
+        // if !data[iterator.index] {
+        //     iterator.value = 0
+        //     return false
+        // }
+        // iterator.value = data[iterator.index]
+        return false
+    }
+}
+
+list: List
+
+@TEST_ERROR(E1) for list {}
+
+@TEST_CASE(iterator_missing_field)
+
+struct ListIterator {
+    value: i32 = 0;
+    // index: i32 = -1;
+}
+struct List {
+    data: i32*;
+    fn create_iterator() -> ListIterator* {
+        return {}
+    }
+    fn iterate(iterator: i32*) -> i32 {
+        // iterator.index++
+        // if !data[iterator.index] {
+        //     iterator.value = 0
+        //     return false
+        // }
+        // iterator.value = data[iterator.index]
+        return false
+    }
+}
+
+list: List
+
+@TEST_ERROR(E1) for list {}

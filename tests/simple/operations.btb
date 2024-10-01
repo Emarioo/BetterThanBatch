@@ -222,9 +222,11 @@ if (5.23 < 23.2d) { // <- Error here at one point, bug with d suffix
 
 }
 
+v: void*
+@TEST_ERROR(ERROR_UNSPECIFIED) sizeof (*v)
+// Error above should be above the one below
+// because the one below stops compilation
+
 nah: i32;
 pt := &nah;
 @TEST_ERROR(ERROR_UNSPECIFIED) nah * sizeof *pt
-
-v: void*
-@TEST_ERROR(ERROR_UNSPECIFIED) sizeof (*v)

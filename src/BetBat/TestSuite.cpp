@@ -346,7 +346,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     // }
 
     bool useInterp = false;
-    // bool useInterp = true;
+    // useInterp = true;
 
     // TODO: Use multithreading. Some threads compile test cases while others start programs and test them.
     //   One thread can test multiple programs and redirect stdout to some file.

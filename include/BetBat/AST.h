@@ -646,7 +646,11 @@ struct ASTExpression : ASTNode {
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
-
+enum ForLoopType : u8 {
+    SLICED_FOR_LOOP,
+    RANGED_FOR_LOOP,
+    CUSTOM_FOR_LOOP, // user defined with create_iterator, iterate
+};
 struct ASTStatement : ASTNode {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
     enum Type {
@@ -734,8 +738,12 @@ struct ASTStatement : ASTNode {
     // };
     PolyVersions<QuickArray<TypeId>> versions_expressionTypes; // types from firstExpression
 
+    // used with for loops
+    PolyVersions<OverloadGroup::Overload> versions_create_overload{};
+    PolyVersions<OverloadGroup::Overload> versions_iterate_overload{};
+
     bool is_notstable = false;
-    bool rangedForLoop=false; // otherwise sliced for loop
+    ForLoopType forLoopType=SLICED_FOR_LOOP;
     bool globalDeclaration=false; // for variables, indicates whether variable refers to global data in data segment
     bool sharedContents = false; // this node is not the owner of it's nodes.
 
@@ -1206,8 +1214,8 @@ struct AST {
     
     // NOTE: These functions are methods of the AST instead of OverloadGroup because it's easier to synchronize with multi-threading. (we would need individual mutex for each group or a global variable, it's better to have mutex in the AST)
     OverloadGroup::Overload* getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
-    // Note that this function becomes complex if parentStruct is polymorphic.
-    OverloadGroup::Overload* getOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    // Note that this function becomes complex if parentStruct is polymorphic. It only checks computed polymorphic functions
+    OverloadGroup::Overload* getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
     
     // FuncImpl can be null and probably will be most of the time
     // when you call this.

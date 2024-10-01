@@ -994,7 +994,14 @@ bool TinyBytecode::applyRelocations(Bytecode* code) {
         // Assert may fire if function wasn't generated.
         // Perhaps no one declared usage of the function even
         // though we should have.
-        Assert(rel.funcImpl && rel.funcImpl->tinycode_id);
+        if (!(rel.funcImpl && rel.funcImpl->tinycode_id)) {
+            if(rel.funcImpl->usages == 0) {
+                log::out << log::RED << "COMPILER BUG! "<<log::NO_COLOR<<"Function '"<<log::LIME<<rel.funcImpl->astFunction->name<<log::NO_COLOR<<"' had zero declared usages but generator emitted relocations.\n";
+                Assert(false);
+            } else {
+                Assert((rel.funcImpl && rel.funcImpl->tinycode_id));
+            }
+        }
         *(i32*)&instructionSegment[rel.pc] = rel.funcImpl->tinycode_id;
     }
     return suc;
@@ -1424,6 +1431,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_CALL: {
             LinkConvention l = (LinkConvention)instructions[pc++];
             CallConvention c = (CallConvention)instructions[pc++];
+            int reloc_pos = pc;
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
@@ -1442,8 +1450,20 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 int ind = imm - 1;
                 if(ind > 0 && ind < code->tinyBytecodes.size())
                     log::out << log::LIME << code->tinyBytecodes[ind]->name;
-                else
-                    log::out << log::LIME << imm;
+                else {
+                    bool found = false;
+                    if (ind == -1) {
+                        for(auto& rel : call_relocations) {
+                            if (reloc_pos == rel.pc) {
+                                log::out << log::LIME << rel.funcImpl->astFunction->name;
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if(!found)
+                        log::out << log::LIME << imm;
+                }
             }
         } break;
         case BC_CALL_REG: {

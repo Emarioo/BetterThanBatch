@@ -1632,6 +1632,9 @@ SignalIO GenContext::generateSpecialFncall(ASTExpression* expression){
 
     return SIGNAL_SUCCESS;
 }
+// SignalIO GenContext::generateFunctionCallFromArgs(FunctionSignature* signature, OverloadGroup::Overload overload, const BaseArray<ASTExpression*> args, QuickArray<TypeId>* outTypeIds, bool isOperator) {
+    // this won't work, what if caller wants arguments to be generated with generateReference and not generateExpression, i'd like to avoid function callbacks and lambdas.
+// }
 SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId>* outTypeIds, bool isOperator){
     using namespace engone;
 
@@ -5678,7 +5681,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             // NOTE: We add debug information last because varinfo does not have the frame offsets yet.
 
-            if(statement->rangedForLoop){
+            if(statement->forLoopType == RANGED_FOR_LOOP){
                 auto& varnameNr = statement->varnames[0];
                 if(!varnameNr.identifier) {
                     Assert(hasAnyErrors());
@@ -5765,7 +5768,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     varinfo_index->versions_typeId[info.currentPolyVersion],
                     info.currentScopeDepth + 1,
                     varnameNr.identifier->scopeId);
-            } else {
+            } else if (statement->forLoopType == SLICED_FOR_LOOP) {
                 auto& varnameIt = statement->varnames[0];
                 auto& varnameNr = statement->varnames[1];
                 if(!varnameIt.identifier || !varnameNr.identifier) {
@@ -5912,6 +5915,177 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     varinfo_index->versions_typeId[info.currentPolyVersion],
                     info.currentScopeDepth + 1,
                     varnameNr.identifier->scopeId);
+            } else if(statement->forLoopType == CUSTOM_FOR_LOOP) {
+                auto& varnameIt = statement->varnames[0];
+                auto& varnameNr = statement->varnames[1];
+                if(!varnameIt.identifier || !varnameNr.identifier) {
+                    Assert(hasForeignErrors());
+                    continue;
+                }
+                auto varinfo_item  = varnameIt.identifier;
+                auto varinfo_index = varnameNr.identifier;
+
+                OverloadGroup::Overload create_overload = statement->versions_create_overload[currentPolyVersion];
+                OverloadGroup::Overload iterate_overload = statement->versions_iterate_overload[currentPolyVersion];
+                if(!create_overload.funcImpl || !iterate_overload.funcImpl) {
+                    Assert(hasForeignErrors());
+                    continue;
+                }
+                
+                // TODO: Support other conventions and external functions.
+                Assert(create_overload.funcImpl->signature.convention == BETCALL);
+                Assert(iterate_overload.funcImpl->signature.convention == BETCALL);
+
+                TypeId iterator_type = create_overload.funcImpl->signature.returnTypes[0].typeId;
+                TypeInfo* iterator_typeinfo = ast->getTypeInfo(iterator_type);
+                 
+                auto it_memdata = iterator_typeinfo->getMember(NAME_OF_CUSTOM_IT);
+                auto nr_memdata = iterator_typeinfo->getMember(NAME_OF_CUSTOM_NR);
+                if(it_memdata.index == -1) {
+                    Assert(hasForeignErrors());
+                    continue;
+                }
+                if(nr_memdata.index == -1) {
+                    Assert(hasForeignErrors());
+                    continue;
+                }
+                // Assert(it_memdata.index != -1);
+                // Assert(nr_memdata.index != -1);
+                
+                // nocheckin auto dereference iterator
+                SignalIO result = SIGNAL_NO_MATCH;
+                
+                int iterator_offset = 0;
+                { // create_iterator
+                    result = framePush(iterator_type, &iterator_offset, false, false);
+                    
+                    auto signature = &create_overload.funcImpl->signature;
+                    int allocated_stack_space = signature->argSize;
+                    builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
+                    currentFuncImpl->update_max_arguments(allocated_stack_space);
+                    
+                    TypeId iter_type{};
+                    result = generateReference(statement->firstExpression, &iter_type, currentScopeId);
+                    if (result != SIGNAL_SUCCESS)
+                        continue;
+                    iter_type.setPointerLevel(iter_type.getPointerLevel() + 1);
+                    
+                    // TODO: verify type is valid
+                    Assert(signature->argumentTypes.size() == 1);
+                    
+                    Assert(signature->argumentTypes[0].typeId == iter_type);
+                        
+                    result = generatePop_set_arg(signature->argumentTypes[0].offset, signature->argumentTypes[0].typeId);
+                    if (result != SIGNAL_SUCCESS)
+                        continue;
+                    
+                    int reloc;
+                    builder.emit_call(create_overload.astFunc->linkConvention, create_overload.astFunc->callConvention, &reloc);
+                    info.addCallToResolve(reloc, create_overload.funcImpl);
+                    
+                    builder.emit_free_args(allocated_stack_space);
+                    
+                    Assert(signature->returnTypes.size() == 1);
+                    auto &ret = signature->returnTypes[0];
+                    TypeId returned_type = ret.typeId;
+                    
+                    result = generatePush_get_val(ret.offset - signature->returnSize, returned_type);
+                    if (result != SIGNAL_SUCCESS)
+                        continue;
+                        
+                    result = generatePop(BC_REG_LOCALS, iterator_offset, returned_type);
+                    if (result != SIGNAL_SUCCESS)
+                        continue;
+                    
+                    varinfo_index->versions_dataOffset[info.currentPolyVersion] = iterator_offset + nr_memdata.offset;
+                    varinfo_item->versions_dataOffset[info.currentPolyVersion] = iterator_offset + it_memdata.offset;
+                }
+
+                _GLOG(log::out << "push loop\n");
+                loopScope->continueAddress = builder.get_pc();
+
+                { // iterate(&iterator)
+                    auto signature = &iterate_overload.funcImpl->signature;
+                    int allocated_stack_space = signature->argSize;
+                    builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
+                    currentFuncImpl->update_max_arguments(allocated_stack_space);
+                    
+                    // First argument (this)
+                    TypeId iter_type{};
+                    result = generateReference(statement->firstExpression, &iter_type, currentScopeId);
+                    if (result != SIGNAL_SUCCESS)
+                        continue;
+                    iter_type.setPointerLevel(iter_type.getPointerLevel() + 1);
+                    
+                    Assert(signature->argumentTypes.size() == 2);
+                    
+                    // Second argument (iterator)
+                    builder.emit_ptr_to_locals(BC_REG_B, iterator_offset);
+                    builder.emit_push(BC_REG_B);
+                    
+                    result = generatePop_set_arg(signature->argumentTypes[1].offset, signature->argumentTypes[1].typeId);
+                    if (result != SIGNAL_SUCCESS)
+                        continue;
+                    
+                    result = generatePop_set_arg(signature->argumentTypes[0].offset, signature->argumentTypes[0].typeId);
+                    if (result != SIGNAL_SUCCESS)
+                        continue;
+                    
+                    int reloc;
+                    builder.emit_call(iterate_overload.astFunc->linkConvention, iterate_overload.astFunc->callConvention, &reloc);
+                    info.addCallToResolve(reloc, iterate_overload.funcImpl);
+                    
+                    builder.emit_free_args(allocated_stack_space);
+                    
+                    Assert(signature->returnTypes.size() == 1);
+                    auto &ret = signature->returnTypes[0];
+                    TypeId returned_type = ret.typeId;
+                    
+                    result = generatePush_get_val(ret.offset - signature->returnSize, returned_type);
+                    if (result != SIGNAL_SUCCESS)
+                        continue;
+                        
+                    // TODO: Type check before generator
+                    Assert(returned_type == AST_BOOL);
+                }
+                
+                // pop boolean from iterate() function
+                builder.emit_pop(BC_REG_A);
+                
+                loopScope->resolveBreaks.add(0);
+                builder.emit_jz(BC_REG_A, &loopScope->resolveBreaks.last());
+
+                result = generateBody(statement->firstBody);
+                if (result != SIGNAL_SUCCESS)
+                    continue;
+
+                builder.emit_jmp(loopScope->continueAddress);
+
+                for (auto ind : loopScope->resolveBreaks) {
+                    builder.fix_jump_imm32_here(ind);
+                }
+                
+                // TODO: Call destruct(iterator) on the created iterator
+                
+                // only add 'it' for Sliced loop (not ranged)
+                debugFunction->addVar(varnameIt.name,
+                    iterator_offset,
+                    // varinfo_item->versions_dataOffset[info.currentPolyVersion],
+                    varinfo_item->versions_typeId[info.currentPolyVersion],
+                    info.currentScopeDepth + 1, // +1 because variables exist within stmt->firstBody, not the current scope
+                    varnameIt.identifier->scopeId);
+                debugFunction->addVar(varnameNr.name,
+                    varinfo_index->versions_dataOffset[info.currentPolyVersion],
+                    varinfo_index->versions_typeId[info.currentPolyVersion],
+                    info.currentScopeDepth + 1,
+                    varnameNr.identifier->scopeId);
+                debugFunction->addVar("_for_iter_",
+                    iterator_offset,
+                    iterator_type,
+                    info.currentScopeDepth + 1, // +1 because variables exist within stmt->firstBody, not the current scope
+                    statement->firstBody->scopeId);
+            } else {
+                Assert(("statement->forLoopType is invalid",false));
             }
             
             // builder.emit_free_local(stackBeforeLoop - info.currentFrameOffset);

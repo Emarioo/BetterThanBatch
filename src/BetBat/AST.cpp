@@ -717,6 +717,17 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
     // if(overloads.size()==1)
     //     return &overloads[0];
 
+    int non_named_args = 0;
+    bool is_member_call = false;
+    if (fncall) {
+        non_named_args = fncall->nonNamedArgs;
+        is_member_call = fncall->isMemberCall();
+    } else {
+        non_named_args = argTypes.size();
+        // NOTE: With no fncall we can't know isMemberCall so if you have a parent struct
+        //   then implicit_this must be true.
+    }
+
     auto ast = this;
     lock_overloads.lock();
     defer { lock_overloads.unlock(); };
@@ -746,8 +757,8 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
         // NOTE: I refactored here to have less duplicated code. 'this' require special behaviour which is no done cleanly.
         //   BUT, did I break something? - Emarioo, 2023-12-19
             
-        if(fncall->nonNamedArgs > overload.astFunc->arguments.size() - startOfRealArguments // can't match if the call has more essential args than the total args the overload has
-        || fncall->nonNamedArgs < overload.astFunc->nonDefaults - startOfRealArguments // can't match if the call has less essential args than the overload (excluding defaults)
+        if(non_named_args > overload.astFunc->arguments.size() - startOfRealArguments // can't match if the call has more essential args than the total args the overload has
+        || non_named_args < overload.astFunc->nonDefaults - startOfRealArguments // can't match if the call has less essential args than the overload (excluding defaults)
         || argTypes.size() > overload.astFunc->arguments.size() - startOfRealArguments)
             continue;
             
@@ -755,8 +766,8 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
             found_int = false;
             found_sint = false; // we don't use int
             found_uint = false;
-            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                if(inferred_args->get(j))
+            for(int j=0;j<(int)non_named_args;j++){
+                if(inferred_args && inferred_args->get(j))
                     continue; // NOTE: Because argument is inferred, the argument expression has not been checked and so the type 'argTypes[i]' will be invalid. But we don't care about the type because inferred types, presumably initializers, will always match.
                 TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
                 bool is_castable = ast->castable(argTypes[j], implArgType, false);
@@ -777,8 +788,8 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
                 // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
         } else {
-            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                if(inferred_args->get(j))
+            for(int j=0;j<(int)non_named_args;j++){
+                if(inferred_args && inferred_args->get(j))
                     continue;
                 TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
                 if(argTypes[j] != implArgType) {
@@ -850,7 +861,7 @@ void AST::declareUsageOfOverload(OverloadGroup::Overload* overload) {
     overload->funcImpl->usages++;
 }
 // OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
+OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
     // That means that we match if two parent structs have different args.
@@ -859,6 +870,18 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<
 
     lock_overloads.lock();
     defer { lock_overloads.unlock(); };
+    
+    int non_named_args = 0;
+    bool is_member_call = false;
+    if (fncall) {
+        non_named_args = fncall->nonNamedArgs;
+        is_member_call = fncall->isMemberCall();
+    } else {
+        non_named_args = argTypes.size();
+        if(parentStruct) {
+            Assert(implicit_this);
+        }
+    }
 
     // Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
     OverloadGroup::Overload* outOverload = nullptr;
@@ -941,7 +964,7 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<
 
             if(canCast) {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(fncall->isMemberCall() && j == 0)
+                    if(is_member_call && j == 0)
                         continue;
                     if(inferred_args && inferred_args->get(j))
                         continue;
@@ -953,7 +976,7 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<
                 }
             } else {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(fncall->isMemberCall() && j == 0)
+                    if(is_member_call && j == 0)
                         continue;
                     if(inferred_args && inferred_args->get(j))
                         continue;
