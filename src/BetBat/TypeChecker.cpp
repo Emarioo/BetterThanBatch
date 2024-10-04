@@ -7,7 +7,7 @@
 
 // Old logging
 #undef WARN_HEAD3
-#define WARN_HEAD3(R,M) info.compileInfo->options->compileStats.warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
+#define WARN_HEAD3(R,M) info.compileInfo->compile_stats.warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
 
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION2(CONTENT)
@@ -5410,7 +5410,7 @@ void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
     _VLOG(log::out << log::BLUE << "Type check enums:\n";)
     // Check enums first since they don't depend on anything.
     SignalIO result = info.checkEnums(scope);
-    info.compiler->options->compileStats.errors += info.errors;
+    info.compiler->compile_stats.errors += info.errors;
 }
 SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ignore_errors, bool* changed) {
     using namespace engone;
@@ -5437,7 +5437,7 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
 
     // if(!info.showErrors)
     if(info.showErrors)
-        info.compiler->options->compileStats.errors += info.errors;
+        info.compiler->compile_stats.errors += info.errors;
 
     if(info.completedStruct) {
         *changed = true;
@@ -5509,7 +5509,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
             continue;
     }
 
-    info.compiler->options->compileStats.errors += info.errors;
+    info.compiler->compile_stats.errors += info.errors;
 }
 
 void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope) {
@@ -5539,7 +5539,7 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
         auto result = info.checkFunctionScope(ast_func, func_impl);
     }
 
-    info.compiler->options->compileStats.errors += info.errors;
+    info.compiler->compile_stats.errors += info.errors;
     // return info.errors;
 }
 void TyperContext::init_context(Compiler* compiler) {

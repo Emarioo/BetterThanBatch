@@ -75,7 +75,16 @@ void VirtualMachine::init_stack(int stack_size) {
     memset(stack.data(), 0, stack.max);
     memset((void*)registers, 0, sizeof(registers));
 }
-void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations){
+TinyBytecode* VirtualMachine::fetch_tinycode(Bytecode* bytecode, const std::string& tinycode_name){
+    for(int i=0;i<bytecode->tinyBytecodes.size();i++) {
+        if(bytecode->tinyBytecodes[i]->name == tinycode_name) {
+            return bytecode->tinyBytecodes[i];
+        }
+    }
+    return nullptr;
+}
+
+void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations, CompileOptions* options){
     using namespace engone;
 
     TRACE_FUNC()
@@ -119,7 +128,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
             for (int i=0;i<t->call_relocations.size();i++) {
                 auto& rel = t->call_relocations[i];
-                if (!rel.funcImpl || rel.funcImpl->tinycode_id == 0)
+                if (!rel.funcImpl || rel.funcImpl->tinycode_id <= 0)
                     continue;
 
                 auto tcode = bytecode->tinyBytecodes[rel.funcImpl->tinycode_id-1];
@@ -297,13 +306,14 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     #define instructions tinycode->instructionSegment
     i64 userAllocatedBytes=0;
     u64 executedInstructions = 0;
+    bool enable_fncall_logging = true;
+    std::unordered_map<std::string, u64> number_of_fncalls{};
     // u64 length = bytecode->instructionSegment.used;
     // if(length==0)
     //     log::out << log::YELLOW << "VirtualMachine ran bytecode with zero instructions. Bug?\n";
     // Instruction* codePtr = (Instruction*)bytecode->instructionSegment.data;
     // Bytecode::Location* prevLocation = nullptr;
-    int prev_tinyindex = -1;
-    int prev_line = -1;
+    BytecodePrintCache print_cache{};
     bool running = true;
 
     DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
@@ -337,8 +347,15 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
     bool logging = false;
     bool interactive = false;
-    // logging = true;
+    if(options) {
+        if(options->interactive_vm)
+            interactive = true;
+        if(options->logged_vm)
+            logging = true;
+    }
     // interactive = true;
+    // logging = true;
+    
     while(running) {
         for(int i=0;i<breakpoints.size();i++) {
             if (breakpoints[i].pc == pc) {
@@ -427,24 +444,24 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         #endif
         bool printed_newline = false;
         if(logging) {
-            auto line_index = tinycode->index_of_lines[prev_pc] - 1;
-            if(line_index != -1) {
-                auto& line = tinycode->lines[line_index];
+            // auto line_index = tinycode->index_of_lines[prev_pc] - 1;
+            // if(line_index != -1) {
+            //     auto& line = tinycode->lines[line_index];
 
-                if(line.line_number != prev_line || tiny_index != prev_tinyindex) {
-                    if(tiny_index != prev_tinyindex) {
-                        log::out << log::GOLD  << tinycode->name <<"\n";
-                        prev_tinyindex = tiny_index;
-                    }
-                    prev_tinyindex = tiny_index;
-                    log::out << log::CYAN << line.line_number << "| " << line.text<<"\n";
-                    prev_line = line.line_number;
-                }
-            } else if(tiny_index != prev_tinyindex) {
-                log::out << log::GOLD  << tinycode->name <<"\n";
-                prev_tinyindex = tiny_index;
-            }
-            tinycode->print(prev_pc, prev_pc + 1, bytecode, &dll_function_names);
+            //     if(line.line_number != prev_line || tiny_index != prev_tinyindex) {
+            //         if(tiny_index != prev_tinyindex) {
+            //             log::out << log::GOLD  << tinycode->name <<"\n";
+            //             prev_tinyindex = tiny_index;
+            //         }
+            //         prev_tinyindex = tiny_index;
+            //         log::out << log::CYAN << line.line_number << "| " << line.text<<"\n";
+            //         prev_line = line.line_number;
+            //     }
+            // } else if(tiny_index != prev_tinyindex) {
+            //     log::out << log::GOLD  << tinycode->name <<"\n";
+            //     prev_tinyindex = tiny_index;
+            // }
+            tinycode->print(prev_pc, prev_pc + 1, bytecode, &dll_function_names, false, &print_cache);
         }
 
         void* ptr_from_mov = nullptr;
@@ -528,21 +545,28 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             } else {
                 imm = 0;
             }
-            void* ptr = ptr = (void*)(registers[mop] + imm);
+            void* ptr = (void*)(registers[mop] + imm);
             ptr_from_mov = ptr;
+            Assert(ptr);
             
             int size = GET_CONTROL_SIZE(control);
             if(opcode == BC_MOV_MR || opcode == BC_MOV_MR_DISP16) {
-                if(size == CONTROL_8B)       *(i8*) ptr = registers[op1];
-                else if(size == CONTROL_16B) *(i16*)ptr = registers[op1];
-                else if(size == CONTROL_32B) *(i32*)ptr = registers[op1];
-                else if(size == CONTROL_64B) *(i64*)ptr = registers[op1];
+                int real_size = 1 << size;
+                memcpy(ptr, &registers[op1], real_size);
+                // if(size == CONTROL_8B)       *(i8*) ptr = registers[op1];
+                // else if(size == CONTROL_16B) *(i16*)ptr = registers[op1];
+                // else if(size == CONTROL_32B) *(i32*)ptr = registers[op1];
+                // else if(size == CONTROL_64B) *(i64*)ptr = registers[op1];
             } else {
-                if(size == CONTROL_8B)       registers[op0] = *(i8*) ptr;
-                else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
-                else if(size == CONTROL_32B) registers[op0] = *(i32*)ptr;
-                else if(size == CONTROL_64B) registers[op0] = *(i64*)ptr;
+                int real_size = 1 << size;
+                registers[op0] = 0;
+                memcpy(&registers[op0], ptr, real_size);
+                // if(size == CONTROL_8B)       registers[op0] = *(i8*) ptr;
+                // else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
+                // else if(size == CONTROL_32B) registers[op0] = *(i32*)ptr;
+                // else if(size == CONTROL_64B) registers[op0] = *(i64*)ptr;
             }
+            int x = 0; // dumb variable because debugger jumps next instruction and out of scope so I can't see the local variables.
         } break;
         case BC_SET_ARG: {
             op0 = (BCRegister)instructions[pc++];
@@ -656,7 +680,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
-            registers[op0] = imm;
+            registers[op0] = 0;
+            *(i32*)&registers[op0] = imm;
         } break;
         case BC_LI64: {
             op0 = (BCRegister)instructions[pc++];
@@ -747,6 +772,14 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 pc = 0;
                 tiny_index = new_tiny_index;
                 tinycode = bytecode->tinyBytecodes[tiny_index];
+                
+                if(enable_fncall_logging) {
+                    auto pair = number_of_fncalls.find(tinycode->name);
+                    if (pair == number_of_fncalls.end())
+                        number_of_fncalls[tinycode->name] = 1;
+                    else
+                        pair->second += 1;
+                }
             }
         } break;
         case BC_CALL_REG: {
@@ -761,9 +794,35 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             log::out.flush();
             printed_newline = true;
             
-            Assert(false); // how do we call a function pointer?
-
+            int new_tiny_index = registers[op0] - 1; // -1 very important
             
+            if (!(new_tiny_index >= 0 && new_tiny_index < bytecode->tinyBytecodes.size())) {
+                // not valid index
+                running = false;
+                break;
+            }
+            
+            stack_pointer -= 8;
+            CHECK_STACK();
+            *(i64*)stack_pointer = pc | ((i64)tiny_index << 32);
+
+            stack_pointer -= 8;
+            CHECK_STACK();
+            *(i64*)stack_pointer = base_pointer;
+            base_pointer = stack_pointer;
+            registers[BC_REG_LOCALS] = base_pointer;
+
+            pc = 0;
+            tiny_index = new_tiny_index;
+            tinycode = bytecode->tinyBytecodes[tiny_index];
+            
+             if(enable_fncall_logging) {
+                auto pair = number_of_fncalls.find(tinycode->name);
+                if (pair == number_of_fncalls.end())
+                    number_of_fncalls[tinycode->name] = 1;
+                else
+                    pair->second += 1;
+            }
         } break;
         case BC_RET: {
             i64 diff = stack_pointer - (i64)stack.data();
@@ -790,7 +849,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             tinycode = bytecode->tinyBytecodes[tiny_index];
         } break;
         case BC_DATAPTR: {
-            // Assert(false);
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
@@ -803,23 +861,18 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             LinkConvention l = (LinkConvention)instructions[pc++];
 
+            running = false;
+            break;
             log::out << log::RED << "Cannot access imported variable in virtual machine (not implemented)\n";
             // Assert(bytecode->dataSegment.size() > imm);
             // registers[op0] = (u64)(bytecode->dataSegment.data() + imm);
         } break;
         case BC_CODEPTR: {
-            Assert(false);
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
 
-            Assert(false);
-            // TODO: How do we store tinycode_id as function pointer?
-            //   Inline assembly can't call tinycode_id...
-            //   I guess inline assembly don't work in VM anyway.
-                        
-            int new_tiny_index = imm-1;
-            registers[op0] = (u64)(bytecode->dataSegment.data() + imm);
+            registers[op0] = imm;
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
@@ -829,12 +882,65 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             u8 tsize = 1 << GET_CONTROL_CONVERT_SIZE(control);
 
             if(!IS_CONTROL_FLOAT(control) && !IS_CONTROL_CONVERT_FLOAT(control)) {
-                u64 tmp = registers[op1];
-                if(tsize == 1) *(u8*)&registers[op0] = tmp;
-                else if(tsize == 2) *(u16*)&registers[op0] = tmp;
-                else if(tsize == 4) *(u32*)&registers[op0] = tmp;
-                else if(tsize == 8) *(u64*)&registers[op0] = tmp;
-                else Assert(false);
+                if(op0 == op1) {
+                    if(tsize < 8)
+                    memset((char*)&registers[op0] + tsize, 0, 8 - tsize);
+                } else {
+                    registers[op0] = 0;
+                }
+                if (IS_CONTROL_CONVERT_SIGNED(control)) {
+                    if (IS_CONTROL_SIGNED(control)) {
+                        // i16 -> i32
+                        // 0xffff -> 0xffff_ffff
+                        
+                        i64 tmp = registers[op1];
+                        
+                        bool issigned = tmp >> (8 * fsize - 1);
+                        
+                        if(issigned)
+                            memset((char*)&tmp + fsize, 0xFF, 8-fsize);
+                        else
+                            memset((char*)&tmp + fsize, 0x0, 8-fsize);
+                        
+                        if(tsize == 1) *(i8*)&registers[op0] = tmp;
+                        else if(tsize == 2) *(i16*)&registers[op0] = tmp;
+                        else if(tsize == 4) *(i32*)&registers[op0] = tmp;
+                        else if(tsize == 8) *(i64*)&registers[op0] = tmp;
+                        else Assert(false);
+                    } else {
+                        u64 tmp = registers[op1];
+                        if(tsize == 1) *(i8*)&registers[op0] = tmp;
+                        else if(tsize == 2) *(i16*)&registers[op0] = tmp;
+                        else if(tsize == 4) *(i32*)&registers[op0] = tmp;
+                        else if(tsize == 8) *(i64*)&registers[op0] = tmp;
+                        else Assert(false);
+                    }
+                } else {
+                    if (IS_CONTROL_SIGNED(control)) {
+                        // i16 -> i32
+                        // 0xffff -> 0xffff_ffff
+                        
+                        i64 tmp = registers[op1];
+                        bool issigned = tmp >> (8 * fsize - 1);
+                        if(issigned)
+                            memset((char*)&tmp + fsize, 0xFF, 8-fsize);
+                        else
+                            memset((char*)&tmp + fsize, 0x0, 8-fsize);
+                        
+                        if(tsize == 1) *(u8*)&registers[op0] = tmp;
+                        else if(tsize == 2) *(u16*)&registers[op0] = tmp;
+                        else if(tsize == 4) *(u32*)&registers[op0] = tmp;
+                        else if(tsize == 8) *(u64*)&registers[op0] = tmp;
+                        else Assert(false);
+                    } else {
+                        u64 tmp = registers[op1];
+                        if(tsize == 1) *(u8*)&registers[op0] = tmp;
+                        else if(tsize == 2) *(u16*)&registers[op0] = tmp;
+                        else if(tsize == 4) *(u32*)&registers[op0] = tmp;
+                        else if(tsize == 8) *(u64*)&registers[op0] = tmp;
+                        else Assert(false);
+                    }
+                }
             } else if(IS_CONTROL_UNSIGNED(control) && IS_CONTROL_CONVERT_FLOAT(control)) {
                 u64 tmp = registers[op1];
                 if(tsize == 4) *(float*)&registers[op0] = tmp;
@@ -864,6 +970,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             } else if(IS_CONTROL_FLOAT(control) && IS_CONTROL_CONVERT_SIGNED(control)) {
                 if(fsize == 4){
                     float tmp = *(float*)&registers[op1];
+                    registers[op0] = 0;
                     if(tsize == 1) *(i8*)&registers[op0] = tmp;
                     else if(tsize == 2) *(i16*)&registers[op0] = tmp;
                     else if(tsize == 4) *(i32*)&registers[op0] = tmp;
@@ -878,10 +985,10 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                     else Assert(false);
                 } else Assert(false);
             } else if(IS_CONTROL_FLOAT(control) && IS_CONTROL_CONVERT_FLOAT(control)) {
-                if(fsize == 4 && tsize == 4)      *(float*)&registers[op0] = *(float*)registers[op1];
-                else if(fsize == 4 && tsize == 8) *(double*)&registers[op0] = *(float*)registers[op1];
-                else if(fsize == 8 && tsize == 4) *(float*)&registers[op0] = *(double*)registers[op1];
-                else if(fsize == 8 && tsize == 8) *(double*)&registers[op0] = *(double*)registers[op1];
+                if(fsize == 4 && tsize == 4)      *(float*)&registers[op0] = *(float*)&registers[op1];
+                else if(fsize == 4 && tsize == 8) *(double*)&registers[op0] = *(float*)&registers[op1];
+                else if(fsize == 8 && tsize == 4) *(float*)&registers[op0] = *(double*)&registers[op1];
+                else if(fsize == 8 && tsize == 8) *(double*)&registers[op0] = *(double*)&registers[op1];
                 else Assert(false);
             }  else Assert(false);
         } break;
@@ -891,12 +998,16 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             u8 batchsize = (u8)instructions[pc++];
 
             Assert(registers[op0] > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
+            Assert(registers[op1] < 0x100000); // we rarely memzero memory larger than this
             memset((void*)registers[op0],0, registers[op1]);
         } break;
         case BC_MEMCPY: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             op2 = (BCRegister)instructions[pc++];
+            Assert(registers[op0] > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
+            Assert(registers[op1] > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
+            Assert(registers[op2] < 0x100000); // we rarely memzero memory larger than this
             memcpy((void*)registers[op0],(void*)registers[op1], registers[op2]);
         } break;
         case BC_ASM: {
@@ -904,7 +1015,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             u8 outputs = (u8)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
-            log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
+            if(!silent) {
+                log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
+            }
             // TODO: Print what assembly we tried to execute.
             //   Show call stack too?
             running = false;
@@ -923,52 +1036,82 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
+            
+            u64 raw_value0 = registers[op0];
+            u64 raw_value1 = registers[op1];
+            registers[op0] = 0; // we reset first operand because we don't want any dirty bits remaining
+            // we don't reset second operand because other instructions may reuse the value
+            // we copy the second operand in case first and second operand point to the same register
 
             if(IS_CONTROL_FLOAT(control)) {
                 if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
                     switch(opcode){
-                        #define OP(P) *(float*)&registers[op0] = *(float*)&registers[op0] P *(float*)&registers[op1]; break;
+                        #define OP(P) *(float*)&registers[op0] = *(float*)&raw_value0 P *(float*)&raw_value1; break;
+                        #define OP_BOOL(P) registers[op0] = *(float*)&raw_value0 P *(float*)&raw_value1; break;
                         case BC_ADD: OP(+)
                         case BC_SUB: OP(-)
                         case BC_MUL: OP(*)
                         case BC_DIV: OP(/)
-                        case BC_MOD: *(float*)&registers[op0] = fmodf(*(float*)&registers[op0] + *(float*)&registers[op1], *(float*)&registers[op1]); break; // positive modulo
-                        case BC_EQ:  OP(==)
-                        case BC_NEQ: OP(!=)
-                        case BC_LT:  OP(<)
-                        case BC_LTE: OP(<=)
-                        case BC_GT:  OP(>)
-                        case BC_GTE: OP(>=)
+                        case BC_MOD: {
+                            // modulo no negative numbers
+                            auto tmp = fmodf(*(float*)&raw_value0, *(float*)&raw_value1);
+                            if (tmp<0.f)
+                                tmp += *(float*)&raw_value1;
+                            *(float*)&registers[op0] = tmp;
+                            break;
+                        }
+                        case BC_EQ:  OP_BOOL(==)
+                        case BC_NEQ: OP_BOOL(!=)
+                        case BC_LT:  OP_BOOL(<)
+                        case BC_LTE: OP_BOOL(<=)
+                        case BC_GT:  OP_BOOL(>)
+                        case BC_GTE: OP_BOOL(>=)
                         default: Assert(false);
                         #undef OP
+                        #undef OP_BOOL
                     }
                 } else if(GET_CONTROL_SIZE(control) == CONTROL_64B) {
                     switch(opcode){
-                        #define OP(P) *(double*)&registers[op0] = *(double*)&registers[op0] P *(double*)&registers[op1]; break;
+                        #define OP(P) *(double*)&registers[op0] = *(double*)&raw_value0 P *(double*)&raw_value1; break;
+                        #define OP_BOOL(P) registers[op0] = *(double*)&raw_value0 P *(double*)&raw_value1; break;
                         case BC_ADD: OP(+)
                         case BC_SUB: OP(-)
                         case BC_MUL: OP(*)
                         case BC_DIV: OP(/)
-                        case BC_MOD: *(double*)&registers[op0] = fmodl(*(double*)&registers[op0] + *(double*)&registers[op1], *(double*)&registers[op1]); break;
-                        case BC_EQ:  OP(==)
-                        case BC_NEQ: OP(!=)
-                        case BC_LT:  OP(<)
-                        case BC_LTE: OP(<=)
-                        case BC_GT:  OP(>)
-                        case BC_GTE: OP(>=)
+                        case BC_MOD: {
+                            // modulo no negative numbers
+                            auto tmp = fmodl(*(double*)&raw_value0, *(double*)&raw_value1);
+                            if (tmp<0.f)
+                                tmp += *(double*)&raw_value1;
+                            *(double*)&registers[op0] = tmp;
+                            break;
+                        }
+                        case BC_EQ:  OP_BOOL(==)
+                        case BC_NEQ: OP_BOOL(!=)
+                        case BC_LT:  OP_BOOL(<)
+                        case BC_LTE: OP_BOOL(<=)
+                        case BC_GT:  OP_BOOL(>)
+                        case BC_GTE: OP_BOOL(>=)
                         default: Assert(false);
                         #undef OP
+                        #undef OP_BOOL
+                        
                     }
                 }
             } else {
-                #define OP(P) registers[op0] = (TYPE)registers[op0] P (TYPE)registers[op1]; break;
+                #define OP(P) *(TYPE*)&registers[op0] = *(TYPE*)&raw_value0 P *(TYPE*)&raw_value1; break;
                 #define SWITCH_OPS                      \
                      switch(opcode){                    \
                         case BC_ADD: OP(+)              \
                         case BC_SUB: OP(-)              \
                         case BC_MUL: OP(*)              \
                         case BC_DIV: OP(/)              \
-                        case BC_MOD: registers[op0] = ((TYPE)registers[op0] + (TYPE)registers[op1]) % (TYPE)registers[op1]; break; /* positive modulo    */   \
+                        case BC_MOD: {                   \
+                            auto tmp = *(TYPE*)&raw_value0 % *(TYPE*)&raw_value1; \
+                            if(tmp<0)                   \
+                                tmp += *(TYPE*)&raw_value1; \
+                            *(TYPE*)&registers[op0] = tmp;       \
+                        } break; /* positive modulo    */   \
                         case BC_EQ:  OP(==)             \
                         case BC_NEQ: OP(!=)             \
                         case BC_LT:  OP(<)              \
@@ -1016,6 +1159,13 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 }
                 #undef OP
             }
+            
+            // if(op0 != op1 && IS_CONTROL_UNSIGNED(control)) {
+            //     // Clear upper bits of register to avoid problems
+            //     int size = 1 << GET_CONTROL_SIZE(control);
+            //     if(size != 8)
+            //         memset((char*)&registers[op0] + size, 0, 8-size); // reset
+            // }
         } break;
         case BC_LAND:
         case BC_LOR:
@@ -1028,9 +1178,14 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
+            
+            u64 raw_value0 = registers[op0];
+            u64 raw_value1 = registers[op1];
+            registers[op0] = 0;
+
             // TODO: Handle sizes, don't always to 64-bit operation
             switch(opcode){
-                #define OP(P) registers[op0] = registers[op0] P registers[op1]; break;
+                #define OP(P) registers[op0] = raw_value0 P raw_value1; break;
                 case BC_BXOR: OP(^)
                 case BC_BOR: OP(|)
                 case BC_BAND: OP(&)
@@ -1038,10 +1193,14 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 case BC_BRSHIFT: OP(>>)
                 case BC_LAND: OP(&&)
                 case BC_LOR: OP(||)
-                case BC_LNOT: registers[op0] = !registers[op1]; break;
+                case BC_LNOT: registers[op0] = !raw_value1; break;
                 default: Assert(false);
                 #undef OP
             }
+            // Clear upper bits of register to avoid problems
+            int size = 1 << GET_CONTROL_SIZE(control);
+            if(size != 8)
+                memset((char*)&registers[op0] + size, 0, 8-size); // reset
         } break;
         case BC_RDTSC: {
             op0 = (BCRegister)instructions[pc++];
@@ -1119,12 +1278,12 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         default: {
             log::out << log::RED << "Implement "<< log::PURPLE<< opcode << "\n";
-            Assert(false);
-            return;
+            running = false;
+            break;
         }
         } // switch
 
-        if(logging && op0 && opcode != BC_LI32 && opcode != BC_LI64) {
+        if(logging && op0 && opcode != BC_LI32 && opcode != BC_LI64 && opcode != BC_CALL) {
             i64 val = registers[op0];
             if(ptr_from_mov) {
                      if(GET_CONTROL_SIZE(control) == CONTROL_8B)  val = *(i8*)ptr_from_mov;

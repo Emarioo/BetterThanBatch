@@ -45,11 +45,11 @@ struct DebugInformation;
 #define GET_CONTROL_CONVERT_SIZE(x) (InstructionControl)((CONTROL_MASK_CONVERT_SIZE & x) >> 2)
 #define GET_CONTROL_CAST(x) (x & CONTROL_MASK_TYPE)
 #define IS_CONTROL_UNSIGNED(x) (!((CONTROL_SIGNED_OP|CONTROL_FLOAT_OP) & x))
-#define IS_CONTROL_SIGNED(x) ((CONTROL_SIGNED_OP & x))
-#define IS_CONTROL_FLOAT(x) (CONTROL_FLOAT_OP & x)
+#define IS_CONTROL_SIGNED(x) (0!=(CONTROL_SIGNED_OP & x))
+#define IS_CONTROL_FLOAT(x) (0!=(CONTROL_FLOAT_OP & x))
 #define IS_CONTROL_CONVERT_UNSIGNED(x) (!((CONTROL_CONVERT_SIGNED_OP|CONTROL_CONVERT_FLOAT_OP) & x))
-#define IS_CONTROL_CONVERT_SIGNED(x) ((CONTROL_CONVERT_SIGNED_OP & x))
-#define IS_CONTROL_CONVERT_FLOAT(x) (CONTROL_CONVERT_FLOAT_OP & x)
+#define IS_CONTROL_CONVERT_SIGNED(x) (0 != (CONTROL_CONVERT_SIGNED_OP & x))
+#define IS_CONTROL_CONVERT_FLOAT(x) (0 != (CONTROL_CONVERT_FLOAT_OP & x))
 // from -> to (CAST_FROM_TO)
 
 InstructionControl operator |(InstructionControl a, InstructionControl b);
@@ -326,6 +326,10 @@ struct ExternalRelocation {
 
     bool is_global_var = false;
 };
+struct BytecodePrintCache {
+    int prev_tinyindex = -1;
+    int prev_line = -1;
+};
 struct Bytecode;
 typedef u32 TinyBytecodeID;
 // Look at me I'm tiny bytecode! 
@@ -367,7 +371,7 @@ struct TinyBytecode {
     }
     
     // high_index is exclusive
-    void print(int low_index, int high_index, Bytecode* code = nullptr, DynamicArray<std::string>* dll_functions = nullptr, bool force_newline = false);
+    void print(int low_index, int high_index, Bytecode* code = nullptr, DynamicArray<std::string>* dll_functions = nullptr, bool force_newline = false, BytecodePrintCache* print_cache = nullptr);
 
     void restore_to_empty() {
         // When I add a new list to tinycode I will forget to reset it in this function.

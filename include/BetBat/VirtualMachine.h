@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BetBat/CompilerOptions.h"
 #include "BetBat/Bytecode.h"
 #include "BetBat/NativeRegistry.h"
 // #include "Native/NativeLayer.h"
@@ -14,7 +15,7 @@ struct VirtualMachine {
         cleanup();
     }
     
-    volatile i64 registers[BC_REG_MAX];
+    i64 registers[BC_REG_MAX];
     // engone::Memory<u8> stack{};
     QuickArray<u8> stack{};
 
@@ -29,8 +30,9 @@ struct VirtualMachine {
     bool silent = false;
     
     void init_stack(int stack_size = 0x10000);
-    void execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations = false);
-
+    void execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations = false, CompileOptions* options = nullptr);
+    TinyBytecode* fetch_tinycode(Bytecode* bytecode, const std::string& tinycode_name);
+    
     // resets registers and other things but keeps the alloctions.
     void reset();
     void cleanup();

@@ -1,41 +1,5 @@
 
-#import "Logger"
-#import "Memory"
-
-struct ListIterator {
-    // iterator struct must have these two members named exactly like this
-    value: i32* = null;
-    index: i32 = -1;
-}
-struct List {
-    data: i32*;
-    fn init() {
-        data = Allocate(5 * 4)
-        data[0] = 10
-        data[1] = 20
-        data[2] = 33
-        data[3] = 44
-        data[4] = 0
-    }
-    // method should have zero arguments and return one struct
-    fn create_iterator() -> ListIterator {
-        return {}
-    }
-    // method should have one argument (pointer to struct) and return a boolean
-    fn iterate(iterator: ListIterator*) -> bool {
-        iterator.index++
-        if !data[iterator.index] {
-            iterator.value = null
-            return false
-        }
-        iterator.value = &data[iterator.index]
-        return true
-    }
-}
-
-list: List
-list.init()
-
-for list {
-    log(nr, ": ",*it) // it is a pointer to an integer so we dereference it, don't forget this
-}
+a: u64 = 0x5_0000_0000
+n: i32 = -32
+f: u64 = a + n
+_test 0x4_FFFF_FFE0; f

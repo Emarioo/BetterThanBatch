@@ -6,7 +6,7 @@
 #include "BetBat/x64_gen.h"
 #include "BetBat/x64_defs.h"
 
-#include "BetBat/CompilerEnums.h"
+#include "BetBat/CompilerOptions.h"
 #include "BetBat/Compiler.h"
 
 #include "BetBat/Reformatter.h"
@@ -815,7 +815,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         if(is_blank && accessed_params.size()) {
             log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
             log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
-            compiler->options->compileStats.errors++; // nochecking, TODO: call some function instead
+            compiler->compile_stats.errors++; // nochecking, TODO: call some function instead
         }
         if (is_entry_point) {
             // entry point has it's arguments put on the stack, not in rdi, rsi...
@@ -3921,7 +3921,7 @@ engone::Logger& operator<<(engone::Logger& l, X64Inst& i) {
 bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
     using namespace engone;
     
-    #define SEND_ERROR() compiler->options->compileStats.errors++;
+    #define SEND_ERROR() compiler->compile_stats.errors++;
     
     // TODO: Use one inline assembly file per thread and reuse them.
     //   bin path gets full of assembly files otherwise.

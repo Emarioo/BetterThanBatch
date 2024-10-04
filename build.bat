@@ -9,51 +9,12 @@
 @REM python build.py clean
 @REM goto END
 
-if "%~1"=="run" (
-    @REM Run compiler without compiling it
-    @REM btb -dev
-
-    goto RUN_COMPILER
-)
-
-SET RUN_AT_END=1
-
-python build.py use_tracy=true
-
-SET compileSuccess=!errorlevel!
-
-if !compileSuccess! == 0 if !RUN_AT_END!==1 (
-:RUN_COMPILER
-    rem
-
-    @REM cl /nologo /TC wa.c /Fo:wa.o /link /nologo /OUT:wa.exe
-
-    bin\btb -dev
-
-    @REM dumpbin bin/main.o /all > outm
-    @REM dumpbin wa.o /all > outw
-
-    @REM bin\btb examples/dev
-
-    @REM bin\btb examples/crawler/GameCore -d -o main.exe -r
-    @REM bin\btb examples/crawler/GameCore -d -o bin/code.dll
-
-    @REM if !errorlevel! == 0 (
-    @REM     tasklist /fi "IMAGENAME eq main.exe" | find /I "main.exe"
-    @REM     if not !errorlevel! == 0 (
-    @REM         bin\btb examples/crawler/main -d -o main.exe -r
-    @REM     )
-    @REM )
-    
-    @REM bin\btb examples/dev -d -o test.exe
+if not "%~1"=="run" (
+    py build.py
+    @REM py build.py use_tracy=true
+) else (
+    @REM bin\btb -dev
     @REM bin\btb --test
     
-    @REM bin\btb examples/dev
-    @REM if !errorlevel!==0 (
-    @REM     start main server
-    @REM     timeout 1
-    @REM     start main client
-    @REM )
-    
+    bin\btb examples/dev -vm -pvm
 )
-:END

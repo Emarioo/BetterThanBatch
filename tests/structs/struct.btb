@@ -134,18 +134,21 @@ struct Poly<T> {
         return second();
     }
     fn second() -> i32 {
-        #import "Logger"
-        log("second, size",sizeof T)
-        sizeof T;
+        // #import "Logger"
+        // log("second, size",sizeof T)
+        acc_size += sizeof T
         return 0;
     }
 }
+global acc_size: i32
 
 a: Poly<i32>;
 b: Poly<i64>;
 
 a.first();
+_test acc_size;  4
 b.first();
+_test acc_size;  12
 
 @TEST_CASE(nested_struct)
 

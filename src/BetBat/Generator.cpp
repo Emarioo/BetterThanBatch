@@ -1355,7 +1355,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                         // TODO: BOUNDS CHECK
                         if(typesize>1){
                             builder.emit_li32(BC_REG_A, typesize);
-                            builder.emit_mul(indexer_reg, BC_REG_A, 8, false, false);
+                            builder.emit_mul(indexer_reg, BC_REG_A, 4, false, false);
                         }
                         builder.emit_add(BC_REG_B, indexer_reg, 8, false, true);
 
@@ -1383,7 +1383,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
 
                         if(typesize>1){
                             builder.emit_li32(BC_REG_A, typesize);
-                            builder.emit_mul(reg, BC_REG_A, 8, false, false);
+                            builder.emit_mul(reg, BC_REG_A, 4, false, false);
                         }
                         builder.emit_add(BC_REG_B, reg, 8, false, true);
                         builder.emit_push(BC_REG_B);
@@ -3719,7 +3719,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
 
                 if(lsize>1){
                     builder.emit_li32(BC_REG_A, lsize);
-                    builder.emit_mul(indexer_reg, BC_REG_A, 8, false, false);
+                    builder.emit_mul(indexer_reg, BC_REG_A, 4, false, false);
                 }
                 builder.emit_add(BC_REG_B, indexer_reg, 8, false);
 
@@ -3736,7 +3736,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                 builder.emit_pop(BC_REG_B); // reference
                 if(lsize>1){
                     builder.emit_li32(BC_REG_A, lsize);
-                    builder.emit_mul(reg,BC_REG_A, 8, false, false);
+                    builder.emit_mul(reg,BC_REG_A, 4, false, false);
                 }
                 builder.emit_add(BC_REG_B, reg, 8, false);
 
@@ -6349,7 +6349,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // if(alignment != 0)
             //     builder.emit_alloc_local(BC_REG_INVALID, alignment);
             // Assert(currentFrameOffset % 16 == 0);
-            int loc = compiler->options->addTestLocation(statement->location, &compiler->lexer);
+            int loc = compiler->addTestLocation(statement->location, &compiler->lexer);
             builder.emit_test(BC_REG_D, BC_REG_A, 8, loc);
             // if(alignment != 0)
             //     builder.emit_free_local(alignment);
@@ -6945,7 +6945,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
         }
     }
     
-    context.compiler->options->compileStats.errors += context.errors;
+    context.compiler->compile_stats.errors += context.errors;
 
     return true;
 }

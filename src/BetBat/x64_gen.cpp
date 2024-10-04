@@ -36,7 +36,7 @@ Notes:
 #include "BetBat/x64_defs.h"
 
 #include "BetBat/Compiler.h"
-#include "BetBat/CompilerEnums.h"
+#include "BetBat/CompilerOptions.h"
 
 // DO NOT REMOVE NATIVE REGISTER FUNCTIONS JUST BECAUSE WE ONLY
 // HAVE BC_REG_LOCALS. YES it's just one register BUT WHO KNOWS

@@ -66,7 +66,9 @@ app.a = 932
 app.tr = true
 app.soul.numsi = 232.232
 app.soul.ko = 2
-std_print_any(&app, true);
+// How do we test this?
+// std_print_any(&app, true);
+
 // std_print_any("yoo!", true);
 // std_print_any(app, false);
 

@@ -118,10 +118,17 @@ fn TestMapString(tableSize: u32, count: u32) {
 
 // TestMapString(5,10)
 
-_test 0; TestMap(400,200);
-_test 0; TestMap(4000,4000);
-_test 0; TestMap(100,1000);
 
+#if BUILT_FOR_VM
+// virtual machine is slow so we do less calculations
+_test 0; TestMap(400,20);
+_test 0; TestMap(4000,40);
+_test 0; TestMap(100,10);
+#else
+_test 0; TestMap(400,100);
+_test 0; TestMap(4000,200);
+_test 0; TestMap(100,50);
+#endif
 // fn TestDistribution(tableSize: u32, values: i32) {
 //     map: Map<i32, i32>;
 //     map.init(tableSize);

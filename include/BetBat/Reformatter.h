@@ -3,7 +3,7 @@
     (linkers, assemblers)
 */
 
-#include "BetBat/CompilerEnums.h"
+#include "BetBat/CompilerOptions.h"
 #include "Engone/Util/Array.h"
 #include "BetBat/Bytecode.h"
 #include "BetBat/x64_gen.h"

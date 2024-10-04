@@ -5022,7 +5022,7 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     auto signal = info.parseBody(body, info.ast->globalScopeId, PARSE_TRULY_GLOBAL);
     info.functionScopes.pop();
     
-    info.compiler->options->compileStats.errors += info.errors;
+    info.compiler->compile_stats.errors += info.errors;
     
     return body;
 }

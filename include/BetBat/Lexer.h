@@ -11,14 +11,7 @@
 #include "BetBat/Util/Perf.h"
 #include "BetBat/Util/StringBuilder.h"
 
-// Used by TestSuite
-struct TextBuffer {
-    std::string origin;
-    char* buffer = nullptr;
-    int size = 0;
-    int startLine = 1;
-    int startColumn = 1;
-};
+
 
 namespace lexer {
 

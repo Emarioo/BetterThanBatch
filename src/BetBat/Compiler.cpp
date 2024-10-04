@@ -322,7 +322,7 @@ engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v) {
     return logger << ToString(v);
 }
 
-int CompileOptions::addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer){
+int Compiler::addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer){
     auto imp = lexer->getImport_unsafe(loc);
     auto info = lexer->getTokenSource_unsafe(loc);
     
@@ -332,7 +332,7 @@ int CompileOptions::addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lex
     testLocations.last().file = imp->path;
     return testLocations.size()-1;
 }
-CompileOptions::TestLocation* CompileOptions::getTestLocation(int index) {
+TestLocation* Compiler::getTestLocation(int index) {
     return testLocations.getPtr(index);
 }
 void CompileStats::printSuccess(CompileOptions* opts){
@@ -351,12 +351,12 @@ void CompileStats::printSuccess(CompileOptions* opts){
     
     if(opts) {
         log::out << " options: "<<log::AQUA<<opts->target<<log::NO_COLOR<<", " << log::AQUA<< opts->linker<<log::NO_COLOR << "\n";
-        if(opts->compileStats.generatedFiles.size() != 0) {
+        if(generatedFiles.size() != 0) {
             log::out << " output: ";
-            for(int i=0;i<(int)opts->compileStats.generatedFiles.size();i++){
+            for(int i=0;i<(int)generatedFiles.size();i++){
                 if(i!=0)
                     log::out << ", ";
-                log::out << log::AQUA << opts->compileStats.generatedFiles[i] << log::NO_COLOR;
+                log::out << log::AQUA << generatedFiles[i] << log::NO_COLOR;
             }
             log::out << "\n";
         }
@@ -711,7 +711,7 @@ void Compiler::processImports() {
                 signaled = true;
             }
         } else if(!finished && !signaled && waiting_threads+1 == total_threads) {
-            if(options->compileStats.errors > 0) {
+            if(compile_stats.errors > 0) {
                 // error should have been reported
                 lock_imports.unlock();
                 break;
@@ -756,7 +756,7 @@ void Compiler::processImports() {
                 u32 old_id = compiler_imp->import_id;
                 compiler_imp->import_id = lexer.tokenize(compiler_imp->path, old_id);
                 if(!compiler_imp->import_id) {
-                    options->compileStats.errors++; // TODO: Temporary. We should call a function that reports an error since we may need to do more things than just incrementing a counter.
+                    compile_stats.errors++; // TODO: Temporary. We should call a function that reports an error since we may need to do more things than just incrementing a counter.
                     log::out << log::RED << "ERROR: Could not find "<<compiler_imp->path << "\n"; // TODO: Improve error message
                 } else {
                     u32 new_id = preprocessor.process(compiler_imp->import_id,false);
@@ -766,8 +766,8 @@ void Compiler::processImports() {
                     
                     auto intern_imp = lexer.getImport_unsafe(compiler_imp->import_id);
                     
-                    engone::atomic_add(&options->compileStats.lines, intern_imp->lines);
-                    engone::atomic_add(&options->compileStats.readBytes, intern_imp->fileSize);
+                    engone::atomic_add(&compile_stats.lines, intern_imp->lines);
+                    engone::atomic_add(&compile_stats.readBytes, intern_imp->fileSize);
                     
                     u32 tokens = 0;
                     if(intern_imp->chunk_indices.size() > 0) {
@@ -863,9 +863,9 @@ void Compiler::processImports() {
                     //  that you don't have to import it everywhere else though.
                 }
 
-                int prev_errors = options->compileStats.errors;
+                int prev_errors = compile_stats.errors;
                 TypeCheckEnums(ast, my_scope->astScope, this);
-                bool had_errors = options->compileStats.errors > prev_errors;
+                bool had_errors = compile_stats.errors > prev_errors;
 
                 // TODO: Print amount of checked enums.
                 //  LOG(LOG_TASKS, log::GRAY
@@ -939,10 +939,10 @@ void Compiler::processImports() {
                 auto my_scope = ast->getScope(compiler_imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Type function signatures: "<<compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
                 
-                int prev_errors = options->compileStats.errors;
+                int prev_errors = compile_stats.errors;
                 bool is_initial_import = initial_import_id == compiler_imp->import_id;
                 TypeCheckFunctions(ast, my_scope->astScope, this, is_initial_import);
-                bool had_errors = options->compileStats.errors > prev_errors;
+                bool had_errors = compile_stats.errors > prev_errors;
 
                 // TODO: Print amount of checked stuff.
                 //  LOG(LOG_TASKS, log::GRAY
@@ -987,7 +987,7 @@ void Compiler::processImports() {
                     LOGD(LOG_TASKS, log::GREEN<<"Type global body: "<< compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
                 }
                 
-                int prev_errors = options->compileStats.errors;
+                int prev_errors = compile_stats.errors;
                 
                 ASTScope* import_scope = my_scope->astScope;
                 if(compiler_imp->type_checked_import_scope)
@@ -1008,7 +1008,7 @@ void Compiler::processImports() {
                 //     << " tokens: "<<tokens
                 //     << "\n")
 
-                bool had_errors = options->compileStats.errors > prev_errors;
+                bool had_errors = compile_stats.errors > prev_errors;
                 // TODO: Do we need to do something with errors?
 
                 // NOTE: TypeCheckBody may call addTask_type_body.
@@ -1034,7 +1034,7 @@ void Compiler::processImports() {
                     lock_miscellaneous.unlock();
                 }
 
-                int prev_errors = options->compileStats.errors;
+                int prev_errors = compile_stats.errors;
 
                 if(initial_import_id == compiler_imp->import_id) {
                     auto yes = GenerateScope(my_scope->astScope, this, compiler_imp, &compiler_imp->tinycodes, true);
@@ -1048,7 +1048,7 @@ void Compiler::processImports() {
 
 
                 bool new_errors = false;
-                if(prev_errors < options->compileStats.errors) {
+                if(prev_errors < compile_stats.errors) {
                     new_errors = true;
                 }
                 
@@ -1115,7 +1115,7 @@ void Compiler::processImports() {
                     lock_miscellaneous.unlock();
                 }
 
-                if(options->compileStats.errors == 0) {
+                if(compile_stats.errors == 0) {
                     // can't generate if bytecode is messed up.
 
                     switch(options->target) {
@@ -1168,7 +1168,7 @@ void Compiler::run(CompileOptions* options) {
     ZoneScopedC(tracy::Color::Gray19);
     // auto tp = engone::StartMeasure();
 
-    options->compileStats.start_compile = engone::StartMeasure();
+    compile_stats.start_compile = engone::StartMeasure();
 
     Assert(!this->options);
     this->options = options;
@@ -1294,7 +1294,7 @@ void Compiler::run(CompileOptions* options) {
     
     if(options->source_buffer.buffer && options->source_file.size()) {
         log::out << log::RED << "A source buffer and source file was specified. You can only specify one\n";
-        options->compileStats.errors++;
+        compile_stats.errors++;
         return;
     }
     
@@ -1313,7 +1313,7 @@ void Compiler::run(CompileOptions* options) {
         "    ptr: T*;\n"
         "    len: i64;\n"
         "}\n"
-        "operator []<T>(slice: Slice<T>, index: u32) -> T {\n"
+        "operator []<T>(slice: Slice<T>, index: i32) -> T {\n"
         "    return slice.ptr[index];\n"
         "}\n"
         "fn @compiler init_preload()\n" // init global data and stuff
@@ -1345,6 +1345,7 @@ void Compiler::run(CompileOptions* options) {
         if (output_type == OUTPUT_LIB) preload += "#macro BUILD_LIB #endmacro\n";
         if (output_type == OUTPUT_OBJ) preload += "#macro BUILD_OBJ #endmacro\n";
         if (output_type == OUTPUT_BC)  preload += "#macro BUILD_BC  #endmacro\n";
+        if (options->execute_in_vm)    preload += "#macro BUILT_FOR_VM #endmacro\n";
 
         if(options->stable_global_data) {
             preload += "global @notstable stable_global_memory: void*;\n";
@@ -1383,7 +1384,7 @@ void Compiler::run(CompileOptions* options) {
     }
     if(initial_import_id == 0) {
         log::out << log::RED << "Could not find '"<<options->source_file << "'\n";
-        options->compileStats.errors++;
+        compile_stats.errors++;
         return;
     }
     
@@ -1434,14 +1435,14 @@ void Compiler::run(CompileOptions* options) {
         default: Assert(false);
     }
     
-    if(options->compileStats.errors!=0){ 
+    if(compile_stats.errors!=0){ 
         if(!options->silent)
-            options->compileStats.printFailed();
+            compile_stats.printFailed();
         return;
     }
-    if(options->compileStats.warnings!=0){
+    if(compile_stats.warnings!=0){
         if(!options->silent)
-            options->compileStats.printWarnings();
+            compile_stats.printWarnings();
     }
 
     if(options->only_preprocess) {
@@ -1494,11 +1495,11 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case TARGET_WINDOWS_x64: {
             obj_write_success = ObjectFile::WriteFile(OBJ_COFF, object_path, program, this);
-            options->compileStats.generatedFiles.add(object_path);
+            compile_stats.generatedFiles.add(object_path);
         } break;
         case TARGET_LINUX_x64: {
             obj_write_success = ObjectFile::WriteFile(OBJ_ELF, object_path, program, this);
-            options->compileStats.generatedFiles.add(object_path);
+            compile_stats.generatedFiles.add(object_path);
         } break;
         default: Assert(false);
     }
@@ -1506,7 +1507,7 @@ void Compiler::run(CompileOptions* options) {
     if(!obj_write_success) {
         // error message should have been printed.
         // TODO: We should return error codes and print messages here. the ObjectFile functions shouldn't decide how and what we print.
-        options->compileStats.errors++;
+        compile_stats.errors++;
         return;
         // log::out << log::RED << "Could not write object file '"<<object_path<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
     } else if((output_type == OUTPUT_EXE || output_type == OUTPUT_DLL || output_type == OUTPUT_LIB) && options->target != TARGET_BYTECODE) {
@@ -1765,7 +1766,7 @@ void Compiler::run(CompileOptions* options) {
                 log::out << log::LIME<<"Linker command: "<<cmd<<"\n";
             // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
             
-            options->compileStats.start_linker = engone::StartMeasure();
+            compile_stats.start_linker = engone::StartMeasure();
             bool yes = engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
             if(yes && perform_copy) {
                 bool success = FileCopy(temp_path, options->output_file);
@@ -1774,13 +1775,13 @@ void Compiler::run(CompileOptions* options) {
                 }
             }
             failed = !yes;
-            options->compileStats.end_linker = engone::StartMeasure();
-            options->compileStats.generatedFiles.add(output_path);
+            compile_stats.end_linker = engone::StartMeasure();
+            compile_stats.generatedFiles.add(output_path);
         }
-        options->compileStats.end_linker = StartMeasure();
+        compile_stats.end_linker = StartMeasure();
         if(exitCode != 0 || failed) {
             log::out << log::RED << "Linker failed: '"<<cmd<<"'\n";
-            options->compileStats.errors++;
+            compile_stats.errors++;
             return;
         }    
     } else {
@@ -1788,11 +1789,11 @@ void Compiler::run(CompileOptions* options) {
         //   app.bc as outputfile should we write out a bytecode file format?
     }
     
-    options->compileStats.end_compile = engone::StartMeasure();
+    compile_stats.end_compile = engone::StartMeasure();
     
-    if(options->compileStats.errors==0) {
+    if(compile_stats.errors==0) {
         if(!options->silent) {
-            options->compileStats.printSuccess(options);
+            compile_stats.printSuccess(options);
         }
     }
     
@@ -1816,7 +1817,15 @@ void Compiler::run(CompileOptions* options) {
     // }
 JUMP_TO_EXEC:
     
-    if(options->compileStats.errors == 0 && options->executeOutput && output_type == OUTPUT_EXE) {
+    if(compile_stats.errors != 0) {
+        return;   
+    }
+    if(options->execute_in_vm)  {
+        VirtualMachine vm{};
+        vm.execute(bytecode, entry_point, false, options);
+        return;
+    } 
+    if(options->executeOutput && output_type == OUTPUT_EXE) {
         switch(options->target) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS
@@ -1861,15 +1870,14 @@ JUMP_TO_EXEC:
                 #endif
             } break;
             case TARGET_BYTECODE: {
-                VirtualMachine vm{};
-                vm.execute(bytecode, entry_point);
+                log::out << log::RED << "Bytecode as target is not supported. Use --run-vm to execute in virtual machine.\n";
             } break;
             default: Assert(false);
         }
-    } else {
-        if(!options->silent)
-            log::out << log::GRAY << "not executing program\n";
+        return;
     }
+    if(!options->silent)
+        log::out << log::GRAY << "not executing program\n";
 }
 u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error) {
     Path abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
@@ -1985,7 +1993,7 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
             if(lib.named_as == as_name) {
                 found = true;
                 // TODO: Improve error message, which source file the library came from
-                options->compileStats.errors++;
+                compile_stats.errors++;
                 LOG_MSG_LOCATION
                 log::out << log::RED << "Multiple libraries cannot be named the same ("<<as_name<<").\n";
                 log::out << log::RED << " \""<<BriefString(path)<<"\" collides with \""<<lib.path<<"\"\n";

@@ -276,7 +276,6 @@ u32 TestSuite(CompileOptions* options){
     tests.add("tests/structs/struct.btb");
     tests.add("tests/lang/typeinfo.btb");
     tests.add("tests/modules/test_maps.btb");
-    tests.add("tests/modules/test_maps.btb");
 
     tests.add("tests/funcs/overloading.btb");
     tests.add("tests/funcs/constructor.btb");
@@ -346,7 +345,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     // }
 
     bool useInterp = false;
-    // useInterp = true;
+    useInterp = true;
 
     // TODO: Use multithreading. Some threads compile test cases while others start programs and test them.
     //   One thread can test multiple programs and redirect stdout to some file.
@@ -364,7 +363,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         int failedTests;
         DynamicArray<TestCase::Error> missing_errors; // missing but expected errors
         DynamicArray<u16> failedLocations;
-        DynamicArray<CompileOptions::TestLocation> testLocations;
+        DynamicArray<TestLocation> testLocations;
     };
     DynamicArray<TestResult> results;
 
@@ -389,10 +388,10 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         options.linker = user_options->linker;
         options.verbose = user_options->verbose;
         options.modulesDirectory = user_options->modulesDirectory;
-        if(!useInterp) {
-            options.target = user_options->target;
-            options.output_file = "bin/temp.exe";
-        }
+        // if(!useInterp) {
+        options.target = user_options->target;
+        options.output_file = "bin/temp.exe";
+        // }
         options.source_buffer = testcase.textBuffer;
         
         if(!options.instant_report) {
@@ -465,17 +464,45 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             }
         }
         
-        if(options.compileStats.errors > 0) {
+        if(compiler.compile_stats.errors > 0) {
             // errors will be smaller than errorTypes since errors isn't incremented when doing TEST_ERROR(
-            if(compiler.errorTypes.size() < options.compileStats.errors) {
-                log::out << log::YELLOW << "TestSuite: errorTypes: "<< compiler.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
-                totalTests += options.compileStats.errors - compiler.errorTypes.size();
-                failedTests += options.compileStats.errors - compiler.errorTypes.size();
+            if(compiler.errorTypes.size() < compiler.compile_stats.errors) {
+                log::out << log::YELLOW << "TestSuite: errorTypes: "<< compiler.errorTypes.size() << ", errors: "<<compiler.compile_stats.errors <<", they should be equal\n";
+                totalTests += compiler.compile_stats.errors - compiler.errorTypes.size();
+                failedTests += compiler.compile_stats.errors - compiler.errorTypes.size();
             }
         } else {
             if(useInterp) {
+                bool good_to_go = true;
                 VirtualMachine vm{};
-                vm.execute(compiler.bytecode, compiler.entry_point);
+                
+                auto tinycode = vm.fetch_tinycode(compiler.bytecode, compiler.entry_point);
+                
+                for(auto& tc : compiler.bytecode->tinyBytecodes) {
+                    if(tc->try_blocks.size() > 0){
+                        good_to_go = false;
+                        log::out << log::RED << " exceptions are not supported in VM\n";
+                        break;
+                    }
+                }
+                if(!good_to_go)
+                    continue;
+                
+                
+                if (good_to_go) {
+                    auto prev_stdout = GetStandardOut();
+                    auto prev_stderr = GetStandardErr();
+                    bool yes = SetStandardOut(PipeGetWrite(pipe));
+                    bool yes2 = SetStandardErr(PipeGetWrite(pipe));
+                    
+                    vm.silent = true;
+                    vm.execute(compiler.bytecode, compiler.entry_point);
+                    
+                    SetStandardOut(prev_stdout);
+                    SetStandardErr(prev_stderr);
+                }
+                
+                // log::out << "HI THERE "<<yes<<"\n";
                 // Assert(false);
                 // interpreter.reset();
                 // interpreter.silent = true;
@@ -560,7 +587,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
 
         result.totalTests = totalTests;
         result.failedTests = failedTests;
-        result.testLocations.steal_from(options.testLocations);
+        result.testLocations.steal_from(compiler.testLocations);
     }
     
     auto test_endTime = engone::StopMeasure(test_startTime);

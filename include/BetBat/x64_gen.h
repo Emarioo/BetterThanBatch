@@ -2,7 +2,7 @@
 
 #include "BetBat/Bytecode.h"
 #include "BetBat/Util/StringBuilder.h"
-#include "BetBat/CompilerEnums.h"
+#include "BetBat/CompilerOptions.h"
 
 /*
 Common mistakes

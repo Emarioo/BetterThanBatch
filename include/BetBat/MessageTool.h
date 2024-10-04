@@ -44,7 +44,7 @@
 #endif
 #define ERR_LINE2(T, STR) info.reporter->err_mark(T, StringBuilder{} << STR); 
 
-#define BASE_WARN_SECTION(CODE, CONTENT) { info.compiler->options->compileStats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compiler) info.compiler->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compiler) info.compiler->reporter.end_report(); }
+#define BASE_WARN_SECTION(CODE, CONTENT) { info.compiler.compile_stats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compiler) info.compiler->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compiler) info.compiler->reporter.end_report(); }
 
 #define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n\n";
 #define ERR_MSG_LOG(STR) engone::log::out << STR;

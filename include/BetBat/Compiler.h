@@ -7,7 +7,7 @@
 #include "BetBat/NativeRegistry.h"
 
 #include "BetBat/UserProfile.h"
-#include "BetBat/CompilerEnums.h"
+#include "BetBat/CompilerOptions.h"
 
 #include "BetBat/COFF.h"
 #include "BetBat/ELF.h"
@@ -52,7 +52,6 @@ struct Path {
 };
 engone::Logger& operator<<(engone::Logger& logger, const Path& v);
 
-struct CompileOptions;
 struct CompileStats {
     volatile int errors=0;
     volatile int warnings=0;
@@ -102,66 +101,6 @@ struct CompilerVersion {
     };
     // bufferSize should include null termination
     void serialize(char* outString, int bufferSize, u32 flags = INCLUDE_AVAILABLE|EXCLUDE_REVISION);
-};
-struct CompileOptions {
-    CompileOptions() = default;
-    ~CompileOptions() {
-        
-    }
-    void cleanup() {
-        userArguments.cleanup();
-        importDirectories.cleanup();
-        testLocations.cleanup();
-        compileStats.generatedFiles.cleanup();
-    }
-
-    std::string source_file;
-    std::string output_file = "main.exe"; // Should .exe be default on Unix too? no right?
-    TargetPlatform target = CONFIG_DEFAULT_TARGET;
-    LinkerChoice linker = CONFIG_DEFAULT_LINKER;
-    // std::string linker_cmd = "";
-    TextBuffer source_buffer; // pure text instead of a path to some file
-
-    bool useDebugInformation = true;
-    bool silent = false;
-    bool verbose = false;
-    bool executeOutput = false;
-    bool incremental_build = false;
-    bool stable_global_data = false; // I though about disallowing stable globals when using executable and mostly allowing it for dlls and libs but then I thought, "I dont know how users will use it so why should I limit the possibilities.".
-
-    bool disable_multithreading = true; // TODO: Should be false
-    bool disable_preload = false;
-
-    bool quit = false;
-    bool instant_report = true;
-    bool devmode = false;
-    bool only_preprocess = false;
-    bool performTests = false;
-    bool show_profiling = false;
-    std::string pattern_for_files;
-
-    std::string modulesDirectory{"./modules/"}; // Where the standard library can be found. Typically "modules"
-
-    DynamicArray<std::string> defined_macros;
-
-    DynamicArray<std::string> userArguments; // Ignored if output isn't executed. Arguments to pass to the interpreter or executable
-
-    DynamicArray<Path> importDirectories; // Directories to look for imports (source files)
-    int threadCount=0; // zero will use the CPU's number of core
-
-    struct TestLocation {
-        // TODO: store file name elsewhere, duplicated data
-        std::string file;
-        int line=0;
-        int column=0;
-    };
-    DynamicArray<TestLocation> testLocations;
-    // returns index of the newly added test location
-    TestLocation* getTestLocation(int index);
-    // int addTestLocation(TokenRange& range);
-    int addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer);
-
-    CompileStats compileStats{};
 };
 
 enum TaskType : u32 {
@@ -214,6 +153,12 @@ struct CompilerImport {
 };
 extern const char* const PRELOAD_NAME;
 extern const char* const TYPEINFO_NAME;
+struct TestLocation {
+    // TODO: store file name elsewhere, duplicated data
+    std::string file;
+    int line=0;
+    int column=0;
+};
 struct Compiler {
     ~Compiler() {
         cleanup();   
@@ -254,6 +199,7 @@ struct Compiler {
     Reporter reporter{};
 
     CompileOptions* options = nullptr;
+    CompileStats compile_stats{};
 
     std::string entry_point = "main";
     lexer::SourceLocation location_of_entry_point;
@@ -359,6 +305,12 @@ struct Compiler {
         temp_tinycode->restore_to_empty();
         return temp_tinycode;
     }
+
+    DynamicArray<TestLocation> testLocations;
+    // returns index of the newly added test location
+    TestLocation* getTestLocation(int index);
+    // int addTestLocation(TokenRange& range);
+    int addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer);
 
 private:
     engone::Semaphore lock_wait_for_imports;
