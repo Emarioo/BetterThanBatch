@@ -40,13 +40,13 @@ bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index) 
     exportedFunctions.last().tinycode_index = tinycode_index;
     return true;
 }
-void Bytecode::addExternalRelocation(const std::string& name, const std::string& library_path, int tinycode_index, int pc, bool is_var){
+void Bytecode::addExternalRelocation(const std::string& name, const std::string& library_path, int tinycode_index, int pc, ExternalRelocationType rel_type){
     ExternalRelocation tmp{};
     tmp.name = name;
     tmp.library_path = library_path;
     tmp.tinycode_index = tinycode_index;
     tmp.pc = pc;
-    tmp.is_global_var = is_var;
+    tmp.type = rel_type;
     externalRelocations.add(tmp);
 }
 void Bytecode::cleanup(){

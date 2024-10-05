@@ -381,7 +381,11 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
             // I don't know how linking works on Linux...
             alias = "__imp_" + alias;
         }
-        addExternalRelocation(alias, lib_path, reloc, false); // is_var = false BECAUSE it's an external symbol from a dll or static library
+        if(varinfo->is_var()) {
+            addExternalRelocation(alias, lib_path, reloc, BC_REL_GLOBAL_VAR);
+        } else {
+            addExternalRelocation(alias, lib_path, reloc, BC_REL_FUNCTION);
+        }
     }
 }
 SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
@@ -2135,15 +2139,14 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
         }
         if(link_convention == STATIC_IMPORT) {
             builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-            addExternalRelocation(alias, lib_path, reloc);
+            addExternalRelocation(alias, lib_path, reloc, BC_REL_FUNCTION);
         } else if(link_convention == DYNAMIC_IMPORT){
             builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
             if(compiler->options->target == TARGET_WINDOWS_x64) {
                 // I don't know how linking works on Linux...
                 alias = "__imp_" + alias;
             }
-            addExternalRelocation(alias, lib_path, reloc);
-            // addExternalRelocation("__imp_"+alias, lib_path, reloc);
+            addExternalRelocation(alias, lib_path, reloc, BC_REL_FUNCTION);
         } else {
             // NOTE: We emit call to prevent asserts and keep compiling since this link problem
             //   is a problem in x64.

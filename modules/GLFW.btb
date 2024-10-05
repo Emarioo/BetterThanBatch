@@ -17,8 +17,8 @@
     #load "advapi32.lib"
     #load "shell32.lib"
 #else
-    // #load "libs/glfw-3.3.9/lib-ubuntu/libglfw3.a" as GLFW
-    #load "libs/glfw-3.3.9/lib-ubuntu/libglfw.so.3.3" as GLFW
+    #load "libs/glfw-3.3.9/lib-ubuntu/libglfw3.a" as GLFW
+    // #load "libs/glfw-3.3.9/lib-ubuntu/libglfw.so.3.3" as GLFW
     #load "m.so" // math
     #load "X11.so"
     // #load "wayland-client.so"

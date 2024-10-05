@@ -208,9 +208,9 @@ struct ByteStream {
 
     // Marked unsafe because the pointer in the returned slice
     // may be invalidated if the stream is cleaned up.
-    fn sliced_unsafe() -> Slice<u8> {
-        return Slice<u8>{cast<u8*>data, size};
-    }
+    // fn sliced_unsafe() -> Slice<u8> {
+    //     return Slice<u8>{cast<u8*>data, size};
+    // }
     // fn resize(newLen: u32) -> bool {
     //     if newLen > max {
     //         if !_reserve(newLen)

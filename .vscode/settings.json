@@ -92,6 +92,7 @@
         "string.h": "c",
         "sigaction.h": "c",
         "wait.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "glfw3.h": "c"
     }
 }

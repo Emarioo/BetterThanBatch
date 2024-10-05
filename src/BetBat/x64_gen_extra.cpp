@@ -1886,8 +1886,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 } else if(base->link == LinkConvention::DYNAMIC_IMPORT) {
                     // dynamic lib
                     emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
-                    emit1(OPCODE_MOV_REG_RM);
+                    emit1(OPCODE_LEA_REG_M);
                     emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
+                    // emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
+                    // emit1(OPCODE_MOV_REG_RM);
+                    // emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
                 } else {
                     log::out << log::RED << "Link convention was not resolved to @importlib or @importdll, error should have been printed earlier.\n";
                     log::out.flush();
@@ -3831,7 +3834,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         auto& rel = bytecode->externalRelocations[i];
         if(tinycode->index == rel.tinycode_index) {
             int off = get_map_translation(rel.pc);
-            prog->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.is_global_var);
+            prog->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.type == BC_REL_GLOBAL_VAR);
             // found = true;
             // break;
         }

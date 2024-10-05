@@ -318,13 +318,17 @@ struct BCRelocation {
     int pc=-1;
     bool valid() { return tinycode_index != -1; }
 };
+enum ExternalRelocationType : u8{
+    BC_REL_FUNCTION,
+    BC_REL_GLOBAL_VAR,
+};
 struct ExternalRelocation {
     std::string name;
     std::string library_path;
     int tinycode_index=0;
     int pc=0;
-
-    bool is_global_var = false;
+    
+    ExternalRelocationType type = BC_REL_FUNCTION;
 };
 struct BytecodePrintCache {
     int prev_tinyindex = -1;
@@ -471,7 +475,7 @@ struct Bytecode {
     
     // Relocation for external functions
     DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,const std::string& library_path, int tinycode_index, int pc, bool is_var = false);
+    void addExternalRelocation(const std::string& name,const std::string& library_path, int tinycode_index, int pc, ExternalRelocationType rel_type);
 
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;

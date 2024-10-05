@@ -88,7 +88,7 @@
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
-            "environment": [],
+            "environment": [{"name":"LD_LIBRARY_PATH","value":"."}],
             "console": "integratedTerminal",
             "MIMode": "gdb",
             "miDebuggerPath": "gdb",

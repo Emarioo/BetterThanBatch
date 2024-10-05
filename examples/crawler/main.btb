@@ -1,3 +1,5 @@
+// Compile GameCore instead of main if you don't want hotreloading
+
 /*
     A dungeon crawler game
 

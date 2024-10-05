@@ -405,9 +405,38 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
             if (fTexture==-1){
                 oColor = fColor;
             } else {
-                oColor = fColor * texture(uSampler[fTexture], fUV);
+                // this line is forbidden in GLSL 1.30 and later (index sampler with non-constant expression)
+                //oColor = fColor * texture(uSampler[fTexture], fUV);
+                
+                // for now we do this instead
+                switch (fTexture) {
+                case 0:
+                    oColor = fColor * texture(uSampler[0], fUV);
+                    break;
+                case 1:
+                    oColor = fColor * texture(uSampler[1], fUV);
+                    break;
+                case 2:
+                    oColor = fColor * texture(uSampler[2], fUV);
+                    break;
+                case 3:
+                    oColor = fColor * texture(uSampler[3], fUV);
+                    break;
+                case 4:
+                    oColor = fColor * texture(uSampler[4], fUV);
+                    break;
+                case 5:
+                    oColor = fColor * texture(uSampler[5], fUV);
+                    break;
+                case 6:
+                    oColor = fColor * texture(uSampler[6], fUV);
+                    break;
+                case 7:
+                    oColor = fColor * texture(uSampler[7], fUV);
+                    break;
+                }
+                // Text font needs to be white. Text color will be limited to some colors otherwise.
             }
-            // Text font needs to be white. Text color will be limited to some colors otherwise.
         };
 
         @strend
@@ -983,10 +1012,12 @@ fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
 
     success: i32; // reused further down
     infoLog: char[512];
+    info_max: i32 = infoLog.len
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
     if !success {
-        glGetShaderInfoLog(vertexShader, 512, null, infoLog.ptr);
-        log("Vertex shader error: ",infoLog);
+        len: i32 = 0;
+        glGetShaderInfoLog(vertexShader, info_max, &len, infoLog.ptr);
+        log("Vertex shader error: ",Slice<char>{infoLog.ptr,len});
     }
 
     fragmentShader := glCreateShader(GL_FRAGMENT_SHADER);
@@ -999,9 +1030,10 @@ fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
     GLCHECK
     if !success {
-        glGetShaderInfoLog(fragmentShader, 512, null, infoLog.ptr);
+        len: i32 = 0;
+        glGetShaderInfoLog(fragmentShader, info_max, &len, infoLog.ptr);
         GLCHECK
-        log("Fragment shader error: ",infoLog);
+        log("Fragment shader error: ",Slice<char>{infoLog.ptr,len});
     }
 
     shaderProgram := glCreateProgram();
@@ -1016,9 +1048,10 @@ fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
     GLCHECK
     if !success {
-        glGetProgramInfoLog(shaderProgram, 512, null, infoLog.ptr);
+        len: i32 = 0;
+        glGetProgramInfoLog(shaderProgram, 512, &len, infoLog.ptr);
         GLCHECK
-        log("Fragment shader error: ",infoLog);
+        log("Fragment shader error: ",Slice<char>{infoLog.ptr,len});
     }
     
     glDeleteShader(vertexShader);
