@@ -65,6 +65,7 @@ struct CompileOptions {
     bool devmode = false;
     bool only_preprocess = false;
     bool performTests = false;
+    bool cache_tests = false;
     bool show_profiling = false;
     std::string pattern_for_files;
     

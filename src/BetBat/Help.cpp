@@ -9,8 +9,8 @@ void print_version(){
     CompilerVersion version = CompilerVersion::Current();
     version.serialize(buffer, sizeof(buffer),CompilerVersion::INCLUDE_AVAILABLE);
     log::out << "BTB Compiler, version: " << log::LIME<< buffer <<"\n";
-    log::out << log::GRAY << "(major.minor.patch.revision/name-year.month.day)\n";
-    // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)";
+    // log::out << log::GRAY << "(major.minor.patch.revision/name-year.month.day)\n";
+    // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)\n";
 }
 void print_help(){
     using namespace engone;
@@ -79,7 +79,11 @@ void print_help(){
     USAGE("-r,--run")
     DESC("Will run the executable after it's been compiled.\n")
     END
-
+    
+    USAGE("-vm,--run-vm")
+    DESC("Will compile and run code in Virtual Machine.\n")
+    END
+    
     USAGE("--incremental")
     DESC("Compiles source code if any file changed since last compilation. Mostly used with hotreloading.\n")
     END
@@ -124,12 +128,25 @@ void print_help(){
     // NOTE: I seem to have disabled or ruined this.
     // DESC("Displays time measurements of the internal parts of the compiler.\n")
     END
+    
+    USAGE("-pvm,--log-vm")
+    DESC("Will compile and run code in Virtual Machine while logging bytecode instructions.\n")
+    END
+    
+    USAGE("-ivm,--int-vm")
+    DESC("Will compile and run code in Virtual Machine with interactive mode.\n")
+    END
 
     HEADER("Testing")
 
     USAGE("-ts,--test [pattern]")
     DESC("Will run tests on all files that matched the [pattern]. Some default files will be chosen if a pattern wasn't supplied. See '--pattern-match' for syntax of pattern.\n")
     END
+    
+    USAGE("-ct,--cache-tests")
+    DESC("Will cache tests if they succeed and skip them next time you run tests. Useful if you are solving failed tests and don't care about the ones that succeed. Running tests without caching will remove cached tests but you can also manually delete 'bin/cached_tests.dat' which stores them..\n")
+    END
+    
     
     // I don't know if this still works?
     // USAGE("-twe,--test-with-errors [pattern]")

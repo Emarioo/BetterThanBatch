@@ -11,6 +11,7 @@
 
 if not "%~1"=="run" (
     py build.py
+    @REM py build.py use_optimizations=true
     @REM py build.py use_tracy=true
 ) else (
     @REM bin\btb -dev

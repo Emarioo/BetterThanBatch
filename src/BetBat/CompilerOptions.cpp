@@ -49,8 +49,10 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
             options->execute_in_vm = true;
         } else if (arg == "--int-vm" || arg == "-ivm") {
             options->interactive_vm = true;
+            options->execute_in_vm = true;
         } else if (arg == "--log-vm" || arg == "-pvm") { // not abbreviated lvm to avoid confusing with llvm
             options->logged_vm = true;
+            options->execute_in_vm = true;
         } else if (arg == "--preproc" || arg == "-p") {
             options->only_preprocess = true;
         } else if (arg == "--out" || arg == "-o") {
@@ -71,6 +73,8 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
                 i++;
                 options->pattern_for_files = commands[i];
             }
+        } else if (arg == "--cache-tests" || arg == "-ct") {
+            options->cache_tests = true;
         } else if (arg == "--test-with-errors" || arg == "-twe") {
             options->performTests = true;
             options->instant_report = true;

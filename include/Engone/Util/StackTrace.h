@@ -15,8 +15,23 @@
 
 #include <functional>
 
-#define ENABLE_ASSERT_HANDLER
+// #define ENABLE_ASSERT_HANDLER
 
+#ifdef ENABLE_ASSERT_HANDLER
+    #ifdef OS_WINDOWS
+        #define TRACE_FUNC() PushStackTrace(__func__, __FILE__, __LINE__); defer_2 { PopStackTrace(); };
+    #else
+        #define TRACE_FUNC() PushStackTrace(__FUNCTION__, __FILE__, __LINE__); defer_2 { PopStackTrace(); };
+    #endif
+    #define CALLBACK_ON_ASSERT(X) PushCallbackOnAssert([&](){ X });
+    #define SINGLE_CALLBACK_ON_ASSERT(X) SetSingleCallbackOnAssert([&](){ X });
+    #define POP_LAST_CALLBACK() PopLastCallback();
+#else
+    #define TRACE_FUNC()
+    #define CALLBACK_ON_ASSERT(X)
+    #define SINGLE_CALLBACK_ON_ASSERT(X)
+    #define POP_LAST_CALLBACK()
+#endif
 
 #define defer_2 DeferStruct_2 COMBINE(defer_2,__LINE__){};COMBINE(defer_2,__LINE__)._func=[&]()
 struct DeferStruct_2 {
@@ -26,16 +41,6 @@ struct DeferStruct_2 {
     // std::function<void()>& _func;
     std::function<void()> _func;
 };
-#ifdef OS_WINDOWS
-    #define TRACE_FUNC() PushStackTrace(__func__, __FILE__, __LINE__); defer_2 { PopStackTrace(); };
-#else
-    #define TRACE_FUNC() PushStackTrace(__FUNCTION__, __FILE__, __LINE__); defer_2 { PopStackTrace(); };
-#endif
-
-#define CALLBACK_ON_ASSERT(X) PushCallbackOnAssert([&](){ X });
-#define SINGLE_CALLBACK_ON_ASSERT(X) SetSingleCallbackOnAssert([&](){ X });
-
-#define POP_LAST_CALLBACK() PopLastCallback();
 
 // Caller once per thread
 // InitAssetHandler must be called by a SINGLE thread the first time because we initialize global information.

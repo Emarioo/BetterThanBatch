@@ -1695,7 +1695,16 @@ void Compiler::run(CompileOptions* options) {
             cmd += object_path + " ";
 
             if(options->target == TARGET_WINDOWS_x64) {
-                cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
+                bool has_kernel = false;
+                for(auto& path : program->libraries) {
+                    if (path == "Kernel32.lib" || path == "Kernel32.dll" || path == "Kernel32") {
+                        has_kernel = true;
+                        break;
+                    }
+                }
+                if(!has_kernel) {
+                    cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
+                }
             } else if(options->target == TARGET_LINUX_x64) {
                 // cmd += "-lc "; // link clib because it has wrappers for syscalls, NOTE: We actually don't need this, we use syscalls in assembly.
             }

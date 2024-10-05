@@ -426,6 +426,18 @@ namespace engone {
 		*seconds = (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec))/(double)NS;
         return true;
     }
+     bool FileLastWriteTimestamp_us(const std::string& path, u64* timestamp, bool log_error){
+		struct stat buffer;
+		int err = stat(path.c_str(), &buffer);
+		if(err != 0)
+			return false;
+
+        // return ( == 0) && (buffer.st_mode & S_IFDIR);
+
+		auto& ts = buffer.st_mtim;
+		*timestamp = (u64)ts.tv_sec * 1000'000 + (u64)ts.tv_nsec;
+        return true;
+    }
 	bool FileCopy(const std::string& src, const std::string& dst, bool log_error){
 		// Assert(("FileCopy function not implemented",false));
 		 

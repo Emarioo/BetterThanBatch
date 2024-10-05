@@ -1,5 +1,3 @@
+#import "examples/map_perf"
 
-a: u64 = 0x5_0000_0000
-n: i32 = -32
-f: u64 = a + n
-_test 0x4_FFFF_FFE0; f
+TestMap(1000,4000);

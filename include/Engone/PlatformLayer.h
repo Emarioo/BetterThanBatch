@@ -130,6 +130,7 @@ namespace engone {
     bool DirectoryExist(const std::string& path);
 	bool DirectoryCreate(const std::string& path);
     bool FileLastWriteSeconds(const std::string& path, double* seconds, bool log_error = false);
+    bool FileLastWriteTimestamp_us(const std::string& path, u64* timestamp, bool log_error = false);
     
 	// Not thread safe if you change working directory or if used within shared libraries. (from windows docs)
 	// Backslashes are converted to forward slashes. Every function in platform layer uses forward slashes but

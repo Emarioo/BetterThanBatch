@@ -691,7 +691,7 @@ SignalIO PreprocContext::parseImport() {
             if(assumed_path.size()) {
                 ERR_SECTION(
                     ERR_HEAD2(str_token)   
-                    ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. It was assumed to exist here '"<<log::GREEN<<assumed_path<<log::NO_COLOR<<"' due to the './' which indicates a relative directory to the current import ('"<<log::GREEN<<TrimLastFile(lexer_import->path)<<log::NO_COLOR<<"' in this case).")
+                    ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. It was assumed to exist here '"<<log::GREEN<<assumed_path<<log::NO_COLOR<<"' due to the './' which indicates a relative directory to the current import ('"<<log::GREEN<<lexer_import->path<<log::NO_COLOR<<"' in this case). Skip './' if you want relative directory to current working directory.")
                     ERR_LINE2(str_token,"here")
                 )
             } else {

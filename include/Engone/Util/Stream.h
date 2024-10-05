@@ -315,10 +315,10 @@ struct ByteStream {
         }
         return iterator.size != 0;
     }
-    bool reserve(u32 size) {
+    void* reserve(u32 size) {
         bool suc = allocations.add({});
         if(!suc)
-            return false;
+            return nullptr;
         
         auto allocation = &allocations.last();
         allocation->max = size;
@@ -326,9 +326,25 @@ struct ByteStream {
         allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
         if(!allocation->ptr) {
             allocations.removeAt(allocations.size()-1);
-            return false;   
+            return nullptr;   
         }
-        return true;
+        return allocation->ptr;
+    }
+    void* prepare_written_bytes(u32 size) {
+        bool suc = allocations.add({});
+        if(!suc)
+            return nullptr;
+        
+        auto allocation = &allocations.last();
+        allocation->max = size;
+        ENSURE_ALLOCATOR
+        allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
+        if(!allocation->ptr) {
+            allocations.removeAt(allocations.size()-1);
+            return nullptr;   
+        }
+        allocation->writtenBytes = size;
+        return allocation->ptr;
     }
     
     static void Test_iterator() {

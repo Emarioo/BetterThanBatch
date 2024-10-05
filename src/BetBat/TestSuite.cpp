@@ -1,6 +1,8 @@
 #include "BetBat/TestSuite.h"
 
 #include "Engone/Logger.h"
+#include "Engone/PlatformLayer.h"
+#include "Engone/Util/Stream.h"
 
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) { CONTENT }
@@ -317,7 +319,7 @@ u32 TestSuite(CompileOptions* options){
 //     }
 //     return 0;
 // }
-u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesToTest){
+u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesToTest) {
     using namespace engone;
 
     // We run out of profilers contexts fast and a message about is printed
@@ -334,9 +336,43 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             engone::Free(origin.buffer, origin.size);
         }
     };
-
     for (auto& file : filesToTest) {
         ParseTestCases(file, &testOrigins, &testCases);
+    }
+    
+    CachedTests cached_tests{};
+    std::string cache_path = "bin/cached_tests.dat";
+    if (user_options->cache_tests) {
+        bool yes = LoadTests(cache_path, &cached_tests);
+        if(!yes) {
+            // no cache is fine
+        } else {
+            log::out << log::GRAY << "Skipping "<<cached_tests.tests.size()<<" tests in cache\n";
+        }
+        for(int i=0;i<testCases.size();i++) {
+            auto& testcase = testCases[i];
+            u64 origin_timestamp;
+            bool has_timestamp = FileLastWriteTimestamp_us(testcase.textBuffer.origin, &origin_timestamp);
+            if(has_timestamp) {
+                int cached_test_index = -1;
+                for(int j=0;j<cached_tests.tests.size();j++) {
+                    auto& cached_test = cached_tests.tests[j];
+                    if (cached_test.path == testcase.textBuffer.origin && cached_test.name == testcase.testName) {
+                        if(cached_test.timestamp >= origin_timestamp) {
+                            cached_test_index = j;
+                            break;
+                        }
+                    }
+                }
+                if(cached_test_index != -1) {
+                    // cached_tests.tests.removeAt(cached_test_index);
+                    testCases.removeAt(i);
+                    i--;
+                }
+            }
+        }
+    } else {
+        FileDelete(cache_path);
     }
 
     // log::out << log::GOLD << "Test cases ("<<testCases.size()<<"):\n";
@@ -346,6 +382,9 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
 
     bool useInterp = false;
     useInterp = true;
+    
+    if(user_options->execute_in_vm)
+        useInterp = true;
 
     // TODO: Use multithreading. Some threads compile test cases while others start programs and test them.
     //   One thread can test multiple programs and redirect stdout to some file.
@@ -366,18 +405,17 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         DynamicArray<TestLocation> testLocations;
     };
     DynamicArray<TestResult> results;
+    results.resize(testCases.size());
 
     i64 finalFailedTests = 0;
     i64 finalTotalTests = 0;
 
     auto test_startTime = engone::StartMeasure();
     bool progress_bar = false;
-
-    // VirtualMachine interpreter{};
+    
     for(int i=0;i<testCases.size();i++) {
         auto& testcase = testCases[i];
-        results.add({});
-        auto& result = results.last();
+        auto& result = results[i];
 
         CompileOptions options{};
         options.silent = true;
@@ -485,10 +523,6 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                         break;
                     }
                 }
-                if(!good_to_go)
-                    continue;
-                
-                
                 if (good_to_go) {
                     auto prev_stdout = GetStandardOut();
                     auto prev_stderr = GetStandardErr();
@@ -501,12 +535,6 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                     SetStandardOut(prev_stdout);
                     SetStandardErr(prev_stderr);
                 }
-                
-                // log::out << "HI THERE "<<yes<<"\n";
-                // Assert(false);
-                // interpreter.reset();
-                // interpreter.silent = true;
-                // interpreter.execute(bytecode);
             } else {
                 // TODO: Check if x64 failed, check if exe was produced
 
@@ -588,6 +616,46 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         result.totalTests = totalTests;
         result.failedTests = failedTests;
         result.testLocations.steal_from(compiler.testLocations);
+    }
+    for(int i=0;i<testCases.size();i++) {
+        auto& testcase = testCases[i];
+        auto& result = results[i];
+
+        if(result.failedTests == 0 && user_options->cache_tests) {
+            int cached_index = -1;
+            for(int j=0;j<cached_tests.tests.size();j++) {
+                auto& ct = cached_tests.tests[j];
+                if(ct.path == testcase.textBuffer.origin && ct.name == testcase.testName) {
+                    cached_index = j;
+                    break;
+                }
+            }
+            if(cached_index == -1) {
+                cached_tests.tests.add({});
+                auto& t = cached_tests.tests.last();
+                t.path = testcase.textBuffer.origin;
+                t.name = testcase.testName;
+                
+                u64 origin_timestamp;
+                bool has_timestamp = FileLastWriteTimestamp_us(testcase.textBuffer.origin, &origin_timestamp);
+                t.timestamp = origin_timestamp;
+            } else {
+                auto& t = cached_tests.tests[cached_index];
+                
+                u64 origin_timestamp;
+                bool has_timestamp = FileLastWriteTimestamp_us(testcase.textBuffer.origin, &origin_timestamp);
+                t.timestamp = origin_timestamp;
+            }
+        }
+    }
+    bool yes = SaveTests(cache_path, &cached_tests);
+    if(!yes) {
+        if(user_options->cache_tests) {
+            // if caching wasn't specified then we don't print message because user doesn't care.
+            log::out << log::RED << "Could not cache tests to '"<<cache_path<<"'.\n";
+        }
+    } else {
+        log::out << log::GRAY << "Caching "<<cached_tests.tests.size()<<" tests to '"<<cache_path<<"'.\n";
     }
     
     auto test_endTime = engone::StopMeasure(test_startTime);
@@ -677,4 +745,74 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     }
 
     return finalFailedTests;
+}
+
+bool SaveTests(const std::string& path, CachedTests* tests) {
+    using namespace engone;
+    ByteStream* stream = ByteStream::Create(nullptr);
+    defer { ByteStream::Destroy(stream, nullptr); };
+    
+    stream->write4((int)tests->tests.size());
+    for(auto& test : tests->tests) {
+        stream->write2((int)test.path.size());
+        stream->write(test.path.data(), test.path.size());
+        stream->write2((int)test.name.size());
+        stream->write(test.name.data(), test.name.size());
+        stream->write8(test.timestamp);
+    }
+    
+    void* ptr;
+    u32 size;
+    bool yes = stream->finalize(&ptr, &size);
+    
+    auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
+    if(!file) {
+        return false;
+    }
+    FileWrite(file, ptr, size);
+    FileClose(file);
+    return true;
+}
+bool LoadTests(const std::string& path, CachedTests* tests) {
+    using namespace engone;
+    ByteStream* stream = ByteStream::Create(nullptr);
+    defer { ByteStream::Destroy(stream, nullptr); };
+    
+    u64 filesize;
+    auto file = FileOpen(path, FILE_READ_ONLY, &filesize);
+    if(!file) {
+        return false;
+    }
+    defer { FileClose(file); };
+    void* data = stream->prepare_written_bytes(filesize);
+    
+    if(!data) {
+        return false;
+    }
+    FileRead(file, data, filesize);
+    
+    tests->tests.cleanup();
+    
+    int offset = 0;
+    int test_count = stream->read4(offset);
+    offset += 4;
+    tests->tests.resize(test_count);
+    for(auto& test : tests->tests) {
+        int len = stream->read2(offset);
+        offset += 2;
+        test.path.resize(len);
+        stream->read(offset, (void*)test.path.data(), test.path.size());
+        offset += len;
+        
+        len = stream->read2(offset);
+        offset += 2;
+        test.name.resize(len);
+        stream->read(offset, (void*)test.name.data(), test.name.size());
+        offset += len;
+        
+        test.timestamp = stream->read8(offset);
+        offset += 8;
+    }
+    
+    return true;
 }

@@ -29,3 +29,15 @@ struct TestOrigin {
 u32 TestSuite(CompileOptions* options);
 
 u32 VerifyTests(CompileOptions* options, DynamicArray<std::string>& filesToTest);
+
+struct CachedTests {
+    struct Test {
+        std::string path;
+        std::string name; // name of test case inside file
+        u64 timestamp;
+    };
+    DynamicArray<Test> tests;
+};
+
+bool SaveTests(const std::string& path, CachedTests* tests);
+bool LoadTests(const std::string& path, CachedTests* tests);

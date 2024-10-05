@@ -199,7 +199,6 @@ _test 49000; T(u16, u8, 7000, *, 7);
 // }
 _test 1; cast<u8>301 % cast<u8>258;
 
-
 @TEST_CASE(plusplus)
 
 a := 2332;
