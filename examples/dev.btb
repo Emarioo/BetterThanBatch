@@ -1,56 +1,73 @@
+
+// #import "OS"
+
+// global num: i32;
+// main();
+// fn main() -> i32{
+//     // Bug 0: The address of global variables must be set before they are used in
+//     //  functions. Functions were evaluated before everything including globals which cause the issue.
+//     return num;
+// }
+
+// global str: char*;
+// str = Allocate(16);
+// *str; // This caused a crash at some point in time
+
+// TODO: Test that you can access globals from another file.
+
 /*
     GLFW GLAD Test, to see if the libraries are found.
 */
 
-#import "examples/crawler/GameCore"
-// #import "examples/crawler/main"
+// // #import "examples/crawler/GameCore"
+// // #import "examples/crawler/main"
 // #import "GLAD"
+// #import "GLFW"
 // #import "Logger"
 // #import "OS"
 
 // fn main() {
 //     yes := glfwInit();
-//     if !yes {
-//         log("glfwInit failed");
-//         return ;
-//     }
-//     log("fine")
-//     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-//     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-//     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+//     // if !yes {
+//     //     log("glfwInit failed");
+//     //     return ;
+//     // }
+//     // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+//     // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+//     // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-//     width := 800
-//     height := 600
-//     title := "hey"
-//     glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
-//     if !glfw_window {
-//         log("window failed");
-//         glfwTerminate();
-//         return ;
-//     }
+//     // width := 800
+//     // height := 600
+//     // title := "hey"
+//     // glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
+//     // if !glfw_window {
+//     //     log("window failed");
+//     //     glfwTerminate();
+//     //     return ;
+//     // }
 
-//     glfwMakeContextCurrent(glfw_window)
+//     // glfwMakeContextCurrent(glfw_window)
 
-//     yes = gladLoadGL()
-//     if !yes {
-//         log("gladLoadGL failed")
-//         glfwTerminate()
-//         return ;
-//     }
-//     glViewport(0, 0, 66, 66)
-//     x := 0.0
-//     while (!glfwWindowShouldClose(glfw_window)) {
-//         glViewport(0, 0, width, height)
+//     // yes = gladLoadGL()
+//     // if !yes {
+//     //     log("gladLoadGL failed")
+//     //     glfwTerminate()
+//     //     return ;
+//     // }
+//     // glViewport(0, 0, 800, 600)
+//     // x := 0.0
+//     // while (!glfwWindowShouldClose(glfw_window)) {
+//     //     glViewport(0, 0, width, height)
         
-//         glClearColor(0.2, x, 0.2, 1);
-//         x = (0.002 + x) % 2.0
-//         glClear(GL_COLOR_BUFFER_BIT);
+//     //     glClearColor(0.2, x, 0.2, 1);
+//     //     x = (0.002 + x) % 2.0
+//     //     glClear(GL_COLOR_BUFFER_BIT);
 
-//         // user may not always want this
-//         glfwSwapBuffers(glfw_window);
-//         glfwPollEvents();
+//     //     // user may not always want this
+//     //     glfwSwapBuffers(glfw_window);
+//     //     glfwPollEvents();
         
-//         // temporary
-//         ProcessSleep(0.002) // don't use up CPU resources
-//     }
+//     //     // temporary
+//     //     ProcessSleep(0.002) // don't use up CPU resources
+//     // }
 // }

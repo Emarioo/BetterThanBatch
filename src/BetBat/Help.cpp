@@ -143,8 +143,9 @@ void print_help(){
     DESC("Will run tests on all files that matched the [pattern]. Some default files will be chosen if a pattern wasn't supplied. See '--pattern-match' for syntax of pattern.\n")
     END
     
+    // Useful if you are solving failed tests and don't care about the ones that succeed
     USAGE("-ct,--cache-tests")
-    DESC("Will cache tests if they succeed and skip them next time you run tests. Useful if you are solving failed tests and don't care about the ones that succeed. Running tests without caching will remove cached tests but you can also manually delete 'bin/cached_tests.dat' which stores them..\n")
+    DESC("Will cache successful tests and skip them next time. If tests in a file are modified then they will be retested and cached anew. The cache is normally located here '"<<log::LIME<<"bin/cached_tests.dat"<<log::LIME<<"' and will removed if caching is inactive, you can safely remove it manually to.\n")
     END
     
     

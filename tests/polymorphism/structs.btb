@@ -126,3 +126,17 @@ _test 24; ma.init();
         ptr: T*;
     }
 }
+
+struct Number<T> {
+    x: T;
+    fn sayhi<K>(to_fill: K*) {
+       
+    }
+}
+struct Fruit {
+    x: i32;
+}
+
+num: Number<i32>
+fruit: Fruit
+num.sayhi(&fruit) // tests implicit polymoprhic arguments on methods

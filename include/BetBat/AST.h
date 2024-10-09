@@ -308,6 +308,11 @@ struct TypeId {
         out._flags = out._flags & ~POINTER_MASK;
         return out; 
     }
+    TypeId withoutPointer() const {
+        TypeId out = *this;
+        out._flags = out._flags & ~POINTER_MASK;
+        return out; 
+    }
     bool isPointer() const {
         return (_flags & POINTER_MASK) != 0;
     }

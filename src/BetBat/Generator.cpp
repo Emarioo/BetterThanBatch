@@ -379,7 +379,7 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
 
         if(link_convention == LinkConvention::DYNAMIC_IMPORT && compiler->options->target == TARGET_WINDOWS_x64) {
             // I don't know how linking works on Linux...
-            alias = "__imp_" + alias;
+            // alias = "__imp_" + alias;
         }
         if(varinfo->is_var()) {
             addExternalRelocation(alias, lib_path, reloc, BC_REL_GLOBAL_VAR);
@@ -2144,7 +2144,7 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
             builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
             if(compiler->options->target == TARGET_WINDOWS_x64) {
                 // I don't know how linking works on Linux...
-                alias = "__imp_" + alias;
+                // alias = "__imp_" + alias;
             }
             addExternalRelocation(alias, lib_path, reloc, BC_REL_FUNCTION);
         } else {

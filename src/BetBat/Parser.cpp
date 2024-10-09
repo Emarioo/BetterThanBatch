@@ -3948,7 +3948,19 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         argv.defaultValue = nullptr;
         function->nonDefaults++;
 
-        std::string str = parentStruct->name + "*"; // TODO: doesn't work with polymorhpism?
+        std::string str = parentStruct->name;
+        if(parentStruct->polyArgs.size()>0){
+            str += "<";
+            for(int i=0;i<parentStruct->polyArgs.size();i++){
+                auto& poly = parentStruct->polyArgs[i];
+                if(i != 0)
+                    str+=",";
+                str += poly.name;
+            }
+            str += ">";
+        }
+        str += "*";
+        
         argv.stringType = info.ast->getTypeString(str);;
     }
     info.advance(); // skip (

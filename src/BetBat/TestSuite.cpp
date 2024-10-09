@@ -340,40 +340,42 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         ParseTestCases(file, &testOrigins, &testCases);
     }
     
+    // NOTE: We always try to load cache so that a user can run 'btb --test' first and then 'btb --test -ct' without having
+    //   to rerun all tests again because we cache on 'btb --test'.
     CachedTests cached_tests{};
     std::string cache_path = "bin/cached_tests.dat";
-    if (user_options->cache_tests) {
-        bool yes = LoadTests(cache_path, &cached_tests);
-        if(!yes) {
-            // no cache is fine
-        } else {
+    bool has_cache = LoadTests(cache_path, &cached_tests);
+    if(has_cache) {
+        if(user_options->cache_tests) {
             log::out << log::GRAY << "Skipping "<<cached_tests.tests.size()<<" tests in cache\n";
-        }
-        for(int i=0;i<testCases.size();i++) {
-            auto& testcase = testCases[i];
-            u64 origin_timestamp;
-            bool has_timestamp = FileLastWriteTimestamp_us(testcase.textBuffer.origin, &origin_timestamp);
-            if(has_timestamp) {
-                int cached_test_index = -1;
-                for(int j=0;j<cached_tests.tests.size();j++) {
-                    auto& cached_test = cached_tests.tests[j];
-                    if (cached_test.path == testcase.textBuffer.origin && cached_test.name == testcase.testName) {
-                        if(cached_test.timestamp >= origin_timestamp) {
-                            cached_test_index = j;
-                            break;
+            for(int i=0;i<testCases.size();i++) {
+                auto& testcase = testCases[i];
+                u64 origin_timestamp;
+                bool has_timestamp = FileLastWriteTimestamp_us(testcase.textBuffer.origin, &origin_timestamp);
+                if(has_timestamp) {
+                    int cached_test_index = -1;
+                    for(int j=0;j<cached_tests.tests.size();j++) {
+                        auto& cached_test = cached_tests.tests[j];
+                        if (cached_test.path == testcase.textBuffer.origin && cached_test.name == testcase.testName) {
+                            if(cached_test.timestamp >= origin_timestamp) {
+                                cached_test_index = j;
+                                break;
+                            }
                         }
                     }
-                }
-                if(cached_test_index != -1) {
-                    // cached_tests.tests.removeAt(cached_test_index);
-                    testCases.removeAt(i);
-                    i--;
+                    if(cached_test_index != -1) {
+                        testCases.removeAt(i);
+                        i--;
+                    }
                 }
             }
         }
     } else {
-        FileDelete(cache_path);
+        // there was no cache which is fine
     }
+    // } else {
+    //     FileDelete(cache_path);
+    // }
 
     // log::out << log::GOLD << "Test cases ("<<testCases.size()<<"):\n";
     // for(auto& testCase : testCases){
@@ -381,7 +383,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     // }
 
     bool useInterp = false;
-    useInterp = true;
+    // useInterp = true;
     
     if(user_options->execute_in_vm)
         useInterp = true;
@@ -617,11 +619,15 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         result.failedTests = failedTests;
         result.testLocations.steal_from(compiler.testLocations);
     }
+    // NOTE: We do cache logic even if it's not active because user may type btb --test and then btb --test -ct, if so
+    //   we want to cache on the first test run so that user doesn't have to sit through passed tests again even if they didn't
+    //   specify caching first time.
+    // if(user_options->cache_tests)
     for(int i=0;i<testCases.size();i++) {
         auto& testcase = testCases[i];
         auto& result = results[i];
 
-        if(result.failedTests == 0 && user_options->cache_tests) {
+        if(result.failedTests == 0) {
             int cached_index = -1;
             for(int j=0;j<cached_tests.tests.size();j++) {
                 auto& ct = cached_tests.tests[j];

@@ -1531,7 +1531,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
     
     // log::out << "Poly overloads ("<<possible_overload_groups.size()<<"):\n";
     // ERR_LINE2(expr->location,"here");
-
+    if(expr->nodeId == 5542) {
+        int x=0;   
+    }
     for(auto& ent : possible_overload_groups) {
         auto fnOverloads = ent.fn_overloads;
 
@@ -1540,7 +1542,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
         auto parentStructImpl = ent.parentStructImpl;
         auto parentAstStruct = ent.parentAstStruct;
-        bool implicitPoly = (fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0));
+        // bool implicitPoly = (fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0));
+        bool implicitPoly = (fnPolyArgs.size()==0);
         // TODO: Optimize by checking what in the overloads didn't match. If all parent structs are a bad match then
         //  we don't have we don't need to getOverload the second time with canCast=true
         OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, &inferred_args);
@@ -1624,7 +1627,15 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                 //         parentAstStruct->polyArgs[j].virtualType->id = {};
                 //     }
                 // }
-
+                if(parentAstStruct) {
+                    parentAstStruct->pushPolyState(parentStructImpl);
+                }
+                defer {
+                    if(parentAstStruct) {
+                        parentAstStruct->popPolyState();
+                    }
+                };
+                
                 choosenTypes.resize(0); // clear types from previous check that didn't work out
 
                 // IMPORTANT TODO: NAMESPACES ARE IGNORED AT THE MOMENT. HANDLE THEM!
@@ -1668,6 +1679,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     // if(typeInfo->id != baseType) {
                     bool is_base_virtual = false;
                     bool is_poly_virtual = false;
+                    bool is_struct_base_virtual = false;
                     for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
                         if(overload.astFunc->polyArgs[k].virtualType->originalId == param_baseTypeInfo->originalId) {
                             is_base_virtual = true;
@@ -1686,9 +1698,43 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                             }
                         }
                     }
+                    if(parentAstStruct) {
+                        for(int k = 0;k<parentAstStruct->polyArgs.size();k++){
+                            // We should not do is_base_virtual because the parent struct is already typed.
+                            // We know the type of the polymorphic argument from the struct, we don't have to choose any types from there.
+                            if(parentAstStruct->polyArgs[k].virtualType->originalId == param_baseTypeInfo->originalId) {
+                                is_struct_base_virtual = true;
+                                break;
+                            }
+                            for (int pi=0;pi<param_polyTypes.size();pi++) {
+                                auto ptype = param_polyTypes[pi];
+                                
+                                // WARNING, we assume no pointer
+                                TypeInfo* typeInfo = info.ast->convertToTypeInfo(ptype, argScope, false);
+                                // TypeId baseType = typeInfo->id;
+
+                                if(parentAstStruct->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
+                                    is_poly_virtual = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     // TODO: This code only matches certain types. Complicated ones like T<K,T<K,V>> is not handled (T<K,V> is handled though)
 
-                    if(!is_base_virtual && !is_poly_virtual) {
+                    if(is_struct_base_virtual) {
+                        // TODO: What about type being T<K> where T comes from struct Array<T> and K comes from polymorphic function.
+                        // If we haven't matched function, we need to choose K as a type, we don't do that here...
+                        // NOTE: We look for struct polymorphic argument in parent struct scope, not local scope where function call is.
+                        TypeId real_type = info.ast->convertToTypeId(param_typeString, parentAstStruct->scopeId, true);
+                        // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
+                        //   Perhaps we should cast when some types are polmorphic too?
+                        if(ast->castable(typeToMatch, real_type)){
+                            continue;
+                        }
+                        found = false;
+                        break;
+                    } else if(!is_base_virtual && !is_poly_virtual) {
                         // no virtual/polymorphic type
                         TypeId real_type = info.ast->convertToTypeId(param_typeString, scopeId, true);
                         // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
@@ -1795,7 +1841,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         } else {
                             TypeId real_type = info.ast->convertToTypeId(param_typeString_base, scopeId, true);
                             
-                            if(real_type != typeToMatch_baseType || plevel != typeToMatch.getPointerLevel()){
+                            if(real_type.withoutPointer() != typeToMatch_baseType || plevel != typeToMatch.getPointerLevel()){
                                 found = false;
                                 break;
                             }
@@ -1812,10 +1858,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                                 found = false;
                                 break;
                             }
-
+                            
                             for(int pti = 0; pti < param_polyTypes.size(); pti++){
                                 auto param_poly_typeName = param_polyTypes[pti];
-                                TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, false);
+                                TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, true);
+                                // TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, false);
                                 TypeInfo* typeInfo = info.ast->getTypeInfo(param_arg_type.baseType());
 
                                 auto typeToMatch_polyarg = typeToMatch_typeInfo->structImpl->polyArgs[pti];
@@ -2238,6 +2285,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
         log::out <<"\n";
     )
+    log::out << "nodeid: "<<expr->nodeId<<"\n";
 
     FNCALL_FAIL
     return SIGNAL_FAILURE;

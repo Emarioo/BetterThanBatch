@@ -14,8 +14,8 @@ if not "%~1"=="run" (
     @REM py build.py use_optimizations=true
     @REM py build.py use_tracy=true
 ) else (
-    @REM bin\btb -dev
+    bin\btb -dev
     @REM bin\btb --test
     
-    bin\btb examples/dev -vm -pvm
+    @REM bin\btb examples/dev -vm -pvm
 )
