@@ -3519,15 +3519,17 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 int prefix = 0;
                 if(GET_CONTROL_SIZE(base->control) == CONTROL_32B) {
-
+                    // add instruction has a pointer and we must specify
+                    // REXW so we don't use a 32-bit pointer.
+                    prefix |= PREFIX_REXW;
                 } else if(GET_CONTROL_SIZE(base->control) == CONTROL_64B)
                     prefix |= PREFIX_REXW;
                 else Assert(false);
                 
-                emit1(PREFIX_LOCK);
+                emit1((u8)(PREFIX_LOCK));
                 emit_prefix(prefix, reg0->reg, reg1->reg);
                 emit1(OPCODE_ADD_RM_REG);
-                emit_modrm(MODE_DEREF, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
+                emit_modrm(MODE_DEREF, CLAMP_EXT_REG(reg1->reg), CLAMP_EXT_REG(reg0->reg));
 
                 FIX_POST_IN_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)

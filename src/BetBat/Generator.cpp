@@ -4541,25 +4541,46 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         funcImpl->tinycode_id = tinycode->index + 1;
         if(tinycode->name == compiler->entry_point) {
             bytecode->index_of_main = tinycode->index;
-            bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->name, tinycode->index);
+            int prev_tinyindex;
+            bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->name, tinycode->index, &prev_tinyindex);
             if(!yes) {
+                auto& prev_tiny = bytecode->tinyBytecodes[prev_tinyindex];
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
-                    ERR_MSG("You cannot have two functions named '"<<funcImpl->astFunction->name<<"' since it is the entry point. Either main is overloaded or polymorphic which isn't allowed.")
-                    ERR_LINE2(function->location,"second '"<<funcImpl->astFunction->name<<"' (or third...)")
-                    // TODO: Show all functions named main
+                    ERR_MSG_LOG("You have two functions named '"<<funcImpl->astFunction->name<<"' which is the entry point. ")
+                    if(prev_tiny->debugFunction && !prev_tiny->debugFunction->funcAst) {
+                        auto& file = bytecode->debugInformation->files[prev_tiny->debugFunction->fileIndex];
+                        log::out << "The other 'main' is implicitly created in '" << file<<"'. The initial file you import should call upon a function in the other file.";
+                    }
+                    log::out << "\n\n";
+                    
+                    ERR_LINE2(function->location,"second '"<<funcImpl->astFunction->name<<"'")
+                    if(prev_tiny->debugFunction) {
+                        if(prev_tiny->debugFunction->funcAst) {
+                            auto func = prev_tiny->debugFunction->funcAst;
+                            ERR_LINE2(func->location,"first '"<<funcImpl->astFunction->name<<"'")
+                        } else {
+                            // auto& file = bytecode->debugInformation->files[prev_tiny->debugFunction->fileIndex];
+                            // log::out << "First 'main' comes from global scope of " << file<<"\n";
+                        }
+                    }
                 )
             }
         }
 
         if(function->export_alias.size() != 0) {
-            bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->export_alias, tinycode->index);
+            int prev_tinyindex;
+            bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->export_alias, tinycode->index, &prev_tinyindex);
             if (!yes) {
+                auto& prev_tiny = bytecode->tinyBytecodes[prev_tinyindex];
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
                     ERR_MSG("You cannot export functions with the same name. Use alias in annotation to export with a different name than the one used inside the language.")
                     ERR_LINE2(function->location,"rename or alias")
-                    // TODO: Show all functions named main
+                    if(prev_tiny->debugFunction && prev_tiny->debugFunction->funcAst) {
+                        auto func = prev_tiny->debugFunction->funcAst;
+                        ERR_LINE2(func->location,"first '"<<funcImpl->astFunction->name<<"'")
+                    }
                 )
             }
         }
@@ -6880,7 +6901,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     Identifier* iden = nullptr;
     if(is_initial_import) {
         if(compiler->entry_point.size() != 0) {
-            iden = compiler->ast->findIdentifier(scope->scopeId,0,compiler->entry_point, nullptr, true, false);
+            iden = compiler->ast->findIdentifier(imp->scopeId,0,compiler->entry_point, nullptr, true, true);
             if(!iden) {
                 // If no main function exists then the code in global scope of
                 // initial import will be the main function.
@@ -6913,6 +6934,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 auto dfun = di->addFunction(nullptr, context.tinycode, imp->path, 1);
                 dfun->import_id = imp->import_id;
                 context.debugFunction = dfun;
+                // Don't add yet?
                 context.bytecode->addExportedFunction(tb_main->name, context.tinycode->index);
 
                 Assert(!context.currentFuncImpl);

@@ -260,7 +260,7 @@ namespace lexer {
         };
         FeedIterator createFeedIterator(Token start_token, Token end_token = {});
         FeedIterator createFeedIterator(Import* imp, u32 start, u32 end);
-        bool feed(FeedIterator& iterator, bool skipSuffix = false, bool apply_indent = false);
+        bool feed(FeedIterator& iterator, bool skipSuffix = false, bool apply_indent = false, bool no_quotes = false);
 
         void print(u32 fileid);
 
@@ -282,7 +282,7 @@ namespace lexer {
         // signedness_suffix, 0 = no suffix, 1 = signed, 2 = unsigned
         bool isIntegerLiteral(Token token, i64* value = nullptr, int* significant_digits = nullptr, int* signedness_suffix = nullptr);
 
-        std::string tostring(Token token);
+        std::string tostring(Token token, bool no_quotes = false);
         std::string tostring(SourceLocation token) { return tostring(token.tok); }
 
         u32 createImport(const std::string& path, Import** out_import);

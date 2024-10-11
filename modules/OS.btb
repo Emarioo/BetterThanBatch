@@ -63,10 +63,6 @@ struct Process {
     }
 }
 
-// TODO: Where should we define Assert? not in OS.btb, maybe in preload?
-// #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
-#macro Assert(expression) #endmacro
-
 // NOTE: We force microsecond resolution (assuming MONOTONIC clock supports it)
 #macro __LINUX_MEASURE_RESOLUTION 1000_000
 fn StartMeasure() -> i64 {

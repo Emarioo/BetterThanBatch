@@ -83,7 +83,7 @@ struct TyperContext : public PhaseContext {
     OverloadGroup::Overload* computePolymorphicFunction(ASTFunction* polyFunc, StructImpl* parentStructImpl, const BaseArray<TypeId>& fnPolyArgs, OverloadGroup* fnOverloads);
     // used by checkFnCall and for-loop with user iterators (in checkRest)
     // there are no default values for arguments because it is important that you give each argument thought.
-    ASTFunction* findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpression* expr, bool operatorOverloadAttempt);
+    ASTFunction* findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, ASTStruct* parentStructAst, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpression* expr, bool operatorOverloadAttempt);
     
     void init_context(Compiler* compiler);
 };

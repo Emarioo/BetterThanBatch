@@ -29,9 +29,11 @@ InstructionControl apply_size(InstructionControl c, int size) {
     return c;
 }
 
-bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index) {
+bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index, int* existing_tinycode_index) {
     for(int i=0;i<exportedFunctions.size();i++) {
         if(exportedFunctions[i].name == name) {
+            if(existing_tinycode_index)
+                *existing_tinycode_index = exportedFunctions[i].tinycode_index;
             return false;
         }
     }

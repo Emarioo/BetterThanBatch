@@ -4,16 +4,16 @@ I am not updating this right now since it's mostly users of the language that be
 
 <!-- All notable changes to this project will be documented in this file. Every version will not have a release on github but every version that does, will be marked. -->
  
-The format is based on [Keep a Changelog](http://keepachangelog.com/)
-and this project **DOES NOT** adhere to [Semantic Versioning](http://semver.org/). At least not versions below **1.0.0**.
+Versioning for this project works like this: [Versioning](/docs/details/05-Versioning.md).
  
 ## [0.2.0] - 2024-07-16 [WIP]
+I started the changelog in this version so it's very lacking.
 
 ### Added
- 
-- Added CHANGELOG.md.
+- Added Asserts.btb
+- Added CHANGELOG.md
 
 ### Changed
   
 ### Fixed
- 
+- Fixed linecounter.btb

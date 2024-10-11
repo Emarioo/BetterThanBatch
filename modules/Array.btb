@@ -1,6 +1,7 @@
 // import allocation functions
 #import "Memory"
 // #import "Logger"
+#import "Asserts"
 
 #macro ARRAY_CLEANUP(ARR) for @ptr ARR.sliced_unsafe() it.cleanup(); ARR.cleanup();
 
@@ -137,6 +138,13 @@ struct Array<T> {
     fn reserve(newMax: i32) -> bool {
         // log("newMax",newMax)
         // log("size",sizeof T)
+        Assert(!is_frozen())
+        // NOTE: We could return false instead of asserting but the intention of freeze,
+        //   is to put a restriction and an expectation of no reallocations. You
+        //   want an asser as soon as it happens.
+        if is_frozen()
+            return false
+        
         if newMax==0 {
             // log("{",cast<u64>ptr, max, len,"}",newMax);
             if max!=0 {
@@ -206,6 +214,49 @@ struct Array<T> {
 
         return new_array
     }
+    
+    fn create_iterator() -> Array_Iterator<T> {
+        return {null,-1}
+    }
+    fn iterate(iter: Array_Iterator<T>*) -> bool {
+        if iter.index+1 >= len {
+            iter.value = null
+            iter.index = len
+            return false
+        }
+        iter.index++
+        iter.value = &ptr[iter.index]
+        return true
+    }
+    
+    fn is_frozen() -> bool {
+        return ptr && max == 0
+    }
+    // If an array is frozen, any reallocation will trigger an assert.
+    // You want to freeze an array in multi-threaded applications were you
+    // have filled an array with data and want it to be read-only.
+    fn freeze() -> Array_FreezeLock {
+        lock: Array_FreezeLock
+        lock.ptr = ptr
+        lock.max = max
+        max = 0 // prevent user from resizing array
+        return lock
+    }
+    fn unfreeze(lock: Array_FreezeLock*) {
+        Assert(ptr == lock.ptr)
+        Assert(max == 0)
+        max = lock.max
+        lock.ptr = null
+        lock.max = 0
+    }
+}
+struct Array_FreezeLock {
+    ptr: void*;
+    max: i32;
+}
+struct Array_Iterator<T> {
+    value: T*;
+    index: i32;
 }
 // this does not work
 operator []<T>(arr: Array<T>, index: i32) -> T {
@@ -234,6 +285,41 @@ fn sort<T>(arr: Array<T>*, compare_callback: FnCmp, descending: bool = false, us
         }
     }
 }
+
+
+fn TestArrayFreeze() {
+    arr: Array<i32>
+    for 0..5
+        arr.add(nr)
+    
+    lock := arr.freeze()
+    
+    // TODO: Use _test instead of logging?
+    // TODO: If we use a boolean in the freeze array instead of setting max to zero
+    //   We can allow adding of new elements as long as we don't resize.
+    //   But if you do call freeze you may want to actually freeze the array completly and not
+    //   allow any new elements.
+    for 0..50 {
+        yes := arr.add(100 + nr)
+        if !yes {
+            log("Could not add ", nr, ", arr = ", &arr)
+            break
+        }
+    }
+    
+    arr.unfreeze(&lock)
+    
+    for 0..50 {
+        yes := arr.add(100 + nr)
+        if !yes {
+            log("Could not add ", nr, ", arr = ", &arr)
+            break
+        }
+    }
+    
+    log("Final array: ", &arr)
+}
+
 // Some code to quickly test an array
 // #import "Logger"
 // #import "Array"

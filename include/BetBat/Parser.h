@@ -174,7 +174,7 @@ struct ParseContext : public PhaseContext {
             //     *string = {"",1};
             return &eof;
         }
-        if((info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
+        if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
             *string = chunk->get_string(info->data_offset);
             info->s = chunk->get_data(info->data_offset);
         }

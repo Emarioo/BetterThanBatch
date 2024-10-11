@@ -1,0 +1,31 @@
+
+#import "Logger"
+
+#if DISABLE_ASSERTS
+    #macro Assert(EXPR) #endmacro
+#else
+    #macro Assert(EXPR) CheckAssert(EXPR, #line, #file, #quoted EXPR)
+#endif
+
+fn CheckAssert(condition: bool, line: i32, file: char[], expr_string: char[]) {
+    // TODO: NOT THREAD SAFE, we need a boolean per thread. thread local storage?
+    global disable_asserts: bool;
+    if condition
+        return;
+        
+    if disable_asserts
+        return;
+        
+    disable_asserts = true
+    defer disable_asserts = false
+    
+    prints("[ASSERT] ")
+    prints(expr_string)
+    prints(" - ")
+    prints(file)
+    prints(":")
+    std_print(line)
+    prints("\n");
+    
+    *(cast<i32*>null) = 0
+}

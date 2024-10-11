@@ -470,7 +470,7 @@ struct Bytecode {
     };
     DynamicArray<ExportedFunction> exportedFunctions;
     // returns false if a symbol with 'name' has been exported already
-    bool addExportedFunction(const std::string& name, int tinycode_index);
+    bool addExportedFunction(const std::string& name, int tinycode_index, int* existing_tinycode_index = nullptr);
 
     
     // Relocation for external functions

@@ -862,7 +862,14 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
                 lexer->popTokenFromImport(new_lexer_import);
             } else {
-                layer->concat_next_token = false;
+                // Once again why do we set concat to false here?
+                // layer->concat_next_token = false;
+                new_data += lexer->tostring(tok, true);
+                new_data += lexer->tostring(token, true);
+                
+                ln = prev_src->line;
+                col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
+                lexer->popTokenFromImport(new_lexer_import);
             }
         } else if(layer->quote_next_token) {
             if((token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
@@ -874,7 +881,10 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     new_data += lexer->getStdStringFromToken(token);
                 }
             } else {
-                layer->quote_next_token = false;
+                new_data += lexer->tostring(token);
+                // Assert(false);
+                // // Why is this here? I put an assert here because I am suspicious. - Emarioo, 2024-10-11
+                // layer->quote_next_token = false;
             }
         }
 
@@ -912,8 +922,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             return false;
         }
 
-        layer->concat_next_token = false;
-        layer->quote_next_token = false;
+        // layer->concat_next_token = false;
+        // layer->quote_next_token = false;
         return true;
     };
 
@@ -1135,6 +1145,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     
                     for(int i = real_index; i < real_index + real_count;i++) {
                         auto& list = layer->input_arguments[i];
+                        
                         for(int j=0;j<list.size();j++) {
                             bool end = i+1 == real_index + real_count && j+1 == list.size();
                             if(end) {
@@ -1233,8 +1244,10 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                             lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
                                             appended_tokens++;
                                         }
-                                        layer->concat_next_token = false;
-                                        layer->quote_next_token = false;
+                                        if(layer->quote_next_token)
+                                            layer->concat_next_token = true;
+                                        else
+                                            layer->concat_next_token = false;
                                         continue;
                                     }
                                 }
@@ -1250,10 +1263,14 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                         // auto t = lexer->appendToken(new_lexer_import, list[j], true);
                                 }
                                 appended_tokens++;
-                                layer->concat_next_token = false;
-                                layer->quote_next_token = false;
+                                if(layer->quote_next_token)
+                                    layer->concat_next_token = true;
+                                else
+                                    layer->concat_next_token = false;
                             }
                         }
+                        layer->quote_next_token = false;
+                        layer->concat_next_token = false;
                         if(i+1 != real_index + real_count && list.size() != 0) {
                             if(layer->adjacent_callee) {
                                 lexer::Token com{};
@@ -1270,8 +1287,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                 lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
                                 appended_tokens++;
                                 // TODO: Concat logic?
-                                layer->concat_next_token = false;
-                                layer->quote_next_token = false;
+                                // layer->concat_next_token = false;
+                                // layer->quote_next_token = false;
                             }
                         }
                     }

@@ -1,9 +1,30 @@
+/*
+    Line counter is used to count lines of files.
+    It supports pattern matching, recursive traversal through directories
+    and include, exclude of file extensions.
+        
+    The program takes in arguments and does calculations and gives you information, statistics in different forms.
+    
+    Examples:
+        Let exe = linecounter
+        
+        exe main.btb - Line count for this file
+        exe -i btb - Count lines for all filepaths that contain btb
+        exe -e bin okay - Count lines for all files in current folder (recursively) except for bin and okay
+        
+    
+    Features:
+    - 
+    
+
+
+*/
 #import "Array"
 #import "String"
 // #import "OS"
+#import "File"
 #import "Threads"
-#import "Basic"
-// #import "Logger"
+#import "Logger"
 
 // directory iterator
 // threads
@@ -21,125 +42,199 @@
 //     log("Arg",nr,":", it);
 // }
 
-// #macro LN log(#line)
-#macro LN #endmacro
-
 struct Options {
-    fn cleanup() {
-        ARRAY_CLEANUP(whitelistedDirectories)
-        ARRAY_CLEANUP(whitelistedFormats)
-        ARRAY_CLEANUP(blacklistedDirectories)
-    }
-    threadAmount: u32 = 5;
+    threadAmount: i32 = 1;
+    
     rootPath: char[];
-    whitelistedDirectories: Array<StringBuilder>;
-    whitelistedFormats: Array<StringBuilder>;
-    blacklistedDirectories: Array<StringBuilder>;
-    // blacklistedPaths? sometimes you may want to blacklist names in file names
-    // whitelistedFormats can be used to allow specific files
+    files: Array<StringBuilder>; // individual files to check
+    include_patterns: Array<StringBuilder>;
+    exclude_patterns: Array<StringBuilder>;
+    
+    verbose: bool;
+    quick: bool;
 }
-options: Options;
-defer { options.cleanup(); }
-options.rootPath = ".";
-options.whitelistedDirectories.add(StringBuilder{}).append("src");
-options.whitelistedDirectories.add(StringBuilder{}).append("include");
+fn print_version() {
+    log("0.1.0/revamp-2024-10-10")
+}
+fn print_help() {
+    log("Help information")
+    log(" -f,--file    : Include files in search.")
+    log(" -x,--exclude : Exclude patterns from search.")
+    log(" -i,--include : Include patterns in search.")
+    log(" -r,--root    : Set root directory to perform search.")
+    log(" -q,--quick   : Fast counting with less information.")
+    log(" -v,--verbose : Extra information")
+    log(" -b,--base    : Set default includes, excludes")
+    // log(" -t,--threads : Set thread count.")
+}
+fn main(argc: i32, argv: char**) -> i32 {
+    
+    if argc <= 1 {
+        log("Line counter program by Emarioo.")
+        log("Developed using BetterThanBatch.")
+        std_print("Version: ") print_version()
+        return 0
+    }
+    
+    options: Options
+    options.rootPath = "."
+    enum Mode {
+        MODE_FILE,
+        MODE_INCLUDE,
+        MODE_EXCLUDE,
+    }
+    mode: Mode = MODE_FILE
+    for 1..argc {
+        arg := Slice<char>{argv[nr], strlen(argv[nr])}
+        if arg == "--help" {
+            print_help()
+        } else if arg == "-f" || arg == "--file" {
+            mode = MODE_FILE
+        } else if arg == "-x" || arg == "--exclude" {
+            mode = MODE_EXCLUDE
+        } else if arg == "-i" || arg == "--include" {
+            mode = MODE_INCLUDE
+        } else if arg == "-r" || arg == "--root" {
+            if nr+1 >= argc {
+                log("Expected a path after '",arg,"'.")
+                return 1
+            }
+            nr++
+            arg = Slice<char>{argv[nr], strlen(argv[nr])}
+            options.rootPath = arg
+        } else if arg == "-q" || arg == "--quick" {
+            options.quick = true
+        } else if arg == "-v" || arg == "--verbose" {
+            options.verbose = true
+        } else if arg[0] == '-' {
+            log("Unknown argument '",arg,"', see --help.")
+            return 1
+        } else {
+            tmp: StringBuilder
+            tmp.append(arg)
+            switch mode {
+                case MODE_FILE:    options.files.add(tmp)
+                case MODE_INCLUDE: options.include_patterns.add(tmp)
+                case MODE_EXCLUDE: options.exclude_patterns.add(tmp)
+            }
+        }
+    }
+    
+    log(&options)
 
-options.blacklistedDirectories.add(StringBuilder{}).append("git");
-// options.blacklistedDirectories.add(StringBuilder{}).append("bin");
-options.blacklistedDirectories.add(StringBuilder{}).append(".vs");
-
-// options.whitelistedFormats.add(StringBuilder{}).append("/out");
-options.whitelistedFormats.add(StringBuilder{}).append(".cpp");
-options.whitelistedFormats.add(StringBuilder{}).append(".h");
-
-// if args specify formats then don't add default ones.
-
-CalculateFiles(&options);
-
-// fn PrintHelp() {
-//     log("Help:");
-//     log(" -help : Show help information.");
-//     log(" -threads : Argument after -threads specifies the amount of threads to use.");
-//     log(" -root");
-//     log(" -debug : Spits out information. It is recommended to pipe stdout into a file.");
-// }
+    
+    options.verbose = true
+    tmp: StringBuilder
+    
+    #macro INCLUDE(S) tmp = {} tmp.append(S) options.include_patterns.add(tmp)
+    #macro EXCLUDE(S) tmp = {} tmp.append(S) options.exclude_patterns.add(tmp)
+    INCLUDE(".cpp")
+    INCLUDE(".h")
+    // INCLUDE(".btb")
+    
+    EXCLUDE("fuzzer_gen")
+    EXCLUDE("libs")
+    EXCLUDE("git")
+    EXCLUDE("bin")
+    EXCLUDE(".vs")
+    
+    CalculateFiles(&options);
+    
+    return 0
+}
 
 fn CalculateFiles(options: Options*) {
-    // TODO: Check that whitelistedFormats begins with a dot. "cpp" isn't allowed, ".cpp" is.
-    // TODO: Warn that there are no whitelisted formats so no files will be checked.
-    // TODO: Notify that no whitelisted directories will allow all directories in root path that aren't blacklisted
-
-    iterator := DirectoryIteratorCreate(&options.rootPath);
-    defer { DirectoryIteratorDestroy(iterator); }
-    if !iterator {
-        // error message
-        return;
+    // TODO: Print options
+    
+    log("Options:")
+    log(" Root: ", options.rootPath)
+    log(" Threads: ", options.threadAmount)
+    std_print(" Includes: ")
+    for options.include_patterns {
+        if nr != 0
+            std_print(", ")
+        std_print(*it)
     }
-    LN
-    files: Array<StringBuilder>;
-
-    result: DirectoryIteratorData*;
-    // iterator.result works too
-    while result = iterator.next() {
-        // TODO: blacklist, whitelist
-        LN
-        if result.isDirectory {
-            LN
-            blacklisted := false;
-            for @ptr options.blacklistedDirectories.sliced_unsafe() {
-                // LN
-                // log(it.sliced())
-                if findString(result.name,it.sliced()) {
-                    blacklisted = true;
+    log()
+    std_print(" Excludes: ")
+    for options.exclude_patterns {
+        if nr != 0
+            std_print(", ")
+        std_print(*it)
+    }
+    log()
+    
+    
+    masterInfo: MasterInfo;
+    defer masterInfo.cleanup();
+    
+    // Find and match files
+    total_bytes := 0
+    time_start_find_files := StartMeasure()
+    for 0..options.files.size() {
+        fil := options.files.get_unsafe(nr)
+        files.add(fil.copy())
+        
+        total_bytes += FileSize(fil.sliced())
+    }
+    if options.exclude_patterns.size() > 0 || options.include_patterns.size() > 0 {
+        iterator := DirectoryIteratorCreate(options.rootPath);
+        defer { DirectoryIteratorDestroy(iterator); }
+        if !iterator {
+            log("Could not create iterator")
+            // error message
+            return;
+        }
+        result: DirIteratorItem*;
+        while DirectoryIteratorNext(iterator, &result) {
+            // log(result.name)
+            if result.is_directory {
+                excluded := false;
+                for @ptr options.exclude_patterns.sliced_unsafe() {
+                    // log(it.sliced())
+                    if find(it.sliced(),result.name) != -1 {
+                        excluded = true;
+                        break;
+                    }
+                    // log("haaha",it.sliced())
+                }
+                if excluded {
+                    DirectoryIteratorSkip(iterator)
+                    continue;   
+                }
+                continue;
+            }
+            included := false
+            for @ptr options.include_patterns.sliced_unsafe() {
+                // log("check ", result.name, " ",it.sliced())
+                if find(it.sliced(),result.name) != -1 {
+                    included = true;
                     break;
                 }
-                // log("haaha",it.sliced())
             }
-            LN
-            if blacklisted {
-                iterator.skip();
-                continue;   
-            }
-            whitelisted := options.whitelistedDirectories.len == 0;
-            for @ptr options.whitelistedDirectories.sliced_unsafe() {
-                // log("check",result.name,it.sliced())
-                if findString(result.name,it.sliced()) {
-                    // log(" yes");
-                    whitelisted = true;
-                    break;
-                }
-            }
-            if !whitelisted
-                iterator.skip();
-            continue;
+            if !included
+                continue;
+            // Optimize by using a bucket array of linear allocators for the file names.
+            // Currently, each file name is allocated separately which isn't ideal.
+            info := masterInfo.files.add(FileInfo{})
+            info.append(result.name)
+            total_bytes += result.file_size
         }
-        LN
-        whitelisted := false
-        // log(result.name)
-        for @ptr options.whitelistedFormats.sliced_unsafe() {
-            if matchEnd(result.name,it.sliced()) {
-                whitelisted = true;
-                break;
-            }
-        }
-        if !whitelisted  continue;
-
-        // Optimize by using a bucket array of linear allocators for the file names.
-        // Currently, each file name is allocated separately which isn't ideal.
-        files.add(StringBuilder{}).append(result.name);
     }
-    LN
-    // for @ptr files.sliced() {
-    //     log(it.sliced())
-    // }
+    
+    time_find_files := StopMeasure(time_start_find_files)
+    
+    log("Found ",files.size(), " (",total_bytes/1000.0," KB) in ", time_find_files*1000.0, " ms")
+    if options.verbose {
+        for files {
+            
+        }
+    }
 
     // A note about the design. ThreadInfo should be kept here or inside MasterInfo
     // because you may want to know how each thread performed. If ThreadInfo is created
     // in the thread function then that individual informtion is lost.
 
-    masterInfo: MasterInfo;
-    masterInfo.files = files;
-    defer masterInfo.cleanup();
 
     masterInfo.threadInfos.resize(options.threadAmount);
     memzero(masterInfo.threadInfos.ptr, masterInfo.threadInfos.max * sizeof ThreadInfo);
@@ -156,31 +251,43 @@ fn CalculateFiles(options: Options*) {
     }
 
     for @ptr masterInfo.threadInfos.sliced_unsafe() {
-        if !it.thread.os_handle // may happen if the thread couldn't be created for some reason
+        if !it.thread.valid() // may happen if the thread couldn't be created for some reason
             continue;
-        ThreadJoin(it.thread);
-        ThreadDestroy(it.thread);
+        it.thread.join();
     }
 
     time := StopMeasure(tp);
+    
+    log("Summary:")
 
-    log("Lines:",(masterInfo.data.lines-masterInfo.data.blankLines), "(including blanks:",masterInfo.data.lines,")");
-    log("Bytes:",masterInfo.data.readCharacters);
-    log("Time:",time*1000,"ms");
+    if options.verbose {
+        log("Checked files:")
+        for 0..files.size() {
+            file := files.get(nr)
+            log(" ",file)
+        }   
+    }
+
+    log("Lines: ",(masterInfo.data.lines-masterInfo.data.blankLines), " (",masterInfo.data.lines," with empty lines)");
+    log("Bytes: ",masterInfo.data.readCharacters);
+    log("Time: ",time*1000,"ms");
 }
 struct CalcData {
-    lines: u32;
-    blankLines: u32;
-    commentLines: u32;
-    readCharacters: u64;
+    lines: i32;
+    blankLines: i32;
+    commentLines: i32;
+    readCharacters: i32;
 
     // thread safe
     fn combine(data: CalcData*) {
         // #macro REC(X,...) X += data.X; REC(...)
         #macro REC(X,...) atomic_add(cast<void*>&X, data.X); REC(...)
         REC(lines, blankLines, commentLines, readCharacters);
-        #undef REC
     }
+}
+struct FileInfo {
+    name: StringBuilder;
+    stats: CalcData;
 }
 struct ThreadInfo {
     thread: Thread;
@@ -189,24 +296,30 @@ struct ThreadInfo {
     masterInfo: MasterInfo*;
 }
 struct MasterInfo {
-    files: Array<StringBuilder>;
-    usedFiles: u32 = 0;
+    files: Array<FileInfo>;
+    usedFiles: i32 = 0;
     data: CalcData;
 
     threadInfos: Array<ThreadInfo>;
     
     // thread safe    
     fn nextFile() -> char[] {
-        if usedFiles == files.len
-            return Slice<char>{null,0};
         while true {
+            if usedFiles >= files.len
+                return Slice<char>{null,0};
             oldVal := usedFiles;
-            if !compare_swap(cast<void*>&usedFiles, oldVal, oldVal + 1) {
-                // log("Retry")
+            // log("looping")
+            res := atomic_compare_swap(cast<void*>&usedFiles, oldVal, oldVal + 1)
+            if res != oldVal {
+                // log("Retry ", usedFiles," " ,oldVal," ", res)
                 continue;
             }
+            if oldVal >= files.len
+                return Slice<char>{null,0};
+            // log("success")
 
-            return files.get_unsafe(oldVal).sliced();
+            fil := files.get_unsafe(oldVal)
+            return fil.sliced();
         }
         // won't ever run
         return Slice<char>{null,0};
@@ -217,11 +330,11 @@ struct MasterInfo {
         threadInfos.cleanup();
     }
 }
-fn @stdcall CalculateLines(_info: void*) -> u32 {
+fn @oscall CalculateLines(_info: void*) -> i32 {
     info: ThreadInfo* = _info;
     Assert(info.masterInfo)
     
-    bufferSize := 0u;
+    bufferSize := 0;
     buffer: char* = null;
     defer Free(buffer, bufferSize);
 
@@ -232,8 +345,8 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
         if !info.path.ptr // no more files
             break;
 
-        fileSize: u64 = 0;
-        file := FileOpen(&info.path, FILE_READ_ONLY, outFileSize = &fileSize);
+        fileSize: i64 = 0;
+        file := FileOpen(info.path, FILE_READ_ONLY, outFileSize = &fileSize);
         defer FileClose(file);
 
         if !file
@@ -246,11 +359,11 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
         if bufferSize < fileSize {
             if buffer {
                 // bufferSize = DEFAULT_BUFFER_SIZE;
-                if bufferSize*2u < fileSize {
+                if bufferSize*2 < fileSize {
                     buffer = Reallocate(fileSize, buffer, bufferSize);
                 } else {
-                    buffer = Reallocate(bufferSize*2u, buffer, bufferSize);
-                    bufferSize = bufferSize * 2u;
+                    buffer = Reallocate(bufferSize*2, buffer, bufferSize);
+                    bufferSize = bufferSize * 2;
                 }
             } else {
                 bufferSize = DEFAULT_BUFFER_SIZE;
@@ -265,9 +378,9 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
         // comments
 
         // TODO: assert if readBytes
-        blanks := 0u;
-        lines := 1u; // files always have one line
-        index := 0u
+        blanks := 0;
+        lines := 1; // files always have one line
+        index := 0
         solelyWhitespace := true;
         while index < readBytes {
             chr := buffer[index];
@@ -292,4 +405,31 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
     // log(info.data.lines)
     info.masterInfo.data.combine(&info.data);
     return 0;
-}
+} 
+
+/*
+
+Old line counter did this:
+linecounter -w *.cpp *.h *.btb -b .git .vs bin libs fuzzer_gen
+    
+Settings
+ Root:
+ Threads: 4
+ BufferSize: 256.00 KB
+ Whitelists: *.cpp *.h *.btb
+ Blacklists: .git .vs bin libs fuzzer_gen
+Found 266 files (3.33 MB) in 3.52 ms
+Calculating lines...
+Summary:
+ 92158 lines, 346 lines per file
+ 81231 (88.14%) effective lines
+ 2.33 M non-space characters
+ 1.07 M space characters
+ 3.33 MB processed bytes
+ 345.52 KB in biggest file
+ 24.72 ms in pure process time (threads' combined time)
+ 17.56 ms overall process time
+Memory
+ Total allocated bytes: 1.00 MB, total allocations: 6
+Program finished in 31.18 ms
+*/

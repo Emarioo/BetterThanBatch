@@ -928,14 +928,14 @@ OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseAr
             // Implicit this means that the arguments the function call has won't have the this argument (this = the object the method is called from)
             // But the function implementation uses a this argument so we do -1 and +1 in some places in the code below
             // to account for this.
-            if(fncall->nonNamedArgs > overload.astFunc->arguments.size()-1 // can't match if the call has more essential args than the total args the overload has
-                || fncall->nonNamedArgs < overload.astFunc->nonDefaults-1 // can't match if the call has less essential args than the overload (excluding defaults)
+            if(non_named_args > overload.astFunc->arguments.size()-1 // can't match if the call has more essential args than the total args the overload has
+                || non_named_args < overload.astFunc->nonDefaults-1 // can't match if the call has less essential args than the overload (excluding defaults)
                 || argTypes.size() > overload.astFunc->arguments.size()-1
                 )
                 continue;
 
             if(canCast) {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                for(int j=0;j<(int)non_named_args;j++){
                     if(inferred_args && inferred_args->get(j))
                         continue;
                     if(!ast->castable(argTypes[j], overload.funcImpl->signature.argumentTypes[j+1].typeId)) {
@@ -945,7 +945,7 @@ OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseAr
                     // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
             } else {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                for(int j=0;j<(int)non_named_args;j++){
                     if(inferred_args && inferred_args->get(j))
                         continue;
                     if(argTypes[j] != overload.funcImpl->signature.argumentTypes[j+1].typeId) {
@@ -956,14 +956,14 @@ OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseAr
                 }
             }
         } else {
-            if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
-                || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
+            if(non_named_args > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
+                || non_named_args < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
                 || argTypes.size() > overload.astFunc->arguments.size()
                 )
                 continue;
 
             if(canCast) {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                for(int j=0;j<(int)non_named_args;j++){
                     if(is_member_call && j == 0)
                         continue;
                     if(inferred_args && inferred_args->get(j))
@@ -975,7 +975,7 @@ OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseAr
                     // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
             } else {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                for(int j=0;j<(int)non_named_args;j++){
                     if(is_member_call && j == 0)
                         continue;
                     if(inferred_args && inferred_args->get(j))
@@ -1640,9 +1640,9 @@ TypeInfo* AST::createType(StringView name, ScopeId scopeId){
     return ptr;
 }
 engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
-    if(typeId.getId() < AST_PRIMITIVE_COUNT) {
+    if(!typeId.string && typeId.getId() < AST_PRIMITIVE_COUNT) {
         logger << PRIM_NAME(typeId.getId());
-    } else if(typeId.getId() < AST_OPERATION_COUNT) {
+    } else if(!typeId.string && typeId.getId() < AST_OPERATION_COUNT) {
         logger << OP_NAME(typeId.getId());
     } else {
         logger << "TypeId{";
@@ -1650,7 +1650,7 @@ engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
             logger << typeId.getId();
             if(typeId.string)
                 logger << ",string";
-            if(typeId.string)
+            if(typeId.poison)
                 logger << ",poison";
             if(typeId.pointer_level > 0)
                 logger << ",ptr:"<<typeId.pointer_level;

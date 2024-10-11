@@ -1688,7 +1688,7 @@ TokenType StringToTokenType(const char* str, int len) {
 
     return TOKEN_NONE;
 }
-bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
+bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent, bool no_quotes) {
     using namespace engone;
     Assert(iterator.file_id != 0);
     iterator.clear();
@@ -1731,10 +1731,12 @@ bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
             APPEND(tok.type)
         } else if(tok.type == TOKEN_LITERAL_STRING) {
             Assert(tok.flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED));
-            if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
-                APPEND('\'')
-            else
-                APPEND('"')
+            if(!no_quotes) {
+                if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
+                    APPEND('\'')
+                else
+                    APPEND('"')
+            }
             
             const char* str;
             u8 len = getStringFromToken(tok,&str);
@@ -1766,11 +1768,12 @@ bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
                     APPEND(c)
                 }
             }
-            
-            if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
-                APPEND('\'')
-            else
-                APPEND('"')
+            if(!no_quotes) {
+                if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
+                    APPEND('\'')
+                else
+                    APPEND('"')
+            }
         } else if(tok.type == TOKEN_ANNOTATION) {
             APPEND('@')
             const char* str;
@@ -1873,11 +1876,11 @@ void Lexer::print(u32 fileid) {
         log::out.print(iter.data(),iter.len());
     }
 }
-std::string Lexer::tostring(Token token) {
+std::string Lexer::tostring(Token token, bool no_quotes) {
     auto iter = createFeedIterator(token);
     std::string out{};
     // TODO: Optimize
-    while(feed(iter, true)) {
+    while(feed(iter, true, false, no_quotes)) {
         out.append(iter.data(),iter.len());
     }
     return out;

@@ -1,5 +1,28 @@
 
-// #import "OS"
+// #import "linecounter"
+// #import "Threads"
+
+// #import "Asserts"
+
+
+// Assert(5 == 9)
+
+#import "Array"
+TestArrayFreeze()
+
+
+// {@dumpbc
+// data: i32 = 24
+// res := atomic_add(&data, 5)
+// }
+
+// x: i32 = 9
+
+// thread := ThreadCreate(CalculateLines, &x);
+
+// fn @oscall CalculateLines(_info: void*) -> i32 {
+//     return 5
+// }
 
 // global num: i32;
 // main();

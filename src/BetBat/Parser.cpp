@@ -4794,13 +4794,13 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
             if(tempFunction)
                 bodyLoc->add(info.ast, tempFunction);
             info.nextContentOrder.last()++;
-        } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "conversion") {
-            info.advance();
-            signal = parseFunction(tempFunction, nullptr, true);
-            astNode = (ASTNode*)tempFunction;
-            if(tempFunction)
-                bodyLoc->add(info.ast, tempFunction);
-            info.nextContentOrder.last()++;
+        // } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "conversion") {
+        //     info.advance();
+        //     signal = parseFunction(tempFunction, nullptr, true);
+        //     astNode = (ASTNode*)tempFunction;
+        //     if(tempFunction)
+        //         bodyLoc->add(info.ast, tempFunction);
+        //     info.nextContentOrder.last()++;
         }  else if(token->type == lexer::TOKEN_ENUM) {
             info.advance();
             signal = parseEnum(tempEnum);

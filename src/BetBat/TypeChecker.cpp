@@ -1577,436 +1577,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
             // IMPORTANT: Parent structs may not be handled properly.
             // Assert(!parentStructImpl);
-
-            int lessArguments = 0;
-            // if(ent.set_implicit_this || expr->isMemberCall()) 
-            if(ent.set_implicit_this)
-                lessArguments = 1;
             
-            // What needs to be done compared to other code paths is that fnPolyArgs is empty and needs to be decided.
-            // This can get complicated fn size<T>(a: Slice<T*>)
-            DynamicArray<TypeId> choosenTypes{};
-            DynamicArray<TypeId> realChoosenTypes{};
-            OverloadGroup::PolyOverload* polyOverload = nullptr;
-            for(int i=0;i<(int)fnOverloads->polyOverloads.size();i++){
-                OverloadGroup::PolyOverload& overload = fnOverloads->polyOverloads[i];
+            // SPON
+            
+            polyFunc = findPolymorphicFunction(fnOverloads, expr->nonNamedArgs,argTypes,ent.set_implicit_this, scopeId, parentStructImpl, parentAstStruct, fnPolyArgs, &inferred_args, expr, operatorOverloadAttempt);
 
-                // if(parentStructImpl) {
-                //     if(overload.funcImpl->structImpl->polyArgs.size() != polyArgs.size() /* && !implicitPoly */)
-                //         continue;
-                //     // I don't think implicitPoly should affects this
-                //     for(int j=0;j<(int)parentStruct->polyArgs.size();j++){
-                //         if(parentStruct->polyArgs[j] != overload.funcImpl->structImpl->polyArgs[j]){
-                //             doesPolyArgsMatch = false;
-                //             break;
-                //         }
-                //     }
-                //     if(!doesPolyArgsMatch)
-                //             continue;
-                // }
-
-                // continue if more args than possible
-                // continue if less args than minimally required
-                if(expr->nonNamedArgs > overload.astFunc->arguments.size() - lessArguments || 
-                    expr->nonNamedArgs < overload.astFunc->nonDefaults - lessArguments ||
-                    argTypes.size() > overload.astFunc->arguments.size() - lessArguments
-                    )
-                    continue;
-                
-                // What is the purpose of voiding virtual types?
-                // The loop of nonNamedArgs doesn't transform virtuals.
-                // If the type is a virtual then it handles it differently so
-                // in theory we won't ever access the value virtualType->id (just virtualType->originalId)
-                // It might do something important though.
-                // - Emarioo, 2024-01-03
-                // for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-                //     overload.astFunc->polyArgs[j].virtualType->id = {};
-                // }
-                // if(parentAstStruct){
-                //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                //         parentAstStruct->polyArgs[j].virtualType->id = {};
-                //     }
-                // }
-                if(parentAstStruct) {
-                    parentAstStruct->pushPolyState(parentStructImpl);
-                }
-                defer {
-                    if(parentAstStruct) {
-                        parentAstStruct->popPolyState();
-                    }
-                };
-                
-                choosenTypes.resize(0); // clear types from previous check that didn't work out
-
-                // IMPORTANT TODO: NAMESPACES ARE IGNORED AT THE MOMENT. HANDLE THEM!
-                // TODO: Fix this code it does not work properly. Some behaviour is missing.
-                bool found = true;
-                for (u32 j=0;j<expr->nonNamedArgs;j++){
-                    if(inferred_args[j]) {
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->args[i]->location)
-                            ERR_MSG("Inferred initializers are not allowed with polymorphic functions.")
-                            ERR_LINE2(expr->args[i]->location, "here")
-                        )
-                        continue;
-                    }
-                    TypeId typeToMatch = argTypes[j];
-                    // Assert(typeToMatch.isValid());
-                    // We begin by matching the first argument.
-                    // We can't use CheckType because it will create types and we need some more fine tuned checking.
-                    // We begin checking the base type (we ignore polymoprhism and pointer level)
-                    // If the arguments match then we have a primitive type. We don't need to decide poly arguments here and everything is fine.
-                    // If it didn't match then we check if the type is polymorphic. If so then we must decide now.
-
-                    ScopeId argScope = overload.astFunc->scopeId;
-
-                    TypeId stringType = overload.astFunc->arguments[j + lessArguments].stringType;
-                    auto param_typeString = info.ast->getStringFromTypeString(stringType);
-
-                    u32 plevel=0;
-                    TEMP_ARRAY(StringView, param_polyTypes);
-                    
-                    StringView param_typeString_no_pointer;
-                    StringView param_typeString_base;
-                    // TODO: We need to decompose function pointers too.
-                    AST::DecomposePointer(param_typeString, &param_typeString_no_pointer, &plevel);
-                    AST::DecomposePolyTypes(param_typeString_no_pointer, &param_typeString_base, &param_polyTypes);
-                    // namespace?
-
-                    TypeInfo* param_baseTypeInfo = info.ast->convertToTypeInfo(param_typeString_base, argScope, false);
-                    TypeId param_baseType = param_baseTypeInfo->id;
-                    // TypeInfo* typeInfo = info.ast->getTypeInfo(baseType);
-                    // if(typeInfo->id != baseType) {
-                    bool is_base_virtual = false;
-                    bool is_poly_virtual = false;
-                    bool is_struct_base_virtual = false;
-                    for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
-                        if(overload.astFunc->polyArgs[k].virtualType->originalId == param_baseTypeInfo->originalId) {
-                            is_base_virtual = true;
-                            break;
-                        }
-                        for (int pi=0;pi<param_polyTypes.size();pi++) {
-                            auto ptype = param_polyTypes[pi];
-                            
-                            // WARNING, we assume no pointer
-                            TypeInfo* typeInfo = info.ast->convertToTypeInfo(ptype, argScope, false);
-                            // TypeId baseType = typeInfo->id;
-
-                            if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
-                                is_poly_virtual = true;
-                                break;
-                            }
-                        }
-                    }
-                    if(parentAstStruct) {
-                        for(int k = 0;k<parentAstStruct->polyArgs.size();k++){
-                            // We should not do is_base_virtual because the parent struct is already typed.
-                            // We know the type of the polymorphic argument from the struct, we don't have to choose any types from there.
-                            if(parentAstStruct->polyArgs[k].virtualType->originalId == param_baseTypeInfo->originalId) {
-                                is_struct_base_virtual = true;
-                                break;
-                            }
-                            for (int pi=0;pi<param_polyTypes.size();pi++) {
-                                auto ptype = param_polyTypes[pi];
-                                
-                                // WARNING, we assume no pointer
-                                TypeInfo* typeInfo = info.ast->convertToTypeInfo(ptype, argScope, false);
-                                // TypeId baseType = typeInfo->id;
-
-                                if(parentAstStruct->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
-                                    is_poly_virtual = true;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    // TODO: This code only matches certain types. Complicated ones like T<K,T<K,V>> is not handled (T<K,V> is handled though)
-
-                    if(is_struct_base_virtual) {
-                        // TODO: What about type being T<K> where T comes from struct Array<T> and K comes from polymorphic function.
-                        // If we haven't matched function, we need to choose K as a type, we don't do that here...
-                        // NOTE: We look for struct polymorphic argument in parent struct scope, not local scope where function call is.
-                        TypeId real_type = info.ast->convertToTypeId(param_typeString, parentAstStruct->scopeId, true);
-                        // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
-                        //   Perhaps we should cast when some types are polmorphic too?
-                        if(ast->castable(typeToMatch, real_type)){
-                            continue;
-                        }
-                        found = false;
-                        break;
-                    } else if(!is_base_virtual && !is_poly_virtual) {
-                        // no virtual/polymorphic type
-                        TypeId real_type = info.ast->convertToTypeId(param_typeString, scopeId, true);
-                        // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
-                        //   Perhaps we should cast when some types are polmorphic too?
-                        if(ast->castable(typeToMatch, real_type)){
-                            continue;
-                        }
-                        found = false;
-                        break;
-                    } else if (is_base_virtual && param_polyTypes.size() == 0) {
-                        // Basic type matching with T, not anything complicated like T<K,V>
-
-                        int typeIndex = -1;
-                        // get base of typetomatch
-                        for(int k=0;k<choosenTypes.size();k++){
-                            // NOTE: The choosen poly type must match in full.
-                            if(choosenTypes[k].baseType() == typeToMatch.baseType() &&
-                                choosenTypes[k].getPointerLevel() + plevel == typeToMatch.getPointerLevel()
-                            ) {
-                                typeIndex = k;
-                                break;
-                            }
-                        }
-                        if(typeIndex !=-1){
-                            // one of the choosen types fulfill the type to match
-                            // no need to do anything
-                            continue;
-                        } else {
-                            if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
-                                // no types remaining
-                                found = false;
-                                break;
-                            }
-                            TypeId newChoosen = typeToMatch;
-                            if(typeToMatch.getPointerLevel() < plevel) {
-                                found = false;
-                                break;
-                            }
-                            newChoosen.setPointerLevel(typeToMatch.getPointerLevel() - plevel);
-                            choosenTypes.add(newChoosen);
-
-                            // size<T,K>(T* <K>*)
-                            // size(u32**)
-                        }
-                    } else {
-                        // Assert(is_base_virtual && is_poly_virtual);
-                        // log::out << "Check "<<expr->name<< "\n";
-                        // log::out << " match " << ast->typeToString(typeToMatch)<<"\n";
-                        // log::out << " arg " << typeName<<"\n";
-
-                        // Matching polymorphic parameter and argument is a little complex.
-                        // A paramater may be of type T<K,V> while argument is Map<String,i32>
-                        // The polymorphic argument T,K,V should then be matched with Map, String and i32
-
-                        // We need to match it with the argument type of the caller
-                        // first we check if base type matches (T)
-                        // Then the individual ones
-
-                        // NOTE: I am fairly certain there are bugs here and scenarios that aren't handled.
-
-                        TypeInfo* typeToMatch_typeInfo = info.ast->getTypeInfo(typeToMatch.baseType());
-                        if(!typeToMatch_typeInfo->astStruct) {
-                            found = false;
-                            break;
-                        }
-                        TypeId typeToMatch_baseType = typeToMatch_typeInfo->astStruct->base_typeId;
-
-                        if(is_base_virtual) {
-                            // polymorphic type! we must decide!
-                            // check if type exists in choosen types
-                            // if so then reuse, if not then use up a time
-                            int typeIndex = -1;
-                            // get base of typetomatch
-                            for(int k=0;k<choosenTypes.size();k++){
-                                // NOTE: The choosen poly type must match in full.
-                                if(choosenTypes[k].baseType() == typeToMatch_baseType &&
-                                    choosenTypes[k].getPointerLevel() + plevel == typeToMatch.getPointerLevel()
-                                ) {
-                                    typeIndex = k;
-                                    break;
-                                }
-                            }
-                            if(typeIndex !=-1){
-                                // one of the choosen types fulfill the type to match
-                                // no need to do anything
-                                continue;
-                            } else {
-                                if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
-                                    // no types remaining
-                                    found = false;
-                                    break;
-                                }
-                                if(typeToMatch.getPointerLevel() < plevel) {
-                                    found = false;
-                                    break;
-                                }
-                                TypeId newChoosen = typeToMatch_baseType;
-                                newChoosen.setPointerLevel(typeToMatch.getPointerLevel() - plevel);
-                                choosenTypes.add(newChoosen);
-
-                                // size<T,K>(T* <K>*)
-                                // size(u32**)
-                            }
-                        } else {
-                            TypeId real_type = info.ast->convertToTypeId(param_typeString_base, scopeId, true);
-                            
-                            if(real_type.withoutPointer() != typeToMatch_baseType || plevel != typeToMatch.getPointerLevel()){
-                                found = false;
-                                break;
-                            }
-                        }
-
-                        if(is_poly_virtual){
-                            // This code should allow implicit calculation of incomplete polymorphic types.
-                            // This sould be allowed: fn add<T>(a: T<i32>).
-                            // But it's not so we get this: fn add<T>(a: T), no polymorphic types
-                            // Also this: fn add<T>(a: Array<T>).
-                            // Also this: fn add<T>(a: T<T>).
-
-                            if(!typeToMatch_typeInfo->structImpl || typeToMatch_typeInfo->structImpl->polyArgs.size() != param_polyTypes.size()) {
-                                found = false;
-                                break;
-                            }
-                            
-                            for(int pti = 0; pti < param_polyTypes.size(); pti++){
-                                auto param_poly_typeName = param_polyTypes[pti];
-                                TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, true);
-                                // TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, false);
-                                TypeInfo* typeInfo = info.ast->getTypeInfo(param_arg_type.baseType());
-
-                                auto typeToMatch_polyarg = typeToMatch_typeInfo->structImpl->polyArgs[pti];
-
-                                bool is_poly = false;
-                                for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
-                                    if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
-                                        is_poly = true;
-                                        break;
-                                    }
-                                }
-                                if (!is_poly) {
-                                    if (param_arg_type != typeToMatch_polyarg) {
-                                        found = false;
-                                        break;
-                                    }
-                                    continue; // type match, check next poly argument
-                                }
-
-                                int typeIndex = -1;
-                                for(int k=0;k<choosenTypes.size();k++){
-                                    // NOTE: The choosen poly type must match in full.
-                                    if(choosenTypes[k].baseType() == typeToMatch_polyarg.baseType() &&
-                                        choosenTypes[k].getPointerLevel() == typeToMatch_polyarg.getPointerLevel()
-                                    ) {
-                                        typeIndex = k;
-                                        break;
-                                    }
-                                }
-                                if(typeIndex !=-1){
-                                    // one of the choosen types fulfill the type to match
-                                    // no need to do anything
-                                    continue;
-                                } else {
-                                    if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
-                                        // no types remaining
-                                        found = false;
-                                        break;
-                                    }
-                                    TypeId newChoosen = typeToMatch_polyarg;
-                                    if(typeToMatch_polyarg.getPointerLevel() < param_arg_type.getPointerLevel()) {
-                                    // if(polyarg.getPointerLevel() > plevel) {
-                                        found = false;
-                                        break;
-                                    }
-                                    newChoosen.setPointerLevel(typeToMatch_polyarg.getPointerLevel() - param_arg_type.getPointerLevel());
-                                    // newChoosen.setPointerLevel(plevel - polyarg.getPointerLevel());
-                                    choosenTypes.add(newChoosen);
-                                }
-                            }
-                        } else {
-                            for(int pti = 0; pti < param_polyTypes.size(); pti++){
-                                auto typeName = param_polyTypes[pti];
-                                TypeId arg_type = info.ast->convertToTypeId(typeName, argScope, false);
-                                TypeInfo* typeInfo = info.ast->getTypeInfo(arg_type.baseType());
-
-                                auto polyarg = typeToMatch_typeInfo->structImpl->polyArgs[pti];
-
-                                if(arg_type == polyarg)
-                                    continue;
-                                
-                                found = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-                // Now we have gone through all arguments, found indicates whether all types matched
-                // and whether we are good.
-                if(found){
-                    // NOTE: You can break here because there should only be one matching overload.
-                    // But we keep going in case we find more matches which would indicate
-                    // a bug in the compiler. An optimised build would not do this.
-                    if(polyFunc) {
-                        // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
-                        Assert(("More than one match!",false));
-                        // return outFunc;
-                        break;
-                    }
-                    polyFunc = overload.astFunc;
-                    polyOverload = &overload;
-                    realChoosenTypes.steal_from(choosenTypes);
-                    //break;
-                }
-            }
-            if(polyFunc) {
-                // We found a function
-                fnPolyArgs.resize(polyFunc->polyArgs.size());
-                for(int i = 0; i < polyFunc->polyArgs.size();i++) {
-                    if(i < realChoosenTypes.size()) {
-                        fnPolyArgs[i] = realChoosenTypes[i];
-                    } else {
-                        fnPolyArgs[i] = AST_VOID;
-                    }
-                }
-                //-- Double check so that the types we choose actually works.
-                // Just in case the code for implicit types has bugs.
-                
-                polyOverload->astFunc->pushPolyState(&fnPolyArgs, parentStructImpl);
-                defer {
-                    polyOverload->astFunc->popPolyState();
-                };
-                bool found = true;
-                int extra = ent.set_implicit_this ? 1 : 0;
-                for (u32 j=0;j<expr->nonNamedArgs;j++){
-                    // IMPORTANT: We also run CheckType in case types needs to be created.
-                    // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
-                    TypeId argType = checkType(polyOverload->astFunc->scopeId,polyOverload->astFunc->arguments[j + extra].stringType,
-                        polyOverload->astFunc->arguments[j + extra].location,nullptr);
-                    // TypeId argType = checkType(scope->scopeId,overload.astFunc->arguments[j].stringType,
-                    // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
-                    if(!ast->castable(argTypes[j], argType)){
-                    // if(argType != argTypes[j]){
-                        found = false;
-                        break;
-                    }
-                }
-                if(!found) {
-                    if (operatorOverloadAttempt) {
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->location)
-                            ERR_MSG("COMPILER BUG, when matching operator overloads. Polymorphic overload was generated which didn't match the actual arguments. It's also possible that we shouldn't have generated one to begin with.")
-                            if (expr->left && argTypes.size() > 0) {
-                                ERR_LINE2(expr->left->location, ast->typeToString(argTypes[0]))
-                            }
-                            if (expr->right && argTypes.size() > 1) {
-                                ERR_LINE2(expr->right->location,ast->typeToString(argTypes[1]))
-                            }
-                        )
-                    } else {
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->location)
-                            ERR_MSG("COMPILER BUG, when matching function overloads. The matching generated a polymorphic overload that was meant to match the arguments but which doesn't.")
-                            
-                            for (int i=0;i<argTypes.size();i++) {
-                                if (expr->args.size() > i) {
-                                    ERR_LINE2(expr->args[i]->location, ast->typeToString(argTypes[i]))
-                                }
-                            }
-                        )
-                    }
-                    Assert(found); // If function we thought would match doesn't then the code is incorrect.
-                }
-            }
         } else {
             // IMPORTANT: Poly parent structs may not be handled properly!
             // Assert(!parentStructImpl);
@@ -2101,58 +1676,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             // return SIGNAL_FAILURE;
             // goto error_on_fncall;
         }
-        ScopeInfo* funcScope = info.ast->getScope(polyFunc->scopeId);
-        FuncImpl* funcImpl = info.ast->createFuncImpl(polyFunc);
-        funcImpl->structImpl = parentStructImpl;
-
-        funcImpl->signature.polyArgs.resize(fnPolyArgs.size());
-
-        for(int i=0;i<(int)fnPolyArgs.size();i++){
-            TypeId id = fnPolyArgs[i];
-            funcImpl->signature.polyArgs[i] = id;
-        }
         
-        // TODO: THIS IS TEMPORARY CODE!
-        WHILE_TRUE_N(1000) {
-            // In processImports we use 'lock_imports' mutex when checking is_being_checked.
-            // This would mean that all threads must use the same mutex 'lock_imports' when checking 'is_being_checked', HOWEVER, we are not in a different phase and no thread will check is_being_checked with a different mutex except for the code right here. SOOO, we can use whichever mutex we'd like.
-            compiler->lock_imports.lock(); // TODO: use a different mutex named more appropriately
-            bool is_being_checked = polyFunc->is_being_checked || (
-                (!currentAstFunc || currentAstFunc->parentStruct != parentAstStruct) &&  // if the function we check with checkFunctionSignature is a method and the parent struct of the method is the same struct as the current parent struct THEN we don't mind that the parent struct is being checked because this thread we are currently doing that.
-                parentAstStruct && parentAstStruct->is_being_checked);
-            if(!is_being_checked) {
-                polyFunc->is_being_checked = true;
-                if(parentAstStruct)
-                    parentAstStruct->is_being_checked = true;
-                compiler->lock_imports.unlock();
-                break;
-            }
-            compiler->lock_imports.unlock();
-
-            engone::Sleep(0.001); // TODO: Don't sleep, try generating another function instead. Move responsibility to compiler instead of generator, currently the generator goes through all functions and generates stuff, perhaps the compiler loop should instead. We can add "generate function" tasks.
-        }
-
-        // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-        SignalIO result = checkFunctionSignature(polyFunc,funcImpl,parentAstStruct, nullptr, parentStructImpl);
-        // outTypes->used = 0; // FNCALL_SUCCESS will fix the types later, we don't want to add them twice
-
-        compiler->lock_imports.lock();
-        polyFunc->is_being_checked = false;
-        if(parentAstStruct)
-            parentAstStruct->is_being_checked = false;
-        compiler->lock_imports.unlock();
-
-
-        OverloadGroup::Overload* newOverload = ast->addPolyImplOverload(fnOverloads, polyFunc, funcImpl);
-        
-        // TypeChecker::CheckImpl checkImpl{};
-        // checkImpl.astFunc = polyFunc;
-        // checkImpl.funcImpl = funcImpl;
-        // info.typeChecker->checkImpls.add(checkImpl);
-
-        info.compiler->addTask_type_body(polyFunc, funcImpl);
-
-        funcImpl->usages++;
+        OverloadGroup::Overload* newOverload = computePolymorphicFunction(polyFunc, parentStructImpl, fnPolyArgs, fnOverloads);
 
         // Can overload be null since we generate a new func impl?
         overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr);
@@ -2160,6 +1685,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, false, true);
         Assert(overload == newOverload);
         if(!overload){
+            auto funcImpl = newOverload->funcImpl;
             ERR_SECTION(
                 ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
                 ERR_MSG_LOG("Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
@@ -2343,7 +1869,7 @@ OverloadGroup::Overload* TyperContext::computePolymorphicFunction(ASTFunction* p
     return newOverload;
 }
 
-ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpression* expr, bool operatorOverloadAttempt) {
+ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, ASTStruct* parentAstStruct, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpression* expr, bool operatorOverloadAttempt) {
     // log::out << "Poly overloads ("<<ent.iden->name<<"):\n";
     // ERR_LINE2(expr->location,"here");
 
@@ -2373,22 +1899,17 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
             argTypes.size() > overload.astFunc->arguments.size() - lessArguments
             )
             continue;
+            
+        if(parentAstStruct) {
+            parentAstStruct->pushPolyState(parentStructImpl);
+        }
+        defer {
+            if(parentAstStruct) {
+                parentAstStruct->popPolyState();
+            }
+        };
         
-        // What is the purpose of voiding virtual types?
-        // The loop of nonNamedArgs doesn't transform virtuals.
-        // If the type is a virtual then it handles it differently so
-        // in theory we won't ever access the value virtualType->id (just virtualType->originalId)
-        // It might do something important though.
-        // - Emarioo, 2024-01-03
-        // for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-        //     overload.astFunc->polyArgs[j].virtualType->id = {};
-        // }
-        // if(parentAstStruct){
-        //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-        //         parentAstStruct->polyArgs[j].virtualType->id = {};
-        //     }
-        // }
-
+        
         choosenTypes.resize(0); // clear types from previous check that didn't work out
 
         // IMPORTANT TODO: NAMESPACES ARE IGNORED AT THE MOMENT. HANDLE THEM!
@@ -2428,10 +1949,10 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
 
             TypeInfo* param_baseTypeInfo = info.ast->convertToTypeInfo(param_typeString_base, argScope, false);
             TypeId param_baseType = param_baseTypeInfo->id;
-            // TypeInfo* typeInfo = info.ast->getTypeInfo(baseType);
-            // if(typeInfo->id != baseType) {
+           
             bool is_base_virtual = false;
             bool is_poly_virtual = false;
+            bool is_struct_base_virtual = false;
             for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
                 if(overload.astFunc->polyArgs[k].virtualType->originalId == param_baseTypeInfo->originalId) {
                     is_base_virtual = true;
@@ -2450,9 +1971,43 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
                     }
                 }
             }
+            if(parentAstStruct) {
+                for(int k = 0;k<parentAstStruct->polyArgs.size();k++){
+                    // We should not do is_base_virtual because the parent struct is already typed.
+                    // We know the type of the polymorphic argument from the struct, we don't have to choose any types from there.
+                    if(parentAstStruct->polyArgs[k].virtualType->originalId == param_baseTypeInfo->originalId) {
+                        is_struct_base_virtual = true;
+                        break;
+                    }
+                    for (int pi=0;pi<param_polyTypes.size();pi++) {
+                        auto ptype = param_polyTypes[pi];
+                        
+                        // WARNING, we assume no pointer
+                        TypeInfo* typeInfo = info.ast->convertToTypeInfo(ptype, argScope, false);
+                        // TypeId baseType = typeInfo->id;
+
+                        if(parentAstStruct->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
+                            is_poly_virtual = true;
+                            break;
+                        }
+                    }
+                }
+            }
             // TODO: This code only matches certain types. Complicated ones like T<K,T<K,V>> is not handled (T<K,V> is handled though)
 
-            if(!is_base_virtual && !is_poly_virtual) {
+            if(is_struct_base_virtual) {
+                    // TODO: What about type being T<K> where T comes from struct Array<T> and K comes from polymorphic function.
+                    // If we haven't matched function, we need to choose K as a type, we don't do that here...
+                    // NOTE: We look for struct polymorphic argument in parent struct scope, not local scope where function call is.
+                    TypeId real_type = info.ast->convertToTypeId(param_typeString, parentAstStruct->scopeId, true);
+                    // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
+                    //   Perhaps we should cast when some types are polmorphic too?
+                    if(ast->castable(typeToMatch, real_type)){
+                        continue;
+                    }
+                    found = false;
+                    break;
+            } else if(!is_base_virtual && !is_poly_virtual) {
                 // no virtual/polymorphic type
                 TypeId real_type = info.ast->convertToTypeId(param_typeString, scopeId, true);
                 // TODO: We cast if we're not dealing with polymorphic types. We should however try to match overload without casting first, and if it fails, try match with casting.
@@ -2579,7 +2134,7 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
 
                     for(int pti = 0; pti < param_polyTypes.size(); pti++){
                         auto param_poly_typeName = param_polyTypes[pti];
-                        TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, false);
+                        TypeId param_arg_type = info.ast->convertToTypeId(param_poly_typeName, argScope, true);
                         TypeInfo* typeInfo = info.ast->getTypeInfo(param_arg_type.baseType());
 
                         auto typeToMatch_polyarg = typeToMatch_typeInfo->structImpl->polyArgs[pti];
@@ -4957,7 +4512,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                         // nocheckin, Calculate from existing polymorphic functions? is that what the getOverload above does? If so do we need to getOverload of non-polymorphic? Is that what we're missing.
                         
                         QuickArray<TypeId> calculated_poly_args{};
-                        ASTFunction* astFunc = findPolymorphicFunction(create_overloads, 0, create_arguments, true, scope->scopeId, iterinfo->structImpl, calculated_poly_args, nullptr, nullptr, false);
+                        ASTFunction* astFunc = findPolymorphicFunction(create_overloads, 0, create_arguments, true, scope->scopeId, iterinfo->structImpl, iterinfo->astStruct, calculated_poly_args, nullptr, nullptr, false);
                         if(astFunc) {
                             create_overload = computePolymorphicFunction(astFunc, iterinfo->structImpl, calculated_poly_args, create_overloads);
                         }
@@ -5056,7 +4611,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     
                     if (!iterate_overload) {
                         QuickArray<TypeId> calculated_poly_args{};
-                        ASTFunction* astFunc = findPolymorphicFunction(iterate_overloads, 0, iterate_arguments, true, scope->scopeId, iterinfo->structImpl, calculated_poly_args, nullptr, nullptr, false);
+                        ASTFunction* astFunc = findPolymorphicFunction(iterate_overloads, 1, iterate_arguments, true, scope->scopeId, iterinfo->structImpl, iterinfo->astStruct, calculated_poly_args, nullptr, nullptr, false);
                         
                         if(astFunc) {
                             iterate_overload = computePolymorphicFunction(astFunc, iterinfo->structImpl, calculated_poly_args, iterate_overloads);
