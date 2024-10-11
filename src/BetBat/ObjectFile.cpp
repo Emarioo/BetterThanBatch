@@ -315,9 +315,14 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         }
 
         u32 real_offset = tinyprogram_offsets[namedRelocation.tinyprog_index] + namedRelocation.textOffset;
-        if(namedRelocation.is_global_var)
-            objectFile.addRelocation(section_text, RELOCA_PC32, real_offset, sym, 0);
-        else
+        if(namedRelocation.is_global_var) {
+            if(compiler->options->target == TARGET_WINDOWS_x64) {
+                // THIS RELOCATION IS IMPORTANT, IT SHOULD BE REL32, gcc generates it in this exact scenario so we do it to. DON'T TOUCH IT YOU HEARE ME!
+                objectFile.addRelocation(section_text, RELOCA_REL32, real_offset, sym, 0);
+            } else if (compiler->options->target == TARGET_LINUX_x64) {
+                objectFile.addRelocation(section_text, RELOCA_PC32, real_offset, sym, 0);
+            } else Assert(false);
+        } else
             objectFile.addRelocation(section_text, RELOCA_REL32, real_offset, sym, 0);
     }
 

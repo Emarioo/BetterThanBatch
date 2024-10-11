@@ -378,8 +378,9 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         // that is relocated. It's just that the bytecode doesn't need an immediate so we skip it.
 
         if(link_convention == LinkConvention::DYNAMIC_IMPORT && compiler->options->target == TARGET_WINDOWS_x64) {
-            // I don't know how linking works on Linux...
-            // alias = "__imp_" + alias;
+            // Windows has an import table with a bunch of pointers.
+            // Linux works a little differently and does not have this.
+            alias = "__imp_" + alias;
         }
         if(varinfo->is_var()) {
             addExternalRelocation(alias, lib_path, reloc, BC_REL_GLOBAL_VAR);
@@ -2143,8 +2144,10 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
         } else if(link_convention == DYNAMIC_IMPORT){
             builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
             if(compiler->options->target == TARGET_WINDOWS_x64) {
-                // I don't know how linking works on Linux...
-                // alias = "__imp_" + alias;
+                // Windows has an import table of pointers and we
+                // prefix with __imp_ to refer to that table.
+                // Linux does not.
+                alias = "__imp_" + alias;
             }
             addExternalRelocation(alias, lib_path, reloc, BC_REL_FUNCTION);
         } else {

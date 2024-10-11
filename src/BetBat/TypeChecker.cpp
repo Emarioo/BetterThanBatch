@@ -1575,17 +1575,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             // log::out << "Poly overloads ("<<ent.iden->name<<"):\n";
             // ERR_LINE2(expr->location,"here");
 
-            // IMPORTANT: Parent structs may not be handled properly.
-            // Assert(!parentStructImpl);
-            
-            // SPON
-            
             polyFunc = findPolymorphicFunction(fnOverloads, expr->nonNamedArgs,argTypes,ent.set_implicit_this, scopeId, parentStructImpl, parentAstStruct, fnPolyArgs, &inferred_args, expr, operatorOverloadAttempt);
 
         } else {
-            // IMPORTANT: Poly parent structs may not be handled properly!
-            // Assert(!parentStructImpl);
-
             int lessArguments = 0;
             if(ent.set_implicit_this)
                 lessArguments = 1;

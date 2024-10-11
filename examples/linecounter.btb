@@ -173,7 +173,8 @@ fn CalculateFiles(options: Options*) {
     time_start_find_files := StartMeasure()
     for 0..options.files.size() {
         fil := options.files.get_unsafe(nr)
-        files.add(fil.copy())
+        info := masterInfo.files.add(FileInfo{})
+        info.name.append(fil)
         
         total_bytes += FileSize(fil.sliced())
     }
@@ -217,19 +218,19 @@ fn CalculateFiles(options: Options*) {
             // Optimize by using a bucket array of linear allocators for the file names.
             // Currently, each file name is allocated separately which isn't ideal.
             info := masterInfo.files.add(FileInfo{})
-            info.append(result.name)
+            info.name.append(result.name)
             total_bytes += result.file_size
         }
     }
     
     time_find_files := StopMeasure(time_start_find_files)
     
-    log("Found ",files.size(), " (",total_bytes/1000.0," KB) in ", time_find_files*1000.0, " ms")
-    if options.verbose {
-        for files {
-            
-        }
-    }
+    log("Found ",masterInfo.files.size(), " (",total_bytes/1000.0," KB) in ", time_find_files*1000.0, " ms")
+    // if options.verbose {
+    //     for masterInfo.files {
+    //         log(it)
+    //     }
+    // }
 
     // A note about the design. ThreadInfo should be kept here or inside MasterInfo
     // because you may want to know how each thread performed. If ThreadInfo is created
@@ -261,10 +262,9 @@ fn CalculateFiles(options: Options*) {
     log("Summary:")
 
     if options.verbose {
-        log("Checked files:")
-        for 0..files.size() {
-            file := files.get(nr)
-            log(" ",file)
+        log("Files:")
+        for masterInfo.files {
+            log(" ",it)
         }   
     }
 
@@ -319,14 +319,14 @@ struct MasterInfo {
             // log("success")
 
             fil := files.get_unsafe(oldVal)
-            return fil.sliced();
+            return fil.name.sliced();
         }
         // won't ever run
         return Slice<char>{null,0};
     }
 
     fn cleanup() {
-        ARRAY_CLEANUP(files)
+        files.cleanup()
         threadInfos.cleanup();
     }
 }

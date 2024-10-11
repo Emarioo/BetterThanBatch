@@ -1878,6 +1878,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 
                 Assert(!IS_REG_XMM(reg0->reg)); // loading pointer into xmm makes no sense, it's a compiler bug
 
+                // IMPORTANT: HOLD ON THERE YOU LITTLE RASCAL! What do you think you're
+                //  doing here. Linking works perfectly and you're trying to mess with it.
+                //  I wouldn't be doing that if I were you.
+                //  These if statements and instructions we generate has to exactly these on
+                //  these operating systems. DON'T TOUCH IT!
                 if(base->link == LinkConvention::STATIC_IMPORT) {
                     // static lib
                     emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
@@ -1886,11 +1891,12 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 } else if(base->link == LinkConvention::DYNAMIC_IMPORT) {
                     // dynamic lib
                     emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
-                    emit1(OPCODE_LEA_REG_M);
+                    if (compiler->options->target == TARGET_WINDOWS_x64) {
+                        emit1(OPCODE_MOV_REG_RM);
+                    } else if(compiler->options->target == TARGET_LINUX_x64) {
+                        emit1(OPCODE_LEA_REG_M);
+                    } else Assert(false);
                     emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
-                    // emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
-                    // emit1(OPCODE_MOV_REG_RM);
-                    // emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
                 } else {
                     log::out << log::RED << "Link convention was not resolved to @importlib or @importdll, error should have been printed earlier.\n";
                     log::out.flush();

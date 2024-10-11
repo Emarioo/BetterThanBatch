@@ -24,7 +24,7 @@ fn main() {
     if !glfw_window {
         log("window failed");
         glfwTerminate();
-        return ;
+        return;
     }
 
     glfwMakeContextCurrent(glfw_window)
@@ -33,7 +33,7 @@ fn main() {
     if !yes {
         log("gladLoadGL failed")
         glfwTerminate()
-        return ;
+        return;
     }
 
     glViewport(0, 0, width, height)

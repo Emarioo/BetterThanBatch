@@ -1,14 +1,17 @@
 
 // #import "linecounter"
 // #import "Threads"
+#import "examples/crawler/GameCore"
+// #import "examples/graphics/testgl"
+// #import "examples/graphics/minimum"
 
 // #import "Asserts"
 
 
 // Assert(5 == 9)
 
-#import "Array"
-TestArrayFreeze()
+// #import "Array"
+// TestArrayFreeze()
 
 
 // {@dumpbc
