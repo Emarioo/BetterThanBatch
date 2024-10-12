@@ -621,8 +621,8 @@ namespace dwarf {
                         stream->write1(0); // we must zero terminate here
 
                         auto src = compiler->lexer.getTokenSource_unsafe(arg_ast.location);
-                        Assert(src->line < 0x10000); // make sure we don't overflow
-                        Assert(src->column < 0x10000); // make sure we don't overflow
+                        Assert((u32)src->line < 0x10000); // make sure we don't overflow
+                        Assert((u32)src->column < 0x10000); // make sure we don't overflow
 
                         stream->write2((file_index)); // file
                         stream->write2((src->line)); // line

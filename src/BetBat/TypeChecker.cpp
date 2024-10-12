@@ -3855,8 +3855,8 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             ERR_SECTION(
                 ERR_HEAD2(now->location, ERROR_TOO_MANY_VARIABLES)
                 ERR_MSG("Too many variables were declared.")
-                ERR_LINE2(now->location, now->varnames.size() + " variables")
-                ERR_LINE2(now->firstExpression->location, poly_typeArray.size() + " return values")
+                ERR_LINE2(now->location, std::to_string(now->varnames.size()) + " variables")
+                ERR_LINE2(now->firstExpression->location, std::to_string(poly_typeArray.size()) + " return values")
             )
             hadError = true;
         }

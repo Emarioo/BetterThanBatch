@@ -145,7 +145,7 @@ void print_help(){
     
     // Useful if you are solving failed tests and don't care about the ones that succeed
     USAGE("-ct,--cache-tests")
-    DESC("Will cache successful tests and skip them next time. If tests in a file are modified then they will be retested and cached anew. The cache is normally located here '"<<log::LIME<<"bin/cached_tests.dat"<<log::LIME<<"' and will removed if caching is inactive, you can safely remove it manually to.\n")
+    DESC("Will cache successful tests and skip them next time. If tests in a file are modified then they will be retested and cached anew. The cache is normally located here '"<<log::LIME<<"bin/cached_tests.dat"<<log::NO_COLOR<<"' and will removed if caching is inactive, you can safely remove it manually to.\n")
     END
     
     

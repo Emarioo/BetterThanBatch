@@ -1061,7 +1061,7 @@ SignalIO ParseContext::parseNamespace(ASTScope*& astNamespace){
         ASTFunction* tempFunction=0;
         ASTScope* tempNamespace=0;
     
-        SignalIO signal;
+        SignalIO signal = SIGNAL_NO_MATCH;
 
         if(token->type == lexer::TOKEN_FUNCTION) {
             info.advance();
@@ -1087,6 +1087,7 @@ SignalIO ParseContext::parseNamespace(ASTScope*& astNamespace){
             )
             
             info.advance();
+            return SIGNAL_COMPLETE_FAILURE;
         }
         switch(signal) {
         case SIGNAL_SUCCESS: break;
