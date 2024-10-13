@@ -2211,5 +2211,9 @@ namespace engone {
 		// Empty
 	}
 #endif
+
+    bool IsProcessDebugged() {
+        return IsDebuggerPresent();
+    }
 }
 #endif

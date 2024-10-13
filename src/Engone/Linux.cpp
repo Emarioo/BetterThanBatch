@@ -21,6 +21,9 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 
+#include <sys/types.h>
+#include <sys/ptrace.h>
+
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -1335,6 +1338,20 @@ namespace engone {
 		auto ptr = dlsym(library, name.c_str());
 		return (VoidFunction)ptr;
 	}
-
+    
+    // This works on both linux and MacOSX (and any BSD kernel).
+    bool IsProcessDebugged() {
+        // https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
+        static bool is_checked = false;
+        static int underDebugger = 0;
+        if (!isCheckedAlready) {
+            if (ptrace(PTRACE_TRACEME, 0, 1, 0) < 0)
+                underDebugger = 1;
+            else
+                ptrace(PTRACE_DETACH, 0, 1, 0);
+            isCheckedAlready = true;
+        }
+        return underDebugger == 1;
+    }
 }
 #endif

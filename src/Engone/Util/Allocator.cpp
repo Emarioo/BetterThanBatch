@@ -29,6 +29,7 @@ namespace engone {
         // @DEBUG
         int alloc_ids[]{
             0,
+            // 4,
             // 49694,
             // 60657,
             // 47941,
@@ -37,8 +38,16 @@ namespace engone {
             // 42
             // 1, 103, 104, 106, 107
         };
-        for(int i=1;i<sizeof(alloc_ids)/sizeof(*alloc_ids);i++) {
-            BREAK(alloc_id == alloc_ids[i]);
+        #if OS_WINDOWS
+        bool do_break = IsDebuggerPresent();
+        #else
+        // what about linux?
+        bool do_break = false;
+        #endif
+        if(do_break) {
+            for(int i=1;i<sizeof(alloc_ids)/sizeof(*alloc_ids);i++) {
+                BREAK(alloc_id == alloc_ids[i]);
+            }
         }
 
         bool prev = m_enableTracking;

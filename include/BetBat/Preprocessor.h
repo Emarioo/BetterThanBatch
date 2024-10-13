@@ -349,7 +349,7 @@ struct PreprocContext : PhaseContext {
     
     // NOTE: We assume that the hashtag and directive identifiers were parsed.
     //   Next is the content
-    SignalIO parseMacroDefinition();
+    SignalIO parseMacroDefinition(bool is_global_macro = false);
     SignalIO parseMacroEvaluation();
     SignalIO parseLink();
     SignalIO parseLoad();

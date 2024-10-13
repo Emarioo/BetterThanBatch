@@ -4,15 +4,24 @@
 #if OS_WINDOWS
     #load "OpenGL32.lib"
     #if LINKER_MSVC
-        #load "libs/glad/lib-vc2022/glad.lib" as GLAD
-        // #load "libs/glad/lib-vc2022/glad.dll" as GLAD
+        #if USE_DYNAMIC_LIBS
+            #load "libs/glad/lib-vc2022/glad.dll" as GLAD
+        #else
+            #load "libs/glad/lib-vc2022/glad.lib" as GLAD
+        #endif
     #else
-        // #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
-        #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
+        #if USE_DYNAMIC_LIBS
+            #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
+        #else
+            #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
+        #endif
     #endif
 #else
-    // #load "libs/glad/lib-ubuntu/libglad.a" as GLAD
-    #load "libs/glad/lib-ubuntu/libglad.so" as GLAD
+    #if USE_DYNAMIC_LIBS
+        #load "libs/glad/lib-ubuntu/libglad.so" as GLAD
+    #else
+        #load "libs/glad/lib-ubuntu/libglad.a" as GLAD
+    #endif
 #endif
 
 global glErrCode: bool = false;

@@ -38,6 +38,7 @@ u64 ConvertHexadecimal_content(char* str, int length);
 // base.btb -> /
 // src -> /
 std::string TrimLastFile(const std::string& path);
+std::string JoinPaths(const std::string& a, const std::string& b);
 // Removes the last slash and all text before it leaving the file name.
 std::string TrimDir(const std::string& path);
 std::string BriefString(const std::string& path, int max=25, bool skip_cwd = true);

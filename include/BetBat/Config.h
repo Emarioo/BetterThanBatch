@@ -120,6 +120,7 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 enum LoggingSection : u64 {
     LOG_ALL = 0xFFFF'FFFF'FFFF'0000,
     LOG_TASKS               = 0x10000,
+    LOG_LIBS                = 0x20000,
     
     LOG_TOKENIZER       = 0x1,
     LOG_PREPROCESSOR    = 0x2,

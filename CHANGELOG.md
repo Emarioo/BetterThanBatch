@@ -12,6 +12,7 @@ I started the changelog in this version so it's very lacking.
 ### Added
 - Added Asserts.btb
 - Added CHANGELOG.md
+- Added #global_macro, see Preprocessor chapter in guide.
 
 ### Changed
   

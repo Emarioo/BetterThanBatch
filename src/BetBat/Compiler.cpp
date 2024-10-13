@@ -1168,6 +1168,11 @@ void Compiler::run(CompileOptions* options) {
     ZoneScopedC(tracy::Color::Gray19);
     // auto tp = engone::StartMeasure();
 
+    std::string path_to_exe = TrimLastFile(engone::GetPathToExecutable());
+    std::string dir_of_exe = TrimLastFile(path_to_exe);
+
+    compiler_executable_dir = dir_of_exe;
+
     compile_stats.start_compile = engone::StartMeasure();
 
     Assert(!this->options);
@@ -1652,7 +1657,7 @@ void Compiler::run(CompileOptions* options) {
             } else {
                 switch(options->linker) {
                     case LINKER_GCC: cmd += "gcc "; break;
-                    case LINKER_CLANG: cmd += "clang++ "; break;
+                    case LINKER_CLANG: cmd += "clang "; break;
                     default: break;
                 }
                 if(options->useDebugInformation)

@@ -199,6 +199,7 @@ struct Compiler {
     Reporter reporter{};
 
     CompileOptions* options = nullptr;
+    std::string compiler_executable_dir="";
     CompileStats compile_stats{};
 
     std::string entry_point = "main";

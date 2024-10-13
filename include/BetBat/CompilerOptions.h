@@ -41,6 +41,7 @@ struct CompileOptions {
     void cleanup() {
         userArguments.cleanup();
         importDirectories.cleanup();
+        defined_macros.cleanup();
     }
 
     std::string source_file;

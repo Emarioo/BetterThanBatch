@@ -395,4 +395,6 @@ namespace engone {
 	// This only works in visual studios debugger.
 	// An alternative is SetThreadDescription but it is not available in Windows 8.1 which I am using.
 	void SetThreadName(ThreadId threadId, const char* threadName);
+    
+    bool IsProcessDebugged();
 }

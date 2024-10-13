@@ -34,6 +34,30 @@ Because a multiline macro is defined with zero tokens on the same line as the de
 #endif
 ```
 
+## Global macros (experimental, unpredictable)
+Normal macros (`#macro`) are defined inside one file and only visible in that file and other files that import that file.
+
+Global macros are visible for all files regardless of where they are defined. If you define them in the first file that is compiled then they will be visible everywhere. if you define them in a file that is imported by many other files then it is very hard to predict which files have access to them, especially when the compiler uses multiple threads and processing multiple files at once.
+
+```c++
+// main.btb
+#import "Logger"
+
+#global_macro THE_CONST 9
+
+log(get_const())
+
+// util.btb
+fn get_const() -> i32 {
+    // if THE_CONST is defined as a normal macro then the compiler
+    // will tell you "THE_CONST is not defined"
+    return THE_CONST
+}
+```
+
+**NOTE:** In the future, global macros may be **restricted** to the initial source file that is specified on the command line.
+
+
 ## Variadic and recursive macros
 One macro name can have multiple definitions based on the amount of arguments. Macros to be expanded are matched with the definition which matches the argument count. The collection of macro definitions under one macro name is called macro namespace (I am open for other ideas as namespace already is a term and a keyword).
 ```c++
@@ -175,5 +199,7 @@ add(a,b,c,d)       // = 6
 add(a,b,c,d,e,f,g) // = 21
 ```
 
+# Predefined configuration macros
 
 TODO: Default definitions, OS_WINDOWS, OS_UNIX
+

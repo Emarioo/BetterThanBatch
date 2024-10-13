@@ -1,0 +1,7 @@
+fn get_const() -> i32 {
+    return THE_CONST
+}
+
+fn get_const2() -> i32 {
+    @TEST_ERROR(ERROR_UNDECLARED) return THE_CONST
+}

@@ -99,11 +99,18 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
         } else if (arg == "--silent") {
             options->silent = true;
         } else if (arg == "--verbose") {
-            options->verbose = true;
-            log::out << log::RED << "Verbose option (--verbose) is not used anywhere yet\n";
+            // options->verbose = true;
+            global_loggingSection = (LoggingSection)(LOG_TASKS);
+            // log::out << log::RED << "Verbose option (--verbose) is not used anywhere yet\n";
+        // } else if(arg == "--verbose") {
+// | LOG_TASKS
+// | LOG_BYTECODE
+
+// | LOG_TOKENIZER
+// | LOG_PREPROCESSOR
         } else if (arg == "--profiling") {
             options->show_profiling = true;
-        } else if (arg == "--import") {
+        } else if (arg == "-idr"||arg=="--import-dir") {
             i++;
             if(i<commands.size()) {
                 options->importDirectories.add(commands[i]);

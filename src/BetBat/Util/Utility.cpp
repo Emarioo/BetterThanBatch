@@ -332,6 +332,18 @@ int PatternMatchFiles(const std::string& pattern, DynamicArray<std::string>* mat
 
     return num_matched_files;
 }
+std::string JoinPaths(const std::string& a, const std::string& b) {
+    if(a.empty()) return b;
+    if(b.empty()) return a;
+    
+    if(a.back() == '/' && b[0] == '/') {
+        return a + b.substr(1);
+    } else if(a.back() == '/' || b[0] == '/') {
+        return a + b;
+    } else {
+        return a + "/" + b;
+    }
+}
 std::string TrimLastFile(const std::string& path){
     size_t slashI = path.find_last_of("/");
     if(slashI==std::string::npos)

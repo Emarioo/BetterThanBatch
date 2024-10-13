@@ -25,7 +25,7 @@
 
 namespace preproc {
 
-SignalIO PreprocContext::parseMacroDefinition() {
+SignalIO PreprocContext::parseMacroDefinition(bool is_global_macro) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Gold);
 
@@ -207,10 +207,13 @@ SignalIO PreprocContext::parseMacroDefinition() {
         //    First with evaluteTokens, then without.
         //    We don't want to do that. Also, what if you got a global macro
         //   evaluated at !evlauateTokens and then
-        MacroRoot* rootMacro = preprocessor->create_or_get_macro(import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1);
+        u32 the_import_id = import_id;
+        if(is_global_macro)
+            the_import_id = compiler->preload_import_id;
+        MacroRoot* rootMacro = preprocessor->create_or_get_macro(the_import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1);
         
         localMacro.location = { name_token };
-        preprocessor->insertCertainMacro(import_id, rootMacro, &localMacro);
+        preprocessor->insertCertainMacro(the_import_id, rootMacro, &localMacro);
 
         std::string name = lexer->getStdStringFromToken(name_token);
         
@@ -302,11 +305,45 @@ SignalIO PreprocContext::parseLoad(){
     }
     
     if(evaluateTokens) {
+        std::string real_path = path;
+        DynamicArray<std::string> paths;
+        paths.add(path);
+        const std::string& exedir = compiler->compiler_executable_dir;
+        paths.add(JoinPaths(exedir, path));
+        if(exedir.size() > 5 && exedir.substr(exedir.size()-5) == "/bin/") {
+            paths.add(JoinPaths(exedir.substr(0,exedir.size()-4), path));
+        }
+        if (exedir.size() > 4 && exedir.substr(exedir.size()-4) == "/bin") {
+            paths.add(JoinPaths(exedir.substr(0,exedir.size()-3), path));
+        }
+        for(auto& dir : compiler->options->importDirectories) {
+            paths.add(JoinPaths(dir, path));
+        }
+        LOG_CODE(LOG_LIBS,
+            log::out << log::PURPLE << "Finding lib: "<<path<<"\n";
+        )
+        for(auto& tmp : paths) {
+            bool yes = FileExist(tmp);
+            if (yes) {
+                LOG_CODE(LOG_LIBS,
+                    log::out << " found "<<log::LIME<<tmp<<log::NO_COLOR<<"\n";
+                )
+                real_path = tmp;
+                break;
+            } else {
+                LOG_CODE(LOG_LIBS,
+                    log::out << " check "<<tmp<<"\n";
+                )
+            }
+        }
+        LOG_CODE(LOG_LIBS,
+            log::out << ""<<path << " -> " << real_path<<"\n";
+        )
         if(view_as.size() != 0)
-            compiler->addLibrary(import_id, path, view_as);
+            compiler->addLibrary(import_id, real_path, view_as);
         if(view_as.size() == 0 || do_force) {
             Assert(compiler->program);
-            compiler->program->addForcedLibrary(path);
+            compiler->program->addForcedLibrary(real_path);
         }
     }
     
@@ -1655,6 +1692,9 @@ SignalIO PreprocContext::parseOne() {
         } else if(string == "macro") {
             advance();
             signal = parseMacroDefinition();
+        } else if(string == "global_macro") {
+            advance();
+            signal = parseMacroDefinition(true);
         } else if(string == "import") {
             advance();
             signal = parseImport();
@@ -1733,6 +1773,13 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
         lock_imports.lock();
         // log::out << "Preproc imp "<<import_id<<"\n";
         context.current_import = imports.requestSpot(import_id-1, nullptr);
+        if (!context.current_import && import_id == compiler->preload_import_id) {
+            // preload import may already exist if a file defined a global macro.
+            // when that happens it is put into the preload import. Since the 
+            // preload import may not be created yet it is created then and there.
+            // Therefore, we may not be able to requestSpot here.
+            context.current_import = imports.get(import_id-1);
+        }
         lock_imports.unlock();
         Assert(context.current_import);
     }
@@ -1796,6 +1843,10 @@ MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, b
     
     lock_imports.lock();
     Import* imp = imports.get(import_id-1);
+    if(!imp && import_id == compiler->preload_import_id) {
+        imp = imports.requestSpot(compiler->preload_import_id-1, nullptr);
+    }
+        
     lock_imports.unlock();
     Assert(imp);
     

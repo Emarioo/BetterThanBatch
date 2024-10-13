@@ -81,6 +81,7 @@ struct GenContext : public PhaseContext {
     //     sum_frame_size += size;
     // }
     void add_frame_fix(int index) {
+        if(disableCodeGeneration) return;
         frame_size_fixes.add(index);
     }
     void fix_frame_values(FuncImpl* funcImpl, TinyBytecode* tinycode) {
