@@ -6910,7 +6910,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 // initial import will be the main function.
 
                 // TODO: Code here
-                CallConvention main_conv;
+                CallConvention main_conv = BETCALL;
                 switch(compiler->options->target) {
                     case TARGET_WINDOWS_x64: main_conv = STDCALL; break;
                     case TARGET_LINUX_x64: main_conv = UNIXCALL; break;

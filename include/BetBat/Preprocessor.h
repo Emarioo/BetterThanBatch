@@ -82,7 +82,7 @@ private:
     BucketArray<Import> imports{256};
     MUTEX(lock_imports);
     
-    friend class PreprocContext;
+    friend struct PreprocContext;
 };
 typedef DynamicArray<lexer::Token> TokenList;
 struct PreprocContext : PhaseContext {

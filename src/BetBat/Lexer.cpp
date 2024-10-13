@@ -635,7 +635,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 // TODO: Optimize. For example, if first character isn't one of these 'tfsenu' then it's not a special token and we don't have to run all ifs.
                 // log::out << "check " << temp << "\n";
                 
-                #define CASE(S, STR, TOK)  if(S-1 == temp.len && temp == STR+1) {\
+                #define CASE(S, STR, TOK)  if(S-1 == temp.len && temp == (char*)((u8*)STR+1)) {\
                     new_tokens->type = TOK; has_data = false; }
 
                 char f = *(text+str_start);

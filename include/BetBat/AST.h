@@ -174,7 +174,7 @@ struct PolyVersions {
 
     int size() const {
         // return _array.size();
-        return _array.size() + has_first ? 1 : 0;
+        return _array.size() + (has_first ? 1 : 0);
     }
     // automatically allocates
     T& get(u32 index, bool skip_mutex = false) {
@@ -1082,7 +1082,7 @@ struct AST {
         };
         QuickArray<Item> search_items;
         int search_index = 0;
-        friend class AST;
+        friend struct AST;
     };
     ScopeIterator createScopeIterator(ScopeId scopeId, ContentOrder order);
     ScopeInfo* iterate(ScopeIterator& iterator, bool searchSharedScopes = true);

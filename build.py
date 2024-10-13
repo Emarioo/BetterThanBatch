@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 ### What is this ###
 # This is the new build system that replaces makefiles and most of build.bat and build.sh.
 # Build the project with: python build.py
@@ -34,6 +36,7 @@ def main():
 
     # config["use_compiler"] = "gcc"
     config["use_compiler"] = "msvc"
+    # config["use_compiler"] = "clang"
 
     config["use_debug"] = True
     # config["use_tracy"] = True
@@ -121,7 +124,7 @@ def compile(config):
                 except ValueError:
                     pass
             config[key] = val
-        elif arg == "gcc" or arg == "msvc":
+        elif arg == "gcc" or arg == "msvc" or arg == "clang":
             config["use_compiler"] = arg
         elif arg == "clean":
             counter = 0
@@ -254,7 +257,7 @@ def compile(config):
         
         # TODO: Precompiled headers?
 
-    elif config["use_compiler"] == "gcc":
+    elif config["use_compiler"] == "gcc" or config["use_compiler"] == "clang":
         GCC_COMPILE_OPTIONS = "-std=c++14"
         GCC_INCLUDE_DIRS    = "-Iinclude -Ilibs/tracy-0.10/public -include include/pch.h "
         GCC_DEFINITIONS     = "-DCOMPILER_GNU"
@@ -274,13 +277,17 @@ def compile(config):
 
         if enabled("use_optimizations"):
             GCC_COMPILE_OPTIONS += " -O3"
+            
+        CC = "g++"
+        if config["use_compiler"] == "clang":
+            CC = "clang++"
 
         if enabled("use_tracy"):
             if platform.system() == "Windows":
                 GCC_DEFINITIONS += " -DTRACY_ENABLE"
                 GCC_LINK_OPTIONS += " bin/tracy.o"
                 if not os.path.exists("bin/tracy.o"):
-                    cmd("g++ -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp -o bin/tracy.o")
+                    cmd(CC+" -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp -o bin/tracy.o")
                 
             else:
                 print("build.py doesn't support tracy on Linux, tracy is ignored")
@@ -338,7 +345,7 @@ def compile(config):
 
                 if enabled("log_compilation"):
                     print("Compile", trimmed_obj)
-                err = cmd("g++ "+GCC_WARN+" "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" -c "+src +" -o "+ obj)
+                err = cmd(CC+" "+GCC_WARN+" "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" -c "+src +" -o "+ obj)
                 
                 if err != 0:
                     object_failed = True
@@ -371,7 +378,7 @@ def compile(config):
                 print(f,"was not compiled")
                 return False
 
-        err = cmd("g++ "+GCC_LINK_OPTIONS+" "+objs_str+" -o "+config["output"])
+        err = cmd(CC+" "+GCC_LINK_OPTIONS+" "+objs_str+" -o "+config["output"])
         compile_success = err == 0
     else:
         print("Platform/compiler ",platform.system()+"/"+config["use_compiler"],"is not supported in build.py")
@@ -456,6 +463,7 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
             os.mkdir(ubuntu_path)
             
         if not os.path.exists(ubuntu_lib):
+            # Use clang if available? if it's faster?
             cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ ubuntu_obj)
             cmd("ar rcs "+ubuntu_lib+" " + ubuntu_obj)
         if not os.path.exists(ubuntu_dll):
