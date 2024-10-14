@@ -125,7 +125,7 @@ namespace engone {
             if(pair != tracked_type->locations.end()) {
                 tracked_type->locations.erase(ptr);
             } else {
-                Assert(false); // double free?
+                Assert(("double free", false)); // double free?
             }
         }
         if(!skip_mutex) {

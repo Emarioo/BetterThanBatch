@@ -170,9 +170,9 @@ CompilerVersion CompilerVersion::Current(){
     return version;
 }
 void CompilerVersion::deserialize(const char* str) {
-    int versionLength = strlen(str);
-    Assert(versionLength <= MAX_STRING_VERSION_LENGTH);
-    if(versionLength > MAX_STRING_VERSION_LENGTH) return; // in case you disable asserts for whatever reason
+    int str_length = strlen(str);
+    Assert(str_length <= MAX_STRING_VERSION_LENGTH);
+    if(str_length > MAX_STRING_VERSION_LENGTH) return; // in case you disable asserts for whatever reason
     // "0.1.0/0-2023.8.29"
     // "65535.65535.65535/65535-65535.256.256"
     // "9999.9999.9999/9999-9999.99.99"
@@ -180,75 +180,84 @@ void CompilerVersion::deserialize(const char* str) {
     // good defaults
     memset(this, 0, sizeof(CompilerVersion));
     
-    char buffer[MAX_STRING_VERSION_LENGTH+1];
-    strcpy(buffer, str); // buffer and string length is already checked
-    int slashIndex = -1, dashIndex = -1;
-    int dots[3] = {-1, -1, -1 };
-    int lastDots[2] = { -1, -1 };
-    int dotCount = 0;
-    int lastDotCount = 0;
-    for(int i=0;i<versionLength;i++){
+    // char buffer[MAX_STRING_VERSION_LENGTH+1];
+    // strcpy(buffer, str); // buffer and string length is already checked
+    // int slashIndex = -1, dashIndex = -1;
+    
+    struct {
+        union {
+            int vers[4]{-1,-1,-1,-1};
+            struct {
+                int major;
+                int minor;
+                int patch;
+                int revision;
+            };
+        };
+        int name = -1;
+        union {
+            int date[3]{-1,-1,-1};
+            struct {
+                int year;
+                int month;
+                int day;
+            };
+        };
+    } positions;
+    
+    int dot_count=0;
+    int slash_count=0;
+    int dash_count=0;
+    positions.vers[dot_count] = 0;
+    dot_count++;
+    for(int i=0;i<str_length;i++){
         if(str[i] == '/') { // indicates state/name
-            Assert(("too many slashes in version string",slashIndex == -1));
-            slashIndex = i + 1;
-            buffer[i] = '\0';
-        }
-        if(str[i] == '-') { // indicates date
-            Assert(("too many dashes in version string",dashIndex == -1));
-            dashIndex = i + 1;
-            buffer[i] = '\0';
+            Assert(("too many slashes in version string", slash_count < 1));
+            positions.name = i+1;
+            slash_count++;
+            continue;
         }
         if(str[i] == '.') {
-            if (slashIndex == -1 && dashIndex == -1) {
-                if(dotCount < 3) {
-                    dots[dotCount] = i;
-                    buffer[i] = '\0';
-                }
-                dotCount++;
-            }
-            if (dashIndex != -1) {
-                if(lastDotCount < 2) {
-                    lastDots[lastDotCount] = i;
-                    buffer[i] = '\0';
-                }
-                lastDotCount++;
-            }
+            Assert(("too many dots in version string", dot_count < 4));
+            positions.vers[dot_count] = i + 1;
+            dot_count++;
+            continue;
         }
-    }
-    Assert(("there must be two or three dots in first part",dotCount==2 || dotCount==3));
-    if(dashIndex != -1){
-        Assert(("there must be 2 dots in date part (when using dash)",lastDotCount==2));
-    }
-    if(slashIndex != -1) {
-        Assert(("missing name string", slashIndex != dashIndex - 1));
+        if(str[i] == '-') { // indicates date
+            Assert(("too many dashes in version string", dash_count < 3));
+            positions.date[dash_count] = i + 1;
+            dash_count++;
+            continue;
+        }
     }
     
-    int temp=0;
-    #define SET_VER_INT(VAR, OFF) temp = atoi(buffer + OFF); Assert(temp < ((1<<(sizeof(VAR)<<3))-1)); VAR = temp;
-    SET_VER_INT(major, 0)
-    SET_VER_INT(minor, dots[0] + 1)
-    SET_VER_INT(patch, dots[1] + 1)
-    if(dots[2] != -1) {
-        SET_VER_INT(revision, dots[2] + 1)
-    }
-    if(slashIndex != -1) {
-        int nameLen = 0;
-        if(dashIndex == -1){
-            nameLen = versionLength - slashIndex - 1;
+    if (positions.major != -1)
+        major = atoi(str + positions.major);
+    if (positions.minor != -1)
+        minor = atoi(str + positions.minor);
+    if (positions.patch != -1)
+        patch = atoi(str + positions.patch);
+    if (positions.revision != -1)
+        revision = atoi(str + positions.revision);
+        
+    if (positions.name != -1) {
+        int len = 0;
+        if(positions.year != -1) {
+            len = positions.year - positions.name - 1; // -1 for dash
         } else {
-            nameLen = dashIndex - slashIndex - 1;
+            len = str_length - positions.name;
         }
-        Assert(nameLen < (int)sizeof(name));
-        if(nameLen>0){
-            strcpy(name, buffer + slashIndex);
-        }
+        Assert(len-1 < sizeof(name));
+        strncpy(name, str + positions.name, len);
+        name[len] = '\0';
     }
-    if(dashIndex != -1) {
-        SET_VER_INT(year, dashIndex)
-        SET_VER_INT(month, lastDots[0] + 1)
-        SET_VER_INT(day, lastDots[1] + 1)
-    }
-    #undef SET_VER_INT
+        
+    if (positions.year != -1)
+        year = atoi(str + positions.year);
+    if (positions.month != -1)
+        month = atoi(str + positions.month);
+    if (positions.day != -1)
+        day = atoi(str + positions.day);
 }
 void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
     Assert(bufferSize > 50); // version is usually, probably, never bigger than this
@@ -262,7 +271,7 @@ void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
             offset += snprintf(outBuffer + offset, bufferSize - offset, "/%s", name);
         }
         if(0==(flags & EXCLUDE_DATE) && year != 0) // year should normally not be zero so if it is we have special stuff going on
-            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d.%d.%d", (int)year, (int)month, (int)day);
+            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d-%d-%d", (int)year, (int)month, (int)day);
     } else {
         if(flags & INCLUDE_REVISION)
             offset += snprintf(outBuffer + offset, bufferSize - offset, ".%d", (int)revision);
@@ -271,7 +280,7 @@ void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
             offset += snprintf(outBuffer + offset, bufferSize - offset, "/%s", name);
         }
         if(flags & INCLUDE_DATE)
-            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d.%d.%d", (int)year, (int)month, (int)day);
+            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d-%d-%d", (int)year, (int)month, (int)day);
     }
 }
 const char* ToString(TargetPlatform target){

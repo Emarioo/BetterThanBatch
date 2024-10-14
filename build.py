@@ -6,6 +6,7 @@
 # For extra options: python build.py msvc use_debug use_optimizations
 # Run this if you have linking problems: python build.py clean
 #   the system may not have recognized a file as changed
+#   if you change compile options then you must run clean (we will automatically detect this later)
 
 import glob, os, sys, time, platform, threading, shutil, multiprocessing
 
@@ -29,6 +30,7 @@ def main():
     #     Comment/uncomment the options you want
     #####################
 
+    config["bin_dir"] = "bin"
     if platform.system() == "Windows":
         config["output"] = "bin/btb.exe"
     else:
@@ -46,6 +48,7 @@ def main():
     # config["log_sources"] = True
     # config["log_objects"] = True
     # config["log_compilation"] = True
+    # config["verbose"] = True
     # config["log_cmds"] = True
     # config["silent"] = True # TODO: Fix
 
@@ -53,6 +56,8 @@ def main():
     # config["thread_count"] = 8
     config["thread_count"] = multiprocessing.cpu_count()
     yes = compile(config)
+    
+    # print(config)
 
     if not yes:
         print("Compilation failed")
@@ -64,11 +69,14 @@ def main():
         if ind != -1:
             filename = filepath[ind+1:]
         # print("cp ", config["output"], filename)
-        shutil.copy(config["output"], filename)
+        try:
+            shutil.copy(config["output"], filename)
+        except PermissionError as ex:
+            print("CANNOT copy",config["output"],"->",filename)
 
     if yes and os.path.exists(config["output"]) and enabled("run_when_finished"):
         # cmd("bin/btb -dev")
-        cmd("./bin/btb -dev")
+        cmd("./"+config["output"]+" -dev")
 
         # cmd("bin/btb --test")
         
@@ -105,6 +113,8 @@ def compile(config):
         #config = new_config
         global_config = config
 
+    do_clean = False
+    
     # parse command line arguments
     for i in range(1,len(sys.argv)):
         arg = sys.argv[i]
@@ -127,13 +137,7 @@ def compile(config):
         elif arg == "gcc" or arg == "msvc" or arg == "clang":
             config["use_compiler"] = arg
         elif arg == "clean":
-            counter = 0
-            counter += remove_files("bin/*")
-            counter += remove_files("libs/stb/lib-*")
-            counter += remove_files("libs/glad/lib-*")
-            
-            print("Removed " + str(counter) + " files in bin")
-            return True
+            do_clean = True
         else:
             config[arg] = True
             # this allows use to write
@@ -141,8 +145,15 @@ def compile(config):
             # instead of
             #   py build.py use_tracy=true
 
-        # print(config)
-    # return False
+    if do_clean:
+        counter = 0
+        counter += remove_files(config["bin_dir"] + "/*")
+        counter += remove_files("libs/stb/lib-*")
+        counter += remove_files("libs/glad/lib-*")
+        
+        print("Removed " + str(counter) + " files in bin")
+        return True
+        
     # TODO: How do we check that cl exists, cmd("cl") will print compiler version information if it does exist. Piping it won't get us the exit code we want.
     # if config["use_compiler"] == "msvc":
     #     if 0 != cmd("cl /nologo 2> nul > nul"): # cl isn't available, use gcc instead
@@ -152,7 +163,10 @@ def compile(config):
     if config["use_compiler"] == "msvc" and platform.system() == "Linux":
         config["use_compiler"] = "gcc"
 
-    # print(config)
+    if enabled("verbose"):
+        print("Options:",config)
+        if "log_cmds" not in config:
+            config["log_cmds"] = True
 
     if not "output" in config:
         print("config does not specify output path")
@@ -188,7 +202,7 @@ def compile(config):
     object_files = []
 
     for f in source_files:
-        object_files.append(f.replace(".cpp",".o").replace("src/","bin/"))
+        object_files.append(f.replace(".cpp",".o").replace("src/",config["bin_dir"]+"/"))
     
     # With MSVC, we compile all source files every time, we therefore don't need to compute modified files
     # However, if we want to skip compiling the executable because it's up to date, we must compute modified files
@@ -209,8 +223,7 @@ def compile(config):
         
     start_time = int(time.time())
 
-    if not os.path.exists("bin"):
-        os.mkdir("bin")
+    os.makedirs(config["bin_dir"], exist_ok = True)
 
     if platform.system() == "Windows" and config["use_compiler"] == "msvc":
         MSVC_COMPILE_OPTIONS    = "/std:c++17 /nologo /EHsc /TP /wd4129"
@@ -227,14 +240,14 @@ def compile(config):
         
         if enabled("use_tracy"):
             MSVC_DEFINITIONS  += " /DTRACY_ENABLE"
-            MSVC_LINK_OPTIONS += " bin/tracy.obj"
-            if not os.path.exists("bin/tracy.obj"):
-                cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+ MSVC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp /Fobin/tracy.obj")
+            MSVC_LINK_OPTIONS += " "+config["bin_dir"]+"/tracy.obj"
+            if not os.path.exists(config["bin_dir"]+"/tracy.obj"):
+                cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+ MSVC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp /Fo"+config["bin_dir"]+"/tracy.obj")
 
         MSVC_COMPILE_OPTIONS += " /FI pch.h"
 
-        if not os.path.exists("bin/hacky_stdcall.obj"):
-            cmd("ml64 /nologo /Fobin/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
+        if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.obj"):
+            cmd("ml64 /nologo /Fo"+config["bin_dir"]+"/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
 
         if len(modified_files) == 0 and os.path.exists(config["output"]):
             compile_success = True
@@ -243,13 +256,13 @@ def compile(config):
             # because we should recompile if so.
         else:
             # With MSVC we do a unity build, compile on source file that includes all other source files
-            srcfile = "bin/all.cpp"
+            srcfile = config["bin_dir"]+"/all.cpp"
             fd = open(srcfile, "w")
             for file in source_files:
                 fd.write("#include \"" + os.path.abspath(file) + "\"\n")
             fd.close()
 
-            err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
+            err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" "+config["bin_dir"]+"/hacky_stdcall.obj /OUT:"+config["output"])
             # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
             # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
 
@@ -267,7 +280,7 @@ def compile(config):
         else:
             GCC_DEFINITIONS += " -DOS_LINUX"
 
-        GCC_WARN = "-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point -Wno-class-conversion -Wno-address"
+        GCC_WARN = "-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point -Wno-class-conversion -Wno-address -Wno-strict-aliasing"
         # GCC complains about dereferencing nullptr (-Wsequence-point)
         GCC_WARN += " -Wno-sign-compare"
 
@@ -285,9 +298,9 @@ def compile(config):
         if enabled("use_tracy"):
             if platform.system() == "Windows":
                 GCC_DEFINITIONS += " -DTRACY_ENABLE"
-                GCC_LINK_OPTIONS += " bin/tracy.o"
-                if not os.path.exists("bin/tracy.o"):
-                    cmd(CC+" -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp -o bin/tracy.o")
+                GCC_LINK_OPTIONS += " "+config["bin_dir"]+"/tracy.o"
+                if not os.path.exists(config["bin_dir"]+"/tracy.o"):
+                    cmd(CC+" -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp -o "+config["bin_dir"]+"/tracy.o")
                 
             else:
                 print("build.py doesn't support tracy on Linux, tracy is ignored")
@@ -295,13 +308,13 @@ def compile(config):
         # Code below compiles the necessary object files
       
         if platform.system() == "Windows":
-            if not os.path.exists("bin/hacky_stdcall.o"):
-                cmd("as -c src/BetBat/hacky_stdcall.s -o bin/hacky_stdcall.o")
-            object_files.append("bin/hacky_stdcall.o")
+            if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.o"):
+                cmd("as -c src/BetBat/hacky_stdcall.s -o "+config["bin_dir"]+"/hacky_stdcall.o")
+            object_files.append(config["bin_dir"]+"/hacky_stdcall.o")
         else:
-            if not os.path.exists("bin/hacky_sysvcall.o"):
-                cmd("as -c src/BetBat/hacky_sysvcall.s -o bin/hacky_sysvcall.o")
-            object_files.append("bin/hacky_sysvcall.o")
+            if not os.path.exists(config["bin_dir"]+"/hacky_sysvcall.o"):
+                cmd("as -c src/BetBat/hacky_sysvcall.s -o "+config["bin_dir"]+"/hacky_sysvcall.o")
+            object_files.append(config["bin_dir"]+"/hacky_sysvcall.o")
         
         # TODO: Add include directories to compute_modified_files? We assume that all includes come from "include/"
 
@@ -408,7 +421,9 @@ def compile(config):
 
 def compile_vendor(vendor, src, bin_name, dll_defs = ""):
     # GCC_PATHS = "-Llibs/glfw-3.3.9/lib-mingw-w64 -Ilibs/glfw-3.3.9/include -Ilibs/glad/include -Lbin -Ilibs/stb/include"
-    GCC_PATHS = "-Ilibs/glad/include -Lbin -Ilibs/stb/include"
+    global global_config
+    config = global_config
+    GCC_PATHS = "-Ilibs/glad/include -L"+config["bin_dir"]+" -Ilibs/stb/include"
     # MSVC_PATHS = "/Ilibs/glfw-3.3.9/include /Ilibs/glad/include /Ilibs/stb/include"
     MSVC_PATHS = "/Ilibs/glad/include /Ilibs/stb/include"
 
@@ -417,18 +432,18 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
     mingw_path = "libs/"+vendor+"/lib-mingw-w64/"
     mingw_lib = mingw_path + bin_name + ".lib"
     mingw_dll = mingw_path + bin_name + ".dll"
-    mingw_obj = "bin/" + bin_name + ".o"
+    mingw_obj = config["bin_dir"]+"/" + bin_name + ".o"
     
     vc_path = "libs/"+vendor+"/lib-vc2022/"
     vc_lib = vc_path + bin_name + ".lib"
     vc_dll = vc_path + bin_name + ".dll"
     vc_dlllib = vc_path + bin_name + "dll.lib"
-    vc_obj = "bin/" + bin_name + ".obj"
+    vc_obj = config["bin_dir"]+"/" + bin_name + ".obj"
     
     ubuntu_path = "libs/"+vendor+"/lib-ubuntu/"
     ubuntu_lib = ubuntu_path + "lib" + bin_name + ".a"
     ubuntu_dll = ubuntu_path + "lib" +bin_name + ".so"
-    ubuntu_obj = "bin/" + bin_name + ".o"
+    ubuntu_obj = config["bin_dir"]+"/" + bin_name + ".o"
 
     mingw_dll_defs = ""
     vc_dll_defs = ""

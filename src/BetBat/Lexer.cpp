@@ -1394,7 +1394,7 @@ u32 Lexer::createImport(const std::string& path, Import** file) {
             *file = nullptr;
         return 0;
     }
-    Import* _imp;
+    Import* _imp = nullptr;
     u32 file_index = imports.add(nullptr, &_imp);
     if(_imp) {
         _imp->path = path;

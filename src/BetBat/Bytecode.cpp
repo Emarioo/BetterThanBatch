@@ -1350,7 +1350,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
-            
+            imm = 0;
             if(opcode == BC_MOV_RM_DISP16 || opcode == BC_MOV_MR_DISP16) {
                 imm = *(i16*)(instructions.data() + pc);
                 pc += 2;

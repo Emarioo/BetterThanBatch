@@ -865,7 +865,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     
     auto apply_concat=[&](Layer* layer, lexer::Token token, StringView* view = nullptr, bool compute_source = true) {
         std::string new_data="";
-        int ln, col;
+        int ln=0, col=0;
         
         if(new_lexer_import->chunks.size() == 0)
             layer->concat_next_token = false;

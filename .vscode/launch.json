@@ -38,7 +38,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
             // "args": ["examples/dev","-vm","-pvm"],
-            "args": ["--test"],
+            // "args": ["--test"],
             // "args": ["--test","*macs*"],
             // "args": ["examples/graphics/minimum.btb","-m","USE_DYNAMIC_LIBS"],
             // "args": ["examples/dev"],

@@ -230,7 +230,7 @@ namespace engone {
 			return;
 		}
 		
-		if(!info->second.dirIter){
+		if(info->second.dirIter){
 			closedir(info->second.dirIter);
 			info->second.dirIter = nullptr;
 		}
@@ -447,7 +447,7 @@ namespace engone {
 		int from = open(src.c_str(), O_RDONLY);
 		if(from < 0)
 			return false;
-		int to = open(src.c_str(), O_WRONLY | O_CREAT);
+		int to = open(src.c_str(), O_WRONLY | O_CREAT, 00644);
 		if(to < 0) {
 			close(to);
 			return false;
@@ -457,9 +457,14 @@ namespace engone {
 		if(!ptr)
 			return false;
 
+        bool success = true;
 		int n;
 		while ((n = read(from, ptr, BUFFER_SIZE)) > 0) {
-			write(to, ptr, n);
+			int res = write(to, ptr, n);
+            if(res < 0) {
+                success = false;
+                break;
+            }
 		}
 
 		close(from);
@@ -467,7 +472,7 @@ namespace engone {
 
 		free(ptr);
 
-		return true;
+		return success;
 	}
 	bool FileMove(const std::string& src, const std::string& dst){
 		int err = rename(src.c_str(),dst.c_str());

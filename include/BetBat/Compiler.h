@@ -78,7 +78,7 @@ struct CompileStats {
 };
 struct CompilerVersion {
     static const char* global_version;
-    static const int MAX_STRING_VERSION_LENGTH = 4*4 + 19 + 4 + 2 + 2; // integers are limited to 9999 and 99
+    static const int MAX_STRING_VERSION_LENGTH = 4*4 + 19 + 4 + 2 + 2 + 7; // integers are limited to 9999 and 99
     u16 major; // 1-3 year
     u16 minor; // 1-3 months
     u16 patch; // 3 - 10 days
