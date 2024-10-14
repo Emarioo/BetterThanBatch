@@ -510,7 +510,7 @@ fn @import(LibC) getaddrinfo(node: char*,
 fn @import(LibC) freeaddrinfo(res: addrinfo*);
 
 // environ is used by ExecuteCommand when global_environment doesn't exist
-global @import(libc) environ: char**;
+global @import(LibC) environ: char**;
 
 
 #load "pthread" as pthreads

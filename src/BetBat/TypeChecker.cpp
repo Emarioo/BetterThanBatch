@@ -1803,7 +1803,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         }
         log::out <<"\n";
     )
-    log::out << "nodeid: "<<expr->nodeId<<"\n";
+    // log::out << "nodeid: "<<expr->nodeId<<"\n";
 
     FNCALL_FAIL
     return SIGNAL_FAILURE;

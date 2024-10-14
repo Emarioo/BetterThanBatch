@@ -1342,7 +1342,7 @@ namespace engone {
     // This works on both linux and MacOSX (and any BSD kernel).
     bool IsProcessDebugged() {
         // https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
-        static bool is_checked = false;
+        static bool isCheckedAlready = false;
         static int underDebugger = 0;
         if (!isCheckedAlready) {
             if (ptrace(PTRACE_TRACEME, 0, 1, 0) < 0)

@@ -605,8 +605,8 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**, rel
             }
             iter.current_dir.clear();
             
-            dir := iter.remaining_directories.get(0);
-            iter.remaining_directories.remove(0);
+            dir := iter.remaining_directories.pop_item(0);
+            defer dir.cleanup();
             
             Assert(dir.size() != 0)
 
@@ -675,7 +675,6 @@ fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**, rel
 
     // log(file_name)
 
-    safe: char[48]
     file_info: stat;
     res := stat(iter.item.name.sliced().ptr, &file_info)
 
@@ -853,8 +852,6 @@ fn FindFile(path: char[], search_env_path: bool = false, recursive: bool = false
 
     dirs: Array<StringBuilder>
     defer {
-        for dirs.sliced()
-            it.cleanup()
         dirs.cleanup()
     }
     if search_env_path {

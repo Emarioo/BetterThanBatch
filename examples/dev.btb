@@ -3,7 +3,8 @@
 // #import "Threads"
 // #import "examples/crawler/GameCore"
 // #import "examples/graphics/testgl"
-#import "examples/graphics/minimum"
+// #import "examples/graphics/minimum"
+#import "prepare_release"
 
 // #global_macro GLOBAL_MAC num := 5
 

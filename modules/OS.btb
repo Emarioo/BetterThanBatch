@@ -462,7 +462,7 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
             global_environment = environ
             // log("Warning in 'ExecuteCommand': global_environment is null, see SetEnvironment.")
         }
-
+        // log("find ",cmd)
         real_path := FindFile(cmd, true)
         // real_path: StringBuilder
         // real_path.append("okay")
@@ -482,7 +482,7 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
         }
 
         // log("rp ",real_path.ptr)
-        ptr := Allocate(2423)
+        // ptr := Allocate(2423)
 
         if real_path.ptr {
         // if false {
@@ -501,9 +501,10 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
         exit(0)
     }
     // parent process
+    // log("parent")
 
     if !asynchronous {
-        info: siginfo
+        info: siginfo_t
         flags: i32 = WEXITED
         res := waitid(P_PID, pid, &info, flags)
         if res < 0 {

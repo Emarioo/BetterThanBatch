@@ -29,13 +29,13 @@ fn main() {
     path_release: StringBuilder
     path_release.append("bin/")
     #if OS_WINDOWS
-        path_release.append("btb-win_x64-")
+        path_release.append("btb-0.2.0-win_x64")
         path_exe        := "bin/btb.exe"
     #else
-        path_release.append("btb-linux_x64-")
+        path_release.append("btb-0.2.0-linux_x64")
         path_exe        := "bin/btb"
     #endif
-    path_release.append(substring(#date, 0,7))
+    // path_release.append(substring(#date, 0,7))
 
     path_docs       := "docs"
     path_examples   := "examples"
@@ -54,7 +54,7 @@ fn main() {
     DirectoryCreate(path_release.sliced())
 
     cmd: StringBuilder
-    cmd.append("python build.py use_optimizations use_debug=false use_tracy=false output=")
+    cmd.append("python3 build.py use_optimizations use_debug=false use_tracy=false output=")
     cmd.append(path_release)
     #if OS_WINDOWS
         cmd.append("/btb.exe msvc")
@@ -62,7 +62,7 @@ fn main() {
         cmd.append("/btb gcc")
     #endif
     // log(cmd)
-    ExecuteCommand(cmd.sliced(), null, true)
+    ExecuteCommand(cmd.sliced(), null, false)
 
     #macro COPY_DIR(path)
     {
@@ -98,4 +98,6 @@ The standard library is very experimental, functions interacting with the operat
         // log(name_of_error(err))
         FileClose(file)
     }
+    
+    log("Prepared release in ",path_release)
 }
