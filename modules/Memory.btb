@@ -6,7 +6,9 @@
 */
 
 // TODO: import the right OS bindings
-#import "Windows"
+#if OS_WINDOWS
+    #import "Windows"
+#endif
 
 // temporary
 #import "Logger"

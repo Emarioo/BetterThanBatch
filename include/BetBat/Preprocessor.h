@@ -146,7 +146,12 @@ struct PreprocContext : PhaseContext {
     };
     std::unordered_map<std::string, CachedMacro> cached_macro_names;
 
-    DynamicArray<u32> ids_to_check{};
+    struct IDToCheck {
+        u32 id=0;
+        i32 dep_index = -1;
+        CompilerImport* cimp=nullptr;
+    };
+    DynamicArray<IDToCheck> ids_to_check{};
     bool has_computed_deps = false;
 
     struct Layer {

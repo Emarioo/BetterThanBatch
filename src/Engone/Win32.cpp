@@ -2098,7 +2098,7 @@ namespace engone {
 	// TODO: handle is checked against NULL, it should be checked against INVALID_HANDLE_VALUE
 	bool FileMonitor::check(const std::string& path, void(*callback)(const std::string&, uint32), uint32 flags) {
 	// bool FileMonitor::check(const std::string& path, std::function<void(const std::string&, uint32)> callback, uint32 flags) {
-		
+        
 		if(!FileExist(path))
 			return false;
 		//log::out << log::RED << "FileMonitor::check - invalid path : " << m_root << "\n";

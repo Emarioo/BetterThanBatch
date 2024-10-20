@@ -1,0 +1,50 @@
+
+/* TODO: Improve this module.
+    sound: SoundObject = CreateSound("hi.waw")
+    sound.play()
+    sound.stop()
+    sound.loop()
+    sound.set_volume()
+    sound.get_volume()
+    sound.current_time()
+    sound.duration()
+    sound.destroy(sound)
+*/
+// TODO: Audio for Linux, currently stubs
+
+#import "Logger"
+#if OS_WINDOWS
+    #import "Windows"
+#endif
+
+#if OS_LINUX
+fn print_no_sound_linux_support() {
+    global once: bool = false
+    if once
+        return;
+    once = true
+    log("Can't play sound. Sound.btb doesn't support Linux, only Windows (for now).")
+}
+#endif
+
+fn PlaySound(file: char[], synchronous: bool = false) {
+    #if OS_WINDOWS
+        res: u32
+        if(synchronous)
+            res = win32_PlaySound(file.ptr, null, SND_FILENAME)
+        else
+            res = win32_PlaySound(file.ptr, null, SND_ASYNC | SND_FILENAME)
+        if !res {
+            log("ERROR: PlaySound, could not find ",file)
+        }
+    #else
+        print_no_sound_linux_support();
+    #endif
+}
+fn StopSound() {
+    #if OS_WINDOWS
+        win32_PlaySound(null, null, 0)
+    #else
+        print_no_sound_linux_support();
+    #endif
+}

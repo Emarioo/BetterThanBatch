@@ -1148,7 +1148,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     if(!root)
         return SIGNAL_NO_MATCH;
     advance();
-
+    
     ZoneScopedC(tracy::Color::Goldenrod2); // we start profiling here, when we actually are matching macro, that way the count stat in profiler represents the number of evaluated macros instead of the number of tries.
     
     LOG(LOG_PREPROCESSOR, 
@@ -2338,6 +2338,8 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, Prep
     using namespace engone;
     ZoneScopedC(tracy::Color::DarkGoldenrod2);
 
+    // TODO: Thread-safety
+    
     Assert(context);
 
     auto& ids_to_check = context->ids_to_check;
@@ -2346,24 +2348,25 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, Prep
     Assert(context->evaluateTokens);
     Assert(context->import_id == import_id);
 
-    // NOTE: We pre-compute a list of imports we should check for macros because it's time consuming to through each import and it's dependencies, and then those imports' dependencies.
+
+    // NOTE: We pre-compute a list of imports we should check for macros because it's time consuming to go through each import and it's dependencies, and then those imports' dependencies.
     if(!context->has_computed_deps) {
         context->has_computed_deps = true;
 
         ids_to_check.clear();
-        ids_to_check.add(import_id);
+        ids_to_check.add({import_id});
 
         int head = 0;
         while(head < ids_to_check.size()) {
-            u32 id = ids_to_check[head];
+            auto& it = ids_to_check[head];
             head++;
             
             // lock_imports.lock(); // TODO: lock
-            Import* imp = imports.get(id-1);
+            Import* imp = imports.get(it.id-1);
             // lock_imports.unlock();
             
             // lock_imports.lock(); // TODO: lock
-            CompilerImport* cimp = compiler->imports.get(id-1);
+            CompilerImport* cimp = compiler->imports.get(it.id-1);
             // lock_imports.unlock();
             // may happen if import wasn't preprocessed and added to 'imports'
             // it was added to Compiler.imports but didn't process it before being
@@ -2372,18 +2375,19 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, Prep
             Assert(cimp);
             
             // TODO: Optimize
-            FOR(cimp->dependencies) {
-                if(it.disabled)
-                    continue;
+            for(int nr=0;nr<cimp->dependencies.size();nr++) {
+                auto& it = cimp->dependencies[nr];
+                // if(it.disabled) // a dependency may become enabled later so we can't cache non-disabled dependencies, we need all of them. Then when we check dependencies we ignore the disabled once.
+                //     continue;
                 bool already_checked = false;
                 for(int i=0;i<ids_to_check.size();i++) {
-                    if(ids_to_check[i] == it.id) {
+                    if(ids_to_check[i].id == it.id) {
                         already_checked=true;
                         break;
                     }
                 }
                 if(!already_checked) {
-                    ids_to_check.add(it.id);
+                    ids_to_check.add({it.id,nr,cimp});
                 }
             }
         }
@@ -2394,63 +2398,19 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, Prep
         return pair->second.root;
     }
 
-    // TODO: We pre-calculate which imports we check macros from. If we #import a file with macros after pre-calculation then we won't see those macros. We need to check if new imports were added. How would this work with multithreading?
-    
-    if(context->has_computed_deps) {
-        FOR(ids_to_check) {
-            auto id = it;
-            Import* imp = imports.get(id-1);
-
-            auto pair = imp->rootMacros.find(name);
-            if(pair != imp->rootMacros.end()){
-                // _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
-                context->cached_macro_names[name] = { pair->second };
-                return pair->second;
-            }
+    FOR(ids_to_check) {
+        if(it.dep_index != -1) {
+            auto& dep = it.cimp->dependencies[it.dep_index];
+            if(dep.disabled)
+                continue;
         }
-    } else {
-        ids_to_check.clear();
-        ids_to_check.add(import_id);
-        int head = 0;
-        while(head < ids_to_check.size()) {
-            u32 id = ids_to_check[head];
-            head++;
-            
-            // lock_imports.lock(); // TODO: lock
-            Import* imp = imports.get(id-1);
-            // lock_imports.unlock();
-            
-            // lock_imports.lock(); // TODO: lock
-            CompilerImport* cimp = compiler->imports.get(id-1);
-            // lock_imports.unlock();
-            // may happen if import wasn't preprocessed and added to 'imports'
-            // it was added to Compiler.imports but didn't process it before being
-            // here.
-            Assert(imp);
-            Assert(cimp);
-            
-            auto pair = imp->rootMacros.find(name);
-            if(pair != imp->rootMacros.end()){
-                _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
-                context->cached_macro_names[name] = { pair->second };
-                return pair->second;
-            }
-            
-            // TODO: Optimize
-            FOR(cimp->dependencies) {
-                if(it.disabled)
-                    continue;
-                bool already_checked = false;
-                for(int i=0;i<ids_to_check.size();i++) {
-                    if(ids_to_check[i] == it.id) {
-                        already_checked=true;
-                        break;   
-                    }
-                }
-                if(!already_checked) {
-                    ids_to_check.add(it.id);
-                }
-            }
+        Import* imp = imports.get(it.id-1);
+
+        auto pair = imp->rootMacros.find(name);
+        if(pair != imp->rootMacros.end()){
+            // _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
+            context->cached_macro_names[name] = { pair->second };
+            return pair->second;
         }
     }
     return nullptr;
