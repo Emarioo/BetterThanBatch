@@ -45,16 +45,51 @@ struct MacroRoot {
     bool hasBlank=false;
     MacroSpecific variadicMacro;
 };
+struct FunctionInsert {
+    enum ExprType {
+        PATTERN_NONE,
+        PATTERN_NAME,
+        PATTERN_FILE,
+        PATTERN_LIST,
+    };
+    struct Expr {
+        ExprType type = PATTERN_NAME;
+        bool inverse = false;
+        DynamicArray<DynamicArray<Expr>> list{};
+        std::string string{};
+    };
+    
+    Expr pattern{};
+    
+    bool matches(const std::string& name, const std::string& file) const;
+    static bool MatchPattern(const std::string& pattern, const std::string& string);
+    
+    std::string content{};
+    int priority = 0;
+    
+    lexer::SourceLocation location{};
+    
+    void print();
+};
 struct PreprocContext;
 struct Preprocessor {
     void cleanup() {
         imports.cleanup();
+        for(auto& i : function_inserts) {
+            i->~FunctionInsert();
+            engone::Free(i, sizeof(FunctionInsert));
+        }
     }
 
     void init(lexer::Lexer* lexer, Compiler* compiler) { this->lexer = lexer; this->compiler = compiler; }
     
     // returns preprocessed import_id (unsigned 32-bit integer where 0 means failure)
     u32 process(u32 import_id, bool phase_2);
+    
+    DynamicArray<FunctionInsert*> function_inserts;
+    
+    void add_function_insert(FunctionInsert* insert);
+    void match_function_insert(const std::string& name, const std::string& file, DynamicArray<const FunctionInsert*>* out) const;
     
     MacroRoot* create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank);
     void insertCertainMacro(u32 import_id, MacroRoot* rootMacro, MacroSpecific* localMacro);
@@ -337,6 +372,9 @@ struct PreprocContext : PhaseContext {
         // return lexer->getTokenFromImport(import_id, head + off);
         return nullptr;
     }
+    lexer::SourceLocation getloc(int off = 0) {
+        return { gettok(off) };
+    }
     void advance(int n = 1) {
         head += n;
     }
@@ -356,6 +394,7 @@ struct PreprocContext : PhaseContext {
     SignalIO parseImport();
     SignalIO parseIf();
     SignalIO parseInformational(lexer::Token hashtag_tok, lexer::Token directive_tok, StringView directive_str, lexer::Token* out_tok, std::string* out_str);
+    SignalIO parseFunctionInsert();
 
     // incomplete
     SignalIO parseUndef();

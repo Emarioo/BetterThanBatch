@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file. Every versi
  
 Versioning for this project works like this: [Versioning](/docs/details/05-Versioning.md).
  
+## v0.2.1 - ...
+
+### Added
+- Added *#function* which is evaluated to the name of the current function, similar to *#line*.
+- Added StackTrace.btb
+- Added *#function_insert*, see details in guide.
+- Added #fileabs which evaluates to absolute path, #file was changed to evaluate to relative path.
+
+### Standard library additions and changes
+- Added std_print for colors (LogColor enum)
+ 
 ## v0.2.0 - 2024-10-14 (**latest**, **release**)
 I added the changelog this last month so I added changes based on commits messages.
 

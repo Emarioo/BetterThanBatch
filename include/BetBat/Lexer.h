@@ -231,7 +231,8 @@ namespace lexer {
         }
 
         // returns file id, 0 means failure
-        u32 tokenize(char* text, u64 length, const std::string& path_name, u32 prepared_import_id = 0);
+        u32 tokenize(const char* text, u64 length, const std::string& path_name, u32 existing_import_id = 0, int line = 0, int column = 0);
+        u32 tokenize(const std::string& text, const std::string& path_name, u32 existing_import_id = 0, int line = 0, int column = 0);
         u32 tokenize(const std::string& path, u32 existing_import_id = 0);
 
         struct FeedIterator {

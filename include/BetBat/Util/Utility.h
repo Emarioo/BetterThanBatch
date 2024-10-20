@@ -42,7 +42,7 @@ std::string JoinPaths(const std::string& a, const std::string& b);
 // Removes the last slash and all text before it leaving the file name.
 std::string TrimDir(const std::string& path);
 std::string BriefString(const std::string& path, int max=25, bool skip_cwd = true);
-std::string TrimCWD(const std::string& path);
+std::string TrimCWD(const std::string& path, bool include_dot = false);
 // returns extension including the dot, empty string is returned if no string
 std::string ExtractExtension(const std::string& path);
 

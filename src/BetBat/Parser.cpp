@@ -1,5 +1,6 @@
 #include "BetBat/Parser.h"
 #include "BetBat/Compiler.h"
+#include "BetBat/Util/Utility.h"
 
 namespace parser {
 
@@ -1920,6 +1921,9 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 ops.add(AST_DECREMENT);
                 continue;
             }
+            
+            StringView next_token_string{};
+            auto next_token = info.getinfo(&next_token_string, 1);
 
             if(token->type == lexer::TOKEN_LITERAL_INTEGER){
                 auto  token_tiny = info.gettok();
@@ -2794,6 +2798,22 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     )
                 } else
                     info.advance();
+                values.add(tmp);
+            } else if(token->type == '#' && next_token->type == lexer::TOKEN_IDENTIFIER && next_token_string == "function"){
+                auto loc = info.getloc();
+                info.advance(2);
+                
+                ASTExpression* tmp = 0;
+                tmp = info.ast->createExpression(TypeId(AST_STRING));
+                if(functionScopes.size()>0) {
+                    tmp->name = functionScopes.last().function->name;
+                } else {
+                    tmp->name = "__no_function__";
+                }
+                if(cstring)
+                    tmp->flags |= ASTNode::NULL_TERMINATED;
+
+                tmp->location = loc;
                 values.add(tmp);
             } else {
                 auto token_tiny = info.gettok();
@@ -4187,7 +4207,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         info.functionScopes.add({});
         info.functionScopes.last().function = function;
         ASTScope* body = 0;
-        auto signal = parseBody(body, function->scopeId);
+        auto signal = parseBody(body, function->scopeId, ParseFlags::PARSE_FROM_FUNC);
         function->body = body;
         info.functionScopes.pop();
         SIGNAL_SWITCH_LAZY()
@@ -4674,10 +4694,56 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
         functionScopes.last().defers.resize(functionScopes.last().anyScopes.last().defer_size);
         functionScopes.last().anyScopes.pop();
     };
+    
+    TokenIteratorState state{};
+    DynamicArray<u32> extra_preprocs{};
+    if(in_flags & ParseFlags::PARSE_FROM_FUNC) {
+        auto ast_func = functionScopes.last().function;
+        
+        DynamicArray<const preproc::FunctionInsert*> inserts{};
+        compiler->preprocessor.match_function_insert(ast_func->name, TrimCWD(lexer_import->path, true), &inserts);
+        
+        for(auto& insert : inserts) {
+            std::string func_file_path;
+            int line, column;
+            // compiler->lexer.get_source_information(ast_func->location, &func_file_path, &line, &column, nullptr);
+            compiler->lexer.get_source_information(insert->location, &func_file_path, &line, &column, nullptr);
+            
+            u32 temp_import_id = compiler->lexer.tokenize(insert->content, func_file_path, 0, line, 0);
+            
+            CompilerImport imp{};
+            imp.import_id = temp_import_id;
+            imp.path = func_file_path;
+            auto yes = compiler->imports.requestSpot(temp_import_id-1, &imp);
+            Assert(yes);
+            
+            u32 initial_preproc_import_id = compiler->preprocessor.process(temp_import_id, false);
+            
+            u32 real_import_id = compiler->get_map_id(import_id);
+            compiler->addDependency(temp_import_id, real_import_id);
+            
+            u32 preproc_import_id = compiler->preprocessor.process(temp_import_id, true);
+            
+            auto lex_imp = compiler->lexer.getImport_unsafe(preproc_import_id);
+            
+            extra_preprocs.add(preproc_import_id);
+        }
+        if(extra_preprocs.size() > 0) {
+            replace_token_state(&state, extra_preprocs[0]);
+        }
+    }
 
     while(true){
         auto token = info.getinfo(&view);
         if(token->type == lexer::TOKEN_EOF) {
+            if(extra_preprocs.size()>0) {
+                restore_token_state(&state);
+                extra_preprocs.removeAt(0);
+                if(extra_preprocs.size() > 0) {
+                    replace_token_state(&state, extra_preprocs[0]);
+                }
+                continue;
+            }
             if(expectEndingCurlyBrace) {
                 if (functionScopes.size()) {
                     auto func = functionScopes.last().function;

@@ -666,6 +666,363 @@ SignalIO PreprocContext::parseIf(){
     //  log::out << "     exit  ifdef loop\n";
     return SIGNAL_SUCCESS;
 }
+bool FunctionInsert::matches(const std::string& name, const std::string& file) const {
+    using namespace engone;
+    
+    bool final_matched = false;
+    
+    struct Env {
+        const Expr* expr;
+        int comma_index;
+        int and_index;
+        bool last_match = true;
+    };
+    DynamicArray<Env> envs;
+    
+    envs.add({});
+    envs.last().expr = &pattern;
+    
+    while (envs.size() > 0) {
+        auto& env = envs.last();
+        
+        if(env.comma_index >= env.expr->list.size()) {
+            // Assert(!env.last_match);
+            if(envs.size()>1) {
+                envs[envs.size()-2].last_match = env.expr->inverse;
+            } else {
+                final_matched = env.expr->inverse;
+            }
+            envs.pop();
+            continue;
+        }
+        
+        if(!env.last_match) {
+            env.and_index = 0;
+            env.comma_index++;
+            env.last_match = true;
+            continue;
+        }
+        
+        if(env.and_index >= env.expr->list[env.comma_index].size()) {
+            Assert(env.last_match);
+            if(envs.size()>1) {
+                envs[envs.size()-2].last_match = !env.expr->inverse;
+            } else {
+                final_matched = !env.expr->inverse;
+            }
+            envs.pop();
+            continue;
+        }
+        
+        bool matched = false;
+        
+        const Expr* cur = &env.expr->list[env.comma_index][env.and_index];
+        env.and_index++;
+        
+        if(cur->type == PATTERN_NAME) {
+            matched = MatchPattern(cur->string, name);
+        } else if(cur->type == PATTERN_FILE) {
+            matched = MatchPattern(cur->string, file);
+        } else if(cur->type == PATTERN_LIST) {
+            envs.add({});
+            envs.last().expr = cur;
+            continue;
+        }
+        env.last_match = cur->inverse ? !matched : matched;
+    }
+    
+    // log::out << "MATCH "<<final_matched << " "<<name<<" "<<file<<"\n";
+    return final_matched;
+}
+bool FunctionInsert::MatchPattern(const std::string& pattern, const std::string& string) {
+    using namespace engone;
+    // TODO: More complex pattern matching
+    bool yes = false;
+    if(pattern.empty()) yes = false;
+    else if(pattern == "*") yes = true;
+    else if(pattern.size()>2 && pattern[0] == '*' && pattern.back() == '*')
+        yes = string.find(pattern.substr(1,pattern.size()-2)) != -1;
+    else if(pattern.back() == '*')
+        yes = string.find(pattern.substr(0,pattern.size()-1)) == 0;
+    else if(pattern[0] == '*')
+        yes = string.find(pattern.substr(1)) == string.size() - (pattern.size() - 1);
+    else
+        yes = pattern == string;
+    // log::out << " check "<<yes <<" "<<pattern << " "<<string<<"\n";
+    return yes;
+}
+void FunctionInsert::print() {
+    using namespace engone;
+    DynamicArray<Expr*> exprs;
+    int indent = 0;
+    Expr unindent{};
+    unindent.type = (ExprType)10;
+    Expr and{};
+    and.type = (ExprType)9;
+    exprs.add(&pattern);
+    while(exprs.size()>0) {
+        auto expr = exprs.last();
+        exprs.pop();
+        if(expr->type == unindent.type) {
+            indent--;
+            continue;
+        }
+        for(int i=0;i<indent;i++)
+            log::out << " ";
+        if(expr->inverse)
+            log::out << "not ";
+        switch(expr->type) {
+            case 9:
+                log::out << "and\n";
+                indent++;
+            break;
+            case PATTERN_FILE:   
+                log::out << "f'"<<expr->string<<"'\n";
+            break;
+            case PATTERN_NAME:
+                log::out << "n'"<<expr->string<<"'\n";
+            break;
+            case PATTERN_LIST:
+                log::out << "list\n";
+                exprs.add(&unindent);
+                indent++;
+                for(int i=expr->list.size()-1;i>=0;i--) {
+                    auto& innerlist = expr->list[i];
+                    exprs.add(&unindent);
+                    for(int j=innerlist.size()-1;j>=0;j--) {
+                        auto& e = innerlist[j];
+                        exprs.add(&e);
+                    }
+                    exprs.add(&and);
+                }
+            break;
+        }
+    }
+}
+void Preprocessor::add_function_insert(FunctionInsert* insert) {
+    // add and sort based on priority
+    for(int i=0;i<function_inserts.size();i++){
+        auto fi = function_inserts[i];
+        if(fi->priority < insert->priority) {
+            function_inserts.insert(i, insert);
+            return;
+        }
+    }
+    function_inserts.add(insert);
+}
+void Preprocessor::match_function_insert(const std::string& name, const std::string& file, DynamicArray<const FunctionInsert*>* out) const {
+    out->cleanup();
+    for(const auto& in : compiler->preprocessor.function_inserts) {
+        bool matched = in->matches(name, file);
+        if(matched) {
+            out->add(in);
+        }
+    }
+}
+SignalIO PreprocContext::parseFunctionInsert(){
+    using namespace engone;
+    
+    // Parse match patterns
+    /* Draft BNF
+        list = match { ',' match }
+        match = match { 'and' match } | '(' list ')'
+        pattern = ['f'] string
+    */
+    // TODO: Thread safety
+    
+    lexer::SourceLocation insert_location = info.getloc(-2);
+    auto insert_srcloc = getsource(-2);
+    
+    struct Env {
+        int expect_operator=false;
+        FunctionInsert::Expr* expr=nullptr;
+    };
+    DynamicArray<Env> envs;
+    envs.add({});
+    FunctionInsert::Expr garbage{};
+    
+    FunctionInsert* insert = nullptr;
+    if(evaluateTokens) {
+        insert = (FunctionInsert*)Allocate(sizeof(FunctionInsert));
+        new(insert)FunctionInsert();
+        envs.last().expr = &insert->pattern;
+    } else {
+        envs.last().expr = &garbage;
+    }
+    envs.last().expr->type = FunctionInsert::PATTERN_LIST;
+    envs.last().expr->list.add({});
+    
+    int priority = 0;
+    
+    StringView num_data = {};
+    StringView num_data2 = {};
+    lexer::Token token = gettok(&num_data);
+    lexer::Token next_token = gettok(&num_data2, 1);
+    
+    if(token.type == lexer::TOKEN_LITERAL_INTEGER) {
+        info.advance();
+        priority = lexer::ConvertInteger(num_data);
+    } else if(token.type == '-' && next_token.type == lexer::TOKEN_LITERAL_INTEGER) {
+        info.advance(2);
+        priority = -lexer::ConvertInteger(num_data2);
+    }
+    
+    while(true){
+        auto& env = envs.last();
+        
+        StringView view{};
+        lexer::Token token = gettok(&view);
+        if(token.type == lexer::TOKEN_EOF) {
+            ERR_SECTION(
+                ERR_HEAD2(gettok(-1))
+                ERR_MSG("Sudden end of file in #function_insert pattern matching.")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+        }
+        if(env.expect_operator) {
+            if(token.type == ',') {
+                info.advance();
+                env.expr->list.add({});
+                env.expect_operator = false;
+                continue;
+            } else if(token.type == lexer::TOKEN_IDENTIFIER && view == "and") {
+                info.advance();
+                env.expect_operator = false;
+                continue;
+            } else if(token.type == ')') {
+                info.advance();
+                envs.pop();
+                continue;
+            }else {
+                break;
+            }
+        } else {
+            bool inverse = false;
+            if(token.type == lexer::TOKEN_IDENTIFIER && view == "not") {
+                inverse = true;
+                info.advance();
+                token = gettok(&view);
+            }
+            
+            FunctionInsert::ExprType type = FunctionInsert::PATTERN_NAME;
+            bool has_prefix = false;
+            if(token.type == lexer::TOKEN_IDENTIFIER && view == "f") {
+                type = FunctionInsert::PATTERN_FILE;
+                has_prefix = true;
+            } else if(token.type == lexer::TOKEN_IDENTIFIER && view == "n") {
+                type = FunctionInsert::PATTERN_NAME;
+                has_prefix = true;
+            }
+            lexer::Token token_string = gettok(&view, has_prefix ? 1 : 0);
+            StringView next_token_string{};
+            if(token_string.type == lexer::TOKEN_LITERAL_STRING) {
+                info.advance(has_prefix ? 2 : 1);
+                env.expr->list.last().add({});
+                auto& e = env.expr->list.last().last();
+                e.type = type;
+                e.string = view;
+                e.inverse = inverse;
+                env.expect_operator = true;
+                continue;
+            } else if(token.type == '(') {
+                info.advance();
+                env.expect_operator = true;
+                
+                env.expr->list.last().add({});
+                auto e = &env.expr->list.last().last();
+                e->type = FunctionInsert::PATTERN_LIST;
+                e->list.add({});
+                e->inverse = inverse;
+                
+                envs.add({}); // NOTE: You cannot access 'env' variable because it is invalidated memory
+                envs.last().expr = e;
+                continue;
+            } else if(token.type == '#' && info.gettok(&next_token_string, 1).type == lexer::TOKEN_IDENTIFIER && next_token_string == "file") {
+                info.advance(2);
+                env.expr->list.last().add({});
+                auto& e = env.expr->list.last().last();
+                e.type = FunctionInsert::PATTERN_FILE;
+                if(new_lexer_import) // null when not evaluating tokens
+                    e.string = TrimCWD(new_lexer_import->path);
+                e.inverse = inverse;
+                env.expect_operator = true;
+                continue;
+            } else if(token.type == '#' && info.gettok(&next_token_string, 1).type == lexer::TOKEN_IDENTIFIER && next_token_string == "fileabs") {
+                info.advance(2);
+                env.expr->list.last().add({});
+                auto& e = env.expr->list.last().last();
+                e.type = FunctionInsert::PATTERN_FILE;
+                if(new_lexer_import) // null when not evaluating tokens
+                    e.string = new_lexer_import->path;
+                e.inverse = inverse;
+                env.expect_operator = true;
+                continue;
+            } else {
+                if(!evaluateTokens) {
+                    ERR_SECTION(
+                        ERR_HEAD2(token)
+                        ERR_MSG("Missing valid pattern in #function_insert.")
+                        ERR_LINE2(token, "here")
+                    )
+                }
+                if(insert) {
+                    insert->~FunctionInsert();
+                    Free(insert, sizeof(FunctionInsert));
+                }
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+        }
+    }
+    
+    // Parse content
+    int start_token = gethead();
+    int end_token = start_token;
+    auto src = getsource();
+    int spacing = src->column-1;
+    int lining = src->line - insert_srcloc->line;
+    while(true){
+        lexer::Token token = gettok();
+        
+        if(token.type == lexer::TOKEN_EOF) {
+            ERR_SECTION(
+                ERR_HEAD2(gettok(-1))
+                ERR_MSG("Missing #endinsert somewhere for #function_insert.")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+        }
+        
+        if(token.type == '#' && !(token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)){
+            StringView next_token_string{};
+            lexer::Token next_token = gettok(&next_token_string, 1);
+            if(next_token.type == lexer::TOKEN_IDENTIFIER && next_token_string == "endinsert"){
+                end_token = gethead();
+                advance(2);
+                break;
+            }
+        }
+        advance();
+    }
+    if(insert) {
+        auto iter = compiler->lexer.createFeedIterator(lexer_import, start_token, end_token);
+        compiler->lexer.feed(iter);
+        insert->content = "";
+        for(int i=0;i<lining;i++)
+            insert->content += "\n";
+        for(int i=0;i<spacing;i++)
+            insert->content += " ";
+        insert->content += std::string(iter.data(), iter.len());
+        insert->location = insert_location;
+        insert->priority = priority;
+        
+        preprocessor->add_function_insert(insert);
+        
+        // log::out << log::LIME << "FUNCTION INSERT expr:\n";
+        // insert->print();
+        // log::out << log::LIME<<" CONTENT:\n";
+        // log::out << insert->content<<"\n";
+    }
+    return SIGNAL_SUCCESS;
+}
 SignalIO PreprocContext::parseImport() {
     using namespace engone;
     StringView path;
@@ -1562,6 +1919,22 @@ SignalIO PreprocContext::parseInformational(lexer::Token hashtag_tok, lexer::Tok
         signal = SIGNAL_SUCCESS;
     } else if(string == "file") {
         // advance();
+        std::string temp = TrimCWD(new_lexer_import->path);
+
+        lexer::Token tok{};
+        tok.type = lexer::TOKEN_LITERAL_STRING;
+        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED | lexer::TOKEN_FLAG_DOUBLE_QUOTED;
+        string.ptr = (char*)temp.data();
+        string.len = temp.size();
+        
+        
+        *out_str = temp;
+        *out_tok = tok;
+        // lexer->appendToken(new_lexer_import, tok, &string);
+        signal = SIGNAL_SUCCESS;
+    } else if(string == "fileabs") {
+        // advance();
         std::string temp = new_lexer_import->path;
 
         lexer::Token tok{};
@@ -1701,6 +2074,9 @@ SignalIO PreprocContext::parseOne() {
         } else if(string == "link") {
             advance();
             signal = parseLink();
+        } else if(string == "function_insert") {
+            advance();
+            signal = parseFunctionInsert();
         } else if(string == "load") {
             advance();
             signal = parseLoad();
@@ -1837,7 +2213,6 @@ int MacroSpecific::matchArg(lexer::Token token, lexer::Lexer* lexer) {
     }
     return -1;
 }
-
 MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank) {
     Assert(name.type == lexer::TOKEN_IDENTIFIER);
     

@@ -15,6 +15,8 @@ enum ParseFlags : u32 {
     PARSE_TRULY_GLOBAL      = 0x2,
     PARSE_SKIP_ENTRY_BRACES = 0x10, // Treat first found brace in parseBody as a statement
                                     // instead of the start and end of the body
+    PARSE_FROM_FUNC         = 0x20,                                    
+                                    
     // OUTPUT
     PARSE_HAS_CURLIES = 0x4,
     PARSE_HAS_CASE_FALL = 0x8, // annotation @fall for switch cases
@@ -72,8 +74,19 @@ struct ParseContext : public PhaseContext {
     // int at();
     // bool end();
 
+    struct TokenIteratorState {
+        u32 import_id=0;
+        u32 head=0;
+        lexer::Token prev_tok{};
+        u32 prev_index;
+        lexer::Import* lexer_import=nullptr;
+        DynamicArray<lexer::Chunk*> lexer_chunks;
+        DynamicArray<QuickArray<lexer::TokenInfo>*> lexer_tokens;    
+    };
     u32 import_id=0;
     u32 head=0;
+    lexer::Token prev_tok{};
+    u32 prev_index=-1;
     lexer::Import* lexer_import=nullptr;
     DynamicArray<lexer::Chunk*> lexer_chunks;
     DynamicArray<QuickArray<lexer::TokenInfo>*> lexer_tokens;
@@ -87,6 +100,34 @@ struct ParseContext : public PhaseContext {
             lexer_tokens.add(&chunk->tokens);
         }
     }
+    void replace_token_state(TokenIteratorState* prev_state, u32 new_import_id) {
+        prev_state->import_id=import_id;
+        prev_state->head=head;
+        prev_state->prev_tok=prev_tok;
+        prev_state->prev_index=prev_index;
+        prev_state->lexer_import=lexer_import;
+        prev_state->lexer_chunks=lexer_chunks;
+        prev_state->lexer_tokens=lexer_tokens;
+        lexer_tokens.resize(0);
+        lexer_chunks.resize(0);
+        lexer_import = nullptr;
+        prev_index = -1;
+        prev_tok = {};
+        head=0;
+        import_id=new_import_id;
+        setup_token_iterator();
+    }
+    void restore_token_state(TokenIteratorState* state) {
+        import_id=state->import_id;
+        head=state->head;
+        prev_tok=state->prev_tok;
+        prev_index=state->prev_index;
+        lexer_import=state->lexer_import;
+        lexer_chunks=state->lexer_chunks;
+        lexer_tokens=state->lexer_tokens;  
+    }
+    
+    
     // u32 last_fcindex=-1;
     // lexer::Chunk* last_chunk = nullptr;
     // lexer::TokenInfo* tokens_base = nullptr;
@@ -182,8 +223,7 @@ struct ParseContext : public PhaseContext {
         return info;
     }
     
-    lexer::Token prev_tok{};
-    u32 prev_index=-1;
+    
     lexer::Token gettok(int off = 0) {
         u32 fcindex,tindex;
         u32 ind = head + off;

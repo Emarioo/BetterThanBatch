@@ -284,6 +284,8 @@ u32 TestSuite(CompileOptions* options){
     tests.add("tests/funcs/conventions.btb");
     tests.add("tests/funcs/func_ptr.btb");
     
+    tests.add("tests/macro/fn_inserts.btb");
+    
     return VerifyTests(options, tests);
 }
 

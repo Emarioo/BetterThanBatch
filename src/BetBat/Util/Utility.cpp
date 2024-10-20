@@ -368,7 +368,7 @@ std::string TrimDir(const std::string& path){
         return path;
     return path.substr(slashI+1);
 }
-std::string TrimCWD(const std::string& path) {
+std::string TrimCWD(const std::string& path, bool include_dot) {
     std::string cwd = engone::GetWorkingDirectory() + "/";
     ReplaceChar((char*)cwd.data(), cwd.length(),'\\','/');
     int where = cwd.size();
@@ -381,8 +381,12 @@ std::string TrimCWD(const std::string& path) {
     }
     if(where == 0)
         return path;
-    else
-        return "./"+path.substr(where);
+    else {
+        if(include_dot)
+            return "./"+path.substr(where);
+        else
+            return path.substr(where);
+    }
 }
 std::string BriefString(const std::string& path, int max, bool skip_cwd){
     if(path.size() == 0)

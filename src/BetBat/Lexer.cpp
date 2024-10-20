@@ -40,7 +40,10 @@ u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
 
     return file_id;
 }
-u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 existing_import_id){
+u32 Lexer::tokenize(const std::string& text, const std::string& path_name, u32 existing_import_id, int line, int column){
+    return tokenize(text.c_str(), text.length(), path_name, existing_import_id, line, column);
+}
+u32 Lexer::tokenize(const char* text, u64 length, const std::string& path_name, u32 existing_import_id, int inherit_line, int inherit_column){
     using namespace engone;
     ZoneScopedC(tracy::Color::Gold);
 
@@ -164,7 +167,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         new_source_tokens->column = column;
     };
     
-    auto APPEND_DATA = [&](void* ptr, int size) {
+    auto APPEND_DATA = [&](const void* ptr, int size) {
         auto info = new_tokens;
         // TODO: You can probably optimize this function
         // if(info->type & (TOKEN_LITERAL_STRING|TOKEN_ANNOTATION|TOKEN_IDENTIFIER))
@@ -207,8 +210,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         }
     };
     
-    u16 line=1; // TODO: TestSuite needs functionality to set line and column through function arguments.
-    u16 column=1;
+    u16 line = inherit_line == 0 ? 1 : inherit_line; // TODO: TestSuite needs functionality to set line and column through function arguments.
+    u16 column = inherit_column == 0 ? 1 : inherit_column;
     
     bool inQuotes = false;
     bool isSingleQuotes = false;

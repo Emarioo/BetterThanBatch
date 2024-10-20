@@ -1,5 +1,6 @@
 
 #import "Logger"
+#import "StackTrace"
 
 #if DISABLE_ASSERTS
     #macro Assert(EXPR) #endmacro
@@ -18,6 +19,10 @@ fn CheckAssert(condition: bool, line: i32, file: char[], expr_string: char[]) {
         
     disable_asserts = true
     defer disable_asserts = false
+    
+    PrintStackTrace()
+    
+    prints("\n");
     
     prints("[ASSERT] ")
     prints(expr_string)

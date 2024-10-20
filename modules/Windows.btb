@@ -269,6 +269,10 @@ fn @import(Kernel) WriteFile(
   lpOverlapped: void* // optional, TODO: Don't be void?
 ) -> bool;
 fn @import(Kernel) GetStdHandle(nStdHandle: u32) -> HANDLE;
+fn @import(Kernel) SetConsoleTextAttribute(
+  hConsoleOutput: HANDLE,
+  wAttributes: i16,
+) -> u32;
 fn @import(Kernel) FlushFileBuffers(
   hFile: HANDLE
 ) -> bool;

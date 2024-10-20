@@ -1,106 +1,31 @@
-
-// #import "linecounter"
-// #import "Threads"
-// #import "examples/crawler/GameCore"
-// #import "examples/graphics/testgl"
-// #import "examples/graphics/minimum"
-#import "prepare_release"
-
-// #global_macro GLOBAL_MAC num := 5
-
-// #import "dev2"
-
-// func()
-
-// #import "Asserts"
-
-
-// Assert(5 == !9)
-
-// #import "Array"
-// TestArrayFreeze()
-
-
-// {@dumpbc
-// data: i32 = 24
-// res := atomic_add(&data, 5)
-// }
-
-// x: i32 = 9
-
-// thread := ThreadCreate(CalculateLines, &x);
-
-// fn @oscall CalculateLines(_info: void*) -> i32 {
-//     return 5
-// }
-
-// global num: i32;
-// main();
-// fn main() -> i32{
-//     // Bug 0: The address of global variables must be set before they are used in
-//     //  functions. Functions were evaluated before everything including globals which cause the issue.
-//     return num;
-// }
-
-// global str: char*;
-// str = Allocate(16);
-// *str; // This caused a crash at some point in time
-
-// TODO: Test that you can access globals from another file.
-
-/*
-    GLFW GLAD Test, to see if the libraries are found.
-*/
-
-// // #import "examples/crawler/GameCore"
-// // #import "examples/crawler/main"
-// #import "GLAD"
-// #import "GLFW"
 // #import "Logger"
-// #import "OS"
 
-// fn main() {
-//     yes := glfwInit();
-//     // if !yes {
-//     //     log("glfwInit failed");
-//     //     return ;
-//     // }
-//     // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-//     // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-//     // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+// #function_insert not ("*a*", "*b*", "*f*")
+//     log("hi ",#function)
+// #endinsert
 
-//     // width := 800
-//     // height := 600
-//     // title := "hey"
-//     // glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
-//     // if !glfw_window {
-//     //     log("window failed");
-//     //     glfwTerminate();
-//     //     return ;
-//     // }
+// global hits2: i32
 
-//     // glfwMakeContextCurrent(glfw_window)
+// fn f0() {}
+// fn f1() {}
 
-//     // yes = gladLoadGL()
-//     // if !yes {
-//     //     log("gladLoadGL failed")
-//     //     glfwTerminate()
-//     //     return ;
-//     // }
-//     // glViewport(0, 0, 800, 600)
-//     // x := 0.0
-//     // while (!glfwWindowShouldClose(glfw_window)) {
-//     //     glViewport(0, 0, width, height)
-        
-//     //     glClearColor(0.2, x, 0.2, 1);
-//     //     x = (0.002 + x) % 2.0
-//     //     glClear(GL_COLOR_BUFFER_BIT);
+// fn b1() {}
+// fn b2() {}
 
-//     //     // user may not always want this
-//     //     glfwSwapBuffers(glfw_window);
-//     //     glfwPollEvents();
-        
-//     //     // temporary
-//     //     ProcessSleep(0.002) // don't use up CPU resources
-//     // }
-// }
+// fn a1b() {}
+// fn a2b() {}
+
+// fn neither() {}
+
+// f0()
+// f1()
+// b1()
+// b2()
+// a1b()
+// a2b()
+// neither()
+
+#import "Logger"
+
+log(LOG_LIME, "I am green", LOG_CYAN, " I am cyan")
+log("I am normal because of new line")
