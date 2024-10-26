@@ -89,10 +89,10 @@ struct Array<T> {
     fn remove(index: i32) {
         if index >= len
             return;
+        destruct(&ptr[index])
         for index..len-1 {
             ptr[nr] = ptr[nr+1];
         }
-        destruct(&ptr[len-1])
         len--;
     }
     fn get(index: i32) -> T {

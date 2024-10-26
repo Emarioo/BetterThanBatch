@@ -9,15 +9,24 @@
 
 #if OS_WINDOWS
     #if LINKER_MSVC
-        // #load "libs/stb/lib-vc2022/stb_image.lib" as STB_IMAGE
-        #load "libs/stb/lib-vc2022/stb_image.dll" as STB_IMAGE
+        #if USE_DYNAMIC_LIBS
+            #load "libs/stb/lib-vc2022/stb_image.dll" as STB_IMAGE
+        #else
+            #load "libs/stb/lib-vc2022/stb_image.lib" as STB_IMAGE
+        #endif
     #else
-        // #load "libs/stb/lib-mingw-w64/stb_image.lib" as STB_IMAGE
-        #load "libs/stb/lib-mingw-w64/stb_image.dll" as STB_IMAGE
+        #if USE_DYNAMIC_LIBS
+            #load "libs/stb/lib-mingw-w64/stb_image.dll" as STB_IMAGE
+        #else
+            #load "libs/stb/lib-mingw-w64/stb_image.lib" as STB_IMAGE
+        #endif
     #endif
 #else
-    // #load "libs/stb/lib-ubuntu/libstb_image.a" as STB_IMAGE
-    #load "libs/stb/lib-ubuntu/libstb_image.so" as STB_IMAGE
+    #if USE_DYNAMIC_LIBS
+        #load "libs/stb/lib-ubuntu/libstb_image.so" as STB_IMAGE
+    #else
+        #load "libs/stb/lib-ubuntu/libstb_image.a" as STB_IMAGE
+    #endif
 #endif
 
 #macro STB_IMPORT @import(STB_IMAGE)

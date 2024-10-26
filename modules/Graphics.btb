@@ -794,10 +794,10 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], color:
         
         vertices: f32[] {
             // x ,y, uv.x, uv.y, color.rgba, texture
-            (bx + off_x) *     zoom + ox, (by + off_y) *     zoom + oy,     u,  v, color.r, color.b, color.g, color.a,  font.id,
-            (bx + off_x) *     zoom + ox, (by + off_y + h) * zoom + oy, u,  vh, color.r, color.b, color.g, color.a, font.id,
-            (bx + off_x + w) * zoom + ox, (by + off_y + h) * zoom + oy, uw, vh, color.r, color.b, color.g, color.a, font.id,
-            (bx + off_x + w) * zoom + ox, (by + off_y) *     zoom + oy,     uw, v, color.r, color.b, color.g, color.a,  font.id,
+            (bx + off_x) *     zoom + ox, (by + off_y) *     zoom + oy,  u,  v, color.r, color.g, color.b, color.a, font.id,
+            (bx + off_x) *     zoom + ox, (by + off_y + h) * zoom + oy,  u, vh, color.r, color.g, color.b, color.a, font.id,
+            (bx + off_x + w) * zoom + ox, (by + off_y + h) * zoom + oy, uw, vh, color.r, color.g, color.b, color.a, font.id,
+            (bx + off_x + w) * zoom + ox, (by + off_y) *     zoom + oy, uw,  v, color.r, color.g, color.b, color.a, font.id,
         }
         glBindBuffer(GL_ARRAY_BUFFER, window.vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * BASE_SHADER_VERTEX_STRIDE * sizeof f32, vertices.ptr);

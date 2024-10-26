@@ -737,7 +737,7 @@ fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
     while i < slice.len {
         chr := slice.ptr[i];
         if chr >= '0' && chr <= '9' {
-            result = result * 10 + chr - '0';
+            result = result * 10 + cast<i32>(chr - '0');
         } else {
             break;
         }

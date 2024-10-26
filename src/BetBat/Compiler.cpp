@@ -1855,11 +1855,20 @@ JUMP_TO_EXEC:
                 int exitCode;
 
                 std::string cmd = output_path;
+                cmd = ".\\" + cmd; // TODO: Assumes exe path is relative, not good
+                // We need it because when we start program windows will look for executable
+                // in the current processe's executable directory instead of the
+                // current working directory. relative path ensures we always use current working directory.
+                // This matters if you call compiler like this: ..\BetterThanBatch\bin\btb.exe src/main -r
+                
                 ReplaceChar((char*)cmd.data(), cmd.size(), '/', '\\');
                 for (auto& a : options->userArguments) {
                     cmd += " " + a;
                 }
+                
+                // log::out << "CWD: " << GetWorkingDirectory()<<"\n";
 
+                log::out << log::GRAY << "running: " << cmd<<"\n";
                 engone::StartProgram(cmd.c_str(),PROGRAM_WAIT, &exitCode);
                 log::out << log::LIME <<"Exit code: " << exitCode << "\n";
 

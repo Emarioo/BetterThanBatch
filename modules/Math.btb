@@ -34,6 +34,14 @@ fn ceil(v: f32) -> f32 { // TODO: Intrinsic
 // TODO: Intrinsics for pow, min, and max
 //   There is pow in inline assembly but is the implementation good?
 
+// TODO: sinf, cosf should be intrinsics.
+#if OS_WINDOWS
+    #load "Kernel32.lib" as Dummy
+#else
+    #load "c" as Dummy
+#endif
+fn @import(Dummy) sinf(v: f32) -> f32
+fn @import(Dummy) cosf(v: f32) -> f32
 
 fn random64() -> u64 {
 #if OS_WINDOWS
