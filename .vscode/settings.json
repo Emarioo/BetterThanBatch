@@ -93,6 +93,7 @@
         "sigaction.h": "c",
         "wait.h": "c",
         "unistd.h": "c",
-        "glfw3.h": "c"
+        "glfw3.h": "c",
+        "xuartps.h": "c"
     }
 }

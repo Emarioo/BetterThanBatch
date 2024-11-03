@@ -37,6 +37,9 @@ out
 logs
 *.log
 
+# Ignore experimentation folder
+sandbox
+
 # Ignore temporary C/C++ files from root
 /*.cpp
 /*.c
