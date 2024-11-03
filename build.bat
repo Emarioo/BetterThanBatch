@@ -14,8 +14,10 @@ if not "%~1"=="run" (
     @REM py build.py use_optimizations=true
     @REM py build.py use_tracy=true
 ) else (
-    bin\btb -dev -- README.md -v
-    @REM bin\btb -dev
+    @REM bin\btb examples/dev.btb --target arm
+    @REM bin\btb -dev -- README.md -v
+    @REM bin\btb -dev -- README.md -v
+    bin\btb -dev
     @REM bin\btb --test
     
     @REM bin\btb examples/dev -vm -pvm

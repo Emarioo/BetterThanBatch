@@ -3611,6 +3611,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                     } else if(info.compiler->options->target == TARGET_LINUX_x64) {
                         specifiedConvention = true;
                         function->callConvention = CallConvention::UNIXCALL;
+                    } else if(info.compiler->options->target == TARGET_ARM) {   
+                        function->callConvention = CallConvention::ARMCALL;
                     } else Assert(false);
                 }
                 

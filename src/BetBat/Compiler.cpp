@@ -283,53 +283,6 @@ void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
             offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d-%d-%d", (int)year, (int)month, (int)day);
     }
 }
-const char* ToString(TargetPlatform target){
-    #define CASE(X,N) case X: return N;
-    switch(target){
-        CASE(TARGET_WINDOWS_x64,"win-x64")
-        CASE(TARGET_LINUX_x64,"linux-x64")
-        CASE(TARGET_BYTECODE,"bytecode")
-        CASE(TARGET_UNKNOWN,"unknown-target")
-        default: Assert(false);
-    }
-    return "unknown-target";
-    #undef CASE
-}
-TargetPlatform ToTarget(const std::string& str){
-    #define CASE(N,X) if (str==X) return N;
-    CASE(TARGET_WINDOWS_x64,"win-x64")
-    CASE(TARGET_LINUX_x64,"linux-x64")
-    CASE(TARGET_BYTECODE,"bytecode")
-    return TARGET_UNKNOWN;
-    #undef CASE
-}
-engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
-    return logger << ToString(target);
-}
-const char* ToString(LinkerChoice v) {
-    #define CASE(X,N) case X: return N;
-    switch(v){
-        CASE(LINKER_GCC,"gcc")
-        CASE(LINKER_MSVC,"msvc")
-        CASE(LINKER_CLANG,"clang")
-        CASE(LINKER_UNKNOWN,"unknown-linker")
-        default: {}
-    }
-    return "unknown-linker";
-    #undef CASE
-}
-LinkerChoice ToLinker(const std::string& str) {
-    #define CASE(N,X) if (str==X) return N;
-    CASE(LINKER_GCC,"gcc")
-    CASE(LINKER_MSVC,"msvc")
-    CASE(LINKER_CLANG,"clang")
-    CASE(LINKER_UNKNOWN,"unknown-linker")
-    return LINKER_UNKNOWN;
-    #undef CASE
-}
-engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v) {
-    return logger << ToString(v);
-}
 
 int Compiler::addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer){
     auto imp = lexer->getImport_unsafe(loc);
@@ -1136,6 +1089,11 @@ void Compiler::processImports() {
                             for(auto t : compiler_imp->tinycodes)
                                 GenerateX64(this, t);
                         } break;
+                        case TARGET_ARM: {
+                            // @nocheckin gen arm
+                            for(auto t : compiler_imp->tinycodes)
+                                GenerateX64(this, t);
+                        } break;
                         default: Assert(false);
                     }
                 }
@@ -1215,6 +1173,7 @@ void Compiler::run(CompileOptions* options) {
         OUTPUT_INVALID,
         OUTPUT_OBJ,
         OUTPUT_EXE,
+        OUTPUT_ELF,
         OUTPUT_LIB,
         OUTPUT_DLL,
         OUTPUT_BC,
@@ -1233,6 +1192,9 @@ void Compiler::run(CompileOptions* options) {
             case TARGET_WINDOWS_x64:
             case TARGET_LINUX_x64: {
                 output_path = "bin/main.exe"; // skip .exe on Linux?
+            } break;
+            case TARGET_ARM: {
+                output_path = "bin/main.elf";
             } break;
             default: Assert(false);
         }
@@ -1260,6 +1222,9 @@ void Compiler::run(CompileOptions* options) {
         } else if(output_extension == ".lib" || output_extension == ".a") {
             output_type = OUTPUT_LIB;
             // NOTE: Linux uses libNAME.a but we just check .a, should we warn the user if they forgot lib at the start of the file?
+        } else if(output_extension == ".elf") {
+            output_type = OUTPUT_ELF;
+            // NOTE: We assume the user intends to compile a "kernel" image for qemu.
         }
     } else {
         if(options->target == TARGET_LINUX_x64) {
@@ -1278,6 +1243,12 @@ void Compiler::run(CompileOptions* options) {
         log::out << "  .dll .so - dynamic library\n";
         log::out << "  .lib .a  - static library\n";
         log::out << "  .bc      - bytecode\n";
+        log::out << "  .elf     - kernel image (mainly meant for qemu)\n";
+        return;
+    }
+
+    if(options->target == TARGET_ARM && output_type != OUTPUT_OBJ && output_type != OUTPUT_ELF && output_type != OUTPUT_BC) {
+        log::out << log::RED << "The compiler can only generate "<<log::NO_COLOR<<".o .elf .bc "<<log::RED<<" when targeting ARM, not '"<<output_extension<<"'.\n";
         return;
     }
 
@@ -1300,6 +1271,11 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case TARGET_WINDOWS_x64:
         case TARGET_LINUX_x64: {
+            program = X64Program::Create();
+            program->debugInformation = bytecode->debugInformation;
+        } break;
+        case TARGET_ARM: {
+            // @nocheckin
             program = X64Program::Create();
             program->debugInformation = bytecode->debugInformation;
         } break;
@@ -1446,6 +1422,10 @@ void Compiler::run(CompileOptions* options) {
         case TARGET_LINUX_x64: {
             GenerateX64_finalize(this);
         } break;
+        case TARGET_ARM: {
+            // @nocheckin
+            // GenerateX64_finalize(this);
+        } break;
         default: Assert(false);
     }
     
@@ -1497,7 +1477,6 @@ void Compiler::run(CompileOptions* options) {
         return;
     }
 
-    
     switch(options->target){
         case TARGET_BYTECODE: {
             // if(generate_obj_file) {
@@ -1512,6 +1491,10 @@ void Compiler::run(CompileOptions* options) {
             compile_stats.generatedFiles.add(object_path);
         } break;
         case TARGET_LINUX_x64: {
+            obj_write_success = ObjectFile::WriteFile(OBJ_ELF, object_path, program, this);
+            compile_stats.generatedFiles.add(object_path);
+        } break;
+        case TARGET_ARM: {
             obj_write_success = ObjectFile::WriteFile(OBJ_ELF, object_path, program, this);
             compile_stats.generatedFiles.add(object_path);
         } break;
@@ -1807,6 +1790,112 @@ void Compiler::run(CompileOptions* options) {
             compile_stats.errors++;
             return;
         }    
+    } else if (output_type == OUTPUT_ELF){
+        if(program->libraries.size() > 0) {
+            // @nocheckin TODO: Better error messages that shows where libraries came from.
+            log::out << log::RED << "Libraries cannot be linked when compiling for ARM." << log::NO_COLOR;
+            for(auto& path : program->libraries) {
+                log::out << path<<" ";
+            }
+            log::out << "\n";
+            compile_stats.errors++;
+            return;
+        }
+        
+        std::string toolchain = "arm-none-eabi"; // @nocheckin compiler option for arm linker, what about clang?
+        std::string as = toolchain+"-as";
+        std::string linker = toolchain+"-ld";
+        
+        std::string cmd = "";
+        cmd += linker + " ";
+        
+        if(options->useDebugInformation)
+            cmd += "-g ";
+        cmd += object_path + " ";
+        
+        const char* startup = 
+            ".global _Reset\n"
+            "_Reset:\n"
+            "    LDR sp, =stack_top\n"
+            "    BL main\n"
+            "    # angel_SWIreason_ReportException\n"
+            "    mov r0, #0x18\n"
+            "\n"
+            "    # mov r1, #20026 # ADP_Stopped_ApplicationExit\n"
+            "    mov r1, #0x2\n"
+            "    lsl r1, r1, #16\n"
+            "    orr r1, r1, #0x26\n"
+            "    # interrupt\n"
+            "    svc 0x00123456\n"
+            "\n"
+            "    # infinite loop if interrupt didn't work\n"
+            "    B .\n";
+        const char* linker_script = 
+            "ENTRY(_Reset)\n"
+            "SECTIONS\n"
+            "{\n"
+            "    . = 0x10000;\n"
+            "    start = 0x10000;\n"
+            "    .startup . : { startup.o(.text) }\n"
+            "    .text : { *(.text) }\n"
+            "    .data : { *(.data) }\n"
+            "    .bss : { *(.bss COMMON) }\n"
+            "    . = ALIGN(8);\n"
+            "    . = . + 0x10000; /* 64kB of stack memory */\n"
+            "    stack_top = .;\n"
+            "}\n";
+            
+        auto file_startup = FileOpen("bin/arm_startup.s", FILE_CLEAR_AND_WRITE);
+        FileWrite(file_startup, startup, strlen(startup));
+        FileClose(file_startup);
+        
+        std::string cmd_startup = as + " bin/arm_startup.s -o bin/arm_startup.o";
+        int as_exit_code=0;
+        bool yes = StartProgram(cmd_startup.c_str(), PROGRAM_WAIT, &as_exit_code);
+        if(!yes || as_exit_code != 0) {
+            log::out << log::RED << "Assembler failed: '"<<cmd_startup<<"'\n";
+            compile_stats.errors++;
+            return;
+        }
+        
+        auto file_lscript = FileOpen("bin/arm_lscript.ld", FILE_CLEAR_AND_WRITE);
+        FileWrite(file_lscript, linker_script, strlen(linker_script));
+        FileClose(file_lscript);
+        
+        cmd += "bin/arm_startup.o -T bin/arm_lscript.ld ";
+        
+        for (int i = 0;i<(int)linkDirectives.size();i++) {
+            auto& dir = linkDirectives[i];
+            cmd += dir + " ";
+        }
+        cmd += "-o " + output_path;
+        int exitCode = 0;
+        bool failed = false;
+        {
+            ZoneNamedNC(zone0,"Linker",tracy::Color::Blue2, true);
+            
+            if(!options->silent)
+                log::out << log::LIME<<"Linker command: "<<cmd<<"\n";
+            // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
+            
+            compile_stats.start_linker = engone::StartMeasure();
+            bool yes = engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+            if(yes && perform_copy) {
+                bool success = FileCopy(temp_path, options->output_file);
+                if(!success) {
+                    log::out << log::RED << "Could not copy '"<<temp_path<<"' to '"<<options->output_file<<"'\n";
+                }
+            }
+            failed = !yes;
+            compile_stats.end_linker = engone::StartMeasure();
+            compile_stats.generatedFiles.add(output_path);
+        }
+        compile_stats.end_linker = StartMeasure();
+        if(exitCode != 0 || failed) {
+            log::out << log::RED << "Linker failed: '"<<cmd<<"'\n";
+            compile_stats.errors++;
+            return;
+        }
     } else {
         // TODO: If bytecode is the target and the user specified
         //   app.bc as outputfile should we write out a bytecode file format?
@@ -1848,7 +1937,7 @@ JUMP_TO_EXEC:
         vm.execute(bytecode, entry_point, false, options);
         return;
     } 
-    if(options->executeOutput && output_type == OUTPUT_EXE) {
+    if(options->executeOutput && (output_type == OUTPUT_EXE || output_type == OUTPUT_ELF)) {
         switch(options->target) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS
@@ -1903,6 +1992,23 @@ JUMP_TO_EXEC:
             } break;
             case TARGET_BYTECODE: {
                 log::out << log::RED << "Bytecode as target is not supported. Use --run-vm to execute in virtual machine.\n";
+            } break;
+            case TARGET_ARM: {
+                std::string cmd = "qemu-system-arm "
+                    "-semihosting -nographic -serial mon:stdio -M "
+                    "xilinx-zynq-a9 -cpu cortex-a9 ";
+                cmd += "-kernel " + output_path;
+                
+                ReplaceChar((char*)cmd.data(), cmd.size(), '/', '\\');
+                for (auto& a : options->userArguments) {
+                    cmd += " " + a;
+                }
+                
+                log::out << log::GRAY << "running: " << cmd<<"\n";
+                int exitCode;
+                engone::StartProgram(cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                // Exit code isn't from the code we execute, it's from qemu whether it failed or not so we don't print it.
+                // log::out << log::LIME <<"Exit code: " << exitCode << "\n";
             } break;
             default: Assert(false);
         }

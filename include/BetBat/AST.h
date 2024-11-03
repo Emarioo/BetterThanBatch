@@ -24,6 +24,7 @@ enum CallConvention : u8 {
     // CDECL_CONVENTION, // Not implemented yet. CDECL is a macro and unavailable so _CONVENTION was added to the name.
     // https://www.ired.team/miscellaneous-reversing-forensics/windows-kernel-internals/linux-x64-calling-convention-stack-frame
     UNIXCALL, // System V AMD64 ABI calling convention.
+    ARMCALL,
 };
 #define STR_STATIC_IMPORT "importlib"
 #define STR_DYNAMIC_IMPORT "importdll"

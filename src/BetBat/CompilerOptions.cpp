@@ -235,3 +235,54 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
 
     return true;
 }
+
+
+const char* ToString(TargetPlatform target){
+    #define CASE(X,N) case X: return N;
+    switch(target){
+        CASE(TARGET_BYTECODE,"bytecode")
+        CASE(TARGET_WINDOWS_x64,"win-x64")
+        CASE(TARGET_LINUX_x64,"linux-x64")
+        CASE(TARGET_ARM,"arm")
+        CASE(TARGET_UNKNOWN,"unknown-target")
+        default: Assert(false);
+    }
+    return "unknown-target";
+    #undef CASE
+}
+TargetPlatform ToTarget(const std::string& str){
+    #define CASE(N,X) if (str==X) return N;
+    CASE(TARGET_BYTECODE,"bytecode")
+    CASE(TARGET_WINDOWS_x64,"win-x64")
+    CASE(TARGET_LINUX_x64,"linux-x64")
+    CASE(TARGET_ARM,"arm")
+    return TARGET_UNKNOWN;
+    #undef CASE
+}
+engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
+    return logger << ToString(target);
+}
+const char* ToString(LinkerChoice v) {
+    #define CASE(X,N) case X: return N;
+    switch(v){
+        CASE(LINKER_GCC,"gcc")
+        CASE(LINKER_MSVC,"msvc")
+        CASE(LINKER_CLANG,"clang")
+        CASE(LINKER_UNKNOWN,"unknown-linker")
+        default: {}
+    }
+    return "unknown-linker";
+    #undef CASE
+}
+LinkerChoice ToLinker(const std::string& str) {
+    #define CASE(N,X) if (str==X) return N;
+    CASE(LINKER_GCC,"gcc")
+    CASE(LINKER_MSVC,"msvc")
+    CASE(LINKER_CLANG,"clang")
+    CASE(LINKER_UNKNOWN,"unknown-linker")
+    return LINKER_UNKNOWN;
+    #undef CASE
+}
+engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v) {
+    return logger << ToString(v);
+}

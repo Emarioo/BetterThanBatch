@@ -11,6 +11,9 @@ enum TargetPlatform : u32 {
     TARGET_WINDOWS_x64,
     TARGET_LINUX_x64,
     // TARGET_WASM_v1_0,
+    
+    TARGET_ARM,
+    // @nocheckin TARGET_AARCH64,
 
     TARGET_END, // start/end if you want iterate targets
     TARGET_START = TARGET_UNKNOWN + 1,

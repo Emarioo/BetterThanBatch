@@ -6912,9 +6912,10 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 // TODO: Code here
                 CallConvention main_conv = BETCALL;
                 switch(compiler->options->target) {
+                    case TARGET_BYTECODE: main_conv = BETCALL; break;
                     case TARGET_WINDOWS_x64: main_conv = STDCALL; break;
                     case TARGET_LINUX_x64: main_conv = UNIXCALL; break;
-                    case TARGET_BYTECODE: main_conv = BETCALL; break;
+                    case TARGET_ARM: main_conv = ARMCALL; break;
                     default: Assert(false);
                 }
                 TinyBytecode* tb_main = context.bytecode->createTiny(compiler->entry_point,main_conv);

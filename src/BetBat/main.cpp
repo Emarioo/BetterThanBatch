@@ -69,15 +69,17 @@ int main(int argc, const char** argv){
         // opts.file_count = 20;
         // GenerateFuzzedFiles(opts,"main.btb");
 
-        options.output_file = "main.exe";
+        // options.output_file = "main.exe";
+        options.output_file = "main.elf";
         options.source_file = "examples/dev.btb";
-        options.threadCount = 2;
+        options.threadCount = 1;
         // options.disable_multithreading = false;
         // options.target = TARGET_BYTECODE;
         // options.target = TARGET_WINDOWS_x64;
         // options.linker = LINKER_MSVC;
         // options.linker = LINKER_GCC;
-        options.executeOutput = true;
+        options.target = TARGET_ARM;
+        // options.executeOutput = true;
         // options.incremental_build = true;
         // options.disable_preload = true;
         // options.only_preprocess = true;

@@ -1,0 +1,24 @@
+D:\Python\Python312;
+D:\Python\Python312\Scripts;
+C:\Program Files\Common Files\Oracle\Java\javapath;
+C:\Program Files\Eclipse Adoptium\jdk-17.0.2.8-hotspot\bin;
+C:\Program Files\Eclipse Adoptium\jdk-8.0.322.6-hotspot\bin;
+C:\Program Files (x86)\GnuWin32\bin;
+C:\Windows\system32;
+C:\Windows;
+C:\Windows\System32\Wbem;
+C:\Windows\System32\WindowsPowerShell\v1.0\;
+C:\Program Files (x86)\Windows Kits\8.1\Windows Performance Toolkit\;
+C:\Program Files (x86)\Windows Kits\10\;
+C:\Program Files\nodejs;
+C:\Program Files\CMake\bin;
+C:\Program Files\mingw-w64\x86_64-12.2.0-release-posix-seh-ucrt-rt_v10-rev2\mingw64\bin;
+C:\Program Files\PuTTY;
+C:\Program Files\Premake;
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build;
+C:\Program Files\dotnet\;
+D:\;
+C:\Program Files\ffmpeg;
+C:\Program Files (x86)\Arm GNU Toolchain aarch64-none-elf\13.3 rel1\bin;
+C:\Program Files (x86)\Arm GNU Toolchain arm-none-eabi\13.3 rel1\bin;
+D:\qemu
