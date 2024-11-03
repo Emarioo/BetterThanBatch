@@ -697,7 +697,7 @@ void FileCOFF::writeFile(const std::string& path) {
     engone::FileClose(file);
 }
 
-bool FileCOFF::WriteFile(const std::string& path, X64Program* program, u32 from, u32 to){
+bool FileCOFF::WriteFile(const std::string& path, Program* program, u32 from, u32 to){
     using namespace engone;
     using namespace coff;
     Assert(program);

@@ -1,0 +1,70 @@
+#pragma once
+
+#include "BetBat/Program.h"
+#include "BetBat/Bytecode.h"
+
+struct Compiler;
+
+
+enum ARMRegister : u8 {
+    ARM_REG_INVALID = 0,
+    ARM_REG_R0,
+    ARM_REG_R1,
+    ARM_REG_R2,
+    ARM_REG_R3,
+    ARM_REG_R4,
+    ARM_REG_R5,
+    ARM_REG_R6,
+    ARM_REG_R7,
+    ARM_REG_R8,
+    ARM_REG_R9,
+    ARM_REG_R10,
+    ARM_REG_R11,
+    ARM_REG_R12,
+    ARM_REG_R13,
+    ARM_REG_R14,
+    ARM_REG_R15,
+    
+    ARM_REG_MAX,
+    
+    // aliases
+    ARM_REG_FP = ARM_REG_R11,
+    ARM_REG_IP = ARM_REG_R12,
+    ARM_REG_SP = ARM_REG_R13,
+    ARM_REG_LR = ARM_REG_R14,
+    ARM_REG_PC = ARM_REG_R15,
+    
+};
+
+extern const char* arm_register_names[];
+engone::Logger& operator <<(engone::Logger&, ARMRegister);
+
+struct ARMBuilder : public ProgramBuilder {
+    
+    bool generate();
+    
+    void emit_add(ARMRegister rd, ARMRegister rn, ARMRegister rm);
+    void emit_mov(ARMRegister rd, ARMRegister rm);
+    void emit_movw(ARMRegister rd, u16 imm);
+    void emit_movt(ARMRegister rd, u16 imm);
+    void emit_push(ARMRegister r);
+    void emit_pop(ARMRegister r);
+    // immediate is a 13-bit immediate, last bit indicating signedness
+    void emit_ldr(ARMRegister rt, ARMRegister rn, i16 imm16);
+    void emit_str(ARMRegister rt, ARMRegister rn, i16 imm16);
+    void emit_bx(ARMRegister rm);
+    
+    struct RegInfo {
+        bool used = false;
+        ARMRegister arm_reg = ARM_REG_INVALID;
+        BCRegister bc_reg = BC_REG_INVALID;
+    };
+    RegInfo arm_registers[ARM_REG_MAX]{};
+    RegInfo bc_registers[BC_REG_MAX]{};
+    
+    ARMRegister alloc_register(BCRegister reg = BC_REG_INVALID);
+    ARMRegister find_register(BCRegister reg);
+    void free_register(ARMRegister reg);
+};
+
+bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode);

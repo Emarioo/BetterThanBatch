@@ -131,10 +131,10 @@ namespace dwarf {
         int symindex_debug_abbrev = -1;
         int symindex_debug_frame = -1;
 
-        X64Program* program = nullptr; // DWARF needs to know the size of the program code
+        Program* program = nullptr; // DWARF needs to know the size of the program code
     };
 
-    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler, bool provide_section_data);
+    void ProvideSections(ObjectFile* objectFile, Program* program, Compiler* compiler, bool provide_section_data);
     
     // returns number of written bytes
     // return a negative number indicating how many bytes are missing

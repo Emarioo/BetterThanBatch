@@ -5,12 +5,12 @@
 
 #include <iostream>
 
-#define BITS(P,B,E,S) ((P<<(S-E))>>B)
+// #define BITS(P,B,E,S) ((P<<(S-E))>>B)
 
-#define DECODE_OPCODE(I) I->opcode
-#define DECODE_REG0(I) I->op0
-#define DECODE_REG1(I) I->op1
-#define DECODE_REG2(I) I->op2
+// #define DECODE_OPCODE(I) I->opcode
+// #define DECODE_REG0(I) I->op0
+// #define DECODE_REG1(I) I->op1
+// #define DECODE_REG2(I) I->op2
 
 // #define SP_CHANGE(incr) log::out << "sp "<<(i64)(sp-(u64)stack.data-(incr))<<" -> "<<(i64)(sp-(u64)stack.data)<<"\n";
 #define SP_CHANGE(incr)

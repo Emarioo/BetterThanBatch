@@ -11,7 +11,7 @@
 
 #include "BetBat/Reformatter.h"
 
-bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode) {
+bool X64Builder::generate() {
     TRACE_FUNC()
 
     CALLBACK_ON_ASSERT(
@@ -20,12 +20,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
     using namespace engone;
 
-    this->bytecode = code;
-    this->tinycode = tinycode;
-    
     bool failed = false;
     for(auto ind : tinycode->required_asm_instances) {
-        auto& inst = code->asmInstances[ind];
+        auto& inst = bytecode->asmInstances[ind];
         if(!inst.generated) {
             bool yes = prepare_assembly(inst);
             if(yes) {
@@ -68,17 +65,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         auto n = createInst(opcode); // passing opcode does nothing
         n->bc_index = prev_pc;
         n->base = (InstBase*)&instructions[prev_pc];
-        InstBaseType flags = instruction_contents[opcode];
-        if(flags & BASE_op1) pc++;
-        if(flags & BASE_op2) pc++;
-        if(flags & BASE_op3) pc++;
-        if(flags & BASE_ctrl) pc++;
-        if(flags & BASE_link) pc++;
-        if(flags & BASE_call) pc++;
-        if(flags & BASE_imm8) pc++;
-        if(flags & BASE_imm16) pc+=2;
-        if(flags & BASE_imm32) pc+=4;
-        if(flags & BASE_imm64) pc+=8;
+        InstBaseType flags = instruction_contents[opcode].type;
+        pc += instruction_contents[opcode].size - 1; // -1 for the opcode which we incremented earlier
         insert_inst(n);
 
         // log::out << n->base->opcode<<"\n";
@@ -384,7 +372,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     
         // TODO: What if two operands refer to the same register
         if(IS_ESSENTIAL(n->base->opcode)) {
-            if(instruction_contents[n->base->opcode] & BASE_op1) {
+            if(instruction_contents[n->base->opcode].type & BASE_op1) {
 
                 if(n->base->opcode == BC_SET_RET) {
                     auto base = (InstBase_op1_ctrl_imm16*)n->base;
@@ -469,7 +457,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
             }
         } else {
-            if(instruction_contents[n->base->opcode] & BASE_op1) {
+            if(instruction_contents[n->base->opcode].type & BASE_op1) {
                 auto base = (InstBase_op1*)n->base;
                 if(IS_GENERAL_REG(base->op0)) {
                     auto& v = bc_register_map[base->op0];
@@ -492,7 +480,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
             }
         }
-        if(instruction_contents[n->base->opcode] & BASE_op2) {
+        if(instruction_contents[n->base->opcode].type & BASE_op2) {
             auto base = (InstBase_op2*)n->base;
             if(IS_GENERAL_REG(base->op1)) {
                 auto& v = bc_register_map[base->op1];
@@ -509,7 +497,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 n->reg1 = alloc_artifical_reg(-1, X64_REG_BP);
             }
         }
-        if(instruction_contents[n->base->opcode] & BASE_op3) {
+        if(instruction_contents[n->base->opcode].type & BASE_op3) {
             auto base = (InstBase_op3*)n->base;
             if(IS_GENERAL_REG(base->op2)) {
                 auto& v = bc_register_map[base->op2];
@@ -528,28 +516,28 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             suggest_artifical_float(n->reg0);
             suggest_artifical_size(n->reg0, 4);
         }
-        if(instruction_contents[n->base->opcode] & BASE_ctrl) {
+        if(instruction_contents[n->base->opcode].type & BASE_ctrl) {
             int off = 1;
-            if(instruction_contents[n->base->opcode] & BASE_op1)
+            if(instruction_contents[n->base->opcode].type & BASE_op1)
                 off++;
-            if(instruction_contents[n->base->opcode] & BASE_op2)
+            if(instruction_contents[n->base->opcode].type & BASE_op2)
                 off++;
-            if(instruction_contents[n->base->opcode] & BASE_op3)
+            if(instruction_contents[n->base->opcode].type & BASE_op3)
                 off++;
             InstructionControl control = (InstructionControl)*((u8*)n->base + off);
             auto add_base = (InstBase_op2_ctrl*)n->base;
             if(IS_CONTROL_FLOAT(control)) {
                 // TODO: Is this fine? Should we suggest float for all registers if control is float?
                 int size = 1 << GET_CONTROL_SIZE(control);
-                if(instruction_contents[n->base->opcode] & BASE_op1) {
+                if(instruction_contents[n->base->opcode].type & BASE_op1) {
                     suggest_artifical_float(n->reg0);
                     suggest_artifical_size(n->reg0, size);
                 }
-                if(instruction_contents[n->base->opcode] & BASE_op2) {
+                if(instruction_contents[n->base->opcode].type & BASE_op2) {
                     suggest_artifical_float(n->reg1);
                     suggest_artifical_size(n->reg1, size);
                 }
-                if(instruction_contents[n->base->opcode] & BASE_op3) {
+                if(instruction_contents[n->base->opcode].type & BASE_op3) {
                     suggest_artifical_float(n->reg2);
                     suggest_artifical_size(n->reg2, size);
                 }
@@ -1017,7 +1005,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 auto base = (InstBase_op2_ctrl*)n->base;
                 auto base_imm = (InstBase_op2_ctrl_imm16*)n->base;
                 i16 imm = 0;
-                if(instruction_contents[opcode] & BASE_imm16) {
+                if(instruction_contents[opcode].type & BASE_imm16) {
                     imm = base_imm->imm16;
                 }
 
@@ -1048,7 +1036,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 auto base = (InstBase_op2_ctrl*)n->base;
                 auto base_imm = (InstBase_op2_ctrl_imm16*)n->base;
                 i16 imm = 0;
-                if(instruction_contents[opcode] & BASE_imm16) {
+                if(instruction_contents[opcode].type & BASE_imm16) {
                     imm = base_imm->imm16;
                 }
                 if(base->op0 == BC_REG_LOCALS) {
@@ -1232,7 +1220,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 virtual_stack_pointer += imm;
                 push_offsets.pop();
             } break;
-           case BC_SET_ARG: {
+            case BC_SET_ARG: {
                 auto base = (InstBase_op1_ctrl_imm16*)n->base;
                 FIX_PRE_IN_OPERAND(0)
 
@@ -1594,9 +1582,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         emit_bytes(arr,sizeof(arr));
 
                         // C creates these symbol names in it's object file
-                        prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
+                        program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_funcprog_index);
                         // prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
-                        prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_tinyprog_index);
+                        program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_funcprog_index);
                         // prog->namedUndefinedRelocations.add(reloc0);
                         // prog->namedUndefinedRelocations.add(reloc1);
                     #else
@@ -1668,8 +1656,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         emit_bytes(arr,sizeof(arr));
 
                         // C creates these symbol names in it's object file
-                        prog->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_tinyprog_index);
-                        prog->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_tinyprog_index);
+                        program->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_funcprog_index);
+                        program->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_funcprog_index);
 
                     #else
                         // char = [rsp + 7]
@@ -1792,7 +1780,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 
                 FIX_POST_IN_OPERAND(0)
             } break;
-             case BC_JZ: {
+            case BC_JZ: {
                 auto base = (InstBase_op1_imm32*)n->base;
                 
                 FIX_PRE_IN_OPERAND(0)
@@ -1868,7 +1856,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit1(OPCODE_LEA_REG_M);
                 emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
                 i32 disp32_offset = code_size() - 4; // -4 to refer to the 32-bit immediate in modrm_rip
-                prog->addDataRelocation(base->imm32, disp32_offset, current_tinyprog_index);
+                program->addDataRelocation(base->imm32, disp32_offset, current_funcprog_index);
 
                 FIX_POST_OUT_OPERAND(0)
             } break;
@@ -1964,7 +1952,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 
                 InstructionControl control = CONTROL_NONE;
                 int size = 8;
-                if(instruction_contents[opcode] & BASE_ctrl) {
+                if(instruction_contents[opcode].type & BASE_ctrl) {
                     auto base = (InstBase_op2_ctrl*)n->base;
                     control = base->control;
                     size = 1 << GET_CONTROL_SIZE(control);
@@ -3610,7 +3598,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit_bytes(ptr, len);
                     for (int i = 0; i < asmInstance.relocations.size();i++) {
                       auto& it = asmInstance.relocations[i];
-                      prog->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
                     }
                 } else {
                     // TODO: Better error, or handle error somewhere else?
@@ -3718,8 +3706,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 set_imm8(start_addr + 0xf, (imm>>8)&0xFF);
                 set_imm8(start_addr + 0x10, (imm>>16)&0xFF);
 
-                prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_tinyprog_index);
-                prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_tinyprog_index);
+                program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_funcprog_index);
+                program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_funcprog_index);
                 #else
                 
                 /*
@@ -3824,7 +3812,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     }
     
     // last instruction should be ret
-    Assert(tinyprog->text[tinyprog->head-1] == OPCODE_RET);
+    Assert(funcprog->text[funcprog->head-1] == OPCODE_RET);
     
     for(int i=0;i<tinycode->call_relocations.size();i++) {
         auto& r = tinycode->call_relocations[i];
@@ -3832,7 +3820,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             continue;
         int ind = r.funcImpl->tinycode_id - 1;
         // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";
-        prog->addInternalFuncRelocation(current_tinyprog_index, get_map_translation(r.pc), ind);
+        program->addInternalFuncRelocation(current_funcprog_index, get_map_translation(r.pc), ind);
     }
 
     
@@ -3842,7 +3830,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         auto& rel = bytecode->externalRelocations[i];
         if(tinycode->index == rel.tinycode_index) {
             int off = get_map_translation(rel.pc);
-            prog->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.type == BC_REL_GLOBAL_VAR);
+            program->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.type == BC_REL_GLOBAL_VAR);
             // found = true;
             // break;
         }
@@ -3907,7 +3895,7 @@ engone::Logger& operator<<(engone::Logger& l, X64Inst& i) {
     if(i.reg2 != 0)
         l << ", " << i.reg2;
     
-    int flags = instruction_contents[i.base->opcode];
+    int flags = instruction_contents[i.base->opcode].type;
     int offset = 1 + ((flags & BASE_op1) != 0) + ((flags & BASE_op2) != 0) + ((flags & BASE_op3) != 0)
         + ((flags & BASE_ctrl) != 0) + ((flags & BASE_link) != 0)
         + ((flags & BASE_call) != 0);

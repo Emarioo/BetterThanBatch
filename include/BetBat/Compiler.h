@@ -17,6 +17,8 @@
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Generator.h"
 #include "BetBat/x64_gen.h"
+#include "BetBat/arm_gen.h"
+#include "BetBat/Program.h"
 #include "BetBat/Lexer.h"
 #include "BetBat/Preprocessor.h"
 #include "BetBat/Parser.h"
@@ -167,7 +169,7 @@ struct Compiler {
         if(bytecode && bytecode->debugInformation)
             DebugInformation::Destroy(bytecode->debugInformation);
         if(program)
-            X64Program::Destroy(program);
+            Program::Destroy(program);
         program = nullptr;
 
         if(ast)
@@ -194,7 +196,7 @@ struct Compiler {
     AST* ast = nullptr;
     Bytecode* bytecode = nullptr;
     
-    X64Program* program = nullptr;
+    Program* program = nullptr;
     
     Reporter reporter{};
 

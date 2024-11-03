@@ -1089,84 +1089,84 @@ InstBaseType operator|(InstBaseType a, InstBaseType b) {
 }
 #define BASE_op3 (BASE_op3 | BASE_op2 | BASE_op1)
 #define BASE_op2 (BASE_op2 | BASE_op1)
-InstBaseType instruction_contents[256] {
-    BASE_NONE, // BC_HALT
-    BASE_NONE, // BC_NOP
+BCInstructionInfo instruction_contents[256] {
+    { 1, BASE_NONE }, // BC_HALT
+    { 1, BASE_NONE }, // BC_NOP
     
-    BASE_op2,                           // BC_MOV_RR,
-    BASE_op2 | BASE_ctrl,               // BC_MOV_RM,
-    BASE_op2 | BASE_ctrl,               // BC_MOV_MR,
-    BASE_op2 | BASE_ctrl | BASE_imm16,  // BC_MOV_RM_DISP16,
-    BASE_op2 | BASE_ctrl | BASE_imm16,  // BC_MOV_MR_DISP16,
+    { 3, BASE_op2 },                           // BC_MOV_RR,
+    { 4, BASE_op2 | BASE_ctrl },               // BC_MOV_RM,
+    { 4, BASE_op2 | BASE_ctrl },               // BC_MOV_MR,
+    { 6, BASE_op2 | BASE_ctrl | BASE_imm16 },  // BC_MOV_RM_DISP16,
+    { 6, BASE_op2 | BASE_ctrl | BASE_imm16 },  // BC_MOV_MR_DISP16,
     
-    BASE_op1,                   // BC_PUSH,
-    BASE_op1,                   // BC_POP,
-    BASE_op1 | BASE_imm32,      // BC_LI32,
-    BASE_op1 | BASE_imm64,      // BC_LI64,
-    BASE_op1 | BASE_imm32,      // BC_INCR,
-    BASE_op1 | BASE_imm16,      // BC_ALLOC_LOCAL,
-    BASE_imm16,                   // BC_FREE_LOCAL,
+    { 2, BASE_op1 },                   // BC_PUSH,
+    { 2, BASE_op1 },                   // BC_POP,
+    { 6, BASE_op1 | BASE_imm32 },      // BC_LI32,
+    { 10, BASE_op1 | BASE_imm64 },      // BC_LI64,
+    { 6, BASE_op1 | BASE_imm32 },      // BC_INCR,
+    { 4, BASE_op1 | BASE_imm16 },      // BC_ALLOC_LOCAL,
+    { 3, BASE_imm16 },                   // BC_FREE_LOCAL,
     
-    BASE_op1 | BASE_imm16,        // BC_ALLOC_ARGS,
-    BASE_imm16,                   // BC_FREE_ARGS,
+    { 4, BASE_op1 | BASE_imm16 },        // BC_ALLOC_ARGS,
+    { 3, BASE_imm16 },                   // BC_FREE_ARGS,
 
-    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_SET_ARG,
-    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_GET_PARAM,
-    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_GET_VAL,
-    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_SET_RET,
-    BASE_op1 | BASE_imm16,  // BC_PTR_TO_LOCALS,
-    BASE_op1 | BASE_imm16,  // BC_PTR_TO_PARAMS,
+    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_SET_ARG,
+    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_GET_PARAM,
+    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_GET_VAL,
+    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_SET_RET,
+    { 4, BASE_op1 | BASE_imm16 },  // BC_PTR_TO_LOCALS,
+    { 4, BASE_op1 | BASE_imm16 },  // BC_PTR_TO_PARAMS,
 
-    BASE_imm32,                         // BC_JMP,
-    BASE_link | BASE_call | BASE_imm32, // BC_CALL
-    BASE_op1 | BASE_link | BASE_call, // BC_CALL
-    BASE_NONE,                          // BC_RET,
-    BASE_op1 | BASE_imm32,              // BC_JNZ,
-    BASE_op1 | BASE_imm32,              // BC_JZ,
+    { 5, BASE_imm32 },                         // BC_JMP,
+    { 7, BASE_link | BASE_call | BASE_imm32 }, // BC_CALL
+    { 4, BASE_op1 | BASE_link | BASE_call }, // BC_CALL
+    { 1, BASE_NONE },                          // BC_RET,
+    { 6, BASE_op1 | BASE_imm32 },              // BC_JNZ,
+    { 6, BASE_op1 | BASE_imm32 },              // BC_JZ,
 
-    BASE_op1 | BASE_imm32,  // BC_DATAPTR,
-    BASE_op1 | BASE_link,   // BC_EXT_DATAPTR,
-    BASE_op1 | BASE_imm32,  // BC_CODEPTR,
+    { 6, BASE_op1 | BASE_imm32 },  // BC_DATAPTR,
+    { 3, BASE_op1 | BASE_link },   // BC_EXT_DATAPTR,
+    { 6, BASE_op1 | BASE_imm32 },  // BC_CODEPTR,
 
-    BASE_op2 | BASE_ctrl,   // BC_ADD,
-    BASE_op2 | BASE_ctrl,   // BC_SUB,
-    BASE_op2 | BASE_ctrl,   // BC_MUL,
-    BASE_op2 | BASE_ctrl,   // BC_DIV,
-    BASE_op2 | BASE_ctrl,   // BC_MOD,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_ADD,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_SUB,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_MUL,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_DIV,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_MOD,
     
-    BASE_op2 | BASE_ctrl,   // BC_EQ,
-    BASE_op2 | BASE_ctrl,   // BC_NEQ,
-    BASE_op2 | BASE_ctrl,   // BC_LT,
-    BASE_op2 | BASE_ctrl,   // BC_LTE,
-    BASE_op2 | BASE_ctrl,   // BC_GT,
-    BASE_op2 | BASE_ctrl,   // BC_GTE,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_EQ,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_NEQ,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LTE,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_GT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_GTE,
 
-    BASE_op2 | BASE_ctrl,   // BC_LAND,
-    BASE_op2 | BASE_ctrl,   // BC_LOR,
-    BASE_op2 | BASE_ctrl,   // BC_LNOT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LAND,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LOR,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LNOT,
 
-    BASE_op2 | BASE_ctrl,   // BC_BAND,
-    BASE_op2 | BASE_ctrl,   // BC_BOR,
-    BASE_op2 | BASE_ctrl,   // BC_BNOT,
-    BASE_op2 | BASE_ctrl,   // BC_BXOR,
-    BASE_op2 | BASE_ctrl,   // BC_BLSHIFT,
-    BASE_op2 | BASE_ctrl,   // BC_BRSHIFT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BAND,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BOR,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BNOT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BXOR,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BLSHIFT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BRSHIFT,
 
-    BASE_op2 | BASE_ctrl, // BC_CAST,
+    { 4, BASE_op2 | BASE_ctrl }, // BC_CAST,
 
-    BASE_op2 | BASE_ctrl,   // BC_MEMZERO,
-    BASE_op3,               // BC_MEMCPY,
-    BASE_op2,               // BC_STRLEN,
-    BASE_op1,               // BC_RDTSC,
-    BASE_op3,               // BC_ATOMIC_CMP_SWAP,
-    BASE_op2 | BASE_ctrl,   // BC_ATOMIC_ADD,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_MEMZERO,
+    { 4, BASE_op3 },               // BC_MEMCPY,
+    { 3, BASE_op2 },               // BC_STRLEN,
+    { 2, BASE_op1 },               // BC_RDTSC,
+    { 4, BASE_op3 },               // BC_ATOMIC_CMP_SWAP,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_ATOMIC_ADD,
 
-    BASE_op1, // BC_SQRT,
-    BASE_op1, // BC_ROUND,
+    { 2, BASE_op1 }, // BC_SQRT,
+    { 2, BASE_op1 }, // BC_ROUND,
 
-    BASE_imm32 | BASE_imm16, // BC_ASM,
+    { 7, BASE_imm32 | BASE_imm16 }, // BC_ASM,
 
-    BASE_op2 | BASE_ctrl | BASE_imm32, // BC_TEST_VALUE,
+    { 8, BASE_op2 | BASE_ctrl | BASE_imm32 }, // BC_TEST_VALUE,
 
     // BASE_NONE, // BC_EXTEND1 = 253,
     // BASE_NONE, // BC_EXTEND2 = 254,

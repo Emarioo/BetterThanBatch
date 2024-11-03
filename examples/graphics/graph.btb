@@ -1,0 +1,149 @@
+
+// x := 5
+// y := x + 6
+
+
+// #import "examples/sound/morning"
+
+#import "Graphics"
+
+fn sine(inX: f32) -> f32 {
+    #macro RAD 1.57079632679
+    x: f32 = inX;
+    if(inX < 0)
+        x = -inX;
+    t: i32 = x/RAD;
+    if (t&1) {
+        x = RAD * (1+t) - x;
+    } else {
+        x = x - RAD * t;
+    }
+    taylor: f32 = (x - x*x*x/(2*3) + x*x*x*x*x/(2*3*4*5) - x*x*x*x*x*x*x/(2*3*4*5*6*7) + x*x*x*x*x*x*x*x*x/(2*3*4*5*6*7*8*9));
+    if (t&2) {
+        taylor = -taylor;
+    }
+    if(inX < 0)
+        taylor = -taylor;
+    return taylor;
+}
+
+#if OS_WINDOWS
+    #load "Kernel32.lib" as Dummy
+#else
+    #load "c" as Dummy
+#endif
+fn @import(Dummy) sinf(v: f32) -> f32
+fn @import(Dummy) cosf(v: f32) -> f32
+
+
+fn main() {
+    window := CreateWindow(800,600,"Graph")
+    
+    font := window.defaultFont();
+    
+    scalex: f32 = 10
+    scaley: f32 = 10
+    pixel_range := Range{20,window.width-20}
+    oy: f32 = 0
+    ox: f32 = 0
+    window.camera_x = window.width/2
+    while window.running {
+        
+        FillColor(window, {0.1,0.1,0.1})
+        
+        window.enableUISpace(true)
+        
+        if font {
+            h := 15
+            tmp: StringBuilder
+            defer tmp.cleanup()
+            tmp.append("scalex: ")
+            tmp.append(scalex)
+            tmp.append("\nscaley: ")
+            tmp.append(scaley)
+            DrawText(window, 5,5,h,tmp)
+            tmp.resize(0)
+            
+            tmp.append("A combination of Shift, Ctrl, Scroll to scale horizontally or vertically")
+            DrawText(window, 5,window.height-h-4,h,tmp)
+        }
+        
+        window.enableUISpace(false)
+        dot := Color{1,1,1}
+        dotreal := Color{1,0,0}
+        for nr_x: pixel_range {
+            x: f32 = (nr_x-pixel_range.beg) / scalex
+            x_next: f32 = ((nr_x+1)-pixel_range.beg) / scalex
+            y: f32 = sine(x)
+            y_next: f32 = sine(x_next)
+            yreal: f32 = sinf(x)
+            diff := (scaley*y_next + oy) - (scaley*y + oy)
+            if diff > 1.5 {
+                n: i32 = diff
+                for 0..n {
+                    FillRect(window, nr_x + ox, scaley*y + nr + oy, 1, 1, dot)
+                    FillRect(window, nr_x, scaley*yreal + nr, 1, 1, dotreal)
+                }
+            } else if diff < -1.5 {
+                n: i32 = -diff
+                for 0..n {
+                    FillRect(window, nr_x + ox, scaley*y - nr + oy, 1, 1, dot)
+                    FillRect(window, nr_x, scaley*yreal + nr, 1, 1, dotreal)
+                }
+            }
+            
+            FillRect(window, nr_x + ox, scaley*y + oy, 1, 1, dot)
+            FillRect(window, nr_x, scaley*yreal, 1, 1, dotreal)
+        }
+        
+        scroll := window.getScrollY()
+        speed := 1.01
+        if window.isKeyDown(GLFW_KEY_LEFT_CONTROL)
+            speed = 1.05
+        if scroll > 0 {
+            if window.isKeyDown(GLFW_KEY_LEFT_SHIFT) {
+                scalex *= speed
+            } else {
+                scaley *= speed
+            }
+        }
+        if scroll < 0 {
+            if window.isKeyDown(GLFW_KEY_LEFT_SHIFT) {
+                scalex /= speed
+            } else {
+                scaley /= speed
+            }
+        }
+        
+        if window.isKeyDown(GLFW_KEY_W) {
+            window.camera_y-=1;
+        }
+        if window.isKeyDown(GLFW_KEY_S) {
+            window.camera_y+=1;
+        }
+        if window.isKeyDown(GLFW_KEY_A) {
+            window.camera_x+=1;
+        }
+        if window.isKeyDown(GLFW_KEY_D) {
+            window.camera_x-=1;
+        }
+        if window.isKeyPressed(GLFW_KEY_UP) {
+            oy+=1;
+        }
+        if window.isKeyPressed(GLFW_KEY_DOWN) {
+            oy-=1;
+        }
+        if window.isKeyPressed(GLFW_KEY_LEFT) {
+            ox+=1;
+        }
+        if window.isKeyPressed(GLFW_KEY_RIGHT) {
+            ox-=1;
+        }
+        if window.isKeyPressed(GLFW_KEY_R) {
+            ox=0;
+            oy=0;
+        }
+        
+        RefreshWindow(window)   
+    }
+}

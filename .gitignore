@@ -21,6 +21,7 @@ bin
 *.out
 *.obj
 *.pdb
+*.elf
 
 # Don't ignore files from libs
 !libs/**

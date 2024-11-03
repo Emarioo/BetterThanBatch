@@ -2,7 +2,7 @@
 #include "BetBat/Compiler.h"
 
 namespace dwarf {
-    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler, bool provide_section_data) {
+    void ProvideSections(ObjectFile* objectFile, Program* program, Compiler* compiler, bool provide_section_data) {
         using namespace engone;
         SectionNr section_info    = -1;
         SectionNr section_line    = -1;

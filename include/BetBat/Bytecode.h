@@ -198,7 +198,11 @@ enum InstBaseType : u16 {
     BASE_link    = 0x100,
     BASE_call    = 0x200,
 };
-extern InstBaseType instruction_contents[256];
+struct BCInstructionInfo {
+    int size;
+    InstBaseType type;
+};
+extern BCInstructionInfo instruction_contents[256];
 #pragma pack(push)
 #pragma pack(1)
 struct InstBase {

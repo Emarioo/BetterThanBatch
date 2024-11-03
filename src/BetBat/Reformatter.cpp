@@ -229,7 +229,7 @@ if(linker == LINKER_MSVC) {
     }
 }
 
-int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, X64Program* program) {
+int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program* program) {
     using namespace engone;
     Assert(program);
     

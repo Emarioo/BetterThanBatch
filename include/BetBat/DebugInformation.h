@@ -1,6 +1,7 @@
+#pragma once
+
 #include "BetBat/AST.h"
 // #include "BetBat/Bytecode.h"
-#pragma once
 
 // Extensive debug information.
 // The information is converted debug information

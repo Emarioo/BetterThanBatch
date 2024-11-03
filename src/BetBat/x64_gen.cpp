@@ -53,85 +53,13 @@ bool IsNativeRegister(X64Register reg) {
     return reg == X64_REG_BP || reg == X64_REG_SP;
 }
 
-bool GenerateX64_finalize(Compiler *compiler) {
-    Assert(compiler->program); // don't call this function if there is no program
-    Assert(compiler->program->debugInformation); // we expect debug information?
-
-    auto prog = compiler->program;
-    auto bytecode = compiler->bytecode;
-
-    prog->index_of_main = bytecode->index_of_main;
-
-    // prog->debugInformation = bytecode->debugInformation;
-    // bytecode->debugInformation = nullptr;
-
-    if (bytecode->dataSegment.size() != 0) {
-        prog->globalData = TRACK_ARRAY_ALLOC(u8, bytecode->dataSegment.size());
-        // prog->globalData = (u8*)engone::Allocate(bytecode->dataSegment.used);
-        Assert(prog->globalData);
-        prog->globalSize = bytecode->dataSegment.size();
-        memcpy(prog->globalData, bytecode->dataSegment.data(), prog->globalSize);
-
-        // OutputAsHex("data.txt", (char*)prog->globalData, prog->globalSize);
-    }
-
-    for (int i = 0; i < compiler->bytecode->exportedFunctions.size(); i++) {
-        auto &sym = compiler->bytecode->exportedFunctions[i];
-        prog->addExportedSymbol(sym.name, sym.tinycode_index);
-        // X64Program::ExportedSymbol tmp{};
-        // tmp.name = sym.name;
-        // tmp.textOffset = addressTranslation[sym.location];
-        // prog->exportedSymbols.add(tmp);
-    }
-
-    prog->compute_libraries();
-    return true;
-}
-void X64Program::compute_libraries() {
-    libraries.resize(0);
-
-    for (auto &rel : namedUndefinedRelocations) {
-        bool found = false;
-        if (rel.library_path == "") {
-            // intrinsic functions or 'prints' creates a relocation
-            // to GetStdHandle and WriteFile without referring to
-            // a library. Perhaps this shouldn't be allowed but
-            // i believe linkers automatically link with the
-            // basic libraries which GetStdHandle and WriteFile comes from.
-
-            // Inline assembly may also create relocations without library names.
-            // We just have to trust that the user linked with the library manually.
-            continue;
-        }
-        for (auto &s : libraries) {
-            if (s == rel.library_path) {
-                found = true;
-                break;
-            }
-        }
-        if (!found)
-            libraries.add(rel.library_path);
-    }
-    for (auto &fl : forced_libraries) {
-        bool found = false;
-        for (auto &s : libraries) {
-            if (s == fl) {
-                found = true;
-                break;
-            }
-        }
-        if (!found)
-            libraries.add(fl);
-    }
-}
-
 bool GenerateX64(Compiler *compiler, TinyBytecode *tinycode) {
     using namespace engone;
     TRACE_FUNC()
     
     ZoneScopedC(tracy::Color::SkyBlue1);
 
-    _VLOG(log::out << log::BLUE << "x64 Converter:\n";)
+    _VLOG(log::out << log::BLUE << "x64 Generator:\n";)
 
 
     // make sure dependencies have been fixed first
@@ -142,14 +70,9 @@ bool GenerateX64(Compiler *compiler, TinyBytecode *tinycode) {
     }
 
     X64Builder builder{};
-    builder.init(compiler->program);
-    builder.compiler = compiler;
-    builder.bytecode = compiler->bytecode;
-    builder.tinycode = tinycode;
-    builder.tinyprog = compiler->program->createProgram(tinycode->index);
-    builder.current_tinyprog_index = tinycode->index;
+    builder.init(compiler, tinycode);
 
-    yes = builder.generateFromTinycode_v2(builder.bytecode, builder.tinycode);
+    yes = builder.generate();
     return yes;
 }
 
@@ -263,123 +186,17 @@ void X64Builder::free_register(X64Register reg) {
     pair->second.used = false;
     pair->second.artifical_reg = 0;
 }
-bool X64Builder::reserve(u32 newAllocationSize) {
-    if (newAllocationSize == 0) {
-        if (tinyprog->_allocationSize != 0) {
-            TRACK_ARRAY_FREE(tinyprog->text, u8, tinyprog->_allocationSize);
-            // engone::Free(text, _allocationSize);
-        }
-        tinyprog->text = nullptr;
-        tinyprog->_allocationSize = 0;
-        tinyprog->head = 0;
-        return true;
-    }
-    if (!tinyprog->text) {
-        // text = (u8*)engone::Allocate(newAllocationSize);
-        tinyprog->text = TRACK_ARRAY_ALLOC(u8, newAllocationSize);
-        Assert(tinyprog->text);
-        // initialization of elements is done when adding them
-        if (!tinyprog->text)
-            return false;
-        tinyprog->_allocationSize = newAllocationSize;
-        return true;
-    } else {
-        u8 *newText = TRACK_ARRAY_REALLOC(
-                tinyprog->text, u8, tinyprog->_allocationSize, newAllocationSize);
-        // TRACK_DELS(u8, tinyprog->_allocationSize);
-        // u8* newText = (u8*)engone::Reallocate(tinyprog->text,
-        // tinyprog->_allocationSize, newAllocationSize); TRACK_ADDS(u8,
-        // newAllocationSize);
-        Assert(newText);
-        if (!newText)
-            return false;
-        tinyprog->text = newText;
-        tinyprog->_allocationSize = newAllocationSize;
-        if (tinyprog->head > newAllocationSize) {
-            tinyprog->head = newAllocationSize;
-        }
-        return true;
-    }
-    return false;
-}
-
-void X64Builder::emit1(u8 byte) {
-    ensure_bytes(1);
-    *(tinyprog->text + tinyprog->head) = byte;
-    tinyprog->head++;
-}
-void X64Builder::emit2(u16 word) {
-    ensure_bytes(2);
-
-    auto ptr = (u8 *)&word;
-    *(tinyprog->text + tinyprog->head + 0) = *(ptr + 0);
-    *(tinyprog->text + tinyprog->head + 1) = *(ptr + 1);
-    tinyprog->head += 2;
-}
-void X64Builder::emit3(u32 word) {
-    if (tinyprog->head > 0) {
-        // cvtsi2ss instructions have rex smashed in between the opcode or something like that, this assert will catch it.
-        // TODO: Just because the value of the previous byte is REXW doesn't mean it's meant to be. It could be an immediate or modrm byte that happens to be equal to REXW. We can't assert like this. We should still catch bugs where REXW was specified before cvtsi2ss instead of inside.
-        // Assert(*(tinyprog->text + tinyprog->head - 1) != PREFIX_REXW);
-    }
-    Assert(0 == (word & 0xFF000000));
-    ensure_bytes(3);
-
-    auto ptr = (u8 *)&word;
-    *(tinyprog->text + tinyprog->head + 0) = *(ptr + 0);
-    *(tinyprog->text + tinyprog->head + 1) = *(ptr + 1);
-    *(tinyprog->text + tinyprog->head + 2) = *(ptr + 2);
-    tinyprog->head += 3;
-}
-void X64Builder::emit4(u32 dword) {
-    // wish we could assert to find bugs but immediates may be zero and won't
-    // work. we could make a nother functionn specifcially for immediates though.
-    // Assert(dword & 0xFF00'0000);
-    ensure_bytes(4);
-    auto ptr = (u8 *)&dword;
-
-    // deals with non-alignment
-    *(tinyprog->text + tinyprog->head + 0) = *(ptr + 0);
-    *(tinyprog->text + tinyprog->head + 1) = *(ptr + 1);
-    *(tinyprog->text + tinyprog->head + 2) = *(ptr + 2);
-    *(tinyprog->text + tinyprog->head + 3) = *(ptr + 3);
-    tinyprog->head += 4;
-}
-void X64Builder::emit8(u64 qword) {
-    // wish we could assert to find bugs but immediates may be zero and won't
-    // work. we could make a nother functionn specifcially for immediates though.
-    // Assert(dword & 0xFF00'0000);
-    ensure_bytes(8);
-    auto ptr = (u8 *)&qword;
-
-    // deals with non-alignment
-    *(tinyprog->text + tinyprog->head + 0) = *(ptr + 0);
-    *(tinyprog->text + tinyprog->head + 1) = *(ptr + 1);
-    *(tinyprog->text + tinyprog->head + 2) = *(ptr + 2);
-    *(tinyprog->text + tinyprog->head + 3) = *(ptr + 3);
-    *(tinyprog->text + tinyprog->head + 4) = *(ptr + 4);
-    *(tinyprog->text + tinyprog->head + 5) = *(ptr + 5);
-    *(tinyprog->text + tinyprog->head + 6) = *(ptr + 6);
-    *(tinyprog->text + tinyprog->head + 7) = *(ptr + 7);
-    tinyprog->head += 8;
-}
 void X64Builder::fix_jump_here_imm8(u32 offset) {
-    *(u8 *)(tinyprog->text + offset) = (code_size() - (offset + 1));
+    *(u8 *)(funcprog->text + offset) = (code_size() - (offset + 1));
 }
 void X64Builder::emit_jmp_imm8(u32 offset) {
     emit1((u8)(offset - (code_size() + 1)));
 }
 void X64Builder::set_imm32(u32 offset, u32 value) {
-    *(u32 *)(tinyprog->text + offset) = value;
+    *(u32 *)(funcprog->text + offset) = value;
 }
 void X64Builder::set_imm8(u32 offset, u8 value) {
-    *(u8 *)(tinyprog->text + offset) = value;
-}
-void X64Builder::emit_bytes(const u8 *arr, u64 len) {
-    ensure_bytes(len);
-
-    memcpy(tinyprog->text + tinyprog->head, arr, len);
-    tinyprog->head += len;
+    *(u8 *)(funcprog->text + offset) = value;
 }
 void X64Builder::emit_modrm_slash(u8 mod, u8 reg, X64Register _rm) {
     if (_rm == X64_REG_SP && mod != MODE_REG) {
@@ -652,21 +469,21 @@ Disassembly of section .text:
     34:   5d                      pop    %rbp
     35:   c3                      ret
 */
-void X64Program::Destroy(X64Program *program) {
-    using namespace engone;
-    Assert(program);
-    program->~X64Program();
-    TRACK_FREE(program, X64Program);
-    // engone::Free(program,sizeof(X64Program));
-}
-X64Program *X64Program::Create() {
-    using namespace engone;
+// void X64Program::Destroy(X64Program *program) {
+//     using namespace engone;
+//     Assert(program);
+//     program->~X64Program();
+//     TRACK_FREE(program, X64Program);
+//     // engone::Free(program,sizeof(X64Program));
+// }
+// X64Program *X64Program::Create() {
+//     using namespace engone;
 
-    // auto program = (X64Program*)engone::Allocate(sizeof(X64Program));
-    auto program = TRACK_ALLOC(X64Program);
-    new (program) X64Program();
-    return program;
-}
+//     // auto program = (X64Program*)engone::Allocate(sizeof(X64Program));
+//     auto program = TRACK_ALLOC(X64Program);
+//     new (program) X64Program();
+//     return program;
+// }
 
 void X64Builder::emit_push(X64Register reg, int size) {
     if (IS_REG_XMM(reg)) {

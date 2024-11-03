@@ -4,6 +4,7 @@
 #pragma once
 
 #include "BetBat/x64_gen.h"
+#include "BetBat/CompilerOptions.h"
 
 enum ObjectFileType {
     OBJ_NONE,
@@ -11,6 +12,9 @@ enum ObjectFileType {
     OBJ_COFF,
 };
 typedef u32 SectionNr; // 0 = invalid/null
+struct ObjectFileExtraInfo {
+    TargetPlatform target;
+};
 struct ObjectFile {
     enum SectionFlags : u32 {
         FLAG_NONE            = 0x0,
@@ -124,10 +128,8 @@ struct ObjectFile {
     void addRelocation(SectionNr sectionNr, RelocationType type, u32 offset, u32 symbolIndex, u32 addend);
     void addRelocation_data(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2);
     // void addRelocation_ptr(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2);
-    // writes file based on objType from init
-    bool writeFile(const std::string& path);
 
-    static bool WriteFile(ObjectFileType objType, const std::string& path, X64Program* program, Compiler* compiler, u32 from = 0, u32 to = (u32)-1);
+    static bool WriteFile(ObjectFileType objType, const std::string& path, Program* program, Compiler* compiler, u32 from = 0, u32 to = (u32)-1);
 
 private:
     // ELF and COFF has some trickery with the string table which can't just be
@@ -136,8 +138,8 @@ private:
     // and if an ObjectFile has been initialized with ELF, you can't just write 
     // COFF. Not easily at least. There may be other cases which make it hard to just switch between COFF and ELF.
 
-    bool writeFile_coff(const std::string& path);
-    bool writeFile_elf(const std::string& path);
+    bool writeFile_coff(const std::string& path, ObjectFileExtraInfo* extra_info);
+    bool writeFile_elf(const std::string& path, ObjectFileExtraInfo* extra_info);
 
     DynamicArray<Section*> _sections;
     DynamicArray<std::string> _strings; // for string table

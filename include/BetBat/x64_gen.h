@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BetBat/Bytecode.h"
+#include "BetBat/Program.h"
 #include "BetBat/Util/StringBuilder.h"
 #include "BetBat/CompilerOptions.h"
 
@@ -62,148 +63,6 @@ engone::Logger& operator <<(engone::Logger&, X64Register);
 #define CLAMP_XMM(R) (Assert(IS_REG_XMM(R)), (X64Register)(((R-1) & 7) + 1))
 #define CLAMP_EXT_REG(R) (Assert(IS_REG_EXTENDED(R)||IS_REG_NORM(R)), (X64Register)(((R-1) & 7) + 1))
 
-struct X64TinyProgram {
-    ~X64TinyProgram() {
-        if(_allocationSize!=0){
-            TRACK_ARRAY_FREE(text, u8, _allocationSize);
-        }
-    }
-    u8* text=nullptr;
-    u64 _allocationSize=0;
-    u64 head=0;
-
-    // We use InternalFuncRelocation instead of this
-    // struct TinyProgramRelocation {
-    //     int text_offset; // offset within this program
-    //     int tinyprogram_index; // index to other program
-    // };
-    // DynamicArray<TinyProgramRelocation> relocations;
-};
-
-struct X64Program {
-    ~X64Program(){
-        TRACK_ARRAY_FREE(globalData, u8, globalSize);
-        // engone::Free(globalData, globalSize);
-        dataRelocations.cleanup();
-        namedUndefinedRelocations.cleanup();
-        
-        for(auto p : tinyPrograms) {
-            // may be null if we had an error
-            // tinyPrograms is resized based on requested_index so if a bytecode with a high index was generated first and then an error happened the other bytecodes won't even try to create tinyPrograms, therefore leaving some nullptrs.
-            if(p) {
-                p->~X64TinyProgram();    
-                TRACK_FREE(p, X64TinyProgram);
-            }
-        }
-        tinyPrograms.cleanup();
-
-        // compiler->program borrows debugInformation from compiler->code
-        // and it is unclear who should destroy it so we don't.
-        // if(debugInformation) {
-        //     DebugInformation::Destroy(debugInformation);
-        //     debugInformation = nullptr;
-        // }
-    }
-    
-    DynamicArray<X64TinyProgram*> tinyPrograms;
-    X64TinyProgram* createProgram(int requested_index) {
-        if(tinyPrograms.size() <= requested_index) {
-            tinyPrograms.resize(requested_index+1);
-        }
-
-        auto ptr = TRACK_ALLOC(X64TinyProgram);
-        new(ptr)X64TinyProgram();
-        tinyPrograms[requested_index] = ptr;
-        // tinyPrograms.add(ptr);
-        return ptr;
-    }
-    
-    // u64 size() const { return head; }
-
-    u8* globalData = nullptr;
-    u64 globalSize = 0;
-
-    int index_of_main = -1;
-
-    struct DataRelocation {
-        u32 dataOffset; // offset in data segment
-        u32 textOffset; // where to modify       
-        i32 tinyprog_index; 
-    };
-    // struct PtrDataRelocation {
-    //     u32 referer_dataOffset;
-    //     u32 target_dataOffset;
-    // };
-    struct NamedUndefinedRelocation {
-        std::string name; // name of symbol
-        u32 textOffset; // where to modify
-        i32 tinyprog_index;
-        std::string library_path;
-
-        bool is_global_var = false;
-    };
-    // exported functions
-    struct ExportedSymbol {
-        std::string name; // name of symbol
-        // u32 textOffset; // where to modify?
-        i32 tinyprog_index;
-    };
-    struct InternalFuncRelocation {
-        i32 from_tinyprog_index;
-        u32 textOffset;
-        i32 to_tinyprog_index;
-    };
-
-    // DynamicArray<PtrDataRelocation> ptrDataRelocations;
-    DynamicArray<DataRelocation> dataRelocations;
-    DynamicArray<ExportedSymbol> exportedSymbols;
-    DynamicArray<NamedUndefinedRelocation> namedUndefinedRelocations;
-    DynamicArray<InternalFuncRelocation> internalFuncRelocations;
-
-    void addDataRelocation(u32 dataOffset, u32 textOffset, i32 tinyprog_index) {
-        dataRelocations.add({dataOffset, textOffset, tinyprog_index});
-    }
-    void addNamedUndefinedRelocation(const std::string& name, u32 textOffset, i32 tinyprog_index, const std::string& library_path = "", bool is_var = false) {
-        namedUndefinedRelocations.add({name, textOffset, tinyprog_index, library_path, is_var});
-    }
-    void addExportedSymbol(const std::string& name, i32 tinyprog_index) {
-        exportedSymbols.add({name, tinyprog_index});
-    }
-    void addInternalFuncRelocation(i32 from_func, u32 text_offset, i32 to_func) {
-        internalFuncRelocations.add({from_func, text_offset, to_func});
-    }
-    
-    DynamicArray<std::string> forced_libraries;
-    DynamicArray<std::string> libraries; // path to libraries, unique entries
-    
-    // gather up libraries from named undefined relocations
-    // done after all x64 generation is done
-    void compute_libraries();
-
-    void addForcedLibrary(std::string path) {
-        for(auto& s : forced_libraries) {
-            if(s == path) {
-                return;
-            }
-        }
-        forced_libraries.add(path);
-    }
-
-    DebugInformation* debugInformation = nullptr;
-
-    void printHex(const char* path = nullptr);
-    void printAsm(const char* path, const char* objpath = nullptr);
-
-    static void Destroy(X64Program* program);
-    static X64Program* Create();
-
-    // void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
-
-    // static X64Program* ConvertFromBytecode(Bytecode* code);
-private:
-    
-};
-
 struct X64Operand {
     X64Register reg{};
     bool on_stack = false;
@@ -228,14 +87,7 @@ struct X64Inst {
 };
 engone::Logger& operator<<(engone::Logger& l, X64Inst& i);
 
-struct X64Builder {
-    Compiler* compiler = nullptr;
-    X64Program* prog = nullptr;
-    X64TinyProgram* tinyprog = nullptr;
-    i32 current_tinyprog_index = 0;
-    Bytecode* bytecode = nullptr;
-    TinyBytecode* tinycode = nullptr;
-    
+struct X64Builder : public ProgramBuilder {
     struct RegisterInfo {
         bool used = false;
         int artifical_reg=0;
@@ -247,23 +99,6 @@ struct X64Builder {
     void free_register(X64Register reg);
     void free_all_registers();
     
-    int code_size() const { return tinyprog->head; }
-    void ensure_bytes(int size) {
-        if(tinyprog->head + size >= tinyprog->_allocationSize ){
-            bool yes = reserve(tinyprog->_allocationSize * 2 + 50 + size);
-            Assert(yes);
-        }
-    }
-
-    void init(X64Program* p) {
-        prog = p;
-    }
-
-    void emit1(u8 byte);
-    void emit2(u16 word);
-    void emit3(u32 word);
-    void emit4(u32 dword);
-    void emit8(u64 dword);
     void emit_modrm(u8 mod, X64Register reg, X64Register rm);
     void emit_modrm_slash(u8 mod, u8 reg, X64Register rm);
     // RIP-relative addressing
@@ -272,15 +107,8 @@ struct X64Builder {
     void emit_modrm_sib(u8 mod, X64Register reg, u8 scale, u8 index, X64Register base_reg);
     void emit_modrm_sib_slash(u8 mod, u8 reg, u8 scale, u8 index, X64Register base_reg);
 
-    void emit_bytes(const u8* arr, u64 len);
-
     // These are here to prevent implicit casting
     // of arguments which causes mistakes.
-    void emit1(i64 _);
-    void emit2(i64 _);
-    void emit3(i64 _);
-    void emit4(i64 _);
-    void emit8(i8 _);
     void emit_modrm_rip32(X64Register, i64);
     void emit_modrm_rip32_slash(u64 reg, i64);
     void emit_modrm_slash(u8 mod, X64Register reg, X64Register rm);
@@ -292,8 +120,6 @@ struct X64Builder {
     void set_imm32(u32 offset, u32 value);
     void set_imm8(u32 offset, u8 value);
     
-    bool reserve(u32 size);
-
     // float registers require size, general registers will always use REXW
     void emit_mov_reg_reg(X64Register reg, X64Register rm, int size = 0);
     void emit_mov_reg_mem(X64Register reg, X64Register rm, InstructionControl control, int disp32);
@@ -327,7 +153,7 @@ struct X64Builder {
     };
     DynamicArray<Arg> recent_set_args;
 
-    bool generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode);
+    bool generate();
 
     static const X64Register RESERVED_REG0 = X64_REG_DI; // You cannot change these because code in x64_gen assume that other registers are available and that DI and SI are reserved
     static const X64Register RESERVED_REG1 = X64_REG_SI;
@@ -435,9 +261,9 @@ struct X64Builder {
     void map_reg(X64Inst* n, int nr) {
         InstBase_op3* base = (InstBase_op3*)n->base;
         
-        Assert(nr != 0 || (instruction_contents[base->opcode] & BASE_op1));
-        Assert(nr != 1 || (instruction_contents[base->opcode] & BASE_op2));
-        Assert(nr != 2 || (instruction_contents[base->opcode] & BASE_op3));
+        Assert(nr != 0 || (instruction_contents[base->opcode].type & BASE_op1));
+        Assert(nr != 1 || (instruction_contents[base->opcode].type & BASE_op2));
+        Assert(nr != 2 || (instruction_contents[base->opcode].type & BASE_op3));
         
         bc_register_map[base->ops[nr]].used_by = n;
         bc_register_map[base->ops[nr]].reg_nr = nr;
@@ -445,15 +271,13 @@ struct X64Builder {
     void free_map_reg(X64Inst* n, int nr) {
         InstBase_op3* base = (InstBase_op3*)n->base;
         
-        Assert(nr != 0 || (instruction_contents[base->opcode] & BASE_op1));
-        Assert(nr != 1 || (instruction_contents[base->opcode] & BASE_op2));
-        Assert(nr != 2 || (instruction_contents[base->opcode] & BASE_op3));
+        Assert(nr != 0 || (instruction_contents[base->opcode].type & BASE_op1));
+        Assert(nr != 1 || (instruction_contents[base->opcode].type & BASE_op2));
+        Assert(nr != 2 || (instruction_contents[base->opcode].type & BASE_op3));
         
         bc_register_map[base->ops[nr]].used_by = nullptr;
         bc_register_map[base->ops[nr]].reg_nr = 0;
     }
-
-    
 
     X64Inst* createInst(InstructionOpcode opcode) {
         auto ptr = new X64Inst();
@@ -465,13 +289,7 @@ struct X64Builder {
     void insert_inst(X64Inst* inst) {
         inst_list.add(inst);
     }
-    
-    
-
 };
 
 
 bool GenerateX64(Compiler* compiler, TinyBytecode* tinycode);
-
-// Process some final things such as exports, symbols from bytecode program to the x64 program
-bool GenerateX64_finalize(Compiler* compiler);

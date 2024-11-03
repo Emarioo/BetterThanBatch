@@ -6,7 +6,7 @@ namespace elf {
     
 }
 
-bool FileELF::WriteFile(const std::string& name, X64Program* program, u32 from, u32 to) {
+bool FileELF::WriteFile(const std::string& name, Program* program, u32 from, u32 to) {
     using namespace elf;
     Assert(program);
     Assert(false);

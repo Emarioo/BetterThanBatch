@@ -15,7 +15,7 @@
 #include "Engone/PlatformLayer.h"
 #include "Engone/Util/Array.h"
 #include "Engone/Util/Stream.h"
-#include "BetBat/x64_gen.h"
+#include "BetBat/Program.h"
 
 namespace elf {
     
@@ -26,6 +26,12 @@ namespace elf {
     typedef i64 Elf64_Sxword;
     typedef u64 Elf64_Addr;
     typedef u64 Elf64_Off;
+    
+    typedef u32 Elf32_Addr;
+    typedef u16 Elf32_Half;
+    typedef u32 Elf32_Off;
+    typedef i32 Elf32_Sword;
+    typedef u32 Elf32_Word;
     
     #define EI_CLASS 4
     #define EI_DATA 5
@@ -75,6 +81,22 @@ namespace elf {
         Elf64_Half	e_shnum;		/* Section header table entry count */
         Elf64_Half	e_shstrndx;		/* Section header string table index */
     } Elf64_Ehdr; // NOTE: The struct is perfectly aligned to 8 bytes
+    typedef struct {
+        unsigned char	e_ident[EI_NIDENT];	/* Magic number and other info */
+        Elf32_Half	e_type;			/* Object file type */
+        Elf32_Half	e_machine;		/* Architecture */
+        Elf32_Word	e_version;		/* Object file version */
+        Elf32_Addr	e_entry;		/* Entry point virtual address */
+        Elf32_Off	e_phoff;		/* Program header table file offset */
+        Elf32_Off	e_shoff;		/* Section header table file offset */
+        Elf32_Word	e_flags;		/* Processor-specific flags */
+        Elf32_Half	e_ehsize;		/* ELF header size in bytes */
+        Elf32_Half	e_phentsize;		/* Program header table entry size */
+        Elf32_Half	e_phnum;		/* Program header table entry count */
+        Elf32_Half	e_shentsize;		/* Section header table entry size */
+        Elf32_Half	e_shnum;		/* Section header table entry count */
+        Elf32_Half	e_shstrndx;		/* Section header string table index */
+    } Elf32_Ehdr; // NOTE: The struct is perfectly aligned to 8 bytes
     
     /* ################
           sh_type    
@@ -147,6 +169,18 @@ namespace elf {
         Elf64_Xword	sh_addralign;		/* Section alignment */
         Elf64_Xword	sh_entsize;		/* Entry size if section holds table */
     } Elf64_Shdr;
+    typedef struct {
+        Elf32_Word	sh_name;		/* Section name (string tbl index) */
+        Elf32_Word	sh_type;		/* Section type */
+        Elf32_Word	sh_flags;		/* Section flags */
+        Elf32_Addr	sh_addr;		/* Section virtual addr at execution */
+        Elf32_Off	sh_offset;		/* Section file offset */
+        Elf32_Word	sh_size;		/* Section size in bytes */
+        Elf32_Word	sh_link;		/* Link to another section */
+        Elf32_Word	sh_info;		/* Additional section information */
+        Elf32_Word	sh_addralign;		/* Section alignment */
+        Elf32_Word	sh_entsize;		/* Entry size if section holds table */
+    } Elf32_Shdr;
     
     #define ELF32_ST_BIND(val)		(((unsigned char) (val)) >> 4)
     #define ELF32_ST_TYPE(val)		((val) & 0xf)
@@ -188,6 +222,14 @@ namespace elf {
         Elf64_Addr	st_value;		/* Symbol value */
         Elf64_Xword	st_size;		/* Symbol size */
     } Elf64_Sym;
+    typedef struct {
+        Elf32_Word	st_name;		/* Symbol name (string tbl index) */
+        Elf32_Addr	st_value;		/* Symbol value */
+        Elf32_Word	st_size;		/* Symbol size */
+        unsigned char st_info;		/* Symbol type and binding */
+        unsigned char st_other;		/* Symbol visibility */
+        Elf32_Half	st_shndx;		/* Section index */
+    } Elf32_Sym;
     
     #define R_X86_64_PC64 24 // field: dword, calc: S + A - P
     #define R_X86_64_PC32 2 // field: dword, calc: S + A - P
@@ -207,12 +249,21 @@ namespace elf {
         Elf64_Addr	r_offset;		/* Address */
         Elf64_Xword	r_info;			/* Relocation type and symbol index */
     } Elf64_Rel;
+    typedef struct {
+        Elf32_Addr	r_offset;		/* Address */
+        Elf32_Word	r_info;			/* Relocation type and symbol index */
+    } Elf32_Rel;
     
     typedef struct {
         Elf64_Addr	r_offset;		/* Address */
         Elf64_Xword	r_info;			/* Relocation type and symbol index */
         Elf64_Sxword	r_addend;		/* Addend */
     } Elf64_Rela;
+    typedef struct {
+        Elf32_Addr	r_offset;		/* Address */
+        Elf32_Word	r_info;			/* Relocation type and symbol index */
+        Elf32_Sword	r_addend;		/* Addend */
+    } Elf32_Rela;
 
     // #define	PT_NULL		0		/* Program header table entry unused */
     // #define PT_LOAD		1		/* Loadable program segment */
@@ -288,5 +339,5 @@ struct FileELF {
     static FileELF* DeconstructFile(const std::string& path, bool silent = true);
     static void Destroy(FileELF* elfFile);
 
-    static bool WriteFile(const std::string& name, X64Program* program, u32 from = 0, u32 to = (u32)-1);
+    static bool WriteFile(const std::string& name, Program* program, u32 from = 0, u32 to = (u32)-1);
 };

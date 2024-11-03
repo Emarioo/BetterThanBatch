@@ -1092,7 +1092,7 @@ void Compiler::processImports() {
                         case TARGET_ARM: {
                             // @nocheckin gen arm
                             for(auto t : compiler_imp->tinycodes)
-                                GenerateX64(this, t);
+                                GenerateARM(this, t);
                         } break;
                         default: Assert(false);
                     }
@@ -1251,6 +1251,10 @@ void Compiler::run(CompileOptions* options) {
         log::out << log::RED << "The compiler can only generate "<<log::NO_COLOR<<".o .elf .bc "<<log::RED<<" when targeting ARM, not '"<<output_extension<<"'.\n";
         return;
     }
+    if(options->target != TARGET_ARM && output_type == OUTPUT_ELF) {
+        log::out << log::RED << "Compiler will only output an .elf file when targeting ARM. ELF extension is meant for kernel image. We may support kernel image for 'x86_64' target in the future.\n";
+        return;
+    }
 
     if (output_type == OUTPUT_DLL || output_type == OUTPUT_LIB) {
         // NOTE: No entry point for object files?
@@ -1265,22 +1269,8 @@ void Compiler::run(CompileOptions* options) {
     bytecode->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;
     
-    switch(options->target) {
-        case TARGET_BYTECODE: {
-            // do nothing
-        } break;
-        case TARGET_WINDOWS_x64:
-        case TARGET_LINUX_x64: {
-            program = X64Program::Create();
-            program->debugInformation = bytecode->debugInformation;
-        } break;
-        case TARGET_ARM: {
-            // @nocheckin
-            program = X64Program::Create();
-            program->debugInformation = bytecode->debugInformation;
-        } break;
-        default: Assert(false);
-    }
+    program = Program::Create();
+    program->debugInformation = bytecode->debugInformation;
     
     if(options->source_buffer.buffer && options->source_file.size()) {
         log::out << log::RED << "A source buffer and source file was specified. You can only specify one\n";
@@ -1420,11 +1410,10 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case TARGET_WINDOWS_x64:
         case TARGET_LINUX_x64: {
-            GenerateX64_finalize(this);
+            this->program->finalize_program(this);
         } break;
         case TARGET_ARM: {
-            // @nocheckin
-            // GenerateX64_finalize(this);
+            this->program->finalize_program(this);
         } break;
         default: Assert(false);
     }
@@ -1836,7 +1825,7 @@ void Compiler::run(CompileOptions* options) {
             "{\n"
             "    . = 0x10000;\n"
             "    start = 0x10000;\n"
-            "    .startup . : { startup.o(.text) }\n"
+            "    .startup . : { bin/arm_startup.o(.text) }\n"
             "    .text : { *(.text) }\n"
             "    .data : { *(.data) }\n"
             "    .bss : { *(.bss COMMON) }\n"
@@ -1849,7 +1838,7 @@ void Compiler::run(CompileOptions* options) {
         FileWrite(file_startup, startup, strlen(startup));
         FileClose(file_startup);
         
-        std::string cmd_startup = as + " bin/arm_startup.s -o bin/arm_startup.o";
+        std::string cmd_startup = as + " bin/arm_startup.s -o bin/arm_startup.o"; // NOTE: linker script needs to know path of arm_startup.o
         int as_exit_code=0;
         bool yes = StartProgram(cmd_startup.c_str(), PROGRAM_WAIT, &as_exit_code);
         if(!yes || as_exit_code != 0) {
@@ -1994,6 +1983,7 @@ JUMP_TO_EXEC:
                 log::out << log::RED << "Bytecode as target is not supported. Use --run-vm to execute in virtual machine.\n";
             } break;
             case TARGET_ARM: {
+                // @nocheckin TODO: Don't hardcode processor for QEMU.
                 std::string cmd = "qemu-system-arm "
                     "-semihosting -nographic -serial mon:stdio -M "
                     "xilinx-zynq-a9 -cpu cortex-a9 ";
@@ -2005,10 +1995,13 @@ JUMP_TO_EXEC:
                 }
                 
                 log::out << log::GRAY << "running: " << cmd<<"\n";
+                log::out << log::GRAY << "Ctrl+A <release> X (to exit QEMU)\n";
                 int exitCode;
-                engone::StartProgram(cmd.c_str(),PROGRAM_WAIT, &exitCode);
-                // Exit code isn't from the code we execute, it's from qemu whether it failed or not so we don't print it.
-                // log::out << log::LIME <<"Exit code: " << exitCode << "\n";
+                bool yes = engone::StartProgram(cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                if(!yes) {
+                    log::out << log::RED << "Could not run: " << cmd<<"\n";
+                }
+                log::out << log::LIME <<"Exit code from QEMU: " << exitCode << "\n";
             } break;
             default: Assert(false);
         }

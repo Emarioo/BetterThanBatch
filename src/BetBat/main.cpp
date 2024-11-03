@@ -79,11 +79,11 @@ int main(int argc, const char** argv){
         // options.linker = LINKER_MSVC;
         // options.linker = LINKER_GCC;
         options.target = TARGET_ARM;
-        // options.executeOutput = true;
+        options.executeOutput = true;
         // options.incremental_build = true;
         // options.disable_preload = true;
         // options.only_preprocess = true;
-        options.useDebugInformation = true;
+        // options.useDebugInformation = true;
         // options.useDebugInformation = false;
         Compiler compiler{};
         compiler.run(&options);

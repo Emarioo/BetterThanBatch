@@ -54,7 +54,8 @@ struct CompileOptions {
     // std::string linker_cmd = "";
     TextBuffer source_buffer; // pure text instead of a path to some file
 
-    bool useDebugInformation = true;
+    // bool useDebugInformation = true;
+    bool useDebugInformation = false;
     bool silent = false;
     bool verbose = false;
     bool executeOutput = false;
