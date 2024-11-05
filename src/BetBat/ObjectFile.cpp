@@ -730,7 +730,11 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         // sheader->sh_size = 0; // size of data, LATER
         // sheader->sh_link = 0; // not used
         // sheader->sh_info = 0; // not used
-        ELF_SET(sheader,sh_addralign,section->alignment); // check if alignment is 2**x
+        if(extra_info->target == TARGET_ARM) {
+            ELF_SET(sheader,sh_addralign, 4);
+        } else {
+            ELF_SET(sheader,sh_addralign, section->alignment); // check if alignment is 2**x
+        }
         // sheader->sh_entsize = 0;
 
         if(section->flags == FLAG_READ_ONLY)

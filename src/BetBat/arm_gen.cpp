@@ -41,11 +41,15 @@ bool ARMBuilder::generate() {
         log::out << log::RED << "Inline assembly not supported when targeting arm.\n";
     }
     
+    emit_push_fp_lr();
+    emit_mov(ARM_REG_FP, ARM_REG_SP);
+    
     auto& instructions = tinycode->instructionSegment;
     
     BytecodePrintCache print_cache{};
     bool logging = true;
     bool running = true;
+    // running = false;
     i64 pc = 0;
     while(running) {
         if(!(pc < instructions.size()))
@@ -67,9 +71,8 @@ bool ARMBuilder::generate() {
                 Assert(("HALT not implemented",false));
             } break;
             case BC_NOP: {
-                // don't emit nops? they don't do anything unless the user wants to mark the machine code with nops to more easily navigate the disassembly
-                // for now, we disable it
-                // emit1(OPCODE_NOP);
+                // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/NOP
+                emit4((u32)0b11110011101011111000000000000000);
             } break;
             case BC_MOV_RR: {
                 auto inst = (InstBase_op2*)base;
@@ -98,7 +101,8 @@ bool ARMBuilder::generate() {
                     imm = inst->imm16;
                 ARMRegister reg_dst = find_register(inst->op0);
                 ARMRegister reg_op = find_register(inst->op1);
-                emit_str(reg_dst, reg_op, imm);
+                // NOTE: first arg 'rt' is register, second arg 'rn' is memory address
+                emit_str(reg_op, reg_dst, imm);
             } break;
             case BC_PUSH: {
                 auto inst = (InstBase_op1*)base;
@@ -124,16 +128,37 @@ bool ARMBuilder::generate() {
                 
             } break;
             case BC_INCR: {
+                auto inst = (InstBase_op1_imm16*)base;
                 
+                ARMRegister reg_dst = find_register(inst->op0);
+                if(inst->imm16 < 0) {
+                    emit_sub_imm(reg_dst, reg_dst, -inst->imm16);
+                } else {
+                    emit_add_imm(reg_dst, reg_dst, inst->imm16);
+                }
             } break;
             case BC_ALLOC_LOCAL: {
+                auto inst = (InstBase_op1_imm16*)base;
+                int imm = inst->imm16;
                 
+                Assert(inst->op0 == BC_REG_INVALID);
+                
+                if(imm != 0) {
+                    ARMRegister reg_dst = ARM_REG_SP;
+                    emit_sub_imm(reg_dst, reg_dst, imm);
+                }
             } break;
             case BC_ALLOC_ARGS: {
                 
             } break;
             case BC_FREE_LOCAL: {
+                auto inst = (InstBase_imm16*)base;
+                int imm = inst->imm16;
                 
+                if(imm != 0) {
+                    ARMRegister reg_dst = ARM_REG_SP;
+                    emit_add_imm(reg_dst, reg_dst, imm);
+                }
             } break;
             case BC_FREE_ARGS: {
                 
@@ -161,13 +186,19 @@ bool ARMBuilder::generate() {
                 
             } break;
             case BC_RET: {
+                emit_pop_fp_lr();
                 emit_bx(ARM_REG_LR);
             } break;
             case BC_JNZ: {
-                
+                // auto inst = (InstBase_op1_imm32*)base;
+                // ARMRegister reg = find_register(inst->op0);
+                // emit_b(reg, inst->imm32);
             } break;
             case BC_JZ: {
-                
+                // auto inst = (InstBase_op1_imm32*)base;
+                // ARMRegister reg = find_register(inst->op0);
+                // emit_cmp()
+                // emit_b(reg, inst->imm32);
             } break;
             case BC_JMP: {
                 
@@ -181,16 +212,38 @@ bool ARMBuilder::generate() {
             case BC_CODEPTR: {
                 
             } break;
-            case BC_ADD: {
+            case BC_ADD:
+            case BC_SUB:
+            case BC_MUL: {
                 auto inst = (InstBase_op2_ctrl*)base;
                 
                 ARMRegister reg_dst = find_register(inst->op0);
                 ARMRegister reg_op = find_register(inst->op1);
-                emit_add(reg_dst, reg_op, reg_op);
-            } break;
-            case BC_SUB:
-            case BC_MUL: {
-            //  TODO: less than, equal, bitwise ops
+                
+                switch(opcode) {
+                    case BC_ADD: emit_add(reg_dst, reg_op, reg_op); break;
+                    case BC_SUB: emit_add(reg_dst, reg_op, reg_op); break;
+                    case BC_MUL: {
+                        ARMRegister reg_temp = alloc_register();
+                        if(IS_CONTROL_SIGNED(inst->control)) {
+                            emit_smull(reg_dst, reg_temp, reg_op, reg_op);
+                        } else {
+                            emit_umull(reg_dst, reg_temp, reg_op, reg_op);
+                        }
+                        free_register(reg_temp);
+                    } break;
+                    case BC_DIV: {
+                        ARMRegister reg_temp = alloc_register();
+                        if(IS_CONTROL_SIGNED(inst->control)) {
+                            emit_smull(reg_dst, reg_temp, reg_op, reg_op);
+                        } else {
+                            emit_umull(reg_dst, reg_temp, reg_op, reg_op);
+                        }
+                        free_register(reg_temp);
+                    } break;
+                }
+                
+                //  TODO: less than, equal, bitwise ops
             } break;
             case BC_CAST: {
             } break;
@@ -201,6 +254,13 @@ bool ARMBuilder::generate() {
         }
     }
     
+    // NOTE: We should have emitted a ret instruction and any instructions we emit here will never execute.
+    
+    // emit_movw(ARM_REG_R0, 5);
+    // emit_movw(ARM_REG_R1, 6);
+    // emit_add(ARM_REG_R0, ARM_REG_R0, ARM_REG_R1);
+    // emit_bx(ARM_REG_LR);
+    
     funcprog->printHex();
     
     Assert(("Size of generated ARM is not divisible by 4",code_size() % 4 == 0));
@@ -209,7 +269,9 @@ bool ARMBuilder::generate() {
 }
 
 ARMRegister ARMBuilder::alloc_register(BCRegister reg) {
-    for(int i=1;i<ARM_REG_MAX;i++) {
+    if(reg == BC_REG_LOCALS)
+        return ARM_REG_FP;
+    for(int i=1;i<ARM_REG_GENERAL_MAX;i++) {
         auto& info = arm_registers[i];
         if(info.used)
             continue;
@@ -224,6 +286,8 @@ ARMRegister ARMBuilder::alloc_register(BCRegister reg) {
     return ARM_REG_INVALID;
 }
 ARMRegister ARMBuilder::find_register(BCRegister reg) {
+    if(reg == BC_REG_LOCALS)
+        return ARM_REG_FP;
     auto& bc_info = bc_registers[reg];
     // Assert(bc_info.arm_reg != ARM_REG_INVALID);
     if(bc_info.arm_reg == ARM_REG_INVALID)
@@ -231,6 +295,8 @@ ARMRegister ARMBuilder::find_register(BCRegister reg) {
     return bc_info.arm_reg;
 }
 void ARMBuilder::free_register(ARMRegister reg) {
+    if(reg == ARM_REG_FP)
+        return;
     auto& info = arm_registers[reg-1];
     Assert(info.used);
     
@@ -252,6 +318,69 @@ void ARMBuilder::emit_add(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
     int inst = BITS(cond, 4, 28) | BITS(0b0000100, 7, 21) | BITS(S, 1, 20)
         | BITS(Rn,4,16) | BITS(Rd,4,12) | BITS(imm5, 5, 7) | BITS(type, 2, 5)
          | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_add_imm(ARMRegister rd, ARMRegister rn, int imm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/ADD--immediate--ARM-?lang=en
+    // imm == 0 could be a bug so we assert
+    Assert(imm > 0 && imm <= 0xFFF);
+    ARM_CLAMP_dn()
+    int S = 0;
+    int cond = ARM_COND_AL;
+    int imm12 = imm;
+    int inst = BITS(cond, 4, 28) | BITS(0b0010100, 7, 21) | BITS(S, 1, 20)
+        | BITS(Rn,4,16) | BITS(Rd,4,12) | BITS(imm12, 12, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_sub(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/SUB--register-?lang=en
+    ARM_CLAMP_dnm()
+    int S = 0;
+    int cond = ARM_COND_AL;
+    int imm5 = 0;
+    int type = ARM_SHIFT_TYPE_LSL;
+    int inst = BITS(cond, 4, 28) | BITS(0b0000010, 7, 21) | BITS(S, 1, 20)
+        | BITS(Rn,4,16) | BITS(Rd,4,12) | BITS(imm5, 5, 7) | BITS(type, 2, 5)
+         | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_sub_imm(ARMRegister rd, ARMRegister rn, int imm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/SUB--immediate--ARM-?lang=en
+    // imm == 0 could be a bug so we assert
+    Assert(imm > 0 && imm <= 0xFFF);
+    ARM_CLAMP_dn()
+    int S = 0;
+    int cond = ARM_COND_AL;
+    int imm12 = imm;
+    int inst = BITS(cond, 4, 28) | BITS(0b0010010, 7, 21) | BITS(S, 1, 20)
+        | BITS(Rn,4,16) | BITS(Rd,4,12) | BITS(imm12, 12, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_smull(ARMRegister rdlo, ARMRegister rdhi, ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/SMULL?lang=en
+    ARM_CLAMP_nm()
+    Assert(rdlo > 0 && rdlo < ARM_REG_MAX);
+    Assert(rdhi > 0 && rdhi < ARM_REG_MAX);
+    u8 RdLo = rdlo-1;
+    u8 RdHi = rdhi-1;
+    int inst = BITS(0b111110111000, 12, 20) | BITS(Rn, 4, 16)
+        | BITS(RdLo,4,12) | BITS(RdHi,4, 8) | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_umull(ARMRegister rdlo, ARMRegister rdhi, ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/UMULL
+    ARM_CLAMP_nm()
+    Assert(rdlo > 0 && rdlo < ARM_REG_MAX);
+    Assert(rdhi > 0 && rdhi < ARM_REG_MAX);
+    u8 RdLo = rdlo-1;
+    u8 RdHi = rdhi-1;
+    int inst = BITS(0b111110111010, 12, 20) | BITS(Rn, 4, 16)
+        | BITS(RdLo,4,12) | BITS(RdHi,4, 8) | BITS(Rm, 4, 0);
     
     emit4((u32)inst);
 }
@@ -307,6 +436,36 @@ void ARMBuilder::emit_pop(ARMRegister r) {
     
     emit4((u32)inst);
 }
+void ARMBuilder::emit_push_reglist(ARMRegister* regs, int count) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/PUSH?lang=en
+    Assert(count > 0);
+    int cond = ARM_COND_AL;
+    int reglist = 0;
+    for(int i=0;i<count;i++) {
+        ARMRegister r = regs[i];
+        u8 reg = r-1;
+        Assert(r > 0 && r < ARM_REG_MAX);
+        reglist |= 1<<reg;
+    }
+    int inst = BITS(cond, 4, 28) | BITS(0b100100101101, 12, 16) | BITS(reglist, 16, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_pop_reglist(ARMRegister* regs, int count) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/POP--ARM-?lang=en
+    Assert(count > 0);
+    int cond = ARM_COND_AL;
+    int reglist = 0;
+    for(int i=0;i<count;i++) {
+        ARMRegister r = regs[i];
+        u8 reg = r-1;
+        Assert(r > 0 && r < ARM_REG_MAX);
+        reglist |= 1<<reg;
+    }
+    int inst = BITS(cond, 4, 28) | BITS(0b100010111101, 12, 16) | BITS(reglist, 16, 0);
+    
+    emit4((u32)inst);
+}
 void ARMBuilder::emit_ldr(ARMRegister rt, ARMRegister rn, i16 imm16) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LDR--immediate--ARM-?lang=en
     Assert(rt > 0 && rt < ARM_REG_MAX);
@@ -349,6 +508,33 @@ void ARMBuilder::emit_str(ARMRegister rt, ARMRegister rn, i16 imm16) {
         | BITS(U, 1, 23) | BITS(W, 1, 21) | BITS(Rn, 4, 16)
         | BITS(Rt, 4, 12) | BITS(imm12, 12, 0);
     // NOTE: Differs from ldr at bit 20, bit is 0 in str and 1 in ldr
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_b(int imm, int cond) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/B
+    // @nocheckin double check these bit checks with maximum,minimum allowed immediates.
+    Assert(((imm & 0x8000'0000) && (imm & 0x7F00'0000) == 0x7F00'0000) || (imm & 0xFF00'0000) == 0);
+    
+    int imm24 = imm & 0xFF'FFFF;
+    int inst = BITS(cond, 4, 28) | BITS(0b1010, 4, 24) | BITS(imm24, 24, 0);
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_bl(int imm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/B
+    // @nocheckin double check these bit checks with maximum,minimum allowed immediates.
+    Assert(((imm & 0x8000'0000) && (imm & 0x7F00'0000) == 0x7F00'0000) || (imm & 0xFF00'0000) == 0);
+    int cond = ARM_COND_AL;
+    int imm24 = imm & 0xFF'FFFF;
+    int inst = BITS(cond, 4, 28) | BITS(0b1011, 4, 24) | BITS(imm24, 24, 0);
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_blx(ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/BLX--register-
+    Assert(rm > 0 && rm < ARM_REG_MAX);
+    u8 Rm = rm-1;
+    int cond = ARM_COND_AL;
+    int inst = BITS(cond, 4, 28) | BITS(0b00010010, 8, 20) 
+        | BITS(0xFFF, 12, 8) | BITS(0b0011,4,4) | BITS(Rm,4,0);
     emit4((u32)inst);
 }
 void ARMBuilder::emit_bx(ARMRegister rm) {

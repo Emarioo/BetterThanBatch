@@ -29,4 +29,6 @@
 
 #define ARM_CLAMP_dnm() u8 Rd = rd-1; u8 Rn = rn-1; u8 Rm = rm-1; Assert(rd > 0 && rd < ARM_REG_MAX); Assert(rn > 0 && rn < ARM_REG_MAX); Assert(rm > 0 && rm < ARM_REG_MAX);
 #define ARM_CLAMP_dm() u8 Rd = rd-1; u8 Rm = rm-1; Assert(rd > 0 && rd < ARM_REG_MAX); Assert(rm > 0 && rm < ARM_REG_MAX);
+#define ARM_CLAMP_dn() u8 Rd = rd-1; u8 Rn = rn-1; Assert(rd > 0 && rd < ARM_REG_MAX); Assert(rn > 0 && rn < ARM_REG_MAX);
+#define ARM_CLAMP_nm() u8 Rm = rm-1; u8 Rn = rn-1; Assert(rm > 0 && rm < ARM_REG_MAX); Assert(rn > 0 && rn < ARM_REG_MAX);
 #define ARM_CLAMP_d() u8 Rd = rd-1; Assert(rd > 0 && rd < ARM_REG_MAX);

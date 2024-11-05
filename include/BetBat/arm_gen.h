@@ -19,7 +19,9 @@ enum ARMRegister : u8 {
     ARM_REG_R8,
     ARM_REG_R9,
     ARM_REG_R10,
+    
     ARM_REG_R11,
+    ARM_REG_GENERAL_MAX = ARM_REG_R11,
     ARM_REG_R12,
     ARM_REG_R13,
     ARM_REG_R14,
@@ -44,14 +46,38 @@ struct ARMBuilder : public ProgramBuilder {
     bool generate();
     
     void emit_add(ARMRegister rd, ARMRegister rn, ARMRegister rm);
+    void emit_add_imm(ARMRegister rd, ARMRegister rn, int imm);
+    void emit_sub(ARMRegister rd, ARMRegister rn, ARMRegister rm);
+    void emit_sub_imm(ARMRegister rd, ARMRegister rn, int imm);
+    void emit_smull(ARMRegister rdlo, ARMRegister rdhi, ARMRegister rn, ARMRegister rm);
+    void emit_umull(ARMRegister rdlo, ARMRegister rdhi, ARMRegister rn, ARMRegister rm);
+    
+    void emit_cmp(ARMRegister rn, ARMRegister rm);
+    void emit_cmp_imm(ARMRegister rn, int imm);
+    
     void emit_mov(ARMRegister rd, ARMRegister rm);
     void emit_movw(ARMRegister rd, u16 imm);
     void emit_movt(ARMRegister rd, u16 imm);
+    
     void emit_push(ARMRegister r);
     void emit_pop(ARMRegister r);
+    void emit_push_reglist(ARMRegister* regs, int count);
+    void emit_pop_reglist(ARMRegister* regs, int count);
+    void emit_push_fp_lr() {
+        ARMRegister regs[]{ ARM_REG_FP, ARM_REG_LR };
+        emit_push_reglist(regs,2);
+    }
+    void emit_pop_fp_lr() {
+        ARMRegister regs[]{ ARM_REG_FP, ARM_REG_LR };
+        emit_pop_reglist(regs,2);
+    }
     // immediate is a 13-bit immediate, last bit indicating signedness
     void emit_ldr(ARMRegister rt, ARMRegister rn, i16 imm16);
     void emit_str(ARMRegister rt, ARMRegister rn, i16 imm16);
+    
+    void emit_b(int imm, int cond);
+    void emit_bl(int imm);
+    void emit_blx(ARMRegister rm);
     void emit_bx(ARMRegister rm);
     
     struct RegInfo {
