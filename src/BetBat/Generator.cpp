@@ -6915,7 +6915,8 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                     case TARGET_BYTECODE: main_conv = BETCALL; break;
                     case TARGET_WINDOWS_x64: main_conv = STDCALL; break;
                     case TARGET_LINUX_x64: main_conv = UNIXCALL; break;
-                    case TARGET_ARM: main_conv = ARMCALL; break;
+                    case TARGET_ARM: main_conv = UNIXCALL; break;
+                    // case TARGET_ARM: main_conv = ARMCALL; break;
                     default: Assert(false);
                 }
                 TinyBytecode* tb_main = context.bytecode->createTiny(compiler->entry_point,main_conv);
@@ -6984,6 +6985,8 @@ void GenContext::init_context(Compiler* compiler) {
     bytecode = compiler->bytecode;
     reporter = &compiler->reporter;
     scratch_allocator.init(0x10000);
+    FRAME_SIZE = compiler->arch.FRAME_SIZE;
+    REGISTER_SIZE = compiler->arch.REGISTER_SIZE;
 }
 
 void TestGenerate(BytecodeBuilder& b) {

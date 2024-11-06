@@ -204,6 +204,8 @@ struct Compiler {
     std::string compiler_executable_dir="";
     CompileStats compile_stats{};
 
+    ArchitectureInfo arch = {};
+
     std::string entry_point = "main";
     lexer::SourceLocation location_of_entry_point;
     bool has_generated_entry_point = false;

@@ -88,6 +88,8 @@ struct X64Inst {
 engone::Logger& operator<<(engone::Logger& l, X64Inst& i);
 
 struct X64Builder : public ProgramBuilder {
+    int FRAME_SIZE = 16;
+    
     struct RegisterInfo {
         bool used = false;
         int artifical_reg=0;
@@ -141,17 +143,7 @@ struct X64Builder : public ProgramBuilder {
     // don't assume all opcodes will work
     void emit_operation(u8 opcode, X64Register reg, X64Register rm, InstructionControl control);
 
-    static const int FRAME_SIZE = 16;
-    DynamicArray<int> push_offsets{}; // used when set arguments while values are pushed and popped
-    int ret_offset = 0;
-    int callee_saved_space = 0;
     bool disable_modrm_asserts = false;
-
-    struct Arg {
-        InstructionControl control = CONTROL_NONE;
-        int offset_from_rbp = 0;
-    };
-    DynamicArray<Arg> recent_set_args;
 
     bool generate();
 

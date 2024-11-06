@@ -577,41 +577,11 @@ bool X64Builder::generate() {
     #define FIX_POST_IN_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_artifical(n->reg##N);
     #define FIX_POST_OUT_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_artifical(n->reg##N);
 
-    DynamicArray<i32> _bc_to_x64_translation;
-    _bc_to_x64_translation.resize(tinycode->size());
-    int last_pc = 0;
-    auto map_translation = [&](i32 bc_addr, i32 asm_addr) {
-        while(bc_addr >= 0 && _bc_to_x64_translation[bc_addr] == 0) {
-            _bc_to_x64_translation[bc_addr] = asm_addr;
-            bc_addr--;
-        }
-    };
-    auto map_strict_translation = [&](i32 bc_addr, i32 asm_addr) {
-        _bc_to_x64_translation[bc_addr] = asm_addr;
-    };
-    auto get_map_translation = [&](i32 bc_addr) {
-        if(bc_addr >= _bc_to_x64_translation.size())
-            return last_pc;
-        return _bc_to_x64_translation[bc_addr];
-    };
+    bc_to_machine_translation.resize(tinycode->size());
+    last_pc = 0;
 
-    struct RelativeRelocation {
-        // RelativeRelocation(i32 ip, i32 x64, i32 bc) : currentIP(ip), immediateToModify(x64), bcAddress(bc) {}
-        i32 inst_addr=0; // It's more of a nextIP rarther than current. Needed when calculating relative offset
-        // Address MUST point to an immediate (or displacement?) with 4 bytes.
-        // You can add some flags to this struct for more variation.
-        i32 imm32_addr=0; // dword/i32 to modify with correct value
-        i32 bc_addr=0; // address in bytecode, needed when looking up absolute offset in bc_to_x64_translation
-    };
-    DynamicArray<RelativeRelocation> relativeRelocations;
     relativeRelocations.reserve(40);
-    auto addRelocation32 = [&](int inst_addr, int imm32_addr, int bc_addr) {
-        RelativeRelocation rel{};
-        rel.inst_addr = inst_addr;
-        rel.imm32_addr = imm32_addr;
-        rel.bc_addr = bc_addr;
-        relativeRelocations.add(rel);
-    };
+    
     // TODO: What about WinMain?
     bool is_entry_point = tinycode->name == compiler->entry_point; // TODO: temporary, we should let the user specify entry point, the whole compiler assumes "main" as entry point...
 
@@ -746,8 +716,6 @@ bool X64Builder::generate() {
         // BC_REG_XMM7,
     };
 
-    DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
-    int virtual_stack_pointer = 0; // TODO: abstract into X64Builder?
     virtual_stack_pointer -= callee_saved_space; // if callee saved space is misaligned then we need to consider that when 16-byte alignment is required. (BC_ALLOC_ARGS)
 
     // use these when calling intrinsics with call instructions that need 16-byte alignment
@@ -903,23 +871,7 @@ bool X64Builder::generate() {
         }
     }
     
-    struct SPMoment {
-        int virtual_sp;
-        int pop_at_bc_index;
-    };
-    DynamicArray<SPMoment> sp_moments{};
-    auto push_stack_moment = [&](int sp, int bc_addr) {
-        sp_moments.add({sp, bc_addr});
-        // log::out << log::GRAY << "PUSH "<<sp <<" "<< bc_addr <<"\n";
-    };
-    auto pop_stack_moment = [&](int index = -1) {
-        if (index == -1)
-            index = sp_moments.size()-1;
-        auto& moment = sp_moments[index];
-        virtual_stack_pointer = moment.virtual_sp;
-        // log::out << log::GRAY << "POP " << index << "  sp:" << moment.virtual_sp << " " << moment.pop_at_bc_index << "\n";
-        sp_moments.removeAt(index);
-    };
+    
     // TODO: Stack pointers moments were used when the stack pointer changed a lot.
     //   Especially between jumps and return statements in a if or while scope.
     //   Now however, the stack pointer is fixed because we allocate space for local

@@ -15,6 +15,9 @@ struct GenContext : public PhaseContext {
     CompilerImport* imp = nullptr;
     DynamicArray<TinyBytecode*>* out_codes = nullptr;
     
+    int FRAME_SIZE = -1;
+    int REGISTER_SIZE = -1;
+    
     GenContext() : info(*this) { } // well this is dumb
     GenContext& info;
 

@@ -3594,6 +3594,11 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
     bool is_entry_point = false;
     bool is_export = false;
 
+    if(compiler->options->target == TARGET_ARM) {
+        // @TODO: Support BETCALl
+        function->callConvention = CallConvention::UNIXCALL;
+    }
+
     lexer::Token tok_name{};
     if(!is_operator) {
         StringView view_fn_name{};
@@ -3612,7 +3617,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                         specifiedConvention = true;
                         function->callConvention = CallConvention::UNIXCALL;
                     } else if(info.compiler->options->target == TARGET_ARM) {   
-                        function->callConvention = CallConvention::ARMCALL;
+                        function->callConvention = CallConvention::UNIXCALL;
+                        // function->callConvention = CallConvention::ARMCALL;
                     } else Assert(false);
                 }
                 
@@ -3737,15 +3743,32 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             } else if (view_fn_name == "betcall"){
                 function->callConvention = CallConvention::BETCALL;
                 specifiedConvention = true;
+                if(compiler->options->target == TARGET_ARM) {
+                    ERR_SECTION(
+                        ERR_HEAD2(function->location)
+                        ERR_MSG("The calling convention 'betcall' is not supported when targeting ARM (yet).")
+                        ERR_LINE2(function->location, "here")
+                    )
+                }
             // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
             } else if (view_fn_name == "unixcall"){
                 function->callConvention = CallConvention::UNIXCALL;
                 specifiedConvention = true;
             } else if (view_fn_name == "oscall"){
-                if (compiler->options->target == TARGET_WINDOWS_x64) {
-                    function->callConvention = CallConvention::STDCALL;
-                } else if (compiler->options->target == TARGET_LINUX_x64) {
-                    function->callConvention = CallConvention::UNIXCALL;
+                switch(compiler->options->target) {
+                    case TARGET_WINDOWS_x64: {
+                        function->callConvention = CallConvention::STDCALL;
+                    } break;
+                    case TARGET_LINUX_x64: {
+                        function->callConvention = CallConvention::UNIXCALL;
+                    } break;
+                    case TARGET_ARM: {
+                        function->callConvention = CallConvention::UNIXCALL;
+                    } break;
+                    case TARGET_BYTECODE: {
+                        function->callConvention = CallConvention::BETCALL;
+                    } break;
+                    default: Assert(false);
                 }
                 specifiedConvention = true;
             } else if (view_fn_name == "native"){

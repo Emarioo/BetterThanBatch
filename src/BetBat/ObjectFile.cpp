@@ -328,11 +328,22 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
 
     for(int i=0;i<program->internalFuncRelocations.size();i++){
         auto& rel = program->internalFuncRelocations[i];
-
-        u32 from_real_offset = tinyprogram_offsets[rel.from_tinyprog_index] + rel.textOffset;
-        u32 to_real_offset = tinyprogram_offsets[rel.to_tinyprog_index];
         
-        text_stream->write_at<u32>(from_real_offset, to_real_offset - from_real_offset - 4);
+        if(compiler->options->target == TARGET_ARM) {
+            u32 from_real_offset = tinyprogram_offsets[rel.from_tinyprog_index] + rel.textOffset;
+            u32 to_real_offset = tinyprogram_offsets[rel.to_tinyprog_index];
+            int jump_offset = to_real_offset - from_real_offset-8; // I don't know why we should use 8, maybe bl instruction just always jumps a little extra
+            // bl (immediate) instruction expecteds relative jump offset divided by 4
+            jump_offset /= 4;
+            text_stream->write_at<u8>(from_real_offset, jump_offset&0xff);
+            text_stream->write_at<u8>(from_real_offset+1, (jump_offset>>8)&0xFF);
+            text_stream->write_at<u8>(from_real_offset+2, (jump_offset>>16)&0xff);
+        } else {
+            u32 from_real_offset = tinyprogram_offsets[rel.from_tinyprog_index] + rel.textOffset;
+            u32 to_real_offset = tinyprogram_offsets[rel.to_tinyprog_index];
+            
+            text_stream->write_at<u32>(from_real_offset, to_real_offset - from_real_offset - 4);
+        }
     }
 
     for(int i=0;i<program->exportedSymbols.size();i++) {

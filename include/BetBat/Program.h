@@ -5,6 +5,14 @@
 #include "BetBat/DebugInformation.h"
 #include "BetBat/Bytecode.h"
 
+struct ArchitectureInfo {
+    int FRAME_SIZE=-1;
+    int REGISTER_SIZE=-1;
+};
+static const ArchitectureInfo ARCH_x86_64 = {16, 8};
+static const ArchitectureInfo ARCH_aarch64 = {16, 8};
+static const ArchitectureInfo ARCH_arm = {8, 4};
+
 struct FunctionProgram {
     ~FunctionProgram() {
         if(_allocationSize!=0){
@@ -171,4 +179,69 @@ struct ProgramBuilder {
     void emit4(i64 _);
     void emit8(i8 _);
     
+    DynamicArray<i32> bc_to_machine_translation;
+    int last_pc = 0;
+    void map_translation(i32 bc_addr, i32 asm_addr) {
+        while(bc_addr >= 0 && bc_to_machine_translation[bc_addr] == 0) {
+            bc_to_machine_translation[bc_addr] = asm_addr;
+            bc_addr--;
+        }
+    }
+    void map_strict_translation(i32 bc_addr, i32 asm_addr) {
+        bc_to_machine_translation[bc_addr] = asm_addr;
+    }
+    int get_map_translation(i32 bc_addr) {
+        if(bc_addr >= bc_to_machine_translation.size())
+            return last_pc;
+        return bc_to_machine_translation[bc_addr];
+    }
+    
+    struct RelativeRelocation {
+        // RelativeRelocation(i32 ip, i32 x64, i32 bc) : currentIP(ip), immediateToModify(x64), bcAddress(bc) {}
+        i32 inst_addr=0; // It's more of a nextIP rarther than current. Needed when calculating relative offset
+        // Address MUST point to an immediate (or displacement?) with 4 bytes.
+        // You can add some flags to this struct for more variation.
+        i32 imm32_addr=0; // dword/i32 to modify with correct value
+        i32 bc_addr=0; // address in bytecode, needed when looking up absolute offset in bc_to_x64_translation
+    };
+    DynamicArray<RelativeRelocation> relativeRelocations;
+    void addRelocation32(int inst_addr, int imm32_addr, int bc_addr) {
+        RelativeRelocation rel{};
+        rel.inst_addr = inst_addr;
+        rel.imm32_addr = imm32_addr;
+        rel.bc_addr = bc_addr;
+        relativeRelocations.add(rel);
+    }
+    
+    DynamicArray<int> push_offsets{}; // used when set arguments while values are pushed and popped
+    int ret_offset = 0;
+    int callee_saved_space = 0;
+
+    struct Arg {
+        InstructionControl control = CONTROL_NONE;
+        int offset_from_rbp = 0;
+    };
+    DynamicArray<Arg> recent_set_args;
+    
+    struct SPMoment {
+        int virtual_sp;
+        int pop_at_bc_index;
+    };
+    DynamicArray<SPMoment> sp_moments{};
+    DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
+    int virtual_stack_pointer = 0;
+    void push_stack_moment(int sp, int bc_addr) {
+        sp_moments.add({sp, bc_addr});
+        // log::out << log::GRAY << "PUSH "<<sp <<" "<< bc_addr <<"\n";
+    }
+    void pop_stack_moment(int index = -1) {
+        if (index == -1)
+            index = sp_moments.size()-1;
+        auto& moment = sp_moments[index];
+        virtual_stack_pointer = moment.virtual_sp;
+        // log::out << log::GRAY << "POP " << index << "  sp:" << moment.virtual_sp << " " << moment.pop_at_bc_index << "\n";
+        sp_moments.removeAt(index);
+    }
+    
+
 };

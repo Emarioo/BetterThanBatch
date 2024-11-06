@@ -2,6 +2,7 @@
 
 #include "BetBat/Program.h"
 #include "BetBat/Bytecode.h"
+#include "BetBat/arm_defs.h"
 
 struct Compiler;
 
@@ -43,20 +44,31 @@ engone::Logger& operator <<(engone::Logger&, ARMRegister);
 
 struct ARMBuilder : public ProgramBuilder {
     
+    int FRAME_SIZE = 8; // @TODO: Should be 16 bytes on aarch64
+    int REGISTER_SIZE = 4; // @TODO: 8 bytes on aarch64
+    
     bool generate();
     
     void emit_add(ARMRegister rd, ARMRegister rn, ARMRegister rm);
-    void emit_add_imm(ARMRegister rd, ARMRegister rn, int imm);
+    void emit_add_imm(ARMRegister rd, ARMRegister rn, int imm, int cond = ARM_COND_AL);
     void emit_sub(ARMRegister rd, ARMRegister rn, ARMRegister rm);
     void emit_sub_imm(ARMRegister rd, ARMRegister rn, int imm);
     void emit_smull(ARMRegister rdlo, ARMRegister rdhi, ARMRegister rn, ARMRegister rm);
     void emit_umull(ARMRegister rdlo, ARMRegister rdhi, ARMRegister rn, ARMRegister rm);
+    void emit_sdiv(ARMRegister rd, ARMRegister rn, ARMRegister rm);
+    void emit_udiv(ARMRegister rd, ARMRegister rn, ARMRegister rm);
+    void emit_and(ARMRegister rd, ARMRegister rn, ARMRegister rm, int cond = ARM_COND_AL);
+    void emit_and_imm(ARMRegister rd, ARMRegister rn, int imm, int cond = ARM_COND_AL);
+    void emit_orr(ARMRegister rd, ARMRegister rn, ARMRegister rm, bool set_flags = false);
+    void emit_eor(ARMRegister rd, ARMRegister rn, ARMRegister rm);
+    void emit_lsl(ARMRegister rd, ARMRegister rn, ARMRegister rm);
+    void emit_lsr(ARMRegister rd, ARMRegister rn, ARMRegister rm);
     
     void emit_cmp(ARMRegister rn, ARMRegister rm);
     void emit_cmp_imm(ARMRegister rn, int imm);
     
     void emit_mov(ARMRegister rd, ARMRegister rm);
-    void emit_movw(ARMRegister rd, u16 imm);
+    void emit_movw(ARMRegister rd, u16 imm, int cond = ARM_COND_AL);
     void emit_movt(ARMRegister rd, u16 imm);
     
     void emit_push(ARMRegister r);
@@ -80,8 +92,11 @@ struct ARMBuilder : public ProgramBuilder {
     void emit_blx(ARMRegister rm);
     void emit_bx(ARMRegister rm);
     
+    void set_imm24(int index, int imm);
+    
     struct RegInfo {
         bool used = false;
+        int last_used = 0;
         ARMRegister arm_reg = ARM_REG_INVALID;
         BCRegister bc_reg = BC_REG_INVALID;
     };

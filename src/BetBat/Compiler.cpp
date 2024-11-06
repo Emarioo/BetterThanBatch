@@ -1199,6 +1199,19 @@ void Compiler::run(CompileOptions* options) {
             default: Assert(false);
         }
     }
+    switch(options->target){
+        case TARGET_BYTECODE: {
+            arch = ARCH_x86_64;
+        } break;
+        case TARGET_WINDOWS_x64:
+        case TARGET_LINUX_x64: {
+            arch = ARCH_x86_64;
+        } break;
+        case TARGET_ARM: {
+            arch = ARCH_arm;
+        } break;
+        default: Assert(false);
+    }
 
     std::string output_filename = output_path.substr(slash_index+1, dot_index - (slash_index+1));
     std::string output_extension = ExtractExtension(output_path);
@@ -1993,6 +2006,8 @@ JUMP_TO_EXEC:
                 for (auto& a : options->userArguments) {
                     cmd += " " + a;
                 }
+                
+                StartProgram("arm-none-eabi-objdump bin/main.o -d", PROGRAM_WAIT);
                 
                 log::out << log::GRAY << "running: " << cmd<<"\n";
                 log::out << log::GRAY << "Ctrl+A <release> X (to exit QEMU)\n";

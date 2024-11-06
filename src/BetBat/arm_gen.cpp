@@ -5,6 +5,12 @@
 
 // https://armconverter.com/?disasm
 
+// @TODO: We may need to add .ARM.attributes section in ELF to get
+//    correct disassembly from objdump.
+//    https://github.com/ARM-software/abi-aa/blob/main/addenda32/addenda32.rst
+
+// @TODO: Can we use THUMB instructions?
+
 bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode) {
     using namespace engone;
     TRACE_FUNC()
@@ -41,20 +47,264 @@ bool ARMBuilder::generate() {
         log::out << log::RED << "Inline assembly not supported when targeting arm.\n";
     }
     
-    emit_push_fp_lr();
-    emit_mov(ARM_REG_FP, ARM_REG_SP);
+    bc_to_machine_translation.resize(tinycode->size());
+    
+    REGISTER_SIZE = compiler->arch.REGISTER_SIZE;
+    FRAME_SIZE = compiler->arch.FRAME_SIZE;
     
     auto& instructions = tinycode->instructionSegment;
+    
+     // TODO: What about WinMain?
+    bool is_entry_point = tinycode->name == compiler->entry_point; // TODO: temporary, we should let the user specify entry point, the whole compiler assumes "main" as entry point...
+
+    const ARMRegister arm_callee_saved_regs[]{
+        ARM_REG_R4,
+        ARM_REG_R5,
+        ARM_REG_R6,
+        ARM_REG_R7,
+        ARM_REG_R8,
+        ARM_REG_R9,
+        ARM_REG_R10,
+    };
+    const ARMRegister* callee_saved_regs = nullptr;
+
+    if(compiler->force_default_entry_point) {
+        is_entry_point = false;
+    }
+
+    bool is_blank = false;
+    if(tinycode->debugFunction->funcAst) {
+        is_blank = tinycode->debugFunction->funcAst->blank_body; // TODO: We depend on debugFunction, change this
+    }
+
+    if(!is_blank) {
+        if(!is_entry_point) {
+            // entry point on unix systems don't need BP restored
+            // the stack is also already 16-byte aligned.
+            emit_push_fp_lr();
+        } else {
+            // still need to push link register
+            emit_push(ARM_REG_LR);
+        }
+        emit_mov(ARM_REG_FP, ARM_REG_SP);
+    }
+    
+    int callee_saved_regs_len = 0;
+    
+    bool enable_callee_saved_registers = false;
+    enable_callee_saved_registers = true;
+    callee_saved_regs = arm_callee_saved_regs;
+    callee_saved_regs_len = sizeof(arm_callee_saved_regs)/sizeof(*arm_callee_saved_regs);
+
+    if(is_blank || (is_entry_point && compiler->options->target != TARGET_WINDOWS_x64)) {
+        // entry point on unix systems don't need non-volatile registers restored
+        enable_callee_saved_registers = false;
+    }
+    
+    callee_saved_space = 0;
+    if(enable_callee_saved_registers) {
+        // TODO: We can use one instruction to push all registers we want
+        for(int i=0;i<callee_saved_regs_len;i++) {
+            emit_push(callee_saved_regs[i]);
+            callee_saved_space += REGISTER_SIZE;
+        }
+    }
+    auto pop_callee_saved_regs=[&]() {
+        if(enable_callee_saved_registers) {
+            for(int i=callee_saved_regs_len-1;i>=0;i--) {
+                emit_pop(callee_saved_regs[i]);
+            }
+        }
+    };
+    
+    virtual_stack_pointer -= callee_saved_space; // if callee saved space is misaligned then we need to consider that when 16-byte alignment is required. (BC_ALLOC_ARGS)
+    
+    auto push_alignment = [&]() {
+        int misalignment = virtual_stack_pointer % FRAME_SIZE;
+        misalignments.add(misalignment);
+        int imm = FRAME_SIZE - misalignment;
+
+        if(imm != 0) {
+            emit_sub_imm(ARM_REG_SP, ARM_REG_SP, imm);
+        }
+        virtual_stack_pointer -= imm;
+    };
+    auto pop_alignment = [&]() {
+        int misalignment = misalignments.last();
+        misalignments.pop();
+        int imm = FRAME_SIZE - misalignment;
+
+        if(imm != 0) {
+            emit_add_imm(ARM_REG_SP, ARM_REG_SP, imm);
+        }
+        virtual_stack_pointer += imm;
+    };
+    
+    DynamicArray<Arg> accessed_params;
+    int args_offset = 0;
+    
+    i64 pc = 0;
+    while(true) {
+        if(!(pc < instructions.size()))
+            break;
+        i64 prev_pc = pc;
+        InstructionOpcode opcode = (InstructionOpcode)instructions[pc];
+        pc++;
+        
+        InstBase* base = (InstBase*)&instructions[prev_pc];
+        pc += instruction_contents[opcode].size - 1; // -1 because we incremented pc earlier
+        
+        if(opcode == BC_GET_PARAM) {
+            auto inst = (InstBase_op1_ctrl_imm16*)base;
+            int param_index = inst->imm16 / REGISTER_SIZE;
+            if(param_index >= accessed_params.size()) {
+                accessed_params.resize(param_index+1);
+            }
+            // log::out << "param "<<param_index<<" " << base->control<<"\n";
+            accessed_params[param_index].control = inst->control;
+        } else if(opcode == BC_PTR_TO_PARAMS) {
+            // nocheckin IMPORTANT TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
+            auto inst = (InstBase_op1_imm16*)base;
+            int param_index = inst->imm16 / REGISTER_SIZE;
+            if(param_index >= accessed_params.size()) {
+                accessed_params.resize(param_index+1);
+            }
+            // log::out << "param "<<param_index<<" " << base->control<<"\n";
+            if(REGISTER_SIZE == 4)
+                // we don't know the size, if it's float, if it's unsigned so we just assume unsigned 64-bit type.
+                accessed_params[param_index].control = CONTROL_32B;
+            else
+                accessed_params[param_index].control = CONTROL_64B;
+        }
+    }
+    // #define DECL_SIZED_PARAM(CONTROL) InstructionControl control = (InstructionControl)(((CONTROL) & ~CONTROL_MASK_SIZE) | CONTROL_64B);
+    if(tinycode->call_convention == UNIXCALL) {
+        args_offset = callee_saved_space;
+        // If the function only accesses arguments through inline assembly then the user must save the registers manually.
+        // unless we provide a special get_arg instruction in the inline assembly?
+        if(is_blank && accessed_params.size()) {
+            log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
+            log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
+            compiler->compile_stats.errors++; // nochecking, TODO: call some function instead
+        }
+        if (is_entry_point) {
+            // entry point has it's arguments put on the stack, not in rdi, rsi...
+            int count = accessed_params.size();
+            if(count != 0) {
+                // TODO: Print where entry point is defined.
+                // TODO: What's the calling convention for entry point on Unix on ARM computer.
+                log::out << log::RED << "Entry point should have zero arguments when targeting ARM (we don't support any because what would the calling conventin be?)\n";
+                // Assert(("entry point shouldn't have more than 3 args",count <= 3));
+                // Assert(("entry point shouldn't have more than 3 args",count <= 3));
+                // int num = count-1;
+                // emit_sub_imm(ARM_REG_SP, ARM_REG_SP, num*REGISTER_SIZE);
+                // callee_saved_space += REGISTER_SIZE * num;
+                // virtual_stack_pointer -= REGISTER_SIZE * num;
+            }
+            // ARMRegister tmp_reg = ARM_REG_R4;
+            // if(accessed_params.size() > 0) {
+            //     auto& param = accessed_params[0];
+            //     param.offset_from_rbp = 0;
+            // }
+            // if(accessed_params.size() > 1) {
+            //     auto& param = accessed_params[1];
+            //     // DECL_SIZED_PARAM(param.control)
+            //     param.offset_from_rbp = -REGISTER_SIZE;
+                
+            //     emit_mov_reg_reg(tmp_reg, X64_REG_BP);
+            //     emit_add_imm32(tmp_reg, REGISTER_SIZE);
+            //     emit_mov_mem_reg(X64_REG_BP,tmp_reg,control,param.offset_from_rbp);
+            // }
+            // if(accessed_params.size() > 2) {
+            //     auto& param = accessed_params[2];
+            //     DECL_SIZED_PARAM(param.control)
+            //     param.offset_from_rbp = -FRAME_SIZE;
+            //     // emit_mov_reg_reg(tmp_reg, X64_REG_BP); reuse rax from second param
+            //     emit_add_imm32(tmp_reg, 8); // +8 (null of argv)
+
+            //     X64Register extra_reg = X64_REG_D;
+            //     disable_modrm_asserts = true;
+            //     emit_mov_reg_mem(extra_reg,X64_REG_BP,CONTROL_32B,0); // argc
+            //     disable_modrm_asserts = false;
+
+            //     emit1(PREFIX_REXW);
+            //     emit1(OPCODE_SHL_RM_IMM8_SLASH_4);
+            //     emit_modrm_slash(MODE_REG, 4, extra_reg);
+            //     emit1((u8)3);
+
+            //     emit1(PREFIX_REXW);
+            //     emit1(OPCODE_ADD_REG_RM);
+            //     emit_modrm(MODE_REG, tmp_reg, extra_reg);
+
+            //     emit_mov_mem_reg(X64_REG_BP,tmp_reg,control,param.offset_from_rbp);
+            // }
+        } else {
+            int count = accessed_params.size();
+            if(count != 0) {
+                emit_sub_imm(ARM_REG_SP, ARM_REG_SP, count * REGISTER_SIZE);
+                callee_saved_space += count * REGISTER_SIZE;
+                virtual_stack_pointer -= REGISTER_SIZE * count;
+            }
+            int normal_count = 0;
+            int float_count = 0;
+            int stacked_count = 0;
+            for(int i=0;i<accessed_params.size();i++) {
+                auto& param = accessed_params[i];
+                // DECL_SIZED_PARAM(param.control)
+
+                int off = -args_offset - (1+i) * REGISTER_SIZE;
+                param.offset_from_rbp = off;
+
+                ARMRegister reg_args = ARM_REG_FP;
+                ARMRegister reg = ARM_REG_INVALID;
+                // if(IS_CONTROL_FLOAT(control)) {
+                //     if(float_count < 8) {
+                //         // NOTE: Type checker provides a better error, this assert is here as a reminder to fix this code.
+                //         Assert(("x64 generator can't handle more than 4 floats",float_count < 4));
+                //         reg = unixcall_float_regs[float_count];
+                //         emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                //     } else {
+                //         Assert(("x64 generator can't handle more than 8 floats",false));
+                //         reg = X64_REG_XMM7; // is it safe to use xmm7 register?
+                //         int src_off = FRAME_SIZE + stacked_count * 8;
+                //         emit_mov_reg_mem(reg,reg_args,control,src_off);
+                //         emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                //         stacked_count++;
+                //     }
+                //     float_count++;
+                // } else {
+                    if(normal_count < 4) {
+                        reg = (ARMRegister)(ARM_REG_R0 + normal_count);
+                        // reg = unixcall_normal_regs[normal_count];
+                        emit_str(reg, ARM_REG_FP, param.offset_from_rbp);
+                        // emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                    } else {
+                        reg = ARM_REG_R0;
+                        int src_off = FRAME_SIZE + stacked_count * 8;
+                        emit_ldr(reg, ARM_REG_FP, src_off);
+                        emit_str(reg, ARM_REG_FP, param.offset_from_rbp);
+                        // emit_mov_reg_mem(reg,reg_args,control,src_off);
+                        // emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                        stacked_count++;
+                    }
+                    normal_count++;
+                // }
+            }
+        }
+    } else Assert(false);
+    
+    InstBase* last_inst_call = nullptr;
     
     BytecodePrintCache print_cache{};
     bool logging = true;
     bool running = true;
     // running = false;
-    i64 pc = 0;
+    pc = 0;
     while(running) {
         if(!(pc < instructions.size()))
             break;
         i64 prev_pc = pc;
+        map_translation(prev_pc, code_size());
         InstructionOpcode opcode = (InstructionOpcode)instructions[pc];
         pc++;
         
@@ -109,12 +359,14 @@ bool ARMBuilder::generate() {
                 
                 ARMRegister reg_op = find_register(inst->op0);
                 emit_push(reg_op);
+                virtual_stack_pointer -= REGISTER_SIZE;
             } break;
             case BC_POP: {
                 auto inst = (InstBase_op1*)base;
                 
                 ARMRegister reg_dst = alloc_register(inst->op0);
                 emit_pop(reg_dst);
+                virtual_stack_pointer += REGISTER_SIZE;
             } break;
             case BC_LI32: {
                 auto inst = (InstBase_op1_imm32*)base;
@@ -125,7 +377,7 @@ bool ARMBuilder::generate() {
                     emit_movt(reg_dst, inst->imm32 >> 16);
             } break;
             case BC_LI64: {
-                
+                Assert(("BC_LI64 not allowed in ARM gen",false));
             } break;
             case BC_INCR: {
                 auto inst = (InstBase_op1_imm16*)base;
@@ -137,113 +389,499 @@ bool ARMBuilder::generate() {
                     emit_add_imm(reg_dst, reg_dst, inst->imm16);
                 }
             } break;
+            case BC_ALLOC_ARGS:
             case BC_ALLOC_LOCAL: {
                 auto inst = (InstBase_op1_imm16*)base;
                 int imm = inst->imm16;
                 
                 Assert(inst->op0 == BC_REG_INVALID);
                 
+                if(opcode == BC_ALLOC_ARGS) {
+                    int misalignment = (virtual_stack_pointer + imm) % FRAME_SIZE;
+                    misalignments.add(misalignment);
+                    if(misalignment != 0) {
+                        imm += FRAME_SIZE - misalignment;
+                    }
+                }
+                
                 if(imm != 0) {
                     ARMRegister reg_dst = ARM_REG_SP;
                     emit_sub_imm(reg_dst, reg_dst, imm);
                 }
+                virtual_stack_pointer -= imm;
+                push_offsets.add(0); // needed for SET_ARG
             } break;
-            case BC_ALLOC_ARGS: {
-                
-            } break;
+            case BC_FREE_ARGS:
             case BC_FREE_LOCAL: {
                 auto inst = (InstBase_imm16*)base;
                 int imm = inst->imm16;
+                
+                if(opcode == BC_FREE_ARGS) {
+                    int misalignment = misalignments.last();
+                    misalignments.pop();
+                    if(misalignment != 0) {
+                        imm += FRAME_SIZE - misalignment;
+                    }
+                }
                 
                 if(imm != 0) {
                     ARMRegister reg_dst = ARM_REG_SP;
                     emit_add_imm(reg_dst, reg_dst, imm);
                 }
-            } break;
-            case BC_FREE_ARGS: {
                 
+                ret_offset -= imm;
+                virtual_stack_pointer += imm;
+                push_offsets.pop(); // needed for SET_ARG
             } break;
             case BC_SET_ARG: {
+                auto inst = (InstBase_op1_ctrl_imm16*)base;
+
+                ARMRegister reg_dst = ARM_REG_FP;
+                ARMRegister reg_op = find_register(inst->op0);
+
+                // this code is required with stdcall or unixcall
+                // betcall ignores this
+                int arg_index = inst->imm16 / REGISTER_SIZE;
+                if(arg_index >= recent_set_args.size()) {
+                    recent_set_args.resize(arg_index + 1);
+                }
+                recent_set_args[arg_index].control = inst->control;
+
+                Assert(push_offsets.size()); // bytecode is missing ALLOC_ARGS if this fires
                 
+                int off = inst->imm16 + push_offsets.last();
+                Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
+                emit_str(reg_dst, reg_op, off);
             } break;
             case BC_GET_PARAM: {
+                auto inst = (InstBase_op1_ctrl_imm16*)base;
+                
+                ARMRegister reg_dst = ARM_REG_FP;
+                ARMRegister reg_op = find_register(inst->op0);
+
+                int off = inst->imm16 + FRAME_SIZE;
+                if(tinycode->call_convention == UNIXCALL) {
+                    int param_index = inst->imm16 / REGISTER_SIZE;
+                    Assert(param_index < accessed_params.size());
+                    off = accessed_params[param_index].offset_from_rbp;
+                }
+                Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
+                emit_ldr(reg_dst, reg_op, off);
+                
+                // if(IS_CONTROL_SIGNED(base->control)) {
+                //     emit_movsx(reg0->reg, reg0->reg, inst->control);
+                // } else if(!IS_CONTROL_FLOAT(base->control)) {
+                //     emit_movzx(reg0->reg, reg0->reg, inst->control);
+                // }
                 
             } break;
             case BC_GET_VAL: {
-                
+                auto inst = (InstBase_op1_ctrl_imm16*)base;
+                auto call_base = (InstBase_link_call_imm32*)last_inst_call;
+                auto call_base_r = (InstBase_op1_link_call*)last_inst_call;
+                CallConvention conv = call_base->call;
+                if(last_inst_call->opcode == BC_CALL_REG)
+                    conv = call_base_r ->call;
+                switch(conv) {
+                    // case BETCALL: {
+                    //     FIX_PRE_OUT_OPERAND(0)
+
+                    //     X64Register reg_params = X64_REG_SP;
+                    //     int off = base->imm16 - FRAME_SIZE + ret_offset;
+                    //     emit_mov_reg_mem(reg0->reg, reg_params, base->control, off);
+                    
+                    //     if(IS_CONTROL_SIGNED(base->control)) {
+                    //         emit_movsx(reg0->reg, reg0->reg, base->control);
+                    //     } else if(!IS_CONTROL_FLOAT(base->control)) {
+                    //         emit_movzx(reg0->reg, reg0->reg, base->control);
+                    //     }
+                        
+                    //     FIX_POST_OUT_OPERAND(0)
+                    // } break;
+                    // case STDCALL:
+                    case UNIXCALL: {
+                        // TODO: We hope that an instruction after a call didn't
+                        //   overwrite the return value in RAX. We assert if it did.
+                        //   Should we reserve RAX after a call until we reach BC_GET_VAL
+                        //   and use the return value? No because some function do not
+                        //   anything so we would have wasted rax. Then what do we do?
+
+                        ARMRegister reg_dst = alloc_register(inst->op0);
+                        
+                        emit_mov(reg_dst, ARM_REG_R0);
+
+                        // auto reg0 = get_artifical_reg(n->reg0);
+                        // if(reg0->floaty) {
+                        //     reg0->reg = alloc_register(n->reg0, X64_REG_XMM0, true); 
+                        //     Assert(reg0->reg != X64_REG_INVALID);
+                        // } else {
+                        //     // X64_REG_A is used by mul and rdtsc, we can't reserve it
+                        //     // (well, we could but then we would need to temporarily push/pop rax before using it, instead we move A to a new register)
+                        //     FIX_PRE_OUT_OPERAND(0)
+                            
+                        //     if(IS_CONTROL_SIGNED(base->control)) {
+                        //         emit_movsx(reg0->reg, X64_REG_A, base->control);
+                        //     } else if(!IS_CONTROL_FLOAT(base->control)) {
+                        //         emit_movzx(reg0->reg, X64_REG_A, base->control);
+                        //     } else Assert(false);
+                            
+                        //     Assert(reg0->reg != X64_REG_INVALID);
+                        // }
+                    } break;
+                    default: Assert(false);
+                }
             } break;
             case BC_SET_RET: {
-                
+                auto inst = (InstBase_op1_ctrl_imm16*)base;
+                switch(tinycode->call_convention) {
+                    // case BETCALL: {
+                        
+                    //     X64Register reg_rets = X64_REG_BP;
+                    //     int off = base->imm16 - callee_saved_space;
+
+                    //     emit_mov_mem_reg(reg_rets, reg0->reg, base->control, off);
+                        
+                    // } break;
+                    // case STDCALL:
+                    case UNIXCALL: {
+
+                        ARMRegister reg_op = find_register(inst->op0);
+
+                        Assert(inst->imm16 == -REGISTER_SIZE);
+                        // Assert(reg0->floaty == (0 != IS_CONTROL_FLOAT(base->control)));
+                        
+                        emit_mov(ARM_REG_R0, reg_op);
+                        // if(reg0->floaty) {
+                        //     if(reg0->reg != X64_REG_XMM0)
+                        //         emit_mov_reg_reg(X64_REG_XMM0, reg0->reg, 1 << GET_CONTROL_SIZE(base->control));
+                        // } else {
+                        //     if(reg0->reg != X64_REG_A)
+                        //         emit_mov_reg_reg(X64_REG_A, reg0->reg);
+                        // }
+                    } break;
+                    default: Assert(false);
+                }
             } break;
             case BC_PTR_TO_LOCALS: {
+                auto inst = (InstBase_op1_imm16*)base;
                 
+                int off = inst->imm16 - callee_saved_space;
+                ARMRegister reg_dst = alloc_register(inst->op0);
+                emit_add_imm(reg_dst, ARM_REG_FP, off);
             } break;
             case BC_PTR_TO_PARAMS: {
+                auto inst = (InstBase_op1_imm16*)base;
+
+                int off = inst->imm16 + FRAME_SIZE;
+                if(tinycode->call_convention == UNIXCALL) {
+                    // In STDCALL, caller makes space for args and they are put there.
+                    // Sys V ABI convention does not so we make space for them in this call frame.
+                    // The offset is therefore not 'imm+FRAME_SIZE'.
+                    // if(is_entry_point) {
+                    //     off -= 16; // args on stack, no return address or previous rbp
+                    // } else {
+                        // TODO: Is the hardcoded 4 okay?
+                        if(inst->imm16 < 4 * REGISTER_SIZE) {
+                            off = -args_offset - inst->imm16 - REGISTER_SIZE;
+                        }
+                    // }
+                }
                 
+                ARMRegister reg_dst = alloc_register(inst->op0);
+                emit_add_imm(reg_dst, ARM_REG_FP, off);
             } break;
             case BC_CALL:
             case BC_CALL_REG: {
+                auto inst = (InstBase_link_call_imm32*)base;
+                Assert(opcode != BC_CALL_REG);
+                // auto base_r = (InstBase_op1_link_call*)n->base;
                 
+                CallConvention conv = inst->call;
+                LinkConvention link = inst->link;
+                Assert(link == LinkConvention::NONE);
+                
+                switch(conv) {
+                    // case BETCALL: break;
+                    // case STDCALL: {
+                    //     // recent_set_args
+                    //     for(int i=0;i<recent_set_args.size() && i < 4;i++) {
+                    //         auto& arg = recent_set_args[i];
+                    //         auto control = arg.control;
+
+                    //         int off = i * 8;
+                    //         X64Register reg_args = X64_REG_SP;
+                    //         X64Register reg = stdcall_normal_regs[i];
+                    //         if(IS_CONTROL_FLOAT(control))
+                    //             reg = stdcall_float_regs[i];
+                    //         else {
+                    //             emit_prefix(0, reg, reg);
+                    //             emit1(OPCODE_XOR_REG_RM);
+                    //             emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(reg));
+                    //         }
+                    //         emit_mov_reg_mem(reg,reg_args,control,off);
+                    //     }
+                    // } break;
+                    case UNIXCALL: {
+                        // if(recent_set_args.size() > 6) {
+                        //     Assert(("x64 gen can't handle Sys V ABI with more than 6 arguments.", false));
+                        // }
+                        int normal_count = 0;
+                        int float_count = 0;
+                        int stacked_count = 0;
+                        for(int i=0;i<recent_set_args.size();i++) {
+                            auto& arg = recent_set_args[i];
+                            auto control = arg.control;
+                            Assert(GET_CONTROL_SIZE(control) == CONTROL_32B);
+
+                            int off = i * REGISTER_SIZE;
+                            ARMRegister reg_args = ARM_REG_FP;
+                            // log::out << "control " <<(InstructionControl)control << "\n";
+                            
+                            // if(IS_CONTROL_FLOAT(control)) {
+                            //     if(float_count < 8) {
+                            //         // NOTE: We provide a better error message in the type checker.
+                            //         Assert(("x64 generator doesn't support more than 4 float arguments",float_count < 4));
+                                    
+                            //         X64Register reg = unixcall_float_regs[float_count];
+                            //         emit_mov_reg_mem(reg,reg_args,control,off);
+                            //     } else {
+                            //         X64Register tmp = X64_REG_A;
+                            //         emit_mov_reg_mem(X64_REG_A,reg_args,control, off);
+                            //         int dst_off = stacked_count * 8;
+                            //         emit_mov_mem_reg(reg_args,X64_REG_A,control, dst_off);
+                            //         stacked_count++;
+                            //     }
+                            //     float_count++;
+                            // } else {
+                            if(normal_count < 4) {
+                                ARMRegister reg = (ARMRegister)(ARM_REG_R0 + normal_count);
+                                // X64Register reg = unixcall_normal_regs[normal_count];
+                                emit_ldr(reg, reg_args, off);
+                            } else {
+                                ARMRegister tmp = ARM_REG_R4;
+                                int dst_off = stacked_count * REGISTER_SIZE;
+                                
+                                emit_ldr(tmp, reg_args, off);
+                                emit_str(tmp, reg_args, dst_off);
+                                stacked_count++;
+                            }
+                            normal_count++;
+                            // }
+                        }
+                    } break;
+                    default: Assert(false);
+                }
+                
+                
+                recent_set_args.resize(0);
+                ret_offset = 0;
+                
+                int offset = code_size();
+                emit_bl(0);
+                // necessary when adding internal func relocations
+                // +3 = 1 (opcode) + 1 (link) + 1 (convention)
+                map_strict_translation(prev_pc + 3, offset);
             } break;
             case BC_RET: {
-                emit_pop_fp_lr();
-                emit_bx(ARM_REG_LR);
+                
+                if(is_blank) {
+                    // user handles the rest
+                    emit_pop(ARM_REG_LR);
+                    emit_bx(ARM_REG_LR);
+                } else if(compiler->options->target == TARGET_LINUX_x64 && is_entry_point) {
+                    Assert(tinycode->call_convention == UNIXCALL);
+                    // emit1(OPCODE_MOV_REG_RM);
+                    // emit_modrm(MODE_REG, X64_REG_DI, X64_REG_A);
+
+                    // // we have to manually exit when linking with -nostdlib
+                    // emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    // emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                    // emit4((u32)SYS_exit);
+                    // emit2(OPCODE_2_SYSCALL);
+                    emit_pop(ARM_REG_LR);
+                    emit_bx(ARM_REG_LR);
+                } else {
+                    pop_callee_saved_regs();
+                    emit_pop_fp_lr();
+                    emit_bx(ARM_REG_LR);
+                }
             } break;
             case BC_JNZ: {
-                // auto inst = (InstBase_op1_imm32*)base;
-                // ARMRegister reg = find_register(inst->op0);
-                // emit_b(reg, inst->imm32);
+                auto inst = (InstBase_op1_imm32*)base;
+                ARMRegister reg = find_register(inst->op0);
+                emit_cmp_imm(reg, 0);
+                
+                int imm_offset = code_size();
+                emit_b(0, ARM_COND_NE);
+                
+                const u8 BYTE_OF_BC_JNZ = 1 + 1 + 4; // TODO: DON'T HARDCODE VALUES!
+                int jmp_bc_addr = prev_pc + BYTE_OF_BC_JNZ + inst->imm32;
+                addRelocation32(imm_offset, imm_offset, jmp_bc_addr);
             } break;
             case BC_JZ: {
-                // auto inst = (InstBase_op1_imm32*)base;
-                // ARMRegister reg = find_register(inst->op0);
-                // emit_cmp()
-                // emit_b(reg, inst->imm32);
+                auto inst = (InstBase_op1_imm32*)base;
+                ARMRegister reg = find_register(inst->op0);
+                emit_cmp_imm(reg, 0);
+                int imm_offset = code_size();
+                emit_b(0, ARM_COND_EQ);
+                
+                const u8 BYTE_OF_BC_JZ = 1 + 1 + 4; // TODO: DON'T HARDCODE VALUES!
+                int jmp_bc_addr = prev_pc + BYTE_OF_BC_JZ + inst->imm32;
+                addRelocation32(imm_offset, imm_offset, jmp_bc_addr);
+                
             } break;
             case BC_JMP: {
+                auto inst = (InstBase_imm32*)base;
+                
+                int imm_offset = code_size();
+                
+                emit_b(0, ARM_COND_AL);
+                
+                const u8 BYTE_OF_BC_JMP = 1 + 4; // TODO: DON'T HARDCODE VALUES!
+                int jmp_bc_addr = prev_pc + BYTE_OF_BC_JMP + inst->imm32;
+                addRelocation32(imm_offset, imm_offset, jmp_bc_addr);
                 
             } break;
             case BC_DATAPTR: {
-                
+                Assert(false);
             } break;
             case BC_EXT_DATAPTR: {
-                
+                Assert(false);
             } break;
             case BC_CODEPTR: {
-                
+                Assert(false);
             } break;
             case BC_ADD:
             case BC_SUB:
-            case BC_MUL: {
+            case BC_MUL:
+            case BC_DIV:
+            // comparisons
+            case BC_EQ:
+            case BC_NEQ:
+            case BC_LT:
+            case BC_LTE:
+            case BC_GT:
+            case BC_GTE:
+            // logical operations
+            case BC_LAND:
+            case BC_LOR:
+            {
                 auto inst = (InstBase_op2_ctrl*)base;
+                
+                Assert(!IS_CONTROL_FLOAT(inst->control));
                 
                 ARMRegister reg_dst = find_register(inst->op0);
                 ARMRegister reg_op = find_register(inst->op1);
                 
                 switch(opcode) {
-                    case BC_ADD: emit_add(reg_dst, reg_op, reg_op); break;
-                    case BC_SUB: emit_add(reg_dst, reg_op, reg_op); break;
+                    case BC_ADD: emit_add(reg_dst, reg_dst, reg_op); break;
+                    case BC_SUB: emit_add(reg_dst, reg_dst, reg_op); break;
                     case BC_MUL: {
                         ARMRegister reg_temp = alloc_register();
                         if(IS_CONTROL_SIGNED(inst->control)) {
-                            emit_smull(reg_dst, reg_temp, reg_op, reg_op);
+                            emit_smull(reg_dst, reg_temp, reg_dst, reg_op);
                         } else {
-                            emit_umull(reg_dst, reg_temp, reg_op, reg_op);
+                            emit_umull(reg_dst, reg_temp, reg_dst, reg_op);
                         }
                         free_register(reg_temp);
                     } break;
                     case BC_DIV: {
-                        ARMRegister reg_temp = alloc_register();
                         if(IS_CONTROL_SIGNED(inst->control)) {
-                            emit_smull(reg_dst, reg_temp, reg_op, reg_op);
+                            emit_sdiv(reg_dst, reg_dst, reg_op);
                         } else {
-                            emit_umull(reg_dst, reg_temp, reg_op, reg_op);
+                            emit_udiv(reg_dst, reg_dst, reg_op);
                         }
-                        free_register(reg_temp);
                     } break;
+                    case BC_EQ: {
+                        emit_cmp(reg_dst, reg_op);
+                        emit_movw(reg_dst, 1, ARM_COND_EQ);
+                        emit_movw(reg_dst, 0, ARM_COND_NE);
+                    } break;
+                    case BC_NEQ: {
+                        emit_cmp(reg_dst, reg_op);
+                        emit_movw(reg_dst, 0, ARM_COND_EQ);
+                        emit_movw(reg_dst, 1, ARM_COND_NE);
+                    } break;
+                    case BC_LT: {
+                        emit_cmp(reg_dst, reg_op);
+                        emit_movw(reg_dst, 1, ARM_COND_LT);
+                        emit_movw(reg_dst, 0, ARM_COND_GE);
+                    } break;
+                    case BC_GT: {
+                        emit_cmp(reg_dst, reg_op);
+                        emit_movw(reg_dst, 1, ARM_COND_GT);
+                        emit_movw(reg_dst, 0, ARM_COND_LE);
+                    } break;
+                    case BC_LTE: {
+                        emit_cmp(reg_dst, reg_op);
+                        emit_movw(reg_dst, 1, ARM_COND_LE);
+                        emit_movw(reg_dst, 0, ARM_COND_GT);
+                    } break;
+                    case BC_GTE: {
+                        emit_cmp(reg_dst, reg_op);
+                        emit_movw(reg_dst, 1, ARM_COND_GE);
+                        emit_movw(reg_dst, 0, ARM_COND_LT);
+                    } break;
+                    case BC_LAND: {
+                        // AND = r0 != 0 && r1 != 0
+                        emit_cmp_imm(reg_dst, 0);
+                        emit_movw(reg_dst, 1, ARM_COND_NE);
+                        emit_movw(reg_dst, 0, ARM_COND_EQ);
+                        
+                        emit_cmp_imm(reg_op, 0);
+                        emit_and_imm(reg_dst, reg_op, 1, ARM_COND_EQ);
+                        emit_and_imm(reg_dst, reg_op, 0, ARM_COND_NE);
+                    } break;
+                    case BC_LOR: {
+                        emit_orr(reg_dst, reg_dst, reg_op, true);
+                        emit_movw(reg_dst, 1, ARM_COND_EQ);
+                        emit_movw(reg_dst, 0, ARM_COND_NE);
+                    } break;
+                    case BC_BAND: {
+                        emit_and(reg_dst, reg_dst, reg_op);
+                    } break;
+                    case BC_BOR: {
+                        emit_orr(reg_dst, reg_dst, reg_op);
+                    } break;
+                    case BC_BXOR: {
+                        emit_eor(reg_dst, reg_dst, reg_op);
+                    } break;
+                    case BC_BLSHIFT: {
+                        emit_lsl(reg_dst, reg_dst, reg_op);
+                    } break;
+                    case BC_BRSHIFT: {
+                        emit_lsr(reg_dst, reg_dst, reg_op);
+                    } break;
+                    
                 }
                 
                 //  TODO: less than, equal, bitwise ops
+            } break;
+            case BC_MOD: {
+                auto inst = (InstBase_op2_ctrl*)base;
+                ARMRegister reg_dst = find_register(inst->op0);
+                ARMRegister reg_op = find_register(inst->op1);
+                
+                ARMRegister reg_temp = alloc_register();
+                ARMRegister reg_temp2 = alloc_register();
+                
+                Assert(!IS_CONTROL_FLOAT(inst->control));
+                
+                /*
+                op0 - (op0 / op1) * op1
+                mov r0
+                mov r1
+                div r2 r0 r1
+                mul r2 r2 r1
+                sub r0 r0 r2
+                */
+                if(IS_CONTROL_SIGNED(inst->control)) {
+                    emit_sdiv(reg_temp, reg_dst, reg_op);
+                    emit_smull(reg_temp, reg_temp2, reg_dst, reg_op);
+                    emit_sub(reg_dst, reg_dst, reg_temp);
+                }
+                free_register(reg_temp);
+                free_register(reg_temp2);
             } break;
             case BC_CAST: {
             } break;
@@ -253,13 +891,70 @@ bool ARMBuilder::generate() {
             }
         }
     }
-    
-    // NOTE: We should have emitted a ret instruction and any instructions we emit here will never execute.
-    
     // emit_movw(ARM_REG_R0, 5);
     // emit_movw(ARM_REG_R1, 6);
     // emit_add(ARM_REG_R0, ARM_REG_R0, ARM_REG_R1);
     // emit_bx(ARM_REG_LR);
+    
+    // NOTE: We should have emitted a ret instruction and any instructions we emit here will never execute.
+    
+     for(int i=0;i<tinycode->call_relocations.size();i++) {
+        auto& r = tinycode->call_relocations[i];
+        if(r.funcImpl->astFunction->linkConvention == NATIVE)
+            continue;
+        int ind = r.funcImpl->tinycode_id - 1;
+        // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";
+        program->addInternalFuncRelocation(current_funcprog_index, get_map_translation(r.pc), ind);
+    }
+    
+    for(int i=0;i<relativeRelocations.size();i++) {
+        auto& rel = relativeRelocations[i];
+        if(rel.bc_addr == tinycode->size()) {
+            set_imm24(rel.imm32_addr, code_size() - rel.inst_addr);
+        } else {
+            if(get_map_translation(rel.bc_addr) == 0) {
+                // The BC instruction we refer to was skipped by the x64 generator.
+                // Instead we take the next closest translation.
+                // TODO: Optimize. Preferably don't iterate at all.
+                //   If we must then check 64-bit integers for 0 at a time instead of 8-bit integers.
+                // int closest_translation = 0;
+                // for(int i=rel.bc_addr;i<_bc_to_x64_translation.size();i++) {
+                //     if(_bc_to_x64_translation[i] != 0) { // check 64-bit values instead
+                //         closest_translation = _bc_to_x64_translation[i];
+                //         break;
+                //     }
+                // }
+                // if(closest_translation != 0) {
+                //     map_translation(rel.bc_addr, closest_translation);
+                // } else {
+                    log::out << log::RED << "Bug in compiler when translating BC to ARM addresses. This ARM instruction "<<log::GREEN<<NumberToHex(rel.inst_addr,true) <<log::RED<< " wanted to refer to "<<log::GREEN<<rel.bc_addr<<log::RED<<" (BC address) but ther was no mapping of the BC address."<<"\n";
+                // }
+            }
+            
+            Assert(rel.bc_addr>=0); // native functions not implemented
+            int addr_of_next_inst = rel.imm32_addr + 8;
+            i32 value = get_map_translation(rel.bc_addr) - addr_of_next_inst;
+            set_imm24(rel.imm32_addr, value/4);
+            // BL (immediate) instruction expected a relative offset divided by 4.
+            // If you are wondering why the relocation is zero then it is because it
+            // is relative and will jump to the next instruction. This isn't necessary so
+            // they should be optimised away. Don't do this now since it makes the conversion
+            // confusing.
+        }
+    }
+    Assert(bytecode->externalRelocations.size() == 0);
+    // TODO: Optimize, store external relocations per tinycode instead
+    // bool found = bytecode->externalRelocations.size() == 0;
+    // for(int i=0;i<bytecode->externalRelocations.size();i++) {
+    //     auto& rel = bytecode->externalRelocations[i];
+    //     if(tinycode->index == rel.tinycode_index) {
+    //         int off = get_map_translation(rel.pc);
+    //         program->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.type == BC_REL_GLOBAL_VAR);
+    //         // found = true;
+    //         // break;
+    //     }
+    // }
+    
     
     funcprog->printHex();
     
@@ -268,22 +963,35 @@ bool ARMBuilder::generate() {
     return true;
 }
 
+void ARMBuilder::set_imm24(int index, int imm) {
+    // @TODO: Make sure immediate fits within 24 bits
+    funcprog->text[index+0] = imm & 0xFF;
+    funcprog->text[index+1] = (imm>>8) & 0xFF;
+    funcprog->text[index+2] = (imm>>16) & 0xFF;
+}
 ARMRegister ARMBuilder::alloc_register(BCRegister reg) {
     if(reg == BC_REG_LOCALS)
         return ARM_REG_FP;
+    int max_used = 0;
+    int arm_reg = 1;
     for(int i=1;i<ARM_REG_GENERAL_MAX;i++) {
         auto& info = arm_registers[i];
-        if(info.used)
+        if(info.used) {
+            if(max_used < info.last_used) {
+                max_used = info.last_used;
+                arm_reg = i;
+            }
             continue;
+        }
         info.used = true;
         info.bc_reg = reg;
+        info.last_used = 0;
         
         auto& bc_info = bc_registers[reg];
         bc_info.arm_reg = (ARMRegister)i;
         return (ARMRegister)i;
     }
-    Assert(("no free registers",false));
-    return ARM_REG_INVALID;
+    return (ARMRegister)arm_reg;
 }
 ARMRegister ARMBuilder::find_register(BCRegister reg) {
     if(reg == BC_REG_LOCALS)
@@ -292,6 +1000,13 @@ ARMRegister ARMBuilder::find_register(BCRegister reg) {
     // Assert(bc_info.arm_reg != ARM_REG_INVALID);
     if(bc_info.arm_reg == ARM_REG_INVALID)
         return ARM_REG_R0; // @nocheckin temporary
+    for(int i=1;i<ARM_REG_GENERAL_MAX;i++) {
+        if(i == bc_info.arm_reg) {
+            arm_registers[bc_info.arm_reg].last_used = 0;
+        } else {
+            arm_registers[bc_info.arm_reg].last_used++;
+        }
+    }
     return bc_info.arm_reg;
 }
 void ARMBuilder::free_register(ARMRegister reg) {
@@ -321,13 +1036,12 @@ void ARMBuilder::emit_add(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
     
     emit4((u32)inst);
 }
-void ARMBuilder::emit_add_imm(ARMRegister rd, ARMRegister rn, int imm) {
+void ARMBuilder::emit_add_imm(ARMRegister rd, ARMRegister rn, int imm, int cond) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/ADD--immediate--ARM-?lang=en
     // imm == 0 could be a bug so we assert
     Assert(imm > 0 && imm <= 0xFFF);
     ARM_CLAMP_dn()
     int S = 0;
-    int cond = ARM_COND_AL;
     int imm12 = imm;
     int inst = BITS(cond, 4, 28) | BITS(0b0010100, 7, 21) | BITS(S, 1, 20)
         | BITS(Rn,4,16) | BITS(Rd,4,12) | BITS(imm12, 12, 0);
@@ -384,6 +1098,116 @@ void ARMBuilder::emit_umull(ARMRegister rdlo, ARMRegister rdhi, ARMRegister rn, 
     
     emit4((u32)inst);
 }
+void ARMBuilder::emit_sdiv(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/SDIV
+    ARM_CLAMP_dnm()
+    int inst = BITS(0b111110111001, 12, 20) | BITS(Rn, 4, 16)
+        | BITS(0xF,4,12) | BITS(Rd,4, 8) | BITS(0xF,4, 4) | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_udiv(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/UDIV
+    ARM_CLAMP_dnm()
+    int inst = BITS(0b111110111011, 12, 20) | BITS(Rn, 4, 16)
+        | BITS(0xF,4,12) | BITS(Rd,4, 8) | BITS(0xF,4, 4) | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_and(ARMRegister rd, ARMRegister rn, ARMRegister rm, int cond) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/AND--register-
+    ARM_CLAMP_dnm()
+    int S = 0;
+    int imm5 = 0;
+    int type = ARM_SHIFT_TYPE_LSL;
+    int inst = BITS(cond, 4, 28) | BITS(0b0000000, 7, 21) | BITS(S,1,20) | BITS(Rn, 4, 16)
+        | BITS(Rd,4, 12) | BITS(imm5,5, 7) | BITS(type,2,5) | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_and_imm(ARMRegister rd, ARMRegister rn, int imm, int cond) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/AND--register-
+    ARM_CLAMP_dn()
+    // @TODO: Check range of 12-bit immediate
+    int S = 0;
+    int imm12 = imm & 0xFFF;
+    int inst = BITS(cond, 4, 28) | BITS(0b0010000, 7, 21) | BITS(S,1,20) | BITS(Rn, 4, 16)
+        | BITS(Rd,4, 12) | BITS(imm12,12,0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_orr(ARMRegister rd, ARMRegister rn, ARMRegister rm, bool set_flags) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/ORR--register-
+    ARM_CLAMP_dnm()
+    int cond = ARM_COND_AL;
+    int S = set_flags ? 1 : 0;
+    int imm5 = 0;
+    int type = ARM_SHIFT_TYPE_LSL;
+    int inst = BITS(cond, 4, 28) | BITS(0b0001100, 7, 21) | BITS(S,1,20) | BITS(Rn, 4, 16)
+        | BITS(Rd,4, 12) | BITS(imm5,5, 7) | BITS(type,2,5) | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_eor(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/EOR--register-
+    ARM_CLAMP_dnm()
+    int cond = ARM_COND_AL;
+    int S = 0;
+    int imm5 = 0;
+    int type = ARM_SHIFT_TYPE_LSL;
+    int inst = BITS(cond, 4, 28) | BITS(0b0000001, 7, 21) | BITS(S,1,20) | BITS(Rn, 4, 16)
+        | BITS(Rd,4, 12) | BITS(imm5,5, 7) | BITS(type,2,5) | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_lsl(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LSL--register-
+    ARM_CLAMP_dnm()
+    int cond = ARM_COND_AL;
+    int S = 0;
+    int imm5 = 0;
+    int type = ARM_SHIFT_TYPE_LSL;
+    int inst = BITS(cond, 4, 28) | BITS(0b0001101, 7, 21) | BITS(S,1,20) | BITS(Rd, 4, 12)
+        | BITS(Rm,4, 8) | BITS(0b0001,4,4) | BITS(Rn, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_lsr(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LSR--register-
+    ARM_CLAMP_dnm()
+    int cond = ARM_COND_AL;
+    int S = 0;
+    int imm5 = 0;
+    int type = ARM_SHIFT_TYPE_LSL;
+    int inst = BITS(cond, 4, 28) | BITS(0b0001101, 7, 21) | BITS(S,1,20) | BITS(Rd, 4, 12)
+        | BITS(Rm,4, 8) | BITS(0b0011,4,4) | BITS(Rn, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_cmp(ARMRegister rn, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/CMP--register-
+    ARM_CLAMP_nm()
+    int cond = ARM_COND_AL;
+    int imm5 = 0;
+    int type = ARM_SHIFT_TYPE_LSL;
+    int inst = BITS(cond, 4, 28) | BITS(0b00010101, 8, 20) | BITS(Rn, 4, 16)
+        | BITS(imm5,5,7) | BITS(type, 2, 5) | BITS(Rm, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_cmp_imm(ARMRegister rn, int imm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/CMP--immediate-
+    Assert(rn > 0 && rn < ARM_REG_MAX);
+    // @TODO: Fix 12-bit immediate range check
+    // Assert(imm& >= 0x800 && imm <= 0x7FF);
+    u8 Rn = rn-1;
+    int cond = ARM_COND_AL;
+    int imm12 = imm & 0xFFF;
+    int inst = BITS(cond, 4, 28) | BITS(0b00110101, 8, 20) | BITS(Rn, 4, 16)
+        | BITS(imm, 12, 0);
+    
+    emit4((u32)inst);
+}
 void ARMBuilder::emit_mov(ARMRegister rd, ARMRegister rm) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/MOV--register--ARM-?lang=en
     ARM_CLAMP_dm()
@@ -394,10 +1218,9 @@ void ARMBuilder::emit_mov(ARMRegister rd, ARMRegister rm) {
     
     emit4((u32)inst);
 }
-void ARMBuilder::emit_movw(ARMRegister rd, u16 imm16) {
+void ARMBuilder::emit_movw(ARMRegister rd, u16 imm16, int cond) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/MOV--immediate-
     ARM_CLAMP_d()
-    int cond = ARM_COND_AL;
     int imm4 = imm16 >> 12;
     int imm12 = imm16 & 0x0FFF;
     int inst = BITS(cond, 4, 28) | BITS(0b00110000, 8, 20) | BITS(imm4, 4, 16)
@@ -493,7 +1316,7 @@ void ARMBuilder::emit_str(ARMRegister rt, ARMRegister rn, i16 imm16) {
     Assert(rt > 0 && rt < ARM_REG_MAX);
     Assert(rn > 0 && rn < ARM_REG_MAX);
     // immediate can't be larger than 12-bits. it can be signed, not including the 12 bits
-    Assert(((imm16 & 0x8000) && (imm16 & 0x7000) == 0) || (imm16 & 0xF000) == 0);
+    Assert(((imm16 & 0x8000) && (imm16 & 0x7000) == 0x7000) || (imm16 & 0xF000) == 0);
     u8 Rt = rt-1;
     u8 Rn = rn-1;
     
