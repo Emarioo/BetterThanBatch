@@ -1,5 +1,4 @@
 
-
 okay(6)
 
 fn @export okay(x: i32) -> i32 {

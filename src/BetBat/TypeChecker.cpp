@@ -212,7 +212,7 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
             asize = 1; // disable alignment
         }
         if(alignedSize<asize)
-            alignedSize = asize > 8 ? 8 : asize;
+            alignedSize = asize > REGISTER_SIZE ? REGISTER_SIZE : asize;
 
         if(offset % asize != 0) {
             offset += asize - (offset % asize);
@@ -3280,7 +3280,7 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
         int size = info.ast->getTypeSize(argImpl.typeId);
         int asize = info.ast->getTypeAlignedSize(argImpl.typeId);
         if(func->callConvention == STDCALL || func->callConvention == UNIXCALL)
-            asize = 8;
+            asize = REGISTER_SIZE;
         // Assert(size != 0 && asize != 0);
         // Actually, don't continue here. argImpl.offset shouldn't be uninitialized.
         if(size ==0 || asize == 0) // Probably due to an error which was logged. We don't want to assert and crash the compiler.
@@ -3294,9 +3294,9 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
         // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
         offset += size;
     }
-    int diff = offset%8;
+    int diff = offset%REGISTER_SIZE;
     if(diff!=0)
-        offset += 8-diff; // padding to ensure 8-byte alignment
+        offset += REGISTER_SIZE-diff; // padding to ensure 8-byte alignment
 
     // log::out << "total size "<<offset<<"\n";
     // reverse
@@ -3343,7 +3343,7 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
         int size = info.ast->getTypeSize(retImpl.typeId);
         int asize = info.ast->getTypeAlignedSize(retImpl.typeId);
         if(func->callConvention == STDCALL || func->callConvention == UNIXCALL)
-            asize = 8;
+            asize = REGISTER_SIZE;
         // Assert(size != 0 && asize != 0);
         if(size == 0 || asize == 0){ // We don't want to crash the compiler with assert.
             continue;
@@ -3358,8 +3358,8 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
         if(outTypes)
             outTypes->add(retImpl.typeId);
     }
-    if((offset)%8!=0)
-        offset += 8-(offset)%8; // padding to ensure 8-byte alignment
+    if((offset)%REGISTER_SIZE!=0)
+        offset += REGISTER_SIZE-(offset)%REGISTER_SIZE; // padding to ensure 8-byte alignment
 
     // for(int i=0;i<(int)funcImpl->signature.returnTypes.size();i++){
     //     auto& ret = funcImpl->signature.returnTypes[i];
@@ -5143,4 +5143,6 @@ void TyperContext::init_context(Compiler* compiler) {
     reporter = &compiler->reporter;
     typeChecker = &compiler->typeChecker;
     scratch_allocator.init(0x10000);
+    FRAME_SIZE = compiler->arch.FRAME_SIZE;
+    REGISTER_SIZE = compiler->arch.REGISTER_SIZE;
 }

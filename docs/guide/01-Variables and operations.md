@@ -31,6 +31,8 @@ These are the (current) primitive types:
 
 **Unsigned integers**: u8, u16, u32, u64 (cannot represent a negative number)
 
+**Word integers**: uword, iword (the size depends on the target architecture, uword = u32 on a 32-bit system while uword is u64 on a 64-bit system)
+
 **Character**: char (represents a 1-byte character, ASCII)
 
 **Boolean**: bool (represents a 1-byte true or false value)
@@ -51,6 +53,8 @@ final := num0 + num1 // type of final is infered from the expression
 chr: char = 'A'
 yes: bool = true
 ```
+
+**NOTE:** Some implementation detail, uword/iword is an alias for the specific integer type and will show up as i64 in most error messages (on a 64-bit system).
 
 ## Literals
 Literals refer to the constant numbers, strings, and floats in the code.

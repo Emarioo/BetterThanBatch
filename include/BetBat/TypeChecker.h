@@ -31,6 +31,9 @@ struct TyperContext : public PhaseContext {
     TyperContext() : info(*this) { } // well this is dumb
     TyperContext& info;
 
+    int FRAME_SIZE = -1;
+    int REGISTER_SIZE = -1;
+
     // u32 current_import_id;
     
     int funcDepth=0; // FUNC_ENTER

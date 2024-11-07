@@ -432,7 +432,7 @@ void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_
 }
 void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed){
     if(tinycode->call_convention == CallConvention::STDCALL||tinycode->call_convention == CallConvention::UNIXCALL) {
-        Assert(imm == -8);
+        Assert(imm == -8 || imm == -4);
     }
     
     emit_opcode(BC_SET_RET);

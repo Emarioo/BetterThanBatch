@@ -990,6 +990,7 @@ void Compiler::processImports() {
                         c.bytecode = bytecode;
                         c.reporter = &reporter;
                         c.compiler = this;
+                        c.init_context(this);
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
                         have_prepared_global_data = true;
                     }

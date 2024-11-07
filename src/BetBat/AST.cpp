@@ -169,7 +169,9 @@ AST *AST::Create(Compiler* compiler) {
 
     AST *ast = TRACK_ALLOC(AST);
     new(ast) AST(compiler);
-
+    
+    ast->REGISTER_SIZE = compiler->arch.REGISTER_SIZE;
+    ast->FRAME_SIZE = compiler->arch.FRAME_SIZE;
     ast->initLinear();
 
     ast->globalScope = ast->createBody();
@@ -194,7 +196,7 @@ AST *AST::Create(Compiler* compiler) {
     ADD(AST_FLOAT64, 8);
     ADD(AST_BOOL, 1);
     ADD(AST_CHAR, 1);
-    ADD(AST_NULL, 8);
+    ADD(AST_NULL, ast->REGISTER_SIZE);
     ADD(AST_STRING, 0);
     ADD(AST_ID,0);
     ADD(AST_SIZEOF,0);
@@ -1661,7 +1663,7 @@ engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
     }
     return logger;
 }
-TypeInfo* AST::createPredefinedType(StringView name, ScopeId scopeId, TypeId id, u32 size) {
+TypeInfo* AST::createPredefinedType(StringView name, ScopeId scopeId, TypeId id, int size) {
     auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
     new(ptr) TypeInfo{name, id, size};
     ptr->scopeId = scopeId;
@@ -1946,7 +1948,7 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
     
     // create type
     auto type = (TypeInfo *)allocate(sizeof(TypeInfo));
-    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), 8};
+    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), REGISTER_SIZE};
     type->scopeId = globalScopeId;
     if(type->id.getId() >= _typeInfos.size()) {
         _typeInfos.resize(type->id.getId() + AST_PRIMITIVE_COUNT);
@@ -1972,7 +1974,7 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
         int size =  getTypeSize(arg.typeId);
         int asize = getTypeAlignedSize(arg.typeId);
         if(conv == STDCALL || conv == UNIXCALL)
-            asize = 8;
+            asize = REGISTER_SIZE;
         if(size ==0 || asize == 0) // Probably due to an error which was logged. We don't want to assert and crash the compiler.
             continue;
         if((offset%asize) != 0){
@@ -1981,9 +1983,9 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
         arg.offset = offset;
         offset += size;
     }
-    int diff = offset%8;
+    int diff = offset%REGISTER_SIZE;
     if(diff!=0)
-        offset += 8-diff; // padding to ensure 8-byte alignment
+        offset += REGISTER_SIZE-diff; // padding to ensure 8-byte alignment
 
     func_type->argSize = offset;
 
@@ -1994,7 +1996,7 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
         int size =  getTypeSize(ret.typeId);
         int asize = getTypeAlignedSize(ret.typeId);
         if(conv == STDCALL || conv == UNIXCALL)
-            asize = 8;
+            asize = REGISTER_SIZE;
         if(size == 0 || asize == 0){ // We don't want to crash the compiler with assert.
             continue;
         }
@@ -2005,8 +2007,8 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
         ret.offset = offset;
         offset += size;
     }
-    if((offset)%8!=0)
-        offset += 8-(offset)%8; // padding to ensure 8-byte alignment
+    if((offset)%REGISTER_SIZE!=0)
+        offset += REGISTER_SIZE-(offset)%REGISTER_SIZE; // padding to ensure 8-byte alignment
     func_type->returnSize = offset;
         
     return type;
@@ -2045,7 +2047,7 @@ TypeInfo* AST::findOrAddFunctionSignature(FunctionSignature* signature) {
     
     // create type
     auto type = (TypeInfo *)allocate(sizeof(TypeInfo));
-    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), 8};
+    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), REGISTER_SIZE};
     type->scopeId = globalScopeId;
     if(type->id.getId() >= _typeInfos.size()) {
         _typeInfos.resize(type->id.getId() + AST_PRIMITIVE_COUNT);
@@ -2308,7 +2310,7 @@ void AST::destroy(ASTExpression *expression) {
     expression->~ASTExpression();
     // engone::Free(expression, sizeof(ASTExpression));
 }
-u32 TypeInfo::getSize() {
+int TypeInfo::getSize() {
     if (astStruct) {
         if(structImpl) {
             return structImpl->size;
@@ -2320,15 +2322,6 @@ u32 TypeInfo::getSize() {
 }
 StructImpl* TypeInfo::getImpl(){
     return structImpl;
-}
-u32 TypeInfo::alignedSize() {
-    if (astStruct) {
-        if(structImpl)
-            return structImpl->alignedSize;
-        else
-            return 0;
-    }
-    return _size > 8 ? 8 : _size;
 }
 void AST::DecomposeNamespace(StringView view, StringView* out_namespace, StringView* out_name){
     *out_namespace = {};
@@ -2615,7 +2608,7 @@ std::string AST::nameOfFuncImpl(FuncImpl* impl) {
     return name;
 }
 int AST::getTypeSize(TypeId typeId){
-    if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
+    if(typeId.isPointer()) return REGISTER_SIZE;
     if(!typeId.isNormalType()) return -1;
     auto ti = getTypeInfo(typeId);
     if(!ti)
@@ -2623,7 +2616,7 @@ int AST::getTypeSize(TypeId typeId){
     return ti->getSize();
 }
 int AST::getTypeAlignedSize(TypeId typeId) {
-    if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
+    if(typeId.isPointer()) return REGISTER_SIZE;
     if(!typeId.isNormalType()) return 0;
     auto ti = getTypeInfo(typeId);
     if(!ti)
@@ -2637,7 +2630,7 @@ int AST::getTypeAlignedSize(TypeId typeId) {
         else
             return 0;
     }
-    return ti->_size > 8 ? 8 : ti->_size;
+    return ti->_size > REGISTER_SIZE ? REGISTER_SIZE : ti->_size;
 }
 void ASTExpression::printArgTypes(AST* ast, QuickArray<TypeId>& argTypes){
     using namespace engone;

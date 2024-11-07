@@ -73,8 +73,8 @@ struct ARMBuilder : public ProgramBuilder {
     
     void emit_push(ARMRegister r);
     void emit_pop(ARMRegister r);
-    void emit_push_reglist(ARMRegister* regs, int count);
-    void emit_pop_reglist(ARMRegister* regs, int count);
+    void emit_push_reglist(const ARMRegister* regs, int count);
+    void emit_pop_reglist(const ARMRegister* regs, int count);
     void emit_push_fp_lr() {
         ARMRegister regs[]{ ARM_REG_FP, ARM_REG_LR };
         emit_push_reglist(regs,2);

@@ -459,11 +459,14 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
     
     outTypeId = "";
     for(int i=0;i<envs.size();i++) {
-        outTypeId += envs[i].buffer; 
+        outTypeId += envs[i].buffer;
+    }
+    if(outTypeId == "uword" || outTypeId == "iword") {
+        outTypeId = outTypeId[0]+std::to_string(compiler->arch.REGISTER_SIZE * 8);
     }
     if(tokensParsed)
         *tokensParsed = info.gethead() - startToken;
-        
+    
     // log::out << "Parsed: '" << outTypeId << "'\n";
     return SIGNAL_SUCCESS;
     #undef NEXT

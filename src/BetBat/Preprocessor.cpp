@@ -1227,35 +1227,37 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         if(new_lexer_import->chunks.size() == 0)
             layer->concat_next_token = false;
         
+        lexer::TokenType token_type = lexer::TOKEN_IDENTIFIER;
         if(layer->concat_next_token) {
             int token_count = new_lexer_import->getTokenCount();
             
             // TODO: Allow binary and hexidecimal literals
             auto tok = lexer->getTokenFromImport(new_import_id, token_count-1);
             auto prev_src = lexer->getTokenSource_unsafe({tok});
-            if((tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_STRING || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
-            (token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY || token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || token.type == lexer::TOKEN_LITERAL_STRING || token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
-                if(tok.type == lexer::TOKEN_LITERAL_STRING)
-                    layer->quote_next_token = true;
+            token_type = tok.type;
+            // if((tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_STRING || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
+            // (token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY || token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || token.type == lexer::TOKEN_LITERAL_STRING || token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
+            //     if(tok.type == lexer::TOKEN_LITERAL_STRING)
+            //         layer->quote_next_token = true;
                 
-                // TODO: There is bug if we concat two identifiers which become a keyword
+            //     // TODO: There is bug if we concat two identifiers which become a keyword
                 
-                if(TOKEN_IS_KEYWORD(tok.type)) {
-                    new_data += TOK_KEYWORD_NAME(tok.type);
-                } else {
-                    new_data += lexer->getStdStringFromToken(tok);
-                }
-                if(view) {
-                    new_data += std::string(*view);
-                } else if(TOKEN_IS_KEYWORD(token.type)) {
-                    new_data += TOK_KEYWORD_NAME(token.type);
-                } else {
-                    new_data += lexer->getStdStringFromToken(token);
-                }
-                ln = prev_src->line;
-                col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
-                lexer->popTokenFromImport(new_lexer_import);
-            } else {
+            //     if(TOKEN_IS_KEYWORD(tok.type)) {
+            //         new_data += TOK_KEYWORD_NAME(tok.type);
+            //     } else {
+            //         new_data += lexer->getStdStringFromToken(tok);
+            //     }
+            //     if(view) {
+            //         new_data += std::string(*view);
+            //     } else if(TOKEN_IS_KEYWORD(token.type)) {
+            //         new_data += TOK_KEYWORD_NAME(token.type);
+            //     } else {
+            //         new_data += lexer->getStdStringFromToken(token);
+            //     }
+            //     ln = prev_src->line;
+            //     col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
+            //     lexer->popTokenFromImport(new_lexer_import);
+            // } else {
                 // Once again why do we set concat to false here?
                 // layer->concat_next_token = false;
                 new_data += lexer->tostring(tok, true);
@@ -1264,7 +1266,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 ln = prev_src->line;
                 col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
                 lexer->popTokenFromImport(new_lexer_import);
-            }
+            // }
         } else if(layer->quote_next_token) {
             if((token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
                 if(view) {
@@ -1307,7 +1309,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             } else {
                 StringView new_view = new_data;
                 lexer::Token new_token{};
-                new_token.type = lexer::TOKEN_IDENTIFIER;
+                new_token.type = token_type;
                 new_token.flags = lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED;
                 new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
                 lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, ln, col);

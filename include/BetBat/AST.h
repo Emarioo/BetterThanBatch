@@ -384,16 +384,16 @@ struct FunctionSignature {
     CallConvention convention=BETCALL;
 };
 struct TypeInfo {
-    TypeInfo(const StringView& name, TypeId id, u32 size=0) :  name(name), id(id), originalId(id), _size(size) {}
-    TypeInfo(TypeId id, u32 size=0) : id(id), originalId(id), _size(size) {}
+    TypeInfo(const StringView& name, TypeId id, int size=0) :  name(name), id(id), originalId(id), _size(size) {}
+    TypeInfo(TypeId id, int size=0) : id(id), originalId(id), _size(size) {}
     // StringView name;
     std::string name;
     TypeId id={}; // can be virtual and point to a different type
     
     TypeId originalId={};
-    u32 _size=0;
+    int _size=0;
     // u32 _alignedSize=0;
-    u32 arrlen=0;
+    int arrlen=0;
     ASTStruct* astStruct=nullptr;
     StructImpl* structImpl=nullptr; // nullptr means pure/base poly type 
     ASTEnum* astEnum=nullptr;
@@ -409,9 +409,8 @@ struct TypeInfo {
         int offset = 0;
     };
 
-    u32 getSize();
+    int getSize();
     // 1,2,4,8
-    u32 alignedSize();
     MemberData getMember(const std::string& name);
     MemberData getMember(int index);
     StructImpl* getImpl();
@@ -419,7 +418,7 @@ struct TypeInfo {
 struct FuncImpl {
     // std::string name;
     ASTFunction* astFunction = nullptr;
-    u32 usages = 0;
+    int usages = 0;
     bool isUsed() { return usages!=0; }
     
     FunctionSignature signature;
@@ -475,10 +474,10 @@ struct Identifier {
 };
 
 struct IdentifierVariable : public Identifier {
-    i32 memberIndex = -1; // only used with MEMBER type
+    int memberIndex = -1; // only used with MEMBER type
     int argument_index = 0;
 
-    PolyVersions<i32> versions_dataOffset{};
+    PolyVersions<int> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
 
     bool is_import_global = false;
@@ -987,8 +986,8 @@ struct ASTScope : ASTNode {
 struct Compiler;
 struct AST {
     AST(Compiler* compiler) : compiler(compiler) {}
-    Compiler* compiler = nullptr;
 
+    Compiler* compiler = nullptr;
     //-- Creation and destruction
     static AST* Create(Compiler* compiler);
     static void Destroy(AST* ast);
@@ -1013,7 +1012,7 @@ struct AST {
 
     // DynamicArray<TypeInfo*> _typeInfos; // TODO: Use a bucket array
     TypeInfo* createType(StringView name, ScopeId scopeId);
-    TypeInfo* createPredefinedType(StringView name, ScopeId scopeId, TypeId id, u32 size=0);
+    TypeInfo* createPredefinedType(StringView name, ScopeId scopeId, TypeId id, int size=0);
     // isValid() of the returned TypeId will be false if
     // type couldn't be converted.
     TypeId convertToTypeId(StringView typeString, ScopeId scopeId, bool transformVirtual);
@@ -1030,6 +1029,8 @@ struct AST {
     TypeId ensureNonVirtualId(TypeId id);
 
     //-- OTHER
+    int REGISTER_SIZE = -1;
+    int FRAME_SIZE = -1;
     ASTScope* globalScope=0;
     MUTEX(lock_globalScope);
     // QuickArray<ASTScope*> importScopes{};
@@ -1118,7 +1119,7 @@ struct AST {
          // (char*)engone::Allocate(linearAllocationMax);
         Assert(linearAllocation);
     }
-    void* allocate(u32 size) {
+    void* allocate(int size) {
         // const int align = 8;
         // int diff = (align - (linearAllocationUsed % align)) % align;
         // linearAllocationUsed += diff;
@@ -1136,7 +1137,7 @@ struct AST {
         
         // u32 new_index = engone::atomic_add((volatile i32*)&linearAllocationUsed, size) - size;
 
-        u32 new_index = linearAllocationUsed; // TODO: Bad
+        int new_index = linearAllocationUsed; // TODO: Bad
         linearAllocationUsed += size;
         lock_linearAllocation.unlock();
         

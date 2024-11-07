@@ -104,16 +104,19 @@ bool ARMBuilder::generate() {
     callee_saved_space = 0;
     if(enable_callee_saved_registers) {
         // TODO: We can use one instruction to push all registers we want
-        for(int i=0;i<callee_saved_regs_len;i++) {
-            emit_push(callee_saved_regs[i]);
-            callee_saved_space += REGISTER_SIZE;
-        }
+        // for(int i=0;i<callee_saved_regs_len;i++) {
+        //     emit_push(callee_saved_regs[i]);
+        //     callee_saved_space += REGISTER_SIZE;
+        // }
+        emit_push_reglist(callee_saved_regs, callee_saved_regs_len);
+        callee_saved_space += REGISTER_SIZE * callee_saved_regs_len;
     }
     auto pop_callee_saved_regs=[&]() {
         if(enable_callee_saved_registers) {
-            for(int i=callee_saved_regs_len-1;i>=0;i--) {
-                emit_pop(callee_saved_regs[i]);
-            }
+            // for(int i=callee_saved_regs_len-1;i>=0;i--) {
+            //     emit_pop(callee_saved_regs[i]);
+            // }
+            emit_pop_reglist(callee_saved_regs, callee_saved_regs_len);
         }
     };
     
@@ -280,7 +283,7 @@ bool ARMBuilder::generate() {
                         // emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
                     } else {
                         reg = ARM_REG_R0;
-                        int src_off = FRAME_SIZE + stacked_count * 8;
+                        int src_off = FRAME_SIZE + stacked_count * REGISTER_SIZE;
                         emit_ldr(reg, ARM_REG_FP, src_off);
                         emit_str(reg, ARM_REG_FP, param.offset_from_rbp);
                         // emit_mov_reg_mem(reg,reg_args,control,src_off);
@@ -596,6 +599,8 @@ bool ARMBuilder::generate() {
                 Assert(opcode != BC_CALL_REG);
                 // auto base_r = (InstBase_op1_link_call*)n->base;
                 
+                last_inst_call = base;
+                
                 CallConvention conv = inst->call;
                 LinkConvention link = inst->link;
                 Assert(link == LinkConvention::NONE);
@@ -688,7 +693,7 @@ bool ARMBuilder::generate() {
                     // user handles the rest
                     emit_pop(ARM_REG_LR);
                     emit_bx(ARM_REG_LR);
-                } else if(compiler->options->target == TARGET_LINUX_x64 && is_entry_point) {
+                } else if(is_entry_point) {
                     Assert(tinycode->call_convention == UNIXCALL);
                     // emit1(OPCODE_MOV_REG_RM);
                     // emit_modrm(MODE_REG, X64_REG_DI, X64_REG_A);
@@ -1248,6 +1253,10 @@ void ARMBuilder::emit_push(ARMRegister r) {
     int inst = BITS(cond, 4, 28) | BITS(0b100100101101, 12, 16) | BITS(reglist, 16, 0);
     
     emit4((u32)inst);
+    
+    if (push_offsets.size())
+        push_offsets.last() += REGISTER_SIZE;
+    ret_offset += REGISTER_SIZE;
 }
 void ARMBuilder::emit_pop(ARMRegister r) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/POP--ARM-?lang=en
@@ -1258,8 +1267,12 @@ void ARMBuilder::emit_pop(ARMRegister r) {
     int inst = BITS(cond, 4, 28) | BITS(0b100010111101, 12, 16) | BITS(reglist, 16, 0);
     
     emit4((u32)inst);
+    
+    if (push_offsets.size())
+        push_offsets.last() -= REGISTER_SIZE;
+    ret_offset -= REGISTER_SIZE;
 }
-void ARMBuilder::emit_push_reglist(ARMRegister* regs, int count) {
+void ARMBuilder::emit_push_reglist(const ARMRegister* regs, int count) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/PUSH?lang=en
     Assert(count > 0);
     int cond = ARM_COND_AL;
@@ -1273,8 +1286,12 @@ void ARMBuilder::emit_push_reglist(ARMRegister* regs, int count) {
     int inst = BITS(cond, 4, 28) | BITS(0b100100101101, 12, 16) | BITS(reglist, 16, 0);
     
     emit4((u32)inst);
+    
+    if (push_offsets.size())
+        push_offsets.last() += REGISTER_SIZE * count;
+    ret_offset += REGISTER_SIZE * count;
 }
-void ARMBuilder::emit_pop_reglist(ARMRegister* regs, int count) {
+void ARMBuilder::emit_pop_reglist(const ARMRegister* regs, int count) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/POP--ARM-?lang=en
     Assert(count > 0);
     int cond = ARM_COND_AL;
@@ -1288,6 +1305,10 @@ void ARMBuilder::emit_pop_reglist(ARMRegister* regs, int count) {
     int inst = BITS(cond, 4, 28) | BITS(0b100010111101, 12, 16) | BITS(reglist, 16, 0);
     
     emit4((u32)inst);
+    
+    if (push_offsets.size())
+        push_offsets.last() -= REGISTER_SIZE * count;
+    ret_offset -= REGISTER_SIZE * count;
 }
 void ARMBuilder::emit_ldr(ARMRegister rt, ARMRegister rn, i16 imm16) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LDR--immediate--ARM-?lang=en
