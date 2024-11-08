@@ -30,4 +30,20 @@ You can override which ARM toolchain is used using `--arm-tools arm-none-eabi` (
 # Targeting specific ARM processor
 **NOT SUPPPORTED YET**
 
-prints and printc is implemented to use UART for xilinx-synq-a9.
+# Useful commands
+Read about QEMU arguments here: https://www.qemu.org/docs/master/system/qemu-manpage.html
+
+```bash
+# Emulate main.elf in QEMU
+qemu-system-arm -semihosting -nographic -serial mon:stdio -M xilinx-zynq-a9 -cpu cortex-a9 -kernel main.elf
+
+# Debug main.elf in QEMU and create a server for gdb to connect to
+qemu-system-arm -semihosting -nographic -serial mon:stdio -M xilinx-zynq-a9 -cpu cortex-a9 -kernel main.elf -s -S
+
+# Debug QEMU using gdb (in a second terminal)
+arm-none-eabi-gdb main.elf -ex "target remote :1234"
+```
+
+# Modules for ARM processors
+
+implement prints and printc for UART for xilinx-synq-a9.

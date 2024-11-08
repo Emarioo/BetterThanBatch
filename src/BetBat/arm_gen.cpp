@@ -318,6 +318,16 @@ bool ARMBuilder::generate() {
             tinycode->print(prev_pc, prev_pc + 1, bytecode, nullptr, false, &print_cache);
             log::out << "\n";
         }
+
+        for(int i=0;i<sp_moments.size();i++) {
+            auto& moment = sp_moments[i];
+            // log::out << "check " << moment.pop_at_bc_index<<"\n";
+            if(prev_pc == moment.pop_at_bc_index) {
+                pop_stack_moment(i);
+                i--;
+                // break; do not break, there may be more moment to pop on the at the same bc index
+            }
+        }
         
         switch(opcode) {
             case BC_HALT: {
@@ -439,7 +449,6 @@ bool ARMBuilder::generate() {
             case BC_SET_ARG: {
                 auto inst = (InstBase_op1_ctrl_imm16*)base;
 
-                ARMRegister reg_dst = ARM_REG_FP;
                 ARMRegister reg_op = find_register(inst->op0);
 
                 // this code is required with stdcall or unixcall
@@ -454,12 +463,11 @@ bool ARMBuilder::generate() {
                 
                 int off = inst->imm16 + push_offsets.last();
                 Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
-                emit_str(reg_dst, reg_op, off);
+                emit_str(reg_op, ARM_REG_SP, off);
             } break;
             case BC_GET_PARAM: {
                 auto inst = (InstBase_op1_ctrl_imm16*)base;
                 
-                ARMRegister reg_dst = ARM_REG_FP;
                 ARMRegister reg_op = find_register(inst->op0);
 
                 int off = inst->imm16 + FRAME_SIZE;
@@ -469,7 +477,7 @@ bool ARMBuilder::generate() {
                     off = accessed_params[param_index].offset_from_rbp;
                 }
                 Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
-                emit_ldr(reg_dst, reg_op, off);
+                emit_ldr(reg_op, ARM_REG_FP, off);
                 
                 // if(IS_CONTROL_SIGNED(base->control)) {
                 //     emit_movsx(reg0->reg, reg0->reg, inst->control);
@@ -688,7 +696,15 @@ bool ARMBuilder::generate() {
                 map_strict_translation(prev_pc + 3, offset);
             } break;
             case BC_RET: {
+                 // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
                 
+                int total = 0;
+                if(callee_saved_space - args_offset > 0) {
+                    total += callee_saved_space - args_offset;
+                }
+                if(total != 0)
+                    emit_add_imm(ARM_REG_SP, ARM_REG_SP, (total));
+
                 if(is_blank) {
                     // user handles the rest
                     emit_pop(ARM_REG_LR);
@@ -722,6 +738,8 @@ bool ARMBuilder::generate() {
                 const u8 BYTE_OF_BC_JNZ = 1 + 1 + 4; // TODO: DON'T HARDCODE VALUES!
                 int jmp_bc_addr = prev_pc + BYTE_OF_BC_JNZ + inst->imm32;
                 addRelocation32(imm_offset, imm_offset, jmp_bc_addr);
+
+                push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
             } break;
             case BC_JZ: {
                 auto inst = (InstBase_op1_imm32*)base;
@@ -734,6 +752,7 @@ bool ARMBuilder::generate() {
                 int jmp_bc_addr = prev_pc + BYTE_OF_BC_JZ + inst->imm32;
                 addRelocation32(imm_offset, imm_offset, jmp_bc_addr);
                 
+                push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
             } break;
             case BC_JMP: {
                 auto inst = (InstBase_imm32*)base;
@@ -746,6 +765,21 @@ bool ARMBuilder::generate() {
                 int jmp_bc_addr = prev_pc + BYTE_OF_BC_JMP + inst->imm32;
                 addRelocation32(imm_offset, imm_offset, jmp_bc_addr);
                 
+                // Don't mess with moments if we jump back, aka continue and loop statements
+                if (inst->imm32 > 0) {
+                    // Only mess with moments if we have an associated conditional jump (and if we have any moments at all)
+                    // We determine association if the jmp hops to an instruction after the on the conditional one
+                    // hops too.
+                    // There may be flaws, what if we have nested jmp in some sketchy configuration?
+                    // What about break statements. They don't jump backwards.
+                    if (sp_moments.size() > 0) {
+                        auto& last = sp_moments.last();
+                        if (jmp_bc_addr >= last.pop_at_bc_index) {
+                            pop_stack_moment();
+                            push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
+                        }
+                    }
+                }
             } break;
             case BC_DATAPTR: {
                 Assert(false);

@@ -49,3 +49,7 @@ sandbox
 
 # secret keys
 secure
+
+# personal convenient scripts
+deb.bat
+qem.bat
