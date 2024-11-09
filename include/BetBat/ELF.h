@@ -9,6 +9,9 @@
     
     Might be useful:
     https://gist.github.com/DhavalKapil/2243db1b732b211d0c16fd5d9140ab0b
+
+    ARM relocations
+    https://refspecs.linuxbase.org/elf/ARMELFA08.pdf
 */
 #pragma once
 
@@ -302,6 +305,24 @@ namespace elf {
     //     Elf64_Xword	p_memsz;		/* Segment size in memory */
     //     Elf64_Xword	p_align;		/* Segment alignment */
     // } Elf64_Phdr;
+
+    #define R_ARM_NONE 0          //  Any No relocation. Encodes dependencies between sections.
+    #define R_ARM_PC24 1          //  ARM B/BL S – P + A
+    #define R_ARM_ABS32 2         //  32-bit word S + A
+    #define R_ARM_REL32 3         //  32-bit word S – P + A
+    #define R_ARM_PC13 4          //  ARM LDR r, [pc,…] S–P+A
+    #define R_ARM_ABS16 5         //  16-bit half-word S + A
+    #define R_ARM_ABS12 6         //  ARM LDR/STR S+A
+    #define R_ARM_THM_ABS5 7      //  Thumb LDR/STR S+A
+    #define R_ARM_ABS8 8          //  8-bit byte S + A
+    #define R_ARM_SBREL32 9       //  32-bit word S – B + A
+    #define R_ARM_THM_PC22 10     // Thumb BL pair S – P+ A
+    #define R_ARM_THM_PC8 11      // Thumb LDR r, [pc,…] S–P+A
+    #define R_ARM_AMP_VCALL9 12   // AMP VCALL S – B + A
+    #define R_ARM_SWI24 13        // ARM SWI S + A
+    #define R_ARM_THM_SWI8 14     // Thumb SWI S + A
+    #define R_ARM_XPC25 15        // ARM BLX S – P+ A
+    #define R_ARM_THM_XPC22 16    // Thumb BLX pair S – P+ A
 }
 
 struct FileELF {

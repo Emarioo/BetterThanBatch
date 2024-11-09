@@ -6913,9 +6913,16 @@ SignalIO GenContext::generateGlobalData() {
         VirtualMachine vm{};
         vm.silent = true;
         vm.init_stack();
-        void* ptr_to_global_data = bytecode->dataSegment.data() + stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
-        *((void**)(vm.stack.data() + vm.stack.max - REGISTER_SIZE)) = ptr_to_global_data;
-
+        if(REGISTER_SIZE == 4) {
+            void* ptr_to_global_data = bytecode->dataSegment.data() + stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
+            u32 mem = 0x1000'0000;
+            u32 mem_size = bytecode->dataSegment.size();
+            vm.add_memory_mapping(mem, (u64)ptr_to_global_data, mem_size);
+            *((u32*)(vm.stack.data() + vm.stack.max - REGISTER_SIZE)) = mem;
+        } else {
+            void* ptr_to_global_data = bytecode->dataSegment.data() + stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
+            *((void**)(vm.stack.data() + vm.stack.max - REGISTER_SIZE)) = ptr_to_global_data;
+        }
         // let VM evaluate expression and put into global data
         vm.execute(bytecode, temp_tinycode->name, true);
     }

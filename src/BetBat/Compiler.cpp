@@ -1282,6 +1282,10 @@ void Compiler::run(CompileOptions* options) {
     bytecode = Bytecode::Create();
     bytecode->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;
+
+    
+    bytecode->target = options->target;
+    bytecode->arch = arch;
     
     program = Program::Create();
     program->debugInformation = bytecode->debugInformation;

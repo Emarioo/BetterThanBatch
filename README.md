@@ -25,10 +25,10 @@ Example of unfinished multiplayer game
 |Part|Status|
 |-|-|
 |Windows build|Yes|
-|Linux (Ubuntu) build|Mostly works, still fixing things|
+|Linux (Ubuntu) build|Yes|
 |Documentation|Half complete guide|
 |x86-64|Yes|
-|ARM-64|No|
+|ARM|Work in progress|
 |Test cases|Covers simple cases|
 
 |Feature|Status|

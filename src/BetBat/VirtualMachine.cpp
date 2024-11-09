@@ -110,6 +110,10 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         log::out << log::RED << "Tinycode " << tinycode_name << " not found\n";
         return;
     }
+
+    REGISTER_SIZE = bytecode->arch.REGISTER_SIZE;
+    FRAME_SIZE = bytecode->arch.FRAME_SIZE;
+
     DynamicArray<TinyBytecode*> checked_codes{};
     bool compute_related_codes = true; // we compute so that we only load relevant libraries
 
@@ -280,12 +284,30 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         init_stack();
     }
 
-    i64 pc = 0;
-    stack_pointer = (i64)(stack.data() + stack.max);
-    base_pointer = stack_pointer;
+    bool force_mapping = false;
+    bool temp_ptr_was_mapped = false;
+    if(bytecode->target == TARGET_ARM) {
+        force_mapping = true;
+        u64 stack_start = 0xFFFF'FFFF;
+        bool yes = add_memory_mapping(stack_start-stack.max, (u64)stack.data(), stack.max);
+        stack_pointer = stack_start;
+        base_pointer = stack_pointer;
+    } else {
+        stack_pointer = (i64)(stack.data() + stack.max);
+        base_pointer = stack_pointer;
+    }
+    // #define CHECK_PTR_MAPPED(PTR) if(force_mapping && !temp_ptr_was_mapped) { log::out << log::RED << "PTR "<<PTR<<" was not mapped\n"; return; }
+    auto CHECK_PTR_MAPPED = [&](void* PTR) {
+        if(force_mapping && !temp_ptr_was_mapped) { 
+            log::out << log::RED << "PTR "<<PTR<<" was not mapped\n"; 
+            return; 
+        }
+    };
     
     auto CHECK_STACK = [&]() {
-        if(stack_pointer < (i64)stack.data() || stack_pointer > (i64)(stack.data()+stack.max)) {
+        void* ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+        CHECK_PTR_MAPPED(ptr);
+        if((i64)ptr < (i64)stack.data() || (i64)ptr > (i64)(stack.data()+stack.max)) {
             log::out << log::RED << "VirtualMachine: Stack overflow\n";
         }
     };
@@ -324,6 +346,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     // NOTE: We don't need to track relative stack pointer and stack moments like we do in x64 generator because
     //   the VM is running in real time. We have the actual stack pointer and can align it to 16-bytes whenever we want.
 
+    i64 pc = 0;
     i64 prev_pc;
     InstructionOpcode opcode;
     BCRegister op0=BC_REG_INVALID, op1, op2;
@@ -354,7 +377,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             logging = true;
     }
     // interactive = true;
-    // logging = true;
+    logging = true;
     
     while(running) {
         for(int i=0;i<breakpoints.size();i++) {
@@ -488,10 +511,10 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
             if(opcode == BC_ALLOC_ARGS) {
                 push_offsets.add(0);
-                i64 misalignment = (stack_pointer + imm) & 0xF;
+                i64 misalignment = (stack_pointer + imm) % FRAME_SIZE;
                 misalignments.add(misalignment);
                 if(misalignment != 0) {
-                    imm += 16 - misalignment;
+                    imm += FRAME_SIZE - misalignment;
                 }
             }
             stack_pointer -= imm;
@@ -511,7 +534,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 i64 misalignment = misalignments.last();
                 misalignments.pop();
                 if(misalignment != 0) {
-                    imm += 16 - misalignment;
+                    imm += FRAME_SIZE - misalignment;
                 }
             }
             stack_pointer += imm;
@@ -545,7 +568,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             } else {
                 imm = 0;
             }
-            void* ptr = (void*)(registers[mop] + imm);
+            void* ptr = map_pointer(registers[mop] + imm, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
             ptr_from_mov = ptr;
             Assert(ptr);
             
@@ -575,7 +599,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             pc+=2;
             int size = GET_CONTROL_SIZE(control);
 
-            void* ptr = (void*)(stack_pointer + push_offsets.last() + imm);
+            void* ptr = map_pointer(stack_pointer + push_offsets.last() + imm, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
             ptr_from_mov = ptr;
 
             if(size == CONTROL_8B)       *(i8*) ptr = registers[op0];
@@ -590,8 +615,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             pc+=2;
             int size = GET_CONTROL_SIZE(control);
             
-            int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
-            void* ptr = (void*)(base_pointer + FRAME_SIZE + imm);
+            void* ptr = map_pointer(base_pointer + FRAME_SIZE + imm, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
 
             if(size == CONTROL_8B)       registers[op0] = *(i8*) ptr;
             else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
@@ -607,7 +632,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             
             Assert(imm < 0);
             // int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
-            void* ptr = (void*)(base_pointer + imm);
+            void* ptr = map_pointer(base_pointer + imm, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
             ptr_from_mov = ptr;
 
             if(size == CONTROL_8B)       *(i8*) ptr = registers[op0];
@@ -625,9 +651,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             
             Assert(has_return_values_on_stack);
             Assert(imm < 0);
-            int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
             // NOTE: push_offset makes sure push and pop instructions doesn't mess with vals/args registers/references
-            void* ptr = (void*)(stack_pointer + ret_offset + imm - FRAME_SIZE);
+            void* ptr = map_pointer(stack_pointer + ret_offset + imm - FRAME_SIZE, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
 
             if(size == CONTROL_8B)       registers[op0] = *(i8*) ptr;
             else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
@@ -646,19 +672,20 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             imm = *(i16*)&instructions[pc];
             pc+=2;
 
-            int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
-            void* ptr = (void*)(base_pointer + FRAME_SIZE + imm);
 
-            registers[op0] = (i64)ptr;
+            registers[op0] = base_pointer + FRAME_SIZE + imm;
         } break;
         case BC_PUSH: {
             op0 = (BCRegister)instructions[pc++];
             
-            stack_pointer -= 8;
+            stack_pointer -= REGISTER_SIZE;
             CHECK_STACK();
-            *(i64*)stack_pointer = registers[op0];
-            push_offsets.last() += 8;
-            ret_offset += 8;
+
+            auto ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+            memcpy(ptr, &registers[op0], REGISTER_SIZE);
+            push_offsets.last() += REGISTER_SIZE;
+            ret_offset += REGISTER_SIZE;
 
             // TODO: We have to be careful not to overwrite returned values and then accessing them
             //   with get_val. This can happen if we return 8 1-byte -integers and push those values 8 times.
@@ -670,11 +697,13 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         case BC_POP: {
             op0 = (BCRegister)instructions[pc++];
             
-            registers[op0] = *(i64*)stack_pointer;
-            stack_pointer += 8;
+            void* ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+            memcpy(&registers[op0], ptr, REGISTER_SIZE);
+            stack_pointer += REGISTER_SIZE;
             CHECK_STACK();
-            ret_offset -= 8;
-            push_offsets.last() -= 8;
+            ret_offset -= REGISTER_SIZE;
+            push_offsets.last() -= REGISTER_SIZE;
         } break;
         case BC_LI32: {
             op0 = (BCRegister)instructions[pc++];
@@ -684,6 +713,10 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             *(i32*)&registers[op0] = imm;
         } break;
         case BC_LI64: {
+            if(REGISTER_SIZE != 8) {
+                log::out << log::RED <<"VM: BC_LI64 not available on non 64-bit systems.\n";
+                return;
+            }
             op0 = (BCRegister)instructions[pc++];
             imm = *(i64*)&instructions[pc];
             pc+=8;
@@ -759,13 +792,21 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 ret_offset = 0;
             } else {
                 int new_tiny_index = imm-1;
-                stack_pointer -= 8;
+                
+                stack_pointer -= REGISTER_SIZE;
                 CHECK_STACK();
-                *(i64*)stack_pointer = pc | ((i64)tiny_index << 32);
-
-                stack_pointer -= 8;
+                void* ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+                CHECK_PTR_MAPPED(ptr);
+                if(REGISTER_SIZE == 4) {
+                    *(i32*)ptr = pc | ((i64)tiny_index << 16);
+                } else {
+                    *(i64*)ptr = pc | ((i64)tiny_index << 32);
+                }
+                stack_pointer -= REGISTER_SIZE;
                 CHECK_STACK();
-                *(i64*)stack_pointer = base_pointer;
+                ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+                CHECK_PTR_MAPPED(ptr);
+                memcpy(ptr, &base_pointer, REGISTER_SIZE);
                 base_pointer = stack_pointer;
                 registers[BC_REG_LOCALS] = base_pointer;
 
@@ -802,13 +843,21 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 break;
             }
             
-            stack_pointer -= 8;
+            stack_pointer -= REGISTER_SIZE;
             CHECK_STACK();
-            *(i64*)stack_pointer = pc | ((i64)tiny_index << 32);
+            void* ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+            if(REGISTER_SIZE == 4) {
+                *(i32*)ptr = pc | ((i64)tiny_index << 16);
+            } else {
+                *(i64*)ptr = pc | ((i64)tiny_index << 32);
+            }
 
-            stack_pointer -= 8;
+            stack_pointer -= REGISTER_SIZE;
             CHECK_STACK();
-            *(i64*)stack_pointer = base_pointer;
+            ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+            memcpy(ptr, &base_pointer, REGISTER_SIZE);
             base_pointer = stack_pointer;
             registers[BC_REG_LOCALS] = base_pointer;
 
@@ -827,25 +876,43 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         case BC_RET: {
             i64 diff = stack_pointer - (i64)stack.data();
             if(diff == (i64)(stack.max)) {
+                // no previous call frame so we quit
                 running = false;
                 break;
             }
 
-            base_pointer = *(i64*)stack_pointer;
-            stack_pointer += 8;
+            void* ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+            if(REGISTER_SIZE == 4) {
+                base_pointer = *(i32*)ptr;
+            } else {
+                base_pointer = *(i64*)ptr;
+            }
+            stack_pointer += REGISTER_SIZE;
             CHECK_STACK();
 
-            i64 encoded_pc = *(i64*)stack_pointer;
-            stack_pointer += 8;
+            ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+            i64 encoded_pc;
+            if(REGISTER_SIZE == 4) {
+                encoded_pc = *(i32*)ptr;
+            } else {
+                encoded_pc = *(i64*)ptr;
+            }
+            stack_pointer += REGISTER_SIZE;
             CHECK_STACK();
 
             registers[BC_REG_LOCALS] = base_pointer;
 
             has_return_values_on_stack = true;
             ret_offset = 0;
-
-            pc = encoded_pc & 0xFFFF'FFFF;
-            tiny_index = encoded_pc >> 32;
+            if(REGISTER_SIZE == 4) {
+                pc = encoded_pc & 0xFFFF;
+                tiny_index = (encoded_pc >> 16) && 0xFFFF;
+            } else {
+                pc = encoded_pc & 0xFFFF'FFFF;
+                tiny_index = encoded_pc >> 32;
+            }
             tinycode = bytecode->tinyBytecodes[tiny_index];
         } break;
         case BC_DATAPTR: {
@@ -861,9 +928,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             LinkConvention l = (LinkConvention)instructions[pc++];
 
+            log::out << log::RED << "Cannot access imported variable in virtual machine (not implemented)\n";
             running = false;
             break;
-            log::out << log::RED << "Cannot access imported variable in virtual machine (not implemented)\n";
             // Assert(bytecode->dataSegment.size() > imm);
             // registers[op0] = (u64)(bytecode->dataSegment.data() + imm);
         } break;
@@ -997,18 +1064,25 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op1 = (BCRegister)instructions[pc++];
             u8 batchsize = (u8)instructions[pc++];
 
-            Assert(registers[op0] > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
+            void* ptr = map_pointer(registers[op0], temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+
+            Assert((u64)ptr > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
             Assert(registers[op1] < 0x100000); // we rarely memzero memory larger than this
-            memset((void*)registers[op0],0, registers[op1]);
+            memset(ptr, 0, registers[op1]);
         } break;
         case BC_MEMCPY: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             op2 = (BCRegister)instructions[pc++];
-            Assert(registers[op0] > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
-            Assert(registers[op1] > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
+            void* ptr = map_pointer(registers[op0], temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+            void* ptr1 = map_pointer(registers[op1], temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr1);
+            Assert((u64)ptr > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
+            Assert((u64)ptr1 > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
             Assert(registers[op2] < 0x100000); // we rarely memzero memory larger than this
-            memcpy((void*)registers[op0],(void*)registers[op1], registers[op2]);
+            memcpy(ptr, ptr1, registers[op2]);
         } break;
         case BC_ASM: {
             u8 inputs = (u8)instructions[pc++];
@@ -1215,25 +1289,31 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
 
-            registers[op0] = strlen((char*)registers[op1]);
+            void* ptr = map_pointer(registers[op1], temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
+            registers[op0] = strlen((char*)ptr);
         } break;
         case BC_ATOMIC_ADD: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
 
+            void* ptr = map_pointer(registers[op0], temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
             Assert(GET_CONTROL_SIZE(control) == CONTROL_32B);
             Assert(!IS_CONTROL_FLOAT(control));
-            registers[op0] = atomic_add((volatile i32*)registers[op0], registers[op1]);
+            registers[op0] = atomic_add((volatile i32*)ptr, registers[op1]);
         } break;
         case BC_ATOMIC_CMP_SWAP: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             op2 = (BCRegister)instructions[pc++];
 
+            void* ptr = map_pointer(registers[op0], temp_ptr_was_mapped);
+            CHECK_PTR_MAPPED(ptr);
             #ifdef OS_WINDOWS
             // NOTE: op1 is old value (comparand), op2 is new value (exchange)
-            long original_value = _InterlockedCompareExchange((volatile long*)registers[op0], registers[op2], registers[op1]);
+            long original_value = _InterlockedCompareExchange((volatile long*)ptr, registers[op2], registers[op1]);
             registers[op0] = original_value;
             #else
             Assert(("ATOMIC_CMP_SWAP not implemented in VM on Linux",false));
@@ -1412,4 +1492,30 @@ void VirtualMachine::executeNative(int tiny_index){
         // } break;
         default: Assert(false);
     }
+}
+bool VirtualMachine::add_memory_mapping(u64 start, u64 physical, u64 size) {
+    // check for overlap
+    for(int i=0;i<memory_map.size();i++) {
+        auto& map = memory_map[i];
+        if(start + size > map.start_address && start < map.start_address + map.size)
+            return false;
+    }
+    MemoryMapping map{};
+    map.start_address = start;
+    map.physical_start_address = physical;
+    map.size = size;
+    memory_map.add(map);
+    return true;
+}
+void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
+    // find mapping
+    for(int i=0;i<memory_map.size();i++) {
+        auto& map = memory_map[i];
+        if(virtual_pointer >= map.start_address && virtual_pointer < map.start_address + map.size) {
+            was_mapped = true;
+            return (void*)(map.physical_start_address + virtual_pointer - map.start_address);
+        }
+    }
+    was_mapped = false;
+    return (void*)virtual_pointer;
 }

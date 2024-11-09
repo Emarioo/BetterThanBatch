@@ -2,6 +2,7 @@
 // #include "BetBat/Tokenizer.h"
 #include "BetBat/NativeRegistry.h"
 #include "BetBat/DebugInformation.h"
+#include "BetBat/CompilerOptions.h"
 #include "BetBat/ExceptionInformation.h"
 
 #include "BetBat/AST.h"
@@ -422,6 +423,9 @@ struct Bytecode {
     
     u32 getMemoryUsage();
     
+    TargetPlatform target = {};
+    ArchitectureInfo arch = {};
+
     DynamicArray<TinyBytecode*> tinyBytecodes;
     int index_of_main = -1; // rename to index_of_entry_point?
 

@@ -3,13 +3,20 @@
 
 #include "BetBat/arm_defs.h"
 
-// https://armconverter.com/?disasm
+/*
+ https://armconverter.com/?disasm
 
-// @TODO: We may need to add .ARM.attributes section in ELF to get
-//    correct disassembly from objdump.
-//    https://github.com/ARM-software/abi-aa/blob/main/addenda32/addenda32.rst
+ @TODO: We may need to add .ARM.attributes section in ELF to get
+    correct disassembly from objdump.
+    https://github.com/ARM-software/abi-aa/blob/main/addenda32/addenda32.rst
 
-// @TODO: Can we use THUMB instructions?
+Relocations
+https://refspecs.linuxbase.org/elf/ARMELFA08.pdf
+Reloc on arm
+https://stackoverflow.com/questions/64838776/understanding-arm-relocation-example-str-x0-tmp-lo12zbi-paddr
+
+@TODO: Can we use THUMB instructions?
+*/
 
 bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode) {
     using namespace engone;
@@ -295,6 +302,12 @@ bool ARMBuilder::generate() {
             }
         }
     } else Assert(false);
+
+    struct DataptrReloc {
+        int pc_offset; // arm code offset (not bytecode)
+        int data_offset;
+    };
+    DynamicArray<DataptrReloc> dataptr_relocs{};
     
     InstBase* last_inst_call = nullptr;
     
@@ -360,7 +373,7 @@ bool ARMBuilder::generate() {
                 auto inst = (InstBase_op2_ctrl_imm16*)base;
                 
                 i16 imm = 0;
-                if(opcode == BC_MOV_RM_DISP16)
+                if(opcode == BC_MOV_MR_DISP16)
                     imm = inst->imm16;
                 ARMRegister reg_dst = find_register(inst->op0);
                 ARMRegister reg_op = find_register(inst->op1);
@@ -782,7 +795,15 @@ bool ARMBuilder::generate() {
                 }
             } break;
             case BC_DATAPTR: {
-                Assert(false);
+                auto inst = (InstBase_op1_imm32*)base;
+                ARMRegister reg = alloc_register(inst->op0);
+                int imm_offset = code_size();
+                emit_ldr(reg, ARM_REG_PC, 0);
+
+                DataptrReloc rel{};
+                rel.pc_offset = imm_offset;
+                rel.data_offset = inst->imm32;
+                dataptr_relocs.add(rel);
             } break;
             case BC_EXT_DATAPTR: {
                 Assert(false);
@@ -937,13 +958,22 @@ bool ARMBuilder::generate() {
     
     // NOTE: We should have emitted a ret instruction and any instructions we emit here will never execute.
     
+    for(int i=0;i<dataptr_relocs.size();i++) {
+        auto& rel = dataptr_relocs[i];
+
+        i32 disp32_offset = code_size();
+        emit4((u32)0);
+        set_imm12(rel.pc_offset, disp32_offset - rel.pc_offset - 8);
+        program->addDataRelocation(rel.data_offset, disp32_offset, current_funcprog_index);
+    }
+
      for(int i=0;i<tinycode->call_relocations.size();i++) {
         auto& r = tinycode->call_relocations[i];
         if(r.funcImpl->astFunction->linkConvention == NATIVE)
             continue;
         int ind = r.funcImpl->tinycode_id - 1;
-        // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";
         program->addInternalFuncRelocation(current_funcprog_index, get_map_translation(r.pc), ind);
+        // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";
     }
     
     for(int i=0;i<relativeRelocations.size();i++) {
@@ -1007,6 +1037,11 @@ void ARMBuilder::set_imm24(int index, int imm) {
     funcprog->text[index+0] = imm & 0xFF;
     funcprog->text[index+1] = (imm>>8) & 0xFF;
     funcprog->text[index+2] = (imm>>16) & 0xFF;
+}
+void ARMBuilder::set_imm12(int index, int imm) {
+    // @TODO: Make sure immediate fits within 12 bits
+    funcprog->text[index+0] = imm & 0xFF;
+    funcprog->text[index+1] = ((imm>>8) & 0xF) | (funcprog->text[index+1] & 0xF0);
 }
 ARMRegister ARMBuilder::alloc_register(BCRegister reg) {
     if(reg == BC_REG_LOCALS)

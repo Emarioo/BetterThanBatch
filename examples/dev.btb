@@ -1,9 +1,16 @@
 
-okay(6)
 
-fn @export okay(x: i32) -> i32 {
-    return x + 1
-}
+global okay := 5
+
+okay = 0x22
+
+ok := okay
+
+// okay(6)
+
+// fn @export okay(x: i32) -> i32 {
+//     return x + 1
+// }
 
 // if 1 == 6 {
 //     50+20

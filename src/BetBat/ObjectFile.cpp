@@ -1017,11 +1017,16 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                 }
                 ELF_SET(rel,r_offset, myrel.offset);
                 int rel_type = 0;
-                // @nocheckin TODO: Relocations for 32-bit ARM?
+                // @nocheckin TODO: Relocations for 32-bit and 64-bit ARM?
+                Assert(extra_info->target != TARGET_AARCH64);
                 if(myrel.type == RELOCA_PC32) {
                     // int symindex = getSectionSymbol(myrel.sectionNr);
                     // rel->r_info = ELF64_R_INFO(symindex, R_X86_64_PC32);
-                    rel_type = R_X86_64_PC32;
+                    if(extra_info->target == TARGET_ARM) {
+                        rel_type = R_ARM_ABS32;
+                    } else {
+                        rel_type = R_X86_64_PC32;
+                    }
                     ELF_SET(rel,r_addend, myrel.offsetIntoSection);
                     ELF_GET(rel, r_addend += -4);
                 } else if (myrel.type == RELOCA_PLT32) {

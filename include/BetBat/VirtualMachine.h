@@ -14,6 +14,9 @@ struct VirtualMachine {
     ~VirtualMachine(){
         cleanup();
     }
+
+    int REGISTER_SIZE = -1;
+    int FRAME_SIZE = -1;
     
     i64 registers[BC_REG_MAX];
     // engone::Memory<u8> stack{};
@@ -29,6 +32,21 @@ struct VirtualMachine {
     bool expectValuesOnStack = false;
     bool silent = false;
     
+    struct MemoryMapping {
+        u64 start_address;
+        u64 physical_start_address;
+        u64 size;
+    };
+    DynamicArray<MemoryMapping> memory_map;
+    // returns false if memory mapping overlaps with another mapping.
+    // multiple mappings can map to overlapping addresses.
+    void reset_memory_map(){
+        memory_map.clear();
+    }
+    bool add_memory_mapping(u64 start, u64 physical, u64 size);
+    // was_mapped is set to false if no mapping was found
+    void* map_pointer(u64 virtual_pointer, bool& was_mapped);
+
     void init_stack(int stack_size = 0x10000);
     void execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations = false, CompileOptions* options = nullptr);
     TinyBytecode* fetch_tinycode(Bytecode* bytecode, const std::string& tinycode_name);

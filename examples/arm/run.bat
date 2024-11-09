@@ -15,9 +15,10 @@ set QEMU=qemu-system-arm
 
 %GCC% -c -O0 -g main.c -o main.o
 %AS% startup.s -o startup.o
-%AS% assembly.s -o assembly.o
+@REM %AS% assembly.s -o assembly.o
 @REM %OBJDUMP% -d main.o
-%LD% main.o startup.o assembly.o -T link.ld -o main.elf
+@REM %LD% main.o startup.o assembly.o -T link.ld -o main.elf
+%LD% main.o startup.o -T link.ld -o main.elf
 @REM %OBJDUMP% -d main.elf
 
 %QEMU% -semihosting -M xilinx-zynq-a9 -cpu cortex-a9 -nographic -serial mon:stdio -kernel main.elf

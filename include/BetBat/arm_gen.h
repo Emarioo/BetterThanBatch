@@ -93,6 +93,7 @@ struct ARMBuilder : public ProgramBuilder {
     void emit_bx(ARMRegister rm);
     
     void set_imm24(int index, int imm);
+    void set_imm12(int index, int imm);
     
     struct RegInfo {
         bool used = false;

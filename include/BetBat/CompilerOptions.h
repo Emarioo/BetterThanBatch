@@ -13,11 +13,18 @@ enum TargetPlatform : u32 {
     // TARGET_WASM_v1_0,
     
     TARGET_ARM,
-    // @nocheckin TARGET_AARCH64,
+    TARGET_AARCH64,
 
     TARGET_END, // start/end if you want iterate targets
     TARGET_START = TARGET_UNKNOWN + 1,
 };
+struct ArchitectureInfo {
+    int FRAME_SIZE=-1;
+    int REGISTER_SIZE=-1;
+};
+static const ArchitectureInfo ARCH_x86_64 = {16, 8};
+static const ArchitectureInfo ARCH_aarch64 = {16, 8};
+static const ArchitectureInfo ARCH_arm = {8, 4};
 // Also known as linker tools
 enum LinkerChoice : u32 {
     LINKER_UNKNOWN = 0,

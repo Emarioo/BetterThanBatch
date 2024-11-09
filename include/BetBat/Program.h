@@ -5,14 +5,6 @@
 #include "BetBat/DebugInformation.h"
 #include "BetBat/Bytecode.h"
 
-struct ArchitectureInfo {
-    int FRAME_SIZE=-1;
-    int REGISTER_SIZE=-1;
-};
-static const ArchitectureInfo ARCH_x86_64 = {16, 8};
-static const ArchitectureInfo ARCH_aarch64 = {16, 8};
-static const ArchitectureInfo ARCH_arm = {8, 4};
-
 struct FunctionProgram {
     ~FunctionProgram() {
         if(_allocationSize!=0){
