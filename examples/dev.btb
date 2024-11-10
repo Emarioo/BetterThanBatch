@@ -1,32 +1,8 @@
 
 
+#import "arm/xilinx-zynq-a9"
 
-fn num() -> i32 {
-    return 5
-}
+init_uart0_RxTx_115200_8N1()
 
-f := num
-f()
-// okay := num()
-
-
-// okay(6)
-
-// fn @export okay(x: i32) -> i32 {
-//     return x + 1
-// }
-
-// if 1 == 6 {
-//     50+20
-// } else {
-//     1+2
-// }
-
-// okay()
-
-// fn okay() {
-    
-// }
-
-// x := 5
-// y := x + 6
+putchar('a')
+// puts("Hello world!\n".ptr)

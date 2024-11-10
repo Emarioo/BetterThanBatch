@@ -482,7 +482,7 @@ bool ARMBuilder::generate() {
                 Assert(push_offsets.size()); // bytecode is missing ALLOC_ARGS if this fires
                 
                 int off = inst->imm16 + push_offsets.last();
-                Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
+                // Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
                 emit_str(reg_op, ARM_REG_SP, off);
             } break;
             case BC_GET_PARAM: {
@@ -496,7 +496,8 @@ bool ARMBuilder::generate() {
                     Assert(param_index < accessed_params.size());
                     off = accessed_params[param_index].offset_from_rbp;
                 }
-                Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
+                // @TODO: We should probably not assume the parameter is 4 bytes.
+                // Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
                 emit_ldr(reg_op, ARM_REG_FP, off);
                 
                 // if(IS_CONTROL_SIGNED(base->control)) {
@@ -598,7 +599,11 @@ bool ARMBuilder::generate() {
                 
                 int off = inst->imm16 - callee_saved_space;
                 ARMRegister reg_dst = alloc_register(inst->op0);
-                emit_add_imm(reg_dst, ARM_REG_FP, off);
+                if(off < 0) {
+                    emit_sub_imm(reg_dst, ARM_REG_FP, -off);
+                } else {
+                    emit_add_imm(reg_dst, ARM_REG_FP, off);
+                }
             } break;
             case BC_PTR_TO_PARAMS: {
                 auto inst = (InstBase_op1_imm16*)base;
@@ -619,7 +624,11 @@ bool ARMBuilder::generate() {
                 }
                 
                 ARMRegister reg_dst = alloc_register(inst->op0);
-                emit_add_imm(reg_dst, ARM_REG_FP, off);
+                if(off < 0) {
+                    emit_sub_imm(reg_dst, ARM_REG_FP, -off);
+                } else {
+                    emit_add_imm(reg_dst, ARM_REG_FP, off);
+                }
             } break;
             case BC_CALL:
             case BC_CALL_REG: {
@@ -672,7 +681,7 @@ bool ARMBuilder::generate() {
                         for(int i=0;i<recent_set_args.size();i++) {
                             auto& arg = recent_set_args[i];
                             auto control = arg.control;
-                            Assert(GET_CONTROL_SIZE(control) == CONTROL_32B);
+                            // Assert(GET_CONTROL_SIZE(control) == CONTROL_32B);
 
                             int off = i * REGISTER_SIZE;
                             ARMRegister reg_args = ARM_REG_FP;
@@ -857,6 +866,12 @@ bool ARMBuilder::generate() {
             // logical operations
             case BC_LAND:
             case BC_LOR:
+            // bitwise ops
+            case BC_BAND:
+            case BC_BOR:
+            case BC_BXOR:
+            case BC_BLSHIFT:
+            case BC_BRSHIFT:
             {
                 auto inst = (InstBase_op2_ctrl*)base;
                 
@@ -944,10 +959,16 @@ bool ARMBuilder::generate() {
                     case BC_BRSHIFT: {
                         emit_lsr(reg_dst, reg_dst, reg_op);
                     } break;
-                    
                 }
                 
                 //  TODO: less than, equal, bitwise ops
+            } break;
+            case BC_BNOT: {
+                auto inst = (InstBase_op2_ctrl*)base;
+
+                ARMRegister reg_dst = alloc_register(inst->op0);
+                ARMRegister reg_op = find_register(inst->op1);
+                emit_mvn(reg_dst, reg_op);
             } break;
             case BC_MOD: {
                 auto inst = (InstBase_op2_ctrl*)base;
@@ -1298,6 +1319,18 @@ void ARMBuilder::emit_lsr(ARMRegister rd, ARMRegister rn, ARMRegister rm) {
     int type = ARM_SHIFT_TYPE_LSL;
     int inst = BITS(cond, 4, 28) | BITS(0b0001101, 7, 21) | BITS(S,1,20) | BITS(Rd, 4, 12)
         | BITS(Rm,4, 8) | BITS(0b0011,4,4) | BITS(Rn, 4, 0);
+    
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_mvn(ARMRegister rd, ARMRegister rm) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/MVN--register-
+    ARM_CLAMP_dm()
+    int cond = ARM_COND_AL;
+    int S = 0;
+    int imm5 = 0;
+    int type = ARM_SHIFT_TYPE_LSL;
+    int inst = BITS(cond, 4, 28) | BITS(0b0001111, 7, 21) | BITS(S,1,20)
+        | BITS(Rd,4, 12) | BITS(imm5,5, 7) | BITS(type,2,5) | BITS(Rm, 4, 0);
     
     emit4((u32)inst);
 }

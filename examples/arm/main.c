@@ -3,16 +3,19 @@
 
 // int assembly();
 
-int num() {
-    return 23;
-}
+// int num() {
+//     return 23;
+// }
 void main() {
     // init_uart0_RxTx_115200_8N1();
     
     // int val = assembly();
     
-    int(*f)() = num;
-    int c = f();
+    int k = 23;
+    int b = ~k;
+
+    // int(*f)() = num;
+    // int c = f();
     // int c = num();
     // printf("Value: %d\n",val+glob);
 }

@@ -1,0 +1,164 @@
+/*
+    ZedBoard / Zynq-7000 
+    UART info could be found in
+        B.33 UART Controller (UART) / Page 1626 in
+           Zynq-7000
+           All Programmable SoC
+           Technical Reference Manual
+        
+        http://www.xilinx.com/support/documentation/user_guides/ug585-Zynq-7000-TRM.pdf      
+
+    
+    Source: https://github.com/rlangoy/ZedBoard-BareMetal-Examples/blob/master/Hello05
+*/
+
+#macro UART0_BASE 0xe0000000
+#macro UART1_BASE 0xe0001000
+// Register Description as found in
+//    B.33 UART Controller (UART) p.1626
+struct XUARTPS {
+    control_reg0: u32;       /* UART Control Register def=0x128 */
+    mode_reg0: u32;          /* UART Mode Register def=0 */
+    intrpt_en_reg0: u32;     /* Interrupt Enable Register def=0 */
+    intrpt_dis_reg0: u32;    /* Interrupt Disable Register def=0 */
+    intrpt_mask_reg0: u32;   /* Interrupt Mask Register def=0 */
+    chnl_int_sts_reg0: u32;  /* Channel Interrupt Status Register def=x200 */
+    baud_rate_gen: u32;      /* Baud Rate Generator Register def=0x28B */
+    Rcvr_timeout_reg0: u32;          /* Receiver Timeout Register def=0 */
+    Rcvr_FIFO_trigger_level0: u32;   /* Receiver FIFO Trigger Level Register */
+    Modem_ctrl_reg0: u32;            /* Modem Control Register def=0 */
+    Modem_sts_reg0: u32;     /* Modem Status Register */
+    channel_sts_reg0: u32;   /* Channel Status Register def=0 */
+    tx_rx_fifo: u32;         /* Transmit and Receive FIFO def=0 */
+    baud_rate_divider: u32;  /* Baud Rate Divider def=0xf */
+    Flow_delay_reg0: u32;            /* Flow Control Delay Register  def=0*/
+    Tx_FIFO_trigger_level: u32;    /* Transmitter FIFO Trigger Level Register */
+}
+
+global UART0: XUARTPS* =cast_unsafe<XUARTPS*>cast<uword> UART0_BASE;        
+global UART1: XUARTPS* =cast_unsafe<XUARTPS*>cast<uword> UART1_BASE;        
+
+/*
+    Page 496
+    Simplifyed Table 19-1 UART Parameter Value Examples
+    Parameter Value Examples
+    Clock 			     Baud  BRGR-CD   BDIV-CD 					Actual Baud Rate
+    UART Ref clock 	      600   10417     7 
+    UART Ref clock 	    9,600     651     7 
+    UART Ref clock     28,800 	  347     4
+    UART Ref clock    115,200 	   62     6 
+    UART Ref clock    230,400      31     6
+*/
+ 
+/*Baudrates assuming input clock speed is 3125000L */
+/*Baud_rate_gen_reg0*/
+#macro XUARTPS_BRGR_CD_115200       62 /*Baud Rate Clock Divisor*/
+
+/*Register Baud_rate_divider_reg0 Details*/
+#macro XUARTPS_BDIV_CD_115200       6  /*Baud Rate Clock Divisor*/
+
+/* Bits defined in the Register Channel_sts_reg0 */
+#macro UART_STS_TXFULL 1<<4 /* Transmitter FIFO Full continuous status:
+                               0: Tx FIFO is not full
+                               1: Tx FIFO is full*/
+
+/*Register Control_reg0 BitMask */
+#macro XUARTPS_CR_STOPBRK (1<<8)  /* Stop transmitter break */
+#macro XUARTPS_CR_STTBRK  (1<<7)  /* Start transmitter break */
+#macro XUARTPS_CR_RSTTO   (1<<6)  /* Restart receiver timeout counter */
+#macro XUARTPS_CR_TXDIS   (1<<5)  /* Transmit disable */
+#macro XUARTPS_CR_TXEN    (1<<4)  /* Transmit enable */
+#macro XUARTPS_CR_RXDIS   (1<<3)  /* Receive disable */
+#macro XUARTPS_CR_RXEN    (1<<2)  /* Receive enable */
+#macro XUARTPS_CR_TXRES   (1<<1)  /* Software reset for Tx data path */
+#macro XUARTPS_CR_RXRES   (1<<0)  /* Software reset for Rx data path */
+
+/*Register Control mode_reg0 BitMask*/
+// #macro XUARTPS_MR_PAR                  /*Parity type select [5:3]*/
+#macro XUARTPS_MR_PAR_EVEN     0       /* 000: even parity
+                                           001: odd parity
+                                           010: forced to 0 parity (space)
+                                           011: forced to 1 parity (mark)*/
+#macro XUARTPS_MR_PAR_NONE (1<<5)      /* 1xx: no parity*/
+// #macro XUARTPS_MR_CHRL  
+               /* Character length select:
+                                             11: 6 bits
+                                             10: 7 bits*/
+// #macro XUARTPS_MR_CHRL_8               /*   0x: 8 bits*/
+                                                                                                                                                                     
+// #macro XUARTPS_MR_CLKS                 /* Clock source select:*/
+#macro XUARTPS_MR_CLKS_REF_CLK 0       /*  0: clock source is uart_ref_clk*/
+
+//void putc((void*), char);
+
+
+// void putc(int *p ,char c);
+
+/*
+* Initiate UART0  ( /dev/ttyACM0 on host computer )
+*   115,200 Baud 8-bit No-Parity 1-stop-bit
+*/
+fn init_uart0_RxTx_115200_8N1() {
+  /* Disable the transmitter and receiver before writing to the Baud Rate Generator */
+  UART0.control_reg0=0; 
+
+  /* Set Baudrate to 115,200 Baud */
+  UART0.baud_rate_divider =XUARTPS_BDIV_CD_115200;
+  UART0.baud_rate_gen=     XUARTPS_BRGR_CD_115200;
+
+  /*Set 8-bit NoParity 1-StopBit*/
+  UART0.mode_reg0   =   XUARTPS_MR_PAR_NONE;  
+  
+  /*Enable Rx & Tx*/
+  UART0.control_reg0=   XUARTPS_CR_TXEN | XUARTPS_CR_RXEN | XUARTPS_CR_TXRES | XUARTPS_CR_RXRES ;      
+}
+fn init_uart1_RxTx_115200_8N1() {
+  /* Disable the transmitter and receiver before writing to the Baud Rate Generator */
+  UART1.control_reg0=0; 
+
+  /* Set Baudrate to 115,200 Baud */
+  UART1.baud_rate_divider =XUARTPS_BDIV_CD_115200;
+  UART1.baud_rate_gen=     XUARTPS_BRGR_CD_115200;
+
+  /*Set 8-bit NoParity 1-StopBit*/
+  UART1.mode_reg0   =   XUARTPS_MR_PAR_NONE;  
+  
+  /*Enable Rx & Tx*/
+  UART1.control_reg0=   XUARTPS_CR_TXEN | XUARTPS_CR_RXEN | XUARTPS_CR_TXRES | XUARTPS_CR_RXRES ;      
+}
+
+fn sendUART0char(s: char) {
+  /*Make sure that the uart is ready for new char's before continuing*/
+  while ((( UART0.channel_sts_reg0 ) & UART_STS_TXFULL) > 0) ;
+  
+  /* Loop until end of string */
+  UART0.tx_rx_fifo = cast<u32> s; /* Transmit char */
+}
+fn sendUART1char(s: char) {
+  /*Make sure that the uart is ready for new char's before continuing*/
+  while ((( UART1.channel_sts_reg0 ) & UART_STS_TXFULL) > 0) ;
+  
+  /* Loop until end of string */
+  UART1.tx_rx_fifo= cast<u32> s; /* Transmit char */
+}
+
+/* "print.h" uses this function for is's printf implementation */
+fn putchar(c: char) {
+  if(c=='\n')
+    sendUART0char('\r');
+  sendUART0char(c);
+}
+	 
+/* <stdio.h>'s printf uses puts to send chars
+   puts so that printf sends char to the serial port*/
+fn puts(s: char*) {
+    while(*s != '\0') 
+    { 
+	  if(*s=='\n')
+		  sendUART0char('\r');
+	   
+	   sendUART0char(*s); /*Send char to the UART1*/	   
+	   s++; /* Next char */
+    }
+    // return;
+}

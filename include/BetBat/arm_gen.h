@@ -63,7 +63,8 @@ struct ARMBuilder : public ProgramBuilder {
     void emit_eor(ARMRegister rd, ARMRegister rn, ARMRegister rm);
     void emit_lsl(ARMRegister rd, ARMRegister rn, ARMRegister rm);
     void emit_lsr(ARMRegister rd, ARMRegister rn, ARMRegister rm);
-    
+    void emit_mvn(ARMRegister rd, ARMRegister rm);
+
     void emit_cmp(ARMRegister rn, ARMRegister rm);
     void emit_cmp_imm(ARMRegister rn, int imm);
     
