@@ -2465,10 +2465,11 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, QuickArray<Ty
                     if(fun->funcOverloads.overloads.size()==1){
                         
                         int reloc = builder.get_pc() + 2;
-                        builder.emit_codeptr(BC_REG_A, 0);
-                        
-                        info.addCallToResolve(reloc, fun->funcOverloads.overloads[0].funcImpl);
-
+                        builder.emit_codeptr(BC_REG_A, fun->funcOverloads.overloads[0].funcImpl->tinycode_id);
+                        // @TODO: We're being incosistent here where arm_gen adds it's own relocation from the BC_CODEPTR while x64_gen doesn't. arm_gen needs to because relocation for a function address on arm is different from a relocation for a normal function call. Clean this up.
+                        if(compiler->options->target != TARGET_ARM) {
+                            info.addCallToResolve(reloc, fun->funcOverloads.overloads[0].funcImpl);
+                        }
                         // export function when debugging, nice to see if objdump refer to the function we expect
                         // TODO: only add if unique
                         // TODO: Can't add if function wasn't generated, how do we fix that?

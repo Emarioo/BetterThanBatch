@@ -308,6 +308,13 @@ bool ARMBuilder::generate() {
         int data_offset;
     };
     DynamicArray<DataptrReloc> dataptr_relocs{};
+
+    struct CodeptrReloc {
+        int pc_offset;
+        // int bc_imm_index;
+        int tinycode_index;
+    };
+    DynamicArray<CodeptrReloc> codeptr_relocs{};
     
     InstBase* last_inst_call = nullptr;
     
@@ -617,15 +624,23 @@ bool ARMBuilder::generate() {
             case BC_CALL:
             case BC_CALL_REG: {
                 auto inst = (InstBase_link_call_imm32*)base;
-                Assert(opcode != BC_CALL_REG);
-                // auto base_r = (InstBase_op1_link_call*)n->base;
+                auto base_r = (InstBase_op1_link_call*)base;
                 
                 last_inst_call = base;
                 
                 CallConvention conv = inst->call;
                 LinkConvention link = inst->link;
+                ARMRegister ptr_reg = ARM_REG_INVALID;
+                if(opcode == BC_CALL_REG) {
+                    ptr_reg = ARM_REG_R4;
+                    ARMRegister reg_op = find_register(base_r->op0);
+                    if(ptr_reg != reg_op)
+                        emit_mov(ptr_reg, reg_op);
+                    conv = base_r->call;
+                    link = base_r->link;
+                }
                 Assert(link == LinkConvention::NONE);
-                
+
                 switch(conv) {
                     // case BETCALL: break;
                     // case STDCALL: {
@@ -698,10 +713,15 @@ bool ARMBuilder::generate() {
                     default: Assert(false);
                 }
                 
-                
                 recent_set_args.resize(0);
                 ret_offset = 0;
-                
+                if(opcode == BC_CALL_REG) {
+                    emit_mov(ARM_REG_LR, ARM_REG_PC);
+                    emit_bx(ptr_reg);
+                    break;
+                }
+
+
                 int offset = code_size();
                 emit_bl(0);
                 // necessary when adding internal func relocations
@@ -809,7 +829,19 @@ bool ARMBuilder::generate() {
                 Assert(false);
             } break;
             case BC_CODEPTR: {
-                Assert(false);
+                auto inst = (InstBase_op1_imm32*)base;
+                int tinycode_index = inst->imm32 - 1;
+                ARMRegister reg = alloc_register(inst->op0);
+                i32 imm_offset = code_size();
+
+                emit_ldr(reg, ARM_REG_PC, 0);
+                emit_add(reg, reg, ARM_REG_PC);
+
+                CodeptrReloc rel{};
+                rel.pc_offset = imm_offset;
+                rel.tinycode_index = tinycode_index;
+                // rel.bc_imm_index = prev_pc + 2;
+                codeptr_relocs.add(rel);
             } break;
             case BC_ADD:
             case BC_SUB:
@@ -958,6 +990,17 @@ bool ARMBuilder::generate() {
     
     // NOTE: We should have emitted a ret instruction and any instructions we emit here will never execute.
     
+    for(int i=0;i<codeptr_relocs.size();i++) {
+        auto& rel = codeptr_relocs[i];
+
+        i32 disp32_offset = code_size();
+        emit4((u32)(disp32_offset - rel.pc_offset));
+        set_imm12(rel.pc_offset, disp32_offset - rel.pc_offset-8);
+        // map_strict_translation(rel.bc_imm_index, disp32_offset);
+                
+        program->addInternalFuncRelocation(current_funcprog_index, disp32_offset, rel.tinycode_index, true, disp32_offset - rel.pc_offset);
+    }
+
     for(int i=0;i<dataptr_relocs.size();i++) {
         auto& rel = dataptr_relocs[i];
 

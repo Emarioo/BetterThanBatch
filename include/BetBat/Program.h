@@ -70,6 +70,8 @@ struct Program {
         i32 from_tinyprog_index;
         u32 textOffset;
         i32 to_tinyprog_index;
+        bool get_arm_func_address = false;
+        int extra_offset;
     };
      
     DynamicArray<FunctionProgram*> functionPrograms;
@@ -110,8 +112,8 @@ struct Program {
     void addExportedSymbol(const std::string& name, i32 tinyprog_index) {
         exportedSymbols.add({name, tinyprog_index});
     }
-    void addInternalFuncRelocation(i32 from_func, u32 text_offset, i32 to_func) {
-        internalFuncRelocations.add({from_func, text_offset, to_func});
+    void addInternalFuncRelocation(i32 from_func, u32 text_offset, i32 to_func, bool is_arm_func_address = false, int extra_offset = 0) {
+        internalFuncRelocations.add({from_func, text_offset, to_func, is_arm_func_address, extra_offset});
     }
     
     // gather up libraries from named undefined relocations

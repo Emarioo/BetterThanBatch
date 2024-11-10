@@ -1,10 +1,14 @@
 
 
-global okay := 5
 
-okay = 0x22
+fn num() -> i32 {
+    return 5
+}
 
-ok := okay
+f := num
+f()
+// okay := num()
+
 
 // okay(6)
 
