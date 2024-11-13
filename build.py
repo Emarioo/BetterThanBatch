@@ -215,6 +215,9 @@ def compile(config):
     ##############################
     #   COMPILE based on config
     ##############################
+        
+    global head_compiled
+    global object_failed
 
     compile_success = False
 
@@ -232,7 +235,7 @@ def compile(config):
         MSVC_DEFINITIONS        = "/DOS_WINDOWS /DCOMPILER_MSVC"
 
         if enabled("use_debug"):
-            MSVC_COMPILE_OPTIONS += " /Zi"
+            MSVC_COMPILE_OPTIONS += " /Z7"
             MSVC_LINK_OPTIONS += " /DEBUG" # /PROFILE
 
         if enabled("use_optimizations"):
@@ -248,6 +251,16 @@ def compile(config):
 
         if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.obj"):
             cmd("ml64 /nologo /Fo"+config["bin_dir"]+"/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
+        object_files.append(config["bin_dir"]+"/hacky_stdcall.obj")
+
+        # Create sub directories in bin, this part must be single-threaded
+        for f in modified_files:
+            index = source_files.index(f)
+            obj = object_files[index]
+            at = obj.rfind("/")
+            predir = obj[0:at]
+            if not os.path.exists(predir):
+                os.mkdir(predir)
 
         if len(modified_files) == 0 and os.path.exists(config["output"]):
             compile_success = True
@@ -255,18 +268,74 @@ def compile(config):
             # skipping like this won't work if compile flags change
             # because we should recompile if so.
         else:
-            # With MSVC we do a unity build, compile on source file that includes all other source files
-            srcfile = config["bin_dir"]+"/all.cpp"
-            fd = open(srcfile, "w")
-            for file in source_files:
-                fd.write("#include \"" + os.path.abspath(file) + "\"\n")
-            fd.close()
+            if enabled("unity_build"):
+                # With MSVC we do a unity build, compile on source file that includes all other source files
+                srcfile = config["bin_dir"]+"/all.cpp"
+                fd = open(srcfile, "w")
+                for file in source_files:
+                    fd.write("#include \"" + os.path.abspath(file) + "\"\n")
+                fd.close()
 
-            err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" "+config["bin_dir"]+"/hacky_stdcall.obj /OUT:"+config["output"])
-            # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
-            # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
+                err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" "+config["bin_dir"]+"/hacky_stdcall.obj /OUT:"+config["output"])
+                # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
+                # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
 
-            compile_success = err == 0
+                compile_success = err == 0
+            else:
+                # Compile the object files using multiple threads
+                head_compiled = 0
+                object_failed = False
+
+                def compile_objects():
+                    global head_compiled
+                    global modified_files
+                    global object_files
+                    global object_failed
+                    while head_compiled < len(modified_files):
+                        src = modified_files[head_compiled]
+                        index = source_files.index(src)
+                        obj = object_files[index]
+                        head_compiled+=1
+
+                        trimmed_obj = obj[4:] # skip bin/
+
+                        if enabled("log_compilation"):
+                            print("Compile", trimmed_obj)
+                        err = cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+src+" /Fo:"+obj)
+                        
+                        if err != 0:
+                            object_failed = True
+
+                        if enabled("log_compilation"):
+                            print("Done", trimmed_obj)
+
+                thread_count = 8
+                if "thread_count" in config:
+                    thread_count = config["thread_count"]
+                threads = []
+                for i in range(thread_count-1):
+                    t = threading.Thread(target=compile_objects)
+                    threads.append(t)
+                    t.start()
+
+                compile_objects()
+
+                for t in threads:
+                    t.join()
+
+                if object_failed:
+                    return False
+
+                objs_str = ""
+                for f in object_files:
+                    objs_str += " " + f
+
+                    if not os.path.exists(f):
+                        print(f,"was not compiled")
+                        return False
+
+                err = cmd("link "+MSVC_LINK_OPTIONS+" "+objs_str +" /OUT:"+config["output"])
+                compile_success = err == 0
         
         # TODO: Precompiled headers?
 
@@ -338,9 +407,7 @@ def compile(config):
                 os.mkdir(predir)
         
         # Compile the object files using multiple threads
-        global head_compiled
         head_compiled = 0
-        global object_failed
         object_failed = False
 
         def compile_objects():

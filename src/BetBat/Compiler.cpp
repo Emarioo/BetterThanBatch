@@ -1164,10 +1164,27 @@ void Compiler::run(CompileOptions* options) {
         return;
     }
 
-    int slash_index = options->output_file.find_last_of("/");
-    int dot_index = options->output_file.find_last_of(".");
+    std::string output_path = options->output_file;
+    if(options->output_file.size() == 0) {
+        switch(options->target){
+            case TARGET_BYTECODE: {
+                output_path = "main.bc";
+            } break;
+            case TARGET_WINDOWS_x64:
+            case TARGET_LINUX_x64: {
+                output_path = "main.exe"; // skip .exe on Linux?
+            } break;
+            case TARGET_ARM: {
+                output_path = "main.elf";
+            } break;
+            default: Assert(false);
+        }
+    }
+    
+    int slash_index = output_path.find_last_of("/");
+    int dot_index = output_path.find_last_of(".");
     if (dot_index == -1) {
-        dot_index = options->output_file.size();
+        dot_index = output_path.size();
     }
 
     enum OutputType {
@@ -1183,23 +1200,6 @@ void Compiler::run(CompileOptions* options) {
 
     bool obj_write_success = false;
 
-    std::string output_path = options->output_file;
-
-    if(options->output_file.size() == 0) {
-        switch(options->target){
-            case TARGET_BYTECODE: {
-                output_path = "bin/main.bc";
-            } break;
-            case TARGET_WINDOWS_x64:
-            case TARGET_LINUX_x64: {
-                output_path = "bin/main.exe"; // skip .exe on Linux?
-            } break;
-            case TARGET_ARM: {
-                output_path = "bin/main.elf";
-            } break;
-            default: Assert(false);
-        }
-    }
     switch(options->target){
         case TARGET_BYTECODE: {
             arch = ARCH_x86_64;
@@ -1210,6 +1210,11 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case TARGET_ARM: {
             arch = ARCH_arm;
+        } break;
+        case TARGET_AARCH64: {
+            arch = ARCH_aarch64;
+            log::out << log::RED << "ARM 64-bit not supported\n";
+            return;
         } break;
         default: Assert(false);
     }
@@ -1857,6 +1862,8 @@ void Compiler::run(CompileOptions* options) {
         FileClose(file_startup);
         
         std::string cmd_startup = as + " bin/arm_startup.s -o bin/arm_startup.o"; // NOTE: linker script needs to know path of arm_startup.o
+        if(options->useDebugInformation)
+            cmd_startup += " -g";
         int as_exit_code=0;
         bool yes = StartProgram(cmd_startup.c_str(), PROGRAM_WAIT, &as_exit_code);
         if(!yes || as_exit_code != 0) {
@@ -2012,7 +2019,7 @@ JUMP_TO_EXEC:
                     cmd += " " + a;
                 }
                 
-                StartProgram("arm-none-eabi-objdump bin/main.o -d", PROGRAM_WAIT);
+                // StartProgram("arm-none-eabi-objdump bin/main.o -W", PROGRAM_WAIT);
                 
                 log::out << log::GRAY << "running: " << cmd<<"\n";
                 log::out << log::GRAY << "Ctrl+A <release> X (to exit QEMU)\n";

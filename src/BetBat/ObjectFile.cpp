@@ -26,10 +26,10 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     bool suc = false;
     #define CHECK Assert(suc);
 
-    auto section_text = objectFile.createSection(".text", FLAG_CODE, 16);
+    auto section_text = objectFile.createSection(".text", FLAG_CODE, compiler->options->target==TARGET_ARM?4:16);
     SectionNr section_data = -1;
     if (program->globalSize!=0){
-        section_data = objectFile.createSection(".data", FLAG_NONE, 8);
+        section_data = objectFile.createSection(".data", FLAG_WRITE, 8);
     }
     if(program->debugInformation) {
         // We need to do this first because it adds more sections.
@@ -41,11 +41,17 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     // has_exceptions = true;
     SectionNr section_xdata = -1;
     SectionNr section_pdata = -1;
+    SectionNr section_arm_attr = -1;
     // SectionNr section_pdata2 = -1;
     if(has_exceptions) {
         section_xdata = objectFile.createSection(".xdata", FLAG_READ_ONLY, 4);
         section_pdata = objectFile.createSection(".pdata", FLAG_READ_ONLY, 4);
         // section_pdata2 = objectFile.createSection(".pdata", FLAG_NONE | FLAG_READ_ONLY, 4);
+    }
+    if(compiler->options->target == TARGET_ARM) {
+        // section_arm_attr = objectFile.createSection(".ARM.attributes", FLAG_NONE, 1);
+        section_arm_attr = objectFile.createSection(".ARM.attributes", FLAG_NONE, 1);
+        objectFile.addSymbol(ObjectFile::SYM_FILE, "dev.btb", SHN_ABS, 0);
     }
 
     DynamicArray<u32> tinyprogram_offsets;
@@ -289,6 +295,54 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
             }
         }
 
+    }
+    
+    if(section_arm_attr != -1) {
+        // Format for .ARM.attributes can be found here:
+        //   https://github.com/ARM-software/abi-aa/blob/main/addenda32/addenda32.rst
+        auto stream = objectFile.getStreamFromSection(section_arm_attr);
+        stream->write1('A'); // format version
+        
+        // subsections
+        int subsection_offset = stream->getWriteHead();
+        int subsection_length_off = stream->getWriteHead();
+        stream->write4(4); // subsection-length, whole size excluding format version (we don't know the size yet)
+        stream->write("aeabi");
+        
+        // sub-subsections (vendor data)
+        int sub_subsection_offset = stream->getWriteHead();
+        stream->write1(Tag_File);
+        int sub_subsection_length_off = stream->getWriteHead();
+        stream->write4(0); // sub-subsection length, whole sub-subsection size
+        
+        u8* temp_uleb128_ptr;
+        int written;
+        #define ATTR_N(TAG, NUM) stream->write1(TAG);\
+            stream->write_unknown((void**)&temp_uleb128_ptr, 16); \
+            written = dwarf::ULEB128_encode(temp_uleb128_ptr, 16, NUM); \
+            stream->wrote_unknown(written);
+        #define ATTR_S(TAG, STR) stream->write1(TAG); stream->write(STR);
+        
+        // TODO: How do we pick ARM architecture type?
+        ATTR_S(Tag_CPU_name, "4T")
+        ATTR_N(Tag_CPU_arch, Arm_v4T)
+        ATTR_N(Tag_ARM_ISA_use, true)
+        ATTR_N(Tag_THUMB_ISA_use, 1)
+        ATTR_N(Tag_ABI_PCS_wchar_t, 4)
+        ATTR_N(Tag_ABI_FP_denormal, 1)        // : Needed
+        ATTR_N(Tag_ABI_FP_exceptions, 1)      // : Needed
+        ATTR_N(Tag_ABI_FP_number_model, 3)    // : IEEE 754
+        ATTR_N(Tag_ABI_align_needed, 1)       // : 8-byte
+        ATTR_N(Tag_ABI_align8_preserved, 1)       // : 8-byte
+        ATTR_N(Tag_ABI_enum_size, 1)          // : small
+        ATTR_N(Tag_ABI_optimization_goals, 6) // : Aggressive Debug
+        
+        #undef ATTR_N
+        #undef ATTR_S
+        
+        stream->write_at<u32>(sub_subsection_length_off, stream->getWriteHead() - sub_subsection_offset);
+        stream->write_at<u32>(subsection_length_off, stream->getWriteHead() - subsection_offset);
+        
     }
     
     for(int i=0;i<program->dataRelocations.size();i++){
@@ -640,6 +694,7 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
     #define CHECK Assert(suc);
 
     bool small_elf = extra_info->target == TARGET_ARM;
+    int REGISTER_SIZE = extra_info->target == TARGET_ARM ? 4 : 8;
     
     #define ELF_SET(P,M,V) (small_elf ? P##32->M=V : P##64->M=V)
     #define ELF_GET(P,M) (small_elf ? P##32->M : P##64->M )
@@ -740,18 +795,19 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         }
         
         // sheader->sh_name = 0; // set in shstrtab section further down
-        ELF_SET(sheader,sh_type, SHT_PROGBITS);
+        if(section->name == ".ARM.attributes") {
+            ELF_SET(sheader,sh_type, SHT_ARM_ATTRIBUTES);
+        } else {
+            ELF_SET(sheader,sh_type, SHT_PROGBITS);
+        }
+        
         // sheader->sh_flags = 0; // set below
         // sheader->sh_addr = 0; // always zero for object files
         // sheader->sh_offset = 0; // place where data lies, LATER
         // sheader->sh_size = 0; // size of data, LATER
         // sheader->sh_link = 0; // not used
         // sheader->sh_info = 0; // not used
-        if(extra_info->target == TARGET_ARM) {
-            ELF_SET(sheader,sh_addralign, 4);
-        } else {
-            ELF_SET(sheader,sh_addralign, section->alignment); // check if alignment is 2**x
-        }
+        ELF_SET(sheader,sh_addralign, section->alignment); // check if alignment is 2**x
         // sheader->sh_entsize = 0;
 
         if(section->flags == FLAG_READ_ONLY)
@@ -762,7 +818,7 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
             ;
         else if(section->flags == FLAG_CODE)
             ELF_SET(sheader,sh_flags, SHF_ALLOC | SHF_EXECINSTR);
-        else
+        else if(section->flags == FLAG_WRITE)
             ELF_SET(sheader,sh_flags ,SHF_ALLOC | SHF_WRITE);
     }
 
@@ -897,7 +953,7 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         // sheader->sh_size = 0; // size of data, LATER
         ELF_SET(sheader,sh_link, ind_symtab); // index to symtab section
         ELF_SET(sheader,sh_info, section->number); // index to section where relocations should be applied
-        ELF_SET(sheader,sh_addralign, 8);
+        ELF_SET(sheader,sh_addralign, REGISTER_SIZE);
     }
 
     // DynamicArray<Elf64_Shdr*> reloc_sections;
@@ -925,13 +981,44 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
     // }
 
     // ###################
-    //  SECTION DATA
+    //  SECTION STRING TABLE DATA
     // ####################
     {
         obj_stream->write_align(ELF_GET(s_sectionStringTable,sh_addralign));
         ELF_SET(s_sectionStringTable,sh_offset, obj_stream->getWriteHead());
         suc = obj_stream->write1('\0'); // table begins with null string
         CHECK
+        
+        // ELF_SET(header,e_shstrndx)
+        
+        if(small_elf) {
+            Elf32_Shdr* sheader32 = s_sectionStringTable32;
+            sheader32->sh_name = obj_stream->getWriteHead() - s_sectionStringTable32->sh_offset;
+            suc = obj_stream->write(".shstrtab");
+            CHECK
+            sheader32 = s_stringTable32;
+            sheader32->sh_name = obj_stream->getWriteHead() - s_sectionStringTable32->sh_offset;
+            suc = obj_stream->write(".strtab");
+            CHECK
+            sheader32 = s_symtab32;
+            sheader32->sh_name = obj_stream->getWriteHead() - s_sectionStringTable32->sh_offset;
+            suc = obj_stream->write(".symtab");
+            CHECK
+        } else {
+            Elf64_Shdr* sheader64 = s_sectionStringTable64;
+            sheader64->sh_name = obj_stream->getWriteHead() - s_sectionStringTable64->sh_offset;
+            suc = obj_stream->write(".shstrtab");
+            CHECK
+            sheader64 = s_stringTable64;
+            sheader64->sh_name = obj_stream->getWriteHead() - s_sectionStringTable64->sh_offset;
+            suc = obj_stream->write(".strtab");
+            CHECK
+            sheader64 = s_symtab64;
+            sheader64->sh_name = obj_stream->getWriteHead() - s_sectionStringTable64->sh_offset;
+            suc = obj_stream->write(".symtab");
+            CHECK
+        }
+        
         for(int i=0;i<_sections.size();i++){
             auto& section = _sections[i];
             Elf32_Shdr* sheader32 = nullptr;
@@ -946,7 +1033,8 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                 rheader32 = reloca_sections32[section->number];
                 if(rheader32) {
                     rheader32->sh_name = obj_stream->getWriteHead() - s_sectionStringTable32->sh_offset;
-                    std::string nom = section->name+".rela";
+                    // std::string nom = section->name+".rela";
+                    std::string nom = ".rela"+section->name;
                     suc = obj_stream->write(nom.c_str(),nom.length() + 1);
                     CHECK
                 }
@@ -958,7 +1046,8 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                 rheader64 = reloca_sections64[section->number];
                 if(rheader64) {
                     rheader64->sh_name = obj_stream->getWriteHead() - s_sectionStringTable64->sh_offset;
-                    std::string nom = section->name+".rela";
+                    // std::string nom = section->name+".rela";
+                    std::string nom = ".rela"+section->name;
                     suc = obj_stream->write(nom.c_str(),nom.length() + 1);
                     CHECK
                 }
@@ -976,7 +1065,9 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         // make sure that \0 is at the end of the table
         Assert(obj_stream->read1(ELF_GET(s_sectionStringTable,sh_offset) + ELF_GET(s_sectionStringTable,sh_size-1)) == 0);
     }
-
+    // ###################
+    //  SECTION DATA
+    // ####################
     for(int si=0;si<_sections.size();si++){
         auto& section = _sections[si];
         Elf32_Shdr* sheader32 = nullptr;
@@ -1040,11 +1131,19 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                     ELF_GET(rel, r_addend = -4);
                     // rel->r_addend = -4 + myrel.addend;
                 } else if(myrel.type == RELOCA_32) {
-                    rel_type = R_X86_64_32;
+                    if(extra_info->target == TARGET_ARM) {
+                        rel_type = R_ARM_ABS32;
+                    } else {
+                        rel_type = R_X86_64_32;
+                    }
                     // rel->r_addend = 0;
                     // rel->r_addend = -4 + myrel.addend;
                 } else if (myrel.type == RELOCA_64) {
-                    rel_type = R_X86_64_64;
+                    if(extra_info->target == TARGET_ARM) {
+                        rel_type = R_ARM_ABS32;
+                    } else {
+                        rel_type = R_X86_64_64;
+                    }
                     // rel->r_addend = -8;
                     ELF_SET(rel,r_addend, myrel.addend);
                 } else {
@@ -1139,6 +1238,12 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
 
                 if (mysym.type == SYM_SECTION){
                     ELF_SET(sym,st_info, ELFX_ST_INFO(bind, STT_SECTION));
+                    if(bind == STB_LOCAL) {
+                        ELF_SET(sheader,sh_info, i + 1);
+                    }
+                } else if (mysym.type == SYM_FILE){
+                    Assert(bind == STB_LOCAL);
+                    ELF_SET(sym,st_info, ELFX_ST_INFO(bind, STT_FILE));
                     if(bind == STB_LOCAL) {
                         ELF_SET(sheader,sh_info, i + 1);
                     }

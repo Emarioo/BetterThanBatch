@@ -137,9 +137,11 @@ namespace elf {
     #define SHT_HISUNW	  0x6fffffff	/* Sun-specific high bound.  */
     #define SHT_HIOS	  0x6fffffff	/* End OS-specific type */
     #define SHT_LOPROC	  0x70000000	/* Start of processor-specific */
+    #define SHT_ARM_ATTRIBUTES 0x70000003
     #define SHT_HIPROC	  0x7fffffff	/* End of processor-specific */
     #define SHT_LOUSER	  0x80000000	/* Start of application-specific */
     #define SHT_HIUSER	  0x8fffffff	/* End of application-specific */
+    
     
     #define SHF_WRITE	     (1 << 0)	/* Writable */
     #define SHF_ALLOC	     (1 << 1)	/* Occupies memory during execution */
@@ -192,6 +194,14 @@ namespace elf {
     #define ELF64_ST_BIND(val)		ELF32_ST_BIND (val)
     #define ELF64_ST_TYPE(val)		ELF32_ST_TYPE (val)
     #define ELF64_ST_INFO(bind, type)	ELF32_ST_INFO ((bind), (type))
+    
+    #define SHN_UNDEF       0
+    #define SHN_LORESERVE   0xff00
+    #define SHN_LOPROC      0xff00
+    #define SHN_HIPROC      0xff1f
+    #define SHN_ABS         0xfff1
+    #define SHN_COMMON      0xfff2
+    #define SHN_HIRESERVE   0xffff
     
     #define STB_LOCAL	0		/* Local symbol */
     #define STB_GLOBAL	1		/* Global symbol */
@@ -362,3 +372,80 @@ struct FileELF {
 
     static bool WriteFile(const std::string& name, Program* program, u32 from = 0, u32 to = (u32)-1);
 };
+
+// Constants for .ARM.attributes
+#define Tag_File                       1  // u32
+// #define Tag_Section                    2  // u32
+// #define Tag_Symbol                     3  // u32
+#define Tag_CPU_raw_name               4  // NTBS         r2.0	 
+#define Tag_CPU_name                   5  // NTBS         r2.0	 
+#define Tag_CPU_arch                   6  // uleb128      r2.0	r2.06: Added enum values for v6-M, v6S-M; r2.08: Added enum value for v7E-M. r2.09: Added enum value for v8.
+#define Tag_CPU_arch_profile           7  // uleb128      r2.0	r2.05: Added ‘S’ denoting ‘A’ or ‘R’ (don’t care)
+#define Tag_ARM_ISA_use                8  // uleb128      r2.0	 
+#define Tag_THUMB_ISA_use              9  // uleb128      r2.0	 
+#define Tag_FP_arch                    10 // uleb128      r2.0	r2.04: Added enum value for VFPv3 r2.06: Added enum value for VFPv3 restricted to D0-D15 r2.08: Renamed; added enum value for VFPv4 (adds fused MAC + 16-bit FP data in memory). r2.09: Added enum value for v8-A FP
+#define Tag_WMMX_arch                  11 // uleb128      r2.0	r2.02: Added enum value for wireless MMX v2.
+#define Tag_Advanced_SIMD_arch         12 // uleb128      r2.0	r2.08: Added enum value for Neon with fused MAC
+#define Tag_PCS_config                 13 // uleb128      r2.0	 
+#define Tag_ABI_PCS_R9_use             14 // uleb128      r2.0	r2.08: Clarified that value = 2 denotes using R9 to emulate one of the architecturally defined thread ID registers in CP15 c13.
+#define Tag_ABI_PCS_RW_data            15 // uleb128      r2.0	 
+#define Tag_ABI_PCS_RO_data            16 // uleb128      r2.0	 
+#define Tag_ABI_PCS_GOT_use            17 // uleb128      r2.0	 
+#define Tag_ABI_PCS_wchar_t            18 // uleb128      r2.0	 
+#define Tag_ABI_FP_rounding            19 // uleb128      r2.0	 
+#define Tag_ABI_FP_denormal            20 // uleb128      r2.0	 
+#define Tag_ABI_FP_exceptions          21 // uleb128      r2.0	r2.09: fixed typo (missing ‘permitted’)
+#define Tag_ABI_FP_user_exceptions     22 // uleb128      r2.0	 
+#define Tag_ABI_FP_number_model        23 // uleb128      r2.0	 
+#define Tag_ABI_align_needed           24 // uleb128      r2.0	r2.08: Generalized to extended alignment of 2n bytes for n in 4..12
+#define Tag_ABI_align8_preserved       25 // uleb128      r2.0	r2.08: Generalized to extended alignment of 2n bytes for n in 4..12
+#define Tag_ABI_enum_size              26 // uleb128      r2.0	 
+#define Tag_ABI_HardFP_use             27 // uleb128      r2.0	r2.09: Clarified use of existing values and removed DP-only option
+#define Tag_ABI_VFP_args               28 // uleb128      r2.0	r2.09: Added enum value for code compatible with both the base and VFP variants
+#define Tag_ABI_WMMX_args              29 // uleb128      r2.0	 
+#define Tag_ABI_optimization_goals     30 // uleb128      r2.0	 
+#define Tag_ABI_FP_optimization_goals  31 // uleb128      r2.0	 
+#define Tag_compatibility              32 // NTBS         r2.0	r2.05: Revised the ineffective definition. The new one is compatible with the old one if a nonsensical clause in the old one is ignored.
+#define Tag_CPU_unaligned_access       34 // uleb128      r2.02	 
+#define Tag_FP_HP_extension            36 // uleb128      r2.06	r2.08: Renamed (VFP → FP) r2.09: Clarified use of existing values.
+#define Tag_ABI_FP_16bit_format        38 // uleb128      r2.06	 
+#define Tag_MPextension_use            42 // uleb128      r2.08	 
+#define Tag_DIV_use                    44 // uleb128      r2.08	r2.09: Changed wording to clarify meaning.
+#define Tag_DSP_extension              46 // uleb128      2018q4	 
+#define Tag_MVE_arch                   48 // uleb128      2019q4	 
+#define Tag_PAC_extension              50 // uleb128      2021q1	 
+#define Tag_BTI_extension              52 // uleb128      2021q1	 
+#define Tag_nodefaults                 64 // uleb128      r2.06	r2.07: Re-specified tag value inheritance more precisely (Inheritance of public tag values and No defaults tag). In the absence of Tag_nodefaults the specification reduces to that used before its introduction. We believe that only Arm tools are affected. r2.09: Use deprecated as Tag_Section and Tag_Symbol are deprecated.
+#define Tag_also_compatible_with       65 // NTBS         r2.05	r2.06: Restricted usage as noted in Secondary compatibility tag. r2.09: Clarified data format.
+#define Tag_conformance                67 // NTBS         r2.05	 
+// #define Tag_T2EE_use                   66 // uleb128      r2.07	r2.09: Deprecated as not useful
+#define Tag_Virtualization_use         68 // uleb128      r2.07	r2.08: Added two enumeration values to support the 2009 virtualization extensions.
+// #define Tag_MPextension_use            70 // uleb128      r2.07	r2.08: Recoded to 42 (must be recognized by toolchains). PLDW is a user-mode instruction, undefined in architecture v7 w/o MP extensions.
+#define Tag_FramePointer_use           72 // uleb128      2019q2	 
+#define Tag_BTI_use                    74 // uleb128      2021q1	 
+#define Tag_PACRET_use                 76 // uleb128      2021q1
+
+// values for Tag_CPU_arch
+#define Pre_v4                0 // Pre-v4
+#define Arm_v4                1 // Arm v4     // e.g. SA110
+#define Arm_v4T               2 // Arm v4T    // e.g. Arm7TDMI
+#define Arm_v5T               3 // Arm v5T    // e.g. Arm9TDMI
+#define Arm_v5TE              4 // Arm v5TE   // e.g. Arm946E-S
+#define Arm_v5TEJ             5 // Arm v5TEJ  // e.g. Arm926EJ-S
+#define Arm_v6                6 // Arm v6     // e.g. Arm1136J-S
+#define Arm_v6KZ              7 // Arm v6KZ   // e.g. Arm1176JZ-S
+#define Arm_v6T2              8 // Arm v6T2   // e.g. Arm1156T2F-S
+#define Arm_v6K               9 // Arm v6K    // e.g. Arm1136J-S
+#define Arm_v7               10 // Arm v7     // e.g. Cortex-A8, Cortex-M3
+#define Arm_v6_M             11 // Arm v6-M   // e.g. Cortex-M1
+#define Arm_v6S_M            12 // Arm v6S-M  // v6-M with the System extensions
+#define Arm_v7E_M            13 // Arm v7E-M  // v7-M with DSP extensions
+#define Arm_v8_A             14 // Arm v8-A
+#define Arm_v8_R             15 // Arm v8-R
+#define Arm_v8_M_baseline    16 // Arm v8-M.baseline
+#define Arm_v8_M_mainline    17 // Arm v8-M.mainline
+#define Arm_v8_1_A           18 // Arm v8.1-A
+#define Arm_v8_2_A           19 // Arm v8.2-A
+#define Arm_v8_3_A           20 // Arm v8.3-A
+#define Arm_v8_1_M_mainline  21 // Arm v8.1-M.mainline
+#define Arm_v9               22 // Arm v9-A

@@ -21,6 +21,7 @@ struct ObjectFile {
         FLAG_READ_ONLY       = 0x1,
         FLAG_CODE            = 0x2,
         FLAG_DEBUG           = 0x4,
+        FLAG_WRITE           = 0x8,
         // FLAG_EMPTY, whether section has initialized data or not?
     };
     // Relocation types depend on object file format.
@@ -81,6 +82,7 @@ struct ObjectFile {
         SYM_FUNCTION,
         SYM_DATA, // data/object/value in the section?
         SYM_EMPTY,
+        SYM_FILE,
         
         // Windows specific?
         SYM_ABS,

@@ -1129,6 +1129,13 @@ ARMRegister ARMBuilder::alloc_register(BCRegister reg) {
         bc_info.arm_reg = (ARMRegister)i;
         return (ARMRegister)i;
     }
+    auto& info = arm_registers[arm_reg];
+    info.used = true;
+    info.bc_reg = reg;
+    info.last_used = 0;
+    
+    auto& bc_info = bc_registers[reg];
+    bc_info.arm_reg = (ARMRegister)arm_reg;
     return (ARMRegister)arm_reg;
 }
 ARMRegister ARMBuilder::find_register(BCRegister reg) {

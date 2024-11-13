@@ -58,7 +58,7 @@ global UART1: XUARTPS* =cast_unsafe<XUARTPS*>cast<uword> UART1_BASE;
 #macro XUARTPS_BDIV_CD_115200       6  /*Baud Rate Clock Divisor*/
 
 /* Bits defined in the Register Channel_sts_reg0 */
-#macro UART_STS_TXFULL 1<<4 /* Transmitter FIFO Full continuous status:
+#macro UART_STS_TXFULL (1<<4) /* Transmitter FIFO Full continuous status:
                                0: Tx FIFO is not full
                                1: Tx FIFO is full*/
 

@@ -125,7 +125,7 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
                 options->target = ToTarget(commands[i]);
                 if(options->target == TARGET_UNKNOWN) {
                     invalidArguments = true;
-                    log::out << log::RED << arg << " is not a valid target.\n";
+                    log::out << log::RED << commands[i] << " is not a valid target.\n";
                     // TODO: print list of targets
                     print_targets = true;
                 }
@@ -244,6 +244,7 @@ const char* ToString(TargetPlatform target){
         CASE(TARGET_WINDOWS_x64,"win-x64")
         CASE(TARGET_LINUX_x64,"linux-x64")
         CASE(TARGET_ARM,"arm")
+        CASE(TARGET_AARCH64,"aarch64")
         CASE(TARGET_UNKNOWN,"unknown-target")
         default: Assert(false);
     }
@@ -256,6 +257,7 @@ TargetPlatform ToTarget(const std::string& str){
     CASE(TARGET_WINDOWS_x64,"win-x64")
     CASE(TARGET_LINUX_x64,"linux-x64")
     CASE(TARGET_ARM,"arm")
+    CASE(TARGET_AARCH64,"aarch64")
     return TARGET_UNKNOWN;
     #undef CASE
 }

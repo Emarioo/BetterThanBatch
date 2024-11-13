@@ -74,10 +74,20 @@ namespace dwarf {
         // padding of DW_CFA_nop to match the specified length
     };
     struct FrameDescriptionEntry {
+        static const int SIZE64 = 24;
+        static const int SIZE32 = 16;
         u32 length; // multiple of 8?
         u32 CIE_pointer; // points to common information entry this description belongs to?
-        u64 initial_location;
-        u64 address_range;
+        union {
+            struct {
+                u64 initial_location;
+                u64 address_range;
+            };
+            struct {
+                u32 initial_location32;
+                u32 address_range32;
+            };
+        };
         // instructions, array of u8
         // padding, DW_CFA_nop untill the length is reached
     };

@@ -13,7 +13,7 @@ set OBJDUMP=arm-none-eabi-objdump.exe
 set LD=arm-none-eabi-ld.exe
 set QEMU=qemu-system-arm
 
-%GCC% -c -O0 -g main.c -o main.o
+%GCC% -c -O0 main.c -o main.o
 %AS% startup.s -o startup.o
 @REM %AS% assembly.s -o assembly.o
 @REM %OBJDUMP% -d main.o

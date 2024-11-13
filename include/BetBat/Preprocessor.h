@@ -11,6 +11,7 @@
 #include "BetBat/Signals.h"
 
 struct Compiler;
+struct CompilerImport;
 
 namespace preproc {
 struct MacroSpecific {

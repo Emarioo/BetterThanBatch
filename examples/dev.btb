@@ -1,8 +1,8 @@
 
 
-#import "arm/xilinx-zynq-a9"
+// #import "arm/xilinx-zynq-a9"
 
-init_uart0_RxTx_115200_8N1()
+// init_uart0_RxTx_115200_8N1()
 
-putchar('a')
+// putchar('a')
 // puts("Hello world!\n".ptr)
