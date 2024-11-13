@@ -2,15 +2,16 @@
     Linker script
 */
 
-ENTRY(_Reset)
+ENTRY(start)
 SECTIONS
 {
     . = 0x10000;
-    start = 0x10000;
-    .startup . : { startup.o(.text) }
-    .text : { *(.text) }
-  /*  .data : { *(.data) } */
-   /* .bss : { *(.bss COMMON) } */
+    .text : { 
+        startup.o(.text)
+        *(.text)
+    }
+    .data : { *(.data) }
+    .bss : { *(.bss COMMON) }
     . = ALIGN(8);
     . = . + 0x10000; /* 64kB of stack memory */
     stack_top = .;

@@ -1,5 +1,5 @@
-.global _Reset
-_Reset:
+.global start
+start:
     LDR sp, =stack_top
     BL main
     

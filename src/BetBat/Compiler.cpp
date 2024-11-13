@@ -1223,6 +1223,7 @@ void Compiler::run(CompileOptions* options) {
     std::string output_extension = ExtractExtension(output_path);
     
     std::string object_path = "bin/" + output_filename + ".o";
+    // std::string object_path = output_filename + ".o";
     std::string temp_path{};
     bool perform_copy = false;
 
@@ -1826,9 +1827,9 @@ void Compiler::run(CompileOptions* options) {
         cmd += object_path + " ";
         
         const char* startup = 
-            ".global _Reset\n"
-            "_Reset:\n"
-            "    LDR sp, =stack_top\n"
+            ".global start\n"
+            "start:\n"
+            "    LDR sp, =_stack_top\n"
             "    BL main\n"
             "    # angel_SWIreason_ReportException\n"
             "    mov r0, #0x18\n"
@@ -1843,18 +1844,19 @@ void Compiler::run(CompileOptions* options) {
             "    # infinite loop if interrupt didn't work\n"
             "    B .\n";
         const char* linker_script = 
-            "ENTRY(_Reset)\n"
+            "ENTRY(start)\n"
             "SECTIONS\n"
             "{\n"
             "    . = 0x10000;\n"
-            "    start = 0x10000;\n"
-            "    .startup . : { bin/arm_startup.o(.text) }\n"
-            "    .text : { *(.text) }\n"
+            "    .text : {\n"
+            "        bin/arm_startup.o(.text)\n"
+            "        *(.text)\n"
+            "    }\n"
             "    .data : { *(.data) }\n"
             "    .bss : { *(.bss COMMON) }\n"
             "    . = ALIGN(8);\n"
-            "    . = . + 0x10000; /* 64kB of stack memory */\n"
-            "    stack_top = .;\n"
+        "        . = . + 0x10000; /* 64kB of stack memory */\n"
+            "    _stack_top = .;\n"
             "}\n";
             
         auto file_startup = FileOpen("bin/arm_startup.s", FILE_CLEAR_AND_WRITE);
@@ -1876,13 +1878,13 @@ void Compiler::run(CompileOptions* options) {
         FileWrite(file_lscript, linker_script, strlen(linker_script));
         FileClose(file_lscript);
         
-        cmd += "bin/arm_startup.o -T bin/arm_lscript.ld ";
+        cmd += " bin/arm_startup.o -T bin/arm_lscript.ld";
         
         for (int i = 0;i<(int)linkDirectives.size();i++) {
             auto& dir = linkDirectives[i];
-            cmd += dir + " ";
+            cmd += " " + dir;
         }
-        cmd += "-o " + output_path;
+        cmd += " -o " + output_path;
         int exitCode = 0;
         bool failed = false;
         {

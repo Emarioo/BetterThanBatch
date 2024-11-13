@@ -21,7 +21,7 @@ set QEMU=qemu-system-arm
 %LD% main.o startup.o -T link.ld -o main.elf
 @REM %OBJDUMP% -d main.elf
 
-%QEMU% -semihosting -M xilinx-zynq-a9 -cpu cortex-a9 -nographic -serial mon:stdio -kernel main.elf
+@REM %QEMU% -semihosting -M xilinx-zynq-a9 -cpu cortex-a9 -nographic -serial mon:stdio -kernel main.elf
 @REM  -s -S
 
 @REM Ctrl+A (release) X - To exit qemu

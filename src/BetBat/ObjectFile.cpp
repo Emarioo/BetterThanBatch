@@ -25,6 +25,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
 
     bool suc = false;
     #define CHECK Assert(suc);
+    
+    // objectFile.addSymbol(ObjectFile::SYM_FILE, "dev.btb", SHN_ABS, 0);
 
     auto section_text = objectFile.createSection(".text", FLAG_CODE, compiler->options->target==TARGET_ARM?4:16);
     SectionNr section_data = -1;
@@ -42,6 +44,9 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     SectionNr section_xdata = -1;
     SectionNr section_pdata = -1;
     SectionNr section_arm_attr = -1;
+    SectionNr section_comment = -1;
+    SectionNr section_datas = -1;
+    SectionNr section_bss = -1;
     // SectionNr section_pdata2 = -1;
     if(has_exceptions) {
         section_xdata = objectFile.createSection(".xdata", FLAG_READ_ONLY, 4);
@@ -49,9 +54,15 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         // section_pdata2 = objectFile.createSection(".pdata", FLAG_NONE | FLAG_READ_ONLY, 4);
     }
     if(compiler->options->target == TARGET_ARM) {
-        // section_arm_attr = objectFile.createSection(".ARM.attributes", FLAG_NONE, 1);
+        // section_datas = objectFile.createSection(".data", FLAG_WRITE, 1);
+        // section_bss = objectFile.createSection(".bss", FLAG_WRITE, 1);
+        
+        // this symbol tells objdump that after this offset (text section)
+        // we have instructions you can decode, without the symbol the
+        // section will be decoded as words
+        objectFile.addSymbol(ObjectFile::SYM_LOCAL_NOTYPE, "$a", section_text, 0);
+        // section_comment = objectFile.createSection(".comment", FLAG_NONE, 1);
         section_arm_attr = objectFile.createSection(".ARM.attributes", FLAG_NONE, 1);
-        objectFile.addSymbol(ObjectFile::SYM_FILE, "dev.btb", SHN_ABS, 0);
     }
 
     DynamicArray<u32> tinyprogram_offsets;
@@ -344,6 +355,12 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         stream->write_at<u32>(subsection_length_off, stream->getWriteHead() - subsection_offset);
         
     }
+    // if(section_comment != -1) {
+    //     auto stream = objectFile.getStreamFromSection(section_comment);
+    //     stream->write("GCC: (Arm GNU Toolchain 13.3.Rel1 (Build arm-13.24)) 13.3.1 20240614");
+        
+    //     objectFile.addRelocation(section_text, RELOC_ARM_V4BX, text_stream->getWriteHead()-4, 0, 0); 
+    // }
     
     for(int i=0;i<program->dataRelocations.size();i++){
         auto& rel = program->dataRelocations[i];
@@ -414,7 +431,14 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         
         Assert(sym.tinyprog_index != -1); // may happen if function wasn't generated before we exported it or something?
         u32 real_offset = tinyprogram_offsets[sym.tinyprog_index];
+        // if(compiler->options->target == TARGET_ARM) {
+        //     // Function symbols must have the function size attached to it because disassembling elf files
+        //     // with objdump or readelf will show raw data (.word) instead of the instruction mnemonics.
+        //     int function_size = program->functionPrograms[sym.tinyprog_index]->head;
+        //     objectFile.addSymbol(SYM_FUNCTION, sym.name, section_text, real_offset, function_size);
+        // } else {
         objectFile.addSymbol(SYM_FUNCTION, sym.name, section_text, real_offset);
+        // }
     }
 
     if(has_exceptions) {
@@ -725,10 +749,13 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
     // rest of ident can be zero, elf object files from gcc have zero
     
     ELF_SET(header, e_type, ET_REL); // specifies that this is an object file and not an executable or shared/dynamic library
-    if(extra_info->target == TARGET_ARM)
+    if(extra_info->target == TARGET_ARM) {
         header32->e_machine = EM_ARM;
-    else
+        // Processor specific flags.
+        header32->e_flags = 0x500'0000; // Version5 EABI
+    } else {
         header64->e_machine = EM_X86_64;
+    }
     ELF_SET(header, e_version, EV_CURRENT);
     // header->e_entry = 0; // zero for no entry point
     // header->e_phoff = 0; // we don't have program headers
@@ -765,16 +792,40 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         CHECK
         memset(section, 0, sizeof(*section));
     }
-
+    
+    int ind_symtab = 0; // set later, relocation sections use symtab index and are update later too
+    DynamicArray<Elf32_Shdr*> reloca_sections32{};
+    DynamicArray<Elf64_Shdr*> reloca_sections64{};
+    DynamicArray<Elf32_Shdr*> reloc_sections32{};
+    DynamicArray<Elf64_Shdr*> reloc_sections64{};
     DynamicArray<Elf32_Shdr*> sectionHeaders32{};
     DynamicArray<Elf64_Shdr*> sectionHeaders64{};
-    if(small_elf)
+    if(small_elf) {
+        reloc_sections32.resize(_sections.size() + 1);
+        reloca_sections32.resize(_sections.size() + 1);
         sectionHeaders32.resize(_sections.size() + 1);
-    else
+    } else {
+        reloc_sections64.resize(_sections.size() + 1);
+        reloca_sections64.resize(_sections.size() + 1);
         sectionHeaders64.resize(_sections.size() + 1);
+    }
+    
+    auto has_reloc = [&](Section* s, bool with_addend) {
+        for(int i=0;i<s->relocations.size();i++) {
+            auto& r = s->relocations[i];
+            if(with_addend == ((r.type & RELOCA_MASK) != 0)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    
+    std::unordered_map<int,int> section_number_map{};
+    
     for(int i=0;i<_sections.size();i++){
         auto& section = _sections[i];
-        Assert(section->number == ELF_GET(header,e_shnum));
+        section_number_map[section->number] = ELF_GET(header,e_shnum);
+        // Assert(section->number == ELF_GET(header,e_shnum));
         
         Elf32_Shdr* sheader32 = nullptr;
         Elf64_Shdr* sheader64 = nullptr;
@@ -800,28 +851,96 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         } else {
             ELF_SET(sheader,sh_type, SHT_PROGBITS);
         }
-        
-        // sheader->sh_flags = 0; // set below
-        // sheader->sh_addr = 0; // always zero for object files
-        // sheader->sh_offset = 0; // place where data lies, LATER
-        // sheader->sh_size = 0; // size of data, LATER
-        // sheader->sh_link = 0; // not used
-        // sheader->sh_info = 0; // not used
         ELF_SET(sheader,sh_addralign, section->alignment); // check if alignment is 2**x
-        // sheader->sh_entsize = 0;
+        if(section->name == ".data") {
+            ELF_SET(sheader,sh_type, SHT_PROGBITS);
+            ELF_SET(sheader,sh_flags, SHF_ALLOC|SHF_WRITE);
+        } else if(section->name == ".bss") {
+            ELF_SET(sheader,sh_type, SHT_NOBITS);
+            ELF_SET(sheader,sh_flags, SHF_ALLOC|SHF_WRITE);
+        } else if(section->name == ".comment") {
+            ELF_SET(sheader,sh_type, SHT_PROGBITS);
+            ELF_SET(sheader,sh_flags, SHF_MERGE|SHF_STRINGS);
+        } else {
+            // sheader->sh_flags = 0; // set below
+            // sheader->sh_addr = 0; // always zero for object files
+            // sheader->sh_offset = 0; // place where data lies, LATER
+            // sheader->sh_size = 0; // size of data, LATER
+            // sheader->sh_link = 0; // not used
+            // sheader->sh_info = 0; // not used
+            // sheader->sh_entsize = 0;
 
-        if(section->flags == FLAG_READ_ONLY)
-            // sheader->sh_flags = 0;
-            ;
-        else if(section->flags == FLAG_DEBUG)
-            // sheader->sh_flags = 0;
-            ;
-        else if(section->flags == FLAG_CODE)
-            ELF_SET(sheader,sh_flags, SHF_ALLOC | SHF_EXECINSTR);
-        else if(section->flags == FLAG_WRITE)
-            ELF_SET(sheader,sh_flags ,SHF_ALLOC | SHF_WRITE);
+            if(section->flags == FLAG_READ_ONLY)
+                // sheader->sh_flags = 0;
+                ;
+            else if(section->flags == FLAG_DEBUG)
+                // sheader->sh_flags = 0;
+                ;
+            else if(section->flags == FLAG_CODE)
+                ELF_SET(sheader,sh_flags, SHF_ALLOC | SHF_EXECINSTR);
+            else if(section->flags == FLAG_WRITE)
+                ELF_SET(sheader,sh_flags ,SHF_ALLOC | SHF_WRITE);
+        }
+        
+        
+        if(has_reloc(section, true)) {
+            Elf32_Shdr* sheader32 = nullptr;
+            Elf64_Shdr* sheader64 = nullptr;
+            if(small_elf) {
+                suc = obj_stream->write_late((void**)&sheader32, sizeof(*sheader32));
+                CHECK
+                reloca_sections32[section->number] = sheader32;
+                memset(sheader32, 0, sizeof(*sheader32));
+                sheader32->sh_entsize = sizeof(Elf32_Rela);
+            } else {
+                suc = obj_stream->write_late((void**)&sheader64, sizeof(*sheader64));
+                CHECK
+                reloca_sections64[section->number] = sheader64;
+                memset(sheader64, 0, sizeof(*sheader64));
+                sheader64->sh_entsize = sizeof(Elf64_Rela);
+            }
+            ELF_GET(header, e_shnum++);
+            
+            // sheader->sh_name = 0; // set in shstrtab section further down
+            ELF_SET(sheader,sh_type, SHT_RELA);
+            // sheader->sh_flags = 0; // IMPORTANT: what flags?
+            // sheader->sh_addr = 0; // always zero for object files
+            // sheader->sh_offset = 0; // place where data lies, LATER
+            // sheader->sh_size = 0; // size of data, LATER
+            ELF_SET(sheader,sh_link, ind_symtab); // index to symtab section
+            ELF_SET(sheader,sh_info, section_number_map[section->number]); // index to section where relocations should be applied
+            ELF_SET(sheader,sh_addralign, REGISTER_SIZE);
+        }
+        if(has_reloc(section, false)) {
+            Elf32_Shdr* sheader32 = nullptr;
+            Elf64_Shdr* sheader64 = nullptr;
+            if(small_elf) {
+                suc = obj_stream->write_late((void**)&sheader32, sizeof(*sheader32));
+                CHECK
+                reloc_sections32[section->number] = sheader32;
+                memset(sheader32, 0, sizeof(*sheader32));
+                sheader32->sh_entsize = sizeof(Elf32_Rel);
+            } else {
+                suc = obj_stream->write_late((void**)&sheader64, sizeof(*sheader64));
+                CHECK
+                reloc_sections64[section->number] = sheader64;
+                memset(sheader64, 0, sizeof(*sheader64));
+                sheader64->sh_entsize = sizeof(Elf64_Rel);
+            }
+            ELF_GET(header, e_shnum++);
+            
+            // sheader->sh_name = 0; // set in shstrtab section further down
+            ELF_SET(sheader,sh_type, SHT_REL);
+            ELF_SET(sheader,sh_flags, SHF_INFO_LINK);
+            // sheader->sh_addr = 0; // always zero for object files
+            // sheader->sh_offset = 0; // place where data lies, LATER
+            // sheader->sh_size = 0; // size of data, LATER
+            ELF_SET(sheader,sh_link, ind_symtab); // index to symtab section
+            ELF_SET(sheader,sh_info, section_number_map[section->number]); // index to section where relocations should be applied
+            ELF_SET(sheader,sh_addralign, REGISTER_SIZE);
+        }
     }
-
+   
     Elf32_Shdr* s_sectionStringTable32 = nullptr;
     Elf64_Shdr* s_sectionStringTable64 = nullptr;
     { // Section name string table
@@ -884,7 +1003,7 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         // sheader->sh_entsize = 0;
     }
 
-    int ind_symtab = ELF_GET(header,e_shnum);
+    ind_symtab = ELF_GET(header,e_shnum);
     Elf32_Shdr* s_symtab32 = nullptr;
     Elf64_Shdr* s_symtab64 = nullptr;
     { // Symbol table
@@ -907,78 +1026,28 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         
         // sheader->sh_name = 0; // set in shstrtab section further down
         ELF_SET(sheader,sh_type, SHT_SYMTAB);
-        ELF_SET(sheader,sh_flags, SHF_ALLOC);
+        if(extra_info->target != TARGET_ARM) {
+            ELF_SET(sheader,sh_flags, SHF_ALLOC);
+        }
         // sheader->sh_addr = 0; // always zero for object files
         // sheader->sh_offset = 0; // place where data lies, LATER
         // sheader->sh_size = 0; // size of data, LATER
         ELF_SET(sheader,sh_link ,ind_strtab); // Index to string table section, names of symbols should be put there
         // sheader->sh_info = 0; // Index of first non-local symbol (or the number of local symbols). Local symbols must come first.
-        ELF_SET(sheader,sh_addralign, 8);
-    }
-
-    DynamicArray<Elf32_Shdr*> reloca_sections32;
-    DynamicArray<Elf64_Shdr*> reloca_sections64;
-    if(small_elf) {
-        reloca_sections32.resize(_sections.size() + 1); // we may not use all
-    } else {
-        reloca_sections64.resize(_sections.size() + 1); // we may not use all
-    }
-    for(int i=0;i<_sections.size();i++) {
-        auto& section = _sections[i];
-        if(section->relocations.size() == 0)
-            continue;
-        
-        Elf32_Shdr* sheader32 = nullptr;
-        Elf64_Shdr* sheader64 = nullptr;
-        if(small_elf) {
-            suc = obj_stream->write_late((void**)&sheader32, sizeof(*sheader32));
-            CHECK
-            reloca_sections32[section->number] = sheader32;
-            memset(sheader32, 0, sizeof(*sheader32));
-            sheader32->sh_entsize = sizeof(Elf32_Rela);
-        } else {
-            suc = obj_stream->write_late((void**)&sheader64, sizeof(*sheader64));
-            CHECK
-            reloca_sections64[section->number] = sheader64;
-            memset(sheader64, 0, sizeof(*sheader64));
-            sheader64->sh_entsize = sizeof(Elf64_Rela);
-        }
-        ELF_GET(header, e_shnum++);
-        
-        // sheader->sh_name = 0; // set in shstrtab section further down
-        ELF_SET(sheader,sh_type, SHT_RELA);
-        // sheader->sh_flags = 0; // IMPORTANT: what flags?
-        // sheader->sh_addr = 0; // always zero for object files
-        // sheader->sh_offset = 0; // place where data lies, LATER
-        // sheader->sh_size = 0; // size of data, LATER
-        ELF_SET(sheader,sh_link, ind_symtab); // index to symtab section
-        ELF_SET(sheader,sh_info, section->number); // index to section where relocations should be applied
         ELF_SET(sheader,sh_addralign, REGISTER_SIZE);
     }
-
-    // DynamicArray<Elf64_Shdr*> reloc_sections;
-    // reloc_sections.resize(_sections.size() + 1); // we may not use all
-    // for(int i=0;i<_sections.size();i++) {
-    //     auto& section = _sections[i];
-    //     auto& sheader = reloc_sections[section->number];
-    //     if(section->relocations.size() == 0)  continue;
-
-    //     header->e_shnum++;
-    //     suc = obj_stream->write_late((void**)&sheader, sizeof(*sheader));
-    //     CHECK
-    //     memset(sheader, 0, sizeof(*sheader));
-        
-    //     sheader->sh_name = 0; // set in shstrtab section further down
-    //     sheader->sh_type = SHT_REL;
-    //     sheader->sh_flags = 0; // IMPORTANT: what flags?
-    //     sheader->sh_addr = 0; // always zero for object files
-    //     sheader->sh_offset = 0; // place where data lies, LATER
-    //     sheader->sh_size = 0; // size of data, LATER
-    //     sheader->sh_link = ind_symtab; // index to symtab section
-    //     sheader->sh_info = section->number; // index to section where relocations should be applied
-    //     sheader->sh_addralign = 8;
-    //     sheader->sh_entsize = sizeof(Elf64_Rel);
-    // }
+    
+    #define SET_SH_LINK(SECTION_LIST) \
+    for(int i=0;i<SECTION_LIST.size();i++) {\
+        auto& s = SECTION_LIST[i];\
+        if(s) {\
+            s->sh_link = ind_symtab;\
+        }\
+    }
+    SET_SH_LINK(reloc_sections32)
+    SET_SH_LINK(reloc_sections64)
+    SET_SH_LINK(reloca_sections32)
+    SET_SH_LINK(reloca_sections64)
 
     // ###################
     //  SECTION STRING TABLE DATA
@@ -988,8 +1057,6 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
         ELF_SET(s_sectionStringTable,sh_offset, obj_stream->getWriteHead());
         suc = obj_stream->write1('\0'); // table begins with null string
         CHECK
-        
-        // ELF_SET(header,e_shstrndx)
         
         if(small_elf) {
             Elf32_Shdr* sheader32 = s_sectionStringTable32;
@@ -1038,6 +1105,14 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                     suc = obj_stream->write(nom.c_str(),nom.length() + 1);
                     CHECK
                 }
+                rheader32 = reloc_sections32[section->number];
+                if(rheader32) {
+                    rheader32->sh_name = obj_stream->getWriteHead() - s_sectionStringTable32->sh_offset;
+                    // std::string nom = section->name+".rela";
+                    std::string nom = ".rel"+section->name;
+                    suc = obj_stream->write(nom.c_str(),nom.length() + 1);
+                    CHECK
+                }
             } else {
                 sheader64 = sectionHeaders64[section->number];
                 sheader64->sh_name = obj_stream->getWriteHead() - s_sectionStringTable64->sh_offset;
@@ -1051,15 +1126,15 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                     suc = obj_stream->write(nom.c_str(),nom.length() + 1);
                     CHECK
                 }
+                rheader64 = reloc_sections64[section->number];
+                if(rheader64) {
+                    rheader64->sh_name = obj_stream->getWriteHead() - s_sectionStringTable64->sh_offset;
+                    // std::string nom = section->name+".rela";
+                    std::string nom = ".rel"+section->name;
+                    suc = obj_stream->write(nom.c_str(),nom.length() + 1);
+                    CHECK
+                }
             }
-
-            // auto rheader = reloc_sections[section->number];
-            // if(rheader) {
-            //     rheader->sh_name = obj_stream->getWriteHead() - s_sectionStringTable->sh_offset;
-            //     std::string nom = section->name+".rel";
-            //     suc = obj_stream->write(nom.c_str(),nom.length() + 1);
-            //     CHECK
-            // }
         }
         ELF_SET(s_sectionStringTable,sh_size, obj_stream->getWriteHead() - ELF_GET(s_sectionStringTable,sh_offset));
         // make sure that \0 is at the end of the table
@@ -1090,16 +1165,21 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
 
         Elf32_Shdr* rheader32 = nullptr;
         Elf64_Shdr* rheader64 = nullptr;
-        if(small_elf)
+        if(small_elf) {
             rheader32 = reloca_sections32[section->number];
-        else
+        } else {
             rheader64 = reloca_sections64[section->number];
+        }
         if(rheader32 || rheader64) {
             obj_stream->write_align(ELF_GET(rheader,sh_addralign));
             ELF_SET(rheader,sh_offset, obj_stream->getWriteHead());
 
             for(int ri=0;ri<section->relocations.size();ri++) {
                 auto& myrel = section->relocations[ri];
+
+                if((myrel.type & RELOCA_MASK) == 0) {
+                    continue;
+                }
 
                 Elf32_Rela* rel32 = nullptr;
                 Elf64_Rela* rel64 = nullptr;
@@ -1157,40 +1237,48 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
             }
             ELF_SET(rheader,sh_size, obj_stream->getWriteHead() - ELF_GET(rheader,sh_offset));
         }
-        // rheader = reloc_sections[section->number];
-        // if(rheader) {
-        //     obj_stream->write_align(rheader->sh_addralign);
-        //     rheader->sh_offset = obj_stream->getWriteHead();
+        rheader32 = nullptr;
+        rheader64 = nullptr;
+        if(small_elf) {
+            rheader32 = reloc_sections32[section->number];
+        } else {
+            rheader64 = reloc_sections64[section->number];
+        }
+        if(rheader32 || rheader64) {
+            obj_stream->write_align(ELF_GET(rheader,sh_addralign));
+            ELF_SET(rheader,sh_offset, obj_stream->getWriteHead());
 
-        //     for(int ri=0;ri<section->relocations.size();ri++) {
-        //         auto& myrel = section->relocations[ri];
+            for(int ri=0;ri<section->relocations.size();ri++) {
+                auto& myrel = section->relocations[ri];
 
-        //         if(myrel.type == RELOC_PC64) {
-        //             Elf64_Rel* rel = nullptr;
-        //             suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
-        //             CHECK
-        //             memset(rel, 0, sizeof(*rel));
+                if((myrel.type & RELOCA_MASK) != 0) {
+                    continue;
+                }
 
-        //             // if(myrel.type == RELOC_PC32) {
-        //             //     rel->r_offset = myrel.offset;
-        //             //     int symindex = getSectionSymbol(myrel.sectionNr);
-        //             //     rel->r_info = ELF64_R_INFO(symindex, R_X86_64_PC32);
-        //             //     rel->r_addend = myrel.offsetIntoSection;
-        //             //     rel->r_addend -= 4;
-        //             // } else if (myrel.type == RELOC_PLT32){
-        //             //     rel->r_offset = myrel.offset;
-        //             //     rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_PLT32);
-        //             //     rel->r_addend = -4;
-        //             // } else 
-        //             if (myrel.type == RELOC_PC64){
-        //                 rel->r_offset = myrel.offset;
-        //                 rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_64);
-        //                 // rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_PC64);
-        //             }
-        //         }
-        //     }
-        //     rheader->sh_size = obj_stream->getWriteHead() - rheader->sh_offset;
-        // }
+                Elf32_Rel* rel32 = nullptr;
+                Elf64_Rel* rel64 = nullptr;
+                if(small_elf) {
+                    suc = obj_stream->write_late((void**)&rel32, sizeof(*rel32));
+                    CHECK
+                    memset(rel32, 0, sizeof(*rel32));
+                } else {
+                    suc = obj_stream->write_late((void**)&rel64, sizeof(*rel64));
+                    CHECK
+                    memset(rel64, 0, sizeof(*rel64));
+                }
+                int rel_type = 0;
+                if(myrel.type == RELOC_ARM_V4BX) {
+                    rel_type = R_ARM_V4BX;
+                }
+                ELF_SET(rel, r_offset, myrel.offset);
+                if(small_elf) {
+                    ELF_SET(rel,r_info, ELF32_R_INFO(myrel.symbolIndex,rel_type));
+                } else {
+                    ELF_SET(rel,r_info, ELF64_R_INFO(myrel.symbolIndex,rel_type));
+                }
+            }
+            ELF_SET(rheader,sh_size, obj_stream->getWriteHead() - ELF_GET(rheader,sh_offset));
+        }
     }
 
     {
@@ -1225,15 +1313,23 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                 ELF_SET(sym,st_name, addString(mysym.name));
                 // sym->st_other = 0; // always zero
                 // sym->st_size = 0;
-                ELF_SET(sym,st_shndx, mysym.sectionNr);
+                ELF_SET(sym,st_shndx, section_number_map[mysym.sectionNr]);
                 ELF_SET(sym,st_value, mysym.offset);
 
                 ELF_SET(sym,st_info, ELFX_ST_INFO(STB_GLOBAL, STT_NOTYPE));
+            } else if(mysym.type == SYM_LOCAL_NOTYPE) {
+                ELF_SET(sym,st_name, addString(mysym.name));
+                // sym->st_other = 0; // always zero
+                // sym->st_size = 0;
+                ELF_SET(sym,st_shndx, section_number_map[mysym.sectionNr]);
+                ELF_SET(sym,st_value, mysym.offset);
+
+                ELF_SET(sym,st_info, ELFX_ST_INFO(STB_LOCAL, STT_NOTYPE));
             } else {
                 ELF_SET(sym,st_name, addString(mysym.name));
                 // sym->st_other = 0; // always zero
                 // sym->st_size = 0;
-                ELF_SET(sym,st_shndx, mysym.sectionNr);
+                ELF_SET(sym,st_shndx, section_number_map[mysym.sectionNr]);
                 ELF_SET(sym,st_value, mysym.offset);
 
                 if (mysym.type == SYM_SECTION){
@@ -1251,6 +1347,7 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                     bind = STB_GLOBAL;
                     if(mysym.type == SYM_FUNCTION) {
                         ELF_SET(sym,st_info, ELFX_ST_INFO(STB_GLOBAL, STT_FUNC));
+                        ELF_SET(sym,st_size, mysym.extra_value);
                     } else if(mysym.type == SYM_DATA) {
                         Assert(false);
                         // use PC32 relocation if possible
@@ -1330,7 +1427,7 @@ SectionNr ObjectFile::findSection(const std::string& name) {
     }
     return 0;
 }
-int ObjectFile::addSymbol(ObjectFile::SymbolType type, const std::string& name, SectionNr sectionNr, u32 offset) {
+int ObjectFile::addSymbol(ObjectFile::SymbolType type, const std::string& name, SectionNr sectionNr, u32 offset, u32 extra_value) {
     if(type == SYM_SECTION) {
         auto& sec = _sections[sectionNr - 1];
         if(sec->symbolIndex != -1 && sec->name == name)
@@ -1351,6 +1448,7 @@ int ObjectFile::addSymbol(ObjectFile::SymbolType type, const std::string& name, 
     sym.name = name;
     sym.sectionNr = sectionNr;
     sym.offset = offset;
+    sym.extra_value = extra_value;
     if(type == SYM_SECTION) {
         auto& sec = _sections[sectionNr - 1];
         if(sec->name == name)

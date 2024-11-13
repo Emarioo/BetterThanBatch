@@ -33,9 +33,12 @@ struct ObjectFile {
     // but also pass it as an argument of ELF.
     enum RelocationType : u16 {
         // RELOC_PTR,
+        
+        RELOC_MASK,
+        RELOCA_MASK = 0x100,
 
         // Windows x64, COFF
-        RELOCA_ADDR64,
+        RELOCA_ADDR64 = RELOCA_MASK,
         RELOCA_ADDR32NB,
         RELOCA_SECREL,
         RELOCA_REL32, // used when refering to external functions
@@ -46,6 +49,9 @@ struct ObjectFile {
         RELOCA_32 = RELOCA_SECREL,
         RELOCA_PLT32 = RELOCA_REL32, // used when refering to external functions
         RELOCA_PC32, // used when refering to data (in .data or .rodata)
+        
+        // ARM
+        RELOC_ARM_V4BX = RELOC_MASK,
     };
     /*
         What actions do we want relocations to do?
@@ -83,6 +89,7 @@ struct ObjectFile {
         SYM_DATA, // data/object/value in the section?
         SYM_EMPTY,
         SYM_FILE,
+        SYM_LOCAL_NOTYPE,
         
         // Windows specific?
         SYM_ABS,
@@ -93,6 +100,7 @@ struct ObjectFile {
         std::string name;
         SectionNr sectionNr;
         u32 offset = 0; // offset/value
+        u32 extra_value = 0; // st_size in ELF format when compiling for ARM
     };
     ~ObjectFile() {
         cleanup();
@@ -124,7 +132,7 @@ struct ObjectFile {
         return off;
     }
     // returns index of symbol
-    int addSymbol(SymbolType type, const std::string& name, SectionNr sectionNumber, u32 offset);
+    int addSymbol(SymbolType type, const std::string& name, SectionNr sectionNumber, u32 offset, u32 extra_value = 0);
     // returns -1 if not found
     int findSymbol(const std::string& name);
     void addRelocation(SectionNr sectionNr, RelocationType type, u32 offset, u32 symbolIndex, u32 addend);

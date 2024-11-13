@@ -54,6 +54,18 @@ bool ARMBuilder::generate() {
         log::out << log::RED << "Inline assembly not supported when targeting arm.\n";
     }
     
+    // Useful when debugging
+    // int arr[]{
+    //     0x04b02de5, 0x00b08de2, 0x0cd04de2, 0x1730a0e3,
+    //     0x08300be5, 0x08301be5, 0x0330e0e1, 0x0c300be5,
+    //     0x0000a0e1, 0x00d08be2, 0x04b09de4, 0x1eff2fe1,
+    // };
+    // for(int i=0;i<sizeof(arr)/sizeof(*arr);i++) {
+    //     arr[i] = (arr[i] << 24) | (arr[i] >> 24) | ((arr[i]&0xFF00) << 8) | ((arr[i] & 0xFF0000) >> 8);
+    // }
+    // emit_bytes((u8*)arr, sizeof(arr));
+    // return true;
+    
     bc_to_machine_translation.resize(tinycode->size());
     
     REGISTER_SIZE = compiler->arch.REGISTER_SIZE;
