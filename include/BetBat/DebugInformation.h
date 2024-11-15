@@ -22,6 +22,7 @@ struct DebugLocalVar {
     TypeId typeId;
     int scopeLevel = 0;
     ScopeId scopeId;
+    bool is_global;
 };
 struct DebugFunction {
     DebugFunction(FuncImpl* impl, TinyBytecode* tinycode, u32 fileIndex) : 
@@ -42,13 +43,14 @@ struct DebugFunction {
     FuncImpl* funcImpl = nullptr; // needed for type information (arguments, return values)
     TinyBytecode* tinycode = nullptr;
 
-    void addVar(const std::string& name, int frameOffset, TypeId typeId, int scopeLevel, ScopeId scopeId) {
+    void addVar(const std::string& name, int frameOffset, TypeId typeId, int scopeLevel, ScopeId scopeId, bool is_global = false) {
         localVariables.add({});
         localVariables.last().name=name;
         localVariables.last().frameOffset=frameOffset;
         localVariables.last().typeId=typeId;
         localVariables.last().scopeLevel=scopeLevel;
         localVariables.last().scopeId=scopeId;
+        localVariables.last().is_global=is_global;
     }
     
     void addLine(u32 line, u32 bc_address, lexer::TokenOrigin origin) {
@@ -65,6 +67,15 @@ struct DebugFunction {
     DynamicArray<DebugLine> lines;
 
     // may need some flags for type of function, calling convention?
+};
+struct DebugGlobalVariable {
+    std::string name;
+    int location; // offset from data section
+    TypeId typeId;
+    int line=0;
+    int column=0;
+    int file=0;
+    int uuid=0;
 };
 struct DebugInformation {
     DebugInformation(AST* ast) : ast(ast) {}
@@ -85,6 +96,11 @@ struct DebugInformation {
             f->~DebugFunction();
             TRACK_FREE(f,DebugFunction);
         }
+        for(auto v : global_variables){
+            v->~DebugGlobalVariable();
+            TRACK_FREE(v,DebugGlobalVariable);
+        }
+        global_variables.cleanup();
         functions.cleanup();
         files.cleanup();
         // ast = nullptr;
@@ -106,14 +122,14 @@ struct DebugInformation {
     // struct LexicalScope {
     //     ScopeId scopeId;
     // };
-    
+    DynamicArray<DebugGlobalVariable*> global_variables;
     DynamicArray<DebugFunction*> functions;
     DynamicArray<std::string> files;
 
     // file should be absolute path
     u32 addOrGetFile(const std::string& file, bool skip_mutex = false);
-    // TODO: Thread safety
     DebugFunction* addFunction(FuncImpl* impl, TinyBytecode* tinycode, const std::string& from_file, int declared_at_line);
+    DebugGlobalVariable* addGlobalVariable(const std::string& name, int offset, TypeId type, int line, int column, const std::string& from_file);
 
     void print();
 

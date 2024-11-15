@@ -1845,9 +1845,12 @@ void Compiler::run(CompileOptions* options) {
             "    B .\n";
         const char* linker_script = 
             "ENTRY(start)\n"
-            "SECTIONS\n"
-            "{\n"
-            "    . = 0x10000;\n"
+            // "MEMORY {"
+            // "   FLASH (rx) : ORIGIN = 0x00010000, LENGTH = 512K "
+            // "   RAM (rw) : ORIGIN = 0x0x "
+            // "}"
+            "SECTIONS {\n"
+            "    . = 0x10000;"
             "    .text : {\n"
             "        bin/arm_startup.o(.text)\n"
             "        *(.text)\n"
@@ -1855,8 +1858,7 @@ void Compiler::run(CompileOptions* options) {
             "    .data : { *(.data) }\n"
             "    .bss : { *(.bss COMMON) }\n"
             "    . = ALIGN(8);\n"
-        "        . = . + 0x10000; /* 64kB of stack memory */\n"
-            "    _stack_top = .;\n"
+            "    _stack_top = . + 0x10000; /* 64kB of stack memory */\n"
             "}\n";
             
         auto file_startup = FileOpen("bin/arm_startup.s", FILE_CLEAR_AND_WRITE);
@@ -2015,6 +2017,11 @@ JUMP_TO_EXEC:
                     "-semihosting -nographic -serial mon:stdio -M "
                     "xilinx-zynq-a9 -cpu cortex-a9 ";
                 cmd += "-kernel " + output_path;
+                
+                // @nocheckin This should be a compiler option.
+                if(options->useDebugInformation) {
+                    cmd += " -s -S";
+                }
                 
                 ReplaceChar((char*)cmd.data(), cmd.size(), '/', '\\');
                 for (auto& a : options->userArguments) {

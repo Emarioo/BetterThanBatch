@@ -18,6 +18,16 @@ https://stackoverflow.com/questions/64838776/understanding-arm-relocation-exampl
 @TODO: Can we use THUMB instructions?
 */
 
+// u16 flip_bits(u16 bits) {
+//     return (arr[i] << 24) | (arr[i] >> 24) | ((arr[i]&0xFF00) << 8) | ((arr[i] & 0xFF0000) >> 8);
+// }
+u32 flip_bits(u32 bits) {
+    return (bits << 24) | (bits >> 24) | ((bits&0xFF00) << 8) | ((bits & 0xFF0000) >> 8);
+}
+// u64 flip_bits(u64 bits) {
+    
+// }
+
 bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode) {
     using namespace engone;
     TRACE_FUNC()
@@ -202,6 +212,7 @@ bool ARMBuilder::generate() {
     // #define DECL_SIZED_PARAM(CONTROL) InstructionControl control = (InstructionControl)(((CONTROL) & ~CONTROL_MASK_SIZE) | CONTROL_64B);
     if(tinycode->call_convention == UNIXCALL) {
         args_offset = callee_saved_space;
+        
         // If the function only accesses arguments through inline assembly then the user must save the registers manually.
         // unless we provide a special get_arg instruction in the inline assembly?
         if(is_blank && accessed_params.size()) {
@@ -417,9 +428,11 @@ bool ARMBuilder::generate() {
                 auto inst = (InstBase_op1_imm32*)base;
                 
                 ARMRegister reg_dst = alloc_register(inst->op0);
-                emit_movw(reg_dst, inst->imm32 & 0xFFFF);
-                if((inst->imm32 >> 16) != 0)
-                    emit_movt(reg_dst, inst->imm32 >> 16);
+                int imm = inst->imm32;
+                // imm = flip_bits(imm);
+                emit_movw(reg_dst, imm & 0xFFFF);
+                if((imm >> 16) != 0)
+                    emit_movt(reg_dst, imm >> 16);
             } break;
             case BC_LI64: {
                 Assert(("BC_LI64 not allowed in ARM gen",false));
@@ -1104,6 +1117,37 @@ bool ARMBuilder::generate() {
     funcprog->printHex();
     
     Assert(("Size of generated ARM is not divisible by 4",code_size() % 4 == 0));
+    
+    // TODO: Don't iterate like this
+    auto di = bytecode->debugInformation;
+    DebugFunction* fun = nullptr;
+    for(int i=0;i<di->functions.size();i++) {
+        if(di->functions[i]->tinycode == tinycode) {
+            fun = di->functions[i];
+            break;
+        }
+    }
+    Assert(fun);
+
+    fun->offset_from_bp_to_locals = callee_saved_space;
+
+    for(int i=0;i<fun->lines.size();i++) {
+        auto& ln = fun->lines[i];
+        
+        ln.asm_address = get_map_translation(ln.bc_address);
+        if(ln.asm_address == 0) {
+            log::out << log::RED << "Bug in compiler when translating BC to x64 addresses. Line "<<log::LIME<<ln.lineNumber<<log::RED<<" refers to BC addr "<<ln.bc_address<<log::RED <<" which wasn't mapped.\n";
+        }
+        // Assert(ln.asm_address != 0); // very suspicious if it is zero
+    }
+
+    DynamicArray<ScopeInfo*> scopes{};
+
+    for(auto& v : fun->localVariables) {
+        auto now = di->ast->getScope(v.scopeId);
+        now->asm_start = get_map_translation(now->bc_start);
+        now->asm_end = get_map_translation(now->bc_end);
+    }
     
     return true;
 }

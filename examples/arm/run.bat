@@ -13,12 +13,12 @@ set OBJDUMP=arm-none-eabi-objdump.exe
 set LD=arm-none-eabi-ld.exe
 set QEMU=qemu-system-arm
 
-%GCC% -c -O0 main.c -o main.o
+%GCC% -g -c -O0 main.c -o main.o
 %AS% startup.s -o startup.o
 @REM %AS% assembly.s -o assembly.o
 @REM %OBJDUMP% -d main.o
 @REM %LD% main.o startup.o assembly.o -T link.ld -o main.elf
-%LD% main.o startup.o -T link.ld -o main.elf
+%LD% -g main.o startup.o -T link.ld -o main.elf
 @REM %OBJDUMP% -d main.elf
 
 @REM %QEMU% -semihosting -M xilinx-zynq-a9 -cpu cortex-a9 -nographic -serial mon:stdio -kernel main.elf

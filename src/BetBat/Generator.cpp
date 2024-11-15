@@ -5020,9 +5020,13 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         };
 
         if (statement->type == ASTStatement::DECLARATION) {
-            _GLOG(SCOPE_LOG("ASSIGN"))
+            _GLOG(SCOPE_LOG("ASSIGN"))            
 
             if (statement->globalDeclaration) {
+                if(currentPolyVersion == 0){
+                    auto& varname = statement->varnames[0];
+                    debugFunction->addVar(varname.name, varname.identifier->versions_dataOffset[currentPolyVersion], varname.versions_assignType[currentPolyVersion], info.currentScopeDepth, varname.identifier->scopeId, true);
+                }
                 // global variables should not generate any local code.
                 // expressions in globals are generated and evaluated once.
                 continue;
@@ -5104,14 +5108,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
                 int alignment = 0;
                 if (varname.arrayLength>0){
-                    if(statement->globalDeclaration) {
-                        ERR_SECTION(
-                            ERR_HEAD2(statement->location)
-                            ERR_MSG("Global arrays have not been implemented.")
-                            ERR_LINE2(statement->location, "here")
-                        )
-                        continue;
-                    }
                     // TODO: Fix arrays with static data
                     if(statement->firstExpression) {
                         ERR_SECTION(
@@ -5304,119 +5300,113 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
             }
             if(statement->firstExpression){
-                if (statement->globalDeclaration) {
-                    // DO NOTHING! we init global data elsewhere
+                SignalIO result = generateExpression(statement->firstExpression, &rightTypes);
+                if (result != SIGNAL_SUCCESS) {
+                    // assign fails and variable will not be declared potentially causing
+                    // undeclared errors in later code. This is probably better than
+                    // declaring the variable and using void type. Then you get type mismatch
+                    // errors.
+                    continue;
+                }
 
-                    // log::out << "global "<<statement->varnames[0].name << "\n";
-                } else {
-                    SignalIO result = generateExpression(statement->firstExpression, &rightTypes);
-                    if (result != SIGNAL_SUCCESS) {
-                        // assign fails and variable will not be declared potentially causing
-                        // undeclared errors in later code. This is probably better than
-                        // declaring the variable and using void type. Then you get type mismatch
-                        // errors.
+                // Make sure Type checker and generator produce the same types, otherwise there's a bug
+                Assert(typesFromExpr.size()==rightTypes.size());
+                bool cont = false;
+                for(int i=0;i<(int)typesFromExpr.size();i++){
+                    std::string a0 = info.ast->typeToString(typesFromExpr[i]);
+                    std::string a1 = info.ast->typeToString(rightTypes[i]);
+                    // Assert(typesFromExpr[i] == rightTypes[i]);
+                    if(typesFromExpr[i] != rightTypes[i]) {
+                        Assert(info.hasForeignErrors());
+                        if(!info.hasForeignErrors()) {
+                            ERR_SECTION(
+                                ERR_HEAD2(statement->firstExpression->location)
+                                ERR_MSG("Compiler bug sorry! Type checker and generator produced different types '"<<a0<<"' != '"<<a1<<"' (type checker != generator).")
+                                ERR_LINE2(statement->firstExpression->location, "here")
+                            )
+                        }
+                        cont=true;
+                        continue;
+                    }
+                }
+                // pop and cast the generates types to correct types and into the variable location
+                if(cont) continue;
+                for(int i = (int)typesFromExpr.size()-1;i>=0;i--){
+                    TypeId typeFromExpr = typesFromExpr[i];
+                    if((int)statement->varnames.size() <= i){
+                        // TODO: Sometimes we don't want to ignore values like this but sometimes it's convenient.
+                        //   We need an annotation somewhere that throws an error if this happens.
+                        //   Probably on the function definition. @handle_all_return_values
+                        _GLOG(log::out << log::LIME<<"just pop "<<info.ast->typeToString(typeFromExpr)<<"\n";)
+                        generatePop(BC_REG_INVALID, 0, typeFromExpr);
+                        continue;
+                    }
+                    auto& varname = statement->varnames[i];
+                    _GLOG(log::out << log::LIME <<"assign pop "<<info.ast->typeToString(typeFromExpr)<<"\n";)
+                    
+                    TypeId stateTypeId = varname.versions_assignType[info.currentPolyVersion];
+                    IdentifierVariable* varinfo = varname.identifier;
+
+                    if(!varinfo){
+                        Assert(info.hasForeignErrors());
                         continue;
                     }
 
-                    // Make sure Type checker and generator produce the same types, otherwise there's a bug
-                    Assert(typesFromExpr.size()==rightTypes.size());
-                    bool cont = false;
-                    for(int i=0;i<(int)typesFromExpr.size();i++){
-                        std::string a0 = info.ast->typeToString(typesFromExpr[i]);
-                        std::string a1 = info.ast->typeToString(rightTypes[i]);
-                        // Assert(typesFromExpr[i] == rightTypes[i]);
-                        if(typesFromExpr[i] != rightTypes[i]) {
-                            Assert(info.hasForeignErrors());
-                            if(!info.hasForeignErrors()) {
-                                ERR_SECTION(
-                                    ERR_HEAD2(statement->firstExpression->location)
-                                    ERR_MSG("Compiler bug sorry! Type checker and generator produced different types '"<<a0<<"' != '"<<a1<<"' (type checker != generator).")
-                                    ERR_LINE2(statement->firstExpression->location, "here")
-                                )
-                            }
-                            cont=true;
-                            continue;
+                    if(!performSafeCast(typeFromExpr, varinfo->versions_typeId[info.currentPolyVersion])){
+                        if(!info.hasForeignErrors()){
+                            ERRTYPE1(statement->location, typeFromExpr, varinfo->versions_typeId[info.currentPolyVersion], "(assign)."
+                                // ERR_LINE2(statement->location,"bad");
+                            )
                         }
+                        continue;
                     }
-                    // pop and cast the generates types to correct types and into the variable location
-                    if(cont) continue;
-                    for(int i = (int)typesFromExpr.size()-1;i>=0;i--){
-                        TypeId typeFromExpr = typesFromExpr[i];
-                        if((int)statement->varnames.size() <= i){
-                            // TODO: Sometimes we don't want to ignore values like this but sometimes it's convenient.
-                            //   We need an annotation somewhere that throws an error if this happens.
-                            //   Probably on the function definition. @handle_all_return_values
-                            _GLOG(log::out << log::LIME<<"just pop "<<info.ast->typeToString(typeFromExpr)<<"\n";)
-                            generatePop(BC_REG_INVALID, 0, typeFromExpr);
-                            continue;
-                        }
-                        auto& varname = statement->varnames[i];
-                        _GLOG(log::out << log::LIME <<"assign pop "<<info.ast->typeToString(typeFromExpr)<<"\n";)
-                        
-                        TypeId stateTypeId = varname.versions_assignType[info.currentPolyVersion];
-                        IdentifierVariable* varinfo = varname.identifier;
+                    // Assert(!var->globalData || info.currentScopeId == info.ast->globalScopeId);
+                    switch(varinfo->type) {
+                        case Identifier::GLOBAL_VARIABLE: {
+                            Assert(false); 
+                            // possible bug with polyversions and globals?
+                            if(varinfo->declaration && varinfo->declaration->isImported()) {
 
-                        if(!varinfo){
-                            Assert(info.hasForeignErrors());
-                            continue;
-                        }
+                            } else {
+                                builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            }
+                            generatePop(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
+                        } break; 
+                        case Identifier::LOCAL_VARIABLE: {
+                            // builder.emit_li32(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            // builder.emit_({BC_ADDI, BC_REG_BP, BC_REG_B, BC_REG_B});
+                            generatePop(BC_REG_LOCALS, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
+                            // generatePop(BC_REG_BP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
+                        } break;
+                        case Identifier::MEMBER_VARIABLE: {
+                            Assert(info.currentFunction && info.currentFunction->parentStruct);
+                            // TODO: Verify that  you
+                            // NOTE: Is member variable/argument always at this offset with all calling conventions?
+                            
+                        // type = varinfo->versions_typeId[info.currentPolyVersion];
+                            builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false); // pointer
 
-                        if(!performSafeCast(typeFromExpr, varinfo->versions_typeId[info.currentPolyVersion])){
-                            if(!info.hasForeignErrors()){
-                                ERRTYPE1(statement->location, typeFromExpr, varinfo->versions_typeId[info.currentPolyVersion], "(assign)."
-                                    // ERR_LINE2(statement->location,"bad");
+                            auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                            if (mem.array_length) {
+                                ERR_SECTION(
+                                    ERR_HEAD2(statement->location)
+                                    ERR_MSG("You cannot assing values to a struct member that is an array.")
+                                    ERR_LINE2(statement->location,"here")
                                 )
                             }
-                            continue;
-                        }
-                        // Assert(!var->globalData || info.currentScopeId == info.ast->globalScopeId);
-                        switch(varinfo->type) {
-                            case Identifier::GLOBAL_VARIABLE: {
-                                Assert(false); 
-                                // possible bug with polyversions and globals?
-                                if(varinfo->declaration && varinfo->declaration->isImported()) {
-
-                                } else {
-                                    builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                                }
-                                generatePop(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
-                            } break; 
-                            case Identifier::LOCAL_VARIABLE: {
-                                // builder.emit_li32(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                                // builder.emit_({BC_ADDI, BC_REG_BP, BC_REG_B, BC_REG_B});
-                                generatePop(BC_REG_LOCALS, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
-                                // generatePop(BC_REG_BP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
-                            } break;
-                            case Identifier::MEMBER_VARIABLE: {
-                                Assert(info.currentFunction && info.currentFunction->parentStruct);
-                                // TODO: Verify that  you
-                                // NOTE: Is member variable/argument always at this offset with all calling conventions?
-                                
-                            // type = varinfo->versions_typeId[info.currentPolyVersion];
-                                builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false); // pointer
-
-                                auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
-                                if (mem.array_length) {
-                                    ERR_SECTION(
-                                        ERR_HEAD2(statement->location)
-                                        ERR_MSG("You cannot assing values to a struct member that is an array.")
-                                        ERR_LINE2(statement->location,"here")
-                                    )
-                                }
-                                auto type = varinfo->versions_typeId[info.currentPolyVersion];
-                                builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, AST::IsDecimal(type));
-                                // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, REGISTER_SIZE, GenContext::FRAME_SIZE);
-                                
-                                // builder.emit_li32(BC_REG_A,varinfo->versions_dataOffset[info.currentPolyVersion]);
-                                // builder.emit_({BC_ADDI, BC_REG_B, BC_REG_A, BC_REG_B});
-                                generatePop(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
-                            } break;
-                            case Identifier::ARGUMENT_VARIABLE: {
-                                Assert(false);
-                            } break;
-                            default: {
-                                Assert(false);
-                            }
+                            auto type = varinfo->versions_typeId[info.currentPolyVersion];
+                            builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, AST::IsDecimal(type));
+                            // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, REGISTER_SIZE, GenContext::FRAME_SIZE);
+                            
+                            // builder.emit_li32(BC_REG_A,varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            // builder.emit_({BC_ADDI, BC_REG_B, BC_REG_A, BC_REG_B});
+                            generatePop(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
+                        } break;
+                        case Identifier::ARGUMENT_VARIABLE: {
+                            Assert(false);
+                        } break;
+                        default: {
+                            Assert(false);
                         }
                     }
                 }

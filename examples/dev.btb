@@ -2,6 +2,25 @@
 
 // #import "arm/xilinx-zynq-a9"
 
+
+// local := 0x1005
+
+// local += 5
+
+struct ok {
+    x: i32;
+    y: i32;
+}
+global o: ok*;
+
+n: ok
+o = &n
+
+o.x = 110005
+o.y = 99999905
+
+
+
 // init_uart0_RxTx_115200_8N1()
 
 // putchar('a')

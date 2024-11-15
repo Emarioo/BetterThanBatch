@@ -3,15 +3,22 @@
 
 // int assembly();
 
-// int num() {
-//     return 23;
-// }
+#include "hi.c"
+
+int global = 123;
+
+int num() {
+    static int local_global = 123;
+    global += 23;
+    local_global += global;
+    return global;
+}
 void main() {
     // init_uart0_RxTx_115200_8N1();
     
     // int val = assembly();
     
-    int k = 23;
+    int k = 23 + extra_glob;
     int b = ~k;
 
     // int(*f)() = num;

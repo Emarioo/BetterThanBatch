@@ -39,7 +39,7 @@ struct TyperContext : public PhaseContext {
     int funcDepth=0; // FUNC_ENTER
     bool ignoreErrors = false; // not thread safe, you need one of these per thread
     bool ignore_polymorphism_with_struct = false;
-
+    bool is_initial_import = false;
     TypeId inferred_type{};
 
     engone::LinearAllocator scratch_allocator;

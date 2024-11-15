@@ -4074,6 +4074,19 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                 u32 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
                 u32 offset = info.ast->aquireGlobalSpace(size);
                 varinfo->versions_dataOffset.set(currentPolyVersion, offset);
+                if(compiler->bytecode->debugInformation) {
+                    // TODO: Add debug information for import global variables.
+                    if(is_initial_import || !inside_import_scope) {
+                        // if()
+                        // compiler->bytecode->debugInformation->addVar(varname.name,  varname.identifier->versions_dataOffset[currentPolyVersion], varname.versions_assignType[currentPolyVersion], line, column, file, true);
+                    } else {
+                        auto& varname = now->varnames[0];
+                        std::string file;
+                        int line, column;
+                        compiler->lexer.get_source_information(varname.location, &file, &line, &column);
+                        compiler->bytecode->debugInformation->addGlobalVariable(varname.name, varname.identifier->versions_dataOffset[currentPolyVersion], varname.versions_assignType[currentPolyVersion], line, column, file);
+                    }
+                }
 
                 if (now->firstExpression) {
                     info.ast->globals_to_evaluate.add({now, scope->scopeId});
@@ -4133,6 +4146,14 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             }
             // should we not always set this?
             varinfo->declaration = now;
+        }
+        if (varname.arrayLength>0 && now->globalDeclaration){
+            ERR_SECTION(
+                ERR_HEAD2(now->location)
+                ERR_MSG("Global arrays have not been implemented.")
+                ERR_LINE2(now->location, "here")
+            )
+            return SIGNAL_FAILURE;
         }
         // Array initializer list
         if(now->arrayValues.size()!=0) {
@@ -5047,6 +5068,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     TyperContext info = {};
+    info.is_initial_import = is_initial_import;
     info.init_context(compiler);
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 

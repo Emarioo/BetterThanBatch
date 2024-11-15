@@ -18,6 +18,23 @@ u32 DebugInformation::addOrGetFile(const std::string& file, bool skip_mutex) {
         mutex.unlock();
     return index;
 }
+DebugGlobalVariable* DebugInformation::addGlobalVariable(const std::string& name, int offset, TypeId type, int line, int column, const std::string& from_file) {
+    mutex.lock();
+    u32 fi = addOrGetFile(from_file, true);
+    auto ptr = TRACK_ALLOC(DebugGlobalVariable);
+    new(ptr)DebugGlobalVariable();
+    ptr->name = name;
+    ptr->location = offset;
+    ptr->typeId = type;
+    ptr->line = line;
+    ptr->column = column;
+    ptr->uuid = global_variables.size();
+    ptr->name = name;
+    ptr->file = fi;
+    global_variables.add(ptr);
+    mutex.unlock();
+    return ptr;
+}
 DebugFunction* DebugInformation::addFunction(FuncImpl* impl, TinyBytecode* tinycode, const std::string& from_file, int declared_at_line){
     std::string name = "";
     // if(impl)

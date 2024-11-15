@@ -37,6 +37,7 @@ namespace dwarf {
         SectionNr section_text = objectFile->findSection(".text");
         Assert(section_text != -1);
         auto stream_text = (const ByteStream*)objectFile->getStreamFromSection(section_text);
+        SectionNr section_data = objectFile->findSection(".data");
 
         auto debug = program->debugInformation;
         ByteStream* stream = nullptr;
@@ -66,6 +67,7 @@ namespace dwarf {
         int abbrev_compUnit = 0;
         int abbrev_func = 0;
         int abbrev_var = 0;
+        int abbrev_global_var = 0;
         int abbrev_param = 0;
         int abbrev_base_type = 0;
         int abbrev_pointer_type = 0;
@@ -122,6 +124,21 @@ namespace dwarf {
 
             abbrev_var = nextAbbrevCode++;
             WRITE_LEB(abbrev_var) // code
+            WRITE_LEB(DW_TAG_variable) // tag
+            stream->write1(DW_CHILDREN_no);
+
+            WRITE_FORM(DW_AT_name,         DW_FORM_string)
+            WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
+            WRITE_FORM(DW_AT_location,     DW_FORM_block1)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+            
+            // abbrev for globals is currently the same as a local variables
+            abbrev_global_var = nextAbbrevCode++;
+            WRITE_LEB(abbrev_global_var) // code
             WRITE_LEB(DW_TAG_variable) // tag
             stream->write1(DW_CHILDREN_no);
 
@@ -343,7 +360,10 @@ namespace dwarf {
                 return allType.reference[typeId.getPointerLevel()];
             };
             
-            
+             for(int i=0;i<debug->global_variables.size();i++) {
+                auto& var = *debug->global_variables[i];
+                addType(var.typeId);
+             }
             // TODO: Holy snap the polymorphism will actually end me.
             //  How do we make this work with polymorphism? Maybe it does work?
             for(int i=0;i<debug->functions.size();i++) {
@@ -580,13 +600,44 @@ namespace dwarf {
                 // if(i <= 3)
                 // stream->write_at<u32>(offset_section + ref.section_offset, 0x102);
             }
+           
+            for(int i=0;i<debug->global_variables.size();i++) {
+                auto& var = *debug->global_variables[i];
+                WRITE_LEB(abbrev_global_var)
+                stream->write(var.name.c_str());
 
+                // TODO: Store line and column information in local variables in DebugInformation
+                int var_file = var.file;
+                int var_line = var.line;
+                int var_column = var.column;
+
+                stream->write2(var_file); // file
+                Assert(var_line < 0x10000); // make sure we don't overflow
+                stream->write2(var_line); // line
+                Assert(var_column < 0x10000); // make sure we don't overflow
+                stream->write2(var_column); // column
+
+                int typeref = allTypes[var.typeId.getId()].reference[var.typeId.getPointerLevel()];
+                Assert(typeref != 0);
+                stream->write4(typeref); // type reference
+
+                u8* block_length = nullptr;
+                stream->write1(5); // DW_AT_location, begins with block length
+                stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
+                int offset = stream->getWriteHead();
+                stream->write4(var.location);
+                
+                objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.location);
+            }
             // We need this because we added a 16-byte offset in .debug_frame.
             // I don't know why gcc generates DWARF that way but we do the same because I don't know how it works.
             // This offset makes things work and I can't be bothered to question it at the moment.
             // Another problem for future me.
             // - Emarioo, 2024-01-01 (Happy new year!)
-            #define RBP_CONSTANT_OFFSET (-16)
+            int RBP_CONSTANT_OFFSET = -16;
+            if(compiler->options->target == TARGET_ARM) {
+                RBP_CONSTANT_OFFSET = 0;
+            }
 
             for(int i=0;i<debug->functions.size();i++) {
                 auto fun = debug->functions[i];
@@ -658,7 +709,14 @@ namespace dwarf {
 
                         int arg_off = arg_impl.offset;
                         // log::out << "  arg " << arg_off<<"\n";
-                        if(fun->funcAst->callConvention == UNIXCALL) {
+                        if(target == TARGET_ARM) {
+                            // NOTE: THIS won't work if param is bigger than register size
+                            if(pi < 4) {
+                                arg_off = -arg_impl.offset - REGISTER_SIZE;
+                            } else {
+                                arg_off = FRAME_SIZE + arg_impl.offset - 4 * REGISTER_SIZE;
+                            }
+                        } else if(fun->funcAst->callConvention == UNIXCALL) {
                             // TODO: Don't hardcode this. What about non-volatile registers, what if x64_gen changes and puts more stuff on stack?
                             if(fun->name == "main") {
                                 if(pi == 0) {
@@ -805,11 +863,22 @@ namespace dwarf {
                     u8* block_length = nullptr;
                     stream->write_late((void**)&block_length, 1); // DW_AT_location, begins with block length
                     int off_start = stream->getWriteHead();
-                    stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
-                    
-                    int extra_off = -fun->offset_from_bp_to_locals; // extra offset due to non-volatile registers, i think return values with betcall is accounted for in var.frameOffset
-                    
-                    WRITE_SLEB(var.frameOffset + extra_off + RBP_CONSTANT_OFFSET)
+                    if(var.is_global) {
+                        stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
+                        int offset = stream->getWriteHead();
+                        stream->write4(var.frameOffset);
+                        
+                        objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.frameOffset);
+                    } else {
+                        stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
+                        
+                        int extra_off = -fun->offset_from_bp_to_locals; // extra offset due to non-volatile registers, i think return values with betcall is accounted for in var.frameOffset
+                        if(target == TARGET_ARM) {
+                            // DWARF adds some extra offset so we do this to revert it?
+                            extra_off -= REGISTER_SIZE;
+                        }
+                        WRITE_SLEB(var.frameOffset + extra_off + RBP_CONSTANT_OFFSET)
+                    }
                     *block_length = stream->getWriteHead() - off_start; // we write block length later since we don't know the size of the LEB128 integer
                 }
                 while(curLevel>0) {
