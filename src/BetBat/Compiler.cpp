@@ -1136,6 +1136,19 @@ void Compiler::run(CompileOptions* options) {
     ZoneScopedC(tracy::Color::Gray19);
     // auto tp = engone::StartMeasure();
 
+    if(options->linker == LINKER_MSVC) {
+        if(!is_msvc_configured()) {
+            bool yes = configure_msvc();
+            if(!yes) {
+                log::out << log::RED << "MSVC as linker was specified but it it is not configured correctly and automatic configuration failed, have you installed Visual Studio?\n";
+                compile_stats.errors += 1;
+                return;
+            } else if(options->verbose) {
+                log::out << log::GRAY << "MSVC toolchain configured automatically.\n";
+            }
+        }
+    }
+
     std::string path_to_exe = TrimLastFile(engone::GetPathToExecutable());
     std::string dir_of_exe = TrimLastFile(path_to_exe);
 
@@ -2331,6 +2344,108 @@ double Compiler::compute_last_modified_time() {
     }
     return time;
 }
+
+bool Compiler::is_msvc_configured() {
+    using namespace engone;
+    // TODO: Checking for HostX64 which is the path where link.exe should exist
+    //   Is not a great idea. What if another application uses the same path structure?
+    std::string env_path = GetEnvVar("PATH");
+    bool is_configured = env_path.find("\\bin\\HostX64\\x64") != -1;
+    return is_configured;
+}
+bool Compiler::configure_msvc() {
+    using namespace engone;
+    #ifndef OS_WINDOWS
+    return false;
+    #endif
+    
+    bool log_versions = false;
+    
+    auto find_first_folder = [&](const std::string& path) {
+        // TODO: Pick the latest version?
+        std::string name = "";
+        auto iter = DirectoryIteratorCreate(path.c_str(), path.size());
+        DirectoryIteratorData data;
+        while(DirectoryIteratorNext(iter, &data)) {
+            if(!data.isDirectory)
+                continue; // don't care about files
+            
+            std::string dir_path = std::string(data.name,data.namelen);
+            int at = dir_path.find_last_of("/");
+            if(at != -1) {
+                name = dir_path.substr(at+1);
+                break;
+            }
+            DirectoryIteratorSkip(iter);
+        }
+        DirectoryIteratorDestroy(iter, &data);
+        return name;
+    };
+    
+    // Find Visual Studio toolchain versions
+    // std::string version_vs = "2022";
+    // std::string version_msvc = "14.33.31629";
+    // std::string version_kits = "10.0.20348.0";
+    
+    std::string base_vs = "C:\\Program Files\\Microsoft Visual Studio";
+    std::string base_kits = "C:\\Program Files (x86)\\Windows Kits\\10\\";
+    
+    std::string version_vs = find_first_folder(base_vs);
+    if(log_versions)
+        log::out << "Found VS version: "<<version_vs<<"\n";
+    if(version_vs.size() == 0) {
+        return false;
+    }
+    
+    std::string base_tools_nov = base_vs + "\\" + version_vs + "\\Community\\VC\\Tools\\MSVC";
+    std::string version_msvc = find_first_folder(base_tools_nov);
+    if(log_versions)
+        log::out << "Found MSVC version: "<<version_msvc<<"\n";
+    if(version_msvc.size() == 0) {
+        return false;
+    }
+    std::string base_tools = base_tools_nov + "\\" + version_msvc;
+    
+    std::string version_kits = find_first_folder(base_kits + "\\include");
+    if(log_versions)
+        log::out << "Found kits version: "<<version_kits<<"\n";
+    if(version_kits.size() == 0) {
+        return false;
+    }
+    std::string base_kits_include = base_kits + "\\include\\" + version_kits;
+    std::string base_kits_lib = base_kits + "\\lib\\" + version_kits;
+    
+    // Calculate paths
+    std::string add_PATH = ";"+base_tools + "\\bin\\HostX64\\x64;";
+
+    std::string add_LIBPATH = ";"+base_tools + "\\lib\\x64;";
+
+    std::string add_LIB = ";"+base_kits_lib + "\\ucrt\\x64;"
+        + base_kits_lib + "\\um\\x64;"
+        + base_tools + "\\lib\\x64;";
+
+    std::string add_INCLUDE = ";"+base_tools+"\\include;"
+        + base_kits_include+"\\ucrt;"
+        + base_kits_include+"\\um;"
+        + base_kits_include+"\\shared;"
+        + base_kits_include+"\\winrt;"
+        + base_kits_include+"\\cppwinrt;";
+    
+    // Set environment paths
+    add_PATH = GetEnvVar("PATH") + add_PATH;
+    add_LIBPATH = GetEnvVar("LIBPATH") + add_LIBPATH;
+    add_LIB = GetEnvVar("LIB") + add_LIB;
+    add_INCLUDE = GetEnvVar("INCLUDE") + add_INCLUDE;
+    SetEnvVar("PATH", add_PATH);
+    SetEnvVar("LIBPATH", add_LIBPATH);
+    SetEnvVar("LIB", add_LIB);
+    SetEnvVar("INCLUDE", add_INCLUDE);
+    
+    // TODO: Check if linker works?
+    
+    return true;
+}
+
 const char* annotation_names[]{
     "unknown",
     "custom",

@@ -99,7 +99,7 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
         } else if (arg == "--silent") {
             options->silent = true;
         } else if (arg == "--verbose") {
-            // options->verbose = true;
+            options->verbose = true;
             global_loggingSection = (LoggingSection)(LOG_TASKS);
             // log::out << log::RED << "Verbose option (--verbose) is not used anywhere yet\n";
         // } else if(arg == "--verbose") {

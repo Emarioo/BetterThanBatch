@@ -1653,13 +1653,13 @@ namespace engone {
 			freopen_s((FILE**)stdin, "CONIN$", "r", stdin);
 		}
 	}
-	std::string EnvironmentVariable(const std::string& name){
+	std::string GetEnvVar(const std::string& name){
 		std::string buffer{};
 		DWORD length = GetEnvironmentVariableA(name.c_str(),(char*)buffer.data(),0);
 		if(length==0){
 			DWORD err = GetLastError();
 			if(err==ERROR_ENVVAR_NOT_FOUND){
-				printf("[WinError %lu] EnvironmentVariable 1, %s not found\n",err,name.c_str());
+				// printf("[WinError %lu] EnvironmentVariable 1, %s not found\n",err,name.c_str());
 			}else{
 				printf("[WinError %lu] EnvironmentVariable 1, %s\n",err,name.c_str());
 			}
@@ -1676,6 +1676,16 @@ namespace engone {
 		}
 		return buffer;
 	}
+	bool SetEnvVar(const std::string& name, const std::string& value) {
+        // TODO: Check length of value, there is a limit
+		BOOL yes = SetEnvironmentVariableA(name.c_str(), value.c_str());
+		if(!yes){
+			DWORD err = GetLastError();
+            printf("[WinError %lu] SetEnvironmentVariableA, %s = %s\n",err,name.c_str(), value.c_str());
+			return false;
+		}
+		return true;
+    }
 	struct PipeInfo{
 		HANDLE readH=0;	
 		HANDLE writeH=0;	

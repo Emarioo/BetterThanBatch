@@ -317,6 +317,11 @@ struct Compiler {
     // int addTestLocation(TokenRange& range);
     int addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer);
 
+    // returns true if already setup or if successfully setup right now.
+    // returns false if it couldn't
+    bool is_msvc_configured();
+    bool configure_msvc();
+
 private:
     engone::Semaphore lock_wait_for_imports;
     bool signaled = true;

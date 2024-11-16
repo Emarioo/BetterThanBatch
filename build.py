@@ -60,7 +60,7 @@ def main():
     # print(config)
 
     if not yes:
-        print("Compilation failed")
+        print("Compile failed")
     elif os.path.exists(config["output"]):
         filepath = config["output"]
         filepath = filepath.replace("\\","/")
@@ -162,6 +162,15 @@ def compile(config):
     #         # TODO: Find and run vcvars64.bat
     if config["use_compiler"] == "msvc" and platform.system() == "Linux":
         config["use_compiler"] = "gcc"
+
+    if config["use_compiler"] == "msvc":
+        # Check if MSVC is configured
+        if not is_msvc_configured():
+            if configure_msvc_toolchain(enabled("verbose")):
+                print("MSVC toolchain configured automatically.")
+            else:
+                print("MSVC toolchain could not be configured.")
+                return False
 
     if enabled("verbose"):
         print("Options:",config)
@@ -464,11 +473,8 @@ def compile(config):
         print("Platform/compiler ",platform.system()+"/"+config["use_compiler"],"is not supported in build.py")
 
     finish_time = time.time() - start_time
-    if not compile_success:
-        print("Compile failed")
-    else:
-        if not enabled("silent"):
-            print("Compiled in", int(finish_time*100)/100)
+    if compile_success and not enabled("silent"):
+        print("Compiled in", int(finish_time*100)/100)
 
     ################################
     #   COMPILE VENDOR LIBRARIES
@@ -673,6 +679,81 @@ def compute_dependencies(file):
 
     f.close()
     return deps
+
+def find_first_folder(path):
+    # Find the first folder in the given directory.
+    try:
+        directories = [d for d in glob.glob(path + "/*/") if os.path.isdir(d)]
+        if directories:
+            # TODO: Sort by highest version?
+            return os.path.basename(directories[0].rstrip("\\/"))
+    except Exception as e:
+        pass
+        # print(f"Error finding folder in path '{path}': {e}")
+    return ""
+
+def is_msvc_configured():
+    env_path = os.environ.get("PATH","")
+    if "\\bin\\HostX64\\x64" in env_path:
+        return True
+    return False
+
+def configure_msvc_toolchain(verbose):
+    # Find and set up MSVC environment variables.
+    
+    base_vs = "C:\\Program Files\\Microsoft Visual Studio"
+    base_kits = "C:\\Program Files (x86)\\Windows Kits\\10\\"
+
+    # Find Visual Studio version
+    version_vs = find_first_folder(base_vs)
+    if verbose:
+        print(f"Found VS version: {version_vs}")
+    if not version_vs:
+        return False
+
+    # Find MSVC version
+    base_tools_nov = os.path.join(base_vs, version_vs, "Community", "VC", "Tools", "MSVC")
+    version_msvc = find_first_folder(base_tools_nov)
+    if verbose:
+        print(f"Found MSVC version: {version_msvc}")
+    if not version_msvc:
+        return False
+
+    # Find Windows Kits version
+    base_kits_include = os.path.join(base_kits, "include")
+    version_kits = find_first_folder(base_kits_include)
+    if verbose:
+        print(f"Found kits version: {version_kits}")
+    if not version_kits:
+        return False
+
+    # Set paths based on the found versions
+    base_tools = os.path.join(base_tools_nov, version_msvc)
+    base_kits_include = os.path.join(base_kits, "include", version_kits)
+    base_kits_lib = os.path.join(base_kits, "lib", version_kits)
+
+    # Set environment variables to include MSVC tools and Windows Kits
+    add_path = ";" + os.path.join(base_tools, "bin", "HostX64", "x64")
+    add_libpath = ";" + os.path.join(base_tools, "lib", "x64")
+    add_lib = ";" + os.path.join(base_kits_lib, "ucrt", "x64") + ";" + \
+                os.path.join(base_kits_lib, "um", "x64") + ";" + \
+                os.path.join(base_tools, "lib", "x64")
+    add_include = ";" + os.path.join(base_tools, "include") + ";" + \
+                os.path.join(base_kits_include, "ucrt") + ";" + \
+                os.path.join(base_kits_include, "um") + ";" + \
+                os.path.join(base_kits_include, "shared") + ";" + \
+                os.path.join(base_kits_include, "winrt") + ";" + \
+                os.path.join(base_kits_include, "cppwinrt")
+
+# C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.33.31629\lib\x64
+
+    # Set environment variables
+    os.environ["PATH"] = os.environ.get("PATH","") + add_path
+    os.environ["LIBPATH"] = os.environ.get("LIBPATH","") + add_libpath
+    os.environ["LIB"] = os.environ.get("LIB","") + add_lib
+    os.environ["INCLUDE"] = os.environ.get("INCLUDE","") + add_include
+
+    return True
 
 # files or directories
 def remove_files(path):

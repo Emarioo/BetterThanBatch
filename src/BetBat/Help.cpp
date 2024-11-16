@@ -120,7 +120,7 @@ void print_help(){
     END
     
     USAGE("--verbose")
-    DESC("reserved.\n")
+    DESC("Prints the compiler's processing of tasks.\n")
     END
 
     USAGE("--profiling")
