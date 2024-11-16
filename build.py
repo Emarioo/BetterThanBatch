@@ -240,7 +240,7 @@ def compile(config):
     if platform.system() == "Windows" and config["use_compiler"] == "msvc":
         MSVC_COMPILE_OPTIONS    = "/std:c++17 /nologo /EHsc /TP /wd4129"
         MSVC_LINK_OPTIONS       = "/nologo /ignore:4099 Advapi32.lib shell32.lib"
-        MSVC_INCLUDE_DIRS       = "/Iinclude /Ilibs/tracy-0.10/public"
+        MSVC_INCLUDE_DIRS       = "/src/Iinclude /Ilibs/tracy-0.10/public"
         MSVC_DEFINITIONS        = "/DOS_WINDOWS /DCOMPILER_MSVC"
 
         if enabled("use_debug"):
@@ -350,7 +350,7 @@ def compile(config):
 
     elif config["use_compiler"] == "gcc" or config["use_compiler"] == "clang":
         GCC_COMPILE_OPTIONS = "-std=c++14"
-        GCC_INCLUDE_DIRS    = "-Iinclude -Ilibs/tracy-0.10/public -include include/pch.h "
+        GCC_INCLUDE_DIRS    = "-Isrc/include -Ilibs/tracy-0.10/public -include src/include/pch.h "
         GCC_DEFINITIONS     = "-DCOMPILER_GNU"
         GCC_LINK_OPTIONS    = ""
         if platform.system() == "Windows":

@@ -8,7 +8,7 @@ The language is planned to be used for making games, visualizing data and file f
 ## Where to start?
 If you haven't built or downloaded the compiler, take a look at [README](/README.md).
 
-I recommend you keep the compiler binaries/assets (the stuff you downloaded) in one folder and your own projects and code in a separate folder.
+I recommend you keep the compiler binaries/assets (the stuff you downloaded) in one folder and your own projects and code in a separate folder. Add the path to the compiler to `PATH` to have access to it from anywhere in the terminal.
 
 You compile files with this command `btb main.btb -o main.exe` and that is pretty much it. You can change target, linker, and whether you want to execute the program right away but the default settings are fine when starting out.
 
