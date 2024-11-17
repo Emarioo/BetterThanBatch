@@ -1045,6 +1045,8 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
     // lock_imports.unlock();
     Assert(imp);
     
+    Assert(token.type != TOKEN_LITERAL_STRING || (token.flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED)));
+    
     TokenInfo* prev_token = nullptr;
     TokenSource* prev_source = nullptr;
     Token prev_tok = {};
@@ -1063,6 +1065,11 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
             if(chunk->tokens.size()) {
                 prev_token = &chunk->tokens.last();
                 prev_source = &chunk->sources.last();
+                
+                prev_tok.type = prev_token->type;
+                prev_tok.flags = prev_token->flags;
+                prev_tok.s = prev_token->s;
+                prev_tok.c_type = prev_token->c_type;
                 prev_tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
             }
         }

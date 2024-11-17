@@ -1234,7 +1234,9 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             // TODO: Allow binary and hexidecimal literals
             auto tok = lexer->getTokenFromImport(new_import_id, token_count-1);
             auto prev_src = lexer->getTokenSource_unsafe({tok});
-            token_type = tok.type;
+            if (tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_STRING || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) {
+                token_type = tok.type;
+            }
             // if((tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_STRING || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
             // (token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY || token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || token.type == lexer::TOKEN_LITERAL_STRING || token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
             //     if(tok.type == lexer::TOKEN_LITERAL_STRING)
@@ -1262,7 +1264,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 // layer->concat_next_token = false;
                 new_data += lexer->tostring(tok, true);
                 new_data += lexer->tostring(token, true);
-                
+                // log::out << "New thing: "<<new_data<<"\n";
                 ln = prev_src->line;
                 col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
                 lexer->popTokenFromImport(new_lexer_import);
@@ -1279,8 +1281,6 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             } else {
                 new_data += lexer->tostring(token);
                 // Assert(false);
-                // // Why is this here? I put an assert here because I am suspicious. - Emarioo, 2024-10-11
-                // layer->quote_next_token = false;
             }
         }
 
@@ -1311,6 +1311,9 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 lexer::Token new_token{};
                 new_token.type = token_type;
                 new_token.flags = lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED;
+                if(new_token.type & lexer::TOKEN_LITERAL_STRING) {
+                    new_token.flags |= lexer::TOKEN_FLAG_DOUBLE_QUOTED;
+                }
                 new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
                 lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, ln, col);
             }

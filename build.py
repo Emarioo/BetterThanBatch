@@ -51,6 +51,7 @@ def main():
     # config["verbose"] = True
     # config["log_cmds"] = True
     # config["silent"] = True # TODO: Fix
+    config["build_times"] = True
 
     # config["use_opengl"] = True # rarely used
     # config["thread_count"] = 8
@@ -102,6 +103,8 @@ def compile(config):
     ###################################
     #   Validate and fix config
     ###################################
+
+    start_build_time = time.time()
 
     if len(sys.argv) > 1:
         # clean config, use settings from command line instead of those specified above
@@ -216,8 +219,10 @@ def compile(config):
     # With MSVC, we compile all source files every time, we therefore don't need to compute modified files
     # However, if we want to skip compiling the executable because it's up to date, we must compute modified files
     global modified_files
+    start_compute_time = time.time()
     modified_files = compute_modified_files(source_files, object_files, config["output"])
-
+    compute_time = time.time() - start_compute_time
+    
     if enabled("log_sources"):
         print("Source files:", source_files)
 
@@ -233,14 +238,14 @@ def compile(config):
     if not enabled("silent"):
         print("Compiling...")
         
-    start_time = int(time.time())
+    start_compile_time = time.time()
 
     os.makedirs(config["bin_dir"], exist_ok = True)
 
     if platform.system() == "Windows" and config["use_compiler"] == "msvc":
         MSVC_COMPILE_OPTIONS    = "/std:c++17 /nologo /EHsc /TP /wd4129"
         MSVC_LINK_OPTIONS       = "/nologo /ignore:4099 Advapi32.lib shell32.lib"
-        MSVC_INCLUDE_DIRS       = "/src/Iinclude /Ilibs/tracy-0.10/public"
+        MSVC_INCLUDE_DIRS       = "/Isrc/include /Ilibs/tracy-0.10/public"
         MSVC_DEFINITIONS        = "/DOS_WINDOWS /DCOMPILER_MSVC"
 
         if enabled("use_debug"):
@@ -308,9 +313,13 @@ def compile(config):
 
                         trimmed_obj = obj[4:] # skip bin/
 
+                        at = obj.rfind(".")
+                        pdb_path = obj[:at] + ".pdb"
+
                         if enabled("log_compilation"):
                             print("Compile", trimmed_obj)
-                        err = cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+src+" /Fo:"+obj)
+                        
+                        err = cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+src+" /Fo:"+obj + " /Fd:"+pdb_path)
                         
                         if err != 0:
                             object_failed = True
@@ -472,9 +481,15 @@ def compile(config):
     else:
         print("Platform/compiler ",platform.system()+"/"+config["use_compiler"],"is not supported in build.py")
 
-    finish_time = time.time() - start_time
-    if compile_success and not enabled("silent"):
-        print("Compiled in", int(finish_time*100)/100)
+    compile_time = time.time() - start_compile_time
+    build_time = time.time() - start_build_time
+    
+    if compile_success:
+        if enabled("build_times"):
+            print("Dependency computation in", int(compute_time*100)/100)
+            print("Compiled in", int(compile_time*100)/100)
+        if not enabled("silent"):
+            print("Built in", int(build_time*100)/100)
 
     ################################
     #   COMPILE VENDOR LIBRARIES
@@ -580,7 +595,7 @@ def compute_modified_files(source_files, object_files, exe_file):
                 new_dependencies = file_dependencies[dep]
             else:
                 # print(dep)
-                new_dependencies = compute_dependencies(dep)
+                new_dependencies = find_includes(dep)
                 # Store dependencies for the computed file
                 # so we don't have to compute them again
                 # if another file includes the same file.
@@ -590,6 +605,8 @@ def compute_modified_files(source_files, object_files, exe_file):
                 if not new_dep in dependencies:
                     dependencies.append(new_dep)
         
+        # print("FILE:",f)
+        # print("   DEPS:",dependencies)
         # find latest time
         latest_time = -1
         for dep in dependencies:
@@ -613,22 +630,27 @@ def compute_modified_files(source_files, object_files, exe_file):
             modified_files.append(source_files[i])
         else:
             obj_time = os.path.getmtime(object_files[i])
-            if time > exe_time and time > obj_time:
+            if time > exe_time or time > obj_time:
                 modified_files.append(source_files[i])
 
     return modified_files
 
 # returns a list of #includes in the file
-def compute_dependencies(file):
+def find_includes(file):
+    include_paths = ["src/include"] # TODO: Don't hard code includes
     deps = []
     
     if not os.path.exists(file):
-        # print("File not found",file)
         # Some files may not be found such as "signal.h" "tracy/Tracy.hpp" "stdlib.h" but we can ignore those since they won't be modified (shouldn't be modified).
+        if file.find("BetBat") != -1 or file.find("Engone") != -1:
+            # If we don't find files from BetBat or Engone then
+            # we have a problem
+            print("File not found",file)
         return deps
 
     f = open(file, "r")
     text = f.read(-1)
+    f.close()
 
     match_include = True
     match_quote = False
@@ -639,7 +661,8 @@ def compute_dependencies(file):
     #   Knowing whether a macro in the #if condition is defined or not is very complicated.
 
     head = 0
-    while head < len(text):
+    head_len = len(text)
+    while head < head_len:
         chr = text[head]
         head+=1
 
@@ -651,7 +674,10 @@ def compute_dependencies(file):
         if match_include:
             if chr == ' ' or chr == '\r' or chr == '\t':
                 continue
-            if chr == '#':
+            # A little bit faster
+            # if chr == '#' and text[head] == "i"
+            if chr == '#' and text[head] == "i":
+                # print(text[head-1:head+10])
                 if text.find("include", head) == head:
                     head += len("include")
                     match_include = False
@@ -667,17 +693,20 @@ def compute_dependencies(file):
                 if path_start == -1:
                     path_start = head
                 else:
-                    # NOTE: We add include/ because every include assumes that path
-                    path = "include/" + text[path_start : head-1]
-                    deps.append(path)
+                    relative_path = text[path_start : head-1]
                     path_start = -1
                     match_quote = False
+                    
+                    for include_dir in include_paths:
+                        dep_path = os.path.join(include_dir, relative_path)
+                        if os.path.exists(dep_path):
+                            deps.append(dep_path)
+                            break
             elif chr == '<': # we ignore #include <path>, we only check quotes, <> should be used for standard library or third part libraries and is not something we modify. If we know the include directories then we could check third party libraries at least.
                 match_include = False
         else:
             pass
 
-    f.close()
     return deps
 
 def find_first_folder(path):

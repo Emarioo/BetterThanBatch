@@ -32,6 +32,10 @@ InstructionControl apply_size(InstructionControl c, int size) {
 bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index, int* existing_tinycode_index) {
     for(int i=0;i<exportedFunctions.size();i++) {
         if(exportedFunctions[i].name == name) {
+            if(tinycode_index == exportedFunctions[i].tinycode_index) {
+                engone::log::out << engone::log::YELLOW << "Exporting function '"<<name <<"' again, compiler should not do that\n";
+                return true;
+            }
             if(existing_tinycode_index)
                 *existing_tinycode_index = exportedFunctions[i].tinycode_index;
             return false;

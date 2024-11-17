@@ -14,8 +14,7 @@ enum ParseFlags : u32 {
     PARSE_INSIDE_SWITCH     = 0x1,
     PARSE_TRULY_GLOBAL      = 0x2,
     PARSE_SKIP_ENTRY_BRACES = 0x10, // Treat first found brace in parseBody as a statement
-                                    // instead of the start and end of the body
-    PARSE_FROM_FUNC         = 0x20,                                    
+    PARSE_FROM_FUNC         = 0x20, // instead of the start and end of the body
                                     
     // OUTPUT
     PARSE_HAS_CURLIES = 0x4,

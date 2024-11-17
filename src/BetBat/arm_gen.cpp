@@ -107,21 +107,23 @@ bool ARMBuilder::generate() {
     }
 
     if(!is_blank) {
-        if(!is_entry_point) {
-            // entry point on unix systems don't need BP restored
-            // the stack is also already 16-byte aligned.
-            emit_push_fp_lr();
-        } else {
-            // still need to push link register
-            emit_push(ARM_REG_LR);
-        }
+        // BAD TEXT
+        // if(!is_entry_point) {
+        // entry point on unix systems don't need BP restored
+        // the stack is also already 16-byte aligned.
+        // } else {
+        //     // still need to push link register
+        //     emit_push(ARM_REG_LR);
+        // }
+        // GOOD TEXT: We always push fp,lr to get right alignment?
+        emit_push_fp_lr();
         emit_mov(ARM_REG_FP, ARM_REG_SP);
     }
     
     int callee_saved_regs_len = 0;
     
     bool enable_callee_saved_registers = false;
-    enable_callee_saved_registers = true;
+    // enable_callee_saved_registers = true;
     callee_saved_regs = arm_callee_saved_regs;
     callee_saved_regs_len = sizeof(arm_callee_saved_regs)/sizeof(*arm_callee_saved_regs);
 
@@ -171,6 +173,8 @@ bool ARMBuilder::generate() {
         }
         virtual_stack_pointer += imm;
     };
+    
+    // #define DEBUG_ARM_GEN
     
     DynamicArray<Arg> accessed_params;
     int args_offset = 0;
@@ -357,10 +361,12 @@ bool ARMBuilder::generate() {
         InstBase* base = (InstBase*)&instructions[prev_pc];
         pc += instruction_contents[opcode].size - 1; // -1 because we incremented pc earlier
         
+        #ifdef DEBUG_ARM_GEN
         if(logging) {
             tinycode->print(prev_pc, prev_pc + 1, bytecode, nullptr, false, &print_cache);
             log::out << "\n";
         }
+        #endif
 
         for(int i=0;i<sp_moments.size();i++) {
             auto& moment = sp_moments[i];
@@ -383,8 +389,10 @@ bool ARMBuilder::generate() {
             case BC_MOV_RR: {
                 auto inst = (InstBase_op2*)base;
                 
-                ARMRegister reg_dst = alloc_register(inst->op0);
                 ARMRegister reg_op = find_register(inst->op1);
+                ARMRegister reg_dst = reg_op;
+                if (inst->op0 != inst->op1)
+                    reg_dst = alloc_register(inst->op0);
                 emit_mov(reg_dst, reg_op);
             } break;
             case BC_MOV_RM:
@@ -394,9 +402,17 @@ bool ARMBuilder::generate() {
                 i16 imm = 0;
                 if(opcode == BC_MOV_RM_DISP16)
                     imm = inst->imm16;
-                ARMRegister reg_dst = alloc_register(inst->op0);
                 ARMRegister reg_op = find_register(inst->op1);
-                emit_ldr(reg_dst, reg_op, imm);
+                ARMRegister reg_dst = reg_op;
+                if (inst->op0 != inst->op1)
+                    reg_dst = alloc_register(inst->op0);
+                int size = GET_CONTROL_SIZE(inst->control);
+                switch(size){
+                    case CONTROL_8B:  emit_ldrb(reg_dst, reg_op, imm); break;
+                    case CONTROL_16B: emit_ldrh(reg_dst, reg_op, imm); break;
+                    case CONTROL_32B: emit_ldr (reg_dst, reg_op, imm); break;
+                    default: Assert(size != CONTROL_64B);
+                }
             } break;
             case BC_MOV_MR:
             case BC_MOV_MR_DISP16: {
@@ -407,8 +423,14 @@ bool ARMBuilder::generate() {
                     imm = inst->imm16;
                 ARMRegister reg_dst = find_register(inst->op0);
                 ARMRegister reg_op = find_register(inst->op1);
-                // NOTE: first arg 'rt' is register, second arg 'rn' is memory address
-                emit_str(reg_op, reg_dst, imm);
+                int size = GET_CONTROL_SIZE(inst->control);
+                switch(size){
+                    // NOTE: first arg 'rt' is register, second arg 'rn' is memory address
+                    case CONTROL_8B:  emit_strb(reg_op, reg_dst, imm); break;
+                    case CONTROL_16B: emit_strh(reg_op, reg_dst, imm); break;
+                    case CONTROL_32B: emit_str (reg_op, reg_dst, imm); break;
+                    default: Assert(size != CONTROL_64B);
+                }
             } break;
             case BC_PUSH: {
                 auto inst = (InstBase_op1*)base;
@@ -508,7 +530,15 @@ bool ARMBuilder::generate() {
                 
                 int off = inst->imm16 + push_offsets.last();
                 // Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
-                emit_str(reg_op, ARM_REG_SP, off);
+                // emit_str(reg_op, ARM_REG_SP, off);
+                
+                int size = GET_CONTROL_SIZE(inst->control);
+                switch(size){
+                    case CONTROL_8B:  emit_strb(reg_op, ARM_REG_SP, off); break;
+                    case CONTROL_16B: emit_strh(reg_op, ARM_REG_SP, off); break;
+                    case CONTROL_32B: emit_str (reg_op, ARM_REG_SP, off); break;
+                    default: Assert(size != CONTROL_64B);
+                }
             } break;
             case BC_GET_PARAM: {
                 auto inst = (InstBase_op1_ctrl_imm16*)base;
@@ -521,16 +551,13 @@ bool ARMBuilder::generate() {
                     Assert(param_index < accessed_params.size());
                     off = accessed_params[param_index].offset_from_rbp;
                 }
-                // @TODO: We should probably not assume the parameter is 4 bytes.
-                // Assert(GET_CONTROL_SIZE(inst->control) == CONTROL_32B);
-                emit_ldr(reg_op, ARM_REG_FP, off);
-                
-                // if(IS_CONTROL_SIGNED(base->control)) {
-                //     emit_movsx(reg0->reg, reg0->reg, inst->control);
-                // } else if(!IS_CONTROL_FLOAT(base->control)) {
-                //     emit_movzx(reg0->reg, reg0->reg, inst->control);
-                // }
-                
+                int size = GET_CONTROL_SIZE(inst->control);
+                switch(size){
+                    case CONTROL_8B:  emit_ldrb(reg_op, ARM_REG_FP, off); break;
+                    case CONTROL_16B: emit_ldrh(reg_op, ARM_REG_FP, off); break;
+                    case CONTROL_32B: emit_ldr (reg_op, ARM_REG_FP, off); break;
+                    default: Assert(size != CONTROL_64B);
+                }
             } break;
             case BC_GET_VAL: {
                 auto inst = (InstBase_op1_ctrl_imm16*)base;
@@ -709,7 +736,8 @@ bool ARMBuilder::generate() {
                             // Assert(GET_CONTROL_SIZE(control) == CONTROL_32B);
 
                             int off = i * REGISTER_SIZE;
-                            ARMRegister reg_args = ARM_REG_FP;
+                            ARMRegister reg_args = ARM_REG_SP;
+                            // ARMRegister reg_args = ARM_REG_FP;
                             // log::out << "control " <<(InstructionControl)control << "\n";
                             
                             // if(IS_CONTROL_FLOAT(control)) {
@@ -786,7 +814,11 @@ bool ARMBuilder::generate() {
                     // emit_modrm_slash(MODE_REG, 0, X64_REG_A);
                     // emit4((u32)SYS_exit);
                     // emit2(OPCODE_2_SYSCALL);
-                    emit_pop(ARM_REG_LR);
+                    // emit_pop(ARM_REG_LR);
+                    // the startup assembly script starts with an 8-byte aligned stack
+                    // so we might as well push and pop fp and lr to keep that
+                    // alignment
+                    emit_pop_fp_lr();
                     emit_bx(ARM_REG_LR);
                 } else {
                     pop_callee_saved_regs();
@@ -990,9 +1022,12 @@ bool ARMBuilder::generate() {
             } break;
             case BC_BNOT: {
                 auto inst = (InstBase_op2_ctrl*)base;
-
-                ARMRegister reg_dst = alloc_register(inst->op0);
+                
                 ARMRegister reg_op = find_register(inst->op1);
+                ARMRegister reg_dst = reg_op;
+                if (inst->op0 != inst->op1) {
+                    reg_dst = alloc_register(inst->op0);
+                }
                 emit_mvn(reg_dst, reg_op);
             } break;
             case BC_MOD: {
@@ -1022,6 +1057,15 @@ bool ARMBuilder::generate() {
                 free_register(reg_temp2);
             } break;
             case BC_CAST: {
+               auto inst = (InstBase_op2_ctrl *)base;
+
+                // @nocheckin Do casts, if we cast to same register then we do nothing
+                ARMRegister reg_op = find_register(inst->op1);
+                ARMRegister reg_dst = reg_op;
+                if (inst->op0 != inst->op1) {
+                    reg_dst = alloc_register(inst->op0);
+                    emit_mov(reg_dst, reg_op);
+                }
             } break;
             default: {
                 log::out << log::RED << "TODO: Implement BC instrtuction in ARM generator: "<< log::PURPLE<< opcode << "\n";
@@ -1051,7 +1095,7 @@ bool ARMBuilder::generate() {
         auto& rel = dataptr_relocs[i];
 
         i32 disp32_offset = code_size();
-        emit4((u32)0);
+        emit4((u32)rel.data_offset);
         set_imm12(rel.pc_offset, disp32_offset - rel.pc_offset - 8);
         program->addDataRelocation(rel.data_offset, disp32_offset, current_funcprog_index);
     }
@@ -1114,7 +1158,7 @@ bool ARMBuilder::generate() {
     // }
     
     
-    funcprog->printHex();
+    // funcprog->printHex();
     
     Assert(("Size of generated ARM is not divisible by 4",code_size() % 4 == 0));
     
@@ -1130,6 +1174,7 @@ bool ARMBuilder::generate() {
     Assert(fun);
 
     fun->offset_from_bp_to_locals = callee_saved_space;
+    fun->args_offset = args_offset;
 
     for(int i=0;i<fun->lines.size();i++) {
         auto& ln = fun->lines[i];
@@ -1203,9 +1248,9 @@ ARMRegister ARMBuilder::find_register(BCRegister reg) {
         return ARM_REG_R0; // @nocheckin temporary
     for(int i=1;i<ARM_REG_GENERAL_MAX;i++) {
         if(i == bc_info.arm_reg) {
-            arm_registers[bc_info.arm_reg].last_used = 0;
+            arm_registers[i].last_used = 0;
         } else {
-            arm_registers[bc_info.arm_reg].last_used++;
+            arm_registers[i].last_used++;
         }
     }
     return bc_info.arm_reg;
@@ -1441,6 +1486,16 @@ void ARMBuilder::emit_movw(ARMRegister rd, u16 imm16, int cond) {
     
     emit4((u32)inst);
 }
+void ARMBuilder::emit_mov_imm(ARMRegister rd, u16 imm, int cond) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/MOVT
+    ARM_CLAMP_d()
+    int S = 0;
+    int imm12 = imm & 0x0FFF;
+    int inst = BITS(cond, 4, 28) | BITS(0b0011101, 7, 21) | BITS(S, 1, 20) | 
+                BITS(Rd, 4, 12) | BITS(imm12, 12, 0);
+
+    emit4((u32)inst);
+}
 void ARMBuilder::emit_movt(ARMRegister rd, u16 imm16) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/MOVT
     ARM_CLAMP_d()
@@ -1540,6 +1595,52 @@ void ARMBuilder::emit_ldr(ARMRegister rt, ARMRegister rn, i16 imm16) {
     // NOTE: Differs from str at bit 20, bit is 0 in str and 1 in ldr
     emit4((u32)inst);
 }
+
+void ARMBuilder::emit_ldrb(ARMRegister rt, ARMRegister rn, i16 imm16) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LDR--immediate--ARM-?lang=en
+    Assert(rt > 0 && rt < ARM_REG_MAX);
+    Assert(rn > 0 && rn < ARM_REG_MAX);
+    // immediate can't be larger than 12-bits. it can be signed, not including the 12 bits
+    Assert(((imm16 & 0x8000) && (imm16 & 0x7000) == 0x7000) || (imm16 & 0xF000) == 0);
+    u8 Rt = rt-1;
+    u8 Rn = rn-1;
+    
+    int cond = ARM_COND_AL;
+    int P = 1; // P=0 would write back (Rn=Rn+imm) which we don't want
+    int U = !(imm16 >> 15);
+    int W = 0; // W=1 would write back
+    int imm12 = imm16 & 0xFFF;
+    if(!U)
+        imm12 = -imm12;
+    int inst = BITS(cond, 4, 28) | BITS(0b010, 3, 25) | BITS(P, 1, 24)
+        | BITS(U, 1, 23) | BITS(1, 1, 22) | BITS(W, 1, 21) | BITS(1, 1, 20) | BITS(Rn, 4, 16)
+        | BITS(Rt, 4, 12) | BITS(imm12, 12, 0);
+    // NOTE: Differs from str at bit 20, bit is 0 in str and 1 in ldr
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_ldrh(ARMRegister rt, ARMRegister rn, i16 imm16) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LDR--immediate--ARM-?lang=en
+    Assert(rt > 0 && rt < ARM_REG_MAX);
+    Assert(rn > 0 && rn < ARM_REG_MAX);
+    // immediate can't be larger than 8-bits. it can be signed, not including the 12 bits
+    Assert(((imm16 & 0x8000) && (imm16 & 0x7000) == 0x7000) || (imm16 & 0xF000) == 0);
+    u8 Rt = rt-1;
+    u8 Rn = rn-1;
+    
+    int cond = ARM_COND_AL;
+    int P = 1; // P=0 would write back (Rn=Rn+imm) which we don't want
+    int U = !(imm16 >> 15);
+    int W = 0; // W=1 would write back
+    int imm4h = (imm16 >> 4) & 0xF;
+    int imm4l = imm16 & 0xF;
+    if(!U)
+        imm4h = -imm4h;
+    int inst = BITS(cond, 4, 28) | BITS(0b000, 3, 25) | BITS(P, 1, 24)
+        | BITS(U, 1, 23) | BITS(1, 1, 22) | BITS(W, 1, 21) | BITS(1, 1, 20) | BITS(Rn, 4, 16)
+        | BITS(Rt, 4, 12) | BITS(imm4h, 4, 8) | BITS(0b1011, 4, 4) | BITS(imm4l, 4, 0);
+    // NOTE: Differs from str at bit 20, bit is 0 in str and 1 in ldr
+    emit4((u32)inst);
+}
 void ARMBuilder::emit_str(ARMRegister rt, ARMRegister rn, i16 imm16) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LDR--immediate--ARM-?lang=en
     Assert(rt > 0 && rt < ARM_REG_MAX);
@@ -1560,6 +1661,52 @@ void ARMBuilder::emit_str(ARMRegister rt, ARMRegister rn, i16 imm16) {
         | BITS(U, 1, 23) | BITS(W, 1, 21) | BITS(Rn, 4, 16)
         | BITS(Rt, 4, 12) | BITS(imm12, 12, 0);
     // NOTE: Differs from ldr at bit 20, bit is 0 in str and 1 in ldr
+    emit4((u32)inst);
+}
+void ARMBuilder::emit_strh(ARMRegister rt, ARMRegister rn, i16 imm16) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LDR--immediate--ARM-?lang=en
+    Assert(rt > 0 && rt < ARM_REG_MAX);
+    Assert(rn > 0 && rn < ARM_REG_MAX);
+    // immediate can't be larger than 8-bits. it can be signed, not including the 12 bits
+    Assert(((imm16 & 0x8000) && (imm16 & 0x7000) == 0x7000) || (imm16 & 0xF000) == 0);
+    u8 Rt = rt-1;
+    u8 Rn = rn-1;
+    
+    int cond = ARM_COND_AL;
+    int P = 1; // P=0 would write back (Rn=Rn+imm) which we don't want
+    int U = !(imm16 >> 15);
+    int W = 0; // W=1 would write back
+    int imm4h = (imm16 >> 4) & 0xF;
+    int imm4l = imm16 & 0xF;
+    if(!U)
+        imm4h = -imm4h;
+    int inst = BITS(cond, 4, 28) | BITS(0b000, 3, 25) | BITS(P, 1, 24)
+        | BITS(U, 1, 23) | BITS(1, 1, 22) | BITS(W, 1, 21) | BITS(0, 1, 20) | BITS(Rn, 4, 16)
+        | BITS(Rt, 4, 12) | BITS(imm4h, 4, 8) | BITS(0b1011, 4, 4) | BITS(imm4l, 4, 0);
+    // NOTE: Differs from str at bit 20, bit is 0 in str and 1 in ldr
+    emit4((u32)inst);
+}
+
+void ARMBuilder::emit_strb(ARMRegister rt, ARMRegister rn, i16 imm16) {
+    // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/LDR--immediate--ARM-?lang=en
+    Assert(rt > 0 && rt < ARM_REG_MAX);
+    Assert(rn > 0 && rn < ARM_REG_MAX);
+    // immediate can't be larger than 12-bits. it can be signed, not including the 12 bits
+    Assert(((imm16 & 0x8000) && (imm16 & 0x7000) == 0x7000) || (imm16 & 0xF000) == 0);
+    u8 Rt = rt-1;
+    u8 Rn = rn-1;
+    
+    int cond = ARM_COND_AL;
+    int P = 1; // P=0 would write back (Rn=Rn+imm) which we don't want
+    int U = !(imm16 >> 15);
+    int W = 0; // W=1 would write back
+    int imm12 = imm16 & 0xFFF;
+    if(!U)
+        imm12 = -imm12;
+    int inst = BITS(cond, 4, 28) | BITS(0b010, 3, 25) | BITS(P, 1, 24)
+        | BITS(U, 1, 23) | BITS(1, 1, 22) | BITS(W, 1, 21) | BITS(0, 1, 20) | BITS(Rn, 4, 16)
+        | BITS(Rt, 4, 12) | BITS(imm12, 12, 0);
+    // NOTE: Differs from str at bit 20, bit is 0 in str and 1 in ldr
     emit4((u32)inst);
 }
 void ARMBuilder::emit_b(int imm, int cond) {

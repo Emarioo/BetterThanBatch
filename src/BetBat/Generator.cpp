@@ -4586,7 +4586,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 )
             }
         }
-        function->export_alias = funcImpl->astFunction->name;
+        if(compiler->options->target == TARGET_ARM) {
+            // @nocheckin
+            function->export_alias = funcImpl->astFunction->name;
+        }
         if(function->export_alias.size() != 0) {
             int prev_tinyindex;
             bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->export_alias, tinycode->index, &prev_tinyindex);

@@ -71,6 +71,7 @@ struct ARMBuilder : public ProgramBuilder {
     void emit_mov(ARMRegister rd, ARMRegister rm);
     void emit_movw(ARMRegister rd, u16 imm, int cond = ARM_COND_AL);
     void emit_movt(ARMRegister rd, u16 imm);
+    void emit_mov_imm(ARMRegister rd, u16 imm, int cond = ARM_COND_AL);
     
     void emit_push(ARMRegister r);
     void emit_pop(ARMRegister r);
@@ -86,7 +87,11 @@ struct ARMBuilder : public ProgramBuilder {
     }
     // immediate is a 13-bit immediate, last bit indicating signedness
     void emit_ldr(ARMRegister rt, ARMRegister rn, i16 imm16);
+    void emit_ldrb(ARMRegister rt, ARMRegister rn, i16 imm16);
+    void emit_ldrh(ARMRegister rt, ARMRegister rn, i16 imm16);
     void emit_str(ARMRegister rt, ARMRegister rn, i16 imm16);
+    void emit_strb(ARMRegister rt, ARMRegister rn, i16 imm16);
+    void emit_strh(ARMRegister rt, ARMRegister rn, i16 imm16);
     
     void emit_b(int imm, int cond);
     void emit_bl(int imm);

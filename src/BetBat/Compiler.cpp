@@ -2032,8 +2032,8 @@ JUMP_TO_EXEC:
                 cmd += "-kernel " + output_path;
                 
                 // @nocheckin This should be a compiler option.
-                if(options->useDebugInformation) {
-                    cmd += " -s -S";
+                if(options->debug_qemu_with_gdb) {
+                    cmd += " -S -gdb tcp::"+options->qemu_gdb_port;
                 }
                 
                 ReplaceChar((char*)cmd.data(), cmd.size(), '/', '\\');

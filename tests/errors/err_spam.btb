@@ -1,10 +1,10 @@
-/*
-    An example of a game
 
-    Goals:
-        2d box collision physics
-        multiplayer
-        players can move, jump, and collide with each other
+/*
+    This is an old version of examples/graphics/game.btb
+    
+    The standard library has changed a lot and stuff in here uses the old stuff. This file prints around 44 errors.
+    TODO: Don't print errors caused by other errors. Compile with: btb tests/errors/err_spam > out.txt
+      and analyze the output. How can you decrease the errors? What would be a good way to limit them?
 */
 
 #import "Graphics"
@@ -198,6 +198,7 @@ fn net_callback(e: NetEvent*, user_data: void*) {
 
         LOG_NET( log("msglen ", e.bytes.len) )
 
+        Assert(e.bytes.len == sizeof NetMessage)
         header := cast<NetHeader*>e.bytes.ptr
         switch header.type {
             case MSGTYPE_SPAWN:

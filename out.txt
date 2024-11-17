@@ -1,0 +1,8 @@
+Exporting function 'net_callback' again, compiler should not do that
+Linker command: gcc bin/main.o -lWs2_32 libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib libs/glad/lib-mingw-w64/glad.lib libs/stb/lib-mingw-w64/stb_image.lib -lBcrypt -lKernel32 -luser32 -lgdi32 -ladvapi32 -lshell32 -lOpenGL32 -o main.exe
+Compiled 11.39 K lines, 378.16 KB
+ total time: 1.11 s, link time: 0.14 s
+ options: win-x64, gcc
+ output: bin/main.o, main.exe
+running: .\main.exe
+Exit code: 0

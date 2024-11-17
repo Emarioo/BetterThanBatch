@@ -104,7 +104,7 @@ fn GLAD_IMPORT gladLoadGLLoader(func: fn()) -> i32;
 
 #macro DEF_GLAD_VAR(X) global GLAD_VARIMPORT(X): fn @oscall /* args go here */
 // #macro DEF_GLAD_VAR(X) fn @oscall GLAD_VARIMPORT(X) /* args go here */
-d
+
 DEF_GLAD_VAR(glClear)(mask: u32); d
 DEF_GLAD_VAR(glClearColor)(red: f32, green: f32, blue: f32, alpha: f32);
 DEF_GLAD_VAR(glViewport)(x: i32, y: i32, w: i32, h: i32);

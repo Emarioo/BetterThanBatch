@@ -377,7 +377,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             logging = true;
     }
     // interactive = true;
-    logging = true;
+    // logging = true;
     
     while(running) {
         for(int i=0;i<breakpoints.size();i++) {

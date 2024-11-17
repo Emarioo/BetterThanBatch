@@ -2527,7 +2527,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 }
                 if(!finalType.isValid()) {
                     if(!hasForeignErrors()) {
-                        Assert(expr->name.size()); // error, if we didn't have any
+                        // Assert(expr->name.size()); // error, if we didn't have any
                     } else {
                         // return SIGNAL_FAILURE; // OI, WE DO NOTHING HERE, OK!
                     }
@@ -2566,11 +2566,16 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     if(outTypes)  outTypes->add(theType);
                 }
             } else {
+                 ERR_SECTION(
+                    ERR_HEAD2(expr->location, ERROR_UNDECLARED)
+                    ERR_MSG("Type/name in sizeof/nameof/typeid is not defined.")
+                    ERR_LINE2(expr->location, "here")
+                )
                 // We may use @TEST_ERROR in which case we expect something to go wrong,
                 // but we don't expect an error from, hence no assert.
                 // We should have provided some message from checkType. (see usage of finalType above)
-                // Assert(hasAnyErrors());
                 if(outTypes) outTypes->add(AST_VOID);
+                return SIGNAL_FAILURE;
             }
         } else if(expr->typeId == AST_ASM){
             for(auto a : expr->args) {

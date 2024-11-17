@@ -31,7 +31,8 @@ struct DebugFunction {
     u32 asm_start; // set later
     u32 asm_end;
 
-    u32 offset_from_bp_to_locals = 0; // zero unless non-volatile registers are used, or x64 gen puts other things on the stack.
+    u32 offset_from_bp_to_locals = 0; // zero unless non-volatile registers and paramters are present
+    u32 args_offset = 0; // zero unless non-volatile registers are used
 
     std::string name;
     // ScopeId scopeId; // can be derived from funcAst so we could skip this member

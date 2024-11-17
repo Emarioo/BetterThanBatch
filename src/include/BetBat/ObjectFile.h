@@ -52,6 +52,7 @@ struct ObjectFile {
         
         // ARM
         RELOC_ARM_V4BX = RELOC_MASK,
+        RELOC_ARM_RELOC_DATA,
     };
     /*
         What actions do we want relocations to do?

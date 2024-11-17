@@ -110,6 +110,10 @@ void print_help(){
     DESC("Will compile with debug information (DWARF). Note that MSVC linker doesn't work with DWARF. You must use g++ or other linker. PDB for Windows is not implemented yet.\n")
     log::out << log::GRAY<<"TODO: -d=DWARF, -d=PDB\n";
     END
+    
+    USAGE("-qd,--qemu-gdb [port]")
+    DESC("If --run is used and target is ARM where is started QEMU, the '-S -gdb tcp::<port>' flags will be passed to QEMU allowing you to debug it if you start GDB and type 'target remote :port'.\n")
+    END
 
     USAGE("-p,--preproc <file>")
     DESC("Will run the preprocesser on the specified file phase and output the result to console (stdout).\n")

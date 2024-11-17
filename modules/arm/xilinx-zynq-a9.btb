@@ -129,14 +129,14 @@ fn init_uart1_RxTx_115200_8N1() {
 
 fn sendUART0char(s: char) {
   /*Make sure that the uart is ready for new char's before continuing*/
-  while ((( UART0.channel_sts_reg0 ) & UART_STS_TXFULL) > 0) ;
+  while ((( UART0.channel_sts_reg0 ) & UART_STS_TXFULL) > 0) {}
   
   /* Loop until end of string */
   UART0.tx_rx_fifo = cast<u32> s; /* Transmit char */
 }
 fn sendUART1char(s: char) {
   /*Make sure that the uart is ready for new char's before continuing*/
-  while ((( UART1.channel_sts_reg0 ) & UART_STS_TXFULL) > 0) ;
+  while ((( UART1.channel_sts_reg0 ) & UART_STS_TXFULL) > 0) {}
   
   /* Loop until end of string */
   UART1.tx_rx_fifo= cast<u32> s; /* Transmit char */
@@ -154,8 +154,8 @@ fn putchar(c: char) {
 fn puts(s: char*) {
     while(*s != '\0') 
     { 
-	  if(*s=='\n')
-		  sendUART0char('\r');
+	//   if(*s=='\n')
+		//   sendUART0char('\r');
 	   
 	   sendUART0char(*s); /*Send char to the UART1*/	   
 	   s++; /* Next char */

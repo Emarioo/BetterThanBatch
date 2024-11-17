@@ -673,7 +673,7 @@ struct Client {
                 e: NetEvent
                 e.type = EVENT_CONNECT
                 e.who = 0
-                client.m_event_callback(e, client.m_user_data)
+                client.m_event_callback(&e, client.m_user_data)
             }
 
             while {
@@ -762,7 +762,7 @@ struct Client {
                     e.type = EVENT_RECEIVE
                     e.who = 0
                     e.bytes = Slice<char>{client.m_message_data,read_bytes}
-                    client.m_event_callback(e, client.m_user_data)
+                    client.m_event_callback(&e, client.m_user_data)
                 }
                 // std_prints("[READ ", read_bytes,"]")
                 // std_print(buffer.ptr, read_bytes)
@@ -774,7 +774,7 @@ struct Client {
                 e: NetEvent
                 e.type = EVENT_DISCONNECT
                 e.who = 0
-                client.m_event_callback(e, client.m_user_data)
+                client.m_event_callback(&e, client.m_user_data)
             }
 
             return 0

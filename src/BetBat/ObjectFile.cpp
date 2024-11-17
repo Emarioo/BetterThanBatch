@@ -61,6 +61,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         // we have instructions you can decode, without the symbol the
         // section will be decoded as words
         objectFile.addSymbol(ObjectFile::SYM_LOCAL_NOTYPE, "$a", section_text, 0);
+        // objectFile.addSymbol(ObjectFile::SYM_EMPTY, "$d", section_data, 0);
         // section_comment = objectFile.createSection(".comment", FLAG_NONE, 1);
         section_arm_attr = objectFile.createSection(".ARM.attributes", FLAG_NONE, 1);
     }
@@ -353,10 +354,18 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     //     objectFile.addRelocation(section_text, RELOC_ARM_V4BX, text_stream->getWriteHead()-4, 0, 0); 
     // }
     
+    int symdata = 0;
+    if(section_data!=-1)
+        symdata = objectFile.getSectionSymbol(section_data);
     for(int i=0;i<program->dataRelocations.size();i++){
         auto& rel = program->dataRelocations[i];
         u32 real_offset = tinyprogram_offsets[rel.tinyprog_index] + rel.textOffset;
-        objectFile.addRelocation_data(section_text, real_offset, section_data, rel.dataOffset);
+        if(compiler->options->target == TARGET_ARM) {
+            objectFile.addRelocation(section_text, RELOC_ARM_RELOC_DATA ,real_offset, symdata, 0);
+        } else {
+            objectFile.addRelocation_data(section_text, real_offset, section_data, rel.dataOffset);
+        }
+        
     }
     // for(int i=0;i<program->ptrDataRelocations.size();i++){
     //     auto& rel = program->ptrDataRelocations[i];
@@ -1260,6 +1269,9 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                 int rel_type = 0;
                 if(myrel.type == RELOC_ARM_V4BX) {
                     rel_type = R_ARM_V4BX;
+                }
+                if(myrel.type == RELOC_ARM_RELOC_DATA) {
+                    rel_type = R_ARM_ABS32;   
                 }
                 ELF_SET(rel, r_offset, myrel.offset);
                 if(small_elf) {

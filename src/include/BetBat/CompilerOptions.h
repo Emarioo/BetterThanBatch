@@ -81,6 +81,9 @@ struct CompileOptions {
     bool show_profiling = false;
     std::string pattern_for_files;
     
+    bool debug_qemu_with_gdb = false;
+    std::string qemu_gdb_port = "1234";
+    
     bool execute_in_vm = false;
     bool interactive_vm = false;
     bool logged_vm = false;

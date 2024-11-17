@@ -711,11 +711,12 @@ namespace dwarf {
                         // log::out << "  arg " << arg_off<<"\n";
                         if(target == TARGET_ARM) {
                             // NOTE: THIS won't work if param is bigger than register size
-                            if(pi < 4) {
-                                arg_off = -arg_impl.offset - REGISTER_SIZE;
-                            } else {
-                                arg_off = FRAME_SIZE + arg_impl.offset - 4 * REGISTER_SIZE;
-                            }
+                            arg_off = -fun->args_offset - arg_impl.offset - 2*REGISTER_SIZE;
+                            // if(pi < 4) {
+                            //     arg_off = -arg_impl.offset - REGISTER_SIZE;
+                            // } else {
+                            //     arg_off = FRAME_SIZE + arg_impl.offset - 4 * REGISTER_SIZE;
+                            // }
                         } else if(fun->funcAst->callConvention == UNIXCALL) {
                             // TODO: Don't hardcode this. What about non-volatile registers, what if x64_gen changes and puts more stuff on stack?
                             if(fun->name == "main") {
@@ -842,6 +843,10 @@ namespace dwarf {
                     
                     indent(curLevel);
                     log::out << "var "<<var.name<<" "<<var.scopeId<<"\n";
+                    
+                    if(var.is_global && section_data == 0) {
+                        continue;
+                    }
 
                     WRITE_LEB(abbrev_var)
                     stream->write(var.name.c_str());
@@ -867,7 +872,6 @@ namespace dwarf {
                         stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
                         int offset = stream->getWriteHead();
                         stream->write4(var.frameOffset);
-                        
                         objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.frameOffset);
                     } else {
                         stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
@@ -1322,7 +1326,7 @@ namespace dwarf {
                 } else {
                     // we set to zero because relocation will use an addend
                     // this only works with ELF and R_ARM_ABS32.
-                    header->initial_location32 = 0; // relocated later
+                    header->initial_location32 = fun->asm_start; // relocated later
                     
                     relocs.add({symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location32 - (u64)header, fun->asm_start });
                         
