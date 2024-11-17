@@ -1194,7 +1194,7 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
                 }
                 ELF_SET(rel,r_offset, myrel.offset);
                 int rel_type = 0;
-                // @nocheckin TODO: Relocations for 32-bit and 64-bit ARM?
+                // TODO: 64-bit ARM
                 Assert(extra_info->target != TARGET_AARCH64);
                 if(myrel.type == RELOCA_PC32) {
                     // int symindex = getSectionSymbol(myrel.sectionNr);

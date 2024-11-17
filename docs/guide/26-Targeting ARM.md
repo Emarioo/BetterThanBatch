@@ -1,33 +1,19 @@
-**WORK IN PROGRESS**
+**COMPILING FOR ARM IS AN EXPERIMENTAL FEATURE**. The generated instruction set is ARMv7-A (even if ARM.attributes in the generated object file says otherwise).
 
-**COMPILING FOR ARM IS AN EXPERIMENTAL FEATURE** because there are many different versions, variations, processors and available instructions. This compiler just provides a couple of options mainly meant for fun, experimentation, and learning.
+# Target arm (ARMv7-A, 32-bit)
+If you are compiling for ARM then you probably have a specific processor in mind where you want to the compiler to generate an object file and link using your own linker scripts. In this case use: `btb -target arm main.btb -o main.o`.
 
-The compiler itself cannot be compiled for ARM because it assumes little endian. The compiler can cross compile to ARM.
+If you want to test your code in QEMU (xilinx-zynq-a9) then you can use: `btb -target arm main.btb -o main.elf` which will create a default linker script and link using `arm-none-eabi-ld` and then run QEMU. You can add `--qemu-gdb` to start QEMU with a paused GDB server allowing you to connect to it using `target remote :1234` in GDB.
+
+**NOTE**: QEMU is an emulator. For the compiler to run it you must download QEMU and set PATH to point to the qemu binaries (`qemu-system-arm`).
+
+**NOTE**: When generating ELF file for QEMU you may want to link with additional object files. You can add `#link "thing.o"` inside your source code. You can also pass any arbitrary flag to `arm-none-eabi-ld` using this.
 
 
-
-There are three categories of targets: Linux ARM, specific ARM processor, and general ARM. (this may change)
-
-
-# Targeting general ARM
-The target `arm` and `aarch64` is intended for compiling BTB code to ARM instructions unrelated to any processor and operating system. You may still be able to use this target if you are compiling for a specific processor. Targeting a specific processor may just add some compiler magic to make life easier. (compiling instructions unrelated to processor may not be possible, I am not sure)
-
-If you are compiling for ARM then you probably have a specific build system and processor in mind where you want to generate object files and link using your own linker scripts. In this case you want BTB compiler to generate object files using a command like this: `btb -target arm main.btb -o main.o`.
-
-If you want to test your code in QEMU then you can use: `btb -target arm main.btb -o main.elf` which will create a default linker script and link using `arm-none-eabi-ld` (or `aarch64-none-elf-ld`) and then run QEMU. You can add the `--what-is-done` flag to know exactly what the compiler is doing.
-
-You can override which ARM toolchain is used using `--arm-tools arm-none-eabi` (don't use arm-none-eabi since that is the default).
-
-**NOTE**: QEMU is an emulator. For the compiler to run it you must download QEMU and set PATH to point to the qemu binaries (`qemu-system-x`).
-
-**NOTE**: When generating elf file for QEMU you may want to link with additional object files. This is not possible right now. You have to generate object files, create linker script and startup script and link those yourself.
-
-**NOTE:** What is meant by "general ARM"? I don't know? ARMv7 or ARMv8? Names and things are work in progress.
-
-# Targeting Linux ARM
+# Target aarch-64 (ARMv8, 64-bit)
 **NOT SUPPPORTED YET**
 
-# Targeting specific ARM processor
+# Target Linux ARM
 **NOT SUPPPORTED YET**
 
 # Useful commands
@@ -44,6 +30,10 @@ qemu-system-arm -semihosting -nographic -serial mon:stdio -M xilinx-zynq-a9 -cpu
 arm-none-eabi-gdb main.elf -ex "target remote :1234"
 ```
 
-# Modules for ARM processors
+# Modules for ARM
+The standard library that use operating system functions will not work when targeting ARM. So will certain features such as atomic intrinsics.
 
-implement prints and printc for UART for xilinx-synq-a9.
+There is `xilinx-synq-a9.btb` which is a module that contains functions to interract with the UART.
+
+# Future
+The plan is to have three categories of target, ARM for Linux, and these ARM versions: ARMv7-A (32-bit), ARMv7-M (32-bit), ARMv8-? (64-bit).

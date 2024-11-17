@@ -630,7 +630,7 @@ def compute_modified_files(source_files, object_files, exe_file):
             modified_files.append(source_files[i])
         else:
             obj_time = os.path.getmtime(object_files[i])
-            if time > exe_time or time > obj_time:
+            if time > exe_time and time > obj_time:
                 modified_files.append(source_files[i])
 
     return modified_files
