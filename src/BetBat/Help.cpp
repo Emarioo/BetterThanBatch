@@ -55,9 +55,13 @@ void print_help(){
     DESC("Specifies the target platform to compile for. The default is the same as what the compiler executable was compiled for. Also, compiling for Unix on Windows wouldn't work because of the linker. With a special linker maybe but you can only use a predefined linker.\n")
     log::out << "These are available: " << log::LIME;
     for(int i=TARGET_START;i<TARGET_END;i++) {
+        if(i == TARGET_AARCH64 || i == TARGET_ARM) {
+            // ARM supported is experimental
+            continue;
+        }
         if(i!=TARGET_START)
             log::out << ", ";
-        log::out << ToString((TargetPlatform)i);
+        log::out << log::LIME << ToString((TargetPlatform)i) << log::NO_COLOR;
     }
     log::out << "\n";
     END

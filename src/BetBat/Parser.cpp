@@ -2460,6 +2460,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     }
                     if(token->type == '{') {
                         depth++;
+                        info.advance();
                         continue;
                     }
                     if(token->type == '}') {

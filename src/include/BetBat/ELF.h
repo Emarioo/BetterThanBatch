@@ -347,9 +347,12 @@ struct FileELF {
     }
     u8* _rawFileData = nullptr;
     u64 fileSize = 0;
+    bool is_32bit = false;
 
     elf::Elf64_Ehdr* header = nullptr;
     elf::Elf64_Shdr* sections = nullptr;
+    elf::Elf32_Ehdr* header32 = nullptr;
+    elf::Elf32_Shdr* sections32 = nullptr;
     int sections_count = 0;
     char* section_names = nullptr;
     int section_names_size = 0;
@@ -360,6 +363,7 @@ struct FileELF {
     const u8* dataOfSection(int sectionIndex, int* out_size) const;
     
     const elf::Elf64_Rela* relaOfSection(int sectionIndex, int* out_count) const;
+    const elf::Elf32_Rela* relaOfSection32(int sectionIndex, int* out_count) const;
 
     // QuickArray<elf::Elf64_Shdr*> sections{};
     // QuickArray<elf::Elf64_Sym*> symbols{};

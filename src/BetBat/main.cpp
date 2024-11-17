@@ -84,6 +84,7 @@ int main(int argc, const char** argv){
         // options.disable_preload = true;
         // options.only_preprocess = true;
         options.useDebugInformation = true;
+        // options.debug_qemu_with_gdb = true;
         // options.useDebugInformation = false;
         Compiler compiler{};
         compiler.run(&options);

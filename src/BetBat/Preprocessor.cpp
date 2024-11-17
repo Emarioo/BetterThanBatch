@@ -2119,6 +2119,7 @@ SignalIO PreprocContext::parseOne() {
         advance();
         if(evaluateTokens) {
             lexer->appendToken(new_lexer_import, tok, &string);
+            lexer->appendToken(new_lexer_import, macro_tok, &string);
         }
     }
     return SIGNAL_SUCCESS;

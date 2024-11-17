@@ -146,7 +146,13 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
             if (print_targets) {
                 log::out << "These targets are available:\n";
                 for(int j=TARGET_START;j<TargetPlatform::TARGET_END;j++) {
-                    log::out << " " << ToString((TargetPlatform)j);
+                    if(j == TARGET_AARCH64 || j == TARGET_ARM) {
+                        // ARM supported is experimental
+                        continue;
+                    }
+                    if(j!=TARGET_START)
+                        log::out << ", ";
+                    log::out << log::LIME << ToString((TargetPlatform)j) << log::NO_COLOR;
                 }
             }
         } else if (arg == "--linker" || arg == "-l") {

@@ -113,6 +113,8 @@ struct ARMBuilder : public ProgramBuilder {
     ARMRegister alloc_register(BCRegister reg = BC_REG_INVALID);
     ARMRegister find_register(BCRegister reg);
     void free_register(ARMRegister reg);
+    
+    bool prepare_assembly(Bytecode::ASM& inst);
 };
 
 bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode);

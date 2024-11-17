@@ -1148,6 +1148,14 @@ void Compiler::run(CompileOptions* options) {
             }
         }
     }
+    
+    if(options->target == TARGET_ARM) {
+        log::out << log::YELLOW << "ARM support is experimental and does not fully work.\n";
+    }
+    if(options->target == TARGET_AARCH64) {
+        log::out << log::RED << "ARM-64 bit (aarch64) is not supported.";
+        return;
+    }
 
     std::string path_to_exe = TrimLastFile(engone::GetPathToExecutable());
     std::string dir_of_exe = TrimLastFile(path_to_exe);

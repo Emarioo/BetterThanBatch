@@ -1,12 +1,11 @@
-// #import "arm/xilinx-zynq-a9"
+#import "arm/xilinx-zynq-a9"
 
-// init_uart0_RxTx_115200_8N1()
+init_uart0_RxTx_115200_8N1()
 
-// s := "Hello world!\n".ptr
-// while(*s != '\0') { 
-//     sendUART0char(*s);
-//     s++;
-// }
+v := asm<i32> {
+    mov r0, #66
+    push {r0}
+}
 
-
-#import "examples/graphics/game"
+sendUART0char(v)
+sendUART0char('\n')

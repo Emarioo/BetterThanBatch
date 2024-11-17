@@ -2,6 +2,7 @@
 #include "BetBat/Compiler.h"
 
 #include "BetBat/arm_defs.h"
+#include "BetBat/Reformatter.h"
 
 /*
  https://armconverter.com/?disasm
@@ -17,16 +18,6 @@ https://stackoverflow.com/questions/64838776/understanding-arm-relocation-exampl
 
 @TODO: Can we use THUMB instructions?
 */
-
-// u16 flip_bits(u16 bits) {
-//     return (arr[i] << 24) | (arr[i] >> 24) | ((arr[i]&0xFF00) << 8) | ((arr[i] & 0xFF0000) >> 8);
-// }
-u32 flip_bits(u32 bits) {
-    return (bits << 24) | (bits >> 24) | ((bits&0xFF00) << 8) | ((bits & 0xFF0000) >> 8);
-}
-// u64 flip_bits(u64 bits) {
-    
-// }
 
 bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode) {
     using namespace engone;
@@ -60,10 +51,6 @@ bool ARMBuilder::generate() {
         tinycode->print(0,-1, code);
     )
     
-    if(tinycode->required_asm_instances.size() > 0) {
-        log::out << log::RED << "Inline assembly not supported when targeting arm.\n";
-    }
-    
     // Useful when debugging
     // int arr[]{
     //     0x04b02de5, 0x00b08de2, 0x0cd04de2, 0x1730a0e3,
@@ -75,6 +62,22 @@ bool ARMBuilder::generate() {
     // }
     // emit_bytes((u8*)arr, sizeof(arr));
     // return true;
+    
+    bool failed = false;
+    for(auto ind : tinycode->required_asm_instances) {
+        auto& inst = bytecode->asmInstances[ind];
+        if(!inst.generated) {
+            bool yes = prepare_assembly(inst);
+            if(yes) {
+               inst.generated = true; 
+            } else {
+                failed = true;
+                // error should have been printed
+            }
+        }
+    }
+    if(failed)
+        return false;
     
     bc_to_machine_translation.resize(tinycode->size());
     
@@ -1067,6 +1070,30 @@ bool ARMBuilder::generate() {
                     emit_mov(reg_dst, reg_op);
                 }
             } break;
+            case BC_ASM: {
+                InstBase_imm32_imm8_2* inst = (InstBase_imm32_imm8_2*)base;
+                
+                if(push_offsets.size())
+                    push_offsets.last() += 8 * (-inst->imm8_0 + inst->imm8_1);
+                
+                virtual_stack_pointer += (inst->imm8_0 - inst->imm8_1) * 8; // inputs - outputs
+                
+                Bytecode::ASM& asmInstance = bytecode->asmInstances.get(inst->imm32);
+                Assert(asmInstance.generated);
+                u32 len = asmInstance.iEnd - asmInstance.iStart;
+                if(len != 0) {
+                    u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
+                    int pc_start = code_size();
+                    emit_bytes(ptr, len);
+                    for (int i = 0; i < asmInstance.relocations.size();i++) {
+                      auto& it = asmInstance.relocations[i];
+                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+                    }
+                } else {
+                    // TODO: Better error, or handle error somewhere else?
+                    log::out << log::RED << "BC_ASM at "<<prev_pc<<" was incomplete\n";
+                }
+            } break;
             default: {
                 log::out << log::RED << "TODO: Implement BC instrtuction in ARM generator: "<< log::PURPLE<< opcode << "\n";
                 Assert(false);
@@ -1745,6 +1772,133 @@ void ARMBuilder::emit_bx(ARMRegister rm) {
         | BITS(0xFFF, 12, 8) | BITS(0b0001, 4, 4) | BITS(Rm, 4, 0);
     emit4((u32)inst);
 }
+
+bool ARMBuilder::prepare_assembly(Bytecode::ASM& asmInst) {
+    using namespace engone;
+    
+    #define SEND_ERROR() compiler->compile_stats.errors++;
+    
+    // TODO: Use one inline assembly file per thread and reuse them.
+    //   bin path gets full of assembly files otherwise.
+    //   The only downside is that if there was a problem, the user can't take a look at
+    //   the assembly because it might have been overwritten so spamming assembly files will do for the time being.
+    std::string asm_file = "bin/inline_asm"+std::to_string(tinycode->index)+".s";
+    std::string obj_file = "bin/inline_asm"+std::to_string(tinycode->index)+".o";
+    auto file = engone::FileOpen(asm_file,FILE_CLEAR_AND_WRITE);
+    defer { if(file) engone::FileClose(file); };
+    if(!file) {
+        SEND_ERROR();
+        log::out << log::RED << "Could not create " << asm_file << "!\n";
+        return false;
+    }
+    const char* pretext = nullptr;
+    const char* posttext = nullptr;
+    int asm_line_offset = 0;
+    std::string cmd = "";
+    std::string assembler = "arm-none-eabi-as";
+    // We assume arm-none-eabi
+    pretext = ".text\n";
+    posttext = "\n"; // assembler complains about not having a newline so we add one here
+    asm_line_offset = 3;
+    cmd = assembler + " -o " + obj_file + " " + asm_file;
+    
+    bool yes = engone::FileWrite(file, pretext, strlen(pretext));
+    Assert(yes);
+    char* asmText = bytecode->rawInlineAssembly._ptr + asmInst.start;
+    u32 asmLen = asmInst.end - asmInst.start;
+    yes = engone::FileWrite(file, asmText, asmLen);
+    Assert(yes);
+    yes = engone::FileWrite(file, posttext, strlen(posttext));
+    Assert(yes);
+
+    engone::FileClose(file);
+    file = {};
+
+    // TODO: Turn off logging from ml64? or at least pipe into somewhere other than stdout.
+    //  If ml64 failed then we do want the error messages.
+    // TODO: ml64 can compile multiple assembly files into multiple object files. Not sure how we
+    //    separate them out later. This is probably faster than doing one by one. Altough, be wary 
+    //    of command line character limit.
+    //  
+    auto asmLog = engone::FileOpen("bin/asm.log",FILE_CLEAR_AND_WRITE);
+    defer { if(asmLog) engone::FileClose(asmLog); };
+    
+    int exitCode = 0;
+    yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, nullptr, {}, asmLog, asmLog);
+    if(exitCode != 0 || !yes) {
+        u64 fileSize = engone::FileGetSize(asmLog);
+        if(fileSize != 0) {
+            engone::FileSetHead(asmLog, 0);
+            QuickArray<char> errorMessages{};
+            errorMessages.resize(fileSize);
+            
+            yes = engone::FileRead(asmLog, errorMessages.data(), errorMessages.size());
+            Assert(yes);
+            if(yes) {
+                // log::out << std::string(errorMessages.data(), errorMessages.size());
+                ReformatAssemblerError(LINKER_GCC, asmInst, errorMessages, -asm_line_offset);
+            }
+        } else {
+            // If asmLog is empty then we probably misused it
+            // and assembler printed to the compiler's stdout.
+            // We print a message anyway in case the user just
+            // got "Compiler failed with 5 errors". Debugging that would be rough without this message.
+            log::out << log::RED << "Assembly error\n";
+        }
+        SEND_ERROR();
+        return false;
+    }
+    engone::FileClose(asmLog);
+    asmLog = {};
+
+    // TODO: DeconstructFile isn't optimized and we deconstruct symbols and segments we don't care about.
+    //  Write a specific function for just the text segment.
+    Assert(compiler->options->target == TARGET_ARM);
+    if(compiler->options->target == TARGET_ARM) {
+        // TODO: What about arch64?
+        auto objfile = FileELF::DeconstructFile(obj_file);
+        defer { FileELF::Destroy(objfile); };
+        if(!objfile) {
+            log::out << log::RED << "Could not find " << obj_file  << "!\n";
+            SEND_ERROR();
+            return false;
+        }
+        int textSection_index = objfile->sectionIndexByName(".text");
+        if(textSection_index == 0) {
+            log::out << log::RED << "Text section could not be found for the compiled inline assembly. Compiler bug?\n";
+            SEND_ERROR();
+            return false;
+        }
+        int relocations_count=0;
+        if(objfile->is_32bit) {
+            auto relocations = objfile->relaOfSection32(textSection_index, &relocations_count);
+        } else {
+            auto relocations = objfile->relaOfSection(textSection_index, &relocations_count);
+        }
+        if(relocations_count!=0){
+            log::out << log::RED << "Relocations are not supported in inline assembly.\n";
+            SEND_ERROR();
+            return false;
+        }
+        
+        int textSize = 0;
+        const u8* textData = objfile->dataOfSection(textSection_index, &textSize);
+        Assert(textData);
+        
+        // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
+        // u32 len = section->SizeOfRawData;
+        // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
+        asmInst.iStart = bytecode->rawInstructions.used;
+        bytecode->rawInstructions.reserve(bytecode->rawInstructions.used + textSize);
+        memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
+        bytecode->rawInstructions.used += textSize;
+        asmInst.iEnd = bytecode->rawInstructions.used;
+    }
+    return true;
+}
+
+
+
 const char* arm_register_names[]{
     "INVALID", // ARM_REG_INVALID = 0,
     "r0",      // ARM_REG_R0,
