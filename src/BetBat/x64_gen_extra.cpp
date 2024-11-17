@@ -81,7 +81,7 @@ bool X64Builder::generate() {
             accessed_params[param_index].control = base->control;
         }
         if(opcode == BC_PTR_TO_PARAMS) {
-            // nocheckin IMPORTANT TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
+            // TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
             auto base = (InstBase_op1_imm16*)n->base;
             int param_index = base->imm16 / 8;
             if(param_index >= accessed_params.size()) {

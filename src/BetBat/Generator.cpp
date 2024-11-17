@@ -4586,10 +4586,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 )
             }
         }
-        if(compiler->options->target == TARGET_ARM) {
-            // @nocheckin
-            function->export_alias = funcImpl->astFunction->name;
-        }
         if(function->export_alias.size() != 0) {
             int prev_tinyindex;
             bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->export_alias, tinycode->index, &prev_tinyindex);
@@ -6848,8 +6844,6 @@ SignalIO GenContext::generateGlobalData() {
         // VM will manually put the pointer at this memory location
         // we do 16 because of 16-byte alignment rule in calling conventions
         builder.emit_alloc_local(BC_REG_INVALID, 16);
-
-        // nocheckin TOOD: I changed how locals and stack pointer works, stack pointer is modified once at the top and bottom of functions, will emit_alloc_local mess that up? Should be fine if we're just generating expressions.
 
         TypeId type{};
         if(!stmt->firstExpression) {

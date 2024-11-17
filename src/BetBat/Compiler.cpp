@@ -1091,7 +1091,6 @@ void Compiler::processImports() {
                                 GenerateX64(this, t);
                         } break;
                         case TARGET_ARM: {
-                            // @nocheckin gen arm
                             for(auto t : compiler_imp->tinycodes)
                                 GenerateARM(this, t);
                         } break;
@@ -1826,7 +1825,7 @@ void Compiler::run(CompileOptions* options) {
         }    
     } else if (output_type == OUTPUT_ELF){
         if(program->libraries.size() > 0) {
-            // @nocheckin TODO: Better error messages that shows where libraries came from.
+            // TODO: Better error messages that shows where libraries came from.
             log::out << log::RED << "Libraries cannot be linked when compiling for ARM." << log::NO_COLOR;
             for(auto& path : program->libraries) {
                 log::out << path<<" ";
@@ -1836,7 +1835,8 @@ void Compiler::run(CompileOptions* options) {
             return;
         }
         
-        std::string toolchain = "arm-none-eabi"; // @nocheckin compiler option for arm linker, what about clang?
+         // TODO: Compiler option for arm linker, what about clang?
+        std::string toolchain = "arm-none-eabi";
         std::string as = toolchain+"-as";
         std::string linker = toolchain+"-ld";
         
@@ -2033,13 +2033,12 @@ JUMP_TO_EXEC:
                 log::out << log::RED << "Bytecode as target is not supported. Use --run-vm to execute in virtual machine.\n";
             } break;
             case TARGET_ARM: {
-                // @nocheckin TODO: Don't hardcode processor for QEMU.
+                // TODO: Don't hardcode processor for QEMU.
                 std::string cmd = "qemu-system-arm "
                     "-semihosting -nographic -serial mon:stdio -M "
                     "xilinx-zynq-a9 -cpu cortex-a9 ";
                 cmd += "-kernel " + output_path;
                 
-                // @nocheckin This should be a compiler option.
                 if(options->debug_qemu_with_gdb) {
                     cmd += " -S -gdb tcp::"+options->qemu_gdb_port;
                 }

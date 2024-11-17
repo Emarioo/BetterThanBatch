@@ -202,7 +202,7 @@ bool ARMBuilder::generate() {
             // log::out << "param "<<param_index<<" " << base->control<<"\n";
             accessed_params[param_index].control = inst->control;
         } else if(opcode == BC_PTR_TO_PARAMS) {
-            // nocheckin IMPORTANT TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
+            // TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
             auto inst = (InstBase_op1_imm16*)base;
             int param_index = inst->imm16 / REGISTER_SIZE;
             if(param_index >= accessed_params.size()) {
@@ -1062,7 +1062,7 @@ bool ARMBuilder::generate() {
             case BC_CAST: {
                auto inst = (InstBase_op2_ctrl *)base;
 
-                // @nocheckin Do casts, if we cast to same register then we do nothing
+                // TODO: Do casts, if we cast to same register then we do nothing
                 ARMRegister reg_op = find_register(inst->op1);
                 ARMRegister reg_dst = reg_op;
                 if (inst->op0 != inst->op1) {
@@ -1270,9 +1270,7 @@ ARMRegister ARMBuilder::find_register(BCRegister reg) {
     if(reg == BC_REG_LOCALS)
         return ARM_REG_FP;
     auto& bc_info = bc_registers[reg];
-    // Assert(bc_info.arm_reg != ARM_REG_INVALID);
-    if(bc_info.arm_reg == ARM_REG_INVALID)
-        return ARM_REG_R0; // @nocheckin temporary
+    Assert(bc_info.arm_reg != ARM_REG_INVALID);
     for(int i=1;i<ARM_REG_GENERAL_MAX;i++) {
         if(i == bc_info.arm_reg) {
             arm_registers[i].last_used = 0;
@@ -1738,7 +1736,7 @@ void ARMBuilder::emit_strb(ARMRegister rt, ARMRegister rn, i16 imm16) {
 }
 void ARMBuilder::emit_b(int imm, int cond) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/B
-    // @nocheckin double check these bit checks with maximum,minimum allowed immediates.
+    // TODO: double check these bit checks with maximum,minimum allowed immediates.
     Assert(((imm & 0x8000'0000) && (imm & 0x7F00'0000) == 0x7F00'0000) || (imm & 0xFF00'0000) == 0);
     
     int imm24 = imm & 0xFF'FFFF;
@@ -1747,7 +1745,7 @@ void ARMBuilder::emit_b(int imm, int cond) {
 }
 void ARMBuilder::emit_bl(int imm) {
     // https://developer.arm.com/documentation/ddi0406/c/Application-Level-Architecture/Instruction-Details/Alphabetical-list-of-instructions/B
-    // @nocheckin double check these bit checks with maximum,minimum allowed immediates.
+    // TODO: double check these bit checks with maximum,minimum allowed immediates.
     Assert(((imm & 0x8000'0000) && (imm & 0x7F00'0000) == 0x7F00'0000) || (imm & 0xFF00'0000) == 0);
     int cond = ARM_COND_AL;
     int imm24 = imm & 0xFF'FFFF;
