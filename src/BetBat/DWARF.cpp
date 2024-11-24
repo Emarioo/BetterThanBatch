@@ -93,10 +93,13 @@ namespace dwarf {
             // WRITE_FORM(DW_AT_language,  DW_FORM_data1)
             WRITE_FORM(DW_AT_name,      DW_FORM_string)
             WRITE_FORM(DW_AT_comp_dir,  DW_FORM_string)
-            WRITE_FORM(DW_AT_low_pc,    DW_FORM_data4)
-            WRITE_FORM(DW_AT_high_pc,   DW_FORM_data4)
-            // WRITE_FORM(DW_AT_low_pc,    DW_FORM_addr)
-            // WRITE_FORM(DW_AT_high_pc,   DW_FORM_addr)
+            if(REGISTER_SIZE == 4) {
+                WRITE_FORM(DW_AT_low_pc,    DW_FORM_data4)
+                WRITE_FORM(DW_AT_high_pc,   DW_FORM_data4)
+            } else {
+                WRITE_FORM(DW_AT_low_pc,    DW_FORM_addr)
+                WRITE_FORM(DW_AT_high_pc,   DW_FORM_addr)
+            }
             WRITE_FORM(DW_AT_stmt_list, DW_FORM_data4)
             WRITE_LEB(0) // value?
             WRITE_LEB(0) // end attributes for abbreviation
@@ -112,10 +115,13 @@ namespace dwarf {
             WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
             WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             // WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
-            WRITE_FORM(DW_AT_low_pc,       DW_FORM_data4)
-            WRITE_FORM(DW_AT_high_pc,      DW_FORM_data4)
-            // WRITE_FORM(DW_AT_low_pc,       DW_FORM_addr)
-            // WRITE_FORM(DW_AT_high_pc,      DW_FORM_addr)
+            if(REGISTER_SIZE == 4) {
+                WRITE_FORM(DW_AT_low_pc,       DW_FORM_data4)
+                WRITE_FORM(DW_AT_high_pc,      DW_FORM_data4)
+            } else {
+                WRITE_FORM(DW_AT_low_pc,       DW_FORM_addr)
+                WRITE_FORM(DW_AT_high_pc,      DW_FORM_addr)
+            }
             WRITE_FORM(DW_AT_frame_base,   DW_FORM_block1)
             // WRITE_FORM(DW_AT_call_all_tail_calls, DW_FORM_flag_present)
             WRITE_FORM(DW_AT_sibling,      DW_FORM_ref4)
@@ -260,11 +266,13 @@ namespace dwarf {
             WRITE_LEB(DW_TAG_lexical_block) // tag
             stream->write1(DW_CHILDREN_yes);
 
-            // WRITE_FORM(DW_AT_low_pc,           DW_FORM_addr)
-            // WRITE_FORM(DW_AT_high_pc,          DW_FORM_addr)
-            
-            WRITE_FORM(DW_AT_low_pc,           DW_FORM_data4)
-            WRITE_FORM(DW_AT_high_pc,          DW_FORM_data4)
+            if(REGISTER_SIZE == 4) {
+                WRITE_FORM(DW_AT_low_pc,           DW_FORM_data4)
+                WRITE_FORM(DW_AT_high_pc,          DW_FORM_data4)
+            } else {
+                WRITE_FORM(DW_AT_low_pc,           DW_FORM_addr)
+                WRITE_FORM(DW_AT_high_pc,          DW_FORM_addr)
+            }
             
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
@@ -322,12 +330,18 @@ namespace dwarf {
             // stream->write("unknown.btb"); // source file
             // stream->write("project/src"); // project dir
             relocs.add({ stream->getWriteHead() - offset_section, 0 });
-            stream->write4(0); // start address of code
-            // stream->write8(0); // start address of code
+            if(REGISTER_SIZE == 4) {
+                stream->write4(0); // start address of code
+            } else {
+                stream->write8(0); // start address of code
+            }
             // Assert(false);
             relocs.add({ stream->getWriteHead() - offset_section, (u32)stream_text->getWriteHead() });
-            stream->write4(stream_text->getWriteHead()); // end address of text code
-            // stream->write8(stream_text->getWriteHead()); // end address of text code
+            if(REGISTER_SIZE == 4) {
+                stream->write4(stream_text->getWriteHead()); // end address of text code
+            } else {
+                stream->write8(stream_text->getWriteHead()); // end address of text code
+            }
             int reloc_statement_list = stream->getWriteHead() - offset_section;
             stream->write4(0); // statement list, address/pointer to reloc thing
 
@@ -665,11 +679,17 @@ namespace dwarf {
                 u32 proc_low = fun->asm_start;
                 u32 proc_high = fun->asm_end;
                 relocs.add({ stream->getWriteHead() - offset_section, proc_low });
-                stream->write4(proc_low); // pc low
-                // stream->write8(proc_low); // pc low
+                if(REGISTER_SIZE == 4) {
+                    stream->write4(proc_low); // pc low
+                } else {
+                    stream->write8(proc_low); // pc low
+                }
                 relocs.add({ stream->getWriteHead() - offset_section, proc_high });
-                stream->write4(proc_high); // pc high
-                // stream->write8(proc_high); // pc high
+                if(REGISTER_SIZE == 4) {
+                    stream->write4(proc_high); // pc high
+                } else {
+                    stream->write8(proc_high); // pc high
+                }
 
                 stream->write1((u8)(1)); // frame base, begins with block length
                 stream->write1((u8)(DW_OP_call_frame_cfa)); // block content
@@ -825,16 +845,21 @@ namespace dwarf {
                             ScopeInfo* scope = ast->getScope(scopes_to_generate[i]);
                             scopeStack.add({scopes_to_generate[i]});
                             u32 proc_low = fun->asm_start + scope->asm_start;
-                            u32 proc_high = fun->asm_end + scope->asm_end;
+                            u32 proc_high = fun->asm_start + scope->asm_end;
                             
                             WRITE_LEB(abbrev_lexical_block)
                             relocs.add({ stream->getWriteHead() - offset_section, proc_low });
-                            stream->write4(proc_low); // pc low
-                            // stream->write8(proc_low); // pc low
+                            if(REGISTER_SIZE == 4) {
+                                stream->write4(proc_low); // pc low
+                            } else {
+                                stream->write8(proc_low); // pc low
+                            }
                             relocs.add({ stream->getWriteHead() - offset_section, proc_high });
-                            
-                            stream->write4(proc_high); // pc high
-                            // stream->write8(proc_high); // pc high
+                            if(REGISTER_SIZE == 4) {
+                                stream->write4(proc_high); // pc high
+                            } else {
+                                stream->write8(proc_high); // pc high
+                            }
                             indent(curLevel);
                             curLevel++;
                             log::out << "scope "<<curLevel<<"\n";

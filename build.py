@@ -56,13 +56,15 @@ def main():
     # config["use_opengl"] = True # rarely used
     # config["thread_count"] = 8
     config["thread_count"] = multiprocessing.cpu_count()
-    yes = compile(config)
+    yes = True
+    if not enabled("run"):
+        yes = compile(config)
     
     # print(config)
 
     if not yes:
         print("Compile failed")
-    elif os.path.exists(config["output"]):
+    elif os.path.exists(config["output"]) and not enabled("run"):
         filepath = config["output"]
         filepath = filepath.replace("\\","/")
         ind = filepath.rfind("/")
@@ -75,7 +77,7 @@ def main():
         except PermissionError as ex:
             print("CANNOT copy",config["output"],"->",filename)
 
-    if yes and os.path.exists(config["output"]) and enabled("run_when_finished"):
+    if yes and os.path.exists(config["output"]) and (enabled("run_when_finished") or enabled("run")):
         # cmd("bin/btb -dev")
         cmd("./"+config["output"]+" -dev")
 

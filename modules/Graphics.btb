@@ -518,8 +518,8 @@ fn RefreshWindow(window: WindowContext*) {
     window.running = !glfwWindowShouldClose(window.glfw_window) && !window.schedule_close
 
     // temporary
-    ProcessSleep(0.001) // don't use up CPU resources
-    // ProcessSleep(0.5) // don't use up CPU resources
+    if window.delta < 0.01
+        ProcessSleep(0.05) // don't use up CPU resources
     
     glViewport(0, 0, window.width, window.height)
     

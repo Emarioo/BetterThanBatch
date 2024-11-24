@@ -1783,7 +1783,9 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
         // we should always emit alloc_args even if we don't have any arguments to ensure 16-byte alignment
         // The x64 generator (and virtual machine) ensures 16-byte alignment on alloc_args instructions
         builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
-        currentFuncImpl->update_max_arguments(allocated_stack_space);
+        // We don't have current func impl when evaluatin at compile time
+        if(currentFuncImpl)
+            currentFuncImpl->update_max_arguments(allocated_stack_space);
     }
 
     // Evaluate arguments and push the values to stack
@@ -1867,7 +1869,8 @@ SignalIO GenContext::generateFncall(ASTExpression* expression, QuickArray<TypeId
                         // we must emit alloc args before we generate pushed values!
                         // builder.emit_alloc_args(BC_REG_INVALID, arg_space);
                         builder.fix_alloc_args(off_alloc_args, arg_space);
-                        currentFuncImpl->update_max_arguments(arg_space);
+                        if(currentFuncImpl)
+                            currentFuncImpl->update_max_arguments(arg_space);
                         Assert(cast_sig->argumentTypes.size() == 1);
                         generatePop_set_arg(cast_sig->argumentTypes[0].offset, cast_sig->argumentTypes[0].typeId);
 
@@ -4789,6 +4792,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             } else if (function->name == "global_slice") {
                 BCRegister reg = BC_REG_A;
                 builder.emit_dataptr(reg, 0);
+                // -16 is hardcode, use sizeof slice.
                 builder.emit_set_ret(reg, -16, REGISTER_SIZE, false);
 
                 // NOTE: We return preallocated data which is the globals defined by the user instead
