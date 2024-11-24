@@ -26,7 +26,6 @@ See the [Guide](/docs/guide/00-Introduction.md) for details.
 - **Decent error messages** - You are bombarded with them in certain cases and macros certainly makes it harder to figure out what the error message is about but most messages provide the types that are problematic (in polymorphic structs/functions for example). This is how errors look like:
 ![](/docs/img/err-named-arg.png)
 
-
 ## Standard library
 Most modules in the standard library work for Windows and Linux.
 - **String**
@@ -65,6 +64,8 @@ Download a release (follow steps below) or [build](#Building) the compiler and t
 4. Install a linker from one of these toolchains: GCC, Clang, or MSVC (Microsoft Visual C/C++ Compiler). The building section describes how to setup MSVC.
 
 The compiler is capable of generating object files but you need a linker to turn them into executables.
+
+Lastly, if you are using vscode then install the BTB Language extension [btb-lang/README.md](/btb-lang/README.md). If you are working with other editors then you would need to write the syntax highlighting yourself. You can look at the vscode extension's syntax grammar and highlighting and reimplement it for your editor's plugin system.
 
 # Building
 

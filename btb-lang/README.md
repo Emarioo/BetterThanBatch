@@ -1,65 +1,27 @@
-# btb-lang README
+# Highlighting for the BTB language
 
-This is the README for your extension "btb-lang". After writing up a brief description, we recommend including the following sections.
+This plugin provies syntax highlighting for the BTB language and makes sure vscode recognizes text in .btb files as a programming language allowing you to toggle comments among other things.
+
+![](img/syntax-example.png)
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- Syntax highlighting for .btb files
 
-For example if there is an image subfolder under your extension project workspace:
+The extension does not support hints, suggestions or syntax errors, just highlighting. There are plans to implement a language server but that may be in 1-2 years (maybe more).
 
-\!\[feature X\]\(images/feature-x.png\)
+**WARNING:** The syntax highlighting does not fully reflect if code will compile or not. It is just a bit of color to make it more pleasant to work with.
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Installing
 
-## Requirements
+### From the Marketplace
+1. Open Visual Studio Code.
+2. Go to the Extensions view (`Ctrl+Shift+X`).
+3. Search for "btb lang" and click **Install**.
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+### From VSIX
+1. Download the `.vsix` file from [Releases](https://github.com/Emarioo/BetterThanBatch/releases).
+2. Open Visual Studio Code.
+3. Go to the Extensions view, click `...`, and select **Install from VSIX...**.
 
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+**NOTE**: This extension currently lives inside the `btb-lang` directory in the repository for the compiler/language: `https://github.com/Emarioo/BetterThanBatch`.

@@ -86,7 +86,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control",
-				"match": "\\b(if|else|while|switch|case|default|for|break|namespace|continue|global|fn|enum|union|struct|return|defer|each|operator|cast|cast_unsafe|_test|using|as)\\b"
+				"match": "\\b(if|else|while|switch|case|for|break|namespace|continue|global|fn|enum|union|struct|return|defer|each|operator|asm|cast|cast_unsafe|_test|using|as)\\b"
 			},
             {
                 "name": "keyword.other",
