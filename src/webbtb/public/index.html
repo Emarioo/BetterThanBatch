@@ -6,32 +6,233 @@
     <head>
         <meta charset="UTF-8">
         <title>BTB Compiler</title>
-        <!-- <link rel="stylesheet" href="style.css"> -->
+        <link rel="stylesheet" href="style.css">
         <script src="script.js"></script>
     </head>
     <body>
         <!-- <canvas id="particle-canvas"></canvas> -->
         <div class="nav">
-            
+            <div class="nav-links">
+                <a href="docs">Docs</a>
+                <a href="https://github.com/Emarioo/BetterThanBatch">Github</a>
+            </div>
+            <div class="search-bar">
+                <input class="search-input" placeholder="Search..."/>
+            </div>
         </div>
-        <div class="top_content">
-            <h1>BTB Compiler (logo)</h1>
-            <p>Hello dude!</p>
+        <div class="content">
+            <div class="home-panel">
+                <div class="home-left">
+                    <h1>BTB Language</h1>
+                    <p>
+                    Better Than Batch (BTB) is a language and compiler meant for easier development with a complete standard library and cross platform goals.
+                    Commonly used for everyday cross-platform intermediate scripting needs when Bash and Batch isn't enough and Python is too slow.
+                    </p>
+                    <div>
+                        <a target="_blank" href="https://github.com/Emarioo/BetterThanBatch/releases" class="cto_button cto_download"><b>Download BTB</b></a>
+                        <a href="https://github.com/Emarioo/BetterThanBatch" class="cto_button cto_guide"><b>Friendly guide</b></a>
+                    </div>
+                    <p>Latest version: <a target="_blank" href="https://github.com/Emarioo/BetterThanBatch/releases/tag/v0.2.0"><b>0.2.0</b></a> (2024-10-14)</p>
+                    <a href="https://github.com/Emarioo/BetterThanBatch/tree/main/CHANGELOG.md">Changelog</a>
+                </div>
+                <div class="home-right">
+                    <code>
+#import "OS"
+#import "Threads"
+#import "Logger"
+
+#macro WORK_COUNT 5
+
+global global_number: i32
+threads: Thread[3]
+ids: i32[]{1,2,3}
+
+for @ptr threads {
+    *it = ThreadCreate(work, &ids.ptr[nr])
+}
+log("Main thread is waiting...")
+
+for @ptr threads
+    it.join()
+
+log("All ", threads.len, " threads finished")
+
+fn @oscall work(arg: void*) -> i32 {
+    global print_mutex: Mutex
+    id := *cast<i32*>arg
+    
+    for 1..WORK_COUNT+1 {
+        // keeping the access to global number outside
+        // of lock to show off data race condition
+        result := global_number += nr
+        
+        print_mutex.lock()
+        log("  Thread ", id,": result ", result)
+        print_mutex.unlock()
+        ProcessSleep(0.005) // 5 ms
+    }
+    return 0
+}
+                    </code>
+                </div>
+            </div>
+            <hr>
+            <div class="info">
+                <div class="info-left">
+                    <h3>About the language</h3>
+                    <span>
+                        Yoo! Why should you use this language? Because you may find it fun and refreshing.
+                        It's designed with the developer in mind, the fast comptile time, circular imports, control at assembly level, data-oriented focus, and the best of all built in metaprogramming capabilities.
+                        Well, metaprogramming is still in the works. Global variables are evaluated in a virtual machine at compile time, we're slowly getting there.
+
+
+                    </span>
+                    <span>
+                        Now some warnings. The language is developed by one person.
+                        I have a job and can only work on the language for a couple of hours every day.
+                        It is slowly coming together at a steady pace (last thing I did was experimenting with ARM code generation).
+                        There are many bugs in the compiler and the standard library is incomplete and will go through many changes. This will stay true until version 1.0.  
+                    </span>
+                </div>
+                <div class="info-right">
+                    <span>image...</span>
+                </div>
+            </div>
             
-            <a href="./guide">Guide</a>
+            <div class="feature-section">
+                <div class="feature-item">
+                    <div class="feature-desc">
+                        <h3>For loops, slices, and ranges</h3>
+                        <p>Of course the language supports for-loops but the syntax is very convenient in combination with slices and ranges. You can even implement your own iterators for your own container data structures like arrays or maps (see docs).</p>
+                    </div>i
+                    <div class="feature-code">
+                        <code>
+#import "Logger"
 
-            <p>Code examples, code and result side by side</p>
+for 0..5 {
+    log("index: ", nr)
+}
 
-            <p>Text explainaing key features</p>
+numbers: i32[]{ 3, 5, 7, 9 }
+for numbers
+    log("num: ", nr, " ", numbers[nr])
+                        </code>
+                    </div> 
+                </div>
+            </div>
+            <div class="feature-section">
+                <div class="feature-item">
+                    <div class="feature-desc">
+                        <h3>Runtime type information</h3>
+                        <p>The language has type information at runtime which allows you to print any struct since you know the members' name, offset, size, and data type. Taking this one step further, if you have a pointer and it's type then you can recursively print the data if it's a primitive type or if a struct, recursively print all the members.</p>
+                    </div>
+                    <div class="feature-code">
+                        <code>
+#import "Logger"
+#import "String"
+#import "Array"
+
+struct Box {
+    x: float;
+    str: char[];
+    builder: StringBuilder;
+    arr: Array<i32>;
+}
+box: Box
+box.x = 5.8
+box.str = "Hello!"
+builder.append("Goodbye")
+arr.add(23)
+arr.add(52) 
+
+log("This is the box: ", &box)
+                        </code>
+                    </div> 
+                </div>
+            </div>
+            <div class="feature-item">
+                    <div class="feature-desc">
+                        <h3>Inline assembly</h3>
+                        <p>The language supports convenient inline assembly written using intel syntax just like you would in a normal assembly file. Assembly is "pasted" between your other code in expressions or statements. The assembly block allows for input and output expressions from and to the assembly.</p>
+                    </div>
+                    <div class="feature-code">
+                        <code>
+#import "Logger"
+
+value := asm<i32>(9,10) {
+    pop rbx      // 10
+    pop rax      // 9
+    
+    add rax, rbx // 19 = 9 + 10
+
+    push rax     // 19
+}
+log("value: ", value)
+                        </code>
+                    </div> 
+                </div>
+            </div>
+            <div class="feature-item">
+                    <div class="feature-desc">
+                        <h3>Polymorphism</h3>
+                        <p>Some polymorphism (templates, generics) for your generic array and map needs. Works for structs and functions.</p>
+                    </div>
+                    <div class="feature-code">
+                        <code>
+struct Box&ltT&gt {
+    items: T[4];
+    used_items: i32;
+
+    fn set(index: i32, value: T) {
+        items[index] = value
+        if index >= used_items
+            used_items = index+1
+    }
+}
+box: Box&ltchar[]&gt
+box.set(0, "Hello")
+box.set(2, "there")
+log("Items: ",box.used_items)
+for 0..4 {
+    log("  ",nr, ": ",box.items[nr])
+}
+                        </code>
+                    </div> 
+                </div>
+            </div>
+
+            <div class="community">
+                <span>Join the <a href="https://discord.gg/gVzQhm9pwH">Discord</a> community!</span>
+            </div>
+            
+            <footer>
+                <div class="footer-content">
+                    <div class="footer-left">
+                        <p>Last updated: <span id="last-updated">2024-11-26</span></p>
+                        <p>© 2023–2024 Emarioo</p>
+                    </div>
+                    <div class="footer-center">
+                        <a href="https://github.com/Emarioo/BetterThanBatch/releases" target="_blank">Releases</a>
+                        <a href="https://github.com/Emarioo/BetterThanBatch#guide" target="_blank">Guide</a>
+                    </div>
+                    <div class="footer-right">
+                        <a class="discord-icon-container" href="https://discord.gg/gVzQhm9pwH" target="_blank">
+                            <img src="img/discord_white.svg" alt="Discord" class="discord-icon discord-white">
+                            <img src="img/discord_purple.svg" alt="Discord" class="discord-icon discord-purple">
+                        </a>
+                        <a href="https://github.com/Emarioo" target="_blank">
+                        <!-- <img src="github-icon.svg" alt="GitHub" class="icon"> -->
+                        </a>
+                    </div>
+                </div>
+            </footer
         </div>
-        <!-- <div class="content">
-        </div> -->
     </body>
 
     <script>
         var content = document.getElementsByClassName('content')[0]
         
         // TODO: Debug refresh feature, comment out when done.
-        // setInterval(()=>{ window.location.href = window.location.href }, 1000)
+        //setInterval(()=>{ window.location.href = window.location.href }, 2000)
     </script>
-</html>
+</html>

@@ -8,7 +8,7 @@ const PORT = 8080;
 const PORT_HTTPS = 8081;
 const stats_path = "stats.json"
 
-const DISABLE_HTTPS = true;
+const DISABLE_HTTPS = false;
 
 const http = require("http");
 const https = require("https");
@@ -139,14 +139,16 @@ function requestListener(req, res) {
             let type = "text/html"
             if(ext == "jpg")
                 type = "image/jpg"
+            if(ext == "svg")
+                type = "image/svg+xml"
             if(ext == "mp3")
                 type = "audio/mpeg"
-            res.writeHead(200, {'Content-Type': type});
-
-            
+           
             if(path == "public/guide.html") {
                 data = ModifyContent(data, options) // data is returned without modification if nothing changed
             }
+
+            res.writeHead(200, {'Content-Type': type, 'Content-Length': data.length});
 
             res.write(data)
             res.end()
@@ -216,19 +218,27 @@ openssl x509 -req -in security/client.csr -signkey security/client-key.pem -out 
 chmod +r security/client-key.pem security/client-cert.pem
 */
 if (!DISABLE_HTTPS) {
+    try {
+	let os_username = process.env.USER || 'no_one'
+	let key_path = "/home/"+os_username+"/secure"
+    let key_data = fs.readFileSync(key_path + '/privkey.pem')
+
     const options = {
         // From openssl
         // key: fs.readFileSync('security/client-key.pem'),
         // cert: fs.readFileSync('security/client-cert.pem'),
         // From certbot
-        key: fs.readFileSync('security/privkey.pem'),
-        cert: fs.readFileSync('security/fullchain.pem'),
+        key: key_data,
+        cert: fs.readFileSync(key_path + '/fullchain.pem'),
     };
     const https_server = https.createServer(options, requestListener);
 
     https_server.listen(PORT_HTTPS, () => {
         console.log("Server is running on", PORT_HTTPS);
     });
+    } catch(ex) {
+        console.log(ex)
+    }
 }
 
 function OnTerminate() {

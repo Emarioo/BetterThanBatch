@@ -1,6 +1,6 @@
-**WARNING:** Website is under construction. I have not chosen a domain name either.
+**WARNING:** Website is under construction.
 
-This part of the repository contains the code for the website.
+This directory contains the source code for the website which you can find here [btb-lang.org](http://btb-lang.org).
 
 The website is based on the documentation in `docs/guide` and some other markdown files.
 
@@ -15,6 +15,7 @@ Follow these steps:
 
 If you are experiencing problems, please let me know through a github issue.
 
+**TODO:** Move website design into other file.
 # Website design
 These are the goals:
 - **Easy to find information** - Search feature, information ordererd by usefulness?
@@ -33,6 +34,9 @@ A section to a "Get started page".
 
 Further down we have some text explaining the project and some of the key features in the language.
 
+**TODO:** Provide link to repository on the website (link to repo and github releases).
+**TODO:** Deal with http and https. If directory security or ssl-keys exists then start https and http when launching server, otherwise just launch http.
+
 ### The guide
 Search bar
 An ordered list of information from `docs/guide`
@@ -42,4 +46,4 @@ Clicking on code snippets to copy. Small tiny code pieces like paths should be c
 Should parsed markdown code blocks scretch over the whole screen even if the code inside isn't that big? Probably not. width auto doesn't work, maybe it's caused by \<code\>?
 
 **TODO:** Syntax highlighting in code blocks.
-**TODO:** CSS for the markdown content. The default looks garbage.
+**TODO:** CSS for the website and markdown content. The current is garbage.
