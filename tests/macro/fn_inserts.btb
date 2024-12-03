@@ -1,0 +1,92 @@
+@TEST_CASE(fn_insert_basic)
+
+#function_insert "compute", "main"
+    hits+=1
+#endinsert
+
+global hits: i32
+
+fn compute() {
+    
+}
+
+fn main() {
+    compute()
+    
+    _test 2; hits
+}
+
+@TEST_CASE(fn_insert_patterns)
+
+#function_insert "f*", "b*"
+    hits0+=1
+#endinsert
+#function_insert "a*" and "*b"
+    hits1+=1
+#endinsert
+#function_insert not ("*a*", "*b*", "*f*")
+    hits2+=1
+#endinsert
+
+global hits0: i32
+global hits1: i32
+global hits2: i32
+
+fn f0() {}
+fn f1() {}
+
+fn b1() {}
+fn b2() {}
+
+fn a1b() {}
+fn a2b() {}
+
+fn neither() {}
+
+f0()
+f1()
+b1()
+b2()
+a1b()
+a2b()
+neither()
+    
+_test 4; hits0
+_test 2; hits1
+_test 1; hits2
+
+@TEST_CASE(fn_insert_priority)
+
+#function_insert -1 "go"
+    hits.ptr[hits.len++] = 2
+#endinsert
+#function_insert 1 "go"
+    hits.ptr[hits.len++] = 1
+#endinsert
+
+global hits: i32[]
+
+fn go() { }
+
+local_hits: i32[2]
+hits = local_hits
+hits.len = 0
+go()
+
+_test 1; hits[0]
+_test 2; hits[1]
+
+
+@TEST_CASE(fn_insert_cwd)
+
+#function_insert f"*/tests/macro/fn_inserts.btb"
+    hits++
+#endinsert
+
+global hits: i32
+
+fn go() {}
+
+go()
+
+_test 1; hits

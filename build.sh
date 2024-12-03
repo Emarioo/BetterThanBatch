@@ -6,30 +6,10 @@
 #     echo Set PATH: $PATH
 # fi
 
-if [ "$1" = "run" ]; then
-    btb -dev
-    exit
+if [ ! "$1" = "run" ]; then
+    export LD_LIBRARY_PATH=.
+    python3 build.py
+else
+    export LD_LIBRARY_PATH=.
+    ./bin/btb -dev
 fi
-
-python3 build.py
-
-err=$?
-
-if [ "$err" = 0 ]; then
-    # cp bin/btb btb
-    if [ "$#" = 0 ]; then
-        ./bin/btb -dev
-        # ./bin/btb --test tests/flow/defer.btb
-        # ./bin/btb tests/flow/defer.btb
-        # ./bin/btb -pm *dev.btb
-        # ./bin/btb tests/simple/operations.btb
-        # ./bin/btb --test
-        # ./bin/btb -ss dev.btb  -p
-        # ./bin/btb -p examples/dev.btb
-        # ./bin/btb -r ma.btb
-    else
-        ./bin/btb $@
-    fi
-fi 
-
-exit

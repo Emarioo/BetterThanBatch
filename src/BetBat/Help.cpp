@@ -9,8 +9,8 @@ void print_version(){
     CompilerVersion version = CompilerVersion::Current();
     version.serialize(buffer, sizeof(buffer),CompilerVersion::INCLUDE_AVAILABLE);
     log::out << "BTB Compiler, version: " << log::LIME<< buffer <<"\n";
-    log::out << log::GRAY << "(major.minor.patch.revision/name-year.month.day)\n";
-    // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)";
+    // log::out << log::GRAY << "(major.minor.patch.revision/name-year.month.day)\n";
+    // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)\n";
 }
 void print_help(){
     using namespace engone;
@@ -55,9 +55,13 @@ void print_help(){
     DESC("Specifies the target platform to compile for. The default is the same as what the compiler executable was compiled for. Also, compiling for Unix on Windows wouldn't work because of the linker. With a special linker maybe but you can only use a predefined linker.\n")
     log::out << "These are available: " << log::LIME;
     for(int i=TARGET_START;i<TARGET_END;i++) {
+        if(i == TARGET_AARCH64 || i == TARGET_ARM) {
+            // ARM supported is experimental
+            continue;
+        }
         if(i!=TARGET_START)
             log::out << ", ";
-        log::out << ToString((TargetPlatform)i);
+        log::out << log::LIME << ToString((TargetPlatform)i) << log::NO_COLOR;
     }
     log::out << "\n";
     END
@@ -79,7 +83,11 @@ void print_help(){
     USAGE("-r,--run")
     DESC("Will run the executable after it's been compiled.\n")
     END
-
+    
+    USAGE("-vm,--run-vm")
+    DESC("Will compile and run code in Virtual Machine.\n")
+    END
+    
     USAGE("--incremental")
     DESC("Compiles source code if any file changed since last compilation. Mostly used with hotreloading.\n")
     END
@@ -106,6 +114,10 @@ void print_help(){
     DESC("Will compile with debug information (DWARF). Note that MSVC linker doesn't work with DWARF. You must use g++ or other linker. PDB for Windows is not implemented yet.\n")
     log::out << log::GRAY<<"TODO: -d=DWARF, -d=PDB\n";
     END
+    
+    USAGE("-qd,--qemu-gdb [port]")
+    DESC("If --run is used and target is ARM where is started QEMU, the '-S -gdb tcp::<port>' flags will be passed to QEMU allowing you to debug it if you start GDB and type 'target remote :port'.\n")
+    END
 
     USAGE("-p,--preproc <file>")
     DESC("Will run the preprocesser on the specified file phase and output the result to console (stdout).\n")
@@ -116,7 +128,7 @@ void print_help(){
     END
     
     USAGE("--verbose")
-    DESC("reserved.\n")
+    DESC("Prints the compiler's processing of tasks.\n")
     END
 
     USAGE("--profiling")
@@ -124,12 +136,26 @@ void print_help(){
     // NOTE: I seem to have disabled or ruined this.
     // DESC("Displays time measurements of the internal parts of the compiler.\n")
     END
+    
+    USAGE("-pvm,--log-vm")
+    DESC("Will compile and run code in Virtual Machine while logging bytecode instructions.\n")
+    END
+    
+    USAGE("-ivm,--int-vm")
+    DESC("Will compile and run code in Virtual Machine with interactive mode.\n")
+    END
 
     HEADER("Testing")
 
     USAGE("-ts,--test [pattern]")
     DESC("Will run tests on all files that matched the [pattern]. Some default files will be chosen if a pattern wasn't supplied. See '--pattern-match' for syntax of pattern.\n")
     END
+    
+    // Useful if you are solving failed tests and don't care about the ones that succeed
+    USAGE("-ct,--cache-tests")
+    DESC("Will cache successful tests and skip them next time. If tests in a file are modified then they will be retested and cached anew. The cache is normally located here '"<<log::LIME<<"bin/cached_tests.dat"<<log::NO_COLOR<<"' and will removed if caching is inactive, you can safely remove it manually to.\n")
+    END
+    
     
     // I don't know if this still works?
     // USAGE("-twe,--test-with-errors [pattern]")

@@ -1,6 +1,8 @@
 #include "BetBat/TestSuite.h"
 
 #include "Engone/Logger.h"
+#include "Engone/PlatformLayer.h"
+#include "Engone/Util/Stream.h"
 
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) { CONTENT }
@@ -276,11 +278,13 @@ u32 TestSuite(CompileOptions* options){
     tests.add("tests/structs/struct.btb");
     tests.add("tests/lang/typeinfo.btb");
     tests.add("tests/modules/test_maps.btb");
-    tests.add("tests/modules/test_maps.btb");
 
     tests.add("tests/funcs/overloading.btb");
     tests.add("tests/funcs/constructor.btb");
     tests.add("tests/funcs/conventions.btb");
+    tests.add("tests/funcs/func_ptr.btb");
+    
+    tests.add("tests/macro/fn_inserts.btb");
     
     return VerifyTests(options, tests);
 }
@@ -317,7 +321,7 @@ u32 TestSuite(CompileOptions* options){
 //     }
 //     return 0;
 // }
-u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesToTest){
+u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesToTest) {
     using namespace engone;
 
     // We run out of profilers contexts fast and a message about is printed
@@ -334,10 +338,46 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             engone::Free(origin.buffer, origin.size);
         }
     };
-
     for (auto& file : filesToTest) {
         ParseTestCases(file, &testOrigins, &testCases);
     }
+    
+    // NOTE: We always try to load cache so that a user can run 'btb --test' first and then 'btb --test -ct' without having
+    //   to rerun all tests again because we cache on 'btb --test'.
+    CachedTests cached_tests{};
+    std::string cache_path = "bin/cached_tests.dat";
+    bool has_cache = LoadTests(cache_path, &cached_tests);
+    if(has_cache) {
+        if(user_options->cache_tests) {
+            log::out << log::GRAY << "Skipping "<<cached_tests.tests.size()<<" tests in cache\n";
+            for(int i=0;i<testCases.size();i++) {
+                auto& testcase = testCases[i];
+                u64 origin_timestamp;
+                bool has_timestamp = FileLastWriteTimestamp_us(testcase.textBuffer.origin, &origin_timestamp);
+                if(has_timestamp) {
+                    int cached_test_index = -1;
+                    for(int j=0;j<cached_tests.tests.size();j++) {
+                        auto& cached_test = cached_tests.tests[j];
+                        if (cached_test.path == testcase.textBuffer.origin && cached_test.name == testcase.testName) {
+                            if(cached_test.timestamp >= origin_timestamp) {
+                                cached_test_index = j;
+                                break;
+                            }
+                        }
+                    }
+                    if(cached_test_index != -1) {
+                        testCases.removeAt(i);
+                        i--;
+                    }
+                }
+            }
+        }
+    } else {
+        // there was no cache which is fine
+    }
+    // } else {
+    //     FileDelete(cache_path);
+    // }
 
     // log::out << log::GOLD << "Test cases ("<<testCases.size()<<"):\n";
     // for(auto& testCase : testCases){
@@ -345,7 +385,10 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     // }
 
     bool useInterp = false;
-    // bool useInterp = true;
+    // useInterp = true;
+    
+    if(user_options->execute_in_vm)
+        useInterp = true;
 
     // TODO: Use multithreading. Some threads compile test cases while others start programs and test them.
     //   One thread can test multiple programs and redirect stdout to some file.
@@ -363,21 +406,20 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         int failedTests;
         DynamicArray<TestCase::Error> missing_errors; // missing but expected errors
         DynamicArray<u16> failedLocations;
-        DynamicArray<CompileOptions::TestLocation> testLocations;
+        DynamicArray<TestLocation> testLocations;
     };
     DynamicArray<TestResult> results;
+    results.resize(testCases.size());
 
     i64 finalFailedTests = 0;
     i64 finalTotalTests = 0;
 
     auto test_startTime = engone::StartMeasure();
     bool progress_bar = false;
-
-    // VirtualMachine interpreter{};
+    
     for(int i=0;i<testCases.size();i++) {
         auto& testcase = testCases[i];
-        results.add({});
-        auto& result = results.last();
+        auto& result = results[i];
 
         CompileOptions options{};
         options.silent = true;
@@ -388,10 +430,10 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         options.linker = user_options->linker;
         options.verbose = user_options->verbose;
         options.modulesDirectory = user_options->modulesDirectory;
-        if(!useInterp) {
-            options.target = user_options->target;
-            options.output_file = "bin/temp.exe";
-        }
+        // if(!useInterp) {
+        options.target = user_options->target;
+        options.output_file = "bin/temp.exe";
+        // }
         options.source_buffer = testcase.textBuffer;
         
         if(!options.instant_report) {
@@ -425,6 +467,8 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         i64 failedTests = 0;
         i64 totalTests = 0;
         
+        #define match_err(A,B) ((A) == (B) || A == ERROR_ANY)
+        
         totalTests += testcase.expectedErrors.size();            
         for(int k=0;k<testcase.expectedErrors.size();k++){
             auto& expectedError = testcase.expectedErrors[k];
@@ -432,7 +476,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             bool found = false;
             for(int j=0;j<compiler.errorTypes.size();j++){
                 auto& actualError = compiler.errorTypes[j];
-                if(expectedError.errorType == actualError.errorType
+                if(match_err(expectedError.errorType, actualError.errorType)
                 && expectedError.line == actualError.line) {
                     found = true;
                     break;
@@ -450,7 +494,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             bool found = false;
             for(int k=0;k<testcase.expectedErrors.size();k++){
                 auto& expectedError = testcase.expectedErrors[k];
-                if(expectedError.errorType == actualError.errorType
+                if(match_err(expectedError.errorType, actualError.errorType)
                 && expectedError.line == actualError.line) {
                     found = true;
                     break;
@@ -462,21 +506,39 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             }
         }
         
-        if(options.compileStats.errors > 0) {
+        if(compiler.compile_stats.errors > 0) {
             // errors will be smaller than errorTypes since errors isn't incremented when doing TEST_ERROR(
-            if(compiler.errorTypes.size() < options.compileStats.errors) {
-                log::out << log::YELLOW << "TestSuite: errorTypes: "<< compiler.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
-                totalTests += options.compileStats.errors - compiler.errorTypes.size();
-                failedTests += options.compileStats.errors - compiler.errorTypes.size();
+            if(compiler.errorTypes.size() < compiler.compile_stats.errors) {
+                log::out << log::YELLOW << "TestSuite: errorTypes: "<< compiler.errorTypes.size() << ", errors: "<<compiler.compile_stats.errors <<", they should be equal\n";
+                totalTests += compiler.compile_stats.errors - compiler.errorTypes.size();
+                failedTests += compiler.compile_stats.errors - compiler.errorTypes.size();
             }
         } else {
             if(useInterp) {
+                bool good_to_go = true;
                 VirtualMachine vm{};
-                vm.execute(compiler.bytecode, compiler.entry_point);
-                // Assert(false);
-                // interpreter.reset();
-                // interpreter.silent = true;
-                // interpreter.execute(bytecode);
+                
+                auto tinycode = vm.fetch_tinycode(compiler.bytecode, compiler.entry_point);
+                
+                for(auto& tc : compiler.bytecode->tinyBytecodes) {
+                    if(tc->try_blocks.size() > 0){
+                        good_to_go = false;
+                        log::out << log::RED << " exceptions are not supported in VM\n";
+                        break;
+                    }
+                }
+                if (good_to_go) {
+                    auto prev_stdout = GetStandardOut();
+                    auto prev_stderr = GetStandardErr();
+                    bool yes = SetStandardOut(PipeGetWrite(pipe));
+                    bool yes2 = SetStandardErr(PipeGetWrite(pipe));
+                    
+                    vm.silent = true;
+                    vm.execute(compiler.bytecode, compiler.entry_point);
+                    
+                    SetStandardOut(prev_stdout);
+                    SetStandardErr(prev_stderr);
+                }
             } else {
                 // TODO: Check if x64 failed, check if exe was produced
 
@@ -557,7 +619,51 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
 
         result.totalTests = totalTests;
         result.failedTests = failedTests;
-        result.testLocations.steal_from(options.testLocations);
+        result.testLocations.steal_from(compiler.testLocations);
+    }
+    // NOTE: We do cache logic even if it's not active because user may type btb --test and then btb --test -ct, if so
+    //   we want to cache on the first test run so that user doesn't have to sit through passed tests again even if they didn't
+    //   specify caching first time.
+    // if(user_options->cache_tests)
+    for(int i=0;i<testCases.size();i++) {
+        auto& testcase = testCases[i];
+        auto& result = results[i];
+
+        if(result.failedTests == 0) {
+            int cached_index = -1;
+            for(int j=0;j<cached_tests.tests.size();j++) {
+                auto& ct = cached_tests.tests[j];
+                if(ct.path == testcase.textBuffer.origin && ct.name == testcase.testName) {
+                    cached_index = j;
+                    break;
+                }
+            }
+            if(cached_index == -1) {
+                cached_tests.tests.add({});
+                auto& t = cached_tests.tests.last();
+                t.path = testcase.textBuffer.origin;
+                t.name = testcase.testName;
+                
+                u64 origin_timestamp;
+                bool has_timestamp = FileLastWriteTimestamp_us(testcase.textBuffer.origin, &origin_timestamp);
+                t.timestamp = origin_timestamp;
+            } else {
+                auto& t = cached_tests.tests[cached_index];
+                
+                u64 origin_timestamp;
+                bool has_timestamp = FileLastWriteTimestamp_us(testcase.textBuffer.origin, &origin_timestamp);
+                t.timestamp = origin_timestamp;
+            }
+        }
+    }
+    bool yes = SaveTests(cache_path, &cached_tests);
+    if(!yes) {
+        if(user_options->cache_tests) {
+            // if caching wasn't specified then we don't print message because user doesn't care.
+            log::out << log::RED << "Could not cache tests to '"<<cache_path<<"'.\n";
+        }
+    } else {
+        log::out << log::GRAY << "Caching "<<cached_tests.tests.size()<<" tests to '"<<cache_path<<"'.\n";
     }
     
     auto test_endTime = engone::StopMeasure(test_startTime);
@@ -589,6 +695,22 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         } else {
             log::out << log::RED << "NO ";
         }
+        
+        /* TODO: The way we print a case failed because we didn't receive
+             the expected error is confusing. It looks like the case
+             failed because there was an error, see below and fix it.
+             
+            tests/structs/struct.btb
+             OK assign_add (0/0)
+             OK array_in_struct (7/7)
+             OK indexing_slice (1/1)
+             OK methods (1/1)
+             OK methods_poly (0/0)
+             NO nested_struct 50.00% (1/2)
+              LN 167: ERROR_ANY
+             OK circular_structs (0/0)
+            Summary: 92.86% (13/14)
+        */
         log::out << log::NO_COLOR << testCase.testName << " ";
         if(result.failedTests != 0) {
             log::out << log::RED;
@@ -631,4 +753,74 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     }
 
     return finalFailedTests;
+}
+
+bool SaveTests(const std::string& path, CachedTests* tests) {
+    using namespace engone;
+    ByteStream* stream = ByteStream::Create(nullptr);
+    defer { ByteStream::Destroy(stream, nullptr); };
+    
+    stream->write4((int)tests->tests.size());
+    for(auto& test : tests->tests) {
+        stream->write2((int)test.path.size());
+        stream->write(test.path.data(), test.path.size());
+        stream->write2((int)test.name.size());
+        stream->write(test.name.data(), test.name.size());
+        stream->write8(test.timestamp);
+    }
+    
+    void* ptr;
+    u32 size;
+    bool yes = stream->finalize(&ptr, &size);
+    
+    auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
+    if(!file) {
+        return false;
+    }
+    FileWrite(file, ptr, size);
+    FileClose(file);
+    return true;
+}
+bool LoadTests(const std::string& path, CachedTests* tests) {
+    using namespace engone;
+    ByteStream* stream = ByteStream::Create(nullptr);
+    defer { ByteStream::Destroy(stream, nullptr); };
+    
+    u64 filesize;
+    auto file = FileOpen(path, FILE_READ_ONLY, &filesize);
+    if(!file) {
+        return false;
+    }
+    defer { FileClose(file); };
+    void* data = stream->prepare_written_bytes(filesize);
+    
+    if(!data) {
+        return false;
+    }
+    FileRead(file, data, filesize);
+    
+    tests->tests.cleanup();
+    
+    int offset = 0;
+    int test_count = stream->read4(offset);
+    offset += 4;
+    tests->tests.resize(test_count);
+    for(auto& test : tests->tests) {
+        int len = stream->read2(offset);
+        offset += 2;
+        test.path.resize(len);
+        stream->read(offset, (void*)test.path.data(), test.path.size());
+        offset += len;
+        
+        len = stream->read2(offset);
+        offset += 2;
+        test.name.resize(len);
+        stream->read(offset, (void*)test.name.data(), test.name.size());
+        offset += len;
+        
+        test.timestamp = stream->read8(offset);
+        offset += 8;
+    }
+    
+    return true;
 }

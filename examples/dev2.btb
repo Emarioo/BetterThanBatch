@@ -3,30 +3,36 @@
     bin\btb examples/dev2 -d -o main.exe -r
 */  
 
-#if !BUILD_EXE
-    // DLL
-    fn @export(alias="mult") dll_mult(x: f32, y: f32) -> f32 {
-        return x * y
-    }
-#else
-    // EXE
-    #import "Logger"
-    #import "Lang"
-    #import "OS"
+fn func() {
+    #macro HI a := 5
 
-    #load "bin/math.dll" as Math
-    fn @import(Math) mult(x: f32, y: f32) -> f32
+    GLOBAL_MAC
+}
 
-    fn main() {
-        z := mult(1.9, 5)
-        log("mult: ",z)
+// #if !BUILD_EXE
+//     // DLL
+//     fn @export(alias="mult") dll_mult(x: f32, y: f32) -> f32 {
+//         return x * y
+//     }
+// #else
+//     // EXE
+//     #import "Logger"
+//     #import "Lang"
+//     #import "OS"
 
-        lib := LoadDynamicLibrary("bin/math.dll")
-        log("lib: ",&lib)
-        f := cast_unsafe<fn @oscall(f32,f32)->f32> lib.get_pointer("mult")
-        log("func ",cast_unsafe<void*>f)
+//     #load "bin/math.dll" as Math
+//     fn @import(Math) mult(x: f32, y: f32) -> f32
 
-        z2 := f(1.9, 5.0)
-        log("mult2: ",z2)
-    }
-#endif
+//     fn main() {
+//         z := mult(1.9, 5)
+//         log("mult: ",z)
+
+//         lib := LoadDynamicLibrary("bin/math.dll")
+//         log("lib: ",&lib)
+//         f := cast_unsafe<fn @oscall(f32,f32)->f32> lib.get_pointer("mult")
+//         log("func ",cast_unsafe<void*>f)
+
+//         z2 := f(1.9, 5.0)
+//         log("mult2: ",z2)
+//     }
+// #endif

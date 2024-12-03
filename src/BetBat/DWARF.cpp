@@ -2,8 +2,13 @@
 #include "BetBat/Compiler.h"
 
 namespace dwarf {
-    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler, bool provide_section_data) {
+    void ProvideSections(ObjectFile* objectFile, Program* program, Compiler* compiler, bool provide_section_data) {
         using namespace engone;
+        
+        int FRAME_SIZE = compiler->arch.FRAME_SIZE;
+        int REGISTER_SIZE = compiler->arch.REGISTER_SIZE;
+        TargetPlatform target = compiler->options->target;
+        
         SectionNr section_info    = -1;
         SectionNr section_line    = -1;
         SectionNr section_abbrev  = -1;
@@ -32,6 +37,7 @@ namespace dwarf {
         SectionNr section_text = objectFile->findSection(".text");
         Assert(section_text != -1);
         auto stream_text = (const ByteStream*)objectFile->getStreamFromSection(section_text);
+        SectionNr section_data = objectFile->findSection(".data");
 
         auto debug = program->debugInformation;
         ByteStream* stream = nullptr;
@@ -61,6 +67,7 @@ namespace dwarf {
         int abbrev_compUnit = 0;
         int abbrev_func = 0;
         int abbrev_var = 0;
+        int abbrev_global_var = 0;
         int abbrev_param = 0;
         int abbrev_base_type = 0;
         int abbrev_pointer_type = 0;
@@ -86,8 +93,10 @@ namespace dwarf {
             // WRITE_FORM(DW_AT_language,  DW_FORM_data1)
             WRITE_FORM(DW_AT_name,      DW_FORM_string)
             WRITE_FORM(DW_AT_comp_dir,  DW_FORM_string)
-            WRITE_FORM(DW_AT_low_pc,    DW_FORM_addr)
-            WRITE_FORM(DW_AT_high_pc,   DW_FORM_addr)
+            WRITE_FORM(DW_AT_low_pc,    DW_FORM_data4)
+            WRITE_FORM(DW_AT_high_pc,   DW_FORM_data4)
+            // WRITE_FORM(DW_AT_low_pc,    DW_FORM_addr)
+            // WRITE_FORM(DW_AT_high_pc,   DW_FORM_addr)
             WRITE_FORM(DW_AT_stmt_list, DW_FORM_data4)
             WRITE_LEB(0) // value?
             WRITE_LEB(0) // end attributes for abbreviation
@@ -103,8 +112,10 @@ namespace dwarf {
             WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
             WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             // WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
-            WRITE_FORM(DW_AT_low_pc,       DW_FORM_addr)
-            WRITE_FORM(DW_AT_high_pc,      DW_FORM_addr)
+            WRITE_FORM(DW_AT_low_pc,       DW_FORM_data4)
+            WRITE_FORM(DW_AT_high_pc,      DW_FORM_data4)
+            // WRITE_FORM(DW_AT_low_pc,       DW_FORM_addr)
+            // WRITE_FORM(DW_AT_high_pc,      DW_FORM_addr)
             WRITE_FORM(DW_AT_frame_base,   DW_FORM_block1)
             // WRITE_FORM(DW_AT_call_all_tail_calls, DW_FORM_flag_present)
             WRITE_FORM(DW_AT_sibling,      DW_FORM_ref4)
@@ -113,6 +124,21 @@ namespace dwarf {
 
             abbrev_var = nextAbbrevCode++;
             WRITE_LEB(abbrev_var) // code
+            WRITE_LEB(DW_TAG_variable) // tag
+            stream->write1(DW_CHILDREN_no);
+
+            WRITE_FORM(DW_AT_name,         DW_FORM_string)
+            WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
+            WRITE_FORM(DW_AT_location,     DW_FORM_block1)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+            
+            // abbrev for globals is currently the same as a local variables
+            abbrev_global_var = nextAbbrevCode++;
+            WRITE_LEB(abbrev_global_var) // code
             WRITE_LEB(DW_TAG_variable) // tag
             stream->write1(DW_CHILDREN_no);
 
@@ -234,8 +260,11 @@ namespace dwarf {
             WRITE_LEB(DW_TAG_lexical_block) // tag
             stream->write1(DW_CHILDREN_yes);
 
-            WRITE_FORM(DW_AT_low_pc,           DW_FORM_addr)
-            WRITE_FORM(DW_AT_high_pc,          DW_FORM_addr)
+            // WRITE_FORM(DW_AT_low_pc,           DW_FORM_addr)
+            // WRITE_FORM(DW_AT_high_pc,          DW_FORM_addr)
+            
+            WRITE_FORM(DW_AT_low_pc,           DW_FORM_data4)
+            WRITE_FORM(DW_AT_high_pc,          DW_FORM_data4)
             
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
@@ -258,7 +287,7 @@ namespace dwarf {
             comp->version = 3; // DWARF VERSION
             int reloc_abbrev_offset = (u64)&comp->debug_abbrev_offset - (u64)comp;
             comp->debug_abbrev_offset = 0; // 0 since we only have one compilation unit
-            comp->address_size = 8;
+            comp->address_size = REGISTER_SIZE;
             
             u8* ptr = nullptr;
             int written = 0;
@@ -293,10 +322,12 @@ namespace dwarf {
             // stream->write("unknown.btb"); // source file
             // stream->write("project/src"); // project dir
             relocs.add({ stream->getWriteHead() - offset_section, 0 });
-            stream->write8(0); // start address of code
+            stream->write4(0); // start address of code
+            // stream->write8(0); // start address of code
             // Assert(false);
             relocs.add({ stream->getWriteHead() - offset_section, (u32)stream_text->getWriteHead() });
-            stream->write8(stream_text->getWriteHead()); // end address of text code
+            stream->write4(stream_text->getWriteHead()); // end address of text code
+            // stream->write8(stream_text->getWriteHead()); // end address of text code
             int reloc_statement_list = stream->getWriteHead() - offset_section;
             stream->write4(0); // statement list, address/pointer to reloc thing
 
@@ -329,7 +360,10 @@ namespace dwarf {
                 return allType.reference[typeId.getPointerLevel()];
             };
             
-            
+             for(int i=0;i<debug->global_variables.size();i++) {
+                auto& var = *debug->global_variables[i];
+                addType(var.typeId);
+             }
             // TODO: Holy snap the polymorphism will actually end me.
             //  How do we make this work with polymorphism? Maybe it does work?
             for(int i=0;i<debug->functions.size();i++) {
@@ -442,7 +476,7 @@ namespace dwarf {
                         
                         stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
                         // stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
-                        Assert(typeInfo->getSize() < 256); // size should fit in one bye
+                        Assert(typeInfo->getSize() < 256); // size should fit in one byte
                         stream->write1(typeInfo->getSize()); // size
                         
                         int typeRef = getTypeRef(typeInfo->astEnum->colonType);
@@ -487,7 +521,7 @@ namespace dwarf {
                         WRITE_LEB(abbrev_base_type)
 
                         stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
-                        stream->write1(8); // size
+                        stream->write1(REGISTER_SIZE); // size
                         stream->write1(DW_ATE_unsigned);
                     // } else if (queuedType == AST_FUNC_REFERENCE) {
                     //     // TODO: Implement function references/pointers
@@ -551,7 +585,7 @@ namespace dwarf {
                     allType.reference[j + 1] = stream->getWriteHead() - offset_section;
                     WRITE_LEB(abbrev_pointer_type)
                     
-                    stream->write1(8); // size, pointers are 8 in size
+                    stream->write1(REGISTER_SIZE); // size, pointers are 8 in size
                     stream->write4(allType.reference[j]); // ref4, we refer to the previous pointer level (or struct/base type)
                 }
             }
@@ -566,13 +600,44 @@ namespace dwarf {
                 // if(i <= 3)
                 // stream->write_at<u32>(offset_section + ref.section_offset, 0x102);
             }
+           
+            for(int i=0;i<debug->global_variables.size();i++) {
+                auto& var = *debug->global_variables[i];
+                WRITE_LEB(abbrev_global_var)
+                stream->write(var.name.c_str());
 
+                // TODO: Store line and column information in local variables in DebugInformation
+                int var_file = var.file;
+                int var_line = var.line;
+                int var_column = var.column;
+
+                stream->write2(var_file); // file
+                Assert(var_line < 0x10000); // make sure we don't overflow
+                stream->write2(var_line); // line
+                Assert(var_column < 0x10000); // make sure we don't overflow
+                stream->write2(var_column); // column
+
+                int typeref = allTypes[var.typeId.getId()].reference[var.typeId.getPointerLevel()];
+                Assert(typeref != 0);
+                stream->write4(typeref); // type reference
+
+                u8* block_length = nullptr;
+                stream->write1(5); // DW_AT_location, begins with block length
+                stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
+                int offset = stream->getWriteHead();
+                stream->write4(var.location);
+                
+                objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.location);
+            }
             // We need this because we added a 16-byte offset in .debug_frame.
             // I don't know why gcc generates DWARF that way but we do the same because I don't know how it works.
             // This offset makes things work and I can't be bothered to question it at the moment.
             // Another problem for future me.
             // - Emarioo, 2024-01-01 (Happy new year!)
-            #define RBP_CONSTANT_OFFSET (-16)
+            int RBP_CONSTANT_OFFSET = -16;
+            if(compiler->options->target == TARGET_ARM) {
+                RBP_CONSTANT_OFFSET = 0;
+            }
 
             for(int i=0;i<debug->functions.size();i++) {
                 auto fun = debug->functions[i];
@@ -600,9 +665,11 @@ namespace dwarf {
                 u32 proc_low = fun->asm_start;
                 u32 proc_high = fun->asm_end;
                 relocs.add({ stream->getWriteHead() - offset_section, proc_low });
-                stream->write8(proc_low); // pc low
+                stream->write4(proc_low); // pc low
+                // stream->write8(proc_low); // pc low
                 relocs.add({ stream->getWriteHead() - offset_section, proc_high });
-                stream->write8(proc_high); // pc high
+                stream->write4(proc_high); // pc high
+                // stream->write8(proc_high); // pc high
 
                 stream->write1((u8)(1)); // frame base, begins with block length
                 stream->write1((u8)(DW_OP_call_frame_cfa)); // block content
@@ -621,8 +688,8 @@ namespace dwarf {
                         stream->write1(0); // we must zero terminate here
 
                         auto src = compiler->lexer.getTokenSource_unsafe(arg_ast.location);
-                        Assert(src->line < 0x10000); // make sure we don't overflow
-                        Assert(src->column < 0x10000); // make sure we don't overflow
+                        Assert((u32)src->line < 0x10000); // make sure we don't overflow
+                        Assert((u32)src->column < 0x10000); // make sure we don't overflow
 
                         stream->write2((file_index)); // file
                         stream->write2((src->line)); // line
@@ -642,7 +709,15 @@ namespace dwarf {
 
                         int arg_off = arg_impl.offset;
                         // log::out << "  arg " << arg_off<<"\n";
-                        if(fun->funcAst->callConvention == UNIXCALL) {
+                        if(target == TARGET_ARM) {
+                            // NOTE: THIS won't work if param is bigger than register size
+                            arg_off = -fun->args_offset - arg_impl.offset - 2*REGISTER_SIZE;
+                            // if(pi < 4) {
+                            //     arg_off = -arg_impl.offset - REGISTER_SIZE;
+                            // } else {
+                            //     arg_off = FRAME_SIZE + arg_impl.offset - 4 * REGISTER_SIZE;
+                            // }
+                        } else if(fun->funcAst->callConvention == UNIXCALL) {
                             // TODO: Don't hardcode this. What about non-volatile registers, what if x64_gen changes and puts more stuff on stack?
                             if(fun->name == "main") {
                                 if(pi == 0) {
@@ -754,10 +829,12 @@ namespace dwarf {
                             
                             WRITE_LEB(abbrev_lexical_block)
                             relocs.add({ stream->getWriteHead() - offset_section, proc_low });
-                            stream->write8(proc_low); // pc low
+                            stream->write4(proc_low); // pc low
+                            // stream->write8(proc_low); // pc low
                             relocs.add({ stream->getWriteHead() - offset_section, proc_high });
                             
-                            stream->write8(proc_high); // pc high
+                            stream->write4(proc_high); // pc high
+                            // stream->write8(proc_high); // pc high
                             indent(curLevel);
                             curLevel++;
                             log::out << "scope "<<curLevel<<"\n";
@@ -766,6 +843,10 @@ namespace dwarf {
                     
                     indent(curLevel);
                     log::out << "var "<<var.name<<" "<<var.scopeId<<"\n";
+                    
+                    if(var.is_global && section_data == 0) {
+                        continue;
+                    }
 
                     WRITE_LEB(abbrev_var)
                     stream->write(var.name.c_str());
@@ -787,11 +868,21 @@ namespace dwarf {
                     u8* block_length = nullptr;
                     stream->write_late((void**)&block_length, 1); // DW_AT_location, begins with block length
                     int off_start = stream->getWriteHead();
-                    stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
-                    
-                    int extra_off = -fun->offset_from_bp_to_locals; // extra offset due to non-volatile registers, i think return values with betcall is accounted for in var.frameOffset
-                    
-                    WRITE_SLEB(var.frameOffset + extra_off + RBP_CONSTANT_OFFSET)
+                    if(var.is_global) {
+                        stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
+                        int offset = stream->getWriteHead();
+                        stream->write4(var.frameOffset);
+                        objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.frameOffset);
+                    } else {
+                        stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
+                        
+                        int extra_off = -fun->offset_from_bp_to_locals; // extra offset due to non-volatile registers, i think return values with betcall is accounted for in var.frameOffset
+                        if(target == TARGET_ARM) {
+                            // DWARF adds some extra offset so we do this to revert it?
+                            extra_off -= REGISTER_SIZE;
+                        }
+                        WRITE_SLEB(var.frameOffset + extra_off + RBP_CONSTANT_OFFSET)
+                    }
                     *block_length = stream->getWriteHead() - off_start; // we write block length later since we don't know the size of the LEB128 integer
                 }
                 while(curLevel>0) {
@@ -966,10 +1057,14 @@ namespace dwarf {
                 reg_column = 1;
 
             stream->write1(0); // extended opcode uses a zero at first
-            stream->write1(1 + 8); // then count of bytes for the whole extended operation
+            stream->write1(1 + REGISTER_SIZE); // then count of bytes for the whole extended operation
             WRITE_LEB(DW_LNE_set_address) // then opcode and data
                 int reloc_pc_addr = stream->getWriteHead() - offset_section;
-                stream->write8(0);
+                if(REGISTER_SIZE == 8) {
+                    stream->write8(0);
+                } else {
+                    stream->write4(0);
+                }
                 reg_address = 0;
 
 
@@ -1098,18 +1193,26 @@ namespace dwarf {
             // header->header_length = don't know yet;
             int reloc_debug_info_offset = (u64)&header->debug_info_offset - (u64)header;
             header->debug_info_offset = 0;
-            header->address_size = 8;
+            header->address_size = REGISTER_SIZE;
             header->segment_size = 0;
-
-            suc = stream->write_align(8);
+            
+            suc = stream->write_align(REGISTER_SIZE);
             CHECK
             
             int reloc_text_start = stream->getWriteHead() - offset_section;
+            // if(REGISTER_SIZE == 8) {
             stream->write8(0);
             stream->write8(stream_text->getWriteHead());
 
+            stream->write8(0); // null entry
             stream->write8(0);
-            stream->write8(0);
+            // } else {
+            //     stream->write4(0);
+            //     stream->write4(stream_text->getWriteHead());
+
+            //     stream->write4(0); // null entry
+            //     stream->write4(0);
+            // }
 
             header->unit_length = (stream->getWriteHead() - offset_section) - sizeof(ArangesHeader::unit_length);
             
@@ -1135,11 +1238,18 @@ namespace dwarf {
             int written = 0;
 
             enum DW_registers : u8 {
+                // x86
                 DW_rbp = 6,
                 DW_rsp = 7,
                 DW_rip = 16,
+                
+                // ARM
+                DW_r11 = 11,
+                DW_r13 = 13,
+                DW_r14 = 14,
             };
             
+            int code_factor = 1;
             {
                 CommonInformationEntry* header = nullptr;
                 stream->write_late((void**)&header, sizeof(CommonInformationEntry));
@@ -1148,24 +1258,39 @@ namespace dwarf {
                 header->version = 3; // Specific version for debug_frame (not the DWARF version)
                 
                 stream->write1(0); // augmentation string, ZERO for now?
+                
+                if(compiler->options->target == TARGET_ARM) {
+                    code_factor = 2;
+                    WRITE_LEB(2) // code_alignment factor
+                    WRITE_SLEB(-4) // data_alignment_factor
+                    WRITE_LEB(14) // return address register, lr register
 
-                WRITE_LEB(1) // code_alignment factor
-                WRITE_SLEB(-8) // data_alignment_factor
+                    // initial instructions for the columns?
+                    // Copied from what g++ generates
+                    stream->write1(DW_CFA_def_cfa);
+                    WRITE_LEB(DW_r13)
+                    WRITE_LEB(0)
+                } else {
+                    // x86_64
+                    code_factor = 1;
+                    WRITE_LEB(1) // code_alignment factor
+                    WRITE_SLEB(-8) // data_alignment_factor
 
-                WRITE_LEB(DW_rip) // return address register, ?
+                    WRITE_LEB(DW_rip) // return address register, ?
 
-                // initial instructions for the columns?
-                // Copied from what g++ generates
-                stream->write1(DW_CFA_def_cfa);
-                WRITE_LEB(DW_rsp)
-                WRITE_LEB(8)
+                    // initial instructions for the columns?
+                    // Copied from what g++ generates
+                    stream->write1(DW_CFA_def_cfa);
+                    WRITE_LEB(DW_rsp)
+                    WRITE_LEB(8)
 
-                stream->write1(DW_CFA_offset(DW_rip));
-                WRITE_LEB(1) // 1 becomes -8 (1 * data_alignment_factor)
+                    stream->write1(DW_CFA_offset(DW_rip));
+                    WRITE_LEB(1) // 1 becomes -8 (1 * data_alignment_factor)
 
+                }
                 // What I have understood from what GCC generates is that the whole CIE should start at an 8-byte alignment
                 // and end at an 8-byte alignment. The same goes for the following FDEs
-                stream->write_align(8);
+                stream->write_align(REGISTER_SIZE);
                 header->length = (stream->getWriteHead() - offset_section) - sizeof(CommonInformationEntry::length);
             }
             struct Reloc {
@@ -1180,52 +1305,100 @@ namespace dwarf {
                 auto& fun = debug->functions[fi];
                 Assert(fun->asm_end != 0);
 
-                Assert(stream->getWriteHead() % 8 == 0);
+                Assert(stream->getWriteHead() % REGISTER_SIZE == 0);
                 int offset_fde_start = stream->getWriteHead();
 
+                int fd_size = REGISTER_SIZE == 8 ? FrameDescriptionEntry::SIZE64 : FrameDescriptionEntry::SIZE32;
+
                 FrameDescriptionEntry* header = nullptr;
-                stream->write_late((void**)&header, sizeof(FrameDescriptionEntry));
+                stream->write_late((void**)&header, fd_size);
                 header->length = 0; // don't know yet
                 
                 header->CIE_pointer = 0; // relocated later
                 relocs.add({symindex_debug_frame, offset_fde_start - offset_section  + (u64)&header->CIE_pointer - (u64)header });
                 
-                header->initial_location = fun->asm_start; // relocated later
-                
-                relocs.add({symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location - (u64)header, fun->asm_start });
+                if(REGISTER_SIZE == 8) {
+                    header->initial_location = fun->asm_start; // relocated later
                     
-                header->address_range = fun->asm_end - fun->asm_start;
+                    relocs.add({symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location - (u64)header, fun->asm_start });
+                        
+                    header->address_range = fun->asm_end - fun->asm_start;
+                } else {
+                    // we set to zero because relocation will use an addend
+                    // this only works with ELF and R_ARM_ABS32.
+                    header->initial_location32 = fun->asm_start; // relocated later
+                    
+                    relocs.add({symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location32 - (u64)header, fun->asm_start });
+                        
+                    header->address_range32 = (fun->asm_end - fun->asm_start);
+                }
 
-                // instructions, based on what g++ generates and a little from DWARF specification
-                stream->write1(DW_CFA_advance_loc4);
-                stream->write4(2); // move past push rbp (2 bytes with the general push instruction we used)
+                if(compiler->options->target == TARGET_ARM) {
+                    // instructions based on what arm-none-eabi-gcc generates with -g flag
+                    stream->write1(DW_CFA_advance_loc4);
+                    stream->write4(4/code_factor);
 
-                stream->write1(DW_CFA_def_cfa_offset);
-                WRITE_LEB(16)
+                    stream->write1(DW_CFA_def_cfa_offset);
+                    WRITE_LEB(4)
 
-                stream->write1(DW_CFA_offset(DW_rbp));
-                WRITE_LEB(2) // * data_alignment_factor
+                    stream->write1(DW_CFA_offset(DW_r11));
+                    WRITE_LEB(1) // * data_alignment_factor
 
-                stream->write1(DW_CFA_advance_loc4);
-                stream->write4(3);
+                    stream->write1(DW_CFA_advance_loc4);
+                    stream->write4(4/code_factor);
 
-                stream->write1(DW_CFA_def_cfa_register);
-                WRITE_LEB(DW_rbp)
+                    stream->write1(DW_CFA_def_cfa_register);
+                    WRITE_LEB(DW_r11)
 
-                stream->write1(DW_CFA_advance_loc4);
-                stream->write4(fun->asm_end - fun->asm_start - 5 - 1);
-                // NOTE: Above is a relative hop to almost the end of the function
-                //   -5 because push rbp, mov rbp, rsp in the beginning of the function
-                //   -1 because we asm_end is exclusive
+                    stream->write1(DW_CFA_advance_loc4);
+                    stream->write4((fun->asm_end - fun->asm_start - 8 - 8)/code_factor);
+                    // NOTE: Above is a relative hop to almost the end of the function
+                    //   -8 because push {fp, lr} and mov fp, sp
+                    //   -8 because pop {fp, lr} and bx lr
 
-                stream->write1(DW_CFA_restore(DW_rbp));
+                    stream->write1(DW_CFA_def_cfa_register);
+                    WRITE_LEB(DW_r13)
+                    
+                    stream->write1(DW_CFA_advance_loc4);
+                    stream->write4(4/code_factor);
 
-                stream->write1(DW_CFA_def_cfa);
-                WRITE_LEB(DW_rsp)
-                WRITE_LEB(8)
+                    stream->write1(DW_CFA_restore(DW_r11));
+                    
+                    stream->write1(DW_CFA_def_cfa_offset);
+                    WRITE_LEB(0)
+                } else {
+                    // x86_64
+                    // instructions, based on what g++ generates and a little from DWARF specification
+                    stream->write1(DW_CFA_advance_loc4);
+                    stream->write4(2); // move past push rbp (2 bytes with the general push instruction we used)
+
+                    stream->write1(DW_CFA_def_cfa_offset);
+                    WRITE_LEB(16)
+
+                    stream->write1(DW_CFA_offset(DW_rbp));
+                    WRITE_LEB(2) // * data_alignment_factor
+
+                    stream->write1(DW_CFA_advance_loc4);
+                    stream->write4(3);
+
+                    stream->write1(DW_CFA_def_cfa_register);
+                    WRITE_LEB(DW_rbp)
+
+                    stream->write1(DW_CFA_advance_loc4);
+                    stream->write4(fun->asm_end - fun->asm_start - 5 - 1);
+                    // NOTE: Above is a relative hop to almost the end of the function
+                    //   -5 because push rbp, mov rbp, rsp in the beginning of the function
+                    //   -1 because we asm_end is exclusive
+
+                    stream->write1(DW_CFA_restore(DW_rbp));
+
+                    stream->write1(DW_CFA_def_cfa);
+                    WRITE_LEB(DW_rsp)
+                    WRITE_LEB(8)
+                }
                 
                 // potential padding
-                stream->write_align(8);
+                stream->write_align(REGISTER_SIZE);
                 header->length = (stream->getWriteHead() - offset_fde_start) - sizeof(FrameDescriptionEntry::length);
             }
 

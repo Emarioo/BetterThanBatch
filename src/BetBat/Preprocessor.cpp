@@ -25,7 +25,7 @@
 
 namespace preproc {
 
-SignalIO PreprocContext::parseMacroDefinition() {
+SignalIO PreprocContext::parseMacroDefinition(bool is_global_macro) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Gold);
 
@@ -207,10 +207,13 @@ SignalIO PreprocContext::parseMacroDefinition() {
         //    First with evaluteTokens, then without.
         //    We don't want to do that. Also, what if you got a global macro
         //   evaluated at !evlauateTokens and then
-        MacroRoot* rootMacro = preprocessor->create_or_get_macro(import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1);
+        u32 the_import_id = import_id;
+        if(is_global_macro)
+            the_import_id = compiler->preload_import_id;
+        MacroRoot* rootMacro = preprocessor->create_or_get_macro(the_import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1);
         
         localMacro.location = { name_token };
-        preprocessor->insertCertainMacro(import_id, rootMacro, &localMacro);
+        preprocessor->insertCertainMacro(the_import_id, rootMacro, &localMacro);
 
         std::string name = lexer->getStdStringFromToken(name_token);
         
@@ -302,11 +305,45 @@ SignalIO PreprocContext::parseLoad(){
     }
     
     if(evaluateTokens) {
+        std::string real_path = path;
+        DynamicArray<std::string> paths;
+        paths.add(path);
+        const std::string& exedir = compiler->compiler_executable_dir;
+        paths.add(JoinPaths(exedir, path));
+        if(exedir.size() > 5 && exedir.substr(exedir.size()-5) == "/bin/") {
+            paths.add(JoinPaths(exedir.substr(0,exedir.size()-4), path));
+        }
+        if (exedir.size() > 4 && exedir.substr(exedir.size()-4) == "/bin") {
+            paths.add(JoinPaths(exedir.substr(0,exedir.size()-3), path));
+        }
+        for(auto& dir : compiler->options->importDirectories) {
+            paths.add(JoinPaths(dir, path));
+        }
+        LOG_CODE(LOG_LIBS,
+            log::out << log::PURPLE << "Finding lib: "<<path<<"\n";
+        )
+        for(auto& tmp : paths) {
+            bool yes = FileExist(tmp);
+            if (yes) {
+                LOG_CODE(LOG_LIBS,
+                    log::out << " found "<<log::LIME<<tmp<<log::NO_COLOR<<"\n";
+                )
+                real_path = tmp;
+                break;
+            } else {
+                LOG_CODE(LOG_LIBS,
+                    log::out << " check "<<tmp<<"\n";
+                )
+            }
+        }
+        LOG_CODE(LOG_LIBS,
+            log::out << ""<<path << " -> " << real_path<<"\n";
+        )
         if(view_as.size() != 0)
-            compiler->addLibrary(import_id, path, view_as);
+            compiler->addLibrary(import_id, real_path, view_as);
         if(view_as.size() == 0 || do_force) {
             Assert(compiler->program);
-            compiler->program->addForcedLibrary(path);
+            compiler->program->addForcedLibrary(real_path);
         }
     }
     
@@ -629,6 +666,363 @@ SignalIO PreprocContext::parseIf(){
     //  log::out << "     exit  ifdef loop\n";
     return SIGNAL_SUCCESS;
 }
+bool FunctionInsert::matches(const std::string& name, const std::string& file) const {
+    using namespace engone;
+    
+    bool final_matched = false;
+    
+    struct Env {
+        const Expr* expr;
+        int comma_index;
+        int and_index;
+        bool last_match = true;
+    };
+    DynamicArray<Env> envs;
+    
+    envs.add({});
+    envs.last().expr = &pattern;
+    
+    while (envs.size() > 0) {
+        auto& env = envs.last();
+        
+        if(env.comma_index >= env.expr->list.size()) {
+            // Assert(!env.last_match);
+            if(envs.size()>1) {
+                envs[envs.size()-2].last_match = env.expr->inverse;
+            } else {
+                final_matched = env.expr->inverse;
+            }
+            envs.pop();
+            continue;
+        }
+        
+        if(!env.last_match) {
+            env.and_index = 0;
+            env.comma_index++;
+            env.last_match = true;
+            continue;
+        }
+        
+        if(env.and_index >= env.expr->list[env.comma_index].size()) {
+            Assert(env.last_match);
+            if(envs.size()>1) {
+                envs[envs.size()-2].last_match = !env.expr->inverse;
+            } else {
+                final_matched = !env.expr->inverse;
+            }
+            envs.pop();
+            continue;
+        }
+        
+        bool matched = false;
+        
+        const Expr* cur = &env.expr->list[env.comma_index][env.and_index];
+        env.and_index++;
+        
+        if(cur->type == PATTERN_NAME) {
+            matched = MatchPattern(cur->string, name);
+        } else if(cur->type == PATTERN_FILE) {
+            matched = MatchPattern(cur->string, file);
+        } else if(cur->type == PATTERN_LIST) {
+            envs.add({});
+            envs.last().expr = cur;
+            continue;
+        }
+        env.last_match = cur->inverse ? !matched : matched;
+    }
+    
+    // log::out << "MATCH "<<final_matched << " "<<name<<" "<<file<<"\n";
+    return final_matched;
+}
+bool FunctionInsert::MatchPattern(const std::string& pattern, const std::string& string) {
+    using namespace engone;
+    // TODO: More complex pattern matching
+    bool yes = false;
+    if(pattern.empty()) yes = false;
+    else if(pattern == "*") yes = true;
+    else if(pattern.size()>2 && pattern[0] == '*' && pattern.back() == '*')
+        yes = string.find(pattern.substr(1,pattern.size()-2)) != -1;
+    else if(pattern.back() == '*')
+        yes = string.find(pattern.substr(0,pattern.size()-1)) == 0;
+    else if(pattern[0] == '*')
+        yes = string.find(pattern.substr(1)) == string.size() - (pattern.size() - 1);
+    else
+        yes = pattern == string;
+    // log::out << " check "<<yes <<" "<<pattern << " "<<string<<"\n";
+    return yes;
+}
+void FunctionInsert::print() {
+    using namespace engone;
+    DynamicArray<Expr*> exprs;
+    int indent = 0;
+    Expr unindent{};
+    unindent.type = (ExprType)10;
+    Expr and{};
+    and.type = (ExprType)9;
+    exprs.add(&pattern);
+    while(exprs.size()>0) {
+        auto expr = exprs.last();
+        exprs.pop();
+        if(expr->type == unindent.type) {
+            indent--;
+            continue;
+        }
+        for(int i=0;i<indent;i++)
+            log::out << " ";
+        if(expr->inverse)
+            log::out << "not ";
+        switch(expr->type) {
+            case 9:
+                log::out << "and\n";
+                indent++;
+            break;
+            case PATTERN_FILE:   
+                log::out << "f'"<<expr->string<<"'\n";
+            break;
+            case PATTERN_NAME:
+                log::out << "n'"<<expr->string<<"'\n";
+            break;
+            case PATTERN_LIST:
+                log::out << "list\n";
+                exprs.add(&unindent);
+                indent++;
+                for(int i=expr->list.size()-1;i>=0;i--) {
+                    auto& innerlist = expr->list[i];
+                    exprs.add(&unindent);
+                    for(int j=innerlist.size()-1;j>=0;j--) {
+                        auto& e = innerlist[j];
+                        exprs.add(&e);
+                    }
+                    exprs.add(&and);
+                }
+            break;
+        }
+    }
+}
+void Preprocessor::add_function_insert(FunctionInsert* insert) {
+    // add and sort based on priority
+    for(int i=0;i<function_inserts.size();i++){
+        auto fi = function_inserts[i];
+        if(fi->priority < insert->priority) {
+            function_inserts.insert(i, insert);
+            return;
+        }
+    }
+    function_inserts.add(insert);
+}
+void Preprocessor::match_function_insert(const std::string& name, const std::string& file, DynamicArray<const FunctionInsert*>* out) const {
+    out->cleanup();
+    for(const auto& in : compiler->preprocessor.function_inserts) {
+        bool matched = in->matches(name, file);
+        if(matched) {
+            out->add(in);
+        }
+    }
+}
+SignalIO PreprocContext::parseFunctionInsert(){
+    using namespace engone;
+    
+    // Parse match patterns
+    /* Draft BNF
+        list = match { ',' match }
+        match = match { 'and' match } | '(' list ')'
+        pattern = ['f'] string
+    */
+    // TODO: Thread safety
+    
+    lexer::SourceLocation insert_location = info.getloc(-2);
+    auto insert_srcloc = getsource(-2);
+    
+    struct Env {
+        int expect_operator=false;
+        FunctionInsert::Expr* expr=nullptr;
+    };
+    DynamicArray<Env> envs;
+    envs.add({});
+    FunctionInsert::Expr garbage{};
+    
+    FunctionInsert* insert = nullptr;
+    if(evaluateTokens) {
+        insert = (FunctionInsert*)Allocate(sizeof(FunctionInsert));
+        new(insert)FunctionInsert();
+        envs.last().expr = &insert->pattern;
+    } else {
+        envs.last().expr = &garbage;
+    }
+    envs.last().expr->type = FunctionInsert::PATTERN_LIST;
+    envs.last().expr->list.add({});
+    
+    int priority = 0;
+    
+    StringView num_data = {};
+    StringView num_data2 = {};
+    lexer::Token token = gettok(&num_data);
+    lexer::Token next_token = gettok(&num_data2, 1);
+    
+    if(token.type == lexer::TOKEN_LITERAL_INTEGER) {
+        info.advance();
+        priority = lexer::ConvertInteger(num_data);
+    } else if(token.type == '-' && next_token.type == lexer::TOKEN_LITERAL_INTEGER) {
+        info.advance(2);
+        priority = -lexer::ConvertInteger(num_data2);
+    }
+    
+    while(true){
+        auto& env = envs.last();
+        
+        StringView view{};
+        lexer::Token token = gettok(&view);
+        if(token.type == lexer::TOKEN_EOF) {
+            ERR_SECTION(
+                ERR_HEAD2(gettok(-1))
+                ERR_MSG("Sudden end of file in #function_insert pattern matching.")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+        }
+        if(env.expect_operator) {
+            if(token.type == ',') {
+                info.advance();
+                env.expr->list.add({});
+                env.expect_operator = false;
+                continue;
+            } else if(token.type == lexer::TOKEN_IDENTIFIER && view == "and") {
+                info.advance();
+                env.expect_operator = false;
+                continue;
+            } else if(token.type == ')') {
+                info.advance();
+                envs.pop();
+                continue;
+            }else {
+                break;
+            }
+        } else {
+            bool inverse = false;
+            if(token.type == lexer::TOKEN_IDENTIFIER && view == "not") {
+                inverse = true;
+                info.advance();
+                token = gettok(&view);
+            }
+            
+            FunctionInsert::ExprType type = FunctionInsert::PATTERN_NAME;
+            bool has_prefix = false;
+            if(token.type == lexer::TOKEN_IDENTIFIER && view == "f") {
+                type = FunctionInsert::PATTERN_FILE;
+                has_prefix = true;
+            } else if(token.type == lexer::TOKEN_IDENTIFIER && view == "n") {
+                type = FunctionInsert::PATTERN_NAME;
+                has_prefix = true;
+            }
+            lexer::Token token_string = gettok(&view, has_prefix ? 1 : 0);
+            StringView next_token_string{};
+            if(token_string.type == lexer::TOKEN_LITERAL_STRING) {
+                info.advance(has_prefix ? 2 : 1);
+                env.expr->list.last().add({});
+                auto& e = env.expr->list.last().last();
+                e.type = type;
+                e.string = view;
+                e.inverse = inverse;
+                env.expect_operator = true;
+                continue;
+            } else if(token.type == '(') {
+                info.advance();
+                env.expect_operator = true;
+                
+                env.expr->list.last().add({});
+                auto e = &env.expr->list.last().last();
+                e->type = FunctionInsert::PATTERN_LIST;
+                e->list.add({});
+                e->inverse = inverse;
+                
+                envs.add({}); // NOTE: You cannot access 'env' variable because it is invalidated memory
+                envs.last().expr = e;
+                continue;
+            } else if(token.type == '#' && info.gettok(&next_token_string, 1).type == lexer::TOKEN_IDENTIFIER && next_token_string == "file") {
+                info.advance(2);
+                env.expr->list.last().add({});
+                auto& e = env.expr->list.last().last();
+                e.type = FunctionInsert::PATTERN_FILE;
+                if(new_lexer_import) // null when not evaluating tokens
+                    e.string = TrimCWD(new_lexer_import->path);
+                e.inverse = inverse;
+                env.expect_operator = true;
+                continue;
+            } else if(token.type == '#' && info.gettok(&next_token_string, 1).type == lexer::TOKEN_IDENTIFIER && next_token_string == "fileabs") {
+                info.advance(2);
+                env.expr->list.last().add({});
+                auto& e = env.expr->list.last().last();
+                e.type = FunctionInsert::PATTERN_FILE;
+                if(new_lexer_import) // null when not evaluating tokens
+                    e.string = new_lexer_import->path;
+                e.inverse = inverse;
+                env.expect_operator = true;
+                continue;
+            } else {
+                if(!evaluateTokens) {
+                    ERR_SECTION(
+                        ERR_HEAD2(token)
+                        ERR_MSG("Missing valid pattern in #function_insert.")
+                        ERR_LINE2(token, "here")
+                    )
+                }
+                if(insert) {
+                    insert->~FunctionInsert();
+                    Free(insert, sizeof(FunctionInsert));
+                }
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+        }
+    }
+    
+    // Parse content
+    int start_token = gethead();
+    int end_token = start_token;
+    auto src = getsource();
+    int spacing = src->column-1;
+    int lining = src->line - insert_srcloc->line;
+    while(true){
+        lexer::Token token = gettok();
+        
+        if(token.type == lexer::TOKEN_EOF) {
+            ERR_SECTION(
+                ERR_HEAD2(gettok(-1))
+                ERR_MSG("Missing #endinsert somewhere for #function_insert.")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+        }
+        
+        if(token.type == '#' && !(token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)){
+            StringView next_token_string{};
+            lexer::Token next_token = gettok(&next_token_string, 1);
+            if(next_token.type == lexer::TOKEN_IDENTIFIER && next_token_string == "endinsert"){
+                end_token = gethead();
+                advance(2);
+                break;
+            }
+        }
+        advance();
+    }
+    if(insert) {
+        auto iter = compiler->lexer.createFeedIterator(lexer_import, start_token, end_token);
+        compiler->lexer.feed(iter);
+        insert->content = "";
+        for(int i=0;i<lining;i++)
+            insert->content += "\n";
+        for(int i=0;i<spacing;i++)
+            insert->content += " ";
+        insert->content += std::string(iter.data(), iter.len());
+        insert->location = insert_location;
+        insert->priority = priority;
+        
+        preprocessor->add_function_insert(insert);
+        
+        // log::out << log::LIME << "FUNCTION INSERT expr:\n";
+        // insert->print();
+        // log::out << log::LIME<<" CONTENT:\n";
+        // log::out << insert->content<<"\n";
+    }
+    return SIGNAL_SUCCESS;
+}
 SignalIO PreprocContext::parseImport() {
     using namespace engone;
     StringView path;
@@ -691,16 +1085,25 @@ SignalIO PreprocContext::parseImport() {
             if(assumed_path.size()) {
                 ERR_SECTION(
                     ERR_HEAD2(str_token)   
-                    ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. It was assumed to exist here '"<<log::GREEN<<assumed_path<<log::NO_COLOR<<"' due to the './' which indicates a relative directory to the current import ('"<<log::GREEN<<TrimLastFile(lexer_import->path)<<log::NO_COLOR<<"' in this case).")
+                    ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. It was assumed to exist here '"<<log::GREEN<<assumed_path<<log::NO_COLOR<<"' due to the './' which indicates a relative directory to the current import ('"<<log::GREEN<<lexer_import->path<<log::NO_COLOR<<"' in this case). Skip './' if you want relative directory to current working directory.")
                     ERR_LINE2(str_token,"here")
                 )
             } else {
-                ERR_SECTION(
-                    ERR_HEAD2(str_token)   
-                    ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. Did you setup default modules directory correctly? Does the file exist in current working directory of the compiler or from import directories through command line options?")
-                    ERR_LINE2(str_token,"here")
-                    // TODO: List the import directories?
-                )
+                if(path.ptr[0] == '~') {
+                    ERR_SECTION(
+                        ERR_HEAD2(str_token)   
+                        ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' contains ~ which isn't allowed.could not be found. Did you setup default modules directory correctly? Does the file exist in current working directory of the compiler or from import directories through command line options?")
+                        ERR_LINE2(str_token,"here")
+                        // TODO: List the import directories?
+                    )
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(str_token)   
+                        ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. Did you setup default modules directory correctly? Does the file exist in current working directory of the compiler or from import directories through command line options?")
+                        ERR_LINE2(str_token,"here")
+                        // TODO: List the import directories?
+                    )
+                }
             }
             return SIGNAL_SUCCESS; // we failed semantically, but not syntactically
         } else {
@@ -745,7 +1148,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     if(!root)
         return SIGNAL_NO_MATCH;
     advance();
-
+    
     ZoneScopedC(tracy::Color::Goldenrod2); // we start profiling here, when we actually are matching macro, that way the count stat in profiler represents the number of evaluated macros instead of the number of tries.
     
     LOG(LOG_PREPROCESSOR, 
@@ -781,7 +1184,9 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     auto createLayer = [&](bool eval_content) {
         auto ptr = scratch_allocator.create_no_init<Layer>();
         new(ptr)Layer(eval_content);
-        ptr->input_arguments.init(&scratch_allocator);
+
+        // ptr->input_arguments.init(&scratch_allocator); // we run into trouble with large macros, scratch allocator would need more memory
+
         return ptr;
     };
     auto deleteLayer = [&](Layer* layer) {
@@ -817,42 +1222,53 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     
     auto apply_concat=[&](Layer* layer, lexer::Token token, StringView* view = nullptr, bool compute_source = true) {
         std::string new_data="";
-        int ln, col;
+        int ln=0, col=0;
         
         if(new_lexer_import->chunks.size() == 0)
             layer->concat_next_token = false;
         
+        lexer::TokenType token_type = lexer::TOKEN_IDENTIFIER;
         if(layer->concat_next_token) {
             int token_count = new_lexer_import->getTokenCount();
             
             // TODO: Allow binary and hexidecimal literals
             auto tok = lexer->getTokenFromImport(new_import_id, token_count-1);
             auto prev_src = lexer->getTokenSource_unsafe({tok});
-            if((tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_STRING || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
-            (token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY || token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || token.type == lexer::TOKEN_LITERAL_STRING || token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
-                if(tok.type == lexer::TOKEN_LITERAL_STRING)
-                    layer->quote_next_token = true;
+            if (tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_STRING || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) {
+                token_type = tok.type;
+            }
+            // if((tok.type == lexer::TOKEN_LITERAL_OCTAL ||tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_STRING || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
+            // (token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY || token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || token.type == lexer::TOKEN_LITERAL_STRING || token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
+            //     if(tok.type == lexer::TOKEN_LITERAL_STRING)
+            //         layer->quote_next_token = true;
                 
-                // TODO: There is bug if we concat two identifiers which become a keyword
+            //     // TODO: There is bug if we concat two identifiers which become a keyword
                 
-                if(TOKEN_IS_KEYWORD(tok.type)) {
-                    new_data += TOK_KEYWORD_NAME(tok.type);
-                } else {
-                    new_data += lexer->getStdStringFromToken(tok);
-                }
-                if(view) {
-                    new_data += std::string(*view);
-                } else if(TOKEN_IS_KEYWORD(token.type)) {
-                    new_data += TOK_KEYWORD_NAME(token.type);
-                } else {
-                    new_data += lexer->getStdStringFromToken(token);
-                }
+            //     if(TOKEN_IS_KEYWORD(tok.type)) {
+            //         new_data += TOK_KEYWORD_NAME(tok.type);
+            //     } else {
+            //         new_data += lexer->getStdStringFromToken(tok);
+            //     }
+            //     if(view) {
+            //         new_data += std::string(*view);
+            //     } else if(TOKEN_IS_KEYWORD(token.type)) {
+            //         new_data += TOK_KEYWORD_NAME(token.type);
+            //     } else {
+            //         new_data += lexer->getStdStringFromToken(token);
+            //     }
+            //     ln = prev_src->line;
+            //     col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
+            //     lexer->popTokenFromImport(new_lexer_import);
+            // } else {
+                // Once again why do we set concat to false here?
+                // layer->concat_next_token = false;
+                new_data += lexer->tostring(tok, true);
+                new_data += lexer->tostring(token, true);
+                // log::out << "New thing: "<<new_data<<"\n";
                 ln = prev_src->line;
                 col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
                 lexer->popTokenFromImport(new_lexer_import);
-            } else {
-                layer->concat_next_token = false;
-            }
+            // }
         } else if(layer->quote_next_token) {
             if((token.type == lexer::TOKEN_LITERAL_OCTAL || token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
                 if(view) {
@@ -863,7 +1279,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     new_data += lexer->getStdStringFromToken(token);
                 }
             } else {
-                layer->quote_next_token = false;
+                new_data += lexer->tostring(token);
+                // Assert(false);
             }
         }
 
@@ -892,8 +1309,11 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             } else {
                 StringView new_view = new_data;
                 lexer::Token new_token{};
-                new_token.type = lexer::TOKEN_IDENTIFIER;
+                new_token.type = token_type;
                 new_token.flags = lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED;
+                if(new_token.type & lexer::TOKEN_LITERAL_STRING) {
+                    new_token.flags |= lexer::TOKEN_FLAG_DOUBLE_QUOTED;
+                }
                 new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
                 lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, ln, col);
             }
@@ -901,8 +1321,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             return false;
         }
 
-        layer->concat_next_token = false;
-        layer->quote_next_token = false;
+        // layer->concat_next_token = false;
+        // layer->quote_next_token = false;
         return true;
     };
 
@@ -932,9 +1352,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 layer->specific = layer->top_caller->specific;
             lexer::Token token = layer->get(lexer);
             if(token.type == lexer::TOKEN_EOF) {
-                // TODO: Assert happens if ) wasn't found
-                // this can happen at the end of the file
-                Assert(false);
+                ERR_SECTION(
+                    ERR_HEAD2(macro_token)
+                    ERR_MSG("Sudden end of file, expected closing parenthesis.")
+                    ERR_LINE2(macro_token, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
             }
             
             if(layer->paren_depth==0 && (token.type == ',' || token.type == ')')) {
@@ -1121,6 +1544,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     
                     for(int i = real_index; i < real_index + real_count;i++) {
                         auto& list = layer->input_arguments[i];
+                        
                         for(int j=0;j<list.size();j++) {
                             bool end = i+1 == real_index + real_count && j+1 == list.size();
                             if(end) {
@@ -1219,8 +1643,10 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                             lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
                                             appended_tokens++;
                                         }
-                                        layer->concat_next_token = false;
-                                        layer->quote_next_token = false;
+                                        if(layer->quote_next_token)
+                                            layer->concat_next_token = true;
+                                        else
+                                            layer->concat_next_token = false;
                                         continue;
                                     }
                                 }
@@ -1236,10 +1662,14 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                         // auto t = lexer->appendToken(new_lexer_import, list[j], true);
                                 }
                                 appended_tokens++;
-                                layer->concat_next_token = false;
-                                layer->quote_next_token = false;
+                                if(layer->quote_next_token)
+                                    layer->concat_next_token = true;
+                                else
+                                    layer->concat_next_token = false;
                             }
                         }
+                        layer->quote_next_token = false;
+                        layer->concat_next_token = false;
                         if(i+1 != real_index + real_count && list.size() != 0) {
                             if(layer->adjacent_callee) {
                                 lexer::Token com{};
@@ -1256,8 +1686,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                 lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
                                 appended_tokens++;
                                 // TODO: Concat logic?
-                                layer->concat_next_token = false;
-                                layer->quote_next_token = false;
+                                // layer->concat_next_token = false;
+                                // layer->quote_next_token = false;
                             }
                         }
                     }
@@ -1494,6 +1924,22 @@ SignalIO PreprocContext::parseInformational(lexer::Token hashtag_tok, lexer::Tok
         signal = SIGNAL_SUCCESS;
     } else if(string == "file") {
         // advance();
+        std::string temp = TrimCWD(new_lexer_import->path);
+
+        lexer::Token tok{};
+        tok.type = lexer::TOKEN_LITERAL_STRING;
+        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED | lexer::TOKEN_FLAG_DOUBLE_QUOTED;
+        string.ptr = (char*)temp.data();
+        string.len = temp.size();
+        
+        
+        *out_str = temp;
+        *out_tok = tok;
+        // lexer->appendToken(new_lexer_import, tok, &string);
+        signal = SIGNAL_SUCCESS;
+    } else if(string == "fileabs") {
+        // advance();
         std::string temp = new_lexer_import->path;
 
         lexer::Token tok{};
@@ -1624,12 +2070,18 @@ SignalIO PreprocContext::parseOne() {
         } else if(string == "macro") {
             advance();
             signal = parseMacroDefinition();
+        } else if(string == "global_macro") {
+            advance();
+            signal = parseMacroDefinition(true);
         } else if(string == "import") {
             advance();
             signal = parseImport();
         } else if(string == "link") {
             advance();
             signal = parseLink();
+        } else if(string == "function_insert") {
+            advance();
+            signal = parseFunctionInsert();
         } else if(string == "load") {
             advance();
             signal = parseLoad();
@@ -1667,6 +2119,7 @@ SignalIO PreprocContext::parseOne() {
         advance();
         if(evaluateTokens) {
             lexer->appendToken(new_lexer_import, tok, &string);
+            lexer->appendToken(new_lexer_import, macro_tok, &string);
         }
     }
     return SIGNAL_SUCCESS;
@@ -1702,6 +2155,13 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
         lock_imports.lock();
         // log::out << "Preproc imp "<<import_id<<"\n";
         context.current_import = imports.requestSpot(import_id-1, nullptr);
+        if (!context.current_import && import_id == compiler->preload_import_id) {
+            // preload import may already exist if a file defined a global macro.
+            // when that happens it is put into the preload import. Since the 
+            // preload import may not be created yet it is created then and there.
+            // Therefore, we may not be able to requestSpot here.
+            context.current_import = imports.get(import_id-1);
+        }
         lock_imports.unlock();
         Assert(context.current_import);
     }
@@ -1731,7 +2191,7 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
     //     log::out << "preproc toks/srcs " << c->tokens.size() << "/" << c->sources.size()<<"\n";
     // }
 
-    context.compiler->options->compileStats.errors += context.errors;
+    context.compiler->compile_stats.errors += context.errors;
     
     return context.new_import_id;
 }
@@ -1759,12 +2219,15 @@ int MacroSpecific::matchArg(lexer::Token token, lexer::Lexer* lexer) {
     }
     return -1;
 }
-
 MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank) {
     Assert(name.type == lexer::TOKEN_IDENTIFIER);
     
     lock_imports.lock();
     Import* imp = imports.get(import_id-1);
+    if(!imp && import_id == compiler->preload_import_id) {
+        imp = imports.requestSpot(compiler->preload_import_id-1, nullptr);
+    }
+        
     lock_imports.unlock();
     Assert(imp);
     
@@ -1881,6 +2344,8 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, Prep
     using namespace engone;
     ZoneScopedC(tracy::Color::DarkGoldenrod2);
 
+    // TODO: Thread-safety
+    
     Assert(context);
 
     auto& ids_to_check = context->ids_to_check;
@@ -1889,24 +2354,25 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, Prep
     Assert(context->evaluateTokens);
     Assert(context->import_id == import_id);
 
-    // NOTE: We pre-compute a list of imports we should check for macros because it's time consuming to through each import and it's dependencies, and then those imports' dependencies.
+
+    // NOTE: We pre-compute a list of imports we should check for macros because it's time consuming to go through each import and it's dependencies, and then those imports' dependencies.
     if(!context->has_computed_deps) {
         context->has_computed_deps = true;
 
         ids_to_check.clear();
-        ids_to_check.add(import_id);
+        ids_to_check.add({import_id});
 
         int head = 0;
         while(head < ids_to_check.size()) {
-            u32 id = ids_to_check[head];
+            auto& it = ids_to_check[head];
             head++;
             
             // lock_imports.lock(); // TODO: lock
-            Import* imp = imports.get(id-1);
+            Import* imp = imports.get(it.id-1);
             // lock_imports.unlock();
             
             // lock_imports.lock(); // TODO: lock
-            CompilerImport* cimp = compiler->imports.get(id-1);
+            CompilerImport* cimp = compiler->imports.get(it.id-1);
             // lock_imports.unlock();
             // may happen if import wasn't preprocessed and added to 'imports'
             // it was added to Compiler.imports but didn't process it before being
@@ -1915,18 +2381,19 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, Prep
             Assert(cimp);
             
             // TODO: Optimize
-            FOR(cimp->dependencies) {
-                if(it.disabled)
-                    continue;
+            for(int nr=0;nr<cimp->dependencies.size();nr++) {
+                auto& it = cimp->dependencies[nr];
+                // if(it.disabled) // a dependency may become enabled later so we can't cache non-disabled dependencies, we need all of them. Then when we check dependencies we ignore the disabled once.
+                //     continue;
                 bool already_checked = false;
                 for(int i=0;i<ids_to_check.size();i++) {
-                    if(ids_to_check[i] == it.id) {
+                    if(ids_to_check[i].id == it.id) {
                         already_checked=true;
                         break;
                     }
                 }
                 if(!already_checked) {
-                    ids_to_check.add(it.id);
+                    ids_to_check.add({it.id,nr,cimp});
                 }
             }
         }
@@ -1937,63 +2404,19 @@ MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name, Prep
         return pair->second.root;
     }
 
-    // TODO: We pre-calculate which imports we check macros from. If we #import a file with macros after pre-calculation then we won't see those macros. We need to check if new imports were added. How would this work with multithreading?
-    
-    if(context->has_computed_deps) {
-        FOR(ids_to_check) {
-            auto id = it;
-            Import* imp = imports.get(id-1);
-
-            auto pair = imp->rootMacros.find(name);
-            if(pair != imp->rootMacros.end()){
-                // _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
-                context->cached_macro_names[name] = { pair->second };
-                return pair->second;
-            }
+    FOR(ids_to_check) {
+        if(it.dep_index != -1) {
+            auto& dep = it.cimp->dependencies[it.dep_index];
+            if(dep.disabled)
+                continue;
         }
-    } else {
-        ids_to_check.clear();
-        ids_to_check.add(import_id);
-        int head = 0;
-        while(head < ids_to_check.size()) {
-            u32 id = ids_to_check[head];
-            head++;
-            
-            // lock_imports.lock(); // TODO: lock
-            Import* imp = imports.get(id-1);
-            // lock_imports.unlock();
-            
-            // lock_imports.lock(); // TODO: lock
-            CompilerImport* cimp = compiler->imports.get(id-1);
-            // lock_imports.unlock();
-            // may happen if import wasn't preprocessed and added to 'imports'
-            // it was added to Compiler.imports but didn't process it before being
-            // here.
-            Assert(imp);
-            Assert(cimp);
-            
-            auto pair = imp->rootMacros.find(name);
-            if(pair != imp->rootMacros.end()){
-                _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
-                context->cached_macro_names[name] = { pair->second };
-                return pair->second;
-            }
-            
-            // TODO: Optimize
-            FOR(cimp->dependencies) {
-                if(it.disabled)
-                    continue;
-                bool already_checked = false;
-                for(int i=0;i<ids_to_check.size();i++) {
-                    if(ids_to_check[i] == it.id) {
-                        already_checked=true;
-                        break;   
-                    }
-                }
-                if(!already_checked) {
-                    ids_to_check.add(it.id);
-                }
-            }
+        Import* imp = imports.get(it.id-1);
+
+        auto pair = imp->rootMacros.find(name);
+        if(pair != imp->rootMacros.end()){
+            // _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
+            context->cached_macro_names[name] = { pair->second };
+            return pair->second;
         }
     }
     return nullptr;

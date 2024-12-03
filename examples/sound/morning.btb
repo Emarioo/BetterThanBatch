@@ -1,0 +1,9 @@
+
+#import "Sound"
+#import "File"
+
+fn main() {
+    PlaySound("examples/sound/goodmorning.wav", true)
+    PlaySound("examples/sound/goodmorning.wav", true)
+}
+

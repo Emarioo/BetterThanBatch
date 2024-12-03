@@ -1,0 +1,54 @@
+/*
+    GLFW GLAD Test, to see if the libraries are found.
+*/
+
+#import "GLFW"
+#import "GLAD"
+#import "Logger"
+#import "OS"
+
+fn main() {
+    yes := glfwInit();
+    if !yes {
+        log("glfwInit failed");
+        return ;
+    }
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    width := 800
+    height := 600
+    title := "hey"
+    glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
+    if !glfw_window {
+        log("window failed");
+        glfwTerminate();
+        return;
+    }
+
+    glfwMakeContextCurrent(glfw_window)
+
+    yes = gladLoadGL()
+    if !yes {
+        log("gladLoadGL failed")
+        glfwTerminate()
+        return;
+    }
+
+    glViewport(0, 0, width, height)
+
+    while (!glfwWindowShouldClose(glfw_window)) {
+        glViewport(0, 0, width, height)
+        
+        glClearColor(0.2, 0.2, 0.2, 1);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        // user may not always want this
+        glfwSwapBuffers(glfw_window);
+        glfwPollEvents();
+        
+        // temporary
+        ProcessSleep(0.002) // don't use up CPU resources
+    }
+}

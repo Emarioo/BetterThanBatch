@@ -1,0 +1,82 @@
+/*
+    An HTTPS server
+    
+    Generate your own keys with these commands:
+        mkdir secure
+        openssl genrsa -out secure/client-key.pem 2048
+        openssl req -new -key secure/client-key.pem -out secure/client.csr
+        openssl x509 -req -in secure/client.csr -signkey secure/client-key.pem -out secure/client-cert.pem
+        chmod +r secure/client-key.pem secure/client-cert.pem
+        
+    When making a real server 
+*/
+#import "Sockets"
+#import "OpenSSL"
+#import "Logger"
+
+fn main() -> i32 {
+    sock := create_socket(AF_INET, SOCK_STREAM, 0)
+
+    addr: sockaddr_in = {
+        sin_family = AF_INET,
+        sin_port = htons(5523),
+        sin_addr = 0,
+    }
+
+    err := sock.bind(cast_unsafe<void*>&addr, sizeof(addr))
+    if err {
+        log("bind err")
+        return 1
+    }
+
+    err = sock.listen(5)
+    if err {
+        log("listen err")
+        return 1
+    }
+    ctx := SSL_CTX_new(TLS_server_method())
+    while {
+        client: Socket, err = sock.accept(null, null)
+        if err {
+            log("accept err")   
+            return 1
+        }
+        
+        log("sock accept")
+
+        // "Making Minimalist HTTPS Server in C on Linux" by Nir Lichtman : https://www.youtube.com/watch?v=6stTRIOsm2E
+        ssl := SSL_new(ctx)
+        SSL_set_fd(ssl, client.get_fd())
+        log("fd")
+        SSL_use_certificate_file(ssl, "secure/client-cert.pem".ptr, SSL_FILETYPE_PEM)
+        log("cert")
+        SSL_use_PrivateKey_file(ssl, "secure/client-key.pem".ptr, SSL_FILETYPE_PEM)
+        log("priv")
+        SSL_accept(ssl)
+        
+        log("ssl accept")
+        
+        buffer: char[1024]
+        read_bytes: i64
+        bytes := SSL_read_ex(ssl, buffer.ptr, 1023, &read_bytes)
+        
+        log("read ", bytes, " ",read_bytes)
+        
+        std_print(buffer.ptr, read_bytes) log()
+        
+        res := @strbeg
+HTTP/1.0 200 OK
+Content-Type: text/html
+
+Empty page here!
+        @strend
+        
+        SSL_write(ssl, res.ptr, res.len)
+        
+        SSL_shutdown(ssl)
+        client.close()
+    }
+    sock.close()
+    
+    return 5
+}

@@ -1,0 +1,20 @@
+
+
+// new: sigaction_t
+// memzero(&new, sizeof(new))
+// new.sa_sigaction = cast_unsafe<FN_SIGACTION>app_shutdown
+
+// err := sigaction(SIGINT, &new, null)
+// if err < 0 {
+//     log("sigaction bad")
+// } else {
+//     while {
+//         log("Waiting")
+//         ProcessSleep(2.0)
+//     }
+// }
+// fn @oscall app_shutdown(signum: i32) {
+//     log("shutdown")
+    
+//     exit(0)
+// }

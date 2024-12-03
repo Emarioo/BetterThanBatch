@@ -1,0 +1,926 @@
+
+/*
+    This is an old version of examples/graphics/game.btb
+    
+    The standard library has changed a lot and stuff in here uses the old stuff. This file prints around 44 errors.
+    TODO: Don't print errors caused by other errors. Compile with: btb tests/errors/err_spam > out.txt
+      and analyze the output. How can you decrease the errors? What would be a good way to limit them?
+*/
+
+#import "Graphics"
+#import "Net"
+#import "Math"
+#import "Logger"
+#import "Array"
+#import "BucketArray"
+#import "String"
+
+#macro DEFAULT_PORT 4097
+#macro PLAYER_SPEED 120.0
+#macro GRAVITY 17.0
+
+struct UUID {
+    data: u64; // zero means invalid, none, empty UUID
+    fn valid() -> bool { return data != 0 }
+}
+operator ==(a: UUID, b: UUID) -> bool {
+    return a.data == b.data
+}
+operator !=(a: UUID, b: UUID) -> bool {
+    return a.data != b.data
+}
+fn gen_uuid() -> UUID {
+    return UUID{random64()}
+}
+
+enum TextureNames {
+    IMG_BLOB,
+    IMG_BACK_LEVEL0,
+    // IMG_BACK_LEVEL1,
+    IMG_BACK_LEVEL2,
+}
+enum EntityType {
+    BLOB,
+    PLATFORM,
+}
+struct EntityInfo {
+    texture: Texture*;
+    color: Color;
+    is_static: bool;
+}
+struct Entity {
+    id: UUID;
+    pos: vec2;
+    size: vec2;
+    vel: vec2;
+    entity_info: i32; // entity type
+    on_ground: bool;
+}
+
+global entities: BucketArray<Entity>
+// global entities: Array<Entity>
+global entity_infos: Array<EntityInfo>
+global window: WindowContext*;
+global textures: Array<Texture*>;
+global pause_update: bool;
+global current_frame: i32
+global server: Server
+global client: Client
+global is_server: bool = false
+
+global moving_platform: Entity*;
+global player: Entity*;
+
+fn add_entity(x: f32, y: f32, w: f32, h: f32, type: EntityType) -> Entity* {
+    e, id := entities.add(null)
+    e.entity_info = cast<i32>type
+    e.pos.x = x
+    e.pos.y = y
+    e.size.x = w
+    e.size.y = h
+    e.id = gen_uuid()
+
+    return e
+}
+fn add_entitity_with_uuid(x: f32, y: f32, w: f32, h: f32, type: EntityType, uuid: UUID) -> Entity* {
+    e, id := entities.add(null)
+    e.entity_info = cast<i32>type
+    e.pos.x = x
+    e.pos.y = y
+    e.size.x = w
+    e.size.y = h
+    e.id = uuid
+
+    return e
+}
+fn get_entity(id: UUID) -> Entity* {
+    iter := entities.create_iterator()
+    while entities.iterate(&iter) {
+        if iter.ptr.id == id {
+            return iter.ptr
+        }
+    }
+    return null
+}
+
+// Window (glfw, opengl context) should be initialized before calling this
+fn InitEntityInfos() {
+    blob := CreateTexture("examples/graphics/blob.png")
+    textures.add(blob)
+    tmp := CreateTexture("examples/graphics/sky.png")
+    textures.add(tmp)
+    // tmp = CreateTexture("examples/graphics/ground.png")
+    // textures.add(tmp)
+    tmp = CreateTexture("examples/graphics/mountains.png")
+    textures.add(tmp)
+
+    // blob := CreateTexture("examples/graphics/blob.png")
+    // textures.add(blob)
+
+    // blob
+    entity_infos.add(EntityInfo{})
+    entity_infos.last().texture = blob
+
+    // platform
+    entity_infos.add(EntityInfo{})
+    entity_infos.last().color = Color{0.8,0.8,0.8}
+    entity_infos.last().is_static = true
+}
+
+
+enum NetType {
+    MSGTYPE_POSITION,
+    MSGTYPE_SPAWN,
+}
+struct NetHeader {
+    type: NetType
+}
+struct NetPosition {
+    header: NetHeader = NetHeader{MSGTYPE_POSITION};
+    pos: vec2;
+    vel: vec2;
+    id: UUID;
+}
+struct NetSpawn {
+    header: NetHeader = NetHeader{MSGTYPE_SPAWN};
+    pos: vec2;
+    size: vec2;
+    vel: vec2;
+    entity_info: i32; // entity type
+    id: UUID;
+}
+
+// #macro LOG_NET(X) X
+#macro LOG_NET(X) #endmacro
+
+fn net_callback(e: NetEvent*, user_data: void*) {
+    LOG_NET(
+        std_print("EVENT ") std_print_any(&e.type) log()
+    )
+    switch e.type {
+    case EVENT_START_LISTENING:
+        if is_server {
+            // msg: NetSpawn
+            // msg.pos = player.pos
+            // msg.size = player.size
+            // msg.entity_info = BLOB
+            // msg.id = player.id
+            // data := Slice<char>{cast<char*>&msg, sizeof msg}
+            // if is_server {
+            //     server.send(data)
+            // } else {
+            //     client.send(data)
+            // }
+            // msg: NetSpawn
+        //     msg.pos = vec2{50,50}
+        //     msg.size = vec2{30,30}
+        //     msg.entity_info = BLOB
+        //     data := Slice<char>(cast<char*>&msg, sizeof msg)
+        //     server.send(data)
+        } else {
+            // msg: NetSpawn
+            // msg.pos = player.pos
+            // msg.size = player.size
+            // msg.entity_info = BLOB
+            // msg.id = player.id
+            // data := Slice<char>{cast<char*>&msg, sizeof msg}
+            // client.send(data)
+        }
+    case EVENT_CONNECT:
+        msg: NetSpawn
+        msg.pos = player.pos
+        msg.size = player.size
+        msg.entity_info = BLOB
+        msg.id = player.id
+        data := Slice<char>{cast<char*>&msg, sizeof msg}
+        server.send(data, e.who)
+    case EVENT_RECEIVE:
+
+        LOG_NET( log("msglen ", e.bytes.len) )
+
+        Assert(e.bytes.len == sizeof NetMessage)
+        header := cast<NetHeader*>e.bytes.ptr
+        switch header.type {
+            case MSGTYPE_SPAWN:
+                body := cast<NetSpawn*>e.bytes.ptr
+                LOG_NET( std_print_any(body,true) )
+
+                entity := add_entitity_with_uuid(body.pos.x,body.pos.y, body.size.x,body.size.y, cast_unsafe<EntityType>body.entity_info, body.id)
+
+            case MSGTYPE_POSITION:
+                body := cast<NetPosition*>e.bytes.ptr
+                // LOG_NET( std_print_any(body,true) )
+
+                entity := get_entity(body.id)
+                if entity {
+                    entity.pos = body.pos
+                    entity.vel = body.vel
+                }
+
+            case:
+                std_prints("ERROR, bad message header ") std_print_any(header) log()
+        }
+    case: // nothing
+    }
+}
+
+fn main(argc: i32, argv: char**) -> i32 {
+    // log(argc)
+    if argc > 1 {
+        client.set_callback(net_callback, null)
+        client.start("127.0.0.1", DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    } else {
+        is_server = true
+        server.set_callback(net_callback, null)
+        server.start(DEFAULT_PORT, NET_TCP | NET_PROTO_MESSAGE)
+    }
+    start_game()
+    return 0
+}
+
+fn start_game() {
+    entities.init(64)
+
+    // window = CreateWindow(1400,600)
+    window = CreateWindow(800,600)
+
+    InitEntityInfos()
+
+    if is_server {
+        player = add_entity(50, 50, 30, 30, BLOB)
+        
+    } else {
+        player = add_entity(200, 50, 30, 30, BLOB)
+    }
+    {
+        msg: NetSpawn
+        msg.pos = player.pos
+        msg.size = player.size
+        msg.entity_info = BLOB
+        msg.id = player.id
+        data := Slice<char>{cast<char*>&msg, sizeof msg}
+        if is_server {
+            server.send(data)
+        } else {
+            client.send(data)
+        }
+    }
+
+    // add_entity(200, 50, 50, 40, BLOB)
+
+    moving_platform = add_entity(20, 350, 140, 20, PLATFORM)
+    moving_platform.vel.y = 16.5
+
+    add_entity(180, 400, 160, 20, PLATFORM)
+
+    SaveFrame(0)
+    SavePermanentFrame(0)
+
+    step := 0
+
+    while window.running {
+        FillColor(window, Color{0.2,0.2,0.2})
+        
+        // Send updated positions
+        step++
+        if step > 1 && (server.is_active() || client.is_active()){
+            msg: NetPosition
+            msg.pos = player.pos
+            msg.vel = player.vel
+            msg.id = player.id
+            data := Slice<char>{cast<void*>&msg, sizeof msg}
+            if is_server {
+                server.send(data)
+            } else {
+                client.send(data)
+            }
+            step = 0
+        }
+
+        window.enableUISpace(false)
+        
+        Update()
+
+        RenderBackground();
+
+        RenderEntities();
+
+        window.enableUISpace(true)
+        
+        layout_y: f32 = 0
+
+        fps: StringBuilder
+        fps.append(cast<i32>(window.delta*1000))
+        fps.append(".")
+        fps.append((cast<i32>(window.delta*10000)) % 10)
+        fps.append(" ms")
+        
+        DrawText(window, 0, layout_y, 20, fps)
+        layout_y += 20
+
+        temp: StringBuilder
+        temp.append("frame: ")
+        temp.append(current_frame)
+        temp.append("(saved ")
+        temp.append(GetSavedFrames())
+        temp.append(")")
+        DrawText(window, 0, layout_y, 20, temp.sliced())
+        layout_y += 20
+        temp.cleanup()
+
+        temp.append("frame_memory: ")
+        temp.append(FrameMemoryUsage())
+        DrawText(window, 0, layout_y, 20, temp.sliced())
+        layout_y += 20
+        temp.cleanup()
+
+        if pause_update {
+            txt: StringBuilder
+            txt.append("paused: ")
+            txt.append(pause_update)
+            
+            DrawText(window, 0, layout_y, 20, txt.sliced())
+        }
+
+        layout_y = window.height - 5
+        text_h: f32 = 18
+        text_w: f32 = 0
+        font := window.defaultFont()
+
+        #macro TEXT(TXT)
+            temp.append(TXT)
+            text_w = font.width_of_text(temp.sliced(), text_h)
+            layout_y -= text_h
+            DrawText(window, window.width - text_w - 5, layout_y, text_h, temp.sliced())
+            temp.cleanup()
+        #endmacro
+
+        // text is rendered bottom-up
+        TEXT("shift + 1/3 to rapidly step frames")
+        TEXT("1/3 to step back/forward a frame")
+        TEXT("2 to pause/unpause")
+        TEXT("R to reset positions\nlalala")
+        TEXT("WASD and Arrow keys to move")
+
+        // FillRect(window, t, 10, 100., 100., Color{0.5,1,1})
+        // FillRect(window, 0.1, 0.1, 0.2, 0.2, Color{1,1,1})
+        
+        RefreshWindow(window)
+    }   
+    
+    // DestroyTexture(blob)
+    DestroyWindow(window)
+}
+
+fn Update() {
+    // player_index: i32 = -1
+    // player2_index: i32 = -1
+    // for @ptr entities.sliced() {
+    //     if it.entity_info == cast<i32>BLOB {
+    //         if player_index == -1
+    //             player_index = nr
+    //         else if player2_index == -1 {
+    //             player2_index = nr
+    //             break
+    //         }
+    //     }
+    // }
+
+    // player, player2: Entity*;
+    // if player_index != -1 {
+    //     player = entities.get_unsafe(player_index)
+    // }
+    // if player2_index != -1 {
+    //     player2 = entities.get_unsafe(player2_index)
+    // }
+
+    timestep := window.delta // temporary
+
+    speed := PLAYER_SPEED
+    jump_force := 200 * GRAVITY / 9
+
+    if moving_platform {
+        // moving_platform := entities.get_unsafe(moving_platform_id)
+        if moving_platform.pos.y < 350 {
+            moving_platform.vel.y *= -1.05
+            moving_platform.pos.y = 350
+        }
+        if moving_platform.pos.y > 450 {
+            moving_platform.vel.y *= -1.05
+            moving_platform.pos.y = 450
+        }
+    }
+
+    real_speed := speed
+    if window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+        real_speed *= 2
+
+    
+    if window.isKeyPressed(GLFW_KEY_R) {
+        // RestoreFrame(0) // broken
+        if player {
+            player.pos.x = 250
+            player.pos.y = 50
+            player.vel.x = 0
+            player.vel.y = 0
+        }
+        // if player2 {
+        //     player2.pos.x = 200
+        //     player2.pos.y = 50
+        //     player2.vel.x = 0
+        //     player2.vel.y = 0
+        // }
+    }
+    
+    if player {
+        // if window.isKeyDown(GLFW_KEY_W) {
+        //     // player.pos.y -= real_speed * window.delta
+        //     player.vel.y = -real_speed
+        // } else if window.isKeyDown(GLFW_KEY_S) {
+        //     player.vel.y = real_speed
+        //     // player.pos.y += real_speed * window.delta
+        // } else {
+        //     player.vel.y = 0
+        // }
+        if window.isKeyDown(GLFW_KEY_SPACE) || window.isKeyDown(GLFW_KEY_W) {
+            if player.on_ground {
+                player.vel.y = -jump_force
+            }
+        }
+        if window.isKeyDown(GLFW_KEY_A) {
+            // player.pos.x -= real_speed * window.delta
+            player.vel.x = -real_speed
+        } else if window.isKeyDown(GLFW_KEY_D) {
+            player.vel.x = real_speed
+            // player.pos.x += real_speed * window.delta
+        } else {
+            player.vel.x = 0
+        }
+    }
+
+    // if player2 {
+    //     // if window.isKeyDown(GLFW_KEY_UP) {
+    //     //     // player.pos.y -= real_speed * window.delta
+    //     //     player2.vel.y = -real_speed
+    //     // } else if window.isKeyDown(GLFW_KEY_DOWN) {
+    //     //     player2.vel.y = real_speed
+    //     //     // player.pos.y += real_speed * window.delta
+    //     // } else {
+    //     //     player2.vel.y = 0
+    //     // }
+    //     if window.isKeyDown(GLFW_KEY_UP) {
+    //         if player2.on_ground {
+    //             player2.vel.y = -jump_force
+    //         }
+    //     }
+    //     if window.isKeyDown(GLFW_KEY_LEFT) {
+    //         // player.pos.x -= real_speed * window.delta
+    //         player2.vel.x = -real_speed
+    //     } else if window.isKeyDown(GLFW_KEY_RIGHT) {
+    //         player2.vel.x = real_speed
+    //         // player.pos.x += real_speed * window.delta
+    //     } else {
+    //         player2.vel.x = 0
+    //     }
+    // } else 
+    {
+        speed := 200 * timestep
+        if window.isKeyDown(GLFW_KEY_DOWN) {
+            window.camera_y += speed
+        } else if window.isKeyDown(GLFW_KEY_UP) {
+            window.camera_y -= speed
+        }
+        if window.isKeyDown(GLFW_KEY_LEFT) {
+            window.camera_x -= speed
+        } else if window.isKeyDown(GLFW_KEY_RIGHT) {
+            window.camera_x += speed
+        }
+    }
+
+    scroll := window.getScrollY()
+    if scroll > 0 {
+        window.camera_zoom *= 1.04;
+    } else if scroll < 0 {
+        window.camera_zoom *= 0.96;
+    }
+
+    if window.isKeyPressed(GLFW_KEY_2) {
+        pause_update = !pause_update
+        if !pause_update {
+            // TODO: Fix this feature
+            // EraseFutureFrames(current_frame)
+        }
+    }
+
+    if pause_update {
+        shift := window.isKeyDown(GLFW_KEY_LEFT_SHIFT)
+        if window.isKeyPressed(GLFW_KEY_1) || (shift && window.isKeyDown(GLFW_KEY_1))  {
+            // back a frame
+            if HasPreviousFrame(current_frame) {
+                current_frame--
+                RestoreFrame(current_frame)
+            }
+            return;
+        } else if window.isKeyPressed(GLFW_KEY_3) || (shift && window.isKeyDown(GLFW_KEY_3)) {
+            // forward a frame
+            if IsLastFrame(current_frame) {
+                current_frame++
+            } else {
+                current_frame++
+                RestoreFrame(current_frame)
+                return;
+            }
+        } else return;
+    } else {
+        current_frame++
+    }
+
+    iter := entities.create_iterator()
+    while entities.iterate(&iter) {
+        it := iter.ptr
+        // we do velocity first so that the collision
+        // has the previous velocity and not a modified version
+        if it.entity_info == cast<i32> BLOB {
+            it.vel.y += GRAVITY // gravity
+        }
+
+        it.pos.x += it.vel.x * timestep
+        it.pos.y += it.vel.y * timestep
+
+        it.on_ground = false
+    }
+
+    // 
+    // Collision
+    // 
+    iter0 := entities.create_iterator()
+    while entities.iterate(&iter0) {
+        it0 := iter0.ptr
+    // for i: 0..entities.size() {
+    //     it0 := entities.get_unsafe(i)
+
+        info0 := entity_infos.get_unsafe(it0.entity_info)
+
+        iter1 := entities.create_iterator(iter0.index + 1) // don't loop over the same entities multiple times
+        while entities.iterate(&iter1) {
+            it1 := iter1.ptr
+        // for j: i+1..entities.size() {
+        //     it1 := entities.get_unsafe(j)
+
+            info1 := entity_infos.get_unsafe(it1.entity_info)
+            
+            if info0.is_static && info1.is_static
+                continue // nothing happens if static
+
+            if it0.pos.x + it0.size.x > it1.pos.x &&
+                it0.pos.x < it1.pos.x + it1.size.x && 
+                it0.pos.y + it0.size.y > it1.pos.y && 
+                it0.pos.y < it1.pos.y + it1.size.y
+            {
+                // TODO: Y position
+                was_x := it0.pos.x - it0.vel.x * timestep + it0.size.x >
+                    it1.pos.x - it1.vel.x * timestep && it0.pos.x - it0.vel.x * timestep < it1.pos.x - it1.vel.x * timestep + it1.size.x
+                was_y := it0.pos.y - it0.vel.y * timestep + it0.size.y > 
+                    it1.pos.y - it1.vel.y * timestep && it0.pos.y - it0.vel.y * timestep < it1.pos.y - it1.vel.y * timestep + it1.size.y
+
+                if !was_y {
+                    if !info0.is_static
+                        it0.on_ground = true // set even if we entity hit the "roof"
+                    if !info1.is_static
+                        it1.on_ground = true
+
+                    both_down := it0.vel.y > it1.vel.y && it1.vel.y >= 0
+                    both_down2 := it1.vel.y > it0.vel.y && it0.vel.y >= 0
+                    both_up := it0.vel.y < it1.vel.y && it1.vel.y <= 0
+                    both_up2 := it1.vel.y < it0.vel.y  && it0.vel.y <= 0
+                    // #macro hi(...) log(...)
+                    #macro hi(...) #endmacro
+                    // TODO: Apply force to collided entity
+                    if both_down {
+                        hi("both_down")
+                        // both entities moving down, stick down
+                        if !info0.is_static {
+                            // if 0 isn't static then we want to position that entity
+                            it0.pos.y = it1.pos.y - it0.size.y
+                            it0.vel.y = 0
+                        } else if !info1.is_static {
+                            it1.pos.y = it0.pos.y + it0.size.y
+                            it1.vel.y = 0
+                        }
+                    } else if both_up {
+                        hi("both_up")
+                        // stick up
+                        if !info0.is_static {
+                            it0.pos.y = it1.pos.y + it1.size.y
+                            it0.vel.y = 0
+                        } else !info1.is_static {
+                            it1.pos.y = it0.pos.y + it1.size.y
+                            it1.vel.y = 0
+                        }
+                    } else if it0.vel.y > 0 && it1.vel.y < 0 {
+                        hi("head coll")
+                        // head on collision  it0 >|< it1
+                        if info1.is_static {
+                            it0.pos.y = it1.pos.y - it0.size.y
+                            it0.vel.y = 0
+                        } else if info0.is_static {
+                            // if 0 isn't static then we want to position that entity
+                            it1.pos.y = it0.pos.y + it0.size.y
+                            it1.vel.y = 0
+                        } else {
+                            mid_y := (it0.pos.y + it1.pos.y) / 2
+                            off := it0.size.y/2
+                            if it1.size.y < it0.size.y
+                                off = it1.size.y/2
+                            it0.pos.y = mid_y - off
+                            it1.pos.y = mid_y + off
+
+                            it0.vel.y = 0
+                            it1.vel.y = 0
+                        }
+                    } else if it1.vel.y > it0.vel.y && it0.vel.y >= 0 {
+                        // stick down (for other entity)
+                        hi("both down 2")
+                        if !info1.is_static {
+                            it1.pos.y = it0.pos.y - it1.size.y
+                            it1.vel.y = 0
+                        } else {
+                            it0.pos.y = it1.pos.y - it1.size.y
+                            it0.vel.y = 0
+                        }
+                    } else if it1.vel.y < it0.vel.y  && it0.vel.y <= 0 {
+                        // stick up (for other entity)
+                        hi("both up 2")
+                        if !info1.is_static {
+                            it1.pos.y = it0.pos.y + it0.size.y
+                            it1.vel.y = 0
+                        } else {
+                            it0.pos.y = it1.pos.y + it0.size.y
+                            it0.vel.y = 0
+                        }
+                    } else if it1.vel.y > 0 && it0.vel.y < 0 {
+                        hi("head coll2")
+                        // head on collision  it1 >|< it0 (other way)
+                        if info1.is_static {
+                            it1.pos.y = it0.pos.y - it1.size.y
+                            it1.vel.y = 0
+                        } else if info0.is_static {
+                            it0.pos.y = it1.pos.y - it1.size.y
+                            it0.vel.y = 0
+                        } else {
+                            mid_y := (it0.pos.y + it1.pos.y) / 2
+                            off := it1.size.y/2
+                            if it0.size.y > it1.size.y
+                                off = it0.size.y/2
+                            it1.pos.y = mid_y - off
+                            it0.pos.y = mid_y + off
+
+                            it0.vel.y = 0
+                            it1.vel.y = 0
+                        }
+                    } else {
+                        hi("why")
+                        // entities have zero velocity, should not have collided?
+                    }
+                }
+                // if !was_x {
+                //     // TODO: Apply force to collided entity
+                //     if it0.vel.x > it1.vel.x && it1.vel.x >= 0 {
+                //         // stick left
+                //         it0.pos.x = it1.pos.x - it0.size.x
+                //         it0.vel.x = 0
+                //     } else if it0.vel.x < it1.vel.x  && it1.vel.x <= 0 {
+                //         // stick right
+                //         it0.pos.x = it1.pos.x + it1.size.x
+                //         it0.vel.x = 0
+                //     } else if it0.vel.x > 0 && it1.vel.x < 0 {
+                //         // head on collision
+                //         mid_x := (it0.pos.x + it1.pos.x) / 2
+                //         off := it0.size.x/2
+                //         if it1.size.x < it0.size.x
+                //             off = it1.size.x/2
+                //         it0.pos.x = mid_x - off
+                //         it1.pos.x = mid_x + off
+
+                //         it0.vel.x = 0
+                //         it1.vel.x = 0
+                //     } else if it1.vel.x > it0.vel.x && it0.vel.x >= 0 {
+                //         // stick left (for other entity)
+                //         it1.pos.x = it0.pos.x - it1.size.x
+                //         it1.vel.x = 0
+                //     } else if it1.vel.x < it0.vel.x  && it0.vel.x <= 0 {
+                //         // stick right (for other entity)
+                //         it1.pos.x = it0.pos.x + it0.size.x
+                //         it1.vel.x = 0
+                //     } else if it1.vel.x > 0 && it0.vel.x < 0 {
+                //         // hi("head on other")
+                //         // head on collision (other way)
+                //         mid_x := (it0.pos.x + it1.pos.x) / 2
+                //         off := it1.size.x/2
+                //         if it0.size.x > it1.size.x
+                //             off = it0.size.x/2
+                //         it1.pos.x = mid_x - off
+                //         it0.pos.x = mid_x + off
+
+                //         it0.vel.x = 0
+                //         it1.vel.x = 0
+                //     } else {
+                //         hi("why")
+                //         // entities have zero velocity, should not have collided?
+                //     }
+                // }
+            }
+        }
+    }
+
+    SaveFrame(current_frame)
+}
+fn RenderEntities() {
+    iter := entities.create_iterator()
+    while entities.iterate(&iter) {
+        it := iter.ptr
+
+        info := entity_infos.get_unsafe(it.entity_info)
+        if info.texture {
+            DrawTexture(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.texture)
+        } else {
+            FillRect(window, it.pos.x, it.pos.y, it.size.x, it.size.y, info.color)
+        }
+        
+        str: StringBuilder
+        str.append("on_ground: ")
+        str.append(it.on_ground)
+
+        DrawText(window, it.pos.x + it.size.x, it.pos.y - 16, 16, str.sliced())
+    }
+}
+
+fn RenderBackground() {
+    // draw based on camera
+    sky := textures[cast<i32>IMG_BACK_LEVEL0]
+    // ground := textures[IMG_BACK_LEVEL1]
+    mountains := textures[IMG_BACK_LEVEL2]
+
+    tile_size := sky.width * 1.0 // image scaling
+
+    // screen_width := 300
+    // screen_height := 300
+    // screen_x := 300
+    // screen_y := 100
+    screen_width := window.width
+    screen_height := window.height
+    screen_x := 0
+    screen_y := 0
+
+    { // apply camera transformation
+        // This code would change the screen to fill with tiles so that zooming
+        // out would increase the screen and amount of tiles to draw.
+        // screen_width = screen_width / window.camera_zoom
+        // screen_height = screen_height / window.camera_zoom
+        // screen_x = screen_width/2 - (screen_width / window.camera_zoom) / 2
+        // screen_y = screen_height/2 - (screen_height / window.camera_zoom) / 2
+    }
+
+    tiles_per_width := 1 + ceil((cast<f32>screen_width) / tile_size)
+    tiles_per_height := 1 + ceil((cast<f32>screen_height) / tile_size)
+
+    if tiles_per_width > 100 || tiles_per_height > 100 {
+        log("CHILL dude ", screen_width, " ", screen_height)
+        return
+    }
+
+    // for x: 0..tiles_per_width {
+    //     for y: 0..tiles_per_height {
+    //         offset_x := (floor((window.camera_x / window.camera_zoom) / tile_size) ) * tile_size + screen_x
+    //         if window.camera_x < 0
+    //             offset_x -= tile_size
+    //         offset_y := (floor((window.camera_y / window.camera_zoom) / tile_size) ) * tile_size + screen_y
+    //         if window.camera_y < 0
+    //             offset_y -= tile_size
+    //         DrawTexture(window, offset_x + x * tile_size, offset_y + y * tile_size, tile_size, tile_size, sky)
+    //     }
+    // }
+    // color := Color{1,0,0}
+    // DrawSquare(window, screen_x, screen_y, screen_width, screen_height, color)
+
+    scalings: f32[] {
+        0.5,
+        0.2,
+    }
+
+    for 0..scalings.len {
+        scale := scalings[nr]
+        w := mountains.width
+
+        #macro MOUNT(X,...)
+        DrawTexture(window, X * scale + window.camera_x * scale, w * (1 - scale) - 200, w * scale, w * scale, mountains)
+        MOUNT(...)
+        #endmacro
+        MOUNT(-900,-350,0,400,850, 1400, 1900)
+    }
+
+    
+}
+
+// #macro MAX_FRAMES (60 * 60*2) // 2 minutes
+#macro MAX_FRAMES (60 * 5) // 5 sec
+struct Frame {
+    changes: Array<Entity>
+}
+global last_frame: i32
+global saved_frames: i32
+global frames: Array<Frame>
+global permanent_frames: Array<Frame>
+global permanent_frames_indices: Array<i32>
+fn SavePermanentFrame(frame_index: i32) {
+    // NOTE: This broke, entities is now bucket array
+    // if frame_index < 0
+    //     frame_index = 0
+
+    // permanent_frames.add(Frame{})
+    // permanent_frames_indices.add(frame_index)
+    // frame := permanent_frames.last()
+
+    // // TODO: only store changes
+    // frame.changes.resize(entities.size())
+    // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
+}
+fn SaveFrame(frame_index: i32) {
+    // NOTE: This broke, entities is now bucket array
+    // if frame_index < 0
+    //     frame_index = 0
+
+    // if frame_index > last_frame {
+    //     last_frame = frame_index
+    //     if saved_frames < MAX_FRAMES
+    //         saved_frames++
+    // }
+
+    // real_index := frame_index % MAX_FRAMES
+
+    // frame: Frame*;
+    // if frames.size() <= real_index {
+    //     frames.add(Frame{})
+    //     frame = frames.last()
+    //     // TODO: Erase future frames?
+    // } else {
+    //     frame = frames.get_unsafe(real_index)
+    // }
+
+    // // TODO: only store changes
+    // frame.changes.resize(entities.size())
+    // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
+}
+fn EraseFutureFrames(frame_index: i32) {
+    if frame_index < 0
+        frame_index = 0
+    diff := last_frame - frame_index
+    if diff > MAX_FRAMES
+        saved_frames = 0
+    else
+        saved_frames = diff
+    last_frame = frame_index
+}
+fn GetSavedFrames() -> i32 {
+    return saved_frames
+}
+fn HasPreviousFrame(frame_index: i32) -> bool {
+    // TODO: Check off-by-one error
+    if frame_index-1 <= last_frame - MAX_FRAMES {
+        return false
+    }
+    return true
+}
+fn IsLastFrame(frame_index: i32) -> bool {
+    if frame_index < 0
+        frame_index = 0
+    return last_frame <= frame_index
+}
+fn FrameMemoryUsage() -> i32 {
+    // we do a quick estimation
+    ents := 0
+    if frames.size()
+        ents = frames.last().changes.max
+    sum := frames.max * (sizeof (Frame) + ents * sizeof Entity)
+    return sum
+}
+fn RestoreFrame(frame_index: i32) {
+    // NOTE: This broke when entities became a bucket array, we can't just resize it
+    // if frame_index < 0
+    //     frame_index = 0
+
+    // for permanent_frames_indices.sliced() {
+    //     if it == frame_index {
+    //         frame := permanent_frames.get_unsafe(nr)
+    //         entities.resize(frame.changes.size())
+    //         memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
+    //         return;
+    //     }
+    // }
+
+    // real_index := frame_index % MAX_FRAMES
+
+    // frame := frames.get_unsafe(real_index)
+    // entities.resize(frame.changes.size())
+    // memcpy(entities.ptr, frame.changes.ptr, frame.changes.size() * sizeof Entity)
+}

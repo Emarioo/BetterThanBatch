@@ -1,6 +1,7 @@
 // import allocation functions
 #import "Memory"
 // #import "Logger"
+#import "Asserts"
 
 #macro ARRAY_CLEANUP(ARR) for @ptr ARR.sliced_unsafe() it.cleanup(); ARR.cleanup();
 
@@ -63,19 +64,35 @@ struct Array<T> {
     fn sliced() -> Slice<T> {
         return Slice<T>{ptr, len};
     }
+    // destructs popped item
     fn pop() {
         if len > 0 {
             destruct(&ptr[len-1])
             len--
         }
     }
-    fn remove(index: i32) {
+    // Does not destroy item, it pops it off.
+    fn pop_item(index: i32) -> T {
+        // Assert(index < len)
         if index >= len
-            return;
+            return {}
+        temp := ptr[index]
+        // TODO: Move item directly into return value and implement named return values
         for index..len-1 {
             ptr[nr] = ptr[nr+1];
         }
-        destruct(&ptr[len-1])
+        len--
+        return temp
+    }
+    // item will be destructed, do not use get(0) and remove(0) together.
+    // use pop_item(0) instead
+    fn remove(index: i32) {
+        if index >= len
+            return;
+        destruct(&ptr[index])
+        for index..len-1 {
+            ptr[nr] = ptr[nr+1];
+        }
         len--;
     }
     fn get(index: i32) -> T {
@@ -121,6 +138,13 @@ struct Array<T> {
     fn reserve(newMax: i32) -> bool {
         // log("newMax",newMax)
         // log("size",sizeof T)
+        Assert(!is_frozen())
+        // NOTE: We could return false instead of asserting but the intention of freeze,
+        //   is to put a restriction and an expectation of no reallocations. You
+        //   want an asser as soon as it happens.
+        if is_frozen()
+            return false
+        
         if newMax==0 {
             // log("{",cast<u64>ptr, max, len,"}",newMax);
             if max!=0 {
@@ -129,8 +153,8 @@ struct Array<T> {
                     destruct(&ptr[nr])
                 }
                 bytes := max * sizeof T
-                Free(ptr, bytes);
-                memory_tracker.remove(ptr, bytes, typeid T)
+                Free(cast_unsafe<void*>ptr, bytes);
+                // memory_tracker.remove(cast_unsafe<void*>ptr, bytes, typeid T)
                 // log("nah")
             }
             ptr = null;
@@ -143,9 +167,9 @@ struct Array<T> {
             // log("huh")
             // log("Try reserve, sizeof T =",sizeof T)
             bytes := newMax * sizeof T
-            ptr = Allocate(bytes);
-            memory_tracker.add(ptr, bytes, typeid T)
-            memzero(ptr, bytes)
+            ptr = cast_unsafe<T*>Allocate(bytes);
+            // memory_tracker.add(cast_unsafe<void*>ptr, bytes, typeid T)
+            memzero(cast_unsafe<void*>ptr, bytes)
             // log("allocSize",newMax * sizeof T)
             // log("ptr",ptr)
             // Assert(ptr);
@@ -164,14 +188,14 @@ struct Array<T> {
 
             new_size := newMax * sizeof T;
             old_size := max * sizeof T;
-            newPtr: T* = Reallocate(new_size, ptr, old_size);
-            memory_tracker.remove(ptr, old_size, typeid T)
-            memory_tracker.add(newPtr, new_size, typeid T)
+            newPtr: T* = cast_unsafe<T*>Reallocate(new_size, cast_unsafe<void*>ptr, old_size);
+            // memory_tracker.remove(cast_unsafe<void*>ptr, old_size, typeid T)
+            // memory_tracker.add(cast_unsafe<void*>newPtr, new_size, typeid T)
             // Assert(newPtr);
             if !newPtr
                 return false;
             if newMax > max
-                memzero(newPtr + len * sizeof T, (newMax - max) * sizeof T);
+                memzero(cast_unsafe<void*>newPtr + len * sizeof T, (newMax - max) * sizeof T);
             ptr = newPtr;
             max = newMax;
             if len > newMax {
@@ -186,14 +210,114 @@ struct Array<T> {
         new_array: Array<T>
         
         new_array.resize(len)
-        memcpy(new_array.ptr, ptr, len * sizeof T)
+        memcpy(cast_unsafe<void*>new_array.ptr, cast_unsafe<void*>ptr, len * sizeof T)
 
         return new_array
     }
+    
+    fn create_iterator() -> Array_Iterator<T> {
+        return {null,-1}
+    }
+    fn iterate(iter: Array_Iterator<T>*) -> bool {
+        if iter.index+1 >= len {
+            iter.value = null
+            iter.index = len
+            return false
+        }
+        iter.index++
+        iter.value = &ptr[iter.index]
+        return true
+    }
+    
+    fn is_frozen() -> bool {
+        return ptr && max == 0
+    }
+    // If an array is frozen, any reallocation will trigger an assert.
+    // You want to freeze an array in multi-threaded applications were you
+    // have filled an array with data and want it to be read-only.
+    fn freeze() -> Array_FreezeLock {
+        lock: Array_FreezeLock
+        lock.ptr = ptr
+        lock.max = max
+        max = 0 // prevent user from resizing array
+        return lock
+    }
+    fn unfreeze(lock: Array_FreezeLock*) {
+        Assert(ptr == lock.ptr)
+        Assert(max == 0)
+        max = lock.max
+        lock.ptr = null
+        lock.max = 0
+    }
+}
+struct Array_FreezeLock {
+    ptr: void*;
+    max: i32;
+}
+struct Array_Iterator<T> {
+    value: T*;
+    index: i32;
 }
 // this does not work
 operator []<T>(arr: Array<T>, index: i32) -> T {
     return arr.get(index)
+}
+// arguments: a, b, userdata
+#macro FnCmp fn(void*,void*,void*)->i32
+// Do not sort structs with this function. Integers, floats, pointers to structs are ideal
+// items to sort.
+// Compare function should return a positive number if a is bigger than b (negative otherwise, zero if equal).
+fn sort<T>(arr: Array<T>*, compare_callback: FnCmp, descending: bool = false, user_data: void* = null) {
+    data := arr.data()
+    // TODO: Don't use bubble sort (I just can't help it because it's soooo easy)
+    desc_factor := 1
+    if descending
+        desc_factor = -1
+    for j: 0..arr.len-1 {
+        for i: 0..arr.len-1-j {
+            a := data[i]
+            b := data[i+1]
+            
+            if desc_factor * compare_callback(a, b, user_data) > 0 {
+                data[i] = b
+                data[i+1] = a
+            }
+        }
+    }
+}
+
+
+fn TestArrayFreeze() {
+    arr: Array<i32>
+    for 0..5
+        arr.add(nr)
+    
+    lock := arr.freeze()
+    
+    // TODO: Use _test instead of logging?
+    // TODO: If we use a boolean in the freeze array instead of setting max to zero
+    //   We can allow adding of new elements as long as we don't resize.
+    //   But if you do call freeze you may want to actually freeze the array completly and not
+    //   allow any new elements.
+    for 0..50 {
+        yes := arr.add(100 + nr)
+        if !yes {
+            log("Could not add ", nr, ", arr = ", &arr)
+            break
+        }
+    }
+    
+    arr.unfreeze(&lock)
+    
+    for 0..50 {
+        yes := arr.add(100 + nr)
+        if !yes {
+            log("Could not add ", nr, ", arr = ", &arr)
+            break
+        }
+    }
+    
+    log("Final array: ", &arr)
 }
 
 // Some code to quickly test an array

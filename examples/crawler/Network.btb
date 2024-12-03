@@ -42,13 +42,13 @@ struct NetMessage {
 #macro LOG_NET(X) X
 // #macro LOG_NET(X) #endmacro
 
-fn net_callback(e: Event, user_data: void*) {
+fn net_callback(e: NetEvent, user_data: void*) {
     game_core: GameCore* = user_data
     // LOG_NET(
     //     std_print("EVENT ") std_print_any(&e.type) log()
     // )
     switch e.type {
-    case EVENT_START:
+    case EVENT_START_LISTENING:
         
         if is_server {
             log("Start server")
@@ -87,7 +87,7 @@ fn net_callback(e: Event, user_data: void*) {
                 client.send(data)
             }
         }
-    case EVENT_CLOSE:
+    case EVENT_STOP_LISTENING:
         if is_server {
             log("Close server")
         } else {

@@ -10,8 +10,11 @@
 
     TODO: getaddrinfo is not a syscall and exists in libc so we must link with it if the user uses it.
 */
+    #import "Logger"
 
 #if OS_LINUX // wraps everything in this file
+
+#load "c" as LibC
 
 #macro STDIN_FILENO  0
 #macro STDOUT_FILENO 1
@@ -179,6 +182,9 @@
 // #macro AF_INET6
 // TODO: Add more AF_
 
+#macro SOL_SOCKET 1
+#macro SO_REUSEADDR 2
+
 #macro SHUT_RD 0
 #macro SHUT_WR 1
 #macro SHUT_RDWR 2
@@ -210,7 +216,73 @@
 /* Like CLOCK_REALTIME but in International Atomic Time.  */
 #macro CLOCK_TAI                      11
 
-/*#################3
+
+
+// /usr/include/x86_64-linux-gnu/asm/signal.h:
+// /usr/include/asm-generic/signal-defs.h:
+#macro SIGHUP           1 /* Hangup.  */
+#macro SIGINT           2 /* Interactive attention signal.  */
+#macro SIGQUIT          3 /* Quit.  */
+#macro SIGILL           4 /* Illegal instruction.  */
+#macro SIGTRAP          5 /* Trace/breakpoint trap.  */
+#macro SIGABRT          6 /* Abnormal termination.  */
+#macro SIGIOT           6
+#macro SIGBUS           7 /* Bus error.  */
+#macro SIGFPE           8 /* Erroneous arithmetic operation.  */
+#macro SIGKILL          9 /* Killed.  */
+#macro SIGUSR1         10 /* User-defined signal 1.  */
+#macro SIGSEGV         11 /* Invalid access to storage.  */
+#macro SIGUSR2         12 /* User-defined signal 2.  */
+#macro SIGPIPE         13 /* Broken pipe.  */
+#macro SIGALRM         14 /* Alarm clock.  */
+#macro SIGTERM         15 /* Termination request.  */
+#macro SIGSTKFLT       16
+#macro SIGCHLD         17
+#macro SIGCONT         18
+#macro SIGSTOP         19
+#macro SIGTSTP         20
+#macro SIGTTIN         21
+#macro SIGTTOU         22
+#macro SIGURG          23
+#macro SIGXCPU         24
+#macro SIGXFSZ         25
+#macro SIGVTALRM       26
+#macro SIGPROF         27
+#macro SIGWINCH        28
+#macro SIGIO           29
+#macro SIGPOLL         SIGIO
+/*
+#define SIGLOST         29
+*/
+#macro SIGPWR          30
+#macro SIGSYS          31
+#macro SIGUNUSED       31
+
+/* Bits in `sa_flags'.  */
+#macro SA_NOCLDSTOP  1		 /* Don't send SIGCHLD when children stop.  */
+#macro SA_NOCLDWAIT  2		 /* Don't create zombie on child death.  */
+#macro SA_SIGINFO    4		 /* Invoke signal-catching function with
+				    three arguments instead of one.  */
+// #if defined __USE_XOPEN_EXTENDED || defined __USE_MISC
+#macro SA_ONSTACK   0x08000000 /* Use signal stack by using `sa_restorer'. */
+// #endif
+// #if defined __USE_XOPEN_EXTENDED || defined __USE_XOPEN2K8
+#macro SA_RESTART   0x10000000 /* Restart syscall on signal return.  */
+#macro SA_NODEFER   0x40000000 /* Don't automatically block the signal when
+				    its handler is being executed.  */
+#macro SA_RESETHAND 0x80000000 /* Reset to SIG_DFL on entry to handler.  */
+// #endif
+// #ifdef __USE_MISC
+#macro SA_INTERRUPT    0x20000000 /* Historical no-op.  */
+#macro SA_RESTORER     0x04000000
+
+/* Values for the HOW argument to `sigprocmask'.  */
+#macro	SIG_BLOCK     0		 /* Block signals.  */
+#macro	SIG_UNBLOCK   1		 /* Unblock signals.  */
+#macro	SIG_SETMASK   2		 /* Set the set of blocked signals.  */
+
+
+/*###############
     SYSCALLS
 ################*/
 #macro SYS_read     0
@@ -225,6 +297,10 @@
 #macro SYS_mmap     9
 #macro SYS_mprotect 10
 #macro SYS_munmap   11
+
+#macro SYS_rt_sigaction   13
+#macro SYS_rt_sigprocmask   14
+#macro SYS_rt_sigreturn   15
 
 #macro SYS_access   21
 #macro SYS_pipe   22
@@ -249,8 +325,8 @@
 #macro SYS_listen 50
 #macro SYS_getsockname 51
 
-// #macro SYS_setsockopt 54
-
+#macro SYS_setsockopt 54
+#macro SYS_getsockopt 55
 
 #macro SYS_fork     57
 #macro SYS_vfork    58
@@ -326,6 +402,28 @@ SYSCALL(mmap,  void*, addr: void*, length: i32, prot: i32, flags: i32, fd: i32, 
 SYSCALL(mprotect,  i32, addr: void*, len: i32, prot: i32);
 SYSCALL(munmap,    i32, addr: void*, length: i32)
 
+SYSCALL(rt_sigaction, i32, signum: i32, act: sigaction_t*, old_act: sigaction_t*, sigsetsize: i64)
+SYSCALL(rt_sigprocmask, i32, how: i32, set: sigset_t*, oset: sigset_t*, sigsetsize: i64)
+SYSCALL_VOID(rt_sigreturn)
+// fn @oscall sigaction(signum: i32, act: sigaction_t*, old_act: sigaction_t*) -> i32 {
+//     if !act.sa_restorer {
+//         act.sa_flags |= SA_RESTORER
+//         act.sa_restorer = tramp
+//     }
+//     fn @oscall tramp() {
+//         rt_sigreturn()
+//     }
+//     return rt_sigaction(signum, act, old_act, sizeof sigset_t)
+// }
+// fn @oscall sigprocmask(signum: i32, set: sigset_t*, oset: sigset_t*) -> i32 {
+//     return rt_sigprocmask(signum, set, oset, sizeof sigset_t)
+// }
+
+//  NOTE: I don't know how to use rt_sigaction without Glibc so in the meantime we can use these.
+fn @import(LibC) @oscall sigaction(signum: i32, act: sigaction_t*, old_act: sigaction_t*) -> i32
+fn @import(LibC) @oscall signal(n: i32, f: fn@oscall(i32)) -> i32
+
+
 SYSCALL(access,  i32, path: char*, mode: i32)
 SYSCALL(pipe,  i32, fildes: i32*)
 
@@ -349,8 +447,8 @@ SYSCALL(bind, i32, sockfd: i32, addr: sockaddr*, addrlen: i32)
 SYSCALL(listen, i32, sockfd: i32, backlog: i32)
 SYSCALL(getsockname, i32, sockfd: i32, addr: sockaddr*, addrlen: i32*)
 
-// SYSCALL(setsockopt, i32, )
-
+SYSCALL(setsockopt, i32, sockfd: i32, level: i32, optname: i32, optval: char*, optlen: i32)
+SYSCALL(getsockopt, i32, sockfd: i32, level: i32, optname: i32, optval: char*, optlen: i32)
 
 SYSCALL(fork,   i32)
 SYSCALL(vfork,  i32)
@@ -371,7 +469,7 @@ SYSCALL(clock_getres,  i32, clockid: clockid_t, res: timespec*);
 SYSCALL(clock_gettime, i32, clockid: clockid_t, tp: timespec*);
 SYSCALL(clock_settime, i32, clockid: clockid_t, tp: timespec*);
 
-SYSCALL(waitid, i32, type: i32, id: i32, info: siginfo*, options: i64, ru: void* = null);
+SYSCALL(waitid, i32, type: i32, id: i32, info: siginfo_t*, options: i64, ru: void* = null);
 
 SYSCALL(getrandom, i32, buf: void*, buflen: u32, flags: u32);
 
@@ -404,7 +502,6 @@ fn ntohs(netshort: u16) -> u16 {
     // return (netshort << 8) | (netshort >> 8)
 }
 
-#load "c" as LibC
 // We rely on libc for these, implementing them myself would be a little rough
 fn @import(LibC) getaddrinfo(node: char*,
     service: char*,
@@ -412,19 +509,20 @@ fn @import(LibC) getaddrinfo(node: char*,
     res: addrinfo**) -> i32;
 fn @import(LibC) freeaddrinfo(res: addrinfo*);
 
-
-#load "c" as libc
 // environ is used by ExecuteCommand when global_environment doesn't exist
-global @import(libc) environ: char**;
+global @import(LibC) environ: char**;
 
 
 #load "pthread" as pthreads
 
-#macro pthread_t u64
+// #macro pthread_t u64
+struct pthread_t {
+    data: u64
+}
 
 fn @import(pthreads) pthread_create(thread: pthread_t*,
     attr: pthread_attr_t*,
-    start_routine: fn @unixcall (void*)->void*,
+    start_routine: fn @oscall (void*)->void*,
     arg: void*) -> i32;
 fn @import(pthreads) pthread_join(thread: pthread_t, retval: void**) -> i32;
 fn @import(pthreads) pthread_exit(retval: void*);
@@ -458,20 +556,42 @@ struct pthread_mutexattr_t {
 // I could not find the correct stat structure anywhere but
 // this structure seems to be correct.
 struct stat {
+    // st_dev:         u64;  /* Device.  */
+    // st_ino:         u64;  /* File serial number. */ 
+    // st_nlink:       u32;  /* Link count.  */
+    // _pad23:         u32;
+    
+    // st_mode:        u32;  /* File mode.  */
+    // st_uid:         u32;  /* User ID of the file's owner. */
+    // st_gid:         u32;  /* Group ID of the file's group.*/
+    
+    // st_rdev:        u64;  /* Device number, if device.  */
+
+    // st_size:        i64;  /* Size of file, in bytes.  */
+    // st_blksize:     u64;  /* Optimal block size for I/O.  */
+    // st_blocks:      u64;  /* Number 512-byte blocks allocated. */
+
+    // st_atime:       u64;  /* Time of last access.  */
+    // st_atime_nsec:  u64;  /* Time of last access.  */
+    // st_mtime:       u64;  /* Time of last modification.  */
+    // st_mtime_nsec:  u64;  /* Time of last modification.  */
+    // st_ctime:       u64;  /* Time of last status change.  */
+    // st_ctime_nsec:  u64;  /* Time of last status change.  */
+    
     st_dev:         u64;  /* Device.  */
     st_ino:         u64;  /* File serial number. */ 
-    st_nlink:       u32;  /* Link count.  */
-    _pad23:         u32;
+    st_nlink:       u64;  /* Link count.  */
+    // _pad23:         u32;
     
     st_mode:        u32;  /* File mode.  */
     st_uid:         u32;  /* User ID of the file's owner. */
     st_gid:         u32;  /* Group ID of the file's group.*/
+    _pad0:          u32;  /* Group ID of the file's group.*/
     
     st_rdev:        u64;  /* Device number, if device.  */
-
     st_size:        i64;  /* Size of file, in bytes.  */
-    st_blksize:     u64;  /* Optimal block size for I/O.  */
-    st_blocks:      u64;  /* Number 512-byte blocks allocated. */
+    st_blksize:     i64;  /* Optimal block size for I/O.  */
+    st_blocks:      i64;  /* Number 512-byte blocks allocated. */
 
     st_atime:       u64;  /* Time of last access.  */
     st_atime_nsec:  u64;  /* Time of last access.  */
@@ -479,6 +599,10 @@ struct stat {
     st_mtime_nsec:  u64;  /* Time of last modification.  */
     st_ctime:       u64;  /* Time of last status change.  */
     st_ctime_nsec:  u64;  /* Time of last status change.  */
+    
+    __unused0:      i64;
+    __unused1:      i64;
+    __unused2:      i64;
 };
 
 #macro ino64_t u64
@@ -506,9 +630,16 @@ struct linux_dirent64 {
     d_name: char[1]; /* Filename (null-terminated) */
 };
 
+struct timespec {
+    tv_sec: i64;
+    tv_nsec: i64;
+}
+
+
+
 // This struct may be incorrect, I could not find a struct that matched
 // the values that waitid returned but this order and integer sizes seem to work.
-struct siginfo {
+struct siginfo_t {
     si_signo: i32;
     si_errno: i32;
     si_code : i32;
@@ -516,10 +647,22 @@ struct siginfo {
     pid: i32;
     status: i64;
 }
-
-struct timespec {
-    tv_sec: i64;
-    tv_nsec: i64;
+// struct sigset_t {
+//     n: i32[16]; // (1024 / (8 * sizeof (unsigned long int)))
+// }
+struct  sigset_t {
+    x: i64;
+}
+#macro FN_SIGACTION fn @oscall(i32, siginfo_t*, void*)
+#macro FN_HANDLER fn@oscall(i32)
+struct sigaction_t {
+    // union { // TODO: Implement unions
+    sa_sigaction: FN_SIGACTION;
+    // sa_handler: FN_HANDLER;
+    // }
+    sa_mask: sigset_t;
+    sa_flags: i32;
+    sa_restorer: fn @oscall();
 }
 
 // from netinet/in.h
@@ -821,13 +964,5 @@ fn name_of_error(err: i64) -> char[] {
     }
     return "<unnamed>"
 }
-
-// TODO: Fix these
-// struct pthread_t {
-//     _data: u64;
-// }
-// fn @import @unixcall pthread_create(thread: pthread_t*, attr: void*, start_routine: fn_ref, arg: void*) -> i32;
-// fn @import @unixcall pthread_join(thread: pthread_t, retval: void**) -> i32;
-// fn @import @unixcall pthread_self() -> pthread_t;
 
 #endif // OS_LINUX

@@ -22,13 +22,17 @@ struct Item {
     y: i32 = 12;
 
     fn init() {
+        _test x; 923;
+        _test y; 12;
         *this = Item{}
-        y = 33
-        log("init")
+        y += 21
+        hits++
+        // log("init")
     }
     fn cleanup() {
         hits++
-        log("cleanup")
+        _test hits; 2;
+        _test y; 33;
     }
 }
 
@@ -46,7 +50,7 @@ box.cleanup();
 _test null; box.ptr;
 // log(&box)
 
-_test 1; hits;
+_test 2; hits;
 
 
 struct Ok {

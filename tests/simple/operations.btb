@@ -199,7 +199,6 @@ _test 49000; T(u16, u8, 7000, *, 7);
 // }
 _test 1; cast<u8>301 % cast<u8>258;
 
-
 @TEST_CASE(plusplus)
 
 a := 2332;
@@ -221,6 +220,11 @@ _test 2; *n;
 if (5.23 < 23.2d) { // <- Error here at one point, bug with d suffix 
 
 }
+
+v: void*
+@TEST_ERROR(ERROR_UNSPECIFIED) sizeof (*v)
+// Error above should be above the one below
+// because the one below stops compilation
 
 nah: i32;
 pt := &nah;

@@ -40,7 +40,10 @@ u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
 
     return file_id;
 }
-u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 existing_import_id){
+u32 Lexer::tokenize(const std::string& text, const std::string& path_name, u32 existing_import_id, int line, int column){
+    return tokenize(text.c_str(), text.length(), path_name, existing_import_id, line, column);
+}
+u32 Lexer::tokenize(const char* text, u64 length, const std::string& path_name, u32 existing_import_id, int inherit_line, int inherit_column){
     using namespace engone;
     ZoneScopedC(tracy::Color::Gold);
 
@@ -164,7 +167,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         new_source_tokens->column = column;
     };
     
-    auto APPEND_DATA = [&](void* ptr, int size) {
+    auto APPEND_DATA = [&](const void* ptr, int size) {
         auto info = new_tokens;
         // TODO: You can probably optimize this function
         // if(info->type & (TOKEN_LITERAL_STRING|TOKEN_ANNOTATION|TOKEN_IDENTIFIER))
@@ -207,8 +210,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         }
     };
     
-    u16 line=1; // TODO: TestSuite needs functionality to set line and column through function arguments.
-    u16 column=1;
+    u16 line = inherit_line == 0 ? 1 : inherit_line; // TODO: TestSuite needs functionality to set line and column through function arguments.
+    u16 column = inherit_column == 0 ? 1 : inherit_column;
     
     bool inQuotes = false;
     bool isSingleQuotes = false;
@@ -635,7 +638,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 // TODO: Optimize. For example, if first character isn't one of these 'tfsenu' then it's not a special token and we don't have to run all ifs.
                 // log::out << "check " << temp << "\n";
                 
-                #define CASE(S, STR, TOK)  if(S-1 == temp.len && temp == STR+1) {\
+                #define CASE(S, STR, TOK)  if(S-1 == temp.len && temp == (char*)((u8*)STR+1)) {\
                     new_tokens->type = TOK; has_data = false; }
 
                 char f = *(text+str_start);
@@ -1042,6 +1045,8 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
     // lock_imports.unlock();
     Assert(imp);
     
+    Assert(token.type != TOKEN_LITERAL_STRING || (token.flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED)));
+    
     TokenInfo* prev_token = nullptr;
     TokenSource* prev_source = nullptr;
     Token prev_tok = {};
@@ -1060,6 +1065,11 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
             if(chunk->tokens.size()) {
                 prev_token = &chunk->tokens.last();
                 prev_source = &chunk->sources.last();
+                
+                prev_tok.type = prev_token->type;
+                prev_tok.flags = prev_token->flags;
+                prev_tok.s = prev_token->s;
+                prev_tok.c_type = prev_token->c_type;
                 prev_tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
             }
         }
@@ -1394,7 +1404,7 @@ u32 Lexer::createImport(const std::string& path, Import** file) {
             *file = nullptr;
         return 0;
     }
-    Import* _imp;
+    Import* _imp = nullptr;
     u32 file_index = imports.add(nullptr, &_imp);
     if(_imp) {
         _imp->path = path;
@@ -1688,7 +1698,7 @@ TokenType StringToTokenType(const char* str, int len) {
 
     return TOKEN_NONE;
 }
-bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
+bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent, bool no_quotes) {
     using namespace engone;
     Assert(iterator.file_id != 0);
     iterator.clear();
@@ -1731,10 +1741,12 @@ bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
             APPEND(tok.type)
         } else if(tok.type == TOKEN_LITERAL_STRING) {
             Assert(tok.flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED));
-            if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
-                APPEND('\'')
-            else
-                APPEND('"')
+            if(!no_quotes) {
+                if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
+                    APPEND('\'')
+                else
+                    APPEND('"')
+            }
             
             const char* str;
             u8 len = getStringFromToken(tok,&str);
@@ -1766,11 +1778,12 @@ bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
                     APPEND(c)
                 }
             }
-            
-            if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
-                APPEND('\'')
-            else
-                APPEND('"')
+            if(!no_quotes) {
+                if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
+                    APPEND('\'')
+                else
+                    APPEND('"')
+            }
         } else if(tok.type == TOKEN_ANNOTATION) {
             APPEND('@')
             const char* str;
@@ -1873,11 +1886,11 @@ void Lexer::print(u32 fileid) {
         log::out.print(iter.data(),iter.len());
     }
 }
-std::string Lexer::tostring(Token token) {
+std::string Lexer::tostring(Token token, bool no_quotes) {
     auto iter = createFeedIterator(token);
     std::string out{};
     // TODO: Optimize
-    while(feed(iter, true)) {
+    while(feed(iter, true, false, no_quotes)) {
         out.append(iter.data(),iter.len());
     }
     return out;

@@ -83,7 +83,7 @@ namespace coff {
         CASE(IMAGE_REL_AMD64_SREL32)
         CASE(IMAGE_REL_AMD64_PAIR)
         CASE(IMAGE_REL_AMD64_SSPAN32)
-        case 17: return "R_X86_64_32S"; // I got this from compiling assembly with as and doing objdump -r on .o file
+        // case 17: return "R_X86_64_32S"; // I got this from compiling assembly with as and doing objdump -r on .o file, This was probably a bug
     SWITCH_END
 
     SWITCH_START(Storage_Class)
@@ -697,7 +697,7 @@ void FileCOFF::writeFile(const std::string& path) {
     engone::FileClose(file);
 }
 
-bool FileCOFF::WriteFile(const std::string& path, X64Program* program, u32 from, u32 to){
+bool FileCOFF::WriteFile(const std::string& path, Program* program, u32 from, u32 to){
     using namespace engone;
     using namespace coff;
     Assert(program);

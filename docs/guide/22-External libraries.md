@@ -15,7 +15,11 @@ Libraries to link with is specified in the program itself. There are two ways of
 
 `#load` exists to link with libraries independently from the linker. The compiler uses the right compiler options depending on the linker. `g++ -Ldir_to_lib -llib_file` (GNU Linux or MinGW Windows), `link path_to_lib` (MSVC Windows).
 
+Path after `#load` can be relative to current working directory, relative to folder where the compiler executable is, and relative to import directories specified in arguments passed to the compiler executable. (absolute paths also work of course)
+
+<!-- I don't think this is true anymore
 One important thing is that `#load "your.lib"` without slashes is assumed to be a system library. It will be linked like this: `gcc -llib_file`. This `#load "./your.lib"` will be linked as a user library like this:`gcc your.lib`.
+-->
 
 ## Linking libraries
 **WARNING:** You cannot link with shared libraries on Linux yet.
@@ -76,6 +80,11 @@ fn @importlib(Sound) PlaySoundFromFile(path: char*);
 ```
 
 **NOTE**: When importing (or exporting) the calling convention defaults to `@oscall` (stdcall when  targeting Windows, System V ABI for Linux). You can change the convention by writing `fn @betcall @import(...`.
+
+## Distributing executables and dynamic libraries
+When you compile an executable that uses dynamic libraries, you must also distribute the dynamic libraries along with your executable. Otherwise Windows will complain, "sound.dll not found" on the user's computer.
+
+This part of the compiler is work in progress on Linux but on Windows, the dlls are copied to the working directory where you ran the compiler. These dlls need to be distributed.
 
 # Compiling libraries
 Compile executable: `btb main.btb -o app.exe`

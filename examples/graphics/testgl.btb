@@ -1,0 +1,35 @@
+ 
+#import "GLAD"
+// #import "Logger"
+#import "GLFW"
+ 
+fn main() {
+    yes := glfwInit();
+    // if !yes {
+    //     log("glfwInit failed");
+    //     return ;
+    // }
+    // glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    // glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    // width := 800
+    // height := 600
+    // title := "hey"
+    // glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
+    // if !glfw_window {
+    //     log("window failed");
+    //     glfwTerminate();
+    //     return;
+    // }
+
+    // glfwMakeContextCurrent(glfw_window)
+
+    // yes = gladLoadGL()
+    // if !yes {
+    //     log("gladLoadGL failed")
+    //     glfwTerminate()
+    //     return;
+    // }
+    glViewport(0, 0, 6, 7)
+}

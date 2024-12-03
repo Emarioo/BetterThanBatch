@@ -6,7 +6,7 @@
 #import "OS"
 
 #macro DEFAULT_IP "127.0.0.1"
-#macro DEFAULT_PORT 4000
+#macro DEFAULT_PORT 4999
 
 global log_mutex: Mutex
 
@@ -30,7 +30,7 @@ fn TestClient(user: char*) {
         ProcessSleep(1.0)
     }
     
-    fn handle_event(e: Event, ud: void*) {
+    fn handle_event(e: NetEvent, ud: void*) {
         // log_mutex.lock()
         log("#CLIENT#")
         // std_print_any(&e) log()
@@ -39,15 +39,13 @@ fn TestClient(user: char*) {
     }
 
     client.wait()
-
-    client.close()
 }
 fn TestServer() {
     server: Server
     server.set_callback(handle_event, null)
     err := server.start(DEFAULT_PORT)
 
-    fn handle_event(e: Event, ud: void*) {
+    fn handle_event(e: NetEvent, ud: void*) {
         log_mutex.lock()
         // sem.wait()
         log("#SERVER#")
@@ -57,15 +55,13 @@ fn TestServer() {
         log_mutex.unlock()
     }
 
-    ThreadCreate(lamb, "Yikes".ptr)
-    ThreadCreate(lamb, "noes".ptr)
-    ThreadCreate(lamb, "Wine".ptr)
-    // Lambda would be nice wouldn't it...
-    fn @oscall lamb(n: void*) -> i32 { TestClient(n) return 0 }
-
+    // ThreadCreate(lamb, "Yikes".ptr)
+    // ThreadCreate(lamb, "noes".ptr)
+    // ThreadCreate(lamb, "Wine".ptr)
+    // // Lambda would be nice wouldn't it...
+    // fn @oscall lamb(n: void*) -> i32 { TestClient(n) return 0 }
 
     server.wait()
-    server.close()
 }
 
 fn main(argc: i32, argv: char**) -> i32 {
@@ -87,7 +83,7 @@ fn TestHTTPRequest() {
     msg.append("Connection: close\r\n\r\n")
     client.send(msg.sliced())
     
-    fn handle_event(e: Event, ud: void*) {
+    fn handle_event(e: NetEvent, ud: void*) {
         std_print_any(&e)
         log()
         std_print(e.bytes)

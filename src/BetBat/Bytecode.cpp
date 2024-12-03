@@ -6,6 +6,10 @@
 
 #define ENABLE_BYTECODE_OPTIMIZATIONS
 
+InstructionControl operator |(InstructionControl a, InstructionControl b) {
+    return (InstructionControl)((int)a | (int)b);
+}
+
 u32 Bytecode::getMemoryUsage(){
     Assert(false);
     return 0;
@@ -25,9 +29,15 @@ InstructionControl apply_size(InstructionControl c, int size) {
     return c;
 }
 
-bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index) {
+bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index, int* existing_tinycode_index) {
     for(int i=0;i<exportedFunctions.size();i++) {
         if(exportedFunctions[i].name == name) {
+            if(tinycode_index == exportedFunctions[i].tinycode_index) {
+                engone::log::out << engone::log::YELLOW << "Exporting function '"<<name <<"' again, compiler should not do that\n";
+                return true;
+            }
+            if(existing_tinycode_index)
+                *existing_tinycode_index = exportedFunctions[i].tinycode_index;
             return false;
         }
     }
@@ -36,13 +46,13 @@ bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index) 
     exportedFunctions.last().tinycode_index = tinycode_index;
     return true;
 }
-void Bytecode::addExternalRelocation(const std::string& name, const std::string& library_path, int tinycode_index, int pc, bool is_var){
+void Bytecode::addExternalRelocation(const std::string& name, const std::string& library_path, int tinycode_index, int pc, ExternalRelocationType rel_type){
     ExternalRelocation tmp{};
     tmp.name = name;
     tmp.library_path = library_path;
     tmp.tinycode_index = tinycode_index;
     tmp.pc = pc;
-    tmp.is_global_var = is_var;
+    tmp.type = rel_type;
     externalRelocations.add(tmp);
 }
 void Bytecode::cleanup(){
@@ -278,7 +288,7 @@ void BytecodeBuilder::emit_asm(int asm_instance, int inputs, int outputs) {
 }
 void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
     if(disable_code_gen) return;
-    if(compiler->options->compileStats.errors == 0) {
+    if(compiler->compile_stats.errors == 0) {
         // We would need an array of pushed offsets
         // Assert(pushed_offset == 0);
     }
@@ -293,7 +303,7 @@ void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
 }
 void BytecodeBuilder::emit_alloc_local(BCRegister reg, int* index_to_size) {
     if(disable_code_gen) return;
-    if(compiler->options->compileStats.errors == 0) {
+    if(compiler->compile_stats.errors == 0) {
         // We would need an array of pushed offsets
         // Assert(pushed_offset == 0);
     }
@@ -313,7 +323,7 @@ void BytecodeBuilder::fix_local_imm(int index, u16 size) {
 void BytecodeBuilder::emit_free_local(u16 size) {
     if(disable_code_gen) return;
 
-    if(compiler->options->compileStats.errors == 0) {
+    if(compiler->compile_stats.errors == 0) {
         // Assert(pushed_offset == 0); // We have some pushed values in the way and can't free local variables
     }
     // If size=0 is passed then it's probably a bug.
@@ -329,7 +339,7 @@ void BytecodeBuilder::emit_free_local(u16 size) {
 void BytecodeBuilder::emit_free_local(int* index_to_size) {
     if(disable_code_gen) return;
 
-    if(compiler->options->compileStats.errors == 0) {
+    if(compiler->compile_stats.errors == 0) {
         // Assert(pushed_offset == 0); // We have some pushed values in the way and can't free local variables
     }
     // If size=0 is passed then it's probably a bug.
@@ -344,7 +354,7 @@ void BytecodeBuilder::emit_free_local(int* index_to_size) {
 }
 void BytecodeBuilder::emit_alloc_args(BCRegister reg, u16 size) {
     if(disable_code_gen) return;
-    if(compiler->options->compileStats.errors == 0) {
+    if(compiler->compile_stats.errors == 0) {
 
     }
     // Assert(size > 0); zero size = zero arguments can happen and we can't skip instruction because
@@ -359,7 +369,7 @@ void BytecodeBuilder::emit_alloc_args(BCRegister reg, u16 size) {
 }
 void BytecodeBuilder::emit_empty_alloc_args(int* out_size_offset) {
     if(disable_code_gen) return;
-    if(compiler->options->compileStats.errors == 0) {
+    if(compiler->compile_stats.errors == 0) {
 
     }
     Assert(out_size_offset);
@@ -390,7 +400,7 @@ void BytecodeBuilder::fix_alloc_args(int index, u16 size) {
 void BytecodeBuilder::emit_free_args(u16 size) {
     if(disable_code_gen) return;
 
-    if(compiler->options->compileStats.errors == 0) {
+    if(compiler->compile_stats.errors == 0) {
         // Assert(pushed_offset == 0); // We have some pushed values in the way and can't free local variables
     }
     emit_opcode(BC_FREE_ARGS);
@@ -426,7 +436,7 @@ void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_
 }
 void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed){
     if(tinycode->call_convention == CallConvention::STDCALL||tinycode->call_convention == CallConvention::UNIXCALL) {
-        Assert(imm == -8);
+        Assert(imm == -8 || imm == -4);
     }
     
     emit_opcode(BC_SET_RET);
@@ -452,7 +462,7 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
     // structs members and return values are pushed in different orders which is why
     // structs can have 3 members without value being overwritten while multiple return values can only have 2.
     // TODO: This is obviously a flaw in the BETBAT calling convention. How do we fix it?
-    if(compiler->options->compileStats.errors == 0) {
+    if(compiler->compile_stats.errors == 0) {
         // Assert(("Multiple return values has limits (at least 3 8-byte values will work). BC_PUSH can overwrite the return values in the frame of the callee.",pushed_offset_max >= off + size)); // Asserts if return value we try to access was overwritten by pushed values
     }
 
@@ -549,6 +559,7 @@ void BytecodeBuilder::fix_jump_imm32_here(int imm_index) {
     if(disable_code_gen) return;
 
     *(int*)&tinycode->instructionSegment[imm_index] = get_pc() - (imm_index + 4); // +4 because immediate should be relative to the end of the instruction, not relative to the offset within the instruction
+    // engone::log::out << "fixed "<< (*(int*)&tinycode->instructionSegment[imm_index])<<"\n";
 }
 void BytecodeBuilder::emit_mov_rr(BCRegister to, BCRegister from){
     emit_opcode(BC_MOV_RR);
@@ -989,7 +1000,14 @@ bool TinyBytecode::applyRelocations(Bytecode* code) {
         // Assert may fire if function wasn't generated.
         // Perhaps no one declared usage of the function even
         // though we should have.
-        Assert(rel.funcImpl && rel.funcImpl->tinycode_id);
+        if (!(rel.funcImpl && rel.funcImpl->tinycode_id)) {
+            if(rel.funcImpl->usages == 0) {
+                log::out << log::RED << "COMPILER BUG! "<<log::NO_COLOR<<"Function '"<<log::LIME<<rel.funcImpl->astFunction->name<<log::NO_COLOR<<"' had zero declared usages but generator emitted relocations.\n";
+                Assert(false);
+            } else {
+                Assert((rel.funcImpl && rel.funcImpl->tinycode_id));
+            }
+        }
         *(i32*)&instructionSegment[rel.pc] = rel.funcImpl->tinycode_id;
     }
     return suc;
@@ -1075,84 +1093,84 @@ InstBaseType operator|(InstBaseType a, InstBaseType b) {
 }
 #define BASE_op3 (BASE_op3 | BASE_op2 | BASE_op1)
 #define BASE_op2 (BASE_op2 | BASE_op1)
-InstBaseType instruction_contents[256] {
-    BASE_NONE, // BC_HALT
-    BASE_NONE, // BC_NOP
+BCInstructionInfo instruction_contents[256] {
+    { 1, BASE_NONE }, // BC_HALT
+    { 1, BASE_NONE }, // BC_NOP
     
-    BASE_op2,                           // BC_MOV_RR,
-    BASE_op2 | BASE_ctrl,               // BC_MOV_RM,
-    BASE_op2 | BASE_ctrl,               // BC_MOV_MR,
-    BASE_op2 | BASE_ctrl | BASE_imm16,  // BC_MOV_RM_DISP16,
-    BASE_op2 | BASE_ctrl | BASE_imm16,  // BC_MOV_MR_DISP16,
+    { 3, BASE_op2 },                           // BC_MOV_RR,
+    { 4, BASE_op2 | BASE_ctrl },               // BC_MOV_RM,
+    { 4, BASE_op2 | BASE_ctrl },               // BC_MOV_MR,
+    { 6, BASE_op2 | BASE_ctrl | BASE_imm16 },  // BC_MOV_RM_DISP16,
+    { 6, BASE_op2 | BASE_ctrl | BASE_imm16 },  // BC_MOV_MR_DISP16,
     
-    BASE_op1,                   // BC_PUSH,
-    BASE_op1,                   // BC_POP,
-    BASE_op1 | BASE_imm32,      // BC_LI32,
-    BASE_op1 | BASE_imm64,      // BC_LI64,
-    BASE_op1 | BASE_imm32,      // BC_INCR,
-    BASE_op1 | BASE_imm16,      // BC_ALLOC_LOCAL,
-    BASE_imm16,                   // BC_FREE_LOCAL,
+    { 2, BASE_op1 },                   // BC_PUSH,
+    { 2, BASE_op1 },                   // BC_POP,
+    { 6, BASE_op1 | BASE_imm32 },      // BC_LI32,
+    { 10, BASE_op1 | BASE_imm64 },      // BC_LI64,
+    { 6, BASE_op1 | BASE_imm32 },      // BC_INCR,
+    { 4, BASE_op1 | BASE_imm16 },      // BC_ALLOC_LOCAL,
+    { 3, BASE_imm16 },                   // BC_FREE_LOCAL,
     
-    BASE_op1 | BASE_imm16,        // BC_ALLOC_ARGS,
-    BASE_imm16,                   // BC_FREE_ARGS,
+    { 4, BASE_op1 | BASE_imm16 },        // BC_ALLOC_ARGS,
+    { 3, BASE_imm16 },                   // BC_FREE_ARGS,
 
-    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_SET_ARG,
-    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_GET_PARAM,
-    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_GET_VAL,
-    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_SET_RET,
-    BASE_op1 | BASE_imm16,  // BC_PTR_TO_LOCALS,
-    BASE_op1 | BASE_imm16,  // BC_PTR_TO_PARAMS,
+    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_SET_ARG,
+    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_GET_PARAM,
+    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_GET_VAL,
+    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_SET_RET,
+    { 4, BASE_op1 | BASE_imm16 },  // BC_PTR_TO_LOCALS,
+    { 4, BASE_op1 | BASE_imm16 },  // BC_PTR_TO_PARAMS,
 
-    BASE_imm32,                         // BC_JMP,
-    BASE_link | BASE_call | BASE_imm32, // BC_CALL
-    BASE_op1 | BASE_link | BASE_call, // BC_CALL
-    BASE_NONE,                          // BC_RET,
-    BASE_op1 | BASE_imm32,              // BC_JNZ,
-    BASE_op1 | BASE_imm32,              // BC_JZ,
+    { 5, BASE_imm32 },                         // BC_JMP,
+    { 7, BASE_link | BASE_call | BASE_imm32 }, // BC_CALL
+    { 4, BASE_op1 | BASE_link | BASE_call }, // BC_CALL
+    { 1, BASE_NONE },                          // BC_RET,
+    { 6, BASE_op1 | BASE_imm32 },              // BC_JNZ,
+    { 6, BASE_op1 | BASE_imm32 },              // BC_JZ,
 
-    BASE_op1 | BASE_imm32,  // BC_DATAPTR,
-    BASE_op1 | BASE_link,   // BC_EXT_DATAPTR,
-    BASE_op1 | BASE_imm32,  // BC_CODEPTR,
+    { 6, BASE_op1 | BASE_imm32 },  // BC_DATAPTR,
+    { 3, BASE_op1 | BASE_link },   // BC_EXT_DATAPTR,
+    { 6, BASE_op1 | BASE_imm32 },  // BC_CODEPTR,
 
-    BASE_op2 | BASE_ctrl,   // BC_ADD,
-    BASE_op2 | BASE_ctrl,   // BC_SUB,
-    BASE_op2 | BASE_ctrl,   // BC_MUL,
-    BASE_op2 | BASE_ctrl,   // BC_DIV,
-    BASE_op2 | BASE_ctrl,   // BC_MOD,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_ADD,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_SUB,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_MUL,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_DIV,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_MOD,
     
-    BASE_op2 | BASE_ctrl,   // BC_EQ,
-    BASE_op2 | BASE_ctrl,   // BC_NEQ,
-    BASE_op2 | BASE_ctrl,   // BC_LT,
-    BASE_op2 | BASE_ctrl,   // BC_LTE,
-    BASE_op2 | BASE_ctrl,   // BC_GT,
-    BASE_op2 | BASE_ctrl,   // BC_GTE,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_EQ,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_NEQ,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LTE,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_GT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_GTE,
 
-    BASE_op2 | BASE_ctrl,   // BC_LAND,
-    BASE_op2 | BASE_ctrl,   // BC_LOR,
-    BASE_op2 | BASE_ctrl,   // BC_LNOT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LAND,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LOR,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_LNOT,
 
-    BASE_op2 | BASE_ctrl,   // BC_BAND,
-    BASE_op2 | BASE_ctrl,   // BC_BOR,
-    BASE_op2 | BASE_ctrl,   // BC_BNOT,
-    BASE_op2 | BASE_ctrl,   // BC_BXOR,
-    BASE_op2 | BASE_ctrl,   // BC_BLSHIFT,
-    BASE_op2 | BASE_ctrl,   // BC_BRSHIFT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BAND,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BOR,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BNOT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BXOR,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BLSHIFT,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_BRSHIFT,
 
-    BASE_op2 | BASE_ctrl, // BC_CAST,
+    { 4, BASE_op2 | BASE_ctrl }, // BC_CAST,
 
-    BASE_op2 | BASE_ctrl,   // BC_MEMZERO,
-    BASE_op3,               // BC_MEMCPY,
-    BASE_op2,               // BC_STRLEN,
-    BASE_op1,               // BC_RDTSC,
-    BASE_op3,               // BC_ATOMIC_CMP_SWAP,
-    BASE_op2 | BASE_ctrl,   // BC_ATOMIC_ADD,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_MEMZERO,
+    { 4, BASE_op3 },               // BC_MEMCPY,
+    { 3, BASE_op2 },               // BC_STRLEN,
+    { 2, BASE_op1 },               // BC_RDTSC,
+    { 4, BASE_op3 },               // BC_ATOMIC_CMP_SWAP,
+    { 4, BASE_op2 | BASE_ctrl },   // BC_ATOMIC_ADD,
 
-    BASE_op1, // BC_SQRT,
-    BASE_op1, // BC_ROUND,
+    { 2, BASE_op1 }, // BC_SQRT,
+    { 2, BASE_op1 }, // BC_ROUND,
 
-    BASE_imm32 | BASE_imm16, // BC_ASM,
+    { 7, BASE_imm32 | BASE_imm16 }, // BC_ASM,
 
-    BASE_op2 | BASE_ctrl | BASE_imm32, // BC_TEST_VALUE,
+    { 8, BASE_op2 | BASE_ctrl | BASE_imm32 }, // BC_TEST_VALUE,
 
     // BASE_NONE, // BC_EXTEND1 = 253,
     // BASE_NONE, // BC_EXTEND2 = 254,
@@ -1211,8 +1229,24 @@ engone::Logger& operator<<(engone::Logger& l, InstructionOpcode t) {
 engone::Logger& operator<<(engone::Logger& l, BCRegister r){
     return l << register_names[r];
 }
-
-void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicArray<std::string>* dll_functions, bool force_newline) {
+engone::Logger& operator <<(engone::Logger& logger, InstructionControl c) {
+    logger << "{";
+    int size = GET_CONTROL_SIZE(c);
+         if(size == CONTROL_8B)  logger << "1";
+    else if(size == CONTROL_16B) logger << "2";
+    else if(size == CONTROL_32B) logger << "4";
+    else if(size == CONTROL_64B) logger << "8";
+    if(IS_CONTROL_FLOAT(c))
+        logger << "f";
+    else if (IS_CONTROL_UNSIGNED(c))
+        logger << "u";
+    else
+        logger << "s";
+    
+    logger << "}";
+    return logger;
+}
+void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicArray<std::string>* dll_functions, bool force_newline, BytecodePrintCache* print_cache) {
     using namespace engone;
     bool print_one_inst = high_index - low_index == 1;
     if(high_index == -1 || high_index > instructionSegment.size())
@@ -1223,8 +1257,26 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
     bool print_debug_info = true;
     auto tinycode = this;
     auto tiny_index = index;
-    int prev_tinyindex = -1;
-    int prev_line = -1;
+    
+    BytecodePrintCache _local_print_cache{};
+    bool specified_cache = print_cache;
+    if (!print_cache)
+        print_cache = &_local_print_cache;
+    
+    auto print_control = [](InstructionControl control) {
+        auto prev_color = log::out.getColor();
+        log::out << log::CYAN;
+        int size = GET_CONTROL_SIZE(control);
+        if(size == CONTROL_8B)       log::out << ", byte";
+        else if(size == CONTROL_16B) log::out << ", word";
+        else if(size == CONTROL_32B) log::out << ", dword";
+        else if(size == CONTROL_64B) log::out << ", qword";
+        if(IS_CONTROL_FLOAT(control))
+            log::out << ", float";
+        if(IS_CONTROL_UNSIGNED(control))
+            log::out << ", unsigned";
+        log::out << prev_color;
+    };
 
     int pc=low_index;
     while(pc<high_index) {
@@ -1243,23 +1295,41 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             if(line_index != -1) {
                 auto& line = tinycode->lines[line_index];
 
-                if(line.line_number != prev_line || tiny_index != prev_tinyindex) {
-                    if(tiny_index != prev_tinyindex) {
-                        if(!print_one_inst) {
+                if(line.line_number != print_cache->prev_line || tiny_index != print_cache->prev_tinyindex) {
+                    if(tiny_index != print_cache->prev_tinyindex) {
+                        if(!print_one_inst ||specified_cache) {
                             log::out << log::GOLD  << tinycode->name <<"\n";
-                            prev_tinyindex = tiny_index;
+                            print_cache->prev_tinyindex = tiny_index;
                         }
                     }
-                    prev_tinyindex = tiny_index;
+                    print_cache->prev_tinyindex = tiny_index;
                     log::out << log::CYAN << line.line_number << "| " << line.text<<"\n";
-                    prev_line = line.line_number;
+                    print_cache->prev_line = line.line_number;
                 }
-            } else if(tiny_index != prev_tinyindex) {
-                if(!print_one_inst) {
+            } else if(tiny_index != print_cache->prev_tinyindex) {
+                if(!print_one_inst || specified_cache) {
                     log::out << log::GOLD  << tinycode->name <<"\n";
-                    prev_tinyindex = tiny_index;
+                    print_cache->prev_tinyindex = tiny_index;
                 }
             }
+            
+            // auto line_index = tinycode->index_of_lines[prev_pc] - 1;
+            // if(line_index != -1) {
+            //     auto& line = tinycode->lines[line_index];
+
+            //     if(line.line_number != prev_line || tiny_index != prev_tinyindex) {
+            //         if(tiny_index != prev_tinyindex) {
+            //             log::out << log::GOLD  << tinycode->name <<"\n";
+            //             prev_tinyindex = tiny_index;
+            //         }
+            //         prev_tinyindex = tiny_index;
+            //         log::out << log::CYAN << line.line_number << "| " << line.text<<"\n";
+            //         prev_line = line.line_number;
+            //     }
+            // } else if(tiny_index != prev_tinyindex) {
+            //     log::out << log::GOLD  << tinycode->name <<"\n";
+            //     prev_tinyindex = tiny_index;
+            // }
         }
         
         char buf[8];
@@ -1284,7 +1354,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
-            
+            imm = 0;
             if(opcode == BC_MOV_RM_DISP16 || opcode == BC_MOV_MR_DISP16) {
                 imm = *(i16*)(instructions.data() + pc);
                 pc += 2;
@@ -1298,11 +1368,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 default: Assert(false);
             }
             
-            int size = GET_CONTROL_SIZE(control);
-            if(size == CONTROL_8B)       log::out << ", byte";
-            else if(size == CONTROL_16B) log::out << ", word";
-            else if(size == CONTROL_32B) log::out << ", dword";
-            else if(size == CONTROL_64B) log::out << ", qword";
+            print_control(control);
         } break;
         case BC_SET_ARG:
         case BC_GET_PARAM:
@@ -1328,11 +1394,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 default: Assert(false);
             }
             
-            int size = GET_CONTROL_SIZE(control);
-            if(size == CONTROL_8B)       log::out << ", byte";
-            else if(size == CONTROL_16B) log::out << ", word";
-            else if(size == CONTROL_32B) log::out << ", dword";
-            else if(size == CONTROL_64B) log::out << ", qword";
+            print_control(control);
+                
         } break;
         case BC_PTR_TO_LOCALS:
         case BC_PTR_TO_PARAMS: {
@@ -1395,6 +1458,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_CALL: {
             LinkConvention l = (LinkConvention)instructions[pc++];
             CallConvention c = (CallConvention)instructions[pc++];
+            int reloc_pos = pc;
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
@@ -1413,8 +1477,20 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 int ind = imm - 1;
                 if(ind > 0 && ind < code->tinyBytecodes.size())
                     log::out << log::LIME << code->tinyBytecodes[ind]->name;
-                else
-                    log::out << log::LIME << imm;
+                else {
+                    bool found = false;
+                    if (ind == -1) {
+                        for(auto& rel : call_relocations) {
+                            if (reloc_pos == rel.pc) {
+                                log::out << log::LIME << rel.funcImpl->astFunction->name;
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if(!found)
+                        log::out << log::LIME << imm;
+                }
             }
         } break;
         case BC_CALL_REG: {
@@ -1430,7 +1506,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             
             int addr = pc + imm;
             
-            log::out << log::GRAY << " :"<< addr;
+            log::out << log::GRAY << " :"<< addr << " ("<<imm<<")";
         } break;
         case BC_JNZ:
         case BC_JZ: {
@@ -1440,7 +1516,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             
             int addr = pc + imm;
             
-            log::out << " "<<register_names[op0] <<", "<< log::GRAY << ":"<< addr;
+            log::out << " "<<register_names[op0] <<", "<< log::GRAY << ":"<< addr << " ("<<imm<<")";
         } break;
         case BC_ADD:
         case BC_SUB:
@@ -1459,19 +1535,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             control = (InstructionControl)instructions[pc++];
             
             log::out << " "<<register_names[op0] <<", "<< register_names[op1];
-            // we don't care about sizes
-            auto c = log::out.getColor();
-            log::out << log::CYAN;
-            if(IS_CONTROL_FLOAT(control))
-                log::out << ", float";
-            if(IS_CONTROL_UNSIGNED(control))
-                log::out << ", unsigned";
-            int size = GET_CONTROL_SIZE(control);
-            if(size == CONTROL_8B)       log::out << ", byte";
-            else if(size == CONTROL_16B) log::out << ", word";
-            else if(size == CONTROL_32B) log::out << ", dword";
-            else if(size == CONTROL_64B) log::out << ", qword";
-            log::out << c;
+            
+            print_control(control);
         } break;
         case BC_BAND:
         case BC_BOR:
@@ -1500,6 +1565,11 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             pc+=4;
             log::out << " " << register_names[op0] << ", "<<log::GREEN<<imm;
         } break;
+        case BC_EXT_DATAPTR: {
+            op0 = (BCRegister)instructions[pc++];
+            LinkConvention link = *(LinkConvention*)&instructions[pc++];
+            log::out << " " << register_names[op0] << ", "<<link;
+        } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
@@ -1508,7 +1578,26 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             u8 from_size = 1 << GET_CONTROL_SIZE(control);
             u8 to_size = 1 << GET_CONTROL_CONVERT_SIZE(control);
             
-            log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", "<< "cast?" <<", "<<from_size<<"b->"<<to_size<<"b";
+            std::string out;
+            out += std::to_string(from_size);
+            if(IS_CONTROL_FLOAT(control)) {
+                out += "f";
+            } else if(IS_CONTROL_SIGNED(control)) {
+                out += "s";
+            } else {
+                out += "u";
+            }
+            out += "->";
+            out += std::to_string(to_size);
+            if(IS_CONTROL_CONVERT_FLOAT(control)) {
+                out += "f";
+            } else if(IS_CONTROL_CONVERT_SIGNED(control)) {
+                out += "s";
+            } else {
+                out += "u";
+            }
+            
+            log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", "<< out;
         } break;
         case BC_MEMZERO: {
             op0 = (BCRegister)instructions[pc++];

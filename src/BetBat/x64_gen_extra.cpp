@@ -6,12 +6,12 @@
 #include "BetBat/x64_gen.h"
 #include "BetBat/x64_defs.h"
 
-#include "BetBat/CompilerEnums.h"
+#include "BetBat/CompilerOptions.h"
 #include "BetBat/Compiler.h"
 
 #include "BetBat/Reformatter.h"
 
-bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode) {
+bool X64Builder::generate() {
     TRACE_FUNC()
 
     CALLBACK_ON_ASSERT(
@@ -20,12 +20,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
     using namespace engone;
 
-    this->bytecode = bytecode;
-    this->tinycode = tinycode;
-    
     bool failed = false;
     for(auto ind : tinycode->required_asm_instances) {
-        auto& inst = code->asmInstances[ind];
+        auto& inst = bytecode->asmInstances[ind];
         if(!inst.generated) {
             bool yes = prepare_assembly(inst);
             if(yes) {
@@ -68,17 +65,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         auto n = createInst(opcode); // passing opcode does nothing
         n->bc_index = prev_pc;
         n->base = (InstBase*)&instructions[prev_pc];
-        InstBaseType flags = instruction_contents[opcode];
-        if(flags & BASE_op1) pc++;
-        if(flags & BASE_op2) pc++;
-        if(flags & BASE_op3) pc++;
-        if(flags & BASE_ctrl) pc++;
-        if(flags & BASE_link) pc++;
-        if(flags & BASE_call) pc++;
-        if(flags & BASE_imm8) pc++;
-        if(flags & BASE_imm16) pc+=2;
-        if(flags & BASE_imm32) pc+=4;
-        if(flags & BASE_imm64) pc+=8;
+        InstBaseType flags = instruction_contents[opcode].type;
+        pc += instruction_contents[opcode].size - 1; // -1 for the opcode which we incremented earlier
         insert_inst(n);
 
         // log::out << n->base->opcode<<"\n";
@@ -93,7 +81,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             accessed_params[param_index].control = base->control;
         }
         if(opcode == BC_PTR_TO_PARAMS) {
-            // nocheckin IMPORTANT TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
+            // TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
             auto base = (InstBase_op1_imm16*)n->base;
             int param_index = base->imm16 / 8;
             if(param_index >= accessed_params.size()) {
@@ -384,7 +372,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     
         // TODO: What if two operands refer to the same register
         if(IS_ESSENTIAL(n->base->opcode)) {
-            if(instruction_contents[n->base->opcode] & BASE_op1) {
+            if(instruction_contents[n->base->opcode].type & BASE_op1) {
 
                 if(n->base->opcode == BC_SET_RET) {
                     auto base = (InstBase_op1_ctrl_imm16*)n->base;
@@ -469,7 +457,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
             }
         } else {
-            if(instruction_contents[n->base->opcode] & BASE_op1) {
+            if(instruction_contents[n->base->opcode].type & BASE_op1) {
                 auto base = (InstBase_op1*)n->base;
                 if(IS_GENERAL_REG(base->op0)) {
                     auto& v = bc_register_map[base->op0];
@@ -492,7 +480,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 }
             }
         }
-        if(instruction_contents[n->base->opcode] & BASE_op2) {
+        if(instruction_contents[n->base->opcode].type & BASE_op2) {
             auto base = (InstBase_op2*)n->base;
             if(IS_GENERAL_REG(base->op1)) {
                 auto& v = bc_register_map[base->op1];
@@ -509,7 +497,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 n->reg1 = alloc_artifical_reg(-1, X64_REG_BP);
             }
         }
-        if(instruction_contents[n->base->opcode] & BASE_op3) {
+        if(instruction_contents[n->base->opcode].type & BASE_op3) {
             auto base = (InstBase_op3*)n->base;
             if(IS_GENERAL_REG(base->op2)) {
                 auto& v = bc_register_map[base->op2];
@@ -528,28 +516,28 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             suggest_artifical_float(n->reg0);
             suggest_artifical_size(n->reg0, 4);
         }
-        if(instruction_contents[n->base->opcode] & BASE_ctrl) {
+        if(instruction_contents[n->base->opcode].type & BASE_ctrl) {
             int off = 1;
-            if(instruction_contents[n->base->opcode] & BASE_op1)
+            if(instruction_contents[n->base->opcode].type & BASE_op1)
                 off++;
-            if(instruction_contents[n->base->opcode] & BASE_op2)
+            if(instruction_contents[n->base->opcode].type & BASE_op2)
                 off++;
-            if(instruction_contents[n->base->opcode] & BASE_op3)
+            if(instruction_contents[n->base->opcode].type & BASE_op3)
                 off++;
             InstructionControl control = (InstructionControl)*((u8*)n->base + off);
             auto add_base = (InstBase_op2_ctrl*)n->base;
             if(IS_CONTROL_FLOAT(control)) {
                 // TODO: Is this fine? Should we suggest float for all registers if control is float?
                 int size = 1 << GET_CONTROL_SIZE(control);
-                if(instruction_contents[n->base->opcode] & BASE_op1) {
+                if(instruction_contents[n->base->opcode].type & BASE_op1) {
                     suggest_artifical_float(n->reg0);
                     suggest_artifical_size(n->reg0, size);
                 }
-                if(instruction_contents[n->base->opcode] & BASE_op2) {
+                if(instruction_contents[n->base->opcode].type & BASE_op2) {
                     suggest_artifical_float(n->reg1);
                     suggest_artifical_size(n->reg1, size);
                 }
-                if(instruction_contents[n->base->opcode] & BASE_op3) {
+                if(instruction_contents[n->base->opcode].type & BASE_op3) {
                     suggest_artifical_float(n->reg2);
                     suggest_artifical_size(n->reg2, size);
                 }
@@ -589,41 +577,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     #define FIX_POST_IN_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_artifical(n->reg##N);
     #define FIX_POST_OUT_OPERAND(N) if(reg##N->started_by_bc_index == n->bc_index) free_artifical(n->reg##N);
 
-    DynamicArray<i32> _bc_to_x64_translation;
-    _bc_to_x64_translation.resize(tinycode->size());
-    int last_pc = 0;
-    auto map_translation = [&](i32 bc_addr, i32 asm_addr) {
-        while(bc_addr >= 0 && _bc_to_x64_translation[bc_addr] == 0) {
-            _bc_to_x64_translation[bc_addr] = asm_addr;
-            bc_addr--;
-        }
-    };
-    auto map_strict_translation = [&](i32 bc_addr, i32 asm_addr) {
-        _bc_to_x64_translation[bc_addr] = asm_addr;
-    };
-    auto get_map_translation = [&](i32 bc_addr) {
-        if(bc_addr >= _bc_to_x64_translation.size())
-            return last_pc;
-        return _bc_to_x64_translation[bc_addr];
-    };
+    bc_to_machine_translation.resize(tinycode->size());
+    last_pc = 0;
 
-    struct RelativeRelocation {
-        // RelativeRelocation(i32 ip, i32 x64, i32 bc) : currentIP(ip), immediateToModify(x64), bcAddress(bc) {}
-        i32 inst_addr=0; // It's more of a nextIP rarther than current. Needed when calculating relative offset
-        // Address MUST point to an immediate (or displacement?) with 4 bytes.
-        // You can add some flags to this struct for more variation.
-        i32 imm32_addr=0; // dword/i32 to modify with correct value
-        i32 bc_addr=0; // address in bytecode, needed when looking up absolute offset in bc_to_x64_translation
-    };
-    DynamicArray<RelativeRelocation> relativeRelocations;
     relativeRelocations.reserve(40);
-    auto addRelocation32 = [&](int inst_addr, int imm32_addr, int bc_addr) {
-        RelativeRelocation rel{};
-        rel.inst_addr = inst_addr;
-        rel.imm32_addr = imm32_addr;
-        rel.bc_addr = bc_addr;
-        relativeRelocations.add(rel);
-    };
+    
     // TODO: What about WinMain?
     bool is_entry_point = tinycode->name == compiler->entry_point; // TODO: temporary, we should let the user specify entry point, the whole compiler assumes "main" as entry point...
 
@@ -749,14 +707,15 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         X64_REG_XMM1,
         X64_REG_XMM2,
         X64_REG_XMM3,
-        // BC_REG_XMM4,
+        // Some instructions assume use temporary registers (xmm4-xmm7). If we want to 
+        // allow these instructions here then we may need to rewrite those instructions
+        // to save xmm7 before it is used as a temporary register.
+        // BC_REG_XMM4, 
         // BC_REG_XMM5,
         // BC_REG_XMM6,
         // BC_REG_XMM7,
     };
 
-    DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
-    int virtual_stack_pointer = 0; // TODO: abstract into X64Builder?
     virtual_stack_pointer -= callee_saved_space; // if callee saved space is misaligned then we need to consider that when 16-byte alignment is required. (BC_ALLOC_ARGS)
 
     // use these when calling intrinsics with call instructions that need 16-byte alignment
@@ -781,14 +740,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         virtual_stack_pointer += imm;
     };
 
-    int size_of_saved_args = 0;
-
     // TODO: If the function (tinycode) has parameters and is stdcall or unixcall
     //   then we need the args will be passed through registers and we must
     //   move them to the stack space.
     #define DECL_SIZED_PARAM(CONTROL) InstructionControl control = (InstructionControl)(((CONTROL) & ~CONTROL_MASK_SIZE) | CONTROL_64B);
-    int unixcall_args_offset = 0;
+    int args_offset = 0;
     if(tinycode->call_convention == STDCALL) {
+        args_offset = callee_saved_space;
         // Assert(false);
         for(int i=0;i<accessed_params.size() && i < 4; i++) {
             auto& param = accessed_params[i];
@@ -807,13 +765,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
         }
     } else if(tinycode->call_convention == UNIXCALL) {
-        unixcall_args_offset = callee_saved_space;
+        args_offset = callee_saved_space;
         // If the function only accesses arguments through inline assembly then the user must save the registers manually.
         // unless we provide a special get_arg instruction in the inline assembly?
         if(is_blank && accessed_params.size()) {
             log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
             log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
-            compiler->options->compileStats.errors++; // nochecking, TODO: call some function instead
+            compiler->compile_stats.errors++; // nochecking, TODO: call some function instead
         }
         if (is_entry_point) {
             // entry point has it's arguments put on the stack, not in rdi, rsi...
@@ -869,31 +827,57 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 callee_saved_space += count * 8;
                 virtual_stack_pointer -= 8 * count;
             }
-            for(int i=0;i<accessed_params.size() && i < 6; i++) {
+            int normal_count = 0;
+            int float_count = 0;
+            int stacked_count = 0;
+            for(int i=0;i<accessed_params.size();i++) {
                 auto& param = accessed_params[i];
                 DECL_SIZED_PARAM(param.control)
 
-                size_of_saved_args += 8;
-
-                int off = -unixcall_args_offset - (1+i) * 8;
+                int off = -args_offset - (1+i) * 8;
                 param.offset_from_rbp = off;
 
                 X64Register reg_args = X64_REG_BP;
-                X64Register reg = unixcall_normal_regs[i];
+                X64Register reg = X64_REG_INVALID;
                 if(IS_CONTROL_FLOAT(control)) {
-                    Assert(false); // double check how floats are passed
-                    reg = unixcall_normal_regs[i];
+                    if(float_count < 8) {
+                        // NOTE: Type checker provides a better error, this assert is here as a reminder to fix this code.
+                        Assert(("x64 generator can't handle more than 4 floats",float_count < 4));
+                        reg = unixcall_float_regs[float_count];
+                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                    } else {
+                        Assert(("x64 generator can't handle more than 8 floats",false));
+                        reg = X64_REG_XMM7; // is it safe to use xmm7 register?
+                        int src_off = FRAME_SIZE + stacked_count * 8;
+                        emit_mov_reg_mem(reg,reg_args,control,src_off);
+                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                        stacked_count++;
+                    }
+                    float_count++;
+                } else {
+                    if(normal_count < 6) {
+                        reg = unixcall_normal_regs[normal_count];
+                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                    } else {
+                        reg = X64_REG_A;
+                        int src_off = FRAME_SIZE + stacked_count * 8;
+                        emit_mov_reg_mem(reg,reg_args,control,src_off);
+                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                        stacked_count++;
+                    }
+                    normal_count++;
                 }
-                emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
             }
         }
     }
     
-    struct SPMoment {
-        int virtual_sp;
-        int pop_at_bc_index;
-    };
-    DynamicArray<SPMoment> sp_moments{};
+    
+    // TODO: Stack pointers moments were used when the stack pointer changed a lot.
+    //   Especially between jumps and return statements in a if or while scope.
+    //   Now however, the stack pointer is fixed because we allocate space for local
+    //   variables at start of function. It's just push and pop for expressions and
+    //   arguments for functions that are allocated. BUT, we don't need stack moments
+    //   for that because jumps don't appear inside expressions.
     
     // NOTE: If the generator runs out of registers or X64_REG_INVALID
     //   appears then define the macro below.
@@ -916,6 +900,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     #ifdef DEBUG_REGISTER_USAGE
     log::out << log::CYAN << tinycode->name<<"\n";
     #endif
+    // log::out << log::CYAN << tinycode->name<<"\n";
     for(auto n : inst_list) {
         cur_node = n;
         auto opcode = n->base->opcode;
@@ -923,13 +908,16 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         last_pc = code_size();
         
         for(int i=0;i<sp_moments.size();i++) {
-            if(n->bc_index == sp_moments[i].pop_at_bc_index) {
-                virtual_stack_pointer = sp_moments[i].virtual_sp;
+            auto& moment = sp_moments[i];
+            // log::out << "check " << moment.pop_at_bc_index<<"\n";
+            if(n->bc_index == moment.pop_at_bc_index) {
+                pop_stack_moment(i);
                 i--;
-                sp_moments.pop();
-                break;
+                // break; do not break, there may be more moment to pop on the at the same bc index
             }
         }
+        
+        // log::out << opcode << "  sp:"<<virtual_stack_pointer<<"\n";
         
         #ifdef DEBUG_REGISTER_USAGE
         int log_start = log::out.get_written_bytes();
@@ -969,7 +957,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 auto base = (InstBase_op2_ctrl*)n->base;
                 auto base_imm = (InstBase_op2_ctrl_imm16*)n->base;
                 i16 imm = 0;
-                if(instruction_contents[opcode] & BASE_imm16) {
+                if(instruction_contents[opcode].type & BASE_imm16) {
                     imm = base_imm->imm16;
                 }
 
@@ -1000,7 +988,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 auto base = (InstBase_op2_ctrl*)n->base;
                 auto base_imm = (InstBase_op2_ctrl_imm16*)n->base;
                 i16 imm = 0;
-                if(instruction_contents[opcode] & BASE_imm16) {
+                if(instruction_contents[opcode].type & BASE_imm16) {
                     imm = base_imm->imm16;
                 }
                 if(base->op0 == BC_REG_LOCALS) {
@@ -1162,6 +1150,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     push_offsets.add(0); // needed for SET_ARG
                 } else {
                     Assert(base->op0 == BC_REG_INVALID); // we can't get pointer if we didn't allocate anything
+                    push_offsets.add(0); // needed for SET_ARG
                 }
             } break;
             case BC_FREE_LOCAL:
@@ -1183,7 +1172,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 virtual_stack_pointer += imm;
                 push_offsets.pop();
             } break;
-           case BC_SET_ARG: {
+            case BC_SET_ARG: {
                 auto base = (InstBase_op1_ctrl_imm16*)n->base;
                 FIX_PRE_IN_OPERAND(0)
 
@@ -1337,14 +1326,19 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 int off = base->imm16 + FRAME_SIZE;
                 if(tinycode->call_convention == UNIXCALL) {
+                    // In STDCALL, caller makes space for args and they are put there.
+                    // Sys V ABI convention does not so we make space for them in this call frame.
+                    // The offset is therefore not 'imm+FRAME_SIZE'.
                     if(is_entry_point) {
                         off -= 16; // args on stack, no return address or previous rbp
                     } else {
+                        // TODO: Is the hardcoded 6 okay?
                         if(base->imm16 < 6 * 8) {
-                            off = -unixcall_args_offset - base->imm16;
+                            off = -args_offset - base->imm16 - 8;
                         }
                     }
                 }
+                
                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
                 emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
                 emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
@@ -1355,16 +1349,6 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), reg_params);
 
                 FIX_POST_OUT_OPERAND(0);
-            } break;
-            case BC_JMP: {
-                auto base = (InstBase_imm32*)n->base;
-
-                emit1(OPCODE_JMP_IMM32);
-                int imm_offset = code_size();
-                emit4((u32)0);
-                
-                const u8 BYTE_OF_BC_JMP = 1 + 4; // TODO: DON'T HARDCODE VALUES!
-                addRelocation32(imm_offset - 1, imm_offset, n->bc_index + BYTE_OF_BC_JMP + base->imm32);
             } break;
             case BC_CALL:
             case BC_CALL_REG: {
@@ -1412,24 +1396,52 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         }
                     } break;
                     case UNIXCALL: {
-                        if(recent_set_args.size() > 6) {
-                            Assert(("x64 gen can't handle Sys V ABI with more than 6 arguments.", false));
-                        }
-                        for(int i=0;i<recent_set_args.size() && i < 6;i++) {
+                        // if(recent_set_args.size() > 6) {
+                        //     Assert(("x64 gen can't handle Sys V ABI with more than 6 arguments.", false));
+                        // }
+                        int normal_count = 0;
+                        int float_count = 0;
+                        int stacked_count = 0;
+                        for(int i=0;i<recent_set_args.size();i++) {
                             auto& arg = recent_set_args[i];
                             auto control = arg.control;
 
                             int off = i * 8;
                             X64Register reg_args = X64_REG_SP;
-                            X64Register reg = unixcall_normal_regs[i];
-                            if(IS_CONTROL_FLOAT(control))
-                                reg = unixcall_float_regs[i];
-                            else {
-                                emit_prefix(0, reg, reg);
-                                emit1(OPCODE_XOR_REG_RM);
-                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(reg));
+                            // log::out << "control " <<(InstructionControl)control << "\n";
+                            
+                            if(IS_CONTROL_FLOAT(control)) {
+                                if(float_count < 8) {
+                                    // NOTE: We provide a better error message in the type checker.
+                                    Assert(("x64 generator doesn't support more than 4 float arguments",float_count < 4));
+                                    
+                                    X64Register reg = unixcall_float_regs[float_count];
+                                    emit_mov_reg_mem(reg,reg_args,control,off);
+                                } else {
+                                    X64Register tmp = X64_REG_A;
+                                    emit_mov_reg_mem(X64_REG_A,reg_args,control, off);
+                                    int dst_off = stacked_count * 8;
+                                    emit_mov_mem_reg(reg_args,X64_REG_A,control, dst_off);
+                                    stacked_count++;
+                                }
+                                float_count++;
+                            } else {
+                                if(normal_count < 6) {
+                                    X64Register reg = unixcall_normal_regs[normal_count];
+                                    
+                                    emit_prefix(0, reg, reg);
+                                    emit1(OPCODE_XOR_REG_RM);
+                                    emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(reg));
+                                    emit_mov_reg_mem(reg,reg_args,control,off);
+                                } else {
+                                    X64Register tmp = X64_REG_A;
+                                    emit_mov_reg_mem(X64_REG_A,reg_args,control, off);
+                                    int dst_off = stacked_count * 8;
+                                    emit_mov_mem_reg(reg_args,X64_REG_A,control, dst_off);
+                                    stacked_count++;
+                                }
+                                normal_count++;
                             }
-                            emit_mov_reg_mem(reg,reg_args,control,off);
                         }
                     } break;
                     default: Assert(false);
@@ -1448,9 +1460,13 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 if(base->link == LinkConvention::DYNAMIC_IMPORT) {
                     // log::out << log::RED << "@varimport is incomplete. It was specified in a function named '"<<tinycode->name<<"'\n";
                     // Assert(("incomplete @varimport",false));
-                    emit1(OPCODE_CALL_RM_SLASH_2);
-
-                    emit_modrm_rip32_slash((u8)2, 0);
+                    if(compiler->options->target == TARGET_LINUX_x64) {
+                        emit1(OPCODE_CALL_IMM);
+                        emit4((u32)0);
+                    } else {
+                        emit1(OPCODE_CALL_RM_SLASH_2);
+                        emit_modrm_rip32_slash((u8)2, 0);
+                    }
                     int offset = code_size() - 4;
 
                     map_strict_translation(n->bc_index + 3, offset);
@@ -1518,9 +1534,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         emit_bytes(arr,sizeof(arr));
 
                         // C creates these symbol names in it's object file
-                        prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
+                        program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_funcprog_index);
                         // prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
-                        prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_tinyprog_index);
+                        program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_funcprog_index);
                         // prog->namedUndefinedRelocations.add(reloc0);
                         // prog->namedUndefinedRelocations.add(reloc1);
                     #else
@@ -1592,8 +1608,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         emit_bytes(arr,sizeof(arr));
 
                         // C creates these symbol names in it's object file
-                        prog->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_tinyprog_index);
-                        prog->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_tinyprog_index);
+                        program->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_funcprog_index);
+                        program->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_funcprog_index);
 
                     #else
                         // char = [rsp + 7]
@@ -1668,10 +1684,9 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
                 
                 int total = 0;
-                if(callee_saved_space - callee_saved_regs_len*8  - unixcall_args_offset > 0) {
-                    total += callee_saved_space - callee_saved_regs_len*8 - unixcall_args_offset;
+                if(callee_saved_space - args_offset > 0) {
+                    total += callee_saved_space - args_offset;
                 }
-                total += size_of_saved_args;
                 if(total != 0)
                     emit_add_imm32(X64_REG_SP, (i32)(total));
 
@@ -1713,11 +1728,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JNZ + base->imm32;
                 addRelocation32(imm_offset - 2, imm_offset, jmp_bc_addr);
                 
-                sp_moments.add({virtual_stack_pointer, jmp_bc_addr});
+                push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
                 
                 FIX_POST_IN_OPERAND(0)
             } break;
-             case BC_JZ: {
+            case BC_JZ: {
                 auto base = (InstBase_op1_imm32*)n->base;
                 
                 FIX_PRE_IN_OPERAND(0)
@@ -1735,7 +1750,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JZ + base->imm32;
                 addRelocation32(imm_offset - 2, imm_offset, jmp_bc_addr);
                 
-                sp_moments.add({virtual_stack_pointer, jmp_bc_addr});
+                push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
                 
                 /*
                   Immediates in bytecode jump instructions are relative to
@@ -1755,6 +1770,33 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 */
                 FIX_POST_IN_OPERAND(0)
             } break;
+            case BC_JMP: {
+                auto base = (InstBase_imm32*)n->base;
+
+                emit1(OPCODE_JMP_IMM32);
+                int imm_offset = code_size();
+                emit4((u32)0);
+                
+                const u8 BYTE_OF_BC_JMP = 1 + 4; // TODO: DON'T HARDCODE VALUES!
+                int jmp_bc_addr = n->bc_index + BYTE_OF_BC_JMP + base->imm32;
+                addRelocation32(imm_offset - 1, imm_offset, jmp_bc_addr);
+                
+                // Don't mess with moments if we jump back, aka continue and loop statements
+                if (base->imm32 > 0) {
+                    // Only mess with moments if we have an associated conditional jump (and if we have any moments at all)
+                    // We determine association if the jmp hops to an instruction after the on the conditional one
+                    // hops too.
+                    // There may be flaws, what if we have nested jmp in some sketchy configuration?
+                    // What about break statements. They don't jump backwards.
+                    if (sp_moments.size() > 0) {
+                        auto& last = sp_moments.last();
+                        if (jmp_bc_addr >= last.pop_at_bc_index) {
+                            pop_stack_moment();
+                            push_stack_moment(virtual_stack_pointer, jmp_bc_addr);
+                        }
+                    }
+                }
+            } break;
             case BC_DATAPTR: {
                 auto base = (InstBase_op1_imm32*)n->base;
                 FIX_PRE_OUT_OPERAND(0)
@@ -1766,7 +1808,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 emit1(OPCODE_LEA_REG_M);
                 emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
                 i32 disp32_offset = code_size() - 4; // -4 to refer to the 32-bit immediate in modrm_rip
-                prog->addDataRelocation(base->imm32, disp32_offset, current_tinyprog_index);
+                program->addDataRelocation(base->imm32, disp32_offset, current_funcprog_index);
 
                 FIX_POST_OUT_OPERAND(0)
             } break;
@@ -1776,6 +1818,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 
                 Assert(!IS_REG_XMM(reg0->reg)); // loading pointer into xmm makes no sense, it's a compiler bug
 
+                // IMPORTANT: HOLD ON THERE YOU LITTLE RASCAL! What do you think you're
+                //  doing here. Linking works perfectly and you're trying to mess with it.
+                //  I wouldn't be doing that if I were you.
+                //  These if statements and instructions we generate has to exactly these on
+                //  these operating systems. DON'T TOUCH IT!
                 if(base->link == LinkConvention::STATIC_IMPORT) {
                     // static lib
                     emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
@@ -1784,7 +1831,11 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 } else if(base->link == LinkConvention::DYNAMIC_IMPORT) {
                     // dynamic lib
                     emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_INVALID);
-                    emit1(OPCODE_MOV_REG_RM);
+                    if (compiler->options->target == TARGET_WINDOWS_x64) {
+                        emit1(OPCODE_MOV_REG_RM);
+                    } else if(compiler->options->target == TARGET_LINUX_x64) {
+                        emit1(OPCODE_LEA_REG_M);
+                    } else Assert(false);
                     emit_modrm_rip32(CLAMP_EXT_REG(reg0->reg), (u32)0);
                 } else {
                     log::out << log::RED << "Link convention was not resolved to @importlib or @importdll, error should have been printed earlier.\n";
@@ -1853,7 +1904,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 
                 InstructionControl control = CONTROL_NONE;
                 int size = 8;
-                if(instruction_contents[opcode] & BASE_ctrl) {
+                if(instruction_contents[opcode].type & BASE_ctrl) {
                     auto base = (InstBase_op2_ctrl*)n->base;
                     control = base->control;
                     size = 1 << GET_CONTROL_SIZE(control);
@@ -3414,15 +3465,17 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
 
                 int prefix = 0;
                 if(GET_CONTROL_SIZE(base->control) == CONTROL_32B) {
-
+                    // add instruction has a pointer and we must specify
+                    // REXW so we don't use a 32-bit pointer.
+                    prefix |= PREFIX_REXW;
                 } else if(GET_CONTROL_SIZE(base->control) == CONTROL_64B)
                     prefix |= PREFIX_REXW;
                 else Assert(false);
                 
-                emit1(PREFIX_LOCK);
+                emit1((u8)(PREFIX_LOCK));
                 emit_prefix(prefix, reg0->reg, reg1->reg);
                 emit1(OPCODE_ADD_RM_REG);
-                emit_modrm(MODE_DEREF, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
+                emit_modrm(MODE_DEREF, CLAMP_EXT_REG(reg1->reg), CLAMP_EXT_REG(reg0->reg));
 
                 FIX_POST_IN_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
@@ -3497,7 +3550,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     emit_bytes(ptr, len);
                     for (int i = 0; i < asmInstance.relocations.size();i++) {
                       auto& it = asmInstance.relocations[i];
-                      prog->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
                     }
                 } else {
                     // TODO: Better error, or handle error somewhere else?
@@ -3605,8 +3658,8 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 set_imm8(start_addr + 0xf, (imm>>8)&0xFF);
                 set_imm8(start_addr + 0x10, (imm>>16)&0xFF);
 
-                prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_tinyprog_index);
-                prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_tinyprog_index);
+                program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_funcprog_index);
+                program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_funcprog_index);
                 #else
                 
                 /*
@@ -3711,7 +3764,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     }
     
     // last instruction should be ret
-    Assert(tinyprog->text[tinyprog->head-1] == OPCODE_RET);
+    Assert(funcprog->text[funcprog->head-1] == OPCODE_RET);
     
     for(int i=0;i<tinycode->call_relocations.size();i++) {
         auto& r = tinycode->call_relocations[i];
@@ -3719,7 +3772,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             continue;
         int ind = r.funcImpl->tinycode_id - 1;
         // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";
-        prog->addInternalFuncRelocation(current_tinyprog_index, get_map_translation(r.pc), ind);
+        program->addInternalFuncRelocation(current_funcprog_index, get_map_translation(r.pc), ind);
     }
 
     
@@ -3729,7 +3782,7 @@ bool X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
         auto& rel = bytecode->externalRelocations[i];
         if(tinycode->index == rel.tinycode_index) {
             int off = get_map_translation(rel.pc);
-            prog->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.is_global_var);
+            program->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.type == BC_REL_GLOBAL_VAR);
             // found = true;
             // break;
         }
@@ -3794,7 +3847,7 @@ engone::Logger& operator<<(engone::Logger& l, X64Inst& i) {
     if(i.reg2 != 0)
         l << ", " << i.reg2;
     
-    int flags = instruction_contents[i.base->opcode];
+    int flags = instruction_contents[i.base->opcode].type;
     int offset = 1 + ((flags & BASE_op1) != 0) + ((flags & BASE_op2) != 0) + ((flags & BASE_op3) != 0)
         + ((flags & BASE_ctrl) != 0) + ((flags & BASE_link) != 0)
         + ((flags & BASE_call) != 0);
@@ -3819,7 +3872,7 @@ engone::Logger& operator<<(engone::Logger& l, X64Inst& i) {
 bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
     using namespace engone;
     
-    #define SEND_ERROR() compiler->options->compileStats.errors++;
+    #define SEND_ERROR() compiler->compile_stats.errors++;
     
     // TODO: Use one inline assembly file per thread and reuse them.
     //   bin path gets full of assembly files otherwise.

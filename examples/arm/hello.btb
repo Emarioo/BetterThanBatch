@@ -1,0 +1,17 @@
+/* Compile and run with:
+    btb examples/arm/hello -t arm -g -r
+    
+   To start gdb server in qemu, default port is 1234
+    btb examples/arm/hello -t arm -g -r --qemu-gdb
+    btb examples/arm/hello -t arm -g -r --qemu-gdb 4321
+*/
+
+#import "arm/xilinx-zynq-a9"
+
+init_uart0_RxTx_115200_8N1()
+
+s := "Hello world!\n".ptr
+while(*s != '\0') { 
+    sendUART0char(*s);
+    s++;
+}

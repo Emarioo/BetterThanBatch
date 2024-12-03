@@ -1,6 +1,8 @@
 /*
     Networking with server and client
 
+    There is server/client user data
+    and connection user data.
 
     TODO: It would be convenient if Server and Client was one struct.
       A game that can be a client or server could call the same functions on one struct without
@@ -10,6 +12,8 @@
       while the client only has one connection. So we kind of need a switch even if we have one struct.
 
     TODO: Tests for various events. Test for start, close, wait, disconnect. 
+    
+    TODO: Don't ignore host/network order bytes
 */
 
 #import "Array"
@@ -26,16 +30,30 @@
 #endif
 
 enum EventType {
-	EVENT_START, // server starts listening or client connects to server
-	EVENT_CLOSE, // server stops listening or client closes connections
-	EVENT_RECEIVE, // data is received, server or client
-	EVENT_CONNECT, // from server side, a client connected
-	EVENT_DISCONNECT, // from server side, a client disconnected
+	EVENT_START_LISTENING, // server starts listening, client will not receive this event
+	EVENT_STOP_LISTENING, // server stops listening, client will not receive this event
+	EVENT_RECEIVE, // server/client received data
+	EVENT_CONNECT, // server/client started connection
+	EVENT_DISCONNECT, // server/client closes connection
 }
-struct Event {
+enum NetHandlerResponse {
+    NET_HANDLER_ACCEPT,
+    NET_HANDLER_SOME_MORE_BYTES,
+    NET_HANDLER_EXACT_MORE_BYTES,
+}
+// Every connection has their own NetEvent structure that is passed by pointer
+// to callbacks.
+struct NetEvent {
 	type: EventType;
 	who: ConnectionID; // only server
-	bytes: char[]; // only on receive
+	bytes: char[];
+    handler_response: NetHandlerResponse;
+    handler_byte_count: i32; // used with NET_HANDLER_EXACT_MORE_BYTES to tell Server/Client that exactly this much data is needed
+                             // if user specified NET_HANDLER_EXACT_MORE_BYTES or NET_HANDLER_SOME_MORE_BYTES then Server/Client
+                             // would set this to how many bytes has been put into the buffer excluding the current event.
+                             // bytes.len would contain the real total count.
+                             // When user ACCEPTS the received data they need to set handlar_byte_count
+    user_data: void*; // stays the same per connection, not touched by the Server/Client
 }
 enum NetError {
     NET_SUCCESS,
@@ -46,15 +64,21 @@ enum NetError {
 enum NetProtocol {
     NET_NONE = 0,
     
+    NET_PROTOCOL_MASK = 0x1,
     NET_TCP = 0x0,
     NET_UDP = 0x1, // not implemented
 
     // Protocols and behaviour relevant to the networking library. They have nothing to do with tcp/ip.
-    NET_PROTO_STREAM  = 0x0, // library lets you handle the logic for separating messages, use this when implementing HTTP or other protocols
-    NET_PROTO_MESSAGE = 0x1, // library sends distinct messages that are length prefixed, use this when implementing multiplayer for a game
+    NET_HANDLER_TYPE_MASK = 0x2,
+    NET_HANDLER_STREAM    = 0x0, // library lets you handle the logic for separating messages, use this when implementing HTTP or other protocols
+    NET_HANDLER_MESSAGE   = 0x2, // library sends distinct messages that are length prefixed, use this when implementing custom protocols for multiplayer games (or other applications)
+    
+    // backwards compatibility
+    NET_PROTO_STREAM = 0x0,
+    NET_PROTO_MESSAGE = 0x2,
 }
 #macro ConnectionID i32
-#macro EventCallback fn(e: Event, user_data: void*)
+#macro EventCallback fn(e: NetEvent*, user_data: void*)
 
 struct Connection {
     receiver_thread: Thread;
@@ -64,6 +88,7 @@ struct Connection {
     server: Server*;
     conn_id: ConnectionID; // index into server.m_connections, -1 means invalid connection
     in_use: bool;
+    event: NetEvent;
 }
 struct MessageHeader {
     length: i32;
@@ -82,7 +107,7 @@ struct Server {
         close() // make sure connection is closed
     }
 
-	fn start(port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+	fn start(port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM, message_byte_limit: i32 = 0x100_000) -> NetError {
         if m_is_initialized
             return NET_FAILURE // already started, call close() first
 
@@ -91,8 +116,9 @@ struct Server {
         }
         m_port = port
         m_protocol = protocol
+        m_message_byte_limit = message_byte_limit;
 
-        m_socket = create_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+        m_socket = create_socket(AF_INET, SOCK_STREAM, 0)
         if !m_socket.valid() {
             log("socket failed")
             return NET_FAILURE
@@ -101,9 +127,12 @@ struct Server {
         addr: sockaddr_in
         addr.sin_family = AF_INET
         addr.sin_port = htons(m_port)
-        addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
+        addr.sin_addr = 0
+        // addr.sin_addr = htonl(0x7F_00_00_01) // 127.0.0.1
         
-        err := m_socket.bind(cast<sockaddr*>&addr, sizeof addr)
+        // TODO: SO_REUSEADDR should prevent ports from being in a waiting state.
+        
+        err := m_socket.bind(cast<sockaddr*>&addr, sizeof(addr))
         if err != SOCKET_SUCCESS {
             log("bind failed")
             return NET_BAD_IP
@@ -122,16 +151,16 @@ struct Server {
             server: Server* = arg
 
             if server.m_event_callback {
-                e: Event
-                e.type = EVENT_START
+                e: NetEvent
+                e.type = EVENT_START_LISTENING
                 e.who = 0
                 // NOTE: If user sets server.m_event_callback to null at a bad timing then we may crash here
-                server.m_event_callback(e, server.m_user_data)
+                server.m_event_callback(&e, server.m_user_data)
             }
-
             while {
                 // log("#waiting")
                 client_socket := server.m_socket.accept(null, null)
+                // log("ACCEPT")
                 if !client_socket.valid() {
                     // TODO: Handle error, normally accept fails because socket was closed but
                     //   There may have been an error which we should report.
@@ -154,7 +183,7 @@ struct Server {
                     // Otherwise create a new connection structure
                     connection = Allocate(sizeof Connection)
                     memzero(connection, sizeof Connection)
-                    connection.message_max = 0x10000
+                    connection.message_max = 0x100000 // 1 MB
                     connection.message_data = Allocate(connection.message_max)
                     connection.server = server
                     connection.conn_id = server.m_connections.size()
@@ -179,13 +208,17 @@ struct Server {
                     // NOTE: We cannot lock server.mutex because the listener thread may join
                     //  client connections and when it does, it iterates through all connections and locks server.mutex, if we try to lock it then we end up in a deadlock
 
+                    construct(&connection.event)
+                    
                     if server.m_event_callback {
-                        e: Event
-                        e.type = EVENT_CONNECT
-                        e.who = connection.conn_id
-                        server.m_event_callback(e, server.m_user_data)
+                        connection.event.type = EVENT_CONNECT
+                        connection.event.who = connection.conn_id
+                        connection.event.handler_response = NET_HANDLER_ACCEPT
+                        server.m_event_callback(&connection.event, server.m_user_data)
                     }
-
+                    
+                    requested_byte_count: i32;
+                    byte_offset: i32; // this is used if user request more bytes for their packet/message
                     while {
                         bytes: i32
                         if protocol & NET_PROTO_MESSAGE {
@@ -222,7 +255,7 @@ struct Server {
                                 break
                             }
 
-                            if header.length > 0x1000000 { // more than 1 MB
+                            if header.length > server.m_message_byte_limit {
                                 log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
                                 break
                             }
@@ -243,7 +276,22 @@ struct Server {
                                 server.m_received_bytes += bytes
                             }
                         } else {
-                            bytes = connection.socket.recv(connection.message_data, connection.message_max, 0)
+                            
+                            // TODO: resize message buffer if message_max - byte_offset is to small. Like less than 25% of the original.
+                            if byte_offset >= connection.message_max / 2 {
+                                new_max := connection.message_max * 2
+                                new_ptr := Reallocate(new_max, connection.message_data)
+                                Assert(new_ptr)
+                                connection.message_data = new_ptr
+                                connection.message_max= new_max
+                            }
+                            
+                            size := requested_byte_count
+                            if size == 0 {
+                                size = connection.message_max - byte_offset
+                            }
+                            // log("recv..")
+                            bytes = connection.socket.recv(connection.message_data + byte_offset, size, 0)
 
                             if bytes > 0
                                 server.m_received_bytes += bytes
@@ -266,23 +314,78 @@ struct Server {
                             // log("recv failed")
                             break
                         }
+                        
+                        if bytes < requested_byte_count && requested_byte_count != 0 {
+                            requested_byte_count -= bytes
+                            byte_offset += bytes
+                            continue
+                        }
 
                         if connection.server.m_event_callback {
-                            e: Event
-                            e.type = EVENT_RECEIVE
-                            e.who = connection.conn_id
-                            e.bytes = Slice<char>{connection.message_data,bytes}
-                            server.m_event_callback(e, server.m_user_data)
+                            connection.event.type = EVENT_RECEIVE
+                            connection.event.who = connection.conn_id
+                            connection.event.bytes = Slice<char>{connection.message_data, byte_offset + bytes}
+                            connection.event.handler_response = NET_HANDLER_ACCEPT
+                            connection.event.handler_byte_count = byte_offset
+                            
+                            // global mutex: Mutex;
+                            // global counter: i32;
+                            // mutex.lock();
+                            // counter++;
+                            // log("handling ", counter)
+                            // mutex.unlock()
+                            server.m_event_callback(&connection.event, server.m_user_data)
+                            // mutex.lock();
+                            // counter--;
+                            // log("done handling ", counter)
+                            // mutex.unlock()
+                            
+                            if cast<i32>(protocol & NET_PROTO_MESSAGE) == 0 {
+                                if(connection.event.handler_response == NET_HANDLER_ACCEPT) {
+                                    if !(connection.event.handler_byte_count != byte_offset) {
+                                        // user of library didn't specify how many bytes were consumed.
+                                        // This is only necessary if user previosuly requested more bytes.
+                                        Assert(false)
+                                    }
+                                    consumed_bytes := connection.event.handler_byte_count
+                                    remaining_bytes := byte_offset + bytes - consumed_bytes
+                                    
+                                    dst_offset := 0
+                                    src_offset := consumed_bytes
+                                    
+                                    while remaining_bytes > 0 {
+                                        size := remaining_bytes
+                                        // We need this if memcpy can't handle overlapping memory.
+                                        // Current implementation can but we never know in the future.
+                                        if dst_offset + size > src_offset {
+                                            size = src_offset - dst_offset
+                                        }
+                                        memcpy(connection.message_data + dst_offset, connection.message_data + src_offset, size)
+                                        dst_offset += size
+                                        src_offset += size
+                                        remaining_bytes -= remaining_bytes
+                                    }
+                                    byte_offset = 0
+                                    requested_byte_count = 0
+                                } else if (connection.event.handler_response == NET_HANDLER_SOME_MORE_BYTES) {
+                                    // user wants more bytes
+                                    byte_offset += bytes
+                                } else if(connection.event.handler_response == NET_HANDLER_EXACT_MORE_BYTES) {
+                                    byte_offset += bytes
+                                    requested_byte_count = connection.event.handler_byte_count
+                                }
+                            }
                         }
                         // std_prints("[READ ", bytes,"]")
                         // std_print(buffer.ptr, bytes)
                     }
 
                     if server.m_event_callback {
-                        e: Event
-                        e.type = EVENT_DISCONNECT
-                        e.who = connection.conn_id
-                        server.m_event_callback(e, server.m_user_data)
+                        connection.event.type = EVENT_DISCONNECT
+                        connection.event.who = connection.conn_id
+                        server.m_event_callback(&connection.event, server.m_user_data)
+                        
+                        destruct(&connection.event)
                     }
 
                     // We can't destroy Connection here because it stores data for thread
@@ -333,9 +436,9 @@ struct Server {
 
             // Then trigger close event. We don't want the close event to trigger and then have stray disconnect events appear.
             if server.m_event_callback {
-                e: Event
-                e.type = EVENT_CLOSE
-                server.m_event_callback(e, server.m_user_data)
+                e: NetEvent
+                e.type = EVENT_STOP_LISTENING
+                server.m_event_callback(&e, server.m_user_data)
             }
 
             // We may have closed all connections and the thread may have terminated but
@@ -362,7 +465,7 @@ struct Server {
         m_is_initialized = false
     }
     fn wait() {
-        if m_listener_thread.valid() {
+        if m_listener_thread.valid() && m_listener_thread.id != ThreadSelfId() {
             m_listener_thread.join()
         }
         Assert(!m_socket.valid())
@@ -465,7 +568,7 @@ struct Server {
         m_event_callback = func
         m_user_data = user_data
     }
-	// fn pollEvents(blocking: bool) -> Event[] { }
+	// fn pollEvents(blocking: bool) -> NetEvent[] { }
 	
 	m_port: u32;
     m_protocol: NetProtocol;
@@ -478,9 +581,22 @@ struct Server {
 
     m_event_callback: EventCallback;
     m_user_data: void*;
-
+    
+    fn get_number_connections() -> i32 {
+        mutex.lock()
+        n := 0
+        for m_connections.sliced() {
+            if it.in_use
+                n++
+        }
+        mutex.unlock()
+        return n
+    }
+    
     m_received_bytes: i32;
     m_sent_bytes: i32;
+    
+    m_message_byte_limit: i32 = 0x100_000;
 
 	mutex: Mutex;
 	m_send_mutex: Mutex;
@@ -496,7 +612,7 @@ struct Client {
         }
     }
 
-	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM) -> NetError {
+	fn start(ip: char[], port: u32, protocol: NetProtocol = NET_TCP | NET_PROTO_STREAM, message_byte_limit: i32 = 0x100_000) -> NetError {
         if m_is_initialized
             return NET_FAILURE // already started
 
@@ -507,6 +623,7 @@ struct Client {
         m_ip.append(ip)
         m_port = port
         m_protocol = protocol
+        m_message_byte_limit = message_byte_limit;
 
         m_socket = create_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         if !m_socket.valid() {
@@ -553,10 +670,10 @@ struct Client {
             client: Client* = arg
 
             if client.m_event_callback {
-                e: Event
-                e.type = EVENT_START
+                e: NetEvent
+                e.type = EVENT_CONNECT
                 e.who = 0
-                client.m_event_callback(e, client.m_user_data)
+                client.m_event_callback(&e, client.m_user_data)
             }
 
             while {
@@ -590,7 +707,7 @@ struct Client {
                         break
                     }
 
-                    if header.length > 0x1000000 { // more than 1 MB
+                    if header.length > client.m_message_byte_limit {
                         log("recv read ",header.length," as header length which is suspiciously large, was something corrupted?")
                         break
                     }
@@ -641,11 +758,11 @@ struct Client {
                 }
 
                 if client.m_event_callback {
-                    e: Event
+                    e: NetEvent
                     e.type = EVENT_RECEIVE
                     e.who = 0
                     e.bytes = Slice<char>{client.m_message_data,read_bytes}
-                    client.m_event_callback(e, client.m_user_data)
+                    client.m_event_callback(&e, client.m_user_data)
                 }
                 // std_prints("[READ ", read_bytes,"]")
                 // std_print(buffer.ptr, read_bytes)
@@ -654,10 +771,10 @@ struct Client {
             client.m_socket.close()
 
             if client.m_event_callback {
-                e: Event
-                e.type = EVENT_CLOSE
+                e: NetEvent
+                e.type = EVENT_DISCONNECT
                 e.who = 0
-                client.m_event_callback(e, client.m_user_data)
+                client.m_event_callback(&e, client.m_user_data)
             }
 
             return 0
@@ -679,6 +796,8 @@ struct Client {
         if m_receiver_thread.valid() {
             m_receiver_thread.join()
         }
+        if m_socket.valid() // should already be closed
+            m_socket.close()
         m_is_initialized = false
     }
     fn is_active() -> bool {
@@ -723,7 +842,7 @@ struct Client {
         m_user_data = user_data
     }
 
-    // fn pollEvents(blocking: bool) -> Event[] { }
+    // fn pollEvents(blocking: bool) -> NetEvent[] { }
     
     /*######################
         Members
@@ -747,6 +866,7 @@ struct Client {
     
     m_received_bytes: i32;
     m_sent_bytes: i32;
+    m_message_byte_limit: i32;
 
     /*######################
         Internal functions
@@ -796,14 +916,14 @@ fn TestNetEvents() {
     client1.set_callback(c_callback, null)
     client2.set_callback(c_callback, null)
     global mutex: Mutex
-    fn s_callback(e: Event, ud: void*) {
+    fn s_callback(e: NetEvent, ud: void*) {
         mutex.lock()
         log("Server:")
         std_print_any(&e, true) log()
         // log(&e)
         mutex.unlock()
     }
-    fn c_callback(e: Event, ud: void*) {
+    fn c_callback(e: NetEvent, ud: void*) {
         mutex.lock()
         log("Client")
         std_print_any(&e, true) log()

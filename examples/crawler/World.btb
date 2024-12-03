@@ -77,7 +77,7 @@ struct World {
         chunks.init(100)
     }
     fn add_entity(x: f32, y: f32, w: f32, h: f32, type: EntityType) -> Entity* {
-        id, e := entities.add(null)
+        e, id := entities.add(null)
         e.entity_info = cast<i32>type
         e.pos.x = x
         e.pos.y = y
@@ -150,7 +150,8 @@ struct World {
             }
         }
         if !found_chunk {
-            _: i32, found_chunk = chunks.add(null)
+            chunk, index := chunks.add(null)
+            found_chunk = chunk
             found_chunk.tiles.resize(chunk_size*chunk_size)
         }
         return found_chunk
@@ -387,14 +388,14 @@ fn LoadWorld(path: char[], world: World*) -> bool {
     world.chunk_size = body.chunk_size
 
     for 0..body.entity_count {
-        _, ent := world.entities.add(null)
+        ent, index := world.entities.add(null)
         
         FileRead(file, ent, sizeof(Entity))
     }
 
     tile_count := body.chunk_size * body.chunk_size
     for 0..body.chunk_count {
-        _, chunk := world.chunks.add(null)
+        chunk, index := world.chunks.add(null)
         
         FileRead(file, &chunk.x, sizeof(i32))
         FileRead(file, &chunk.y, sizeof(i32))

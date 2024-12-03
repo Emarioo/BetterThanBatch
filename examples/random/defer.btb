@@ -1,18 +1,18 @@
 #import "Logger"
 
 fn top(){
-    defer print("defer top\n");
+    defer log("defer top");
 
     fn inner(){
-        defer print("defer inner\n");
+        defer log("defer inner");
         for 0..2 {
-            defer print("defer while\n");
+            defer log("defer while");
             {
-                defer print("defer scoped\n");
+                defer log("defer scoped");
             }
             if nr == 1
                 break;
-            print("while end\n")
+            log("while end")
         }
     }
     inner();

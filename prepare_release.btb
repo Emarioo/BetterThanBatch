@@ -29,13 +29,14 @@ fn main() {
     path_release: StringBuilder
     path_release.append("bin/")
     #if OS_WINDOWS
-        path_release.append("btb-win_x64-")
+        path_release.append("btb-0.2.0-win_x64")
         path_exe        := "bin/btb.exe"
     #else
-        path_release.append("btb-linux_x64-")
+        path_release.append("btb-0.2.0-linux_x64")
         path_exe        := "bin/btb"
     #endif
-    path_release.append(substring(#date, 0,7))
+    path_bin := path_release.copy()
+    path_bin.append("-bin")
 
     path_docs       := "docs"
     path_examples   := "examples"
@@ -55,16 +56,20 @@ fn main() {
 
     cmd: StringBuilder
     #if OS_WINDOWS
-        cmd.append("python build.py msvc use_optimizations output=")
+        cmd.append("python build.py use_optimizations use_debug=false use_tracy=false output=")
         cmd.append(path_release)
-        cmd.append("/btb.exe")
+        cmd.append("/btb.exe msvc")
+        cmd.append(" bin_dir=")
+        cmd.append(path_bin)
     #else
-        cmd.append("python3 build.py gcc use_optimizations output=")
+        cmd.append("python3 build.py use_optimizations use_debug=false use_tracy=false output=")
         cmd.append(path_release)
-        cmd.append("/btb")
+        cmd.append("/btb gcc")
+        cmd.append(" bin_dir=")
+        cmd.append(path_bin)
     #endif
     // log(cmd)
-    ExecuteCommand(cmd.sliced(), null, true)
+    ExecuteCommand(cmd.sliced(), null, false)
 
     #macro COPY_DIR(path)
     {
@@ -74,20 +79,23 @@ fn main() {
     }
     #endmacro
 
-    COPY_DIR("docs")
-    COPY_DIR("examples")
+    // COPY_DIR("docs")
+    // COPY_DIR("examples")
+    // COPY_DIR("assets") // not strictly necessary but there are some examples that rely on fonts
     COPY_DIR("modules")
     COPY_DIR("libs")
-    COPY_DIR("assets") // not strictly necessary but there are some examples that rely on fonts
 
     readme := @strbeg
 Hello curious programmer!
 
-This is the 0.2.0 version of the compiler. Read guide and examples provided with the release to begin using the language and compiler!
+This version 0.2.0 of the BTB compiler. Read guide and examples on `www.github.com/Emarioo/BetterThanBatch` to begin using the language!
 
 **DISCLAIMER**: This version is not very stable. You will most likely run in to bugs and problems. You can report any bugs you find on the github repository `www.github.com/Emarioo/BetterThanBatch`
 
-The standard library is very experimental, functions interacting with the operating system does not handle errors very well and so on.
+The standard library is very experimental, functions for the operating system does not handle errors very well.
+
+The compiler is in early stages and will keep changing a lot until the 1.0.0 release.
+One of the planned breaking changes is a redo of the preprocessor and macros.
     @strend
 
     {
@@ -100,4 +108,6 @@ The standard library is very experimental, functions interacting with the operat
         // log(name_of_error(err))
         FileClose(file)
     }
+    
+    log("Prepared release in ",path_release)
 }

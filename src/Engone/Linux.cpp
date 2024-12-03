@@ -21,6 +21,9 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 
+#include <sys/types.h>
+#include <sys/ptrace.h>
+
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -211,7 +214,6 @@ namespace engone {
 			if(result->name[i]=='\\')
 				result->name[i] = '/';
 		}
-
 		return true;
 	}
 	void DirectoryIteratorSkip(DirectoryIterator iterator){
@@ -228,7 +230,7 @@ namespace engone {
 			return;
 		}
 		
-		if(!info->second.dirIter){
+		if(info->second.dirIter){
 			closedir(info->second.dirIter);
 			info->second.dirIter = nullptr;
 		}
@@ -390,8 +392,12 @@ namespace engone {
 		return false;
 	}
     bool FileExist(const std::string& path){
-        struct stat buffer;   
-        return (stat(path.c_str(), &buffer) == 0) && (buffer.st_mode & S_IFDIR) == 0;
+        struct stat buffer;  
+        int err = stat(path.c_str(), &buffer);
+        auto ok = errno;
+        if (err != 0)
+            return false;
+        return (buffer.st_mode & S_IFDIR) == 0;
     }
 	bool DirectoryExist(const std::string& path){
         struct stat buffer;   
@@ -408,9 +414,65 @@ namespace engone {
 		}
 		return position;
 	}
-	bool FileCopy(const std::string& src, const std::string& dst){
-		Assert(("FileCopy function not implemented",false));
-		return false;
+	int GetCPUCoreCount() {
+		return sysconf(_SC_NPROCESSORS_ONLN);
+	}	
+    bool FileLastWriteSeconds(const std::string& path, double* seconds, bool log_error){
+		struct stat buffer;
+		int err = stat(path.c_str(), &buffer);
+		if(err != 0)
+			return false;
+
+        // return ( == 0) && (buffer.st_mode & S_IFDIR);
+
+		auto& ts = buffer.st_mtim;
+		*seconds = (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec))/(double)NS;
+        return true;
+    }
+     bool FileLastWriteTimestamp_us(const std::string& path, u64* timestamp, bool log_error){
+		struct stat buffer;
+		int err = stat(path.c_str(), &buffer);
+		if(err != 0)
+			return false;
+
+        // return ( == 0) && (buffer.st_mode & S_IFDIR);
+
+		auto& ts = buffer.st_mtim;
+		*timestamp = (u64)ts.tv_sec * 1000'000 + (u64)ts.tv_nsec;
+        return true;
+    }
+	bool FileCopy(const std::string& src, const std::string& dst, bool log_error){
+		// Assert(("FileCopy function not implemented",false));
+		 
+		int from = open(src.c_str(), O_RDONLY);
+		if(from < 0)
+			return false;
+		int to = open(src.c_str(), O_WRONLY | O_CREAT, 00644);
+		if(to < 0) {
+			close(to);
+			return false;
+		}
+		#define BUFFER_SIZE 0x100'000
+		void* ptr = malloc(BUFFER_SIZE);
+		if(!ptr)
+			return false;
+
+        bool success = true;
+		int n;
+		while ((n = read(from, ptr, BUFFER_SIZE)) > 0) {
+			int res = write(to, ptr, n);
+            if(res < 0) {
+                success = false;
+                break;
+            }
+		}
+
+		close(from);
+		close(to);
+
+		free(ptr);
+
+		return success;
 	}
 	bool FileMove(const std::string& src, const std::string& dst){
 		int err = rename(src.c_str(),dst.c_str());
@@ -440,6 +502,10 @@ namespace engone {
         path.resize(len);
 
         return path;
+	}
+    std::string EnvironmentVariable(const std::string& name){
+		char* value = getenv(name.c_str());
+        return value;
 	}
     // struct AllocInfo {
 	// 	std::string name;
@@ -781,7 +847,7 @@ namespace engone {
 	}
 	void Mutex::lock() {
 		if(m_internalHandle == 0) {
-			auto ptr = (pthread_mutex_t*)malloc(sizeof (pthread_mutex_t));
+			auto ptr = (pthread_mutex_t*)malloc(sizeof(pthread_mutex_t));
 			m_internalHandle = (u64)ptr;
 			int res = pthread_mutex_init(ptr, nullptr);
 			if(res != 0) {
@@ -1277,6 +1343,20 @@ namespace engone {
 		auto ptr = dlsym(library, name.c_str());
 		return (VoidFunction)ptr;
 	}
-
+    
+    // This works on both linux and MacOSX (and any BSD kernel).
+    bool IsProcessDebugged() {
+        // https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
+        static bool isCheckedAlready = false;
+        static int underDebugger = 0;
+        if (!isCheckedAlready) {
+            if (ptrace(PTRACE_TRACEME, 0, 1, 0) < 0)
+                underDebugger = 1;
+            else
+                ptrace(PTRACE_DETACH, 0, 1, 0);
+            isCheckedAlready = true;
+        }
+        return underDebugger == 1;
+    }
 }
 #endif

@@ -6,7 +6,9 @@
 */
 
 // TODO: import the right OS bindings
-#import "Windows"
+#if OS_WINDOWS
+    #import "Windows"
+#endif
 
 // temporary
 #import "Logger"
@@ -31,6 +33,11 @@ fn Free(ptr: void*, old_size: i64 = 0) {
 // realloc - AllocateHeap(128, ptr, old_size = 64)
 fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
 #if OS_WINDOWS
+    // global mut: Mutex;
+    // mut.lock()
+    // defer mut.unlock()
+    // std_print("enter heap\n")
+    // defer std_print("leave heap\n")
     heap := GetProcessHeap()
     if !size {
         if ptr {
@@ -54,14 +61,14 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
             // dont have stable globals memory ready yet, scuffed and complicated but it works
             if stable_global_memory
         #endif
-            memory_tracker.add(new_ptr, size)
+            // memory_tracker.add(new_ptr, size)
         // else
         //     memory_tracker.add(new_ptr, size, type)
     } else {
         new_ptr = HeapReAlloc(heap, 0, ptr, size)
         // if type.index() == 0 {
             memory_tracker.remove(ptr, old_size) // we must remove first incase HeapReAlloc returns the same pointer
-            memory_tracker.add(new_ptr, size)
+            // memory_tracker.add(new_ptr, size)
         // } else {
         //     memory_tracker.remove(ptr, old_size, type)
         //     memory_tracker.add(new_ptr, size, type)
@@ -116,11 +123,12 @@ fn hash(v: lang_TypeId) -> u32 {
     // Assert(4 == sizeof lang_TypeId)
     return *cast<u32*>&v
 }
+// NOTE: Remember to initialize tracker
 struct MemoryTracker {
     allocations: Map<void*, i32>;
     map_types: Map<u32, MemoryTracker_Item>; // u32 is a hashed lang_TypeId
     initialized: bool;
-    disabled: bool;
+    disabled: bool = true;
     fn init() {
         allocations.init(10000)
         map_types.init(200)
@@ -228,6 +236,8 @@ struct MemoryTracker {
     }
 
     fn print_memory() {
+        disabled = true
+        defer disabled = false
         {
             log("Allocations:")
             iter := allocations.create_iterator()
@@ -262,7 +272,7 @@ struct MemoryTracker {
                     if count == 0
                         continue
 
-                    log("  ",*iter.key, " count: ", count)
+                    log("   ",*iter.key, " count: ", count)
                 }
             }
             if !logged   log(" none")

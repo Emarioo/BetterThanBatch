@@ -1,0 +1,284 @@
+/*
+    Simple HTTP server
+    
+    There are many flaws with it.
+    
+    TODO: Provide utility functions for sanitizing paths and text (for script injection).
+*/
+#import "Net"
+
+#macro FnRequest fn(HTTPRequest*, NetEvent*, void*)
+
+enum HTTPMethod {
+    HTTP_INVALID, // request has incorrect format for HTTP
+    HTTP_GET,
+    HTTP_POST,
+}
+
+struct HTTPServer {
+    server: Server; // TCP server
+    user_data: void*;
+    callback: FnRequest;
+    
+    fn cleanup() {
+        server.cleanup()
+    }
+    fn wait() {
+        server.wait()
+    }
+    fn close() {
+        server.close()
+    }
+    
+    fn send(status: i32, data: char[], who: ConnectionID) {
+        response: StringBuilder
+        defer response.cleanup()
+        
+        build_response(&response, status, data.len)
+       
+        if data.len > 0
+            response.append(data)
+        
+        server.send(response.sliced(), who = who)
+    }
+    fn build_response(string: StringBuilder*, status: i32, content_length: i32) {
+        if status == 200 {
+            string.append("HTTP/1.1 200 OK\r\n")
+        } else if status == 404 {
+            string.append("HTTP/1.1 404 Not Found\r\n")
+        } else {
+            string.append("HTTP/1.1 ")
+            string.append(status)
+            string.append(" Error\r\n")
+        }
+        
+        string.append("Content-Length: ")
+        string.append(content_length)
+        string.append("\r\n")
+        string.append("Connection: keep-alive\r\n")
+        // string.append("Connection: close\r\n")
+        string.append("\r\n")
+    }
+    // NOTE: 'build_response' and 'send_built_response' allows you to append headers and content data to a StringBuilder directly.
+    //   The normal 'send' function will copy data to an internal temporary StringBuilder which is inconvenient (slow) when
+    //   sending large data. 
+    fn send_built_response(response: StringBuilder*, who: ConnectionID) {
+        server.send(response.sliced(), who = who)
+    }
+    fn send_built_response(response: char[], who: ConnectionID) {
+        server.send(response, who = who)
+    }
+}
+
+// NOTE: Any field may be null/empty.
+struct HTTPRequest {
+    method: HTTPMethod;
+    // TODO: HTTP version
+    url: char[]; // includes route and queries
+    route: char[]; // always begins with /
+    queries: Map<char[],char[]>; // queries after ? (http://localhost/get?id=23)
+    
+    headers: Map<char[],char[]>;
+    content: char[];
+}
+
+fn StartHTTPServer(port: i32, callback: FnRequest, user_data: void*, wait: bool = false, message_byte_limit: i32 = 0x100_000) -> HTTPServer* {
+    http_server: HTTPServer* = Allocate(sizeof HTTPServer)
+    construct(http_server)
+    http_server.callback = callback
+    http_server.user_data = user_data
+    http_server.server.set_callback(HTTP_handle_event, http_server)
+    http_server.server.start(port, message_byte_limit = message_byte_limit)
+    
+    if wait {
+        http_server.wait()
+        return null
+    }
+    
+    return http_server
+}
+fn HTTP_handle_event(event: NetEvent*, user_data: void*) {
+    server: HTTPServer* = user_data
+    
+    struct HTTPConData {
+        request: HTTPRequest;
+        header_length: i32;
+        wait_for_content: bool;
+    }
+    if event.type == EVENT_CONNECT {
+        event.user_data = Allocate(sizeof(HTTPConData))
+        construct(cast<HTTPConData*>event.user_data)
+        return;
+    }
+    extra_data := cast<HTTPConData*>event.user_data
+    request := &extra_data.request
+    
+    if event.type == EVENT_DISCONNECT {
+        request.queries.cleanup()
+        request.headers.cleanup()
+        destruct(cast<HTTPConData*>event.user_data)
+        Free(event.user_data)
+        return;
+    }
+    if event.type != EVENT_RECEIVE {
+        return;
+    }
+    
+    // log(&event)
+    // std_print(Slice<char>{event.bytes.ptr,event.bytes.len}) log()
+    
+    if !extra_data.wait_for_content {
+        // quickly go through the header and find \r\n\r\n
+        found_end := -1
+        for 0..event.bytes.len-3 {
+            // TODO: We don't have to go through the whole buffer again, start from event.handler_byte_count which is how many bytes we read last time.
+            //   (start from handler_byte_count - 3 since we may have read a part of \r\n\r\n last time)
+            bytes_as_string := Slice<char>{event.bytes.ptr + nr, 4}
+            if bytes_as_string == "\r\n\r\n" {
+                found_end = nr + 4
+                break
+            }
+        }
+        if found_end == -1 {
+            event.handler_response = NET_HANDLER_SOME_MORE_BYTES
+            return;
+        }
+        
+        // log(&event)
+        if !request.queries.is_initialized() {
+            request.queries.init(10)
+            request.headers.init(40)
+        }
+        request.queries.clear()
+        request.headers.clear()
+        request.method = HTTP_INVALID
+        request.url = {}
+        request.route = {}
+        request.content = {}
+        
+        msg := event.bytes
+        head := 0
+        
+        // log(msg)
+        
+        if substring(msg,0,4) == "GET " {
+            // log("get")
+            request.method = HTTP_GET
+            head += 4
+        } else if substring(msg,0,5) == "POST " {
+            // log("post")
+            request.method = HTTP_POST
+            head += 5
+        } else {
+            // log("other")
+            request.method = HTTP_INVALID
+            server.callback(request, event, server.user_data)
+            event.handler_byte_count = event.bytes.len // consume all bytes
+            return;
+        }
+        
+        path_start := head
+        while head < msg.len {
+            chr := msg[head]
+            head++
+            if chr == ' ' || chr == '\n' || chr == '\r' || chr == '\t'
+                break
+        }
+        
+        request.url = substring(msg,path_start,head-1)
+        
+        index := find("?", request.url)
+
+        option_part := substring(request.url, index + 1)
+        
+        options_str := split("&", option_part)
+        defer options_str.cleanup()
+        for options_str.sliced() {
+            index_of_equal := find("=", it)
+            if index_of_equal == -1
+                continue
+            key := substring(it, 0, index_of_equal)
+            val := substring(it, index_of_equal + 1)
+            request.queries.set(key, val)
+        }
+
+        request.route = substring(request.url, 0, index)
+        
+        version := "HTTP/1.1\r\n"
+        if substring(msg,head,head + version.len) != version {
+            // log("missing HTTP/1.1, or path was bad '",request.url,"'")
+            request.method = HTTP_INVALID
+            server.callback(request, event, server.user_data)
+            event.handler_byte_count = event.bytes.len // consume all bytes
+            return;
+        }
+        head += version.len
+        
+        field_start := head
+        while {
+            chr := msg[head]
+            chr2: char
+            if head+1 < msg.len
+                chr2 = msg[head+1]
+            head++
+            
+            if chr == '\r' && chr2 ==  '\n' {
+                if field_start + 1 == head {
+                    // reached final newline
+                    head++
+                    break
+                }
+                field := substring(msg, field_start, head-2)
+                index_of_colon := find(":", field)
+                
+                if index_of_colon == -1
+                    continue
+                key := substring(field, 0, index_of_colon)
+                val := substring(field, index_of_colon+1)
+                if val[0] == ' ' // skip space after colon (example: 'some-key: the value')
+                    val.ptr += 1
+                request.headers.set(key, val)
+                
+                if key == "Content-Length" {
+                    // log(request.url," ",val)
+                    request.content.len = parse_i64(val)
+                }
+                
+                head++
+                field_start = head
+            }
+        }
+        extra_data.header_length = head
+        
+        if event.bytes.len < extra_data.header_length + request.content.len {
+            // missing some bytes, this will tell server to fetch some more
+            event.handler_response = NET_HANDLER_EXACT_MORE_BYTES
+            event.handler_byte_count = extra_data.header_length + request.content.len - event.bytes.len
+            extra_data.wait_for_content = true;
+            return;
+        }
+    }
+    
+    if request.content.len > 0
+        request.content.ptr = event.bytes.ptr + extra_data.header_length;
+    
+    server.callback(request, event, server.user_data)
+    event.handler_byte_count = event.bytes.len // consume all bytes
+    
+    extra_data.wait_for_content = false
+}
+
+// #################
+//    TEST
+// #################
+
+fn Test() {
+    server := StartHTTPServer(8080, null, null)
+    
+    data := "This is some big data"
+    
+    tmp: StringBuilder
+    server.build_response(&tmp, 200, data.len)
+    tmp.append(data)
+    server.send_built_response(&tmp, who = -1)
+}

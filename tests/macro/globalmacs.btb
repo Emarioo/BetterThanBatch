@@ -1,0 +1,19 @@
+@TEST_CASE(global_macros)
+
+#import "./_util"
+
+#global_macro THE_CONST 9
+
+_test 9; get_const()
+
+
+// Current test system doesn't check @TEST_ERROR in other imports.
+// so we cant do this.
+// @TEST_CASE(without_global_macro)
+
+// #import "./_util"
+
+// #macro THE_CONST 19
+
+// get_const2() // we check for error in function, we don't care about return value
+

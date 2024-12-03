@@ -42,6 +42,9 @@ struct Map<Key,Val> {
         if reserved_chains > 0
             chains.reserve(reserved_chains);
     }
+    fn is_initialized() -> bool {
+        return table.len != 0;
+    }
     fn cleanup() {
         chains.cleanup();
         table.cleanup();   

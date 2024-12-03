@@ -1,6 +1,7 @@
-// #import "OS"
 #import "String"
-
+#if OS_WINDOWS
+    #import "Windows" // terminal colors
+#endif
 
 #macro log(...) { log_inner(...) }
 #macro log_inner(X, ...) std_print(X); log_inner(...)
@@ -45,6 +46,8 @@ fn std_print(value: void*) {
 fn std_print(t: char){
     // printc(t);
     prints(Slice<char>{&t, 1})
+    if(t == '\n')
+        std_print(LOG_NO_COLOR)
 }
 fn std_print(t: bool){
     if t
@@ -54,6 +57,8 @@ fn std_print(t: bool){
 }
 fn std_print(t: char[]){
     prints(t);
+    if(t[t.len-1] == '\n')
+        std_print(LOG_NO_COLOR)
 }
 fn std_print(ptr: char*, len: u64){
     prints(Slice<char>{ptr, len});
@@ -115,4 +120,137 @@ fn std_print_bits(value: u64) {
     s: StringBuilder
     s.append_bits(value)
     prints(s)
+}
+
+enum LogColor : u8 {
+    LOG_BLACK = 0x00,
+    LOG_NAVY = 0x01,
+    LOG_GREEN = 0x02,
+    LOG_CYAN = 0x03,
+    LOG_BLOOD = 0x04,
+    LOG_PURPLE = 0x05,
+    LOG_GOLD = 0x06,
+    LOG_SILVER = 0x07,
+    LOG_GRAY = 0x08,
+    LOG_BLUE = 0x09,
+    LOG_LIME = 0x0A,
+    LOG_AQUA = 0x0B,
+    LOG_RED = 0x0C,
+    LOG_MAGENTA = 0x0D,
+    LOG_YELLOW = 0x0E,
+    LOG_WHITE = 0x0F,
+    LOG__BLACK = 0x00,
+    LOG__BLUE = 0x10,
+    LOG__GREEN = 0x20,
+    LOG__TEAL = 0x30,
+    LOG__BLOOD = 0x40,
+    LOG__PURPLE = 0x50,
+    LOG__GOLD = 0x60,
+    LOG__SILVER = 0x70,
+    LOG__GRAY = 0x80,
+    LOG__NAVY = 0x90,
+    LOG__LIME = 0xA0,
+    LOG__AQUA = 0xB0,
+    LOG__RED = 0xC0,
+    LOG__MAGENTA = 0xD0,
+    LOG__YELLOW = 0xE0,
+    LOG__WHITE = 0xF0,
+    LOG_NO_COLOR = 0x00,
+};
+
+fn std_print(value: LogColor) {
+    if(value == LOG_NO_COLOR)
+        value = LOG_SILVER
+    #if OS_WINDOWS
+        m_consoleHandle := GetStdHandle(STD_OUTPUT_HANDLE);
+        // if (m_consoleHandle == NULL) {
+		// 	if (m_consoleHandle == NULL)
+		// 		return;
+		// }
+		// TODO: don't set color if already set? difficult if you have a variable of last color and a different 
+		//		function sets color without changing the variable.
+		SetConsoleTextAttribute(m_consoleHandle, value);
+    #else
+        // ANSI/bash colors: https://gist.github.com/JBlond/2fea43a3049b38287e5e9cefc87b2124
+        fore: u32 = cast<i32>value&0x0F;
+        foreExtra: u32 = 0;
+        back: u32 = cast<i32>value&0xF0;
+        switch (fore) {
+            #macro LG_CASE(A,B) case 0x##A: fore = B;
+            #macro LG_CASE2(A,B) case 0x##A: fore = B; foreExtra = 1;
+            LG_CASE(00,30) /* BLACK    = 0x00, */ 
+                LG_CASE2(01,34) /* NAVY     = 0x01, */
+            LG_CASE(02,32) /* GREEN    = 0x02, */
+            LG_CASE(03,36) /* CYAN     = 0x03, */
+                LG_CASE2(04,31) /* BLOOD    = 0x04, */
+                LG_CASE(05,35) /* PURPLE   = 0x05, */
+                LG_CASE2(06,33) /* GOLD     = 0x06, */
+                LG_CASE(07,37) /* SILVER   = 0x07, */
+                LG_CASE2(08,30) /* GRAY     = 0x08, */
+            LG_CASE(09,34) /* BLUE     = 0x09, */
+                LG_CASE2(0A,32) /* LIME     = 0x0A, */
+                LG_CASE2(0B,36) /* AQUA     = 0x0B, */
+            LG_CASE(0C,31) /* RED      = 0x0C, */
+            LG_CASE2(0D,35) /* MAGENTA  = 0x0D, */
+            LG_CASE(0E,33) /* YELLOW   = 0x0E, */
+            LG_CASE2(0F,37) /* WHITE    = 0x0F, */
+            case: {
+                // printf("{MIS}");
+            }
+        /*
+                        color  background   bright (not very bright, depends on your terminal I suppose)
+            black        30		40			90
+            red          31		41			91
+            green        32		42			92
+            yellow       33		43			93
+            blue         34		44			94
+            magenta      35		45			95
+            cyan         36		46			96
+            white        37		47			97
+        */
+        /*
+            reset             0  (everything back to normal)
+            bold/bright       1  (often a brighter shade of the same colour)
+            underline         4
+            inverse           7  (swap foreground and background colours)
+            bold/bright off  21
+            underline off    24
+            inverse off      27
+        */
+        }
+        /*	
+        #define PCOLOR(X) log::out << log::X << #X "\n";
+        PCOLOR(WHITE)
+        PCOLOR(SILVER)
+        PCOLOR(GRAY)
+        PCOLOR(BLACK)
+        PCOLOR(GOLD)
+        PCOLOR(YELLOW)
+        PCOLOR(BLOOD)
+        PCOLOR(RED)
+        PCOLOR(BLUE)
+        PCOLOR(NAVY)
+        PCOLOR(AQUA)
+        PCOLOR(CYAN)
+        PCOLOR(LIME)
+        PCOLOR(GREEN)
+        PCOLOR(MAGENTA)
+        PCOLOR(PURPLE)
+        */
+        if(value == 0) {
+            prints("\033[0m")
+            // fprintf(stdout,"\033[0m");
+            // fflush(stdout);
+            // printf("\033[0m");
+        } else {
+            log("\033[",foreExtra,";",fore,"m")
+            
+            // fprintf(stdout,"\033[%u;%um",foreExtra, fore);
+            // fflush(stdout);
+            // write(STDOUT_FILENO, );
+            // printf("\033[%u;%um",foreExtra, fore);
+        }
+        // fprintf(stdout,"{%d}",(int)color);
+        // fflush(stdout);
+    #endif
 }

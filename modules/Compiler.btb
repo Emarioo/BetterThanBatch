@@ -4,7 +4,7 @@
     WORK IN PROGRESS
 */
 
-// THIS ENUM SHOULD BE THE EXACT SAME AS THE ONE IN CompilerEnums.h
+// THIS ENUM SHOULD BE THE EXACT SAME AS THE ONE IN CompilerOptions.h
 enum TargetPlatform {
     TARGET_UNKNOWN = 0,
     TARGET_BYTECODE,
@@ -14,7 +14,7 @@ enum TargetPlatform {
     TARGET_END,
     TARGET_START = TARGET_UNKNOWN + 1,
 }
-// THIS ENUM SHOULD BE THE EXACT SAME AS THE ONE IN CompilerEnums.h
+// THIS ENUM SHOULD BE THE EXACT SAME AS THE ONE IN CompilerOptions.h
 // Also known as linker tools
 enum LinkerChoice : u32 {
     LINKER_UNKNOWN = 0,

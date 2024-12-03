@@ -72,7 +72,7 @@ global moving_platform: Entity*;
 global player: Entity*;
 
 fn add_entity(x: f32, y: f32, w: f32, h: f32, type: EntityType) -> Entity* {
-    id, e := entities.add(null)
+    e, id := entities.add(null)
     e.entity_info = cast<i32>type
     e.pos.x = x
     e.pos.y = y
@@ -83,7 +83,7 @@ fn add_entity(x: f32, y: f32, w: f32, h: f32, type: EntityType) -> Entity* {
     return e
 }
 fn add_entitity_with_uuid(x: f32, y: f32, w: f32, h: f32, type: EntityType, uuid: UUID) -> Entity* {
-    id, e := entities.add(null)
+    e, id := entities.add(null)
     e.entity_info = cast<i32>type
     e.pos.x = x
     e.pos.y = y
@@ -153,12 +153,12 @@ struct NetSpawn {
 // #macro LOG_NET(X) X
 #macro LOG_NET(X) #endmacro
 
-fn net_callback(e: Event, user_data: void*) {
+fn net_callback(e: NetEvent*, user_data: void*) {
     LOG_NET(
         std_print("EVENT ") std_print_any(&e.type) log()
     )
     switch e.type {
-    case EVENT_START:
+    case EVENT_START_LISTENING:
         if is_server {
             // msg: NetSpawn
             // msg.pos = player.pos
@@ -198,7 +198,6 @@ fn net_callback(e: Event, user_data: void*) {
 
         LOG_NET( log("msglen ", e.bytes.len) )
 
-        Assert(e.bytes.len == sizeof NetMessage)
         header := cast<NetHeader*>e.bytes.ptr
         switch header.type {
             case MSGTYPE_SPAWN:
@@ -755,16 +754,6 @@ fn RenderEntities() {
     }
 }
 
-fn DrawSquare(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color) {
-    thickness := 5
-    window.toggleUISpace()
-    FillRect(window, x, y - thickness, w, thickness, color) // top
-    FillRect(window, x, y + h, w, thickness, color) // down
-    
-    FillRect(window, x - thickness, y, thickness, h, color) // left
-    FillRect(window, x + w, y, thickness, h, color) // right
-    window.toggleUISpace()
-}
 fn RenderBackground() {
     // draw based on camera
     sky := textures[cast<i32>IMG_BACK_LEVEL0]

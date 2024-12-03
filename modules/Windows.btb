@@ -43,12 +43,18 @@ fn @import(Kernel) CreateProcessA(
   /* [in, optional]      LPCSTR                */ lpCurrentDirectory: char*,
   /* [in]                LPSTARTUPINFOA        */ lpStartupInfo: STARTUPINFOA*,
   /* [out]               LPPROCESS_INFORMATION */ lpProcessInformation: PROCESS_INFORMATION*
+) -> u32;
+fn @import(Kernel) GetProductInfo(
+  /*[in]  DWORD  */ dwOSMajorVersion: u32,
+  /*[in]  DWORD  */ dwOSMinorVersion: u32,
+  /*[in]  DWORD  */ dwSpMajorVersion: u32,
+  /*[in]  DWORD  */ dwSpMinorVersion: u32,
+  /*[out] PDWORD */ pdwReturnedProductType: u32*
 ) -> bool;
-
 fn @import(Kernel) GetExitCodeProcess(
   hProcess: HANDLE,
   lpExitCode: i32*
-) -> bool;
+) -> u32;
 fn @import(Kernel) ExitProcess(
   uExitCode: u32
 );
@@ -158,8 +164,31 @@ fn @import(Kernel) HeapFree(
 #macro FILE_SHARE_READ                 0x00000001  
 #macro FILE_SHARE_WRITE                0x00000002  
 #macro FILE_SHARE_DELETE               0x00000004  
-#macro FILE_ATTRIBUTE_NORMAL           0x00000080  
-#macro FILE_ATTRIBUTE_DIRECTORY        0x00000010
+
+
+#macro INVALID_FILE_ATTRIBUTES             (cast<i32>-1)
+#macro FILE_ATTRIBUTE_READONLY             0x00000001  
+#macro FILE_ATTRIBUTE_HIDDEN               0x00000002  
+#macro FILE_ATTRIBUTE_SYSTEM               0x00000004  
+#macro FILE_ATTRIBUTE_DIRECTORY            0x00000010  
+#macro FILE_ATTRIBUTE_ARCHIVE              0x00000020  
+#macro FILE_ATTRIBUTE_DEVICE               0x00000040  
+#macro FILE_ATTRIBUTE_NORMAL               0x00000080  
+#macro FILE_ATTRIBUTE_TEMPORARY            0x00000100  
+#macro FILE_ATTRIBUTE_SPARSE_FILE          0x00000200  
+#macro FILE_ATTRIBUTE_REPARSE_POINT        0x00000400  
+#macro FILE_ATTRIBUTE_COMPRESSED           0x00000800  
+#macro FILE_ATTRIBUTE_OFFLINE              0x00001000  
+#macro FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000  
+#macro FILE_ATTRIBUTE_ENCRYPTED            0x00004000  
+#macro FILE_ATTRIBUTE_INTEGRITY_STREAM     0x00008000  
+#macro FILE_ATTRIBUTE_VIRTUAL              0x00010000  
+#macro FILE_ATTRIBUTE_NO_SCRUB_DATA        0x00020000  
+#macro FILE_ATTRIBUTE_EA                   0x00040000  
+#macro FILE_ATTRIBUTE_PINNED               0x00080000  
+#macro FILE_ATTRIBUTE_UNPINNED             0x00100000  
+#macro FILE_ATTRIBUTE_RECALL_ON_OPEN       0x00040000  
+#macro FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000 
 
 #macro MAX_PATH          260
 
@@ -218,6 +247,10 @@ fn @import(Kernel) GetFileTime(
   lpLastAccessTime: i64*,
   lpLastWriteTime: i64*
 ) -> bool;
+// Returns a field of bits, see FILE_ATTRIBUTE_...
+fn @import(Kernel) GetFileAttributesA(
+  lpFileName: char*
+) -> u32;
 // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-readfile
 fn @import(Kernel) ReadFile(
   hFile: HANDLE,
@@ -236,6 +269,10 @@ fn @import(Kernel) WriteFile(
   lpOverlapped: void* // optional, TODO: Don't be void?
 ) -> bool;
 fn @import(Kernel) GetStdHandle(nStdHandle: u32) -> HANDLE;
+fn @import(Kernel) SetConsoleTextAttribute(
+  hConsoleOutput: HANDLE,
+  wAttributes: i16,
+) -> u32;
 fn @import(Kernel) FlushFileBuffers(
   hFile: HANDLE
 ) -> bool;
@@ -255,6 +292,75 @@ fn @import(Kernel) FindNextFileA(
 fn @import(Kernel) FindClose(
   hFindFile: HANDLE
 ) -> bool;
+
+fn @import(Kernel) FindFirstChangeNotificationA(
+  lpPathName: char*,
+  bWatchSubtree: bool,
+  dwNotifyFilter: u32
+) -> HANDLE;
+fn @import(Kernel) FindNextChangeNotification(
+    hChangeHandle: HANDLE
+) -> bool;
+fn @import(Kernel) FindCloseChangeNotification(
+  hChangeHandle: HANDLE
+) -> bool;
+fn @import(Kernel) CancelSynchronousIo(
+  hThread: HANDLE
+) -> bool;
+fn @import(Kernel) ReadDirectoryChangesW(
+    hDirectory: HANDLE,
+    lpBuffer: void*,
+    nBufferLength: i32,
+    bWatchSubtree: bool,
+    dwNotifyFilter: i32,
+    lpBytesReturned: i32*, // optional
+    lpOverlapped: void*, // optional, LPOVERLAPPED
+    lpCompletionRoutine: void* // optional, LPOVERLAPPED_COMPLETION_ROUTINE 
+    ) -> i32;
+
+#macro STATUS_WAIT_0       (cast<u32>0x00000000)
+#macro WAIT_OBJECT_0       ((STATUS_WAIT_0 ) + 0 )
+
+struct FILE_NOTIFY_INFORMATION {
+    NextEntryOffset: i32;
+    Action: i32;
+    FileNameLength: i32;
+    FileName: u16[1]; // WCHAR
+}
+
+#macro FILE_NOTIFY_CHANGE_FILE_NAME    0x00000001   
+#macro FILE_NOTIFY_CHANGE_DIR_NAME     0x00000002   
+#macro FILE_NOTIFY_CHANGE_ATTRIBUTES   0x00000004   
+#macro FILE_NOTIFY_CHANGE_SIZE         0x00000008   
+#macro FILE_NOTIFY_CHANGE_LAST_WRITE   0x00000010   
+#macro FILE_NOTIFY_CHANGE_LAST_ACCESS  0x00000020   
+#macro FILE_NOTIFY_CHANGE_CREATION     0x00000040   
+#macro FILE_NOTIFY_CHANGE_SECURITY     0x00000100   
+#macro FILE_ACTION_ADDED                   0x00000001   
+#macro FILE_ACTION_REMOVED                 0x00000002   
+#macro FILE_ACTION_MODIFIED                0x00000003   
+#macro FILE_ACTION_RENAMED_OLD_NAME        0x00000004   
+#macro FILE_ACTION_RENAMED_NEW_NAME        0x00000005   
+
+
+#macro FILE_FLAG_WRITE_THROUGH         0x80000000
+#macro FILE_FLAG_OVERLAPPED            0x40000000
+#macro FILE_FLAG_NO_BUFFERING          0x20000000
+#macro FILE_FLAG_RANDOM_ACCESS         0x10000000
+#macro FILE_FLAG_SEQUENTIAL_SCAN       0x08000000
+#macro FILE_FLAG_DELETE_ON_CLOSE       0x04000000
+#macro FILE_FLAG_BACKUP_SEMANTICS      0x02000000
+#macro FILE_FLAG_POSIX_SEMANTICS       0x01000000
+#macro FILE_FLAG_SESSION_AWARE         0x00800000
+#macro FILE_FLAG_OPEN_REPARSE_POINT    0x00200000
+#macro FILE_FLAG_OPEN_NO_RECALL        0x00100000
+#macro FILE_FLAG_FIRST_PIPE_INSTANCE   0x00080000
+
+#macro FILE_LIST_DIRECTORY       ( 0x0001 )    // directory
+
+#macro ERROR_OPERATION_ABORTED          995
+#macro ERROR_NOTIFY_ENUM_DIR            1022
+#macro ERROR_NOT_FOUND                  1168
 
 // https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-loadlibrarya
 fn @import(Kernel) LoadLibraryA(
@@ -332,8 +438,8 @@ fn @import(Kernel) ReleaseSemaphore(
   /* [out, optional] LPLONG */ lpPreviousCount: i32*
 ) -> bool;
 
-#macro INFINITE            0xFFFFFFFFu  // Infinite timeout
-#macro WAIT_FAILED         0xFFFFFFFFu
+#macro INFINITE            0xFFFF_FFFFu  // Infinite timeout
+#macro WAIT_FAILED         0xFFFF_FFFFu
 
 fn @import(Kernel) GetErrorMode() -> i32;
 fn @import(Kernel) SetErrorMode(n: i32) -> i32;
@@ -611,7 +717,20 @@ FN_WINSOCK(send)(
 #macro MSG_DONTROUTE   0x4      /* send without using routing tables */
 #macro MSG_WAITALL     0x8      /* do not complete until packet is completely filled */
 
-
+FN_WINSOCK(setsockopt)(
+  s: SOCKET,
+  level: i32,
+  optname: i32,
+  optval: char*,
+  optlen: i32
+) -> i32
+FN_WINSOCK(getsockopt)(
+  s: SOCKET,
+  level: i32,
+  optname: i32,
+  optval: char*,
+  optlen: i32
+) -> i32
 
 fn @import(Winsock) getaddrinfo(
   pNodeName: char*,
@@ -722,6 +841,7 @@ fn ntohs(netshort: u16) -> u16 {
     return htons(netlong)
     // return (netshort << 8) | (netshort >> 8)
 }
+
 
 
 /*###########################################
@@ -855,5 +975,77 @@ fn ntohs(netshort: u16) -> u16 {
 #macro WSANO_DATA                       11004
 
 #macro ERROR_PROC_NOT_FOUND 127
+
+// These are said to be deprecated but it's the easiest way to get information
+
+// major = RET & 0xFF, minor = (RET >> 8) & 0xFF, build = RET >> 16
+fn @import(Kernel) GetVersion() -> u32;
+
+fn @import(Kernel) GetVersionExA(
+  /* [in, out] LPOSVERSIONINFOA */ lpVersionInformation: OSVERSIONINFOA*
+) -> bool;
+struct OSVERSIONINFOA {
+  dwOSVersionInfoSize: u32 = sizeof OSVERSIONINFOA;
+  dwMajorVersion: u32;
+  dwMinorVersion: u32;
+  dwBuildNumber: u32;
+  dwPlatformId: u32;
+  szCSDVersion: char[128];
+}
+
+// Custom function
+fn DecodeWindowsVersion(major: u32*, minor: u32*, build: u32*) {
+    version := GetVersion()
+    
+    if major {
+        *major = version & 0xFF
+    }
+    if minor {
+        *minor = (version >> 8) & 0xFF
+    }
+    if build {
+        if version < 0x8000_0000u {
+            *build = (version >> 16)
+        } else {
+            *build = 0
+        }
+    }
+}
+
+// ######################
+//     SOUND BINDINGS
+// ######################
+// TODO: Use Windows Audio Session API (WASAPI) because PlaySound is being deprecated.
+// 
+
+#load "Winmm.lib" as Winmm
+
+#macro SND_SYNC       0x0000     /* play synchronously (default) */
+#macro SND_ASYNC      0x0001     /* play asynchronously */
+#macro SND_NODEFAULT  0x0002     /* silence (!default) if sound not found */
+#macro SND_MEMORY     0x0004     /* pszSound points to a memory file */
+#macro SND_LOOP       0x0008     /* loop the sound until next sndPlaySound */
+#macro SND_NOSTOP     0x0010     /* don't stop any currently playing sound */
+
+#macro SND_NOWAIT     0x00002000 /* don't wait if the driver is busy */
+#macro SND_ALIAS      0x00010000 /* name is a registry alias */
+#macro SND_ALIAS_ID   0x00110000 /* alias is a predefined ID */
+#macro SND_FILENAME   0x00020000 /* name is file name */
+#macro SND_RESOURCE   0x00040004 /* name is resource name or atom */
+// #if(WINVER >= 0x0400)
+// #define SND_PURGE           0x0040  /* purge non-static events for task */
+// #define SND_APPLICATION     0x0080  /* look for application specific association */
+// #endif /* WINVER >= 0x0400 */
+// #macro SND_SENTRY      0x00080000L /* Generate a SoundSentry event with this sound */
+// #macro SND_RING        0x00100000L /* Treat this as a "ring" from a communications app - don't duck me */
+// #macro SND_SYSTEM      0x00200000L /* Treat this as a system sound */
+
+// #macro SND_ALIAS_START 0           /* alias base */
+
+fn @import(Winmm, alias="PlaySoundA") win32_PlaySound(
+   pszSound: char*,
+   hmod: HMODULE,
+   fdwSound: u32,
+) -> u32;
 
 #endif // OS_WINDOWS

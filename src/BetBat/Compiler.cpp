@@ -170,9 +170,9 @@ CompilerVersion CompilerVersion::Current(){
     return version;
 }
 void CompilerVersion::deserialize(const char* str) {
-    int versionLength = strlen(str);
-    Assert(versionLength <= MAX_STRING_VERSION_LENGTH);
-    if(versionLength > MAX_STRING_VERSION_LENGTH) return; // in case you disable asserts for whatever reason
+    int str_length = strlen(str);
+    Assert(str_length <= MAX_STRING_VERSION_LENGTH);
+    if(str_length > MAX_STRING_VERSION_LENGTH) return; // in case you disable asserts for whatever reason
     // "0.1.0/0-2023.8.29"
     // "65535.65535.65535/65535-65535.256.256"
     // "9999.9999.9999/9999-9999.99.99"
@@ -180,75 +180,84 @@ void CompilerVersion::deserialize(const char* str) {
     // good defaults
     memset(this, 0, sizeof(CompilerVersion));
     
-    char buffer[MAX_STRING_VERSION_LENGTH+1];
-    strcpy(buffer, str); // buffer and string length is already checked
-    int slashIndex = -1, dashIndex = -1;
-    int dots[3] = {-1, -1, -1 };
-    int lastDots[2] = { -1, -1 };
-    int dotCount = 0;
-    int lastDotCount = 0;
-    for(int i=0;i<versionLength;i++){
+    // char buffer[MAX_STRING_VERSION_LENGTH+1];
+    // strcpy(buffer, str); // buffer and string length is already checked
+    // int slashIndex = -1, dashIndex = -1;
+    
+    struct {
+        union {
+            int vers[4]{-1,-1,-1,-1};
+            struct {
+                int major;
+                int minor;
+                int patch;
+                int revision;
+            };
+        };
+        int name = -1;
+        union {
+            int date[3]{-1,-1,-1};
+            struct {
+                int year;
+                int month;
+                int day;
+            };
+        };
+    } positions;
+    
+    int dot_count=0;
+    int slash_count=0;
+    int dash_count=0;
+    positions.vers[dot_count] = 0;
+    dot_count++;
+    for(int i=0;i<str_length;i++){
         if(str[i] == '/') { // indicates state/name
-            Assert(("too many slashes in version string",slashIndex == -1));
-            slashIndex = i + 1;
-            buffer[i] = '\0';
-        }
-        if(str[i] == '-') { // indicates date
-            Assert(("too many dashes in version string",dashIndex == -1));
-            dashIndex = i + 1;
-            buffer[i] = '\0';
+            Assert(("too many slashes in version string", slash_count < 1));
+            positions.name = i+1;
+            slash_count++;
+            continue;
         }
         if(str[i] == '.') {
-            if (slashIndex == -1 && dashIndex == -1) {
-                if(dotCount < 3) {
-                    dots[dotCount] = i;
-                    buffer[i] = '\0';
-                }
-                dotCount++;
-            }
-            if (dashIndex != -1) {
-                if(lastDotCount < 2) {
-                    lastDots[lastDotCount] = i;
-                    buffer[i] = '\0';
-                }
-                lastDotCount++;
-            }
+            Assert(("too many dots in version string", dot_count < 4));
+            positions.vers[dot_count] = i + 1;
+            dot_count++;
+            continue;
         }
-    }
-    Assert(("there must be two or three dots in first part",dotCount==2 || dotCount==3));
-    if(dashIndex != -1){
-        Assert(("there must be 2 dots in date part (when using dash)",lastDotCount==2));
-    }
-    if(slashIndex != -1) {
-        Assert(("missing name string", slashIndex != dashIndex - 1));
+        if(str[i] == '-') { // indicates date
+            Assert(("too many dashes in version string", dash_count < 3));
+            positions.date[dash_count] = i + 1;
+            dash_count++;
+            continue;
+        }
     }
     
-    int temp=0;
-    #define SET_VER_INT(VAR, OFF) temp = atoi(buffer + OFF); Assert(temp < ((1<<(sizeof(VAR)<<3))-1)); VAR = temp;
-    SET_VER_INT(major, 0)
-    SET_VER_INT(minor, dots[0] + 1)
-    SET_VER_INT(patch, dots[1] + 1)
-    if(dots[2] != -1) {
-        SET_VER_INT(revision, dots[2] + 1)
-    }
-    if(slashIndex != -1) {
-        int nameLen = 0;
-        if(dashIndex == -1){
-            nameLen = versionLength - slashIndex - 1;
+    if (positions.major != -1)
+        major = atoi(str + positions.major);
+    if (positions.minor != -1)
+        minor = atoi(str + positions.minor);
+    if (positions.patch != -1)
+        patch = atoi(str + positions.patch);
+    if (positions.revision != -1)
+        revision = atoi(str + positions.revision);
+        
+    if (positions.name != -1) {
+        int len = 0;
+        if(positions.year != -1) {
+            len = positions.year - positions.name - 1; // -1 for dash
         } else {
-            nameLen = dashIndex - slashIndex - 1;
+            len = str_length - positions.name;
         }
-        Assert(nameLen < (int)sizeof(name));
-        if(nameLen>0){
-            strcpy(name, buffer + slashIndex);
-        }
+        Assert(len-1 < sizeof(name));
+        strncpy(name, str + positions.name, len);
+        name[len] = '\0';
     }
-    if(dashIndex != -1) {
-        SET_VER_INT(year, dashIndex)
-        SET_VER_INT(month, lastDots[0] + 1)
-        SET_VER_INT(day, lastDots[1] + 1)
-    }
-    #undef SET_VER_INT
+        
+    if (positions.year != -1)
+        year = atoi(str + positions.year);
+    if (positions.month != -1)
+        month = atoi(str + positions.month);
+    if (positions.day != -1)
+        day = atoi(str + positions.day);
 }
 void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
     Assert(bufferSize > 50); // version is usually, probably, never bigger than this
@@ -262,7 +271,7 @@ void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
             offset += snprintf(outBuffer + offset, bufferSize - offset, "/%s", name);
         }
         if(0==(flags & EXCLUDE_DATE) && year != 0) // year should normally not be zero so if it is we have special stuff going on
-            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d.%d.%d", (int)year, (int)month, (int)day);
+            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d-%d-%d", (int)year, (int)month, (int)day);
     } else {
         if(flags & INCLUDE_REVISION)
             offset += snprintf(outBuffer + offset, bufferSize - offset, ".%d", (int)revision);
@@ -271,58 +280,11 @@ void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
             offset += snprintf(outBuffer + offset, bufferSize - offset, "/%s", name);
         }
         if(flags & INCLUDE_DATE)
-            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d.%d.%d", (int)year, (int)month, (int)day);
+            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d-%d-%d", (int)year, (int)month, (int)day);
     }
-}
-const char* ToString(TargetPlatform target){
-    #define CASE(X,N) case X: return N;
-    switch(target){
-        CASE(TARGET_WINDOWS_x64,"win-x64")
-        CASE(TARGET_LINUX_x64,"linux-x64")
-        CASE(TARGET_BYTECODE,"bytecode")
-        CASE(TARGET_UNKNOWN,"unknown-target")
-        default: Assert(false);
-    }
-    return "unknown-target";
-    #undef CASE
-}
-TargetPlatform ToTarget(const std::string& str){
-    #define CASE(N,X) if (str==X) return N;
-    CASE(TARGET_WINDOWS_x64,"win-x64")
-    CASE(TARGET_LINUX_x64,"linux-x64")
-    CASE(TARGET_BYTECODE,"bytecode")
-    return TARGET_UNKNOWN;
-    #undef CASE
-}
-engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
-    return logger << ToString(target);
-}
-const char* ToString(LinkerChoice v) {
-    #define CASE(X,N) case X: return N;
-    switch(v){
-        CASE(LINKER_GCC,"gcc")
-        CASE(LINKER_MSVC,"msvc")
-        CASE(LINKER_CLANG,"clang")
-        CASE(LINKER_UNKNOWN,"unknown-linker")
-        default: {}
-    }
-    return "unknown-linker";
-    #undef CASE
-}
-LinkerChoice ToLinker(const std::string& str) {
-    #define CASE(N,X) if (str==X) return N;
-    CASE(LINKER_GCC,"gcc")
-    CASE(LINKER_MSVC,"msvc")
-    CASE(LINKER_CLANG,"clang")
-    CASE(LINKER_UNKNOWN,"unknown-linker")
-    return LINKER_UNKNOWN;
-    #undef CASE
-}
-engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v) {
-    return logger << ToString(v);
 }
 
-int CompileOptions::addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer){
+int Compiler::addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer){
     auto imp = lexer->getImport_unsafe(loc);
     auto info = lexer->getTokenSource_unsafe(loc);
     
@@ -332,7 +294,7 @@ int CompileOptions::addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lex
     testLocations.last().file = imp->path;
     return testLocations.size()-1;
 }
-CompileOptions::TestLocation* CompileOptions::getTestLocation(int index) {
+TestLocation* Compiler::getTestLocation(int index) {
     return testLocations.getPtr(index);
 }
 void CompileStats::printSuccess(CompileOptions* opts){
@@ -351,12 +313,12 @@ void CompileStats::printSuccess(CompileOptions* opts){
     
     if(opts) {
         log::out << " options: "<<log::AQUA<<opts->target<<log::NO_COLOR<<", " << log::AQUA<< opts->linker<<log::NO_COLOR << "\n";
-        if(opts->compileStats.generatedFiles.size() != 0) {
+        if(generatedFiles.size() != 0) {
             log::out << " output: ";
-            for(int i=0;i<(int)opts->compileStats.generatedFiles.size();i++){
+            for(int i=0;i<(int)generatedFiles.size();i++){
                 if(i!=0)
                     log::out << ", ";
-                log::out << log::AQUA << opts->compileStats.generatedFiles[i] << log::NO_COLOR;
+                log::out << log::AQUA << generatedFiles[i] << log::NO_COLOR;
             }
             log::out << "\n";
         }
@@ -711,7 +673,7 @@ void Compiler::processImports() {
                 signaled = true;
             }
         } else if(!finished && !signaled && waiting_threads+1 == total_threads) {
-            if(options->compileStats.errors > 0) {
+            if(compile_stats.errors > 0) {
                 // error should have been reported
                 lock_imports.unlock();
                 break;
@@ -756,7 +718,7 @@ void Compiler::processImports() {
                 u32 old_id = compiler_imp->import_id;
                 compiler_imp->import_id = lexer.tokenize(compiler_imp->path, old_id);
                 if(!compiler_imp->import_id) {
-                    options->compileStats.errors++; // TODO: Temporary. We should call a function that reports an error since we may need to do more things than just incrementing a counter.
+                    compile_stats.errors++; // TODO: Temporary. We should call a function that reports an error since we may need to do more things than just incrementing a counter.
                     log::out << log::RED << "ERROR: Could not find "<<compiler_imp->path << "\n"; // TODO: Improve error message
                 } else {
                     u32 new_id = preprocessor.process(compiler_imp->import_id,false);
@@ -766,8 +728,8 @@ void Compiler::processImports() {
                     
                     auto intern_imp = lexer.getImport_unsafe(compiler_imp->import_id);
                     
-                    engone::atomic_add(&options->compileStats.lines, intern_imp->lines);
-                    engone::atomic_add(&options->compileStats.readBytes, intern_imp->fileSize);
+                    engone::atomic_add(&compile_stats.lines, intern_imp->lines);
+                    engone::atomic_add(&compile_stats.readBytes, intern_imp->fileSize);
                     
                     u32 tokens = 0;
                     if(intern_imp->chunk_indices.size() > 0) {
@@ -863,9 +825,9 @@ void Compiler::processImports() {
                     //  that you don't have to import it everywhere else though.
                 }
 
-                int prev_errors = options->compileStats.errors;
+                int prev_errors = compile_stats.errors;
                 TypeCheckEnums(ast, my_scope->astScope, this);
-                bool had_errors = options->compileStats.errors > prev_errors;
+                bool had_errors = compile_stats.errors > prev_errors;
 
                 // TODO: Print amount of checked enums.
                 //  LOG(LOG_TASKS, log::GRAY
@@ -939,10 +901,10 @@ void Compiler::processImports() {
                 auto my_scope = ast->getScope(compiler_imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Type function signatures: "<<compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
                 
-                int prev_errors = options->compileStats.errors;
+                int prev_errors = compile_stats.errors;
                 bool is_initial_import = initial_import_id == compiler_imp->import_id;
                 TypeCheckFunctions(ast, my_scope->astScope, this, is_initial_import);
-                bool had_errors = options->compileStats.errors > prev_errors;
+                bool had_errors = compile_stats.errors > prev_errors;
 
                 // TODO: Print amount of checked stuff.
                 //  LOG(LOG_TASKS, log::GRAY
@@ -987,7 +949,7 @@ void Compiler::processImports() {
                     LOGD(LOG_TASKS, log::GREEN<<"Type global body: "<< compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
                 }
                 
-                int prev_errors = options->compileStats.errors;
+                int prev_errors = compile_stats.errors;
                 
                 ASTScope* import_scope = my_scope->astScope;
                 if(compiler_imp->type_checked_import_scope)
@@ -1008,7 +970,7 @@ void Compiler::processImports() {
                 //     << " tokens: "<<tokens
                 //     << "\n")
 
-                bool had_errors = options->compileStats.errors > prev_errors;
+                bool had_errors = compile_stats.errors > prev_errors;
                 // TODO: Do we need to do something with errors?
 
                 // NOTE: TypeCheckBody may call addTask_type_body.
@@ -1028,13 +990,14 @@ void Compiler::processImports() {
                         c.bytecode = bytecode;
                         c.reporter = &reporter;
                         c.compiler = this;
+                        c.init_context(this);
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
                         have_prepared_global_data = true;
                     }
                     lock_miscellaneous.unlock();
                 }
 
-                int prev_errors = options->compileStats.errors;
+                int prev_errors = compile_stats.errors;
 
                 if(initial_import_id == compiler_imp->import_id) {
                     auto yes = GenerateScope(my_scope->astScope, this, compiler_imp, &compiler_imp->tinycodes, true);
@@ -1048,7 +1011,7 @@ void Compiler::processImports() {
 
 
                 bool new_errors = false;
-                if(prev_errors < options->compileStats.errors) {
+                if(prev_errors < compile_stats.errors) {
                     new_errors = true;
                 }
                 
@@ -1115,7 +1078,7 @@ void Compiler::processImports() {
                     lock_miscellaneous.unlock();
                 }
 
-                if(options->compileStats.errors == 0) {
+                if(compile_stats.errors == 0) {
                     // can't generate if bytecode is messed up.
 
                     switch(options->target) {
@@ -1126,6 +1089,10 @@ void Compiler::processImports() {
                         case TARGET_LINUX_x64: {
                             for(auto t : compiler_imp->tinycodes)
                                 GenerateX64(this, t);
+                        } break;
+                        case TARGET_ARM: {
+                            for(auto t : compiler_imp->tinycodes)
+                                GenerateARM(this, t);
                         } break;
                         default: Assert(false);
                     }
@@ -1168,7 +1135,33 @@ void Compiler::run(CompileOptions* options) {
     ZoneScopedC(tracy::Color::Gray19);
     // auto tp = engone::StartMeasure();
 
-    options->compileStats.start_compile = engone::StartMeasure();
+    if(options->linker == LINKER_MSVC) {
+        if(!is_msvc_configured()) {
+            bool yes = configure_msvc();
+            if(!yes) {
+                log::out << log::RED << "MSVC as linker was specified but it it is not configured correctly and automatic configuration failed, have you installed Visual Studio?\n";
+                compile_stats.errors += 1;
+                return;
+            } else if(options->verbose) {
+                log::out << log::GRAY << "MSVC toolchain configured automatically.\n";
+            }
+        }
+    }
+    
+    if(options->target == TARGET_ARM) {
+        log::out << log::YELLOW << "ARM support is experimental and does not fully work.\n";
+    }
+    if(options->target == TARGET_AARCH64) {
+        log::out << log::RED << "ARM-64 bit (aarch64) is not supported.";
+        return;
+    }
+
+    std::string path_to_exe = TrimLastFile(engone::GetPathToExecutable());
+    std::string dir_of_exe = TrimLastFile(path_to_exe);
+
+    compiler_executable_dir = dir_of_exe;
+
+    compile_stats.start_compile = engone::StartMeasure();
 
     Assert(!this->options);
     this->options = options;
@@ -1191,16 +1184,34 @@ void Compiler::run(CompileOptions* options) {
         return;
     }
 
-    int slash_index = options->output_file.find_last_of("/");
-    int dot_index = options->output_file.find_last_of(".");
+    std::string output_path = options->output_file;
+    if(options->output_file.size() == 0) {
+        switch(options->target){
+            case TARGET_BYTECODE: {
+                output_path = "main.bc";
+            } break;
+            case TARGET_WINDOWS_x64:
+            case TARGET_LINUX_x64: {
+                output_path = "main.exe"; // skip .exe on Linux?
+            } break;
+            case TARGET_ARM: {
+                output_path = "main.elf";
+            } break;
+            default: Assert(false);
+        }
+    }
+    
+    int slash_index = output_path.find_last_of("/");
+    int dot_index = output_path.find_last_of(".");
     if (dot_index == -1) {
-        dot_index = options->output_file.size();
+        dot_index = output_path.size();
     }
 
     enum OutputType {
         OUTPUT_INVALID,
         OUTPUT_OBJ,
         OUTPUT_EXE,
+        OUTPUT_ELF,
         OUTPUT_LIB,
         OUTPUT_DLL,
         OUTPUT_BC,
@@ -1209,25 +1220,30 @@ void Compiler::run(CompileOptions* options) {
 
     bool obj_write_success = false;
 
-    std::string output_path = options->output_file;
-
-    if(options->output_file.size() == 0) {
-        switch(options->target){
-            case TARGET_BYTECODE: {
-                output_path = "bin/main.bc";
-            } break;
-            case TARGET_WINDOWS_x64:
-            case TARGET_LINUX_x64: {
-                output_path = "bin/main.exe"; // skip .exe on Linux?
-            } break;
-            default: Assert(false);
-        }
+    switch(options->target){
+        case TARGET_BYTECODE: {
+            arch = ARCH_x86_64;
+        } break;
+        case TARGET_WINDOWS_x64:
+        case TARGET_LINUX_x64: {
+            arch = ARCH_x86_64;
+        } break;
+        case TARGET_ARM: {
+            arch = ARCH_arm;
+        } break;
+        case TARGET_AARCH64: {
+            arch = ARCH_aarch64;
+            log::out << log::RED << "ARM 64-bit not supported\n";
+            return;
+        } break;
+        default: Assert(false);
     }
 
     std::string output_filename = output_path.substr(slash_index+1, dot_index - (slash_index+1));
     std::string output_extension = ExtractExtension(output_path);
     
     std::string object_path = "bin/" + output_filename + ".o";
+    // std::string object_path = output_filename + ".o";
     std::string temp_path{};
     bool perform_copy = false;
 
@@ -1246,6 +1262,9 @@ void Compiler::run(CompileOptions* options) {
         } else if(output_extension == ".lib" || output_extension == ".a") {
             output_type = OUTPUT_LIB;
             // NOTE: Linux uses libNAME.a but we just check .a, should we warn the user if they forgot lib at the start of the file?
+        } else if(output_extension == ".elf") {
+            output_type = OUTPUT_ELF;
+            // NOTE: We assume the user intends to compile a "kernel" image for qemu.
         }
     } else {
         if(options->target == TARGET_LINUX_x64) {
@@ -1264,6 +1283,16 @@ void Compiler::run(CompileOptions* options) {
         log::out << "  .dll .so - dynamic library\n";
         log::out << "  .lib .a  - static library\n";
         log::out << "  .bc      - bytecode\n";
+        log::out << "  .elf     - kernel image (mainly meant for qemu)\n";
+        return;
+    }
+
+    if(options->target == TARGET_ARM && output_type != OUTPUT_OBJ && output_type != OUTPUT_ELF && output_type != OUTPUT_BC) {
+        log::out << log::RED << "The compiler can only generate "<<log::NO_COLOR<<".o .elf .bc "<<log::RED<<" when targeting ARM, not '"<<output_extension<<"'.\n";
+        return;
+    }
+    if(options->target != TARGET_ARM && output_type == OUTPUT_ELF) {
+        log::out << log::RED << "Compiler will only output an .elf file when targeting ARM. ELF extension is meant for kernel image. We may support kernel image for 'x86_64' target in the future.\n";
         return;
     }
 
@@ -1279,22 +1308,17 @@ void Compiler::run(CompileOptions* options) {
     bytecode = Bytecode::Create();
     bytecode->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;
+
     
-    switch(options->target) {
-        case TARGET_BYTECODE: {
-            // do nothing
-        } break;
-        case TARGET_WINDOWS_x64:
-        case TARGET_LINUX_x64: {
-            program = X64Program::Create();
-            program->debugInformation = bytecode->debugInformation;
-        } break;
-        default: Assert(false);
-    }
+    bytecode->target = options->target;
+    bytecode->arch = arch;
+    
+    program = Program::Create();
+    program->debugInformation = bytecode->debugInformation;
     
     if(options->source_buffer.buffer && options->source_file.size()) {
         log::out << log::RED << "A source buffer and source file was specified. You can only specify one\n";
-        options->compileStats.errors++;
+        compile_stats.errors++;
         return;
     }
     
@@ -1313,7 +1337,7 @@ void Compiler::run(CompileOptions* options) {
         "    ptr: T*;\n"
         "    len: i64;\n"
         "}\n"
-        "operator []<T>(slice: Slice<T>, index: u32) -> T {\n"
+        "operator []<T>(slice: Slice<T>, index: i32) -> T {\n"
         "    return slice.ptr[index];\n"
         "}\n"
         "fn @compiler init_preload()\n" // init global data and stuff
@@ -1345,6 +1369,7 @@ void Compiler::run(CompileOptions* options) {
         if (output_type == OUTPUT_LIB) preload += "#macro BUILD_LIB #endmacro\n";
         if (output_type == OUTPUT_OBJ) preload += "#macro BUILD_OBJ #endmacro\n";
         if (output_type == OUTPUT_BC)  preload += "#macro BUILD_BC  #endmacro\n";
+        if (options->execute_in_vm)    preload += "#macro BUILT_FOR_VM #endmacro\n";
 
         if(options->stable_global_data) {
             preload += "global @notstable stable_global_memory: void*;\n";
@@ -1383,7 +1408,7 @@ void Compiler::run(CompileOptions* options) {
     }
     if(initial_import_id == 0) {
         log::out << log::RED << "Could not find '"<<options->source_file << "'\n";
-        options->compileStats.errors++;
+        compile_stats.errors++;
         return;
     }
     
@@ -1429,19 +1454,22 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case TARGET_WINDOWS_x64:
         case TARGET_LINUX_x64: {
-            GenerateX64_finalize(this);
+            this->program->finalize_program(this);
+        } break;
+        case TARGET_ARM: {
+            this->program->finalize_program(this);
         } break;
         default: Assert(false);
     }
     
-    if(options->compileStats.errors!=0){ 
+    if(compile_stats.errors!=0){ 
         if(!options->silent)
-            options->compileStats.printFailed();
+            compile_stats.printFailed();
         return;
     }
-    if(options->compileStats.warnings!=0){
+    if(compile_stats.warnings!=0){
         if(!options->silent)
-            options->compileStats.printWarnings();
+            compile_stats.printWarnings();
     }
 
     if(options->only_preprocess) {
@@ -1482,7 +1510,6 @@ void Compiler::run(CompileOptions* options) {
         return;
     }
 
-    
     switch(options->target){
         case TARGET_BYTECODE: {
             // if(generate_obj_file) {
@@ -1494,11 +1521,15 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case TARGET_WINDOWS_x64: {
             obj_write_success = ObjectFile::WriteFile(OBJ_COFF, object_path, program, this);
-            options->compileStats.generatedFiles.add(object_path);
+            compile_stats.generatedFiles.add(object_path);
         } break;
         case TARGET_LINUX_x64: {
             obj_write_success = ObjectFile::WriteFile(OBJ_ELF, object_path, program, this);
-            options->compileStats.generatedFiles.add(object_path);
+            compile_stats.generatedFiles.add(object_path);
+        } break;
+        case TARGET_ARM: {
+            obj_write_success = ObjectFile::WriteFile(OBJ_ELF, object_path, program, this);
+            compile_stats.generatedFiles.add(object_path);
         } break;
         default: Assert(false);
     }
@@ -1506,7 +1537,7 @@ void Compiler::run(CompileOptions* options) {
     if(!obj_write_success) {
         // error message should have been printed.
         // TODO: We should return error codes and print messages here. the ObjectFile functions shouldn't decide how and what we print.
-        options->compileStats.errors++;
+        compile_stats.errors++;
         return;
         // log::out << log::RED << "Could not write object file '"<<object_path<<"'. Perhaps a bad path, perhaps due to compilation error?\n";
     } else if((output_type == OUTPUT_EXE || output_type == OUTPUT_DLL || output_type == OUTPUT_LIB) && options->target != TARGET_BYTECODE) {
@@ -1641,13 +1672,17 @@ void Compiler::run(CompileOptions* options) {
         } break;
         case LINKER_CLANG:
         case LINKER_GCC: {
+            // TODO: If on Linux, we need to provide paths to shared libraries somehow. How does linux know where to
+            //   find them. We can't just put them in /usr/lib. We can't just modify LD_LIBRARY_PATH because user may
+            //   compile restart the terminal (resetting variable) and then run executable which will fail cause it can't find libraries.
+            
             if(output_type == OUTPUT_LIB) {
                 cmd += "ar rcs ";
                 cmd += output_path + " ";
             } else {
                 switch(options->linker) {
                     case LINKER_GCC: cmd += "gcc "; break;
-                    case LINKER_CLANG: cmd += "clang++ "; break;
+                    case LINKER_CLANG: cmd += "clang "; break;
                     default: break;
                 }
                 if(options->useDebugInformation)
@@ -1662,11 +1697,12 @@ void Compiler::run(CompileOptions* options) {
                             // parsing command line arguments is though.
                             // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
                         } else {
-                            cmd += "-nostdlib ";
-                            if (entry_point == "main")
-                                cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
+                            // cmd += "-nostdlib ";
+                            // if (entry_point == "main")
+                            //     cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
                         }
                     }
+                    
                     if (entry_point != "main") // no need to set entry if main is used since it is the default
                         cmd += "--entry " + entry_point + " ";
                     
@@ -1689,7 +1725,16 @@ void Compiler::run(CompileOptions* options) {
             cmd += object_path + " ";
 
             if(options->target == TARGET_WINDOWS_x64) {
-                cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
+                bool has_kernel = false;
+                for(auto& path : program->libraries) {
+                    if (path == "Kernel32.lib" || path == "Kernel32.dll" || path == "Kernel32") {
+                        has_kernel = true;
+                        break;
+                    }
+                }
+                if(!has_kernel) {
+                    cmd += "-lKernel32 "; // _test and prints uses WriteFile so we must link with kernel32
+                }
             } else if(options->target == TARGET_LINUX_x64) {
                 // cmd += "-lc "; // link clib because it has wrappers for syscalls, NOTE: We actually don't need this, we use syscalls in assembly.
             }
@@ -1760,7 +1805,7 @@ void Compiler::run(CompileOptions* options) {
                 log::out << log::LIME<<"Linker command: "<<cmd<<"\n";
             // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
             
-            options->compileStats.start_linker = engone::StartMeasure();
+            compile_stats.start_linker = engone::StartMeasure();
             bool yes = engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
             if(yes && perform_copy) {
                 bool success = FileCopy(temp_path, options->output_file);
@@ -1769,25 +1814,137 @@ void Compiler::run(CompileOptions* options) {
                 }
             }
             failed = !yes;
-            options->compileStats.end_linker = engone::StartMeasure();
-            options->compileStats.generatedFiles.add(output_path);
+            compile_stats.end_linker = engone::StartMeasure();
+            compile_stats.generatedFiles.add(output_path);
         }
-        options->compileStats.end_linker = StartMeasure();
+        compile_stats.end_linker = StartMeasure();
         if(exitCode != 0 || failed) {
             log::out << log::RED << "Linker failed: '"<<cmd<<"'\n";
-            options->compileStats.errors++;
+            compile_stats.errors++;
             return;
         }    
+    } else if (output_type == OUTPUT_ELF){
+        if(program->libraries.size() > 0) {
+            // TODO: Better error messages that shows where libraries came from.
+            log::out << log::RED << "Libraries cannot be linked when compiling for ARM." << log::NO_COLOR;
+            for(auto& path : program->libraries) {
+                log::out << path<<" ";
+            }
+            log::out << "\n";
+            compile_stats.errors++;
+            return;
+        }
+        
+         // TODO: Compiler option for arm linker, what about clang?
+        std::string toolchain = "arm-none-eabi";
+        std::string as = toolchain+"-as";
+        std::string linker = toolchain+"-ld";
+        
+        std::string cmd = "";
+        cmd += linker + " ";
+        
+        if(options->useDebugInformation)
+            cmd += "-g ";
+        cmd += object_path + " ";
+        
+        const char* startup = 
+            ".global start\n"
+            "start:\n"
+            "    LDR sp, =_stack_top\n"
+            "    BL main\n"
+            "    # angel_SWIreason_ReportException\n"
+            "    mov r0, #0x18\n"
+            "\n"
+            "    # mov r1, #20026 # ADP_Stopped_ApplicationExit\n"
+            "    mov r1, #0x2\n"
+            "    lsl r1, r1, #16\n"
+            "    orr r1, r1, #0x26\n"
+            "    # interrupt\n"
+            "    svc 0x00123456\n"
+            "\n"
+            "    # infinite loop if interrupt didn't work\n"
+            "    B .\n";
+        const char* linker_script = 
+            "ENTRY(start)\n"
+            // "MEMORY {"
+            // "   FLASH (rx) : ORIGIN = 0x00010000, LENGTH = 512K "
+            // "   RAM (rw) : ORIGIN = 0x0x "
+            // "}"
+            "SECTIONS {\n"
+            "    . = 0x10000;"
+            "    .text : {\n"
+            "        bin/arm_startup.o(.text)\n"
+            "        *(.text)\n"
+            "    }\n"
+            "    .data : { *(.data) }\n"
+            "    .bss : { *(.bss COMMON) }\n"
+            "    . = ALIGN(8);\n"
+            "    _stack_top = . + 0x10000; /* 64kB of stack memory */\n"
+            "}\n";
+            
+        auto file_startup = FileOpen("bin/arm_startup.s", FILE_CLEAR_AND_WRITE);
+        FileWrite(file_startup, startup, strlen(startup));
+        FileClose(file_startup);
+        
+        std::string cmd_startup = as + " bin/arm_startup.s -o bin/arm_startup.o"; // NOTE: linker script needs to know path of arm_startup.o
+        if(options->useDebugInformation)
+            cmd_startup += " -g";
+        int as_exit_code=0;
+        bool yes = StartProgram(cmd_startup.c_str(), PROGRAM_WAIT, &as_exit_code);
+        if(!yes || as_exit_code != 0) {
+            log::out << log::RED << "Assembler failed: '"<<cmd_startup<<"'\n";
+            compile_stats.errors++;
+            return;
+        }
+        
+        auto file_lscript = FileOpen("bin/arm_lscript.ld", FILE_CLEAR_AND_WRITE);
+        FileWrite(file_lscript, linker_script, strlen(linker_script));
+        FileClose(file_lscript);
+        
+        cmd += " bin/arm_startup.o -T bin/arm_lscript.ld";
+        
+        for (int i = 0;i<(int)linkDirectives.size();i++) {
+            auto& dir = linkDirectives[i];
+            cmd += " " + dir;
+        }
+        cmd += " -o " + output_path;
+        int exitCode = 0;
+        bool failed = false;
+        {
+            ZoneNamedNC(zone0,"Linker",tracy::Color::Blue2, true);
+            
+            if(!options->silent)
+                log::out << log::LIME<<"Linker command: "<<cmd<<"\n";
+            // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
+            
+            compile_stats.start_linker = engone::StartMeasure();
+            bool yes = engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+            if(yes && perform_copy) {
+                bool success = FileCopy(temp_path, options->output_file);
+                if(!success) {
+                    log::out << log::RED << "Could not copy '"<<temp_path<<"' to '"<<options->output_file<<"'\n";
+                }
+            }
+            failed = !yes;
+            compile_stats.end_linker = engone::StartMeasure();
+            compile_stats.generatedFiles.add(output_path);
+        }
+        compile_stats.end_linker = StartMeasure();
+        if(exitCode != 0 || failed) {
+            log::out << log::RED << "Linker failed: '"<<cmd<<"'\n";
+            compile_stats.errors++;
+            return;
+        }
     } else {
         // TODO: If bytecode is the target and the user specified
         //   app.bc as outputfile should we write out a bytecode file format?
     }
     
-    options->compileStats.end_compile = engone::StartMeasure();
+    compile_stats.end_compile = engone::StartMeasure();
     
-    if(options->compileStats.errors==0) {
+    if(compile_stats.errors==0) {
         if(!options->silent) {
-            options->compileStats.printSuccess(options);
+            compile_stats.printSuccess(options);
         }
     }
     
@@ -1811,18 +1968,35 @@ void Compiler::run(CompileOptions* options) {
     // }
 JUMP_TO_EXEC:
     
-    if(options->compileStats.errors == 0 && options->executeOutput && output_type == OUTPUT_EXE) {
+    if(compile_stats.errors != 0) {
+        return;   
+    }
+    if(options->execute_in_vm)  {
+        VirtualMachine vm{};
+        vm.execute(bytecode, entry_point, false, options);
+        return;
+    } 
+    if(options->executeOutput && (output_type == OUTPUT_EXE || output_type == OUTPUT_ELF)) {
         switch(options->target) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS
                 int exitCode;
 
                 std::string cmd = output_path;
+                cmd = ".\\" + cmd; // TODO: Assumes exe path is relative, not good
+                // We need it because when we start program windows will look for executable
+                // in the current processe's executable directory instead of the
+                // current working directory. relative path ensures we always use current working directory.
+                // This matters if you call compiler like this: ..\BetterThanBatch\bin\btb.exe src/main -r
+                
                 ReplaceChar((char*)cmd.data(), cmd.size(), '/', '\\');
                 for (auto& a : options->userArguments) {
                     cmd += " " + a;
                 }
+                
+                // log::out << "CWD: " << GetWorkingDirectory()<<"\n";
 
+                log::out << log::GRAY << "running: " << cmd<<"\n";
                 engone::StartProgram(cmd.c_str(),PROGRAM_WAIT, &exitCode);
                 log::out << log::LIME <<"Exit code: " << exitCode << "\n";
 
@@ -1856,15 +2030,41 @@ JUMP_TO_EXEC:
                 #endif
             } break;
             case TARGET_BYTECODE: {
-                VirtualMachine vm{};
-                vm.execute(bytecode, entry_point);
+                log::out << log::RED << "Bytecode as target is not supported. Use --run-vm to execute in virtual machine.\n";
+            } break;
+            case TARGET_ARM: {
+                // TODO: Don't hardcode processor for QEMU.
+                std::string cmd = "qemu-system-arm "
+                    "-semihosting -nographic -serial mon:stdio -M "
+                    "xilinx-zynq-a9 -cpu cortex-a9 ";
+                cmd += "-kernel " + output_path;
+                
+                if(options->debug_qemu_with_gdb) {
+                    cmd += " -S -gdb tcp::"+options->qemu_gdb_port;
+                }
+                
+                ReplaceChar((char*)cmd.data(), cmd.size(), '/', '\\');
+                for (auto& a : options->userArguments) {
+                    cmd += " " + a;
+                }
+                
+                // StartProgram("arm-none-eabi-objdump bin/main.o -W", PROGRAM_WAIT);
+                
+                log::out << log::GRAY << "running: " << cmd<<"\n";
+                log::out << log::GRAY << "Ctrl+A <release> X (to exit QEMU)\n";
+                int exitCode;
+                bool yes = engone::StartProgram(cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                if(!yes) {
+                    log::out << log::RED << "Could not run: " << cmd<<"\n";
+                }
+                log::out << log::LIME <<"Exit code from QEMU: " << exitCode << "\n";
             } break;
             default: Assert(false);
         }
-    } else {
-        if(!options->silent)
-            log::out << log::GRAY << "not executing program\n";
+        return;
     }
+    if(!options->silent)
+        log::out << log::GRAY << "not executing program\n";
 }
 u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error) {
     Path abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
@@ -1980,7 +2180,7 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
             if(lib.named_as == as_name) {
                 found = true;
                 // TODO: Improve error message, which source file the library came from
-                options->compileStats.errors++;
+                compile_stats.errors++;
                 LOG_MSG_LOCATION
                 log::out << log::RED << "Multiple libraries cannot be named the same ("<<as_name<<").\n";
                 log::out << log::RED << " \""<<BriefString(path)<<"\" collides with \""<<lib.path<<"\"\n";
@@ -2025,6 +2225,16 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     } else {
         fullPath = path.text;
     }
+    #if OS_LINUX
+    if(fullPath.text.size() > 0 && fullPath.text[0] == '~') {
+        std::string value = EnvironmentVariable("HOME");
+        if(value.size() != 0) {
+            // log::out << "HOME="<<value<<"\n";
+            // check traling slashes, join them, make sure value and path is separated by ONE slash
+            fullPath.text = std::string(value) + fullPath.text.substr(1);
+        }
+    }
+    #endif
 
     bool keep_searching = true;
 
@@ -2141,6 +2351,108 @@ double Compiler::compute_last_modified_time() {
     }
     return time;
 }
+
+bool Compiler::is_msvc_configured() {
+    using namespace engone;
+    // TODO: Checking for HostX64 which is the path where link.exe should exist
+    //   Is not a great idea. What if another application uses the same path structure?
+    std::string env_path = GetEnvVar("PATH");
+    bool is_configured = env_path.find("\\bin\\HostX64\\x64") != -1;
+    return is_configured;
+}
+bool Compiler::configure_msvc() {
+    using namespace engone;
+    #ifndef OS_WINDOWS
+    return false;
+    #endif
+    
+    bool log_versions = false;
+    
+    auto find_first_folder = [&](const std::string& path) {
+        // TODO: Pick the latest version?
+        std::string name = "";
+        auto iter = DirectoryIteratorCreate(path.c_str(), path.size());
+        DirectoryIteratorData data;
+        while(DirectoryIteratorNext(iter, &data)) {
+            if(!data.isDirectory)
+                continue; // don't care about files
+            
+            std::string dir_path = std::string(data.name,data.namelen);
+            int at = dir_path.find_last_of("/");
+            if(at != -1) {
+                name = dir_path.substr(at+1);
+                break;
+            }
+            DirectoryIteratorSkip(iter);
+        }
+        DirectoryIteratorDestroy(iter, &data);
+        return name;
+    };
+    
+    // Find Visual Studio toolchain versions
+    // std::string version_vs = "2022";
+    // std::string version_msvc = "14.33.31629";
+    // std::string version_kits = "10.0.20348.0";
+    
+    std::string base_vs = "C:\\Program Files\\Microsoft Visual Studio";
+    std::string base_kits = "C:\\Program Files (x86)\\Windows Kits\\10\\";
+    
+    std::string version_vs = find_first_folder(base_vs);
+    if(log_versions)
+        log::out << "Found VS version: "<<version_vs<<"\n";
+    if(version_vs.size() == 0) {
+        return false;
+    }
+    
+    std::string base_tools_nov = base_vs + "\\" + version_vs + "\\Community\\VC\\Tools\\MSVC";
+    std::string version_msvc = find_first_folder(base_tools_nov);
+    if(log_versions)
+        log::out << "Found MSVC version: "<<version_msvc<<"\n";
+    if(version_msvc.size() == 0) {
+        return false;
+    }
+    std::string base_tools = base_tools_nov + "\\" + version_msvc;
+    
+    std::string version_kits = find_first_folder(base_kits + "\\include");
+    if(log_versions)
+        log::out << "Found kits version: "<<version_kits<<"\n";
+    if(version_kits.size() == 0) {
+        return false;
+    }
+    std::string base_kits_include = base_kits + "\\include\\" + version_kits;
+    std::string base_kits_lib = base_kits + "\\lib\\" + version_kits;
+    
+    // Calculate paths
+    std::string add_PATH = ";"+base_tools + "\\bin\\HostX64\\x64;";
+
+    std::string add_LIBPATH = ";"+base_tools + "\\lib\\x64;";
+
+    std::string add_LIB = ";"+base_kits_lib + "\\ucrt\\x64;"
+        + base_kits_lib + "\\um\\x64;"
+        + base_tools + "\\lib\\x64;";
+
+    std::string add_INCLUDE = ";"+base_tools+"\\include;"
+        + base_kits_include+"\\ucrt;"
+        + base_kits_include+"\\um;"
+        + base_kits_include+"\\shared;"
+        + base_kits_include+"\\winrt;"
+        + base_kits_include+"\\cppwinrt;";
+    
+    // Set environment paths
+    add_PATH = GetEnvVar("PATH") + add_PATH;
+    add_LIBPATH = GetEnvVar("LIBPATH") + add_LIBPATH;
+    add_LIB = GetEnvVar("LIB") + add_LIB;
+    add_INCLUDE = GetEnvVar("INCLUDE") + add_INCLUDE;
+    SetEnvVar("PATH", add_PATH);
+    SetEnvVar("LIBPATH", add_LIBPATH);
+    SetEnvVar("LIB", add_LIB);
+    SetEnvVar("INCLUDE", add_INCLUDE);
+    
+    // TODO: Check if linker works?
+    
+    return true;
+}
+
 const char* annotation_names[]{
     "unknown",
     "custom",

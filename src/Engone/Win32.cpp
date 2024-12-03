@@ -15,7 +15,6 @@
 
 // #define LOG_ALLOCATIONS
 // #define LOG_ALLOC(...) if(global_loggingSection&LOG_ALLOCATIONS) { __VA_ARGS__; }
-
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -561,7 +560,50 @@ namespace engone {
 		*seconds = t2/10'000'000.0; // 100-nanosecond intervals
         return true;
     }
-	bool FileCopy(const std::string& src, const std::string& dst, bool log_error){
+	
+    bool FileLastWriteTimestamp_us(const std::string& path, u64* timestamp, bool log_error) {
+        // HANDLE handle = CreateFileA(path.c_str(),GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL, NULL);
+        HANDLE handle = CreateFileA(path.c_str(),GENERIC_READ,FILE_SHARE_READ,NULL,OPEN_EXISTING,0, NULL);
+		
+		if(handle==INVALID_HANDLE_VALUE){
+			DWORD err = GetLastError();
+			if(err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND){
+				// this can happen, it's not really an error, no need to print.
+				// denied access to some more fundamental error is important however.
+				// PL_PRINTF("[WinError %lu] Cannot find '%s'\n",err,path.c_str());
+			}else if(err == ERROR_ACCESS_DENIED){
+				if(log_error)
+					PL_PRINTF("[WinError %lu] Denied access to '%s'\n",err,path.c_str()); // tried to open a directory?
+			}else {
+				if(log_error)
+					PL_PRINTF("[WinError %lu] Error opening '%s'\n",err,path.c_str());
+			}
+			return false;
+		}
+        FILETIME modified;
+        FILETIME creation;
+        FILETIME access;
+        BOOL success = GetFileTime(handle,&creation,&access,&modified);
+        if(!success){
+            DWORD err = GetLastError();
+			if(log_error)
+            	PL_PRINTF("[WinError %lu] GetFileTime '%s'\n",err,path.c_str());
+            return false;
+        }
+        success = CloseHandle(handle);
+        if(!success){
+            DWORD err = GetLastError();
+			if(log_error)
+            	PL_PRINTF("[WinError %lu] CloseHandle '%s'\n",err,path.c_str());
+        }
+		u64 t0 = (u64)creation.dwLowDateTime+(u64)creation.dwHighDateTime*((u64)MAXDWORD+1);
+		u64 t1 = (u64)access.dwLowDateTime+(u64)access.dwHighDateTime*((u64)MAXDWORD+1);
+		u64 t2 = (u64)modified.dwLowDateTime+(u64)modified.dwHighDateTime*((u64)MAXDWORD+1);
+		//printf("T: %llu, %llu, %llu\n",t0,t1,t2);
+		*timestamp = t2 / 10; // 100-nanosecond intervals
+        return true;
+    }
+    bool FileCopy(const std::string& src, const std::string& dst, bool log_error){
 		bool yes = CopyFileA(src.c_str(),dst.c_str(),0);
 		if(!yes){
 			if (log_error) {
@@ -1611,13 +1653,13 @@ namespace engone {
 			freopen_s((FILE**)stdin, "CONIN$", "r", stdin);
 		}
 	}
-	std::string EnvironmentVariable(const std::string& name){
+	std::string GetEnvVar(const std::string& name){
 		std::string buffer{};
 		DWORD length = GetEnvironmentVariableA(name.c_str(),(char*)buffer.data(),0);
 		if(length==0){
 			DWORD err = GetLastError();
 			if(err==ERROR_ENVVAR_NOT_FOUND){
-				printf("[WinError %lu] EnvironmentVariable 1, %s not found\n",err,name.c_str());
+				// printf("[WinError %lu] EnvironmentVariable 1, %s not found\n",err,name.c_str());
 			}else{
 				printf("[WinError %lu] EnvironmentVariable 1, %s\n",err,name.c_str());
 			}
@@ -1634,6 +1676,16 @@ namespace engone {
 		}
 		return buffer;
 	}
+	bool SetEnvVar(const std::string& name, const std::string& value) {
+        // TODO: Check length of value, there is a limit
+		BOOL yes = SetEnvironmentVariableA(name.c_str(), value.c_str());
+		if(!yes){
+			DWORD err = GetLastError();
+            printf("[WinError %lu] SetEnvironmentVariableA, %s = %s\n",err,name.c_str(), value.c_str());
+			return false;
+		}
+		return true;
+    }
 	struct PipeInfo{
 		HANDLE readH=0;	
 		HANDLE writeH=0;	
@@ -2056,7 +2108,7 @@ namespace engone {
 	// TODO: handle is checked against NULL, it should be checked against INVALID_HANDLE_VALUE
 	bool FileMonitor::check(const std::string& path, void(*callback)(const std::string&, uint32), uint32 flags) {
 	// bool FileMonitor::check(const std::string& path, std::function<void(const std::string&, uint32)> callback, uint32 flags) {
-		
+        
 		if(!FileExist(path))
 			return false;
 		//log::out << log::RED << "FileMonitor::check - invalid path : " << m_root << "\n";
@@ -2169,5 +2221,9 @@ namespace engone {
 		// Empty
 	}
 #endif
+
+    bool IsProcessDebugged() {
+        return IsDebuggerPresent();
+    }
 }
 #endif

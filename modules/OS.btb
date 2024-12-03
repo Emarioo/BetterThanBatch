@@ -63,10 +63,6 @@ struct Process {
     }
 }
 
-// TODO: Where should we define Assert? not in OS.btb, maybe in preload?
-// #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
-#macro Assert(expression) #endmacro
-
 // NOTE: We force microsecond resolution (assuming MONOTONIC clock supports it)
 #macro __LINUX_MEASURE_RESOLUTION 1000_000
 fn StartMeasure() -> i64 {
@@ -433,7 +429,9 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
             }
         }
     } else {
-        *exit_code = 0 // perhaps we shouldn't set exit code at all?
+        if exit_code {
+            *exit_code = 0 // perhaps we shouldn't set exit code at all?
+        }
     }
     
     CloseHandle(pi.hThread);
@@ -464,7 +462,7 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
             global_environment = environ
             // log("Warning in 'ExecuteCommand': global_environment is null, see SetEnvironment.")
         }
-
+        // log("find ",cmd)
         real_path := FindFile(cmd, true)
         // real_path: StringBuilder
         // real_path.append("okay")
@@ -484,7 +482,7 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
         }
 
         // log("rp ",real_path.ptr)
-        ptr := Allocate(2423)
+        // ptr := Allocate(2423)
 
         if real_path.ptr {
         // if false {
@@ -503,9 +501,10 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
         exit(0)
     }
     // parent process
+    // log("parent")
 
     if !asynchronous {
-        info: siginfo
+        info: siginfo_t
         flags: i32 = WEXITED
         res := waitid(P_PID, pid, &info, flags)
         if res < 0 {

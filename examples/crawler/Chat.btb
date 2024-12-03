@@ -122,11 +122,14 @@ struct ChatWidget {
                 stream.write(input_message.data(), header.text_len)
 
                 // FileWrite("bin.txt", stream.sliced_unsafe())
+            
+                raw_bytes: u8[]
+                stream.finalize(&raw_bytes)
 
                 if is_server {
-                    server.send(stream.sliced_unsafe())
+                    server.send(raw_bytes)
                 } else {
-                    client.send(stream.sliced_unsafe())
+                    client.send(raw_bytes)
                 }
                 tmp: StringBuilder
                 tmp.append("You: ")

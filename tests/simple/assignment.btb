@@ -52,6 +52,8 @@ a, b, c = many() // all return values
 }
 {
     a, b: i32 = many()
+    _test 1; a
+    _test 2; b
 }
 {
     c: i32; // declare in advance
@@ -59,6 +61,9 @@ a, b, c = many() // all return values
 }
 {
     a, b, c: i32 = many();
+    _test 1; a
+    _test 2; b
+    _test 3; c
 }
 {
     a: i64, b: i32 = many() // does this fail or does it cast?

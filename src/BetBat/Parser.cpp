@@ -1,5 +1,6 @@
 #include "BetBat/Parser.h"
 #include "BetBat/Compiler.h"
+#include "BetBat/Util/Utility.h"
 
 namespace parser {
 
@@ -232,11 +233,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
         // bool type_list = false;
         bool func_params = false;
         bool func_returns = false;
+        bool multiple_return_values = false;
         
         bool only_pointer = false;
         bool may_be_name = true;
         
-        bool expect_closing_paren = false;
+        // bool expect_closing_paren = false;
         // bool consume_closing_paren = false;
     };
     DynamicArray<Env> envs;
@@ -267,6 +269,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().func_returns = true;
                 envs.last().func_params = false;
                 envs.last().may_be_name = false;
+                auto token3 = info.getinfo();
+                if(token3->type == '(') {
+                    info.advance();
+                    envs.last().multiple_return_values = true;
+                    envs.last().buffer += "(";
+                }
                 envs.add({});
                 continue;
             } else {
@@ -333,7 +341,7 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().buffer.append("(");
                 envs.last().func_params = true;
                 envs.add({});
-                envs.last().expect_closing_paren = true;
+                // envs.last().expect_closing_paren = true;
                 // envs.last().consume_closing_paren = false;
                 continue;
             } else if (token->type == lexer::TOKEN_IDENTIFIER && envs.last().may_be_name) {
@@ -354,18 +362,19 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 envs.last().may_be_name = false;
                 envs.add({});
                 continue;
-            } else if (token->type == '(' && envs.last().may_be_name) {
-                if(envs.size() == 1) {
-                    break;
-                }
-                info.advance();
-                envs.last().buffer += "(";
-                envs.last().may_be_name = false;
-                envs.add({});
-                envs.last().expect_closing_paren = true;
-                // envs.last().consume_closing_paren = false;
-                continue;
             }
+            //  else if (token->type == '(' && envs.last().may_be_name) {
+            //     if(envs.size() == 1) {
+            //         break;
+            //     }
+            //     info.advance();
+            //     envs.last().buffer += "(";
+            //     envs.last().may_be_name = false;
+            //     envs.add({});
+            //     envs.last().expect_closing_paren = true;
+            //     // envs.last().consume_closing_paren = false;
+            //     continue;
+            // }
         }
         if (token->type == '*') {
             if(envs.last().may_be_name) {
@@ -395,7 +404,9 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
-            if(envs[envs.size()-2].func_returns) {
+            if(envs[envs.size()-2].multiple_return_values) {
+                
+            } else if(envs[envs.size()-2].func_returns) {
                 // we break here because
                 //  func: fn ()->i32, param: i32
                 // should be treated as
@@ -426,7 +437,10 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
-            if(envs[envs.size()-2].func_returns) {
+            if(envs[envs.size()-2].multiple_return_values) {
+                info.advance();
+                envs.last().buffer += ")";
+            } else if(envs[envs.size()-2].func_returns) {
                 break; // in function pointers, we have 2 envs, not just one so we check function pointer too.
             }
             // if(envs.last().expect_closing_paren) {
@@ -445,11 +459,14 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
     
     outTypeId = "";
     for(int i=0;i<envs.size();i++) {
-        outTypeId += envs[i].buffer; 
+        outTypeId += envs[i].buffer;
+    }
+    if(outTypeId == "uword" || outTypeId == "iword") {
+        outTypeId = outTypeId[0]+std::to_string(compiler->arch.REGISTER_SIZE * 8);
     }
     if(tokensParsed)
         *tokensParsed = info.gethead() - startToken;
-        
+    
     // log::out << "Parsed: '" << outTypeId << "'\n";
     return SIGNAL_SUCCESS;
     #undef NEXT
@@ -764,7 +781,13 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
             //     // what do we do?
             // }
         } else if(name_token->type == lexer::TOKEN_STRUCT) {
-            Assert(("struct in struct not allowed",false)); // error instead
+            ERR_SECTION(
+                ERR_HEAD2(name_tok)
+                ERR_MSG("Structs are not allowed inside of structs.")
+                ERR_LINE2(name_tok, "here")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+            // Assert(("struct in struct not allowed",false)); // error instead
             // ERR_SECTION(
             //     ERR_HEAD2(name)
             //     ERR_MSG("Structs not allowed inside structs.")
@@ -1042,7 +1065,7 @@ SignalIO ParseContext::parseNamespace(ASTScope*& astNamespace){
         ASTFunction* tempFunction=0;
         ASTScope* tempNamespace=0;
     
-        SignalIO signal;
+        SignalIO signal = SIGNAL_NO_MATCH;
 
         if(token->type == lexer::TOKEN_FUNCTION) {
             info.advance();
@@ -1068,6 +1091,7 @@ SignalIO ParseContext::parseNamespace(ASTScope*& astNamespace){
             )
             
             info.advance();
+            return SIGNAL_COMPLETE_FAILURE;
         }
         switch(signal) {
         case SIGNAL_SUCCESS: break;
@@ -1900,6 +1924,9 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 ops.add(AST_DECREMENT);
                 continue;
             }
+            
+            StringView next_token_string{};
+            auto next_token = info.getinfo(&next_token_string, 1);
 
             if(token->type == lexer::TOKEN_LITERAL_INTEGER){
                 auto  token_tiny = info.gettok();
@@ -2433,6 +2460,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     }
                     if(token->type == '{') {
                         depth++;
+                        info.advance();
                         continue;
                     }
                     if(token->type == '}') {
@@ -2774,6 +2802,22 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     )
                 } else
                     info.advance();
+                values.add(tmp);
+            } else if(token->type == '#' && next_token->type == lexer::TOKEN_IDENTIFIER && next_token_string == "function"){
+                auto loc = info.getloc();
+                info.advance(2);
+                
+                ASTExpression* tmp = 0;
+                tmp = info.ast->createExpression(TypeId(AST_STRING));
+                if(functionScopes.size()>0) {
+                    tmp->name = functionScopes.last().function->name;
+                } else {
+                    tmp->name = "__no_function__";
+                }
+                if(cstring)
+                    tmp->flags |= ASTNode::NULL_TERMINATED;
+
+                tmp->location = loc;
                 values.add(tmp);
             } else {
                 auto token_tiny = info.gettok();
@@ -3118,7 +3162,7 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
             if(token->type == lexer::TOKEN_IDENTIFIER && tok1.type == ':'){
                 info.advance(2);
                 statement->varnames[0].name = view;
-            } else if(token->type == lexer::TOKEN_IDENTIFIER && tok1.type == ',' && tok1.type == lexer::TOKEN_IDENTIFIER && tok3.type == ':'){
+            } else if(token->type == lexer::TOKEN_IDENTIFIER && tok1.type == ',' && tok2.type == lexer::TOKEN_IDENTIFIER && tok3.type == ':'){
                 info.advance(4);
                 statement->varnames[0].name = view;
                 statement->varnames[1].name = view_nr;
@@ -3464,6 +3508,14 @@ SignalIO ParseContext::parseFlow(ASTStatement*& statement){
     } else if(token->type == lexer::TOKEN_TRY) {
         auto loc = info.getloc();
         info.advance();
+
+        if(compiler->options->target != TARGET_WINDOWS_x64) {
+            ERR_SECTION(
+                ERR_HEAD2(loc)
+                ERR_MSG_COLORED("Try-catch is not supported on "<<log::LIME << ToString(compiler->options->target) <<log::NO_COLOR<<". Use sigaction instead. In the future we will rethink try-catch because Windows has support for it (Structured Exception Handling) while Linux handles exceptions differently with signals. The language will support platform independent exception handling.")
+                ERR_LINE2(loc, "here")
+            ) 
+        }
         
         statement = info.ast->createStatement(ASTStatement::TRY);
 
@@ -3546,6 +3598,11 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
     bool is_entry_point = false;
     bool is_export = false;
 
+    if(compiler->options->target == TARGET_ARM) {
+        // @TODO: Support BETCALl
+        function->callConvention = CallConvention::UNIXCALL;
+    }
+
     lexer::Token tok_name{};
     if(!is_operator) {
         StringView view_fn_name{};
@@ -3563,6 +3620,9 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                     } else if(info.compiler->options->target == TARGET_LINUX_x64) {
                         specifiedConvention = true;
                         function->callConvention = CallConvention::UNIXCALL;
+                    } else if(info.compiler->options->target == TARGET_ARM) {   
+                        function->callConvention = CallConvention::UNIXCALL;
+                        // function->callConvention = CallConvention::ARMCALL;
                     } else Assert(false);
                 }
                 
@@ -3687,15 +3747,32 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             } else if (view_fn_name == "betcall"){
                 function->callConvention = CallConvention::BETCALL;
                 specifiedConvention = true;
+                if(compiler->options->target == TARGET_ARM) {
+                    ERR_SECTION(
+                        ERR_HEAD2(function->location)
+                        ERR_MSG("The calling convention 'betcall' is not supported when targeting ARM (yet).")
+                        ERR_LINE2(function->location, "here")
+                    )
+                }
             // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
             } else if (view_fn_name == "unixcall"){
                 function->callConvention = CallConvention::UNIXCALL;
                 specifiedConvention = true;
             } else if (view_fn_name == "oscall"){
-                if (compiler->options->target == TARGET_WINDOWS_x64) {
-                    function->callConvention = CallConvention::STDCALL;
-                } else if (compiler->options->target == TARGET_LINUX_x64) {
-                    function->callConvention = CallConvention::UNIXCALL;
+                switch(compiler->options->target) {
+                    case TARGET_WINDOWS_x64: {
+                        function->callConvention = CallConvention::STDCALL;
+                    } break;
+                    case TARGET_LINUX_x64: {
+                        function->callConvention = CallConvention::UNIXCALL;
+                    } break;
+                    case TARGET_ARM: {
+                        function->callConvention = CallConvention::UNIXCALL;
+                    } break;
+                    case TARGET_BYTECODE: {
+                        function->callConvention = CallConvention::BETCALL;
+                    } break;
+                    default: Assert(false);
                 }
                 specifiedConvention = true;
             } else if (view_fn_name == "native"){
@@ -3921,7 +3998,19 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         argv.defaultValue = nullptr;
         function->nonDefaults++;
 
-        std::string str = parentStruct->name + "*"; // TODO: doesn't work with polymorhpism?
+        std::string str = parentStruct->name;
+        if(parentStruct->polyArgs.size()>0){
+            str += "<";
+            for(int i=0;i<parentStruct->polyArgs.size();i++){
+                auto& poly = parentStruct->polyArgs[i];
+                if(i != 0)
+                    str+=",";
+                str += poly.name;
+            }
+            str += ">";
+        }
+        str += "*";
+        
         argv.stringType = info.ast->getTypeString(str);;
     }
     info.advance(); // skip (
@@ -4147,7 +4236,7 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
         info.functionScopes.add({});
         info.functionScopes.last().function = function;
         ASTScope* body = 0;
-        auto signal = parseBody(body, function->scopeId);
+        auto signal = parseBody(body, function->scopeId, ParseFlags::PARSE_FROM_FUNC);
         function->body = body;
         info.functionScopes.pop();
         SIGNAL_SWITCH_LAZY()
@@ -4634,20 +4723,75 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
         functionScopes.last().defers.resize(functionScopes.last().anyScopes.last().defer_size);
         functionScopes.last().anyScopes.pop();
     };
+    
+    TokenIteratorState state{};
+    DynamicArray<u32> extra_preprocs{};
+    if(in_flags & ParseFlags::PARSE_FROM_FUNC) {
+        auto ast_func = functionScopes.last().function;
+        
+        DynamicArray<const preproc::FunctionInsert*> inserts{};
+        compiler->preprocessor.match_function_insert(ast_func->name, TrimCWD(lexer_import->path, true), &inserts);
+        
+        for(auto& insert : inserts) {
+            std::string func_file_path;
+            int line, column;
+            // compiler->lexer.get_source_information(ast_func->location, &func_file_path, &line, &column, nullptr);
+            compiler->lexer.get_source_information(insert->location, &func_file_path, &line, &column, nullptr);
+            
+            u32 temp_import_id = compiler->lexer.tokenize(insert->content, func_file_path, 0, line, 0);
+            
+            CompilerImport imp{};
+            imp.import_id = temp_import_id;
+            imp.path = func_file_path;
+            auto yes = compiler->imports.requestSpot(temp_import_id-1, &imp);
+            Assert(yes);
+            
+            u32 initial_preproc_import_id = compiler->preprocessor.process(temp_import_id, false);
+            
+            u32 real_import_id = compiler->get_map_id(import_id);
+            compiler->addDependency(temp_import_id, real_import_id);
+            
+            u32 preproc_import_id = compiler->preprocessor.process(temp_import_id, true);
+            
+            auto lex_imp = compiler->lexer.getImport_unsafe(preproc_import_id);
+            
+            extra_preprocs.add(preproc_import_id);
+        }
+        if(extra_preprocs.size() > 0) {
+            replace_token_state(&state, extra_preprocs[0]);
+        }
+    }
 
     while(true){
         auto token = info.getinfo(&view);
         if(token->type == lexer::TOKEN_EOF) {
+            if(extra_preprocs.size()>0) {
+                restore_token_state(&state);
+                extra_preprocs.removeAt(0);
+                if(extra_preprocs.size() > 0) {
+                    replace_token_state(&state, extra_preprocs[0]);
+                }
+                continue;
+            }
             if(expectEndingCurlyBrace) {
                 if (functionScopes.size()) {
                     auto func = functionScopes.last().function;
-                    auto loc = getloc();
-                    ERR_SECTION(
-                        ERR_HEAD2(loc)
-                        ERR_MSG("Sudden end of file. A curly brace was expected to end the scope. The scope here belongs to function '"<<func->name<<"'. Did you forget a curly brace in this function?")
-                        ERR_LINE2(loc, "sudden end here")
-                        ERR_LINE2(func->location, "this function")
-                    )
+                    if(func) {
+                        auto loc = getloc();
+                        ERR_SECTION(
+                            ERR_HEAD2(loc)
+                            ERR_MSG("Sudden end of file. A curly brace was expected to end the scope. The scope here belongs to function '"<<func->name<<"'. Did you forget a curly brace in this function?")
+                            ERR_LINE2(loc, "sudden end here")
+                            ERR_LINE2(func->location, "this function")
+                        )
+                    } else {
+                        auto loc = getloc();
+                        ERR_SECTION(
+                            ERR_HEAD2(loc)
+                            ERR_MSG("Sudden end of file. A curly brace was expected to end the scope.")
+                            ERR_LINE2(loc, "sudden end here")
+                        )
+                    }
                 }else {
                     ERR_DEFAULT(info.gettok(), "Sudden end of body. You are missing an ending curly brace '}'.", "here")
                 }
@@ -4746,13 +4890,13 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
             if(tempFunction)
                 bodyLoc->add(info.ast, tempFunction);
             info.nextContentOrder.last()++;
-        } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "conversion") {
-            info.advance();
-            signal = parseFunction(tempFunction, nullptr, true);
-            astNode = (ASTNode*)tempFunction;
-            if(tempFunction)
-                bodyLoc->add(info.ast, tempFunction);
-            info.nextContentOrder.last()++;
+        // } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "conversion") {
+        //     info.advance();
+        //     signal = parseFunction(tempFunction, nullptr, true);
+        //     astNode = (ASTNode*)tempFunction;
+        //     if(tempFunction)
+        //         bodyLoc->add(info.ast, tempFunction);
+        //     info.nextContentOrder.last()++;
         }  else if(token->type == lexer::TOKEN_ENUM) {
             info.advance();
             signal = parseEnum(tempEnum);
@@ -4986,7 +5130,7 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     auto signal = info.parseBody(body, info.ast->globalScopeId, PARSE_TRULY_GLOBAL);
     info.functionScopes.pop();
     
-    info.compiler->options->compileStats.errors += info.errors;
+    info.compiler->compile_stats.errors += info.errors;
     
     return body;
 }

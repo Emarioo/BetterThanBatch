@@ -1,0 +1,71 @@
+#import "Logger"
+
+global global_stack_trace: StackTrace;
+
+// Exists per thread
+struct StackTrace {
+    #macro MAX_STACK_TRACE_FRAMES 100
+    frames: StackFrame[MAX_STACK_TRACE_FRAMES];
+    frame_count: i32;
+    
+    #macro MAX_STACK_TRACE_CALLBACKS 100
+    callbacks: StackTraceCallback[MAX_STACK_TRACE_CALLBACKS];
+    callback_count: i32;
+}
+// #macro FnStackTraceCallback fn(void*)
+struct StackTraceCallback {
+    func: fn(void*);
+    data: void*;
+}
+struct StackFrame {
+    function: char[];
+    file: char[];
+    line: i32;
+    registered_callbacks: i32;
+}
+
+#macro TRACE_STACK_FRAME() PushStackFrame(#function,#file,#line) defer PopStackFrame()
+
+fn PushStackFrame(function: char[], file: char[], line: i32) {
+    frame := &global_stack_trace.frames[global_stack_trace.frame_count++]
+    frame.function = function
+    frame.file = file
+    frame.line = line
+    frame.registered_callbacks = global_stack_trace.callback_count
+    // log("push ",global_stack_trace.callback_count)
+}
+fn PopStackFrame() {
+    global_stack_trace.frame_count--;
+    frame := &global_stack_trace.frames[global_stack_trace.frame_count]
+    global_stack_trace.callback_count = frame.registered_callbacks
+    // log("pop ",global_stack_trace.callback_count)
+}
+fn RegisterTraceCallback(callback: fn(void*), data: void*) {
+    if global_stack_trace.frame_count < 1
+        return;
+    
+    call := &global_stack_trace.callbacks[global_stack_trace.callback_count++]
+    call.func = callback
+    call.data = data
+}
+
+fn PrintStackTrace() {
+    trace := &global_stack_trace
+    if(trace.callback_count > 0) {
+        log(LOG_GOLD,"CALLBACKS:",LOG_NO_COLOR)
+        for @rev 0..trace.callback_count {
+            it := trace.callbacks[nr]
+            it.func(it.data)
+        }
+    }
+    if trace.frame_count > 0 {
+        log(LOG_GOLD,"TRACE:")
+        for 0..trace.frame_count {
+            it := trace.frames[nr]
+            
+            log(" ",it.function," - ",it.file,":",it.line)
+        }
+    } else {
+        log(LOG_GOLD,"TRACE: none")
+    }
+}

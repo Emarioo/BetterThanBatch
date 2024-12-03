@@ -3,6 +3,8 @@
 
 #define AST_LOCK(X) lock_astnodes.lock(); X; lock_astnodes.unlock();
 
+engone::Mutex g_polyVersions_mutex{};
+
 const char* ToString(CallConvention stuff){
     #define CASE(X,N) case X: return N;
     switch(stuff){
@@ -167,7 +169,9 @@ AST *AST::Create(Compiler* compiler) {
 
     AST *ast = TRACK_ALLOC(AST);
     new(ast) AST(compiler);
-
+    
+    ast->REGISTER_SIZE = compiler->arch.REGISTER_SIZE;
+    ast->FRAME_SIZE = compiler->arch.FRAME_SIZE;
     ast->initLinear();
 
     ast->globalScope = ast->createBody();
@@ -192,7 +196,7 @@ AST *AST::Create(Compiler* compiler) {
     ADD(AST_FLOAT64, 8);
     ADD(AST_BOOL, 1);
     ADD(AST_CHAR, 1);
-    ADD(AST_NULL, 8);
+    ADD(AST_NULL, ast->REGISTER_SIZE);
     ADD(AST_STRING, 0);
     ADD(AST_ID,0);
     ADD(AST_SIZEOF,0);
@@ -625,19 +629,36 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
         if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
             from.getPointerLevel() - to.getPointerLevel() == 1 && (less_strict || from.baseType() == AST_VOID))
             return true;
-        // if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
-        //     return true;
-        if(to.baseType() == AST_VOID && to.getPointerLevel() > 0)
+        // We only allow explicit cast of pointers of the same level if one is void.
+        if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
             return true;
+        /* Example:
+            You may write code like this:
+                fn copy(p: i32*) { ... }
+                data: i32 = GetData()
+                copy(&n)
+
+            But then you realise you want to copy more numbers.
+                fn copy(p: i32*) { ... }
+                n: i32* = GetMoreData()
+                copy(&n)
+            
+            Oopsie, you forgot to remove the reference operator.
+                &n is of type 'i32**'. And n is 'i32*'.
+                This mistake would be caught if the same pointer level is required.
+                You can cast_unsafe if you know what you are doing.
+        */
+        // if(to.baseType() == AST_VOID && to.getPointerLevel() > 0)
+        //     return true;
     }
     if(to.isPointer()) {
         if ((from.baseType() == AST_UINT64 || from.baseType() == AST_INT64) && 
             to.getPointerLevel() - from.getPointerLevel() == 1 && (less_strict || to.baseType() == AST_VOID))
             return true;
-        // if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
-        //     return true;
-        if(from.baseType() == AST_VOID && from.getPointerLevel() > 0)
+        if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
             return true;
+        // if(from.baseType() == AST_VOID && from.getPointerLevel() > 0)
+        //     return true;
     }
     if (AST::IsDecimal(from) && AST::IsInteger(to)) {
         return true;
@@ -698,6 +719,17 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
     // if(overloads.size()==1)
     //     return &overloads[0];
 
+    int non_named_args = 0;
+    bool is_member_call = false;
+    if (fncall) {
+        non_named_args = fncall->nonNamedArgs;
+        is_member_call = fncall->isMemberCall();
+    } else {
+        non_named_args = argTypes.size();
+        // NOTE: With no fncall we can't know isMemberCall so if you have a parent struct
+        //   then implicit_this must be true.
+    }
+
     auto ast = this;
     lock_overloads.lock();
     defer { lock_overloads.unlock(); };
@@ -727,8 +759,8 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
         // NOTE: I refactored here to have less duplicated code. 'this' require special behaviour which is no done cleanly.
         //   BUT, did I break something? - Emarioo, 2023-12-19
             
-        if(fncall->nonNamedArgs > overload.astFunc->arguments.size() - startOfRealArguments // can't match if the call has more essential args than the total args the overload has
-        || fncall->nonNamedArgs < overload.astFunc->nonDefaults - startOfRealArguments // can't match if the call has less essential args than the overload (excluding defaults)
+        if(non_named_args > overload.astFunc->arguments.size() - startOfRealArguments // can't match if the call has more essential args than the total args the overload has
+        || non_named_args < overload.astFunc->nonDefaults - startOfRealArguments // can't match if the call has less essential args than the overload (excluding defaults)
         || argTypes.size() > overload.astFunc->arguments.size() - startOfRealArguments)
             continue;
             
@@ -736,8 +768,8 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
             found_int = false;
             found_sint = false; // we don't use int
             found_uint = false;
-            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                if(inferred_args->get(j))
+            for(int j=0;j<(int)non_named_args;j++){
+                if(inferred_args && inferred_args->get(j))
                     continue; // NOTE: Because argument is inferred, the argument expression has not been checked and so the type 'argTypes[i]' will be invalid. But we don't care about the type because inferred types, presumably initializers, will always match.
                 TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
                 bool is_castable = ast->castable(argTypes[j], implArgType, false);
@@ -758,8 +790,8 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
                 // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
         } else {
-            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                if(inferred_args->get(j))
+            for(int j=0;j<(int)non_named_args;j++){
+                if(inferred_args && inferred_args->get(j))
                     continue;
                 TypeId implArgType = overload.funcImpl->signature.argumentTypes[j+startOfRealArguments].typeId;
                 if(argTypes[j] != implArgType) {
@@ -831,7 +863,7 @@ void AST::declareUsageOfOverload(OverloadGroup::Overload* overload) {
     overload->funcImpl->usages++;
 }
 // OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
+OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
     // That means that we match if two parent structs have different args.
@@ -840,6 +872,18 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<
 
     lock_overloads.lock();
     defer { lock_overloads.unlock(); };
+    
+    int non_named_args = 0;
+    bool is_member_call = false;
+    if (fncall) {
+        non_named_args = fncall->nonNamedArgs;
+        is_member_call = fncall->isMemberCall();
+    } else {
+        non_named_args = argTypes.size();
+        if(parentStruct) {
+            Assert(implicit_this);
+        }
+    }
 
     // Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
     OverloadGroup::Overload* outOverload = nullptr;
@@ -886,14 +930,14 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<
             // Implicit this means that the arguments the function call has won't have the this argument (this = the object the method is called from)
             // But the function implementation uses a this argument so we do -1 and +1 in some places in the code below
             // to account for this.
-            if(fncall->nonNamedArgs > overload.astFunc->arguments.size()-1 // can't match if the call has more essential args than the total args the overload has
-                || fncall->nonNamedArgs < overload.astFunc->nonDefaults-1 // can't match if the call has less essential args than the overload (excluding defaults)
+            if(non_named_args > overload.astFunc->arguments.size()-1 // can't match if the call has more essential args than the total args the overload has
+                || non_named_args < overload.astFunc->nonDefaults-1 // can't match if the call has less essential args than the overload (excluding defaults)
                 || argTypes.size() > overload.astFunc->arguments.size()-1
                 )
                 continue;
 
             if(canCast) {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                for(int j=0;j<(int)non_named_args;j++){
                     if(inferred_args && inferred_args->get(j))
                         continue;
                     if(!ast->castable(argTypes[j], overload.funcImpl->signature.argumentTypes[j+1].typeId)) {
@@ -903,7 +947,7 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<
                     // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
             } else {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                for(int j=0;j<(int)non_named_args;j++){
                     if(inferred_args && inferred_args->get(j))
                         continue;
                     if(argTypes[j] != overload.funcImpl->signature.argumentTypes[j+1].typeId) {
@@ -914,15 +958,15 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<
                 }
             }
         } else {
-            if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
-                || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
+            if(non_named_args > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
+                || non_named_args < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
                 || argTypes.size() > overload.astFunc->arguments.size()
                 )
                 continue;
 
             if(canCast) {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(fncall->isMemberCall() && j == 0)
+                for(int j=0;j<(int)non_named_args;j++){
+                    if(is_member_call && j == 0)
                         continue;
                     if(inferred_args && inferred_args->get(j))
                         continue;
@@ -933,8 +977,8 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, const BaseArray<
                     // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
             } else {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(fncall->isMemberCall() && j == 0)
+                for(int j=0;j<(int)non_named_args;j++){
+                    if(is_member_call && j == 0)
                         continue;
                     if(inferred_args && inferred_args->get(j))
                         continue;
@@ -1598,9 +1642,9 @@ TypeInfo* AST::createType(StringView name, ScopeId scopeId){
     return ptr;
 }
 engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
-    if(typeId.getId() < AST_PRIMITIVE_COUNT) {
+    if(!typeId.string && typeId.getId() < AST_PRIMITIVE_COUNT) {
         logger << PRIM_NAME(typeId.getId());
-    } else if(typeId.getId() < AST_OPERATION_COUNT) {
+    } else if(!typeId.string && typeId.getId() < AST_OPERATION_COUNT) {
         logger << OP_NAME(typeId.getId());
     } else {
         logger << "TypeId{";
@@ -1608,7 +1652,7 @@ engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
             logger << typeId.getId();
             if(typeId.string)
                 logger << ",string";
-            if(typeId.string)
+            if(typeId.poison)
                 logger << ",poison";
             if(typeId.pointer_level > 0)
                 logger << ",ptr:"<<typeId.pointer_level;
@@ -1619,7 +1663,7 @@ engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
     }
     return logger;
 }
-TypeInfo* AST::createPredefinedType(StringView name, ScopeId scopeId, TypeId id, u32 size) {
+TypeInfo* AST::createPredefinedType(StringView name, ScopeId scopeId, TypeId id, int size) {
     auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
     new(ptr) TypeInfo{name, id, size};
     ptr->scopeId = scopeId;
@@ -1904,7 +1948,7 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
     
     // create type
     auto type = (TypeInfo *)allocate(sizeof(TypeInfo));
-    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), 8};
+    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), REGISTER_SIZE};
     type->scopeId = globalScopeId;
     if(type->id.getId() >= _typeInfos.size()) {
         _typeInfos.resize(type->id.getId() + AST_PRIMITIVE_COUNT);
@@ -1930,7 +1974,7 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
         int size =  getTypeSize(arg.typeId);
         int asize = getTypeAlignedSize(arg.typeId);
         if(conv == STDCALL || conv == UNIXCALL)
-            asize = 8;
+            asize = REGISTER_SIZE;
         if(size ==0 || asize == 0) // Probably due to an error which was logged. We don't want to assert and crash the compiler.
             continue;
         if((offset%asize) != 0){
@@ -1939,19 +1983,20 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
         arg.offset = offset;
         offset += size;
     }
-    int diff = offset%8;
+    int diff = offset%REGISTER_SIZE;
     if(diff!=0)
-        offset += 8-diff; // padding to ensure 8-byte alignment
+        offset += REGISTER_SIZE-diff; // padding to ensure 8-byte alignment
 
     func_type->argSize = offset;
 
     offset = 0;
-    
-    for(auto& ret : func_type->returnTypes){
+    // NOTE: We calculate return offsets in reverse
+    for(int i = func_type->returnTypes.size()-1;i>=0;i--){
+        auto& ret = func_type->returnTypes[i];
         int size =  getTypeSize(ret.typeId);
         int asize = getTypeAlignedSize(ret.typeId);
         if(conv == STDCALL || conv == UNIXCALL)
-            asize = 8;
+            asize = REGISTER_SIZE;
         if(size == 0 || asize == 0){ // We don't want to crash the compiler with assert.
             continue;
         }
@@ -1962,8 +2007,8 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
         ret.offset = offset;
         offset += size;
     }
-    if((offset)%8!=0)
-        offset += 8-(offset)%8; // padding to ensure 8-byte alignment
+    if((offset)%REGISTER_SIZE!=0)
+        offset += REGISTER_SIZE-(offset)%REGISTER_SIZE; // padding to ensure 8-byte alignment
     func_type->returnSize = offset;
         
     return type;
@@ -2002,7 +2047,7 @@ TypeInfo* AST::findOrAddFunctionSignature(FunctionSignature* signature) {
     
     // create type
     auto type = (TypeInfo *)allocate(sizeof(TypeInfo));
-    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), 8};
+    new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), REGISTER_SIZE};
     type->scopeId = globalScopeId;
     if(type->id.getId() >= _typeInfos.size()) {
         _typeInfos.resize(type->id.getId() + AST_PRIMITIVE_COUNT);
@@ -2265,7 +2310,7 @@ void AST::destroy(ASTExpression *expression) {
     expression->~ASTExpression();
     // engone::Free(expression, sizeof(ASTExpression));
 }
-u32 TypeInfo::getSize() {
+int TypeInfo::getSize() {
     if (astStruct) {
         if(structImpl) {
             return structImpl->size;
@@ -2277,15 +2322,6 @@ u32 TypeInfo::getSize() {
 }
 StructImpl* TypeInfo::getImpl(){
     return structImpl;
-}
-u32 TypeInfo::alignedSize() {
-    if (astStruct) {
-        if(structImpl)
-            return structImpl->alignedSize;
-        else
-            return 0;
-    }
-    return _size > 8 ? 8 : _size;
 }
 void AST::DecomposeNamespace(StringView view, StringView* out_namespace, StringView* out_name){
     *out_namespace = {};
@@ -2571,16 +2607,16 @@ std::string AST::nameOfFuncImpl(FuncImpl* impl) {
     }
     return name;
 }
-u32 AST::getTypeSize(TypeId typeId){
-    if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
-    if(!typeId.isNormalType()) return 0;
+int AST::getTypeSize(TypeId typeId){
+    if(typeId.isPointer()) return REGISTER_SIZE;
+    if(!typeId.isNormalType()) return -1;
     auto ti = getTypeInfo(typeId);
     if(!ti)
-        return 0;
+        return -1;
     return ti->getSize();
 }
-u32 AST::getTypeAlignedSize(TypeId typeId) {
-    if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
+int AST::getTypeAlignedSize(TypeId typeId) {
+    if(typeId.isPointer()) return REGISTER_SIZE;
     if(!typeId.isNormalType()) return 0;
     auto ti = getTypeInfo(typeId);
     if(!ti)
@@ -2594,7 +2630,7 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
         else
             return 0;
     }
-    return ti->_size > 8 ? 8 : ti->_size;
+    return ti->_size > REGISTER_SIZE ? REGISTER_SIZE : ti->_size;
 }
 void ASTExpression::printArgTypes(AST* ast, QuickArray<TypeId>& argTypes){
     using namespace engone;
@@ -2690,9 +2726,8 @@ TypeInfo::MemberData TypeInfo::getMember(const std::string &name) {
     return {{}, -1};
 }
 TypeInfo::MemberData TypeInfo::getMember(int index) {
-    if (astStruct) {
-        StructImpl* impl = structImpl;
-        return {impl->members[index].typeId, index, impl->members[index].offset};
+    if (astStruct && structImpl && index < structImpl->members.size()) {
+        return {structImpl->members[index].typeId, index, structImpl->members[index].offset};
     } else {
         return {{}, -1};
     }

@@ -11,6 +11,27 @@ fn Increment(firstArg: i32, secondArg: f32) -> i32, f32 {
 a, b := Increment(92,13);
 log(a,b);
 ```
+Functions can have default arguments and named arguments.
+```c++
+#import "Logger"
+
+fn print_msg(msg: char[], sender: char[] = {}) {
+    if sender.ptr
+        log(msg)
+    else
+        log(sender,": ", msg)
+}
+
+print_msg("Someone says hi")
+print_msg("Hello someone!", "Cat")
+print_msg("Hello cat and someone.", sender = "Frog")
+```
+**NOTE:** You cannot name an argument that doesn't have a default. On the implementation side of the compiler we would need to rewrite the overload matching system.
+```c++
+fn hi(a: i32, b: i32) {}
+
+hi(5, b = 23) // named argument not allowed
+```
 
 ## main function
 Languages like C/C++ have a main function while Python doesn't need one. This language is similar. Code can be executed outside any function at the global level where all statements are implicitly inserted into a main function. But you can also specify a main function like this:

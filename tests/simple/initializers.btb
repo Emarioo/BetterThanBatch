@@ -36,6 +36,20 @@ hi()
 fn okaye(a: A = { 1 }) { }
 okaye(a = { 2 })
 
+// Return value with inferred initializer
+fn ok() -> A {
+    return {}
+}
+x := ok()
+
+// NOTE: Named arg on default is not allowed yet
+// struct Base {
+//     x: i32;
+//     fn ok(a: A, n: i32) { }
+// }
+// base: Base
+// base.ok({}, n = 8)
+
 // Named argument WITHOUT default arg (doesn't work because named args don't work without default args)
 // fn okayed(a: i32) {}
 // okayed(a = {})
