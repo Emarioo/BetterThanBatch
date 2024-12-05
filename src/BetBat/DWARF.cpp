@@ -615,34 +615,34 @@ namespace dwarf {
                 // stream->write_at<u32>(offset_section + ref.section_offset, 0x102);
             }
            
-            for(int i=0;i<debug->global_variables.size();i++) {
-                auto& var = *debug->global_variables[i];
-                WRITE_LEB(abbrev_global_var)
-                stream->write(var.name.c_str());
+            // for(int i=0;i<debug->global_variables.size();i++) {
+            //     auto& var = *debug->global_variables[i];
+            //     WRITE_LEB(abbrev_global_var)
+            //     stream->write(var.name.c_str());
 
-                // TODO: Store line and column information in local variables in DebugInformation
-                int var_file = var.file;
-                int var_line = var.line;
-                int var_column = var.column;
+            //     // TODO: Store line and column information in local variables in DebugInformation
+            //     int var_file = var.file + 1;
+            //     int var_line = var.line;
+            //     int var_column = var.column;
 
-                stream->write2(var_file); // file
-                Assert(var_line < 0x10000); // make sure we don't overflow
-                stream->write2(var_line); // line
-                Assert(var_column < 0x10000); // make sure we don't overflow
-                stream->write2(var_column); // column
+            //     stream->write2(var_file); // file
+            //     Assert(var_line < 0x10000); // make sure we don't overflow
+            //     stream->write2(var_line); // line
+            //     Assert(var_column < 0x10000); // make sure we don't overflow
+            //     stream->write2(var_column); // column
 
-                int typeref = allTypes[var.typeId.getId()].reference[var.typeId.getPointerLevel()];
-                Assert(typeref != 0);
-                stream->write4(typeref); // type reference
+            //     int typeref = allTypes[var.typeId.getId()].reference[var.typeId.getPointerLevel()];
+            //     Assert(typeref != 0);
+            //     stream->write4(typeref); // type reference
 
-                u8* block_length = nullptr;
-                stream->write1(5); // DW_AT_location, begins with block length
-                stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
-                int offset = stream->getWriteHead();
-                stream->write4(var.location);
+            //     u8* block_length = nullptr;
+            //     stream->write1(5); // DW_AT_location, begins with block length
+            //     stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
+            //     int offset = stream->getWriteHead();
+            //     stream->write4(var.location);
                 
-                objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.location);
-            }
+            //     objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.location);
+            // }
             // We need this because we added a 16-byte offset in .debug_frame.
             // I don't know why gcc generates DWARF that way but we do the same because I don't know how it works.
             // This offset makes things work and I can't be bothered to question it at the moment.
@@ -1158,6 +1158,9 @@ namespace dwarf {
                 }
 
                 // TODO: Set column
+                log::out << fun->name<<" "<<fun->asm_start << " " <<fun->declared_at_line<<"\n";
+                add_row(fun->asm_start, fun->declared_at_line);
+                
                 add_row(fun->asm_start, fun->declared_at_line);
 
                 int lastOffset = 0;
@@ -1169,7 +1172,7 @@ namespace dwarf {
                     // Assert(lastLine <= line.lineNumber);
                     lastOffset = line.asm_address;
                     lastLine = line.lineNumber;
-
+                    log::out << "line " << line.lineNumber << " " << (fun->asm_start + line.asm_address)<<"\n";
                     add_row(line.asm_address + fun->asm_start, line.lineNumber);
                 }
 

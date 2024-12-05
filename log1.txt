@@ -1,0 +1,255 @@
+
+noimp.o:     file format pe-x86-64
+
+Contents of the .debug_info section:
+
+  Compilation Unit @ offset 0x0:
+   Length:        0xb4 (32-bit)
+   Version:       3
+   Abbrev Offset: 0x0
+   Pointer Size:  8
+ <0><b>: Abbrev Number: 1 (DW_TAG_compile_unit)
+    <c>   DW_AT_producer    : BTB Compiler 0.2.0
+    <1f>   DW_AT_name        : dev.btb
+    <27>   DW_AT_comp_dir    : examples
+    <30>   DW_AT_low_pc      : 0x0
+    <38>   DW_AT_high_pc     : 0x6e
+    <40>   DW_AT_stmt_list   : 0x0
+ <1><44>: Abbrev Number: 6 (DW_TAG_base_type)
+    <45>   DW_AT_name        : i32
+    <49>   DW_AT_byte_size   : 4
+    <4a>   DW_AT_encoding    : 5	(signed)
+ <1><4b>: Abbrev Number: 2 (DW_TAG_subprogram)
+    <4c>   DW_AT_external    : 0
+    <4d>   DW_AT_name        : func
+    <52>   DW_AT_decl_file   : 1
+    <54>   DW_AT_decl_line   : 5
+    <56>   DW_AT_decl_column : 1
+    <58>   DW_AT_low_pc      : 0x66
+    <60>   DW_AT_high_pc     : 0x6e
+    <68>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
+    <6a>   DW_AT_sibling     : <0x6f>
+ <2><6e>: Abbrev Number: 0
+ <1><6f>: Abbrev Number: 2 (DW_TAG_subprogram)
+    <70>   DW_AT_external    : 0
+    <71>   DW_AT_name        : main
+    <76>   DW_AT_decl_file   : 1
+    <78>   DW_AT_decl_line   : 12
+    <7a>   DW_AT_decl_column : 1
+    <7c>   DW_AT_low_pc      : 0x0
+    <84>   DW_AT_high_pc     : 0x66
+    <8c>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
+    <8e>   DW_AT_sibling     : <0xb7>
+ <2><92>: Abbrev Number: 13 (DW_TAG_lexical_block)
+    <93>   DW_AT_low_pc      : 0x15
+    <9b>   DW_AT_high_pc     : 0x5a
+ <3><a3>: Abbrev Number: 3 (DW_TAG_variable)
+    <a4>   DW_AT_name        : loc
+    <a8>   DW_AT_decl_file   : 1
+    <aa>   DW_AT_decl_line   : 1
+    <ac>   DW_AT_decl_column : 1
+    <ae>   DW_AT_type        : <0x44>
+    <b2>   DW_AT_location    : 2 byte block: 91 40 	(DW_OP_fbreg: -64)
+ <3><b5>: Abbrev Number: 0
+ <2><b6>: Abbrev Number: 0
+ <1><b7>: Abbrev Number: 0
+
+Raw dump of debug contents of section .debug_line:
+
+  Offset:                      0x0
+  Length:                      116
+  DWARF Version:               3
+  Prologue Length:             78
+  Minimum Instruction Length:  1
+  Initial value of 'is_stmt':  1
+  Line Base:                   -5
+  Line Range:                  10
+  Opcode Base:                 13
+
+ Opcodes:
+  Opcode 1 has 0 args
+  Opcode 2 has 1 arg
+  Opcode 3 has 1 arg
+  Opcode 4 has 1 arg
+  Opcode 5 has 1 arg
+  Opcode 6 has 0 args
+  Opcode 7 has 0 args
+  Opcode 8 has 0 args
+  Opcode 9 has 1 arg
+  Opcode 10 has 0 args
+  Opcode 11 has 0 args
+  Opcode 12 has 1 arg
+
+ The Directory Table (offset 0x1b):
+  1	D:/Backup/CodeProjects/BetterThanBatch/examples
+
+ The File Name Table (offset 0x4c):
+  Entry	Dir	Time	Size	Name
+  1	1	0	0	dev.btb
+
+ Line Number Statements:
+  [0x00000058]  Set column to 1
+  [0x0000005a]  Extended opcode 2: set Address to 0x0
+  [0x00000065]  Set File Name to entry 1 in the File Name Table
+  [0x00000067]  Advance Line by 11 to 12
+  [0x00000069]  Copy
+  [0x0000006a]  Special opcode 216: advance Address by 21 to 0x15 and Line by 1 to 13
+  [0x0000006b]  Special opcode 56: advance Address by 5 to 0x1a and Line by 1 to 14
+  [0x0000006c]  Special opcode 216: advance Address by 21 to 0x2f and Line by 1 to 15
+  [0x0000006d]  Special opcode 197: advance Address by 19 to 0x42 and Line by 2 to 17
+  [0x0000006e]  Advance PC by 36 to 0x66
+  [0x00000070]  Advance Line by -12 to 5
+  [0x00000072]  Copy
+  [0x00000073]  Advance PC by 8 to 0x6e
+  [0x00000075]  Extended opcode 1: End of Sequence
+
+
+Contents of the .debug_abbrev section:
+
+  Number TAG (0x0)
+   1      DW_TAG_compile_unit    [has children]
+    DW_AT_producer     DW_FORM_string
+    DW_AT_name         DW_FORM_string
+    DW_AT_comp_dir     DW_FORM_string
+    DW_AT_low_pc       DW_FORM_addr
+    DW_AT_high_pc      DW_FORM_addr
+    DW_AT_stmt_list    DW_FORM_data4
+    DW_AT value: 0     DW_FORM value: 0
+   2      DW_TAG_subprogram    [has children]
+    DW_AT_external     DW_FORM_flag
+    DW_AT_name         DW_FORM_string
+    DW_AT_decl_file    DW_FORM_data2
+    DW_AT_decl_line    DW_FORM_data2
+    DW_AT_decl_column  DW_FORM_data2
+    DW_AT_low_pc       DW_FORM_addr
+    DW_AT_high_pc      DW_FORM_addr
+    DW_AT_frame_base   DW_FORM_block1
+    DW_AT_sibling      DW_FORM_ref4
+    DW_AT value: 0     DW_FORM value: 0
+   3      DW_TAG_variable    [no children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_decl_file    DW_FORM_data2
+    DW_AT_decl_line    DW_FORM_data2
+    DW_AT_decl_column  DW_FORM_data2
+    DW_AT_type         DW_FORM_ref4
+    DW_AT_location     DW_FORM_block1
+    DW_AT value: 0     DW_FORM value: 0
+   4      DW_TAG_variable    [no children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_decl_file    DW_FORM_data2
+    DW_AT_decl_line    DW_FORM_data2
+    DW_AT_decl_column  DW_FORM_data2
+    DW_AT_type         DW_FORM_ref4
+    DW_AT_location     DW_FORM_block1
+    DW_AT value: 0     DW_FORM value: 0
+   5      DW_TAG_formal_parameter    [no children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_decl_file    DW_FORM_data2
+    DW_AT_decl_line    DW_FORM_data2
+    DW_AT_decl_column  DW_FORM_data2
+    DW_AT_type         DW_FORM_ref4
+    DW_AT_location     DW_FORM_block1
+    DW_AT value: 0     DW_FORM value: 0
+   6      DW_TAG_base_type    [no children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_byte_size    DW_FORM_data1
+    DW_AT_encoding     DW_FORM_data1
+    DW_AT value: 0     DW_FORM value: 0
+   7      DW_TAG_pointer_type    [no children]
+    DW_AT_byte_size    DW_FORM_data1
+    DW_AT_type         DW_FORM_ref4
+    DW_AT value: 0     DW_FORM value: 0
+   8      DW_TAG_structure_type    [has children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_byte_size    DW_FORM_data2
+    DW_AT_sibling      DW_FORM_ref4
+    DW_AT value: 0     DW_FORM value: 0
+   9      DW_TAG_member    [no children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_type         DW_FORM_ref4
+    DW_AT_data_member_location DW_FORM_data2
+    DW_AT value: 0     DW_FORM value: 0
+   10      DW_TAG_enumeration_type    [has children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_byte_size    DW_FORM_data1
+    DW_AT_type         DW_FORM_ref4
+    DW_AT_sibling      DW_FORM_ref4
+    DW_AT value: 0     DW_FORM value: 0
+   11      DW_TAG_enumerator    [no children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_const_value  DW_FORM_data8
+    DW_AT value: 0     DW_FORM value: 0
+   12      DW_TAG_enumerator    [no children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_const_value  DW_FORM_data4
+    DW_AT value: 0     DW_FORM value: 0
+   13      DW_TAG_lexical_block    [has children]
+    DW_AT_low_pc       DW_FORM_addr
+    DW_AT_high_pc      DW_FORM_addr
+    DW_AT value: 0     DW_FORM value: 0
+
+Contents of the .debug_aranges section:
+
+  Length:                   44
+  Version:                  2
+  Offset into .debug_info:  0x0
+  Pointer Size:             8
+  Segment Size:             0
+
+    Address            Length
+    0000000000000000 000000000000006e 
+    0000000000000000 0000000000000000 
+
+Contents of the .debug_frame section:
+
+
+00000000 0000000000000014 ffffffff CIE
+  Version:               3
+  Augmentation:          ""
+  Code alignment factor: 1
+  Data alignment factor: -8
+  Return address column: 16
+
+  DW_CFA_def_cfa: r7 (rsp) ofs 8
+  DW_CFA_offset: r16 (rip) at cfa-8
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+
+00000018 0000000000000034 00000000 FDE cie=00000000 pc=0000000000000066..000000000000006e
+  DW_CFA_advance_loc4: 2 to 0000000000000068
+  DW_CFA_def_cfa_offset: 16
+  DW_CFA_offset: r6 (rbp) at cfa-16
+  DW_CFA_advance_loc4: 3 to 000000000000006b
+  DW_CFA_def_cfa_register: r6 (rbp)
+  DW_CFA_advance_loc4: 2 to 000000000000006d
+  DW_CFA_restore: r6 (rbp)
+  DW_CFA_def_cfa: r7 (rsp) ofs 8
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+
+00000050 0000000000000034 00000000 FDE cie=00000000 pc=0000000000000000..0000000000000066
+  DW_CFA_advance_loc4: 2 to 0000000000000002
+  DW_CFA_def_cfa_offset: 16
+  DW_CFA_offset: r6 (rbp) at cfa-16
+  DW_CFA_advance_loc4: 3 to 0000000000000005
+  DW_CFA_def_cfa_register: r6 (rbp)
+  DW_CFA_advance_loc4: 96 to 0000000000000065
+  DW_CFA_restore: r6 (rbp)
+  DW_CFA_def_cfa: r7 (rsp) ofs 8
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+

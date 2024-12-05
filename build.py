@@ -80,6 +80,7 @@ def main():
     if yes and os.path.exists(config["output"]) and (enabled("run_when_finished") or enabled("run")):
         # cmd("bin/btb -dev")
         cmd("./"+config["output"]+" -dev")
+        cmd("objdump bin/main.o -W > out0.txt")
 
         # cmd("bin/btb --test")
         
