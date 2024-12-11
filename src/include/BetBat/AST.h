@@ -48,38 +48,36 @@ StringBuilder& operator<<(StringBuilder& builder, CallConvention convention);
 StringBuilder& operator<<(StringBuilder& builder, LinkConvention convention);
 
 
-enum PrimitiveType : u16 {
-    AST_VOID=0,
-    AST_UINT8,
-    AST_UINT16,
-    AST_UINT32,
-    AST_UINT64,
-    AST_INT8,
-    AST_INT16,
-    AST_INT32,
-    AST_INT64,
 // IMPORTANT: YOU MUST MODIFY primitive_names in AST.cpp IF YOU MAKE CHANGES HERE
+enum PrimitiveType : u16 {
+    TYPE_VOID=0,
+    TYPE_UINT8,
+    TYPE_UINT16,
+    TYPE_UINT32,
+    TYPE_UINT64,
+    TYPE_INT8,
+    TYPE_INT16,
+    TYPE_INT32,
+    TYPE_INT64,
+    TYPE_BOOL,
+    TYPE_CHAR,
+    TYPE_FLOAT32,
+    TYPE_FLOAT64,
     
-    AST_BOOL,
-    AST_CHAR,
-    
-    AST_FLOAT32,
-    AST_FLOAT64,
-    
-    AST_TRUE_PRIMITIVES,
+    // AST_TRUE_PRIMITIVES,
 
-    AST_STRING, // converted to char[]
-    AST_NULL, // converted to void*
+    // AST_STRING, // converted to char[]
+    // AST_NULL, // converted to void*
 
-    // TODO: should these be moved somewhere else?
-    AST_ID, // variable, enum, type
-    AST_FNCALL,
-    AST_ASM, // inline assembly
-    AST_SIZEOF,
-    AST_NAMEOF,
-    AST_TYPEID,
+    // // TODO: should these be moved somewhere else?
+    // AST_ID, // variable, enum, type
+    // AST_FNCALL,
+    // AST_ASM, // inline assembly
+    // AST_SIZEOF,
+    // AST_NAMEOF,
+    // AST_TYPEID,
     
-    AST_PRIMITIVE_COUNT, // above types are true with isValue
+    TYPE_PRIMITIVE_COUNT, // above types are true with isValue
 };
 enum OperationType : u16 {
     // TODO: Add BINOP (binary) and UNOP (unary) in the enum names.
@@ -87,7 +85,8 @@ enum OperationType : u16 {
     //  using a bitmask (op & BINARY_UNARY_MASK), that would signifcantly speed up code which currently has
     //  to check if an op is equal to any of the operations (op == AST_NOT || op == AST_INCREMENT || ...)
     //  
-    AST_ADD=AST_PRIMITIVE_COUNT,  
+    AST_OP_NONE = 0,
+    AST_ADD,
     AST_SUB,
     AST_MUL,
     AST_DIV,
@@ -114,8 +113,10 @@ enum OperationType : u16 {
 
     AST_RANGE,
     AST_INDEX, // index operator, arr[3] same as *(arr + 3*sizeof Item) unless overloaded
-    AST_INCREMENT,
-    AST_DECREMENT,
+    AST_PRE_INCREMENT,
+    AST_PRE_DECREMENT,
+    AST_POST_INCREMENT,
+    AST_POST_DECREMENT,
 
     AST_CAST,
     AST_MEMBER,
@@ -130,13 +131,15 @@ enum OperationType : u16 {
     AST_OPERATION_COUNT,
 };
 extern const char* statement_names[];
-extern const char* prim_op_names[];
+extern const char* primitive_type_names[];
+extern const char* operation_names[];
 // Preferably use these macros since the way we access
 // the names may change. Perhaps prim and op will be split into
 // their own tables.
-#define PRIM_NAME(X) ((X) >= 0 && (X) < AST_PRIMITIVE_COUNT ? prim_op_names[X] : nullptr)
-#define OP_NAME(X) (((X) >= (OperationType)AST_PRIMITIVE_COUNT && (X) < AST_OPERATION_COUNT) ? prim_op_names[X] : nullptr)
+#define PRIM_NAME(X) (primitive_type_names[X])
+#define OP_NAME(X) (operation_names[X])
 #define STATEMENT_NAME(X) ((X) >= 0 && (X) < ASTStatement::STATEMENT_COUNT ? statement_names[X] : nullptr)
+
 struct ASTNode {
     // TODO: Add a flag which you can check to know whether there are enums or not.
     //  If there aren't then you don't need to go through all the nodes.
@@ -239,7 +242,7 @@ private:
 struct TypeId {
     TypeId() = default;
     TypeId(PrimitiveType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
-    TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
+    // TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
     static TypeId Create(u32 id, int level = 0) {
         TypeId out={}; 
         // TODO: ENUM or STRUCT?
@@ -295,9 +298,9 @@ struct TypeId {
     bool operator==(PrimitiveType primitiveType) const {
         return *this == TypeId(primitiveType);
     }
-    bool operator==(OperationType t) const {
-        return *this == TypeId(t);
-    }
+    // bool operator==(OperationType t) const {
+    //     return *this == TypeId(t);
+    // }
     bool isValid() const {
         return (_flags & VALID_MASK) != 0;
     }
@@ -530,7 +533,41 @@ struct ScopeInfo {
 //         return s.getId();
 //     }
 // };
+enum ASTExpressionType {
+    EXPR_NONE,
+    EXPR_VALUE,
+    EXPR_IDENTIFIER,
+    EXPR_STRING,
+    EXPR_MEMBER,
+    EXPR_ASSIGN,
+    EXPR_INITIALIZER,
+    EXPR_OPERATION,
+    EXPR_CALL,
+    EXPR_CAST,
+    EXPR_BUILTIN, // sizeof, cast
+    EXPR_ASSEMBLY,
+
+    EXPR_NULL,
+    EXPR_TRUE,
+    EXPR_FALSE,
+};
+bool operator==(ASTExpressionType,OperationType) = delete;
+bool operator==(OperationType,ASTExpressionType) = delete;
+
 struct AST;
+
+struct ASTExpression;
+struct ASTExpressionValue;
+struct ASTExpressionString;
+struct ASTExpressionIdentifier;
+struct ASTExpressionMember;
+struct ASTExpressionAssembly;
+struct ASTExpressionOperation;
+struct ASTExpressionAssign;
+struct ASTExpressionCall;
+struct ASTExpressionInitializer;
+struct ASTExpressionCast;
+struct ASTExpressionBuiltin;
 struct ASTExpression : ASTNode {
     ASTExpression() {
         // engone::log::out << "default init\n";
@@ -540,6 +577,7 @@ struct ASTExpression : ASTNode {
         // versions_outTypeSizeof.~PolyVersions();
         // versions_outTypeTypeid.~PolyVersions(); // union with ...Sizeof
     }
+    ASTExpressionType type;
     // enum Type: u8 {
     //     NORMAL = 0,
     //     INLINE_ASSEMBLY = 1,
@@ -549,8 +587,8 @@ struct ASTExpression : ASTNode {
     // ASTExpression() : left(0), right(0), castType(0) { }
     // Token token{};
     lexer::SourceLocation location;
-    bool isValue = false;
-    TypeId typeId = {}; // not polymorphic, primitive or operation
+    // bool isValue = false;
+    // TypeId typeId = {}; // not polymorphic, primitive or operation
     // Type expressionType = NORMAL;
     // enum ConstantType {
     //     NONE,
@@ -564,9 +602,155 @@ struct ASTExpression : ASTNode {
 
     #endif
 
-    bool unsafeCast = false;
-    bool isUnsafeCast() { return unsafeCast; }
-    void setUnsafeCast(bool yes) { unsafeCast = yes; }
+    template<typename T>
+    T* as() const {
+        Assert(type == T::TYPE);
+        return (T*)this;
+    }
+
+    // bool unsafeCast = false;
+    // bool isUnsafeCast() { return unsafeCast; }
+    // void setUnsafeCast(bool yes) { unsafeCast = yes; }
+
+    // bool implicitThisArg = false;
+    // // true if an implicit this argument should be passed.
+    // // this happens when a method calls another method in the same struct.
+    // bool hasImplicitThis() const { return implicitThisArg; }
+    // void setImplicitThis(bool yes) { implicitThisArg = yes; }
+
+    // bool memberCall = false; // rename to method call?
+    // // true if a call has the shape 'obj.func()'
+    // // it is different from implicit this in that the parent struct doesn't determine
+    // // the function we call, the 'obj' does.
+    // bool isMemberCall() const { return memberCall; }
+    // void setMemberCall(bool yes) { memberCall = yes; }
+
+    // bool postAction = false;
+    // bool isPostAction() const { return postAction; }
+    // void setPostAction(bool yes) { postAction = yes; }
+    
+    // bool is_inferred_initializer() {
+    //     return typeId == AST_INITIALIZER && !castType.isValid();
+    // }
+
+    bool uses_cast_operator = false; // needed fpr all exprs
+
+    // union {
+    //     i64 i64Value=0;
+    //     float f32Value;
+    //     double f64Value;
+    //     bool boolValue;
+    //     char charValue;
+    // };
+    // std::string name;
+    StringView namedValue{}; // needed for all exprs
+    // union {
+    //     struct {
+        //     TypeId castType;
+        //     TypeId asmTypeString;
+        //     lexer::TokenRange asm_range{};
+        //     OperationType assignOpType;
+        //     ASTExpression* left = nullptr;
+        //     ASTExpression* right = nullptr;
+        //     // OperationType assignOpType = (OperationType)0;
+        // // };
+        // // struct {
+        //     QuickArray<ASTExpression*> args; // fncall or initialiser
+        //     u32 nonNamedArgs = 0;
+            // u32 nonNamedArgs;
+    //     };
+    // };
+
+    // THE FIELDS BELOW IS SET IN TYPE CHECKER
+
+    // Used if expression type is AST_ID
+    // Identifier* identifier = nullptr;
+    // TODO: Is okay to fill ASTExpression with more data? It's quite large already.
+    //  How else would we store this information because we don't want to recalculate it
+    //  in Generator. I guess some unions?
+    // ASTEnum* enum_ast = nullptr;
+    // int enum_member = -1;
+
+    // PolyVersions<DynamicArray<TypeId>> versions_argTypes{};
+
+    // The contents of overload is stored here. This is not a pointer since
+    // the array containing the overload may be resized.
+    // PolyVersions<OverloadGroup::Overload> versions_overload{};
+    // PolyVersions<FunctionSignature*> versions_func_type{};
+
+    // you could use a union with some of these to save memory
+    // outTypeSizeof and castType could perhaps be combined?
+    // PolyVersions<int> versions_constStrIndex{};
+    // union {
+        // PolyVersions<TypeId> versions_outTypeSizeof{};
+        // PolyVersions<TypeId> versions_outTypeTypeid;
+    // };
+    // PolyVersions<TypeId> versions_castType{};
+    // PolyVersions<TypeId> versions_asmType{};
+
+    void printArgTypes(AST* ast, QuickArray<TypeId>& argTypes);
+
+    void print(AST* ast, int depth);
+};
+
+struct ASTExpressionValue : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_VALUE;
+    TypeId typeId = {};
+    union {
+        i64 i64Value=0;
+        float f32Value;
+        double f64Value;
+        bool boolValue;
+        char charValue;
+    };
+};
+struct ASTExpressionString : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_STRING;
+    PolyVersions<int> versions_constStrIndex{};
+    std::string name;
+};
+
+struct ASTExpressionIdentifier : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_IDENTIFIER;
+    Identifier* identifier;
+    std::string name;
+    ASTEnum* enum_ast = nullptr;
+    int enum_member = -1;
+};
+struct ASTExpressionMember : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_MEMBER;
+    std::string name;
+    ASTExpression* left;
+};
+struct ASTExpressionAssembly : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_ASSEMBLY;
+    TypeId castType;
+    TypeId asmTypeString;
+    lexer::TokenRange asm_range{};
+    QuickArray<ASTExpression*> args;
+    PolyVersions<TypeId> versions_asmType{};
+};
+struct ASTExpressionOperation : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_OPERATION;
+    OperationType op_type;
+    ASTExpression* left;
+    ASTExpression* right;
+    // operator overloading
+    int nonNamedArgs = 0;
+    PolyVersions<OverloadGroup::Overload> versions_overload{};
+};
+struct ASTExpressionAssign : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_ASSIGN;
+    OperationType assign_op_type; // can be none
+    ASTExpression* left;
+    ASTExpression* right;
+};
+struct ASTExpressionCall : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_CALL;
+    std::string name;
+    Identifier* identifier;
+    QuickArray<ASTExpression*> args;
+    u32 nonNamedArgs;
 
     bool implicitThisArg = false;
     // true if an implicit this argument should be passed.
@@ -581,76 +765,43 @@ struct ASTExpression : ASTNode {
     bool isMemberCall() const { return memberCall; }
     void setMemberCall(bool yes) { memberCall = yes; }
 
-    bool postAction = false;
-    bool isPostAction() const { return postAction; }
-    void setPostAction(bool yes) { postAction = yes; }
-    
-    bool is_inferred_initializer() {
-        return typeId == AST_INITIALIZER && !castType.isValid();
-    }
-
-    bool uses_cast_operator = false;
-
-    union {
-        i64 i64Value=0;
-        float f32Value;
-        double f64Value;
-        bool boolValue;
-        char charValue;
-    };
-    std::string name;
-    // StringView name{};
-    // std::string namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
-    StringView namedValue{};
-    // union {
-    //     struct {
-            TypeId castType;
-            TypeId asmTypeString;
-            lexer::TokenRange asm_range{};
-            OperationType assignOpType;
-            ASTExpression* left = nullptr;
-            ASTExpression* right = nullptr;
-            // OperationType assignOpType = (OperationType)0;
-        // };
-        // struct {
-            QuickArray<ASTExpression*> args; // fncall or initialiser
-            u32 nonNamedArgs = 0;
-            // u32 nonNamedArgs;
-    //     };
-    // };
-
-    // THE FIELDS BELOW IS SET IN TYPE CHECKER
-
-    // Used if expression type is AST_ID
-    Identifier* identifier = nullptr;
-    // TODO: Is okay to fill ASTExpression with more data? It's quite large already.
-    //  How else would we store this information because we don't want to recalculate it
-    //  in Generator. I guess some unions?
-    ASTEnum* enum_ast = nullptr;
-    int enum_member = -1;
-
-    // PolyVersions<DynamicArray<TypeId>> versions_argTypes{};
-
-    // The contents of overload is stored here. This is not a pointer since
-    // the array containing the overload may be resized.
     PolyVersions<OverloadGroup::Overload> versions_overload{};
     PolyVersions<FunctionSignature*> versions_func_type{};
-
-    // you could use a union with some of these to save memory
-    // outTypeSizeof and castType could perhaps be combined?
-    PolyVersions<int> versions_constStrIndex{};
-    // union {
-        PolyVersions<TypeId> versions_outTypeSizeof{};
-        PolyVersions<TypeId> versions_outTypeTypeid;
-    // };
-    PolyVersions<TypeId> versions_castType{};
-    PolyVersions<TypeId> versions_asmType{};
-
-    void printArgTypes(AST* ast, QuickArray<TypeId>& argTypes);
-
-    // ASTExpression* next=0;
-    void print(AST* ast, int depth);
 };
+struct ASTExpressionInitializer : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_INITIALIZER;
+    TypeId castType;
+    PolyVersions<TypeId> versions_castType{};
+    QuickArray<ASTExpression*> args;
+    bool is_inferred_initializer() {
+        return !castType.isValid();
+    }
+};
+struct ASTExpressionCast : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_CAST;
+    ASTExpression* left;
+    TypeId castType;
+    PolyVersions<TypeId> versions_castType{};
+    bool unsafeCast = false;
+    bool isUnsafeCast() { return unsafeCast; }
+    void setUnsafeCast(bool yes) { unsafeCast = yes; }
+};
+enum BuiltinType {
+    AST_SIZEOF,
+    AST_TYPEOF,
+    AST_NAMEOF,
+};  
+struct ASTExpressionBuiltin : public ASTExpression {
+    static const ASTExpressionType TYPE = EXPR_BUILTIN;
+    // QuickArray<ASTExpression*> args;
+    BuiltinType builtin_type;
+    ASTExpression* left;
+    std::string name;
+    PolyVersions<TypeId> versions_outTypeSizeof;
+    PolyVersions<TypeId> versions_outTypeTypeid; // typeid/sizeof
+    PolyVersions<int> versions_constStrIndex{}; // nameof
+};
+#define CAST_EXPR(V,T) (V->as<ASTExpression##T>())
 enum ForLoopType : u8 {
     SLICED_FOR_LOOP,
     RANGED_FOR_LOOP,
@@ -704,7 +855,7 @@ struct ASTStatement : ASTNode {
 
     LinkConvention linkConvention; // used with imported global variables
 
-    bool uses_cast_operator = false;
+    // bool uses_cast_operator = false;
 
     ASTExpression* testValue = nullptr;
 
@@ -848,7 +999,7 @@ struct ASTEnum : ASTNode {
         return (rules & rule);
     }
 
-    TypeId colonType = AST_UINT32; // may be a type string before the type checker, may be a type string after if checker failed.
+    TypeId colonType = TYPE_UINT32; // may be a type string before the type checker, may be a type string after if checker failed.
     TypeId actualType = {};
     
     bool getMember(const StringView& name, int* out);
@@ -1176,7 +1327,19 @@ struct AST {
     ASTStruct* createStruct(const StringView& name);
     ASTEnum* createEnum(const StringView& name);
     ASTStatement* createStatement(ASTStatement::Type type);
-    ASTExpression* createExpression(TypeId type);
+
+    ASTExpression* createExpression(ASTExpressionType type);
+    ASTExpressionOperation* createExpressionOperation(OperationType type) {
+        auto ptr = (ASTExpressionOperation*)createExpression(EXPR_OPERATION);
+        ptr->op_type = type;
+        return ptr;
+    }
+    ASTExpressionValue* createExpressionValue(TypeId type) {
+        auto ptr = (ASTExpressionValue*)createExpression(EXPR_VALUE);
+        ptr->typeId = type;
+        return ptr;
+    }
+
     // You may also want to call some additional functions to properly deal with
     // named scopes so types are properly evaluated. See ParseNamespace for an example.
     ASTScope* createNamespace(const StringView& name);
@@ -1220,9 +1383,9 @@ struct AST {
 
     
     // NOTE: These functions are methods of the AST instead of OverloadGroup because it's easier to synchronize with multi-threading. (we would need individual mutex for each group or a global variable, it's better to have mutex in the AST)
-    OverloadGroup::Overload* getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    OverloadGroup::Overload* getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpressionCall* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
     // Note that this function becomes complex if parentStruct is polymorphic. It only checks computed polymorphic functions
-    OverloadGroup::Overload* getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    OverloadGroup::Overload* getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this, ASTExpressionCall* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
     
     // FuncImpl can be null and probably will be most of the time
     // when you call this.

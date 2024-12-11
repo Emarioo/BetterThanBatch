@@ -316,7 +316,7 @@ struct ParseContext : public PhaseContext {
     SignalIO parseAnnotationArguments(lexer::TokenRange* out_arguments);
     SignalIO parseAnnotation(StringView* out_annotation_name, lexer::TokenRange* out_arguments);
     // parses arguments and puts them into fncall->left
-    SignalIO parseArguments(ASTExpression* fncall, int* count);
+    SignalIO parseArguments(ASTExpressionCall* fncall, int* count);
     SignalIO parseExpression(ASTExpression*& expression);
     SignalIO parseFlow(ASTStatement*& statement);
     // returns 0 if syntax is wrong for flow parsing

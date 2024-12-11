@@ -43,37 +43,37 @@ StringBuilder& operator<<(StringBuilder& builder, LinkConvention convention){
     return builder << ToString(convention);
 }
 
-const char* prim_op_names[]{
-// PRIMITIVES
-    "void",         // AST_VOID
-    "u8",           // AST_UINT8
-    "u16",          // AST_UINT16
-    "u32",          // AST_UINT32
-    "u64",          // AST_UINT64
-    "i8",           // AST_INT8
-    "i16",          // AST_INT16
-    "i32",          // AST_INT32
-    "i64",          // AST_INT64
+const char* primitive_type_names[]{
+    "void",         // TYPE_VOID
+    "u8",           // TYPE_UINT8
+    "u16",          // TYPE_UINT16
+    "u32",          // TYPE_UINT32
+    "u64",          // TYPE_UINT64
+    "i8",           // TYPE_INT8
+    "i16",          // TYPE_INT16
+    "i32",          // TYPE_INT32
+    "i64",          // TYPE_INT64
 
-    "bool",         // AST_BOOL
-    "char",         // AST_CHAR
+    "bool",         // TYPE_BOOL
+    "char",         // TYPE_CHAR
 
-    "f32",          // AST_FLOAT32
-    "f64",          // AST_FLOAT64
+    "f32",          // TYPE_FLOAT32
+    "f64",          // TYPE_FLOAT64
     
-    nullptr,        // AST_TRUE_PRIMITIVES
+    // nullptr,        // AST_TRUE_PRIMITIVES
     
-    "ast_string",    // AST_STRING
-    "null",         // AST_NULL
+    // "ast_string",    // AST_STRING
+    // "null",         // AST_NULL
 
-    "ast_id",        // AST_ID
-    "ast_call",     // AST_FNCALL
-    "ast_asm",     // AST_ASM
-    "ast_sizeof",   // AST_SIZEOF
-    "ast_nameof",   // AST_NAMEOF
-    "ast_typeid",   // AST_NAMEOF
-    
-// OPERATIONS
+    // "ast_id",        // AST_ID
+    // "ast_call",     // AST_FNCALL
+    // "ast_asm",     // AST_ASM
+    // "ast_sizeof",   // AST_SIZEOF
+    // "ast_nameof",   // AST_NAMEOF
+    // "ast_typeid",   // AST_NAMEOF
+               
+};
+const char* operation_names[] {
      "+",                   // AST_ADD, AST_PRIMITIVE_COUNT
      "-",                   // AST_SUB
      "*",                   // AST_MUL
@@ -111,7 +111,7 @@ const char* prim_op_names[]{
      "=",                   // AST_ASSIGN
 
      "& (reference)",       // AST_REFER
-     "* (dereference)",     // AST_DEREF               
+     "* (dereference)",     // AST_DEREF  
 };
 const char* statement_names[] {
     "expression",     // EXPRESSION
@@ -183,26 +183,26 @@ AST *AST::Create(Compiler* compiler) {
     ast->globalScopeId = scopeId;
     // initialize default data types
     #define ADD(T, S) ast->createPredefinedType(PRIM_NAME(T), scopeId, T, S);
-    ADD(AST_VOID,0);
-    ADD(AST_UINT8, 1);
-    ADD(AST_UINT16, 2);
-    ADD(AST_UINT32, 4);
-    ADD(AST_UINT64, 8);
-    ADD(AST_INT8, 1);
-    ADD(AST_INT16, 2);
-    ADD(AST_INT32, 4);
-    ADD(AST_INT64, 8);
-    ADD(AST_FLOAT32, 4);
-    ADD(AST_FLOAT64, 8);
-    ADD(AST_BOOL, 1);
-    ADD(AST_CHAR, 1);
-    ADD(AST_NULL, ast->REGISTER_SIZE);
-    ADD(AST_STRING, 0);
-    ADD(AST_ID,0);
-    ADD(AST_SIZEOF,0);
-    ADD(AST_NAMEOF,0);
-    ADD(AST_TYPEID,0);
-    ADD(AST_FNCALL,0);
+    ADD(TYPE_VOID,0);
+    ADD(TYPE_UINT8, 1);
+    ADD(TYPE_UINT16, 2);
+    ADD(TYPE_UINT32, 4);
+    ADD(TYPE_UINT64, 8);
+    ADD(TYPE_INT8, 1);
+    ADD(TYPE_INT16, 2);
+    ADD(TYPE_INT32, 4);
+    ADD(TYPE_INT64, 8);
+    ADD(TYPE_BOOL, 1);
+    ADD(TYPE_CHAR, 1);
+    ADD(TYPE_FLOAT32, 4);
+    ADD(TYPE_FLOAT64, 8);
+    // ADD(AST_NULL, ast->REGISTER_SIZE);
+    // ADD(AST_STRING, 0);
+    // ADD(AST_ID,0);
+    // ADD(AST_SIZEOF,0);
+    // ADD(AST_NAMEOF,0);
+    // ADD(AST_TYPEID,0);
+    // ADD(AST_FNCALL,0);
     #undef ADD
     // {
     //     // TODO: set size and offset of language structs here instead of letting the compiler do it.
@@ -624,13 +624,13 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
     if (from == to)
         return true;
     if(from.isPointer()) {
-        if (to == AST_BOOL)
+        if (to == TYPE_BOOL)
             return true;
-        if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
-            from.getPointerLevel() - to.getPointerLevel() == 1 && (less_strict || from.baseType() == AST_VOID))
+        if ((to.baseType() == TYPE_UINT64 || to.baseType() == TYPE_INT64) && 
+            from.getPointerLevel() - to.getPointerLevel() == 1 && (less_strict || from.baseType() == TYPE_VOID))
             return true;
         // We only allow explicit cast of pointers of the same level if one is void.
-        if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+        if(to.baseType() == TYPE_VOID && from.getPointerLevel() == to.getPointerLevel())
             return true;
         /* Example:
             You may write code like this:
@@ -648,16 +648,16 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
                 This mistake would be caught if the same pointer level is required.
                 You can cast_unsafe if you know what you are doing.
         */
-        // if(to.baseType() == AST_VOID && to.getPointerLevel() > 0)
+        // if(to.baseType() == TYPE_VOID && to.getPointerLevel() > 0)
         //     return true;
     }
     if(to.isPointer()) {
-        if ((from.baseType() == AST_UINT64 || from.baseType() == AST_INT64) && 
-            to.getPointerLevel() - from.getPointerLevel() == 1 && (less_strict || to.baseType() == AST_VOID))
+        if ((from.baseType() == TYPE_UINT64 || from.baseType() == TYPE_INT64) && 
+            to.getPointerLevel() - from.getPointerLevel() == 1 && (less_strict || to.baseType() == TYPE_VOID))
             return true;
-        if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+        if(from.baseType() == TYPE_VOID && from.getPointerLevel() == to.getPointerLevel())
             return true;
-        // if(from.baseType() == AST_VOID && from.getPointerLevel() > 0)
+        // if(from.baseType() == TYPE_VOID && from.getPointerLevel() > 0)
         //     return true;
     }
     if (AST::IsDecimal(from) && AST::IsInteger(to)) {
@@ -669,12 +669,12 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
     if (AST::IsDecimal(from) && AST::IsDecimal(to)) {
         return true;
     }
-    if ((AST::IsInteger(from) && to == AST_CHAR) ||
-        (from == AST_CHAR && AST::IsInteger(to))) {
+    if ((AST::IsInteger(from) && to == TYPE_CHAR) ||
+        (from == TYPE_CHAR && AST::IsInteger(to))) {
         return true;
     }
-    if ((AST::IsInteger(from) && to == AST_BOOL) ||
-        (from == AST_BOOL && AST::IsInteger(to))) {
+    if ((AST::IsInteger(from) && to == TYPE_BOOL) ||
+        (from == TYPE_BOOL && AST::IsInteger(to))) {
         return true;
     }
     if (AST::IsInteger(from) && AST::IsInteger(to)) {
@@ -693,21 +693,21 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
         if(to_size >= from_typeInfo->getSize())
             return true;
     }
-    auto voidp = TypeId::Create(AST_VOID, 1);
+    auto voidp = TypeId::Create(TYPE_VOID, 1);
     if (from == voidp && to_typeInfo && to_typeInfo->funcType) {
         return true;
     }
     if (from_typeInfo && from_typeInfo->funcType && to == voidp) {
         return true;
     }
-    if (from_typeInfo && from_typeInfo->funcType && to == AST_BOOL) {
+    if (from_typeInfo && from_typeInfo->funcType && to == TYPE_BOOL) {
         return true;
     }
     return false;
 
 }
 // OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, const BaseArray<bool>* inferred_args){
+OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpressionCall* fncall, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -863,7 +863,7 @@ void AST::declareUsageOfOverload(OverloadGroup::Overload* overload) {
     overload->funcImpl->usages++;
 }
 // OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
+OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpressionCall* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
     // That means that we match if two parent structs have different args.
@@ -1187,13 +1187,30 @@ ASTFunction *AST::createFunction() {
     AST_LOCK( functions.add(ptr); )
     return ptr;
 }
-ASTExpression *AST::createExpression(TypeId type) {
+ASTExpression *AST::createExpression(ASTExpressionType type) {
     ZoneScopedC(tracy::Color::Gold);
-    auto ptr = (ASTExpression *)allocate(sizeof(ASTExpression));
-    new(ptr) ASTExpression();
+    ASTExpression* ptr = nullptr;
+    #define GEN_EXPR(T) {\
+            ptr = (T*)allocate(sizeof(T)); \
+            new(ptr) T(); \
+        } break;
+    switch(type) {
+        case EXPR_VALUE: GEN_EXPR(ASTExpressionValue)
+        case EXPR_STRING : GEN_EXPR(ASTExpressionString)
+        case EXPR_IDENTIFIER : GEN_EXPR(ASTExpressionIdentifier)
+        case EXPR_MEMBER : GEN_EXPR(ASTExpressionMember)
+        case EXPR_ASSEMBLY : GEN_EXPR(ASTExpressionAssembly)
+        case EXPR_OPERATION : GEN_EXPR(ASTExpressionOperation)
+        case EXPR_ASSIGN : GEN_EXPR(ASTExpressionAssign)
+        case EXPR_CALL : GEN_EXPR(ASTExpressionCall)
+        case EXPR_INITIALIZER : GEN_EXPR(ASTExpressionInitializer)
+        case EXPR_CAST : GEN_EXPR(ASTExpressionCast)
+        case EXPR_BUILTIN : GEN_EXPR(ASTExpressionBuiltin)
+        case EXPR_NULL : GEN_EXPR(ASTExpression)
+    }
     ptr->nodeId = getNextNodeId();
-    ptr->isValue = (u32)type.getId() < AST_PRIMITIVE_COUNT;
-    ptr->typeId = type;
+    ptr->type = type;
+    // ptr->typeId = type;
     AST_LOCK( expressions.add(ptr); )
     return ptr;
 }
@@ -1633,7 +1650,7 @@ TypeInfo* AST::createType(StringView name, ScopeId scopeId){
     ptr->scopeId = scopeId;
     scope->nameTypeMap[name] = ptr;
     if(ptr->id.getId() >= _typeInfos.size()) {
-        _typeInfos.resize(ptr->id.getId() + AST_PRIMITIVE_COUNT);
+        _typeInfos.resize(ptr->id.getId() + TYPE_PRIMITIVE_COUNT);
     }
     _typeInfos[ptr->id.getId()] = ptr;
 
@@ -1642,10 +1659,10 @@ TypeInfo* AST::createType(StringView name, ScopeId scopeId){
     return ptr;
 }
 engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
-    if(!typeId.string && typeId.getId() < AST_PRIMITIVE_COUNT) {
+    if(!typeId.string && typeId.getId() < TYPE_PRIMITIVE_COUNT) {
         logger << PRIM_NAME(typeId.getId());
-    } else if(!typeId.string && typeId.getId() < AST_OPERATION_COUNT) {
-        logger << OP_NAME(typeId.getId());
+    // } else if(!typeId.string && typeId.getId() < AST_OPERATION_COUNT) {
+    //     logger << OP_NAME(typeId.getId());
     } else {
         logger << "TypeId{";
         if(typeId.isValid()) {
@@ -1671,7 +1688,7 @@ TypeInfo* AST::createPredefinedType(StringView name, ScopeId scopeId, TypeId id,
     if(!scope) return nullptr;
     
     if(ptr->id.getId() >= _typeInfos.size()) {
-        _typeInfos.resize(ptr->id.getId() + AST_PRIMITIVE_COUNT);
+        _typeInfos.resize(ptr->id.getId() + TYPE_PRIMITIVE_COUNT);
     }
     _typeInfos[ptr->id.getId()] = ptr;
     scope->nameTypeMap[ptr->name] = ptr;
@@ -1809,7 +1826,7 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
         auto type = findOrAddFunctionSignature(args, rets, convention);
         
         if(!type)
-            return AST_VOID;
+            return TYPE_VOID;
         return type->id;
     }
     
@@ -1951,7 +1968,7 @@ TypeInfo* AST::findOrAddFunctionSignature(const BaseArray<TypeId>& args, const B
     new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), REGISTER_SIZE};
     type->scopeId = globalScopeId;
     if(type->id.getId() >= _typeInfos.size()) {
-        _typeInfos.resize(type->id.getId() + AST_PRIMITIVE_COUNT);
+        _typeInfos.resize(type->id.getId() + TYPE_PRIMITIVE_COUNT);
     }
     _typeInfos[type->id.getId()] = type;
     
@@ -2050,7 +2067,7 @@ TypeInfo* AST::findOrAddFunctionSignature(FunctionSignature* signature) {
     new(type) TypeInfo{"fn", TypeId::Create(nextTypeId++), REGISTER_SIZE};
     type->scopeId = globalScopeId;
     if(type->id.getId() >= _typeInfos.size()) {
-        _typeInfos.resize(type->id.getId() + AST_PRIMITIVE_COUNT);
+        _typeInfos.resize(type->id.getId() + TYPE_PRIMITIVE_COUNT);
     }
     _typeInfos[type->id.getId()] = type;
     
@@ -2115,9 +2132,9 @@ std::string AST::typeToString(TypeId typeId){
     using namespace engone;
     if(typeId.isString())
         return std::string(getStringFromTypeString(typeId));
-    const char* cstr = OP_NAME(typeId.getId());
-    if(cstr)
-        return cstr;
+    // const char* cstr = OP_NAME(typeId.getId());
+    // if(cstr)
+    //     return cstr;
         
     std::string out="";
     // cstr = PRIM_NAME(typeId.getId());
@@ -2634,20 +2651,30 @@ int AST::getTypeAlignedSize(TypeId typeId) {
 }
 void ASTExpression::printArgTypes(AST* ast, QuickArray<TypeId>& argTypes){
     using namespace engone;
-    if(args.size() == 0) {
-        // operators stores arguments in expr.left and expr.right, not expr.args, so if we have zero args we assume it's an operator expression and print argTypes.
-        for(int i=0;i<(int)argTypes.size();i++){
-            if(i!=0) log::out << ", ";
-            log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
+    if(type == EXPR_CALL || type == EXPR_INITIALIZER) {
+        BaseArray<ASTExpression*> args{};
+        if (type == EXPR_CALL) {
+            auto stmp = as<ASTExpressionCall>();
+            args = stmp->args;
+        } else if (type == EXPR_INITIALIZER) {
+            auto stmp = as<ASTExpressionInitializer>();
+            args = stmp->args;
         }
-    } else {
-        // if it's a function call then we check if we have namedValues and print them if so because it's useful information.
-        Assert(args.size() == argTypes.size());
-        for(int i=0;i<(int)args.size();i++){
-            if(i!=0) log::out << ", ";
-            if(args.get(i)->namedValue.size()!=0)
-                log::out << args.get(i)->namedValue <<"=";
-            log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
+        if(args.size() == 0) {
+            // operators stores arguments in expr.left and expr.right, not expr.args, so if we have zero args we assume it's an operator expression and print argTypes.
+            for(int i=0;i<(int)argTypes.size();i++){
+                if(i!=0) log::out << ", ";
+                log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
+            }
+        } else {
+            // if it's a function call then we check if we have namedValues and print them if so because it's useful information.
+            Assert(args.size() == argTypes.size());
+            for(int i=0;i<(int)args.size();i++){
+                if(i!=0) log::out << ", ";
+                if(args.get(i)->namedValue.size()!=0)
+                    log::out << args.get(i)->namedValue <<"=";
+                log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
+            }
         }
     }
     
@@ -2751,15 +2778,15 @@ bool ASTEnum::getMember(const StringView& name, int *out) {
 
 bool AST::IsInteger(TypeId id) {
     if(!id.isNormalType()) return false;
-    return AST_UINT8 <= id.getId() && id.getId() <= AST_INT64;
+    return TYPE_UINT8 <= id.getId() && id.getId() <= TYPE_INT64;
 }
 bool AST::IsSigned(TypeId id) {
     if(!id.isNormalType()) return false;
-    return AST_INT8 <= id.getId() && id.getId() <= AST_INT64; // AST_CHAR is not signed
+    return TYPE_INT8 <= id.getId() && id.getId() <= TYPE_INT64; // TYPE_CHAR is not signed
 }
 bool AST::IsDecimal(TypeId id){
     // TODO: Add float64
-    return id == AST_FLOAT32 || id == AST_FLOAT64;
+    return id == TYPE_FLOAT32 || id == TYPE_FLOAT64;
 }
 /* #region  */
 void PrintSpace(int count) {
@@ -2996,118 +3023,153 @@ void ASTExpression::print(AST *ast, int depth) {
     if(namedValue.size()!=0){
         log::out << namedValue<<"= ";
     }
-    if (isValue) {
+    switch (type) {
+    case EXPR_VALUE: {
+        auto stmp = as<ASTExpressionValue>();
+        TypeId typeId = stmp->typeId;
         log::out << ast->typeToString(typeId);
         log::out << " ";
         log::out.flush();
-        if (typeId == AST_FLOAT32)
-            log::out << f32Value;
-        else if (typeId == AST_FLOAT64)
-            log::out << f64Value;
+        if (typeId == TYPE_FLOAT32)
+            log::out << stmp->f32Value;
+        else if (typeId == TYPE_FLOAT64)
+            log::out << stmp->f64Value;
         else if (AST::IsInteger(typeId))
-            log::out << i64Value;
-        else if (typeId == AST_BOOL)
-            log::out << boolValue;
-        else if (typeId == AST_CHAR)
-            log::out << charValue;
-        else if (typeId == AST_ID)
-            log::out << name;
-        // else if(typeId==AST_STRING) log::out << ast->constStrings[constStrIndex];
-        else if (typeId == AST_FNCALL)
-            log::out << name;
-        else if (typeId == AST_NULL)
-            log::out << "null";
-        else if(typeId == AST_STRING)
-            log::out <<name;
-        else if(typeId == AST_SIZEOF)
-            log::out << name;
-        else if(typeId == AST_NAMEOF)
-            log::out << name;
-        else if(typeId == AST_TYPEID)
-            log::out << name;
-        else if(typeId == AST_ASM)
-            log::out << "<asm>";
-        else
-            log::out << "missing print impl.";
-        if (typeId == AST_FNCALL) {
-            // if (args && args->size()!=0) {
-            if (args.size()!=0) {
-                log::out << " args:\n";
-                // for(auto arg : *args){
-                //     arg->print(ast, depth + 1);
-                // }
-            } else {
-                log::out << " no args\n";
-            }
-        } else
-            log::out << "\n";
-    } else {
-        if(typeId == AST_ASSIGN) {
-            if(castType.getId()!=0){
-                log::out << OP_NAME((OperationType)castType.getId());
-            }
-        }
-        log::out << OP_NAME((OperationType)typeId.getId()) << " ";
-        if (typeId == AST_CAST) {
-            log::out << ast->typeToString(castType);
-            log::out << "\n";
-            left->print(ast, depth + 1);
-        } else if (typeId == AST_MEMBER) {
-            log::out << name;
-            log::out << "\n";
-            left->print(ast, depth + 1);
-        } else if (typeId == AST_INITIALIZER) {
-            log::out << ast->typeToString(castType);
-            log::out << "\n";
-            if(left)
-                left->print(ast, depth + 1);
-        } else if (typeId == AST_FROM_NAMESPACE) {
-            log::out << name;
-            log::out << "\n";
-            if(left)
-                left->print(ast, depth + 1);
-        } else if (typeId == AST_INDEX) {
-            log::out << "\n";
-            if(left)
-                left->print(ast, depth + 1);
-            if(right)
-                right->print(ast, depth + 1);
-        } else if (typeId == AST_INCREMENT) {
-            log::out << "\n";
-            if(left)
-                left->print(ast, depth + 1);
-        } else if (typeId == AST_DECREMENT) {
-            log::out << "\n";
-            if(left)
-                left->print(ast, depth + 1);
-        } else if(typeId == AST_ASSIGN) {
-            // if(castType.getId()!=0){
-            //     log::out << OP_NAME((OperationType)castType.getId());
-            // }
-            log::out << "\n";
-            if (left) {
-                left->print(ast, depth + 1);
-            }
-            if (right) {
-                right->print(ast, depth + 1);
-            }
-        }  else {
-            log::out << "\n";
-            if (left) {
-                left->print(ast, depth + 1);
-            }
-            if (right) {
-                right->print(ast, depth + 1);
-            }
-        }
+            log::out << stmp->i64Value;
+        else if (typeId == TYPE_BOOL)
+            log::out << stmp->boolValue;
+        else if (typeId == TYPE_CHAR)
+            log::out << stmp->charValue;
+    } break;
+    case EXPR_IDENTIFIER: {
+        auto stmp = as<ASTExpressionIdentifier>();
+        log::out << stmp->name;
+    } break;
+    case EXPR_STRING: {
+        auto stmp = as<ASTExpressionString>();
+        log::out << stmp->name;
+        // log::out << ast->constStrings[constStrIndex];
+    } break;
+    case EXPR_CALL: {
+        auto stmp = as<ASTExpressionCall>();
+        log::out << stmp->name;
+        // if (typeId == AST_FNCALL) {
+        //     // if (args && args->size()!=0) {
+        //     if (args.size()!=0) {
+        //         log::out << " args:\n";
+        //         // for(auto arg : *args){
+        //         //     arg->print(ast, depth + 1);
+        //         // }
+        //     } else {
+        //         log::out << " no args\n";
+        //     }
+        // } else
+        //     log::out << "\n";
+    } break;
+    case EXPR_BUILTIN: {
+        auto stmp = as<ASTExpressionBuiltin>();
+        log::out << stmp->name;
+    } break;
+    case EXPR_NULL: {
+        log::out << "null";
+    } break;
+    case EXPR_ASSEMBLY: {
+        log::out << "<asm>";
+    } break;
+    case EXPR_ASSIGN: {
+        // if(castType.getId()!=0){
+        //     log::out << OP_NAME((OperationType)castType.getId());
+        // }
+        log::out << "=";
+    } break;
+     case EXPR_CAST: {
+        auto stmp = as<ASTExpressionCast>();
+        log::out << "cast "<<ast->typeToString(stmp->castType);
+        log::out << "\n";
+        stmp->left->print(ast, depth + 1);
+    } break;
+    case EXPR_OPERATION: {
+        auto stmp = as<ASTExpressionOperation>();
+        log::out << "OP ";
+        log::out << OP_NAME(stmp->op_type) << "\n";
+    } break;
+    default: {
+        log::out << "missing print impl.";
     }
-    if(typeId == AST_FNCALL || typeId == AST_INITIALIZER){
-        // for(ASTExpression* expr : *args){
-        for(ASTExpression* expr : args){
-            if (expr) {
-                expr->print(ast, depth+1);
-            }
-        }
     }
+        
+    // } else {
+    //     if(typeId == AST_ASSIGN) {
+    //         if(castType.getId()!=0){
+    //             log::out << OP_NAME((OperationType)castType.getId());
+    //         }
+    //     }
+    //     log::out << OP_NAME((OperationType)typeId.getId()) << " ";
+
+    //     } else if (typeId == AST_MEMBER) {
+    //         log::out << name;
+    //         log::out << "\n";
+    //         left->print(ast, depth + 1);
+    //     } else if (typeId == AST_INITIALIZER) {
+    //         log::out << ast->typeToString(castType);
+    //         log::out << "\n";
+    //         if(left)
+    //             left->print(ast, depth + 1);
+    //     } else if (typeId == AST_FROM_NAMESPACE) {
+    //         log::out << name;
+    //         log::out << "\n";
+    //         if(left)
+    //             left->print(ast, depth + 1);
+    //     } else if (typeId == AST_INDEX) {
+    //         log::out << "\n";
+    //         if(left)
+    //             left->print(ast, depth + 1);
+    //         if(right)
+    //             right->print(ast, depth + 1);
+    //     } else if (typeId == AST_PRE_INCREMENT) {
+    //         log::out << "\n";
+    //         if(left)
+    //             left->print(ast, depth + 1);
+    //     } else if (typeId == AST_PRE_DECREMENT) {
+    //         log::out << "\n";
+    //         if(left)
+    //             left->print(ast, depth + 1);
+    //     } else if (typeId == AST_POST_INCREMENT) {
+    //         log::out << "\n";
+    //         if(left)
+    //             left->print(ast, depth + 1);
+    //     } else if (typeId == AST_POST_DECREMENT) {
+    //         log::out << "\n";
+    //         if(left)
+    //             left->print(ast, depth + 1);
+    //     } else if(typeId == AST_ASSIGN) {
+    //         // if(castType.getId()!=0){
+    //         //     log::out << OP_NAME((OperationType)castType.getId());
+    //         // }
+    //         log::out << "\n";
+    //         if (left) {
+    //             left->print(ast, depth + 1);
+    //         }
+    //         if (right) {
+    //             right->print(ast, depth + 1);
+    //         }
+    //     }  else {
+    //         log::out << "\n";
+    //         if (left) {
+    //             left->print(ast, depth + 1);
+    //         }
+    //         if (right) {
+    //             right->print(ast, depth + 1);
+    //         }
+    //     }
+    // }
+    // if(typeId == AST_FNCALL || typeId == AST_INITIALIZER){
+    //     // for(ASTExpression* expr : *args){
+    //     for(ASTExpression* expr : args){
+    //         if (expr) {
+    //             expr->print(ast, depth+1);
+    //         }
+    //     }
+    // }
 }
 /* #endregion */

@@ -2,7 +2,15 @@
 // #import "Array"
 // #import "Asserts"
 
-#import "Lang"
+// len := 0
+// if len + 1 > 2 {
+    
+// }
+
+// #import "Lang"
+
+
+a := "okay"
 
 // fn func() {
 //     // arr: Array<i32>
@@ -10,12 +18,13 @@
 //     // arr.add(-23)
 //     // arr.cleanup()
 // }
+// // global ok: i32;
 
-fn main() -> i32{
-    loc: i32;
-    loc2: i32;
-    loc = 23
-    // func()
-    // Assert(false)
-    return loc + 2
-}
+// fn main() -> i32{
+//     loc: i32;
+//     loc2: i32;
+//     loc = 23
+//     // func()
+//     // Assert(false)
+//     return loc + 2
+// }

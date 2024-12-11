@@ -48,7 +48,7 @@ namespace parser {
 // zero means no operation
 bool IsSingleOp(OperationType nowOp){
     return nowOp == AST_REFER || nowOp == AST_DEREF || nowOp == AST_NOT || nowOp == AST_BNOT||
-        nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST || nowOp == AST_INCREMENT || nowOp == AST_DECREMENT || nowOp == AST_UNARY_SUB;
+        nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST || nowOp == AST_PRE_INCREMENT || nowOp == AST_POST_INCREMENT || nowOp == AST_PRE_DECREMENT || nowOp == AST_POST_DECREMENT || nowOp == AST_UNARY_SUB;
 }
 // info is required to perform next when encountering
 // two arrow tokens
@@ -160,8 +160,10 @@ int OpPrecedence(int op){
         case AST_UNARY_SUB:
         case AST_CAST:
             // return 15;
-        case AST_INCREMENT:
-        case AST_DECREMENT:
+        case AST_PRE_INCREMENT:
+        case AST_PRE_DECREMENT:
+        case AST_POST_INCREMENT:
+        case AST_POST_DECREMENT:
             // return 16;
         case AST_REFER:
         case AST_DEREF:
@@ -1463,7 +1465,7 @@ SignalIO ParseContext::parseAnnotation(StringView* out_annotation_name, lexer::T
     return SIGNAL_SUCCESS;
 }
 
-SignalIO ParseContext::parseArguments(ASTExpression* fncall, int* count){
+SignalIO ParseContext::parseArguments(ASTExpressionCall* fncall, int* count){
     ZoneScopedC(tracy::Color::OrangeRed1);
 
     // fncall->nonNamedArgs = 0; // can't do this because caller sets it to 1 if expr is a method call
@@ -1601,24 +1603,24 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 if(token->type == '('){
                     info.advance();
                     // fncall for methods
-                    ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
+                    ASTExpression* tmp = info.ast->createExpression(EXPR_CALL);
                     tmp->location = mem_loc; // TODO: Scuffed source location
-                    tmp->name = std::string(member_view) + polyTypes;
+                    auto stmp = tmp->as<ASTExpressionCall>();
+                    stmp->name = std::string(member_view) + polyTypes;
 
                     // Create "this" argument in methods
                     // tmp->args->add(values.last());
-                    tmp->args.add(values.last());
-                    tmp->nonNamedArgs = 0;
-                    tmp->nonNamedArgs++;
+                    stmp->args.add(values.last());
+                    stmp->nonNamedArgs = 1;
                     values.pop();
                     
                     // tmp->setImplicitThis(true);
                     
-                    tmp->setMemberCall(true);
+                    stmp->setMemberCall(true);
 
                     // Parse the other arguments
                     int count = 0;
-                    auto signal = parseArguments(tmp, &count);
+                    auto signal = parseArguments(stmp, &count);
                     switch(signal){
                         case SIGNAL_SUCCESS: break;
                         case SIGNAL_COMPLETE_FAILURE: {
@@ -1645,10 +1647,11 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     )
                 }
                 
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_MEMBER));
+                ASTExpression* tmp = info.ast->createExpression(EXPR_MEMBER);
                 tmp->location = mem_loc;
-                tmp->name = member_view;
-                tmp->left = values.last();
+                auto stmp = tmp->as<ASTExpressionMember>();
+                stmp->name = member_view;
+                stmp->left = values.last();
                 values.pop();
                 // tmp->tokenRange.firstToken = tmp->left->tokenRange.firstToken;
                 // tmp->tokenRange.startIndex = tmp->left->tokenRange.startIndex;
@@ -1752,13 +1755,12 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     info.advance();
                 }
 
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INDEX));
+                ASTExpressionOperation* tmp = info.ast->createExpressionOperation(AST_INDEX);
                 tmp->location = info.srcloc(token_tiny);
                 // tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = startIndex;
                 // tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
-
                 tmp->left = values.last();
                 values.pop();
                 tmp->right = indexExpr;
@@ -1766,11 +1768,9 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 // tmp->constantValue = tmp->left->constantValue && tmp->right->constantValue; // TODO: constant evaluation
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "++"){ // TODO: Optimize
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INCREMENT));
+                ASTExpressionOperation* tmp = info.ast->createExpressionOperation(AST_POST_INCREMENT);
                 tmp->location = info.getloc();
                 info.advance();
-
-                tmp->setPostAction(true);
 
                 tmp->left = values.last();
                 values.pop();
@@ -1778,11 +1778,10 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 // tmp->constantValue = tmp->left->constantValue;
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "--"){ // TODO: Optimize
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_DECREMENT));
+                ASTExpressionOperation* tmp = info.ast->createExpressionOperation(AST_POST_DECREMENT);
                 tmp->location = info.getloc();
 
                 info.advance();
-                tmp->setPostAction(true);
 
                 tmp->left = values.last();
                 values.pop();
@@ -1833,6 +1832,9 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     continue;
                 } else if(view == "iknow") {
                     info.advance();
+                    // Code below would print an error (or warning?)
+                    // iknow annotation supresses it.
+                    // if (var = 5)
                     allow_assignments = true;
                     continue;
                 }
@@ -1916,12 +1918,12 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "++"){
                 saved_locations.add(info.getloc());
                 info.advance();
-                ops.add(AST_INCREMENT);
+                ops.add(AST_PRE_INCREMENT);
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "--"){
                 saved_locations.add(info.getloc());
                 info.advance();
-                ops.add(AST_DECREMENT);
+                ops.add(AST_PRE_DECREMENT);
                 continue;
             }
             
@@ -1999,7 +2001,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 //         )
                 //     }
                 // }
-                ASTExpression* tmp = 0;
+                ASTExpressionValue* tmp = (ASTExpressionValue*)ast->createExpression(EXPR_VALUE);
                 if(unsignedSuffix) {
                     if(negativeNumber) {
                         ERR_SECTION(
@@ -2009,17 +2011,17 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                         )
                     }
                     if ((num&0xFFFFFFFF00000000) == 0) {
-                        tmp = info.ast->createExpression(TypeId(AST_UINT32));
+                        tmp->typeId = TypeId(TYPE_UINT32);
                     } else {
-                        tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                        tmp->typeId = TypeId(TYPE_UINT64);
                     }
                 } else if(signedSuffix || negativeNumber) {
                     if ((num&0xFFFFFFFF80000000) == 0) {
-                        tmp = info.ast->createExpression(TypeId(AST_INT32));
+                        tmp->typeId = TypeId(TYPE_INT32);
                     } else if((num&0x8000000000000000) == 0 || (negativeNumber && (num == 0x8000000000000000))) {
-                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                        tmp->typeId = TypeId(TYPE_INT64);
                     } else {
-                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                        tmp->typeId = TypeId(TYPE_INT64);
                         if(!printedError){
                             // This message is different from the one in the loop above.
                             // This complains about to large number for signed integers while the above
@@ -2036,11 +2038,11 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 } else {
                     // default will result in signed integers when possible.
                     if ((num&0xFFFFFFFF00000000) == 0) {
-                        tmp = info.ast->createExpression(TypeId(AST_INT32));
+                        tmp->typeId = TypeId(TYPE_INT32);
                     } else if((num&0x8000000000000000) == 0) {
-                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                        tmp->typeId = TypeId(TYPE_INT64);
                     } else {
-                        tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                        tmp->typeId = TypeId(TYPE_UINT64);
                     }
                 }
                 tmp->location = info.srcloc(token_tiny);
@@ -2051,14 +2053,14 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
             } else if(token->type == lexer::TOKEN_LITERAL_DECIMAL){
                 auto loc = info.getloc();
 
-                ASTExpression* tmp = nullptr;
+                ASTExpressionValue* tmp = (ASTExpressionValue*)ast->createExpression(EXPR_VALUE);
                 Assert(view.ptr[0]!='-');// ensure that the tokenizer hasn't been changed
                 // to clump the - together with the number token
                 bool double_suffix = false;
                 double value = lexer::ConvertDecimal(view, &double_suffix);
                 if(double_suffix) {
                     info.advance();
-                    tmp = info.ast->createExpression(TypeId(AST_FLOAT64));
+                    tmp->typeId = TypeId(TYPE_FLOAT64);
                     tmp->f64Value = value;
                     if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                         ops.pop();
@@ -2067,7 +2069,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     }
                 } else {
                     info.advance();
-                    tmp = info.ast->createExpression(TypeId(AST_FLOAT32));
+                    tmp->typeId = TypeId(TYPE_FLOAT32);
                     tmp->f32Value = value;
                     if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                         ops.pop();
@@ -2099,22 +2101,22 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     negativeNumber = true;
                 }
 
-                ASTExpression* tmp = nullptr;
+                ASTExpressionValue* tmp = (ASTExpressionValue*)info.ast->createExpression(EXPR_VALUE);
                 if(significant_digits<=8) {
                     if(unsignedSuffix)
-                        tmp = info.ast->createExpression(TypeId(AST_UINT32));
+                        tmp->typeId = TypeId(TYPE_UINT32);
                     else
-                        tmp = info.ast->createExpression(TypeId(AST_INT32));
+                        tmp->typeId = TypeId(TYPE_INT32);
                 } else if(significant_digits<=16) {
                     if(unsignedSuffix)
-                        tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                        tmp->typeId = TypeId(TYPE_UINT64);
                     else
-                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                        tmp->typeId = TypeId(TYPE_INT64);
                 } else {
                     if(unsignedSuffix)
-                        tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                        tmp->typeId = TypeId(TYPE_UINT64);
                     else
-                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                        tmp->typeId = TypeId(TYPE_INT64);
                     ERR_SECTION(
                         ERR_HEAD2(token_tiny)
                         ERR_MSG("Hexidecimal overflow! '"<<info.lexer->tostring(token_tiny)<<"' is to large for 64-bit integers!")
@@ -2165,19 +2167,19 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
             //     //   often want. Later we will infer the type for literals but that's future stuff.
             //     if(significant_digits<=8) {
             //         if(unsignedSuffix)
-            //             tmp = info.ast->createExpression(TypeId(AST_UINT32));
+            //             tmp = info.ast->createExpression(TypeId(TYPE_UINT32));
             //         else
-            //             tmp = info.ast->createExpression(TypeId(AST_INT32));
+            //             tmp = info.ast->createExpression(TypeId(TYPE_INT32));
             //     } else if(significant_digits<=16) {
             //         if(unsignedSuffix)
-            //             tmp = info.ast->createExpression(TypeId(AST_UINT64));
+            //             tmp = info.ast->createExpression(TypeId(TYPE_UINT64));
             //         else
-            //             tmp = info.ast->createExpression(TypeId(AST_INT64));
+            //             tmp = info.ast->createExpression(TypeId(TYPE_INT64));
             //     } else {
             //         if(unsignedSuffix)
-            //             tmp = info.ast->createExpression(TypeId(AST_UINT64));
+            //             tmp = info.ast->createExpression(TypeId(TYPE_UINT64));
             //         else
-            //             tmp = info.ast->createExpression(TypeId(AST_INT64));
+            //             tmp = info.ast->createExpression(TypeId(TYPE_INT64));
             //         ERR_SECTION(
             //             ERR_HEAD2(token_tiny)
             //             ERR_MSG("Hexidecimal overflow! '"<<info.lexer->tostring(token_tiny)<<"' is to large for 64-bit integers!")
@@ -2197,15 +2199,18 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 ASTExpression* tmp = 0;
                 // if(token->length == 1){
                 if((token->flags&lexer::TOKEN_FLAG_SINGLE_QUOTED)){
-                    tmp = info.ast->createExpression(TypeId(AST_CHAR));
-                    tmp->charValue = *view.ptr;
+                    tmp = info.ast->createExpression(EXPR_VALUE);
+                    auto stmp = tmp->as<ASTExpressionValue>();
+                    stmp->typeId = TypeId(TYPE_CHAR);
+                    stmp->charValue = *view.ptr;
                     // tmp->constantValue = true;// 
                 }else if((token->flags&lexer::TOKEN_FLAG_DOUBLE_QUOTED)) {
-                    tmp = info.ast->createExpression(TypeId(AST_STRING));
-                    tmp->name = view;
+                    tmp = info.ast->createExpression(EXPR_STRING);
+                    auto stmp = tmp->as<ASTExpressionString>();
+                    stmp->name = view;
                     // tmp->constantValue = true;// 
                     if(cstring)
-                        tmp->flags |= ASTNode::NULL_TERMINATED;
+                        stmp->flags |= ASTNode::NULL_TERMINATED;
 
                     // A string of zero size can be useful which is why
                     // the code below is commented out.
@@ -2223,7 +2228,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 // tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_TRUE || token->type == lexer::TOKEN_FALSE){
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_BOOL));
+                ASTExpressionValue* tmp = info.ast->createExpressionValue(TYPE_BOOL);
                 tmp->boolValue = token->type == lexer::TOKEN_TRUE;
                 tmp->location = info.getloc();
                 info.advance();
@@ -2281,7 +2286,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
             //     tmp->tokenRange.tokenStream = info.tokens;
             // } 
             else if(token->type == lexer::TOKEN_NULL){
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NULL));
+                ASTExpression* tmp = info.ast->createExpression(EXPR_NULL);
                 tmp->location = info.getloc();
                 info.advance();
                 values.add(tmp);
@@ -2291,13 +2296,13 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 // tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_SIZEOF || token->type == lexer::TOKEN_NAMEOF || token->type == lexer::TOKEN_TYPEID) {
-                ASTExpression* tmp = nullptr;
+                ASTExpressionBuiltin* tmp = (ASTExpressionBuiltin*)ast->createExpression(EXPR_BUILTIN);
                 if(token->type == lexer::TOKEN_SIZEOF)
-                    tmp = info.ast->createExpression(TypeId(AST_SIZEOF));
+                    tmp->builtin_type = AST_SIZEOF;
                 else if(token->type == lexer::TOKEN_NAMEOF)
-                    tmp = info.ast->createExpression(TypeId(AST_NAMEOF));
+                    tmp->builtin_type = AST_NAMEOF;
                 else if(token->type == lexer::TOKEN_TYPEID)
-                    tmp = info.ast->createExpression(TypeId(AST_TYPEID));
+                    tmp->builtin_type = AST_TYPEOF;
                 else Assert(false);
                 tmp->location = info.getloc();
 
@@ -2366,7 +2371,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 values.add(tmp);
             }  else if(token->type == lexer::TOKEN_ASM) {
                 auto token_tiny = info.gettok();
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ASM));
+                ASTExpressionAssembly* tmp = (ASTExpressionAssembly*)info.ast->createExpression(EXPR_ASSEMBLY);
                 tmp->location = info.getloc();
                 info.advance();
 
@@ -2484,7 +2489,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 // nocheckin, FIGURE THIS OUT
                 // NOTE: Code is copied from the other AST_INITIALIZER of the form 'Struct{}'
                 //   You should refactor this, duplicated code is bad.
-                ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
+                ASTExpressionInitializer* initExpr = (ASTExpressionInitializer*)info.ast->createExpression(EXPR_INITIALIZER);
                 initExpr->location = info.getloc();
                 info.advance();
                 // NOTE: Type checker works on TypeIds not AST_FROM_NAMESPACE.
@@ -2609,7 +2614,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     ns += pure_name;
                     ns += polyTypes;
 
-                    ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
+                    ASTExpressionCall* tmp = (ASTExpressionCall*)info.ast->createExpression(EXPR_CALL);
                     tmp->location = loc;
                     // tmp->name = pure_name + polyTypes;
                     tmp->name = ns;
@@ -2634,7 +2639,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 } else if(tok.type=='{' && 0 == (token->flags & lexer::TOKEN_FLAG_ANY_SUFFIX)){
                 // } else if(tok.type=='{' && 0 == (token->flags & lexer::TOKEN_FLAG_NEWLINE)){
                     // initializer
-                    ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
+                    ASTExpressionInitializer* initExpr = (ASTExpressionInitializer*)info.ast->createExpression(EXPR_INITIALIZER);
                     initExpr->location = info.getloc();
                     info.advance();
                     // NOTE: Type checker works on TypeIds not AST_FROM_NAMESPACE.
@@ -2747,7 +2752,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                         continue; // do a second round here?
                         // TODO: detect more ::
                     } else {
-                        ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ID));
+                        ASTExpressionIdentifier* tmp = (ASTExpressionIdentifier*)info.ast->createExpression(EXPR_IDENTIFIER);
                         tmp->location = loc;
                         // info.advance();
 
@@ -2807,8 +2812,8 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 auto loc = info.getloc();
                 info.advance(2);
                 
-                ASTExpression* tmp = 0;
-                tmp = info.ast->createExpression(TypeId(AST_STRING));
+                ASTExpressionString* tmp = 0;
+                tmp = (ASTExpressionString*)info.ast->createExpression(EXPR_STRING);
                 if(functionScopes.size()>0) {
                     tmp->name = functionScopes.last().function->name;
                 } else {
@@ -2914,20 +2919,25 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 continue; // ignore operation
             }
 
-            auto er = values.last();
+            auto last_value = values.last();
             values.pop();
 
-            auto val = info.ast->createExpression(TypeId(nowOp));
+            ASTExpression* val = nullptr;
+            // ASTExpression* val = (ASTExpressionOperation*)info.ast->createExpression(EXPR_OPERATION);
+            // ASTExpressionOperation* val = (ASTExpressionOperation*)info.ast->createExpression(EXPR_OPERATION);
+            // val->op_type = nowOp;
             // val->tokenRange.tokenStream = info.tokens;
             // FROM_NAMESPACE, CAST, REFER, DEREF, NOT, BNOT
             if(IsSingleOp(nowOp)){
                 // TODO: tokenRange is not properly set!
-                // val->tokenRange.firstToken = er->tokenRange.firstToken;
-                // val->tokenRange.endIndex = er->tokenRange.endIndex;
-                // val->tokenRange = er->tokenRange;
+                // val->tokenRange.firstToken = last_value->tokenRange.firstToken;
+                // val->tokenRange.endIndex = last_value->tokenRange.endIndex;
+                // val->tokenRange = last_value->tokenRange;
                 if(nowOp == AST_FROM_NAMESPACE){
                     auto tok = namespaceNames.last();
-                    val->name = tok;
+                    Assert(false);
+                    // val->name = tok;
+                    // OLD below
                     // val->tokenRange.firstToken = tok;
                     // val->tokenRange.startIndex -= 2; // -{namespace name} -{::}
                     namespaceNames.pop();
@@ -2935,18 +2945,20 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     // val->location = saved_locations.last();
                     // saved_locations.pop();
                 } else if(nowOp == AST_CAST){
-                    val->castType = castTypes.last();
+                    auto tmp = (ASTExpressionCast*)ast->createExpression(EXPR_CAST);
+                    val = tmp;
+                    tmp->castType = castTypes.last();
                     castTypes.pop();
                     auto extraToken = extraTokens.last();
                     extraTokens.pop();
                     auto str = info.lexer->getStdStringFromToken(extraToken);
                     if(str == "cast_unsafe") {
-                        val->setUnsafeCast(true);
+                        tmp->setUnsafeCast(true);
                     }
                     // val->location = saved_locations.last();
                     // saved_locations.pop();
                     // val->tokenRange.firstToken = extraToken;
-                    // val->tokenRange.endIndex = er->tokenRange.firstToken.tokenIndex;
+                    // val->tokenRange.endIndex = last_value->tokenRange.firstToken.tokenIndex;
                 } else if(nowOp == AST_UNARY_SUB){
                     // I had an idea about replacing unary sub with AST_SUB
                     // and creating an integer expression with a zero in it as left node
@@ -2954,39 +2966,65 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     // you have one less operation (AST_UNARY_SUB) to worry about.
                     // The bad is that you create a new expression and operator overloading
                     // wouldn't work with unary sub.
+                    auto tmp = (ASTExpressionOperation*)info.ast->createExpression(EXPR_OPERATION);
+                    val = tmp;
+                    tmp->op_type = nowOp;
                 } else {
-                    // val->tokenRange.startIndex--;
+                    auto tmp = (ASTExpressionOperation*)info.ast->createExpression(EXPR_OPERATION);
+                    val = tmp;
+                    tmp->op_type = nowOp;
                 }
-                if(nowOp == AST_DEREF && (er->typeId == AST_INCREMENT || er->typeId == AST_DECREMENT) && er->postAction) {
+                val->location = loc_op;
+                if(nowOp == AST_DEREF && (last_value->type == EXPR_OPERATION && (last_value->as<ASTExpressionOperation>()->op_type == AST_POST_INCREMENT || last_value->as<ASTExpressionOperation>()->op_type == AST_POST_DECREMENT))) {
+                    auto tmp_val = val->as<ASTExpressionOperation>();
+                    auto tmp_last_value = last_value->as<ASTExpressionOperation>();
                     // We swap deref and post increment so that
                     // *a++ is evaluated as (*a)++ instead of *(a++)
-                    val->location = loc_op;
-                    val->left = er->left;
-                    er->left = val;
-                    val = er;
+                    tmp_val->op_type = nowOp;
+                    tmp_val->left = tmp_last_value->left;
+                    tmp_last_value->left = val;
+                    val = last_value;
+                } else if (nowOp == AST_CAST) {
+                    auto tmp_val = val->as<ASTExpressionCast>();
+                    tmp_val->left = last_value;
                 } else {
-                    val->location = loc_op;
-                    val->left = er;
-                    if(val->typeId != AST_REFER) {
-                        // val->constantValue = er->constantValue;// 
+                    auto tmp_val = val->as<ASTExpressionOperation>();
+                    tmp_val->op_type = nowOp;
+                    tmp_val->left = last_value;
+                    if(tmp_val->op_type != AST_REFER) {
+                        // val->constantValue = last_value->constantValue;// 
                     }
                 }
             } else if(values.size()>0){
+                if(nowOp == AST_ASSIGN) {
+                    val = ast->createExpression(EXPR_ASSIGN);
+                } else {
+                    val = ast->createExpressionOperation(nowOp);
+                }
                 val->location = loc_op;
 
-                auto el = values.last();
+                auto value_left = values.last();
                 values.pop();
-                // val->tokenRange.firstToken = el->tokenRange.firstToken;
-                // val->tokenRange.startIndex = el->tokenRange.startIndex;
-                // val->tokenRange.endIndex = er->tokenRange.endIndex;
-                val->left = el;
-                val->right = er;
-
-                if(nowOp==AST_ASSIGN){
-                    Assert(assignOps.size()>0);
-                    val->assignOpType = assignOps.last();
+                // val->tokenRange.firstToken = value_left->tokenRange.firstToken;
+                // val->tokenRange.startIndex = value_left->tokenRange.startIndex;
+                // val->tokenRange.endIndex = last_value->tokenRange.endIndex;
+                if(val->type == EXPR_ASSIGN) {
+                    auto tmp_val = val->as<ASTExpressionAssign>();
+                    tmp_val->left = value_left;
+                    tmp_val->right = last_value;
+                    tmp_val->assign_op_type = assignOps.last();
                     assignOps.pop();
+                } else {
+                    auto tmp_val = val->as<ASTExpressionOperation>();
+                    tmp_val->left = value_left;
+                    tmp_val->right = last_value;
                 }
+
+                // if(nowOp==AST_ASSIGN){
+                //     Assert(assignOps.size()>0);
+                //     val->assignOpType = assignOps.last();
+                //     assignOps.pop();
+                // }
                 // val->constantValue = val->left->constantValue && val-// >right->constantValue;
             } else {
                 Assert(("Bug in compiler",false));

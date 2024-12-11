@@ -442,11 +442,11 @@ namespace dwarf {
                         // stream->write(tmp.c_str(), tmp.length());
                         // // stream->write(memAst.name.ptr, memAst.name.len);
                         // stream->write1('\0');
-                        // int typeref = getTypeRef(AST_UINT32);
+                        // int typeref = getTypeRef(TYPE_UINT32);
                         // if(typeref == 0) {
-                        //     addType(AST_UINT32);
+                        //     addType(TYPE_UINT32);
                         //     // log::out << "Late "<<ast->typeToString(memImpl.typeId)<<" at "<< (stream->getWriteHead() - offset_section)<<"\n";
-                        //     lateTypeRefs.add({stream->getWriteHead() - offset_section, AST_UINT32 });
+                        //     lateTypeRefs.add({stream->getWriteHead() - offset_section, TYPE_UINT32 });
                         //     stream->write4(DEBUG_VAL32); // not known yet
                         // } else {
                         //     stream->write4(typeref); // ref4
@@ -547,7 +547,7 @@ namespace dwarf {
                     //     stream->write1(8); // size
                     //     stream->write1(DW_ATE_unsigned);
                     } else {
-                        Assert(queuedType.getId() < AST_TRUE_PRIMITIVES);
+                        Assert(queuedType.getId() < TYPE_PRIMITIVE_COUNT);
                         // other type
 
                         log::out << " prim\n";
@@ -559,30 +559,30 @@ namespace dwarf {
                         stream->write1(typeInfo->getSize()); // size
 
                         switch(typeInfo->id.getId()) { // encoding (1 byte)
-                            case AST_VOID:
+                            case TYPE_VOID:
                                 // Assert(false);
                                 stream->write1(DW_ATE_unsigned);
                                 break;
-                            case AST_UINT8:
-                            case AST_UINT16:
-                            case AST_UINT32:
-                            case AST_UINT64:
+                            case TYPE_UINT8:
+                            case TYPE_UINT16:
+                            case TYPE_UINT32:
+                            case TYPE_UINT64:
                                 stream->write1(DW_ATE_unsigned);
                                 break;
-                            case AST_INT8:
-                            case AST_INT16:
-                            case AST_INT32:
-                            case AST_INT64:
+                            case TYPE_INT8:
+                            case TYPE_INT16:
+                            case TYPE_INT32:
+                            case TYPE_INT64:
                                 stream->write1(DW_ATE_signed);
                                 break;
-                            case AST_BOOL:
+                            case TYPE_BOOL:
                                 stream->write1(DW_ATE_boolean);
                                 break;
-                            case AST_CHAR:
+                            case TYPE_CHAR:
                                 stream->write1(DW_ATE_unsigned_char);
                                 break;
-                            case AST_FLOAT32:
-                            case AST_FLOAT64:
+                            case TYPE_FLOAT32:
+                            case TYPE_FLOAT64:
                                 stream->write1(DW_ATE_float);
                                 break;
                             default: {
@@ -1158,7 +1158,7 @@ namespace dwarf {
                 }
 
                 // TODO: Set column
-                log::out << fun->name<<" "<<fun->asm_start << " " <<fun->declared_at_line<<"\n";
+                // log::out << fun->name<<" "<<fun->asm_start << " " <<fun->declared_at_line<<"\n";
                 add_row(fun->asm_start, fun->declared_at_line);
                 
                 add_row(fun->asm_start, fun->declared_at_line);
@@ -1172,7 +1172,7 @@ namespace dwarf {
                     // Assert(lastLine <= line.lineNumber);
                     lastOffset = line.asm_address;
                     lastLine = line.lineNumber;
-                    log::out << "line " << line.lineNumber << " " << (fun->asm_start + line.asm_address)<<"\n";
+                    // log::out << "line " << line.lineNumber << " " << (fun->asm_start + line.asm_address)<<"\n";
                     add_row(line.asm_address + fun->asm_start, line.lineNumber);
                 }
 
