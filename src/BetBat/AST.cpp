@@ -707,7 +707,7 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
 
 }
 // OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpressionCall* fncall, bool canCast, const BaseArray<bool>* inferred_args){
+OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -722,8 +722,8 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
     int non_named_args = 0;
     bool is_member_call = false;
     if (fncall) {
-        non_named_args = fncall->nonNamedArgs;
-        is_member_call = fncall->isMemberCall();
+        non_named_args = fncall->type == EXPR_CALL ? fncall->as<ASTExpressionCall>()->nonNamedArgs : fncall->as<ASTExpressionOperation>()->nonNamedArgs;
+        is_member_call = fncall->type == EXPR_CALL && fncall->as<ASTExpressionCall>()->isMemberCall();
     } else {
         non_named_args = argTypes.size();
         // NOTE: With no fncall we can't know isMemberCall so if you have a parent struct
@@ -863,7 +863,7 @@ void AST::declareUsageOfOverload(OverloadGroup::Overload* overload) {
     overload->funcImpl->usages++;
 }
 // OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpressionCall* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
+OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct,bool implicit_this, ASTExpression* fncall, bool implicitPoly, bool canCast, const BaseArray<bool>* inferred_args){
     using namespace engone;
     // IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
     // That means that we match if two parent structs have different args.
@@ -876,8 +876,8 @@ OverloadGroup::Overload* AST::getPolyOverload(OverloadGroup* group, const BaseAr
     int non_named_args = 0;
     bool is_member_call = false;
     if (fncall) {
-        non_named_args = fncall->nonNamedArgs;
-        is_member_call = fncall->isMemberCall();
+        non_named_args = fncall->type == EXPR_CALL ? fncall->as<ASTExpressionCall>()->nonNamedArgs : fncall->as<ASTExpressionOperation>()->nonNamedArgs;
+        is_member_call = fncall->type == EXPR_CALL && fncall->as<ASTExpressionCall>()->isMemberCall();
     } else {
         non_named_args = argTypes.size();
         if(parentStruct) {
@@ -2297,6 +2297,7 @@ void AST::destroy(ASTStatement *statement) {
     statement->~ASTStatement();
     // engone::Free(statement, sizeof(ASTStatement));
 }
+
 void AST::destroy(ASTExpression *expression) {
     // if (expression->next)
     //     destroy(expression->next);
@@ -2324,8 +2325,23 @@ void AST::destroy(ASTExpression *expression) {
     //     destroy(expression->left);
     // if (expression->right)
     //     destroy(expression->right);
-    expression->~ASTExpression();
-    // engone::Free(expression, sizeof(ASTExpression));
+    #define CASE(T) case T::TYPE: { expression->as<T>()->~T(); return; } break;
+    switch(expression->type) {
+    CASE(ASTExpressionValue)
+    CASE(ASTExpressionString)
+    CASE(ASTExpressionIdentifier)
+    CASE(ASTExpressionMember)
+    CASE(ASTExpressionAssembly)
+    CASE(ASTExpressionOperation)
+    CASE(ASTExpressionAssign)
+    CASE(ASTExpressionCall)
+    CASE(ASTExpressionInitializer)
+    CASE(ASTExpressionCast)
+    CASE(ASTExpressionBuiltin)
+    case EXPR_NULL: expression->~ASTExpression(); return;
+    }
+    #undef CASE
+    Assert(("enum switch ASTExpression",false));
 }
 int TypeInfo::getSize() {
     if (astStruct) {

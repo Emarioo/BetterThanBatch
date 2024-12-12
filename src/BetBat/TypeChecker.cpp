@@ -790,13 +790,13 @@ SignalIO TyperContext::checkDefaultArguments(ASTFunction* astFunc, FuncImpl* fun
     return SIGNAL_SUCCESS;
 }
 
-SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs) {
+SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs) {
     using namespace engone;
 
     TRACE_FUNC()
 
     CALLBACK_ON_ASSERT(
-        ERR_LINE2(expr->location, "crash why?")
+        ERR_LINE2(base_expr->location, "crash why?")
     )
 
     Assert(!outTypes || outTypes->size()==0);
@@ -807,7 +807,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
             if(overload->funcImpl->signature.returnTypes.size()==0)\
                 outTypes->add(TYPE_VOID);\
         }\
-        expr->versions_overload[info.currentPolyVersion] = *overload;
+        if(base_expr->type == EXPR_CALL)\
+            base_expr->as<ASTExpressionCall>()->versions_overload[info.currentPolyVersion] = *overload; \
+        else if(base_expr->type == EXPR_OPERATION) \
+            base_expr->as<ASTExpressionOperation>()->versions_overload[info.currentPolyVersion] = *overload;
     #define FNCALL_FAIL \
         if(outTypes) outTypes->add(TYPE_VOID); \
         FIX_NO_SPECIAL_ACTIONS
@@ -822,14 +825,19 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
     TEMP_ARRAY(TypeId, fnPolyArgs);
     TEMP_ARRAY(StringView, polyTypes);
 
+    Assert(base_expr->type == EXPR_CALL || base_expr->type == EXPR_OPERATION);
+
+    auto& expr_identifier = base_expr->type == EXPR_CALL ? base_expr->as<ASTExpressionCall>()->identifier : base_expr->as<ASTExpressionOperation>()->identifier;
+    auto& expr_nonNamedArgs = base_expr->type == EXPR_CALL ? base_expr->as<ASTExpressionCall>()->nonNamedArgs : base_expr->as<ASTExpressionOperation>()->nonNamedArgs;
+
     // Token baseName{};
     StringView baseName{};
     
     if(operatorOverloadAttempt) {
-        Assert(false);
-        // @nocheckin ditching operator overloading for now
-        // baseName = OP_NAME((OperationType)expr->typeId.getId());
+        auto expr = base_expr->as<ASTExpressionOperation>();
+        baseName = OP_NAME(expr->op_type);
     } else {
+        auto expr = base_expr->as<ASTExpressionCall>();
         // baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
         AST::DecomposePolyTypes(expr->name, &baseName, &polyTypes);
         for(int i=0;i<(int)polyTypes.size();i++){
@@ -913,6 +921,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
         // Assert(argTypes.size() == 2);
 
     } else {
+        auto expr = base_expr->as<ASTExpressionCall>();
         bool thisFailed=false;
         // for(int i = 0; i<(int)expr->args->size();i++){
         //     auto argExpr = expr->args->get(i);
@@ -968,7 +977,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
 
     //-- Get identifier, the namespace of overloads for the function/method.
     
-    if(expr->isMemberCall()){
+    if(base_expr->type == EXPR_CALL && base_expr->as<ASTExpressionCall>()->isMemberCall()){
+        auto expr = base_expr->as<ASTExpressionCall>();
         // Assert(expr->args->size()>0);
         // ASTExpression* thisArg = expr->args->get(0);
         Assert(expr->args.size()>0);
@@ -1147,9 +1157,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
         ;
     } else {
         // special functions
-        if(expr->name == "destruct" || expr->name == "construct") {
-
-             if(expr->args.size() != 1){
+        
+        if(base_expr->type == EXPR_CALL && (base_expr->as<ASTExpressionCall>()->name == "destruct" || base_expr->as<ASTExpressionCall>()->name == "construct")) {
+            auto expr = base_expr->as<ASTExpressionCall>();
+            if(expr->args.size() != 1){
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
                     ERR_MSG("'"<<expr->name<<"' takes one argument, not "<<expr->args.size()<<".")
@@ -1344,13 +1355,14 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
             //     FNCALL_FAIL
             //     return SIGNAL_FAILURE;
             // }
-            expr->identifier = iden;
+            
+            expr_identifier = iden;
             if(iden->type == Identifier::FUNCTION) {
                 possible_overload_groups.add({});
                 possible_overload_groups.last().fn_overloads = &iden->cast_fn()->funcOverloads;
                 possible_overload_groups.last().iden = iden;
             } else if(iden->is_var()){
-                auto var = expr->identifier->cast_var();
+                auto var = expr_identifier->cast_var();
                 // auto var = info.ast->getVariableByIdentifier(iden);
                 auto type = var->versions_typeId[info.currentPolyVersion];
                 
@@ -1364,24 +1376,24 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
                     }
 
                     ERR_SECTION(
-                        ERR_HEAD2(expr->location)
+                        ERR_HEAD2(base_expr->location)
                         ERR_MSG("The identifier '"<<baseName <<"' is a variable but not a function pointer. You can only \"call\" variables if they are a function pointer.")
-                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                        ERR_LINE2(base_expr->location, info.ast->typeToString(type))
                     )
                     FNCALL_FAIL
                     return SIGNAL_FAILURE;
                 }
                 
-                if(expr->nonNamedArgs != argTypes.size()) {
+                if(expr_nonNamedArgs != argTypes.size()) {
                     if(operatorOverloadAttempt || attempt) {
                         FIX_NO_SPECIAL_ACTIONS
                         return SIGNAL_NO_MATCH;
                     }
 
                     ERR_SECTION(
-                        ERR_HEAD2(expr->location)
+                        ERR_HEAD2(base_expr->location)
                         ERR_MSG("Named arguments is not possible when calling a function pointer that does not have parameter names.")
-                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                        ERR_LINE2(base_expr->location, info.ast->typeToString(type))
                     )
                     FNCALL_FAIL
                     return SIGNAL_FAILURE;
@@ -1410,24 +1422,26 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
                     }
 
                     ERR_SECTION(
-                        ERR_HEAD2(expr->location)
+                        ERR_HEAD2(base_expr->location)
                         ERR_MSG("Args don't match with function pointer.")
-                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                        ERR_LINE2(base_expr->location, info.ast->typeToString(type))
                     )
                     FNCALL_FAIL
                     return SIGNAL_FAILURE;
                 }
-
-                for(int i=0;i<expr->args.size();i++) {
-                    auto argExpr = expr->args[i];
-                    if (inferred_args[i]) {
-                        Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
-                        // nocheckin TODO: argTypes index is displaced if methods or implicit this.
-                        argTypes[i] = f->argumentTypes[i].typeId;
-                        auto prev = inferred_type;
-                        inferred_type = argTypes[i];
-                        auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
-                        inferred_type = prev;
+                if(base_expr->type == EXPR_CALL) {
+                    auto expr = base_expr->as<ASTExpressionCall>();
+                    for(int i=0;i<expr->args.size();i++) {
+                        auto argExpr = expr->args[i];
+                        if (inferred_args[i]) {
+                            Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
+                            // nocheckin TODO: argTypes index is displaced if methods or implicit this.
+                            argTypes[i] = f->argumentTypes[i].typeId;
+                            auto prev = inferred_type;
+                            inferred_type = argTypes[i];
+                            auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
+                            inferred_type = prev;
+                        }
                     }
                 }
                 
@@ -1438,19 +1452,22 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
                         for(auto& ret : f->returnTypes)
                             outTypes->add(ret.typeId);
                 }
-                expr->versions_func_type.set(currentPolyVersion, f);
+                if(base_expr->type == EXPR_CALL)
+                    base_expr->as<ASTExpressionCall>()->versions_func_type.set(currentPolyVersion, f);
+                else
+                    base_expr->as<ASTExpressionOperation>()->versions_func_type.set(currentPolyVersion, f);
                 return SIGNAL_SUCCESS;
             }
         }
     }
 
     #define FIX_SPECIAL_ACTIONS \
-        if(ent.set_implicit_this) {                     \
-            expr->setImplicitThis(true);                \
+        if(base_expr->type == EXPR_CALL && ent.set_implicit_this) {                     \
+            base_expr->as<ASTExpressionCall>()->setImplicitThis(true);                \
             ent.set_implicit_this = false;              \
         }                                               \
         if(ent.iden) {                                  \
-            expr->identifier = ent.iden;                \
+            expr_identifier = ent.iden;                \
             ent.iden = nullptr;                         \
         }                                               \
         for (auto& ent2 : possible_overload_groups) {   \
@@ -1480,9 +1497,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
         if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
             // match args with normal impls
             
-            OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, expr, fnOverloads->overloads.size()==1, &inferred_args);
+            OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, base_expr, fnOverloads->overloads.size()==1, &inferred_args);
             if(!overload)
-                overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, expr, true, &inferred_args);
+                overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, base_expr, true, &inferred_args);
             
             if(operatorOverloadAttempt && !overload) {
                 // FIX_NO_SPECIAL_ACTIONS
@@ -1496,6 +1513,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
 
                 // Check inferred expressions, initializers
                 if(!operatorOverloadAttempt) {
+                    auto expr = base_expr->as<ASTExpressionCall>();
                     Assert(argTypes.size() == expr->args.size());
 
                     for(int i=0; i<argTypes.size();i++) {
@@ -1509,8 +1527,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
                         SignalIO result = checkExpression(scopeId, exprArg, &tempTypes, false);
                         inferred_type = prev;
                     }
+                    checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
                 }
-                checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
                 
                 FIX_SPECIAL_ACTIONS
 
@@ -1533,9 +1551,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
     
     // log::out << "Poly overloads ("<<possible_overload_groups.size()<<"):\n";
     // ERR_LINE2(expr->location,"here");
-    if(expr->nodeId == 5542) {
-        int x=0;   
-    }
+    // if(base_expr->nodeId == 5542) {
+    //     int x=0;   
+    // }
     for(auto& ent : possible_overload_groups) {
         auto fnOverloads = ent.fn_overloads;
 
@@ -1548,11 +1566,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
         bool implicitPoly = (fnPolyArgs.size()==0);
         // TODO: Optimize by checking what in the overloads didn't match. If all parent structs are a bad match then
         //  we don't have we don't need to getOverload the second time with canCast=true
-        OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, &inferred_args);
+        OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, implicitPoly, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
-            checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
+            checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
             
             FIX_SPECIAL_ACTIONS
 
@@ -1560,11 +1578,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
             return SIGNAL_SUCCESS;
         }
         // bool useCanCast = false;
-        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true, &inferred_args);
+        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, implicitPoly, true, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
-            checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
+            checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
 
             FIX_SPECIAL_ACTIONS
 
@@ -1577,7 +1595,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
             // log::out << "Poly overloads ("<<ent.iden->name<<"):\n";
             // ERR_LINE2(expr->location,"here");
 
-            polyFunc = findPolymorphicFunction(fnOverloads, expr->nonNamedArgs,argTypes,ent.set_implicit_this, scopeId, parentStructImpl, parentAstStruct, fnPolyArgs, &inferred_args, expr, operatorOverloadAttempt);
+            polyFunc = findPolymorphicFunction(fnOverloads, expr_nonNamedArgs,argTypes,ent.set_implicit_this, scopeId, parentStructImpl, parentAstStruct, fnPolyArgs, &inferred_args, base_expr, operatorOverloadAttempt);
 
         } else {
             int lessArguments = 0;
@@ -1590,8 +1608,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
                     continue;
                 // continue if more args than possible
                 // continue if less args than minimally required
-                if(expr->nonNamedArgs > overload.astFunc->arguments.size() - lessArguments || 
-                    expr->nonNamedArgs < overload.astFunc->nonDefaults - lessArguments ||
+                if(expr_nonNamedArgs > overload.astFunc->arguments.size() - lessArguments || 
+                    expr_nonNamedArgs < overload.astFunc->nonDefaults - lessArguments ||
                     argTypes.size() > overload.astFunc->arguments.size() - lessArguments
                     )
                     continue;
@@ -1601,15 +1619,15 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
                     overload.astFunc->popPolyState();
                 };
                 bool found = true;
-                for (u32 j=0;j<expr->nonNamedArgs;j++){
-                    if(expr->isMemberCall() && j == 0)
+                for (u32 j=0;j<expr_nonNamedArgs;j++){
+                    if(base_expr->type == EXPR_CALL && base_expr->as<ASTExpressionCall>()->isMemberCall() && j == 0)
                         continue; // skip first argument because they will be the same.
 
                     // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
                     lexer::SourceLocation loc = overload.astFunc->arguments[j+lessArguments].location;
                     if(loc.tok.type == lexer::TOKEN_NONE) {
                         // bad token
-                        loc = expr->location;
+                        loc = base_expr->location;
                     }
                     TypeId argType = checkType(overload.astFunc->scopeId,overload.astFunc->arguments[j+lessArguments].stringType,
                         loc,nullptr);
@@ -1674,14 +1692,14 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
         OverloadGroup::Overload* newOverload = computePolymorphicFunction(polyFunc, parentStructImpl, fnPolyArgs, fnOverloads);
 
         // Can overload be null since we generate a new func impl?
-        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr);
+        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr);
         if(!overload)
-            overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, false, true);
+            overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, false, true);
         Assert(overload == newOverload);
         if(!overload){
             auto funcImpl = newOverload->funcImpl;
             ERR_SECTION(
-                ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
+                ERR_HEAD2(base_expr->location, ERROR_OVERLOAD_MISMATCH)
                 ERR_MSG_LOG("Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
                     log::out << log::CYAN<<"Generates args: "<<log::NO_COLOR;
                     if(argTypes.size()==0){
@@ -1696,7 +1714,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
                     if(argTypes.size()==0){
                         log::out << "zero arguments";
                     } else {
-                        expr->printArgTypes(info.ast, argTypes);
+                        base_expr->printArgTypes(info.ast, argTypes);
                     }
                     log::out << "\n"
                 )
@@ -1706,7 +1724,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
             return SIGNAL_FAILURE;
         }
         
-        checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
+        checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
 
         FIX_SPECIAL_ACTIONS
 
@@ -1723,9 +1741,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
 
     if(possible_overload_groups.size() == 0) {
         ERR_SECTION(
-            ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
+            ERR_HEAD2(base_expr->location, ERROR_OVERLOAD_MISMATCH)
             ERR_MSG_LOG("There is no function called '" << log::LIME << baseName << log::NO_COLOR <<"' in the scope.\n\n");
-            ERR_LINE2(expr->location, "bad");
+            ERR_LINE2(base_expr->location, "bad");
         )
 
         FNCALL_FAIL
@@ -1735,10 +1753,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpressionCall* expr, Qui
     // Arguments for fname does not match an overload. These were the arguments:
     // These are the valid overloads: 
     ERR_SECTION(
-        ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
+        ERR_HEAD2(base_expr->location, ERROR_OVERLOAD_MISMATCH)
         // custom code for error message
         log::out << "Arguments for '"<<baseName <<"' does not match an overload. (note, named arguments is only allowed on default arguments)\n";
-        ERR_LINE2(expr->location, "bad");
+        ERR_LINE2(base_expr->location, "bad");
         log::out << "These were the arguments: ";
         if(argTypes.size()==0){
             log::out << "zero arguments";
@@ -1863,7 +1881,7 @@ OverloadGroup::Overload* TyperContext::computePolymorphicFunction(ASTFunction* p
     return newOverload;
 }
 
-ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, ASTStruct* parentAstStruct, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpressionCall* expr, bool operatorOverloadAttempt) {
+ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, ASTStruct* parentAstStruct, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpression* base_expr, bool operatorOverloadAttempt) {
     // log::out << "Poly overloads ("<<ent.iden->name<<"):\n";
     // ERR_LINE2(expr->location,"here");
 
@@ -1911,6 +1929,7 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
         bool found = true;
         for (int j=0;j<nonNamedArgs;j++){
             if(inferred_args && inferred_args->get(j)) {
+                auto expr = base_expr->as<ASTExpressionCall>();
                 ERR_SECTION(
                     ERR_HEAD2(expr->args[i]->location)
                     ERR_MSG("Inferred initializers are not allowed with polymorphic functions.")
@@ -2249,21 +2268,21 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
         if(found) {
            return polyFunc; 
         } else {
-            if (expr) {
+            if (base_expr) {
                 if (operatorOverloadAttempt) {
-                    // @nocheckin Operator overloading disabled
-                    Assert(("operator overload disabled",false));
-                    // ERR_SECTION(
-                    //     ERR_HEAD2(expr->location)
-                    //     ERR_MSG("COMPILER BUG, when matching operator overloads. Polymorphic overload was generated which didn't match the actual arguments. It's also possible that we shouldn't have generated one to begin with.")
-                    //     if (expr->left && argTypes.size() > 0) {
-                    //         ERR_LINE2(expr->left->location, ast->typeToString(argTypes[0]))
-                    //     }
-                    //     if (expr->right && argTypes.size() > 1) {
-                    //         ERR_LINE2(expr->right->location,ast->typeToString(argTypes[1]))
-                    //     }
-                    // )
+                    auto expr = base_expr->as<ASTExpressionOperation>();
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("COMPILER BUG, when matching operator overloads. Polymorphic overload was generated which didn't match the actual arguments. It's also possible that we shouldn't have generated one to begin with.")
+                        if (expr->left && argTypes.size() > 0) {
+                            ERR_LINE2(expr->left->location, ast->typeToString(argTypes[0]))
+                        }
+                        if (expr->right && argTypes.size() > 1) {
+                            ERR_LINE2(expr->right->location,ast->typeToString(argTypes[1]))
+                        }
+                    )
                 } else {
+                    auto expr = base_expr->as<ASTExpressionCall>();
                     ERR_SECTION(
                         ERR_HEAD2(expr->location)
                         ERR_MSG("COMPILER BUG, when matching function overloads. The matching generated a polymorphic overload that was meant to match the arguments but which doesn't.")
@@ -3017,24 +3036,23 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             const char* str = OP_NAME(expr->op_type);
             // // log::out << "Check " << str << "\n";
             if(str && operatorArgs.size() == 2) {
-                // @nocheckin Operator overloading
-                // ZoneScopedNC("check operator",tracy::Color::WebPurple);
-                // int prev = expr->nonNamedArgs;
-                // expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
-                // SignalIO result = checkFncall(scopeId,expr, outTypes, attempt, true, &operatorArgs);
+                ZoneScopedNC("check operator",tracy::Color::WebPurple);
+                int prev = expr->nonNamedArgs;
+                expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
+                SignalIO result = checkFncall(scopeId, expr, outTypes, attempt, true, &operatorArgs);
                 
-                // // log::out << "Check, " << expr->nodeId<<"\n";
-                // if(result == SIGNAL_SUCCESS) {
-                //     // log::out << "Yes, " << expr->nodeId<<"\n";
-                //     return SIGNAL_SUCCESS;
-                // }
+                // log::out << "Check, " << expr->nodeId<<"\n";
+                if(result == SIGNAL_SUCCESS) {
+                    // log::out << "Yes, " << expr->nodeId<<"\n";
+                    return SIGNAL_SUCCESS;
+                }
 
-                // if(result != SIGNAL_NO_MATCH) {
-                //     // log::out << "Error, " << expr->nodeId<<"\n";
-                //     return result; // error bad
-                // }
-                // // no match, try normal operator
-                // expr->nonNamedArgs = prev;
+                if(result != SIGNAL_NO_MATCH) {
+                    // log::out << "Error, " << expr->nodeId<<"\n";
+                    return result; // error bad
+                }
+                // no match, try normal operator
+                expr->nonNamedArgs = prev;
             }
         }
 

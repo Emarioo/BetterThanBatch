@@ -1047,7 +1047,6 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             next = now->left;
         } else if(base_now->type == EXPR_OPERATION && base_now->as<ASTExpressionOperation>()->op_type == AST_INDEX) {
             auto now = base_now->as<ASTExpressionOperation>();
-            // @nocheckin operator overloading
             FuncImpl* operatorImpl = nullptr;
             if (currentPolyVersion < now->versions_overload.size())
                 operatorImpl = now->versions_overload[currentPolyVersion].funcImpl;
@@ -1650,19 +1649,19 @@ SignalIO GenContext::generateSpecialFncall(ASTExpressionCall* expression){
 // SignalIO GenContext::generateFunctionCallFromArgs(FunctionSignature* signature, OverloadGroup::Overload overload, const BaseArray<ASTExpression*> args, QuickArray<TypeId>* outTypeIds, bool isOperator) {
     // this won't work, what if caller wants arguments to be generated with generateReference and not generateExpression, i'd like to avoid function callbacks and lambdas.
 // }
-SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<TypeId>* outTypeIds, bool isOperator){
+SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<TypeId>* outTypeIds, bool isOperator){
     using namespace engone;
 
-    if(expression->name == "construct" || expression->name == "destruct") {
-        return generateSpecialFncall(expression);
+    if(base_expression->type == EXPR_CALL && (base_expression->as<ASTExpressionCall>()->name == "construct" || base_expression->as<ASTExpressionCall>()->name == "destruct")) {
+        return generateSpecialFncall(base_expression->as<ASTExpressionCall>());
     }
     
     ASTFunction* astFunc = nullptr;
     FuncImpl* funcImpl = nullptr;
-    FunctionSignature* signature = expression->versions_func_type[currentPolyVersion];
+    FunctionSignature* signature = base_expression->type == EXPR_CALL ? base_expression->as<ASTExpressionCall>()->versions_func_type[currentPolyVersion] : base_expression->as<ASTExpressionOperation>()->versions_func_type[currentPolyVersion];
     bool is_function_pointer = signature;
     if (!is_function_pointer) {
-        OverloadGroup::Overload overload = expression->versions_overload[info.currentPolyVersion];
+        OverloadGroup::Overload overload = base_expression->type == EXPR_CALL ? base_expression->as<ASTExpressionCall>()->versions_overload[info.currentPolyVersion] : base_expression->as<ASTExpressionOperation>()->versions_overload[info.currentPolyVersion];
         astFunc = overload.astFunc;
         funcImpl = overload.funcImpl;
         if(funcImpl)
@@ -1692,11 +1691,11 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
     TEMP_ARRAY_N(TypeId,tempTypes, 5);
 
     if(isOperator) {
-        // @nocheckin
-        Assert(false);
-        // all_arguments[0] = expression->left;
-        // all_arguments[1] = expression->right;
+        auto expression = base_expression->as<ASTExpressionOperation>();
+        all_arguments[0] = expression->left;
+        all_arguments[1] = expression->right;
     } else {
+        auto expression = base_expression->as<ASTExpressionCall>();
         int extra = expression->isMemberCall() && is_function_pointer ? 1 : 0;
 
         for (int i = 0; i < (int)expression->args.size() - extra;i++) {
@@ -1763,9 +1762,9 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
                 if(size>REGISTER_SIZE){
                     // TODO: This should be moved to the type checker.
                     ERR_SECTION(
-                        ERR_HEAD2(expression->location)
+                        ERR_HEAD2(base_expression->location)
                         ERR_MSG("Argument types cannot be larger than "<<REGISTER_SIZE<<" bytes when using stdcall.")
-                        ERR_LINE2(expression->location, "bad")
+                        ERR_LINE2(base_expression->location, "bad")
                     )
                     return SIGNAL_FAILURE;
                 }
@@ -1805,7 +1804,7 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
     // Evaluate arguments and push the values to stack
     for(int i=0;i<(int)all_arguments.size();i++){
         auto arg = all_arguments[i];
-        if(expression->hasImplicitThis() && i == 0) {
+        if(base_expression->type == EXPR_CALL && base_expression->as<ASTExpressionCall>()->hasImplicitThis() && i == 0) {
             // Make sure we actually have this stored before at the base pointer of
             // the current function.
             Assert(info.currentFunction && info.currentFunction->parentStruct);
@@ -1821,7 +1820,7 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
         
         TypeId argType = {};
         SignalIO result = SIGNAL_FAILURE;
-        if(expression->isMemberCall() && !is_function_pointer && i == 0) {
+        if(base_expression->type == EXPR_CALL && base_expression->as<ASTExpressionCall>()->isMemberCall() && !is_function_pointer && i == 0) {
             // method call and first argument which is 'this'
             bool nonReference = false;
             result = generateReference(arg, &argType, -1, &nonReference);
@@ -1853,7 +1852,7 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
             // if it's not needed, delete a bunch of instructions?
             // builder.emit_alloc_args(0);
             int off_alloc_args = 0;
-            if(expression->uses_cast_operator) {
+            if(base_expression->uses_cast_operator) {
                 // only emit if we need to
                 // unecessary bytecode instructions otherwise.
                 // x64_gen does optimize them away though.
@@ -1871,7 +1870,7 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
                     bool wasSafelyCasted = performSafeCast(argType, signature->argumentTypes[i].typeId);
                     if(!wasSafelyCasted && i < astFunc->nonDefaults) {
                         // cast operator isn't supported with non named arguments at the moment
-                        Assert(expression->uses_cast_operator);
+                        Assert(base_expression->uses_cast_operator);
                         OverloadGroup::Overload cast_overload;
                         wasSafelyCasted = ast->findCastOperator(currentScopeId, argType, signature->argumentTypes[i].typeId, &cast_overload);
                         Assert(cast_overload.astFunc && cast_overload.funcImpl);
@@ -1995,9 +1994,9 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
         // }
         else {
             ERR_SECTION(
-                ERR_HEAD2(expression->location)
+                ERR_HEAD2(base_expression->location)
                 ERR_MSG("'"<<name<<"' is not an intrinsic function.")
-                ERR_LINE2(expression->location,"not an intrinsic")
+                ERR_LINE2(base_expression->location,"not an intrinsic")
             )
         }
         return SIGNAL_SUCCESS;
@@ -2014,7 +2013,7 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
     i32 reloc = 0;
     if(is_function_pointer) {
         BCRegister reg = BC_REG_B;
-
+        auto expression = base_expression->as<ASTExpressionCall>();
         if (expression->isMemberCall()) {
             TypeId type{};
             bool was_reference = false;
@@ -2128,7 +2127,7 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
                         ERR_HEAD2(astFunc->location)
                         ERR_MSG_COLORED("'"<<log::LIME<<astFunc->linked_library<<log::NO_COLOR<<"' is not a library. Did you misspell it?")
                         ERR_LINE2(astFunc->location, "this definition")
-                        ERR_LINE2(expression->location, "this call")
+                        ERR_LINE2(base_expression->location, "this call")
 
                         log::out << "These are the available libraries: ";
                         for(int i=0;i<func_imp->libraries.size();i++){
@@ -2148,7 +2147,7 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
                     ERR_HEAD2(astFunc->location)
                     ERR_MSG("You are trying to call an external function that isn't linked to a library. At the function definition, specify which library to link with.")
                     ERR_LINE2(astFunc->location, "this definition")
-                    ERR_LINE2(expression->location, "this call")
+                    ERR_LINE2(base_expression->location, "this call")
                     ERR_EXAMPLE(1, "#load \"stuff.lib\" as Stuff\nfn @import(Stuff) DoStuff()")
                 )
             }
@@ -2173,7 +2172,7 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
                 ERR_HEAD2(astFunc->location)
                 ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. This was the library name and path: '"<<log::LIME << astFunc->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'. You can always specify @importdll or @importlib manually.")
                 ERR_LINE2(astFunc->location,"function")
-                ERR_LINE2(expression->location,"call")
+                ERR_LINE2(base_expression->location,"call")
             )
         }
     }
@@ -2190,9 +2189,9 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
         if(signature->returnTypes.size() > 1) {
             // NOTE: This message isn't great because the default convention may change in the future and when it does I will forget to change this message.
             ERR_SECTION(
-                ERR_HEAD2(expression->location)
+                ERR_HEAD2(base_expression->location)
                 ERR_MSG_LOG(call_convention<<" cannot have more than 1 return type. Use @betcall for that (the default unless function has @import @export or you are targeting ARM).")
-                ERR_LINE2(expression->location, "function call here")
+                ERR_LINE2(base_expression->location, "function call here")
             )
             return SIGNAL_FAILURE;
         }
@@ -2200,9 +2199,9 @@ SignalIO GenContext::generateFncall(ASTExpressionCall* expression, QuickArray<Ty
         int ret_type_size = info.ast->getTypeSize(signature->returnTypes[0].typeId);
         if(ret_type_size > REGISTER_SIZE) {
             ERR_SECTION(
-                ERR_HEAD2(expression->location)
+                ERR_HEAD2(base_expression->location)
                 ERR_MSG_LOG(call_convention<<" cannot return a type larger than the register size (currently "<<REGISTER_SIZE<<" when targeting "<<compiler->options->target<<").")
-                ERR_LINE2(expression->location, "function call here")
+                ERR_LINE2(base_expression->location, "function call here")
             )
             return SIGNAL_FAILURE;
         }
@@ -3443,9 +3442,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
             if(expression->versions_overload.size()>0)
                 operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
                 if(operatorImpl){
-                    Assert(false);
-                    // @nocheckin
-                    // return generateFncall(expression, outTypeIds, true);
+                    return generateFncall(expression, outTypeIds, true);
                 }
         }
         TypeId ltype = TYPE_VOID;
@@ -3628,9 +3625,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                     operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
                 TypeId ltype = TYPE_VOID;
                 if(operatorImpl){
-                    // @nocheckin
-                    Assert(false);
-                    // return generateFncall(expression, outTypeIds, true);
+                    return generateFncall(expression, outTypeIds, true);
                 }
                 tempTypes.clear();
                 SignalIO err = generateExpression(expression->left, &tempTypes);
