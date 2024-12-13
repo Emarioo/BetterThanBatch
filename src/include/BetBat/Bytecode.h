@@ -356,6 +356,7 @@ struct TinyBytecode {
     };
     DynamicArray<Line> lines{};
     DebugFunction* debugFunction = nullptr;
+    FuncImpl* funcImpl = nullptr;
     DynamicArray<TryBlock> try_blocks{};
     DynamicArray<int> required_asm_instances; // x64 gen needs to know what inline assembly to generate
 

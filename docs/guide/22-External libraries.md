@@ -88,7 +88,9 @@ This part of the compiler is work in progress on Linux but on Windows, the dlls 
 
 # Compiling libraries
 Compile executable: `btb main.btb -o app.exe`
+
 Compile dynamic library: `btb main.btb -o app.dll`
+
 Compile static library: `btb main.btb -o app.lib`
 
 When compiling libraries, the functions you want to export must be annotated with `@export`. Exported functions cannot be polymorphic and you cannot export functions with the same name. You can alias the name.
@@ -101,9 +103,41 @@ fn @export(alias="multiply_int") multiply(x: i32, y: i32) -> i32 {
 }
 ```
 
-A thing to note is that only the functions that are used such as the entry point and exported functions are generated. All other functions are skipped and are not present in the binary.
+A thing to note is that only the functions that are used such as the entry point and exported functions are present in the binary as symbols.
 
-**NOTE**: Exported functions default to @oscall. Write `fn @betcall @import(...` to force another calling convention.
+**NOTE**: Exported functions default to @oscall. Write `fn @betcall @import(...)` to force another calling convention.
+
+## Auto-generated declarations
+When compiling a library, a `libname_decl.btb` file is automatically created which contains the import declarations for that specific library along with enum and struct types.
+
+```c++
+// math.btb
+fn @export add(x: i32, y: f32) -> i32 {
+    return x + y
+}
+
+// app.btb
+#import "math_decl.btb"
+#import "Logger"
+
+add(9,10)
+
+// math_decl.btb (auto-generated)
+#load "math.lib" as math
+
+fn @stdcall @import(math) add(x: i32, y: f32) -> i32;
+```
+
+Assuming the two files above is in the same directory you can run `btb math.btb -o math.lib` which
+will create `math.lib` and `math_decl.btb`. Then you can run `btb app.btb -r` to compile and execute the program.
+
+If you take a look at *math_decl.btb* you will see a *#load* directive at the top. The path is based on the relative path to the library. `btb math.btb -o libs/math.lib` will result in `#load "./libs/math.lib" as math`. The name of the library (*math*) is derived from the output path. `btb math.btb -o MyMaTH.lib` results in `#load "./libs/MyMaTH.lib" as MyMaTH`.
+
+The compiler will also generate `math_decl.h` for C/C++ but there are a few considerations.
+- Exported functions with *betcall* calling convention will be skipped.
+- Polymoprhic struct types will be skipped. May be changed in the future such as specializing the struct (**Array<i32>** -> **Array_i32**).
+
+**KNOWN PROBLEMS:** Compiler will generate types for structs in the standard library so you may unfortunately experience type mismatch with types from standard library.
 
 # What does @import do and how does the compiler link stuff?
 **TODO:** Write some text about Linux.

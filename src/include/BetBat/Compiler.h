@@ -18,6 +18,7 @@
 #include "BetBat/Generator.h"
 #include "BetBat/x64_gen.h"
 #include "BetBat/arm_gen.h"
+#include "BetBat/decl_gen.h"
 #include "BetBat/Program.h"
 #include "BetBat/Lexer.h"
 #include "BetBat/Preprocessor.h"

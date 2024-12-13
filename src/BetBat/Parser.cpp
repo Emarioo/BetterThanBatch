@@ -595,7 +595,7 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
 
     while (name_token->type == lexer::TOKEN_ANNOTATION){
         info.advance();
-        // TODO: Parse annotation parentheses
+        // @IMPORTANT:
         if(name_view == "hide"){
             hideAnnotation=true;
         } else if(name_view == "no_padding"){

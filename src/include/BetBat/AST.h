@@ -274,7 +274,6 @@ struct TypeId {
     union {
         u16 _infoIndex0 = 0;
         PrimitiveType union_primtive;
-        OperationType union_op;
     };
     u8 _infoIndex1 = 0;
     union {
@@ -901,7 +900,7 @@ struct ASTEnum : ASTNode {
     }
 
     TypeId colonType = TYPE_UINT32; // may be a type string before the type checker, may be a type string after if checker failed.
-    TypeId actualType = {};
+    TypeId typeId = {};
     
     bool getMember(const StringView& name, int* out);
 

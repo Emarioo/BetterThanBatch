@@ -1416,7 +1416,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             }
             
             if(token.type == lexer::TOKEN_IDENTIFIER) {
-                // nochecking TODO: Should we auto set the specific like when evaluating content or not?
+                // nocheckin TODO: Should we auto set the specific like when evaluating content or not?
                 Assert(!layer->top_caller || layer->top_caller->specific);
                 if(layer->top_caller && layer->top_caller->specific) { // we can't match argument unless we have a top_caller
                     Assert(layer->top_caller->specific);

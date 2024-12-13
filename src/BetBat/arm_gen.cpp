@@ -225,7 +225,7 @@ bool ARMBuilder::generate() {
         if(is_blank && accessed_params.size()) {
             log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
             log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
-            compiler->compile_stats.errors++; // nochecking, TODO: call some function instead
+            compiler->compile_stats.errors++; // nocheckin, TODO: call some function instead
         }
         if (is_entry_point) {
             // entry point has it's arguments put on the stack, not in rdi, rsi...

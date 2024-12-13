@@ -6,7 +6,6 @@
 #include <x86intrin.h>
 #endif
 
-
 Path::Path(const char* path) : text(path), _type((Type)0) {
     ReplaceChar((char*)text.data(), text.length(), '\\', '/');
 #ifdef OS_WINDOWS
@@ -1534,6 +1533,12 @@ void Compiler::run(CompileOptions* options) {
         default: Assert(false);
     }
     
+    int at = output_path.find_last_of("/");
+    if(at != -1) {
+        std::string output_dir = output_path.substr(0,at);
+        DirectoryCreate(output_dir);
+    }
+    
     if(!obj_write_success) {
         // error message should have been printed.
         // TODO: We should return error codes and print messages here. the ObjectFile functions shouldn't decide how and what we print.
@@ -1938,6 +1943,10 @@ void Compiler::run(CompileOptions* options) {
     } else {
         // TODO: If bytecode is the target and the user specified
         //   app.bc as outputfile should we write out a bytecode file format?
+    }
+    
+    if(output_type == OUTPUT_DLL || output_type == OUTPUT_LIB) {
+        WriteDeclFiles(options->output_file, bytecode, ast, output_type == OUTPUT_DLL);
     }
     
     compile_stats.end_compile = engone::StartMeasure();

@@ -56,7 +56,7 @@ SignalIO TyperContext::checkEnums(ASTScope* scope){
         TypeInfo* typeInfo = info.ast->createType(aenum->name, scope->scopeId);
         // log::out << "Enum " << aenum->name<<"\n";
         if(typeInfo){
-            aenum->actualType = typeInfo->id;
+            aenum->typeId = typeInfo->id;
             _TCLOG(log::out << "Defined enum "<<info.ast->typeToString(typeInfo->id)<<"\n";)
             
             if(aenum->colonType.isValid()) {
@@ -2281,6 +2281,7 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
                             ERR_LINE2(expr->right->location,ast->typeToString(argTypes[1]))
                         }
                     )
+                    return nullptr;
                 } else {
                     auto expr = base_expr->as<ASTExpressionCall>();
                     ERR_SECTION(
@@ -2293,6 +2294,7 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
                             }
                         }
                     )
+                    return nullptr;
                 }
                 Assert(found); // If function we thought would match doesn't then the code is incorrect.
             }
@@ -2478,7 +2480,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             if(found){
                 stmp->enum_ast = astEnum;
                 stmp->enum_member = memberIndex;
-                if(outTypes) outTypes->add(astEnum->actualType);
+                if(outTypes) outTypes->add(astEnum->typeId);
                 return SIGNAL_SUCCESS;
             } else if(astEnum) {
                 ERR_SECTION(
@@ -2523,7 +2525,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         if(stmp->left) {
             if(stmp->left->type == EXPR_IDENTIFIER){
                 // AST_ID could result in a type or a variable
-                auto ltmp = expr->as<ASTExpressionIdentifier>();
+                auto ltmp = stmp->left->as<ASTExpressionIdentifier>();
                 auto& name = ltmp->name;
                 // TODO: Handle function pointer type
                 // This code may need to update when code for AST_ID does

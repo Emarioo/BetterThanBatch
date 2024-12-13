@@ -631,7 +631,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             int size = GET_CONTROL_SIZE(control);
             
             Assert(imm < 0);
-            // int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
+            // int FRAME_SIZE = 8 + 8; // nocheckin TODO: Do not assume frame size, maybe we disable base pointer!
             void* ptr = map_pointer(base_pointer + imm, temp_ptr_was_mapped);
             CHECK_PTR_MAPPED(ptr);
             ptr_from_mov = ptr;

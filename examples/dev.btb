@@ -9,8 +9,35 @@
 
 // #import "Lang"
 
+#if !BUILD_EXE
 
-a := "okay"
+    struct Data {
+        x: i32;
+        mydawn: Data**;
+        Thecoast_inside_my_halls: f32;
+        _: char[];
+    }
+
+    fn @export func(data: Data*) {
+        data.x += 23
+    }
+
+#else
+
+    #import "lib/math_decl"
+    #import "Logger"
+
+    data: Data;
+
+    func(&data)
+
+    log(&data)
+
+#endif
+
+
+
+// a := "okay"
 
 // fn func() {
 //     // arr: Array<i32>

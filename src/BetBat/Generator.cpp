@@ -2384,7 +2384,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
 
         if(expression->enum_ast) {
             auto& mem = expression->enum_ast->members[expression->enum_member];
-            int size = info.ast->getTypeSize(expression->enum_ast->actualType);
+            int size = info.ast->getTypeSize(expression->enum_ast->typeId);
             Assert(size <= REGISTER_SIZE);
             
             if(size > 4) {
@@ -2396,7 +2396,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                 builder.emit_push(BC_REG_A);
             }
 
-            outTypeIds->add(expression->enum_ast->actualType);
+            outTypeIds->add(expression->enum_ast->typeId);
             return SIGNAL_SUCCESS;
         }
 
@@ -4525,6 +4525,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // log::out << "do gen "<<function->name << "\n";
 
         tinycode = bytecode->createTiny(function->name, function->callConvention);
+        tinycode->funcImpl = funcImpl;
         out_codes->add(tinycode);
         builder.init(bytecode, tinycode, compiler);
         
@@ -6248,7 +6249,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 add_frame_fix(index);
             // }
             builder.emit_ret();
-            // info.currentFrameOffset = lastOffset; // nochecking TODO: Should we reset frame like this? If so, should we not break this loop and skip the rest of the statements too?
+            // info.currentFrameOffset = lastOffset; // nocheckin TODO: Should we reset frame like this? If so, should we not break this loop and skip the rest of the statements too?
             // break; // Let's try?
         }
         else if (statement->type == ASTStatement::EXPRESSION) {

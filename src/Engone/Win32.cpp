@@ -502,8 +502,10 @@ namespace engone {
 		DWORD success = CreateDirectoryA(path.c_str(),0);
 		if(!success){
 			DWORD err = GetLastError();
-			PL_PRINTF("[WinError %lu] CreateDirectoryA '%s'\n",err,path.c_str());
-            return false;
+            if(err != ERROR_ALREADY_EXISTS) {
+                PL_PRINTF("[WinError %lu] CreateDirectoryA '%s'\n",err,path.c_str());
+                return false;
+            }
 		}
 		return true;
 	}
