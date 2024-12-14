@@ -1945,7 +1945,7 @@ void Compiler::run(CompileOptions* options) {
         //   app.bc as outputfile should we write out a bytecode file format?
     }
     
-    if(output_type == OUTPUT_DLL || output_type == OUTPUT_LIB) {
+    if(output_type == OUTPUT_DLL || output_type == OUTPUT_LIB || output_type == OUTPUT_OBJ) {
         WriteDeclFiles(options->output_file, bytecode, ast, output_type == OUTPUT_DLL);
     }
     

@@ -18,8 +18,9 @@
         _: char[];
     }
 
-    fn @export func(data: Data*) {
+    fn @export(alias="btb_func") func(data: Data*) -> bool {
         data.x += 23
+        return true
     }
 
 #else

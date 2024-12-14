@@ -1,14 +1,13 @@
 # BetterThanBatch
-A compiler for a programming language.
+A neat compiler.
 
 - Good for your every day scripting needs.
 - Useful for visualizing data structures, programs...?
 - Standard library with essentials for platform independent programs (graphics, audio, file formats, networking)
 - Fast compiler, good error messages, no external build system.
 
-
 # Features
-See the [Guide](/docs/guide/00-Introduction.md) for details.
+See the [Guide](/docs/guide/README.md) for details.
 
 - **Statically typed** - All data types in the program language are statically typed. No dynamic objects.
 - **Imports** - No headers, no forward declarations. Circular dependencies between imports are allowed.
@@ -50,20 +49,18 @@ You are more than welcome to contribute your own bindings!
 ## Other useful features
 
 - **Linking with external libraries** - Dynamic and static.
-- **Exporting functions** - You can compile static and dynamic libraries and export functions.
+- **Exporting functions** - You can compile static and dynamic libraries and export functions. The compiler will auto-generate a file with import declarations.
 - **Debug information** - Debug info for Visual Studio is not supported. The compiler generates DWARF and does not support PDB. Visual Studio Code or GDB supports DWARF which you can use. (you need extension and launch.json for vscode, see .vscode/launch.json in this repository or search on the internet on how to set it up)
 - **The core of the compiler does not use any libraries** - The compiler parses, type checks, and generates object files with instructions completely by itself. It does however rely on a linker to create executables from the object files. It also uses GCC or MSVC Macro assembler when inline assembly is used. The repository contains GLAD, GLFW, stb_image which is part of the standard library that is distributed. The compiler itself doesn't use them. There is also Tracy which is used for profiling performance.
-- **Software/hardware exception handling** - Only for Windows. The plan is to redesign it since one of the goals for the programming language is no platform specific features (or at least VERY few).
+- **Software/hardware exception handling** - Only for Windows. Linux uses signals which is very different from what Windows offers. The plan is to redesign the exception feature to work on all major platforms.
 
 # How to get started
-Download a release (follow steps below) or [build](#Building) the compiler and then read the [Guide](/docs/guide/00-Introduction.md).
+Download a release (follow steps below) or clone the repository and [build](#Building) the compiler. Then read the [Guide](/docs/guide/README.md).
 
 1. Download a release (.zip) from https://github.com/Emarioo/BetterThanBatch/releases
 2. Then unzip in a folder of your choice.
-3. (optional) Add the path to the executable to the environment variable `PATH` so you can call `btb` from a terminal in any directory.
-4. Install a linker from one of these toolchains: GCC, Clang, or MSVC (Microsoft Visual C/C++ Compiler). The building section describes how to setup MSVC.
-
-The compiler is capable of generating object files but you need a linker to turn them into executables.
+3. Add the path to the executable to the environment variable `PATH` so you can call `btb` from a terminal in any directory.
+4. Install one of these toolchains: GCC, Clang, or MSVC (Microsoft Visual C/C++ Compiler). The compiler cannot link object files into executables by itself.
 
 Lastly, if you are using vscode then install the BTB Language extension [btb-lang/README.md](/btb-lang/README.md). If you are working with other editors then you would need to write the syntax highlighting yourself. You can look at the vscode extension's syntax grammar and highlighting and reimplement it for your editor's plugin system.
 
@@ -73,7 +70,7 @@ Lastly, if you are using vscode then install the BTB Language extension [btb-lan
 
 The project is written in C++ and uses a python script (`build.py`) to build the compiler. Once compiled, the executable can be found in `bin/btb.exe`. I recommend editing the environment variable `PATH` so that you have access to `btb.exe` from anywhere.
 
-Begin by cloning the repository then follow the instructions based on your operating system. If you're on macOS then you're out of luck. (if you want to be the one implementing macOS support then join the discord and let's have a chat: https://discord.gg/gVzQhm9pwH)
+Begin by cloning the repository then follow the instructions based on your operating system. If you're on macOS then you're out of luck. (if you want to be the one implementing macOS support then join the discord and let's have a chat: https://discord.gg/gVzQhm9pwH).
 ```
 git clone https://github.com/Emarioo/BetterThanBatch
 ```
@@ -104,7 +101,7 @@ python build.py
 python build.py gcc
 ```
 
-A full rebuild can take 4-7 seconds with MSVC, 25-50 seconds with gcc or clang.
+A full rebuild can take 7-12 seconds with MSVC, 25-50 seconds with gcc or clang. If you modify .cpp files then about 1-3 seconds.
 
 ### Installing/using MSVC
 1. Install Visual Studio and select `C/C++ desktop development` in the Visual Studio Installer.
@@ -154,10 +151,10 @@ Reads files and counts newlines using multiple threads: [Line counter](/examples
 The compiler is work in progress and bugs in the code generation do occur which are really hard to catch. If you do encounter strange behaviour and are about to pull out your hair then don't hesitate to ask for help on the discord. I (Emarioo) am happy to help.
 
 So far I have worked on the compiler for 1700 hours and I think it really shows with all it's capabilities. For the future I have around 400 todos in my private documents and 600 in the source code. Some of the major things I want to work on are the following:
-- ARM code generation, compile BTB for Arduino and other chips. Mostly for learning and experimentation.
+- ARM code generation, compile BTB for a microprocessor. Mostly for learning and experimentation.
 - Optimize and refactor the compiler. Current architecture makes it hard to multi-thread because data is accessed from anywhere at anytime (is what it feels like).
 - Move away from the preprocessor and utilize the syntax tree and compile time evaluation more.
-- Build system module.
+- Build system/compiler module allows you to interact with the compiler at compile time.
 - Lambda functions and possibly closures.
 
 During the compiler's development I have been inspired by many things, but the person who lead me down this path was Jonathan Blow with his programming language Jai. Huge thanks to him for his amazing and inspiring videos and games. (if you haven't played Braid, Anniversary Edition then I think you should check it out on steam, it's fantastic, just saying)

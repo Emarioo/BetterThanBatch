@@ -23,26 +23,23 @@ c = 2 * b  // reassign a value to a variable, note the sole '=' without the ':'
 ```
 
 ## Primitive types
-The language is typed which means that every variable has a **type**. A type describes the kind of data that is stored in a variable and it's size.
+The language is typed which means that every variable has a **type**. A type describes the kind of data that is stored in a variable and it's size. These are the primitive types:
 
-These are the (current) primitive types:
+**Signed integers**: `i8`, `i16`, `i32`, `i64` (1, 2, 4, and 8 bytes respectively)
 
-**Signed integers**: i8, i16, i32, i64 (1, 2, 4, and 8 bytes respectively)
+**Unsigned integers**: `u8`, `u16`, `u32`, `u64` (cannot represent a negative number)
 
-**Unsigned integers**: u8, u16, u32, u64 (cannot represent a negative number)
+**Word integers**: `uword`, `iword` (the size depends on the target architecture, uword = u32 on a 32-bit system while uword is u64 on a 64-bit system)
 
-**Word integers**: uword, iword (the size depends on the target architecture, uword = u32 on a 32-bit system while uword is u64 on a 64-bit system)
+**Character**: `char` (represents a 1-byte character, ASCII)
 
-**Character**: char (represents a 1-byte character, ASCII)
+**Boolean**: `bool` (represents a 1-byte true or false value)
 
-**Boolean**: bool (represents a 1-byte true or false value)
+**Decimal/floating point numbers**: `f32`, `f64` (4 and 8 bytes respectively)
 
-**Decimal/floating point numbers**: f32, f64 (4 and 8 bytes respectively)
+**Pointers**: `void*`, `i32*`, `char*` (8 bytes on a 64-bit computer)
 
-**Pointers**: void*, i32*, char* (8 bytes on a 64-bit computer)
-
-**Function pointers**: fn(), fn(i32*)->i32 (8 bytes on a 64-bit computer)
-(function pointers is covered in the chapter about functions)
+**Function pointers**: `fn()`, `fn(i32*)->i32` (8 bytes on a 64-bit computer, function pointers are covered in the chapter about functions)
 
 The type of a variable can be specified between the colon and equal sign. Otherwise, the type is infered from the expression.
 ```c++
@@ -54,7 +51,7 @@ chr: char = 'A'
 yes: bool = true
 ```
 
-**NOTE:** Some implementation detail, uword/iword is an alias for the specific integer type and will show up as i64 in most error messages (on a 64-bit system).
+**NOTE:** uword/iword is an alias for the specific integer type and will show up as i64 instead of iword in error messages.
 
 ## Literals
 Literals refer to the constant numbers, strings, and floats in the code.

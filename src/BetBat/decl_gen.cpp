@@ -14,13 +14,14 @@ std::string ToCTypeName(AST* ast, TypeId type) {
         case TYPE_INT16: out = "short"; break;
         case TYPE_INT32: out = "int"; break;
         case TYPE_INT64: out = "long int"; break;
-        // case TYPE_BOOL:
+        case TYPE_BOOL: out = "int"; break;
         // case TYPE_CHAR:
         case TYPE_FLOAT32: out = "float"; break;
         case TYPE_FLOAT64: out = "double"; break;
         default: {
             auto info = ast->getTypeInfo(type.baseType());
             if(info->funcType) {
+                // TODO: Print function pointers
                 // wait a second....
                 // I have to generate function pointers!?
                 return "void*";
@@ -102,17 +103,12 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
         text_c += "    #else\n";
         text_c += "        #define "+upper_raw_name+"_API\n";
         text_c += "    #endif\n";
-        text_c += "    #define "+upper_raw_name+"_ALIAS(N) __attribute__((alias(N)))\n";
         text_c += "#elif defined(_MSC_VER)\n";
         text_c += "    #ifdef "+upper_raw_name+"_DLL\n";
         text_c += "        #define "+upper_raw_name+"_API __declspec(dllimport)\n";
         text_c += "    #else\n";
         text_c += "        #define "+upper_raw_name+"_API\n";
         text_c += "    #endif\n";
-        text_c += "    #define "+upper_raw_name+"_ALIAS(N) __declspec(alias(N))\n";
-        // text_c += "#else\n";
-        // text_c += "    #define "+upper_raw_name+"_API\n";
-        // text_c += "    #define "+upper_raw_name+"_ALIAS(N)\n";
         text_c += "#endif\n";
         
         text_c += "\n";
@@ -208,6 +204,13 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
     ///    referred to by other structs are emitted first.
     // =====================================
     
+    if(file_type & DECL_C) {
+        text_c += "// =========================\n";
+        text_c += "//     Enums and structs\n";
+        text_c += "// =========================\n";
+        text_c += "\n";
+    }
+    
     for (int ti=types.size()-1;ti>=0;ti--) {
         TypeId type = types[ti];
         TypeInfo* typeinfo = ast->getTypeInfo(type);
@@ -283,18 +286,19 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                 // C doesn't have template/generics/polymorphism.
                 // We generate the specialized structs instead.
             }
-            int max_name_len = 0;
+            int max_name_len_btb = 0;
+            int max_name_len_c = 0;
             for(int i=0;i<typeinfo->astStruct->members.size();i++) {
                 if(file_type & DECL_BTB) {
                     auto& mem = typeinfo->astStruct->members[i];
-                    if(mem.name.size() > max_name_len)
-                        max_name_len = mem.name.size();
+                    if(mem.name.size() > max_name_len_btb)
+                        max_name_len_btb = mem.name.size();
                 }
                 if(file_type & DECL_C) {
                     auto& mem_impl = typeinfo->structImpl->members[i];
                     std::string type_name = ToCTypeName(ast, mem_impl.typeId);
-                    if(type_name.size() > max_name_len)
-                        max_name_len = type_name.size();
+                    if(type_name.size() > max_name_len_c)
+                        max_name_len_c = type_name.size();
                 }
             }
             if(file_type & DECL_BTB) {
@@ -329,7 +333,7 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                 // TODO: Handle array_length expression in the future (just a literal for now)
                 if(file_type & DECL_BTB) {
                     text_btb += "    " + mem.name + ": ";
-                    for(int j=0;j<max_name_len - mem.name.size();j++)
+                    for(int j=0;j<max_name_len_btb - mem.name.size();j++)
                         text_btb += " ";
                     text_btb += ast->typeToString(mem_impl.typeId);
                     if(mem.array_length > 0) {
@@ -344,7 +348,7 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                     } else {
                         text_c += "    " + type_name;
                     }
-                    for(int j=0;j<max_name_len - type_name.size();j++)
+                    for(int j=0;j<max_name_len_c - type_name.size();j++)
                         text_c += " ";
                     text_c += +" " + mem.name;
                     if(mem.array_length > 0) {
@@ -385,6 +389,13 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
     // ========================
     //     Emit functions
     // ========================
+    
+    if(file_type & DECL_C) {
+        text_c += "// =================\n";
+        text_c += "//     Functions\n";
+        text_c += "// =================\n";
+        text_c += "\n";
+    }
     
     for(auto tinycode : tinycodes) {
         // TODO: Add comment if the exported function had one above it?
@@ -433,30 +444,52 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
             text_btb += ";\n";
         }
         if(file_type & DECL_C) {
-            text_c += upper_raw_name + "_API ";
-            if(astfunc->export_alias.size() != 0 && astfunc->export_alias != tinycode->name)
-                text_c += upper_raw_name + "_ALIAS(\""+astfunc->export_alias+"\") ";
-            
+            std::string ret_str = "";
+            std::string arg_str = "";
             Assert(signature.returnTypes.size() <= 1);
             if(signature.returnTypes.size() == 1) {
                 auto& ret_type = signature.returnTypes[0].typeId;
-                text_c += ToCTypeName(ast, ret_type) + " ";
+                ret_str += ToCTypeName(ast, ret_type) + " ";
             } else {
-                text_c += "void ";
+                ret_str += "void ";
             }
             
-            text_c += tinycode->name + "(";
-            
+            arg_str += "(";
             for(int i=0;i<signature.argumentTypes.size();i++) {
                 auto& arg_type = signature.argumentTypes[i].typeId;
                 auto& arg = astfunc->arguments[i];
                 
                 if(i != 0)
-                    text_c += ", ";
+                    arg_str += ", ";
                     
-                text_c += ToCTypeName(ast, arg_type) + " " + arg.name;
+                arg_str += ToCTypeName(ast, arg_type) + " " + arg.name;
             }
-            text_c += ");\n";
+            arg_str += ")";
+            
+            text_c += upper_raw_name + "_API ";
+            text_c += ret_str;
+            text_c += astfunc->export_alias;
+            text_c += arg_str + ";\n";
+            
+            if(astfunc->export_alias.size() != 0 && astfunc->export_alias != tinycode->name) {
+                text_c += ret_str;
+                text_c += tinycode->name;
+                text_c += arg_str;
+                text_c += " { ";
+                if(signature.returnTypes.size() == 1) {
+                    text_c += "return ";
+                }
+                text_c += astfunc->export_alias;
+                text_c += "(";
+                for(int i=0;i<signature.argumentTypes.size();i++) {
+                    auto& arg_type = signature.argumentTypes[i].typeId;
+                    auto& arg = astfunc->arguments[i];
+                    if(i != 0)
+                        text_c += ", ";
+                    text_c += arg.name;
+                }
+                text_c+="); }\n";
+            }
         }
     }
     
@@ -467,7 +500,6 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
         text_c += "#endif\n";
         text_c += "\n";
         text_c += "#undef " + upper_raw_name + "_API\n";
-        text_c += "#undef " + upper_raw_name + "_ALIAS\n";
     }
     
     // =======================
