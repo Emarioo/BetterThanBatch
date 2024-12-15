@@ -63,9 +63,6 @@ bool Program::finalize_program(Compiler* compiler) {
 
     index_of_main = bytecode->index_of_main;
 
-    // prog->debugInformation = bytecode->debugInformation;
-    // bytecode->debugInformation = nullptr;
-
     if (bytecode->dataSegment.size() != 0) {
         globalData = TRACK_ARRAY_ALLOC(u8, bytecode->dataSegment.size());
         // prog->globalData = (u8*)engone::Allocate(bytecode->dataSegment.used);
@@ -78,11 +75,12 @@ bool Program::finalize_program(Compiler* compiler) {
 
     for (int i = 0; i < bytecode->exportedFunctions.size(); i++) {
         auto &sym = bytecode->exportedFunctions[i];
-        addExportedSymbol(sym.name, sym.tinycode_index);
-        // X64Program::ExportedSymbol tmp{};
-        // tmp.name = sym.name;
-        // tmp.textOffset = addressTranslation[sym.location];
-        // prog->exportedSymbols.add(tmp);
+        if(sym.tinycode_index < functionPrograms.size() && functionPrograms[sym.tinycode_index]) {
+            addExportedSymbol(sym.name, sym.tinycode_index);
+        } else {
+            // exported symbol was added to temporary
+            // compile time tinycode
+        }
     }
 
     compute_libraries();

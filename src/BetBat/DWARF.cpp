@@ -896,7 +896,13 @@ namespace dwarf {
                     if(var.is_global) {
                         stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
                         int offset = stream->getWriteHead();
-                        stream->write4(var.frameOffset);
+                        // stream->write4(var.frameOffset);
+                        if(REGISTER_SIZE == 8) {
+                            stream->write8(var.frameOffset);
+                        } else {
+                            stream->write4(var.frameOffset);
+                            // stream->write8(0);
+                        }
                         objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.frameOffset);
                     } else {
                         stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.

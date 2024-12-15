@@ -10,6 +10,7 @@ A neat compiler.
 See the [Guide](/docs/guide/README.md) for details.
 
 - **Statically typed** - All data types in the program language are statically typed. No dynamic objects.
+- **Compile time execution** - Run code at compile time. Read and parse a config.txt file to a data structure and place it in your program as a global variable.
 - **Imports** - No headers, no forward declarations. Circular dependencies between imports are allowed.
 - **Function overloading** - Very powerful in combination with macros. `std_print` is the standard print function which can print all sorts of types.
 - **Operator overloading** - Overloading for all arithmetic, logical, and relational operations.
@@ -17,7 +18,6 @@ See the [Guide](/docs/guide/README.md) for details.
 - **Runtime type information** - Not included by default. Import `Lang` to access type information.
 - **Print any type** - The `Logger` module implements a polymorphic `std_print` function which takes in a pointer of some type and prints it.
 - **Preprocessor** - Conditional sections, recursive macros, and functions inserts that allow you match functions where you want to insert text at the start of them.
-- **Compile time execution** - Only globals are evaluated at compile time at this moment.
 - **Stack trace and asserts** - `Assert` and `StackTrace` modules that in combination with function inserts give you a stack trace similar to Javascript.
 - **x86-64 generation** - Compiler supports x86-64 targets. (32-bit x86 is not supported yet)
 - **ARM generation** - Currently **Experimental**, use at your own risk.

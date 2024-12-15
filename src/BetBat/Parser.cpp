@@ -1550,18 +1550,18 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
         allow_assignments = prev_assign;
     };
 
-    bool shouldComputeExpression = false;
+    // bool shouldComputeExpression = false;
 
     StringView view{};
-    auto token = info.getinfo();
-    auto token2 = info.getinfo(&view, 1);
-    if(token->type == '#' && token2->type == lexer::TOKEN_IDENTIFIER && view == "run") {
-        info.advance(2);
-        shouldComputeExpression = true;
-        if(functionScopes.size() > 0 && functionScopes.last().function) {
-            functionScopes.last().function->contains_run_directive = true;
-        }
-    }
+    // auto token = info.getinfo();
+    // auto token2 = info.getinfo(&view, 1);
+    // if(token->type == '#' && token2->type == lexer::TOKEN_IDENTIFIER && view == "run") {
+    //     info.advance(2);
+    //     shouldComputeExpression = true;
+    //     if(functionScopes.size() > 0 && functionScopes.last().function) {
+    //         functionScopes.last().function->contains_run_directive = true;
+    //     }
+    // }
 
     // bool negativeNumber=false;
     bool expectOperator=false;
@@ -2828,6 +2828,17 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
 
                 tmp->location = loc;
                 values.add(tmp);
+            } else if(token->type == '#' && next_token->type == lexer::TOKEN_IDENTIFIER && next_token_string == "run") {
+                info.advance(2);
+                if(functionScopes.size() > 0 && functionScopes.last().function) {
+                    functionScopes.last().function->contains_run_directive = true;
+                }
+                ASTExpression* tmp=0;
+                auto signal = parseExpression(tmp);
+                SIGNAL_SWITCH_LAZY()
+                tmp->computeWhenPossible = true;
+                
+                values.add(tmp);
             } else {
                 auto token_tiny = info.gettok();
                 // if(attempt){
@@ -3041,7 +3052,6 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
         expectOperator=!expectOperator;
         if(ending){
             expression = values.last();
-            expression->computeWhenPossible = shouldComputeExpression;
             if(!info.hasAnyErrors()) {
                 Assert(values.size()==1);
             }
@@ -4897,7 +4907,19 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
             token = info.getinfo(&view);
         }
 
+        bool shouldComputeExpression = false;
+        token = info.getinfo();
+        auto token2 = info.getinfo(&view, 1);
+        if(token->type == '#' && token2->type == lexer::TOKEN_IDENTIFIER && view == "run") {
+            info.advance(2);
+            shouldComputeExpression = true;
+            if(functionScopes.size() > 0 && functionScopes.last().function) {
+                functionScopes.last().function->contains_run_directive = true;
+            }
+        }
+        
         lexer::Token stmt_loc = info.gettok();
+        token = info.getinfo();
 
         ASTNode* astNode = nullptr;
         SignalIO signal=SIGNAL_NO_MATCH;
@@ -5002,6 +5024,7 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
         // We add the AST structures even during error to
         // avoid leaking memory.
         if(tempStatement) {
+            tempStatement->computeWhenPossible = shouldComputeExpression;
             tempStatement->location = info.srcloc(stmt_loc);
             astNode = (ASTNode*)tempStatement;
             // TODO: Optimize by performing the logic for defer, return, break, continue in flow instead of here. That way, all statements don't have to perform these checks.

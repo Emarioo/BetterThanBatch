@@ -43,6 +43,8 @@ struct ParseContext : public PhaseContext {
     std::string currentNamespace = "";
     bool ignoreErrors = false;
     bool showErrors = true;
+    
+    bool inside_run_directive = false; // for expressions
 
     bool is_inside_try_block = false; // defer is not allowed in try blocks since we may crash and then the defer won't be called. We may want to change this behaviour in the future but we do this just to be safe and prevent simple stupid mistakes.
     bool allow_inferred_initializers = false;

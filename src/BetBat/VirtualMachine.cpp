@@ -156,7 +156,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 bool yes = t->applyRelocations(bytecode, false, &unresolved_func);
                 if(!yes) {
                     error.type = VM_UNRESOLVED_CALL;
-                    error.message = unresolved_func->astFunction->name;
+                    error.message = unresolved_func->astFunction->name + " called from " + t->name;
                     // log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
                     return;
                 }
@@ -169,7 +169,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             FuncImpl* unresolved_func = nullptr;
             if(!yes) {
                 error.type = VM_UNRESOLVED_CALL;
-                    error.message = unresolved_func->astFunction->name;
+                error.message = unresolved_func->astFunction->name + " called from " + t->name;
                 // log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
                 return;
             }
@@ -245,7 +245,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     }
     
     for(auto& pair_lib : libs) {
-        log::out << "VM lib "<< pair_lib.first<<"\n";
+        // log::out << "VM lib "<< pair_lib.first<<"\n";
         pair_lib.second->dll = LoadDynamicLibrary(pair_lib.first, false); // false = don't log error
         if(!pair_lib.second->dll) {
             // TODO: This solution is cheeky.
@@ -272,7 +272,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 // APPLY RELOCATIONS
                 for(auto r : pair_fn.second->relocs) {
                     auto& t = bytecode->tinyBytecodes[r->tinycode_index];
-                    log::out << "Apply reloc "<< r->pc << ", "<<r->name<<"\n";
+                    // log::out << "Apply reloc "<< r->pc << ", "<<r->name<<"\n";
                     *(i32*)&t->instructionSegment[r->pc] = Bytecode::BEGIN_DLL_FUNC_INDEX + index;
                 }
             }
@@ -307,6 +307,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         stack_pointer = (i64)(stack.data() + stack.max);
         base_pointer = stack_pointer;
     }
+    registers[BC_REG_LOCALS] = base_pointer;
+    
     // #define CHECK_PTR_MAPPED(PTR) if(force_mapping && !temp_ptr_was_mapped) { log::out << log::RED << "PTR "<<PTR<<" was not mapped\n"; return; }
     auto CHECK_PTR_MAPPED = [&](void* PTR) {
         if(force_mapping && !temp_ptr_was_mapped) { 
@@ -592,6 +594,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 // else if(size == CONTROL_16B) *(i16*)ptr = registers[op1];
                 // else if(size == CONTROL_32B) *(i32*)ptr = registers[op1];
                 // else if(size == CONTROL_64B) *(i64*)ptr = registers[op1];
+                int x = 0; // dumb variable because debugger jumps next instruction and out of scope so I can't see the local variables.
             } else {
                 int real_size = 1 << size;
                 registers[op0] = 0;
@@ -600,8 +603,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 // else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
                 // else if(size == CONTROL_32B) registers[op0] = *(i32*)ptr;
                 // else if(size == CONTROL_64B) registers[op0] = *(i64*)ptr;
+                int x = 0; // dumb variable because debugger jumps next instruction and out of scope so I can't see the local variables.
+                // Thank you variable, you saved me some time - Emarioo, 2024-12-15
             }
-            int x = 0; // dumb variable because debugger jumps next instruction and out of scope so I can't see the local variables.
         } break;
         case BC_SET_ARG: {
             op0 = (BCRegister)instructions[pc++];
@@ -800,7 +804,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             } else {
                 int new_tiny_index = imm-1;
                 if(new_tiny_index < 0 && new_tiny_index >= bytecode->tinyBytecodes.size()) {
-                    this->error.type = VM_UNRESOLVED_CALL;
+                    error.type = VM_UNRESOLVED_CALL;
                     return;
                 }
                 
@@ -1472,5 +1476,7 @@ void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
         }
     }
     was_mapped = false;
+    // suspicious pointer
+    Assert((i64)virtual_pointer >= 0x100000 && (i64)virtual_pointer < 0x0010'0000'0000'0000);
     return (void*)virtual_pointer;
 }

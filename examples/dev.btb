@@ -16,24 +16,86 @@
         
 */
 
+#import "Logger"
 
-fn @export build() {
-    #run forn()
-}
-fn forn() {
-    go()
-}
-fn @export go() {
-    #run build()
-}
 
-// If run directive is encountered in another run directive then it is ignored.
-// #run 1 + #run 5
-#run 1 + (#run 5)
-
-go()
-
-fn oc() {
-    // run directive in global should not affect the function
-    global g := #run 1
+fn first() {
+    log("first")
+    #run second()
 }
+fn second() {
+    log("second")
+    #run first()
+}
+// first() // Should trigger a compiler error for circular dependency.
+
+
+// #import "Memory"
+
+// fn compute() -> i32 {
+//     x: i32* = Allocate(4);
+//     *x = 99;
+//     return *x
+// }
+// // we can call functions that calls external functions from dynamic libraries
+// _test 99; #run compute();
+// _test 99; compute();
+
+// #import "Memory"
+
+// fn compute() -> i32 {
+//     x: i32* = Allocate(4);
+//     *x = 99;
+//     return *x
+// }
+// // we can call functions that calls external functions from dynamic libraries
+// // x := #run compute();
+// _test 99; #run compute();
+// // log(x)
+
+// fn compute() -> i32 {
+//     a := 5;
+//     b := #run a + 5;
+//     return b;
+// }
+// log(compute())
+
+// global counter: i32 = #run 5;
+
+// x := #run counter++;
+// y := #run counter++;
+
+// log(x," ",y," ", counter)
+// make sure #run are executed in the right order
+// _test 5; x;
+// _test 6; y;
+
+// fn hello() { }
+
+// global f: fn() = #run hello; // error, we don't allow this
+
+// @TEST_ERROR(E3001) #run hello();
+// fn hello() { }
+
+// struct app {
+//     x: fn();
+// }
+
+// // global f: fn() = app{}; // error, we don't allow this
+// global f: app = app{hello}; // error, we don't allow this
+
+// log(cast_unsafe<i64>f)
+
+// struct app {
+//     x: i32 = 4;
+//     y: char[] = "Hello";
+// }
+
+// y := #run "Hello"
+// y := #run app{}
+
+// #run for 0..5 {
+//     log("Hello")   
+// }
+
+// log("Runtime")

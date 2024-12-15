@@ -165,7 +165,8 @@ struct TestLocation {
 };
 struct GlobalRunDirective {
     // statement or expression?
-    ASTExpression* expression = nullptr;
+    ASTStatement* statement = nullptr;
+    // ASTExpression* expression = nullptr;
     ScopeId scope{};
 };
 struct Compiler {

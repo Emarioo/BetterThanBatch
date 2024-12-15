@@ -751,6 +751,7 @@ struct ASTStatement : ASTNode {
     // bool uses_cast_operator = false;
 
     ASTExpression* testValue = nullptr;
+    bool computeWhenPossible = false;
 
     std::string linked_alias;
     std::string linked_library;

@@ -1005,29 +1005,15 @@ void Compiler::processImports() {
                     lock_miscellaneous.lock();
                     if(!have_prepared_global_data) { // thread safe check
                         GenContext c{};
-                        c.ast = ast;
-                        c.bytecode = bytecode;
-                        c.reporter = &reporter;
-                        c.compiler = this;
                         c.init_context(this);
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
+                        GenContext c2{};
+                        c2.init_context(this);
+                        c2.generateGlobalData();
                         have_prepared_global_data = true;
                     }
                     lock_miscellaneous.unlock();
                 }
-                if(!have_run_global_run_directives && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check
-                    lock_miscellaneous.lock();
-                    if(!have_run_global_run_directives) { // thread safe check
-                        GenContext c{};
-                        c.init_context(this);
-                        for(int i=0;i<global_run_directives.size();i++) {
-                            auto& rundir = global_run_directives[i];
-                            c.executeGlobalRunDirective(&rundir);
-                        }
-                        have_run_global_run_directives = true;
-                    }
-                    lock_miscellaneous.unlock();
-                 }
 
                 int prev_errors = compile_stats.errors;
                 
@@ -1099,13 +1085,26 @@ void Compiler::processImports() {
                 // auto my_scope = ast->getScope(compiler_imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Gen machine code: "<<compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
 
-                if(!have_generated_comp_time_global_data) { // cheap quick check, will the compiler optimize it away?
+                // if(!have_generated_comp_time_global_data) { // cheap quick check, will the compiler optimize it away?
+                //     lock_miscellaneous.lock();
+                //     if(!have_generated_comp_time_global_data) { // thread safe check
+                //         GenContext c{};
+                //         c.init_context(this);
+                //         c.generateGlobalData();
+                //         have_generated_comp_time_global_data = true;
+                //     }
+                //     lock_miscellaneous.unlock();
+                // }
+                if(!have_run_global_run_directives) { // cheap quick check
                     lock_miscellaneous.lock();
-                    if(!have_generated_comp_time_global_data) { // thread safe check
+                    if(!have_run_global_run_directives) { // thread safe check
                         GenContext c{};
                         c.init_context(this);
-                        c.generateGlobalData();
-                        have_generated_comp_time_global_data = true;
+                        for(int i=0;i<global_run_directives.size();i++) {
+                            auto& rundir = global_run_directives[i];
+                            c.executeGlobalRunDirective(&rundir);
+                        }
+                        have_run_global_run_directives = true;
                     }
                     lock_miscellaneous.unlock();
                 }

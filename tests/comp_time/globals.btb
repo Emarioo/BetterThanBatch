@@ -1,15 +1,9 @@
 @TEST_CASE(global_initialization)
 
-yeet: i32
-global glob: i32 = yeet
-
 global hoho: i32 = 8
 global yas: i32 = hoho
 
-fn main() {
-
-    log(yas)
-}
+_test yas; 8; // make sure globals are evaluated in order
 
 @TEST_CASE(global_file_io)
 

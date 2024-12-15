@@ -176,6 +176,7 @@ void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode, Compiler* com
     ret_offset = 0;
     has_return_values = false;
     virtual_stack_pointer = 0;
+    
 }
 
 void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 test_location) {

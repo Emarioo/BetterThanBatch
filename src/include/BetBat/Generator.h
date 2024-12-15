@@ -25,8 +25,8 @@ struct GenContext : public PhaseContext {
 
     int currentFrameOffset = 0;
 
-    bool inside_global_level = false;
     bool inside_compile_time_execution = false;
+    bool inside_global = false;
 
     BytecodeBuilder builder{};
 
@@ -124,6 +124,7 @@ struct GenContext : public PhaseContext {
     SignalIO generateArtificialPush(TypeId typeId);
     // Generate a push from pointer (baseReg) where a list of pushed values are stored. generatePush reads memory from a struct layout while this function "copies" pushed values from a pointer.
     SignalIO generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr);
+    SignalIO generatePushedLiterals(TypeId type, char* stack, ASTExpression* expression, TypeInfo* structImpl = nullptr, int memberIndex = 0);
     void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, int offset);
     void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
     
@@ -136,6 +137,7 @@ struct GenContext : public PhaseContext {
     SignalIO generateFunction(ASTFunction* function, ASTStruct* astStruct = nullptr);
     SignalIO generateFunctions(ASTScope* body);
     SignalIO generateBody(ASTScope *body);
+    SignalIO generateStatement(ASTStatement *statement);
     
     SignalIO generatePreload();
     SignalIO generateData();

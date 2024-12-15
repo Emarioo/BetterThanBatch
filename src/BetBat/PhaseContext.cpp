@@ -12,6 +12,6 @@ bool PhaseContext::hasAnyErrors() {
 bool PhaseContext::hasForeignErrors() {
     if(disableCodeGeneration) return true;
     Assert(compiler);
-    return compiler->compile_stats.errors != 0;
+    return compiler->compile_stats.errors != 0 || compiler->errorTypes.size() != 0;
     // return compiler->errorTypes.size() != 0;
 }
