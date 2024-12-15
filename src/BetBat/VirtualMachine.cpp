@@ -90,12 +90,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     TRACE_FUNC()
 
     Assert(bytecode);
-    auto nativeRegistry = NativeRegistry::GetGlobal();
-    // if(!bytecode->nativeRegistry) {
-    //     bytecode->nativeRegistry = NativeRegistry::GetGlobal();
-    //     // bytecode->nativeRegistry = NativeRegistry::Create();
-    //     // bytecode->nativeRegistry->initNativeContent();
-    // }
 
     TinyBytecode* tinycode = nullptr;
     int tiny_index = -1;
@@ -113,6 +107,13 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
     REGISTER_SIZE = bytecode->arch.REGISTER_SIZE;
     FRAME_SIZE = bytecode->arch.FRAME_SIZE;
+
+    {
+        CallFrame frame{};
+        frame.func = bytecode->tinyBytecodes[tiny_index];
+        frame.return_address = 0;
+        call_stack.add(frame);
+    }
 
     DynamicArray<TinyBytecode*> checked_codes{};
     bool compute_related_codes = true; // we compute so that we only load relevant libraries
@@ -150,19 +151,26 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             }
         }
         if(apply_related_relocations) {
+            FuncImpl* unresolved_func = nullptr;
             for(auto& t : checked_codes) {
-                bool yes = t->applyRelocations(bytecode);
+                bool yes = t->applyRelocations(bytecode, false, &unresolved_func);
                 if(!yes) {
-                    log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
+                    error.type = VM_UNRESOLVED_CALL;
+                    error.message = unresolved_func->astFunction->name;
+                    // log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
                     return;
                 }
             }
         }
     } else {
+        FuncImpl* unresolved_func = nullptr;
         for(auto& t : bytecode->tinyBytecodes) {
-            bool yes = t->applyRelocations(bytecode);
+            bool yes = t->applyRelocations(bytecode, false, &unresolved_func);
+            FuncImpl* unresolved_func = nullptr;
             if(!yes) {
-                log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
+                error.type = VM_UNRESOLVED_CALL;
+                    error.message = unresolved_func->astFunction->name;
+                // log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
                 return;
             }
         }
@@ -208,7 +216,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         if(checked_codes.size() != 0) {
             load_lib = false;
             for (auto t : checked_codes) {
-                if(t->index == bytecode->externalRelocations.last().tinycode_index) {
+                if(t->index == r.tinycode_index) {
                     load_lib = true;
                     break;
                 }
@@ -235,7 +243,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         }
         fn->relocs.add(&r);
     }
+    
     for(auto& pair_lib : libs) {
+        log::out << "VM lib "<< pair_lib.first<<"\n";
         pair_lib.second->dll = LoadDynamicLibrary(pair_lib.first, false); // false = don't log error
         if(!pair_lib.second->dll) {
             // TODO: This solution is cheeky.
@@ -262,6 +272,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 // APPLY RELOCATIONS
                 for(auto r : pair_fn.second->relocs) {
                     auto& t = bytecode->tinyBytecodes[r->tinycode_index];
+                    log::out << "Apply reloc "<< r->pc << ", "<<r->name<<"\n";
                     *(i32*)&t->instructionSegment[r->pc] = Bytecode::BEGIN_DLL_FUNC_INDEX + index;
                 }
             }
@@ -786,12 +797,12 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 }
                 has_return_values_on_stack = true; // NOTE: potential return values
                 ret_offset = 0;
-            } else if(imm < 0) {
-                executeNative(imm);
-                has_return_values_on_stack = true; // NOTE: potential return values
-                ret_offset = 0;
             } else {
                 int new_tiny_index = imm-1;
+                if(new_tiny_index < 0 && new_tiny_index >= bytecode->tinyBytecodes.size()) {
+                    this->error.type = VM_UNRESOLVED_CALL;
+                    return;
+                }
                 
                 stack_pointer -= REGISTER_SIZE;
                 CHECK_STACK();
@@ -810,6 +821,11 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 base_pointer = stack_pointer;
                 registers[BC_REG_LOCALS] = base_pointer;
 
+                CallFrame frame{};
+                frame.func = bytecode->tinyBytecodes[tiny_index];
+                frame.return_address = pc;
+                call_stack.add(frame);
+                
                 pc = 0;
                 tiny_index = new_tiny_index;
                 tinycode = bytecode->tinyBytecodes[tiny_index];
@@ -822,6 +838,18 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                         pair->second += 1;
                 }
             }
+        } break;
+        case BC_PRINTS: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            char* ptr = (char*)registers[op0];
+            int len = (int)registers[op1];
+            log::out.print(ptr, len);
+        } break;
+        case BC_PRINTC: {
+            op0 = (BCRegister)instructions[pc++];
+            char chr = sqrtf(*(float*)&registers[op0]);
+            log::out.print(&chr, 1);
         } break;
         case BC_CALL_REG: {
             op0 = (BCRegister)instructions[pc++];
@@ -1418,79 +1446,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         #ifdef ILOG_REGS
         printRegisters();
         #endif
-    }
-}
-void VirtualMachine::executeNative(int tiny_index){
-    using namespace engone;
-    u64 args = stack_pointer;
-    switch (tiny_index) {
-        case NATIVE_printi:{
-            i64 num = *(i64*)(args);
-            #ifdef ILOG
-            log::out << log::LIME<<"print: "<<num<<"\n";
-            #else                    
-            log::out << num;
-            #endif
-        } break;
-        case NATIVE_printd:{
-            float num = *(float*)(args);
-            #ifdef ILOG
-            log::out << log::LIME<<"print: "<<num<<"\n";
-            #else                    
-            log::out << num;
-            #endif
-        } break;
-        case NATIVE_printc: {
-            char chr = *(char*)(args); // +7 comes from the alignment after char
-            #ifdef ILOG
-            log::out << log::LIME << "print: "<<chr<<"\n";
-            #else
-            log::out << chr;
-            #endif
-        } break;
-        case NATIVE_prints: {
-            char* ptr = *(char**)(args);
-            u64 len = *(u64*)(args+8);
-            
-            #ifdef ILOG
-            log::out << log::LIME << "print: ";
-            for(u32 i=0;i<len;i++){
-                log::out << ptr[i];
-            }
-            log::out << "\n";
-            #else
-            for(u32 i=0;i<len;i++){
-                log::out << ptr[i];
-            }
-            #endif
-        } break;
-        // case NATIVE_Allocate:{
-        //     u64 size = *(u64*)(fp+argoffset);
-        //     void* ptr = engone::Allocate(size);
-        //     if(ptr)
-        //         userAllocatedBytes += size;
-        //     _ILOG(log::out << "alloc "<<size<<" -> "<<ptr<<"\n";)
-        //     *(u64*)(fp-8) = (u64)ptr;
-        // } break;
-        // case NATIVE_Reallocate:{
-        //     void* ptr = *(void**)(fp+argoffset);
-        //     u64 oldsize = *(u64*)(fp +argoffset + 8);
-        //     u64 size = *(u64*)(fp+argoffset+16);
-        //     ptr = engone::Reallocate(ptr,oldsize,size);
-        //     if(ptr)
-        //         userAllocatedBytes += size - oldsize;
-        //     _ILOG(log::out << "realloc "<<size<<" ptr: "<<ptr<<"\n";)
-        //     *(u64*)(fp-8) = (u64)ptr;
-        // } break;
-        // case NATIVE_Free:{
-        //     void* ptr = *(void**)(fp+argoffset);
-        //     u64 size = *(u64*)(fp+argoffset+8);
-        //     engone::Free(ptr,size);
-        //     userAllocatedBytes -= size;
-        //     _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
-        //     break;
-        // } break;
-        default: Assert(false);
     }
 }
 bool VirtualMachine::add_memory_mapping(u64 start, u64 physical, u64 size) {

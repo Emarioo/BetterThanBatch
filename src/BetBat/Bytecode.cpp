@@ -68,10 +68,6 @@ void Bytecode::cleanup(){
     //     DebugInformation::Destroy(debugInformation);
     //     debugInformation = nullptr;
     // }
-    // if(nativeRegistry && nativeRegistry != NativeRegistry::GetGlobal()){
-    //     NativeRegistry::Destroy(nativeRegistry);
-    //     nativeRegistry = nullptr;
-    // }
     // debugText.clear();
     // debugText.shrink_to_fit();
 }
@@ -978,7 +974,7 @@ void BytecodeBuilder::emit_imm64(i64 imm) {
     i64* ptr = (i64*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 8);
     *ptr = imm;
 }
-bool TinyBytecode::applyRelocations(Bytecode* code) {
+bool TinyBytecode::applyRelocations(Bytecode* code, bool assert_on_failure, FuncImpl** unresolved_func) {
     using namespace engone;
     TRACE_FUNC()
 
@@ -1000,12 +996,18 @@ bool TinyBytecode::applyRelocations(Bytecode* code) {
         // Assert may fire if function wasn't generated.
         // Perhaps no one declared usage of the function even
         // though we should have.
-        if (!(rel.funcImpl && rel.funcImpl->tinycode_id)) {
+        if (!rel.funcImpl->tinycode_id) {
             if(rel.funcImpl->usages == 0) {
                 log::out << log::RED << "COMPILER BUG! "<<log::NO_COLOR<<"Function '"<<log::LIME<<rel.funcImpl->astFunction->name<<log::NO_COLOR<<"' had zero declared usages but generator emitted relocations.\n";
                 Assert(false);
             } else {
-                Assert((rel.funcImpl && rel.funcImpl->tinycode_id));
+                if(assert_on_failure) {
+                    Assert((rel.funcImpl && rel.funcImpl->tinycode_id));
+                }
+                if(unresolved_func)
+                    *unresolved_func = rel.funcImpl;
+                suc = false;
+                break;
             }
         }
         *(i32*)&instructionSegment[rel.pc] = rel.funcImpl->tinycode_id;
@@ -1086,6 +1088,8 @@ const char* instruction_names[] {
     "sqrt", // BC_SQRT
     "round", // BC_ROUND
     "asm", // BC_ASM
+    "prints", // BC_PRINTS
+    "printc", // BC_PRINTC
     "test", // BC_TEST_VALUE
 };
 InstBaseType operator|(InstBaseType a, InstBaseType b) {
@@ -1169,6 +1173,8 @@ BCInstructionInfo instruction_contents[256] {
     { 2, BASE_op1 }, // BC_ROUND,
 
     { 7, BASE_imm32 | BASE_imm16 }, // BC_ASM,
+    { 3, BASE_op2 },                // BC_PRINTS,
+    { 2, BASE_op1 },                // BC_PRINTC,
 
     { 8, BASE_op2 | BASE_ctrl | BASE_imm32 }, // BC_TEST_VALUE,
 
@@ -1466,13 +1472,13 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             if(imm >= Bytecode::BEGIN_DLL_FUNC_INDEX && dll_functions) {
                 int ind = imm - Bytecode::BEGIN_DLL_FUNC_INDEX;
                 log::out << log::LIME << dll_functions->get(ind);
-            } else if(imm < 0) {
-                auto r = NativeRegistry::GetGlobal();
-                auto f = r->findFunction(imm);
-                if(f) {
-                    log::out << log::LIME << f->name;
-                } else
-                    log::out << log::LIME << imm;
+            // } else if(imm < 0) {
+            //     auto r = NativeRegistry::GetGlobal();
+            //     auto f = r->findFunction(imm);
+            //     if(f) {
+            //         log::out << log::LIME << f->name;
+            //     } else
+            //         log::out << log::LIME << imm;
             } else {
                 int ind = imm - 1;
                 if(ind > 0 && ind < code->tinyBytecodes.size())
@@ -1613,9 +1619,15 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         } break;
         case BC_RDTSC:
         case BC_SQRT:
+        case BC_PRINTC:
         case BC_ROUND: {
             op0 = (BCRegister)instructions[pc++];
             log::out << " " << register_names[op0];
+        } break;
+        case BC_PRINTS: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            log::out << " " << register_names[op0] << ", " << register_names[op1];
         } break;
         case BC_ASM: {
             u8 inputs = (u8)instructions[pc++];

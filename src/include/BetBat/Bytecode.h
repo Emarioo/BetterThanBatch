@@ -1,6 +1,6 @@
 #pragma once
 // #include "BetBat/Tokenizer.h"
-#include "BetBat/NativeRegistry.h"
+#include "BetBat/IntrinsicRegistry.h"
 #include "BetBat/DebugInformation.h"
 #include "BetBat/CompilerOptions.h"
 #include "BetBat/ExceptionInformation.h"
@@ -145,6 +145,9 @@ enum InstructionOpcode : u8 {
     BC_ROUND,
 
     BC_ASM,
+    
+    BC_PRINTS,
+    BC_PRINTC,
 
     // used when running test cases
     // The stack must be aligned to 16 bytes because
@@ -368,7 +371,7 @@ struct TinyBytecode {
         // std::string func_name;
     };
     DynamicArray<Relocation> call_relocations;
-    bool applyRelocations(Bytecode* code);
+    bool applyRelocations(Bytecode* code, bool assert_on_failure, FuncImpl** unresolved_func = nullptr);
     // void addRelocation(int pc, const std::string& name) {
     //     call_relocations.add({});
     //     call_relocations.last().pc = pc;
@@ -647,7 +650,6 @@ struct BytecodeBuilder {
         return { tinycode->index, (int)tinycode->instructionSegment.size() + offset };
     }
 
-private:
     // building blocks for every instruction
     void emit_opcode(InstructionOpcode type);
     void emit_operand(BCRegister reg);
@@ -656,6 +658,7 @@ private:
     void emit_imm16(i16 imm);
     void emit_imm32(i32 imm);
     void emit_imm64(i64 imm);
+private:
     
     // call the functions, don't access the fields directly
     static const int PREVIOUS_INSTRUCTIONS_MAX = 5;

@@ -29,7 +29,7 @@ bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode) {
 
 
     // make sure dependencies have been fixed first
-    bool yes = tinycode->applyRelocations(compiler->bytecode);
+    bool yes = tinycode->applyRelocations(compiler->bytecode, true);
     if (!yes) {
         log::out << "Incomplete call relocation\n";
         return false;
@@ -48,7 +48,7 @@ bool ARMBuilder::generate() {
     TRACE_FUNC()
 
     CALLBACK_ON_ASSERT(
-        tinycode->print(0,-1, code);
+        tinycode->print(0,-1, bytecode);
     )
     
     // Useful when debugging
@@ -1129,8 +1129,6 @@ bool ARMBuilder::generate() {
 
      for(int i=0;i<tinycode->call_relocations.size();i++) {
         auto& r = tinycode->call_relocations[i];
-        if(r.funcImpl->astFunction->linkConvention == NATIVE)
-            continue;
         int ind = r.funcImpl->tinycode_id - 1;
         program->addInternalFuncRelocation(current_funcprog_index, get_map_translation(r.pc), ind);
         // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";

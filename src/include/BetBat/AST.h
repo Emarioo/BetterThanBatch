@@ -34,7 +34,6 @@ enum LinkConvention : u8 {
     IMPORT=0x80, // external from the source code, linkConvention with static library or object files
     STATIC_IMPORT=0x81,  // linkConvention with lib or relative code
     DYNAMIC_IMPORT=0x82, // linkConvention with dll, function are renamed to __impl_
-    NATIVE=0x10, // for interpreter or other implementation in x64 converter, TO BE DEPRACATED
 };
 
 #define IS_IMPORT(X) (X&(u8)0x80)
@@ -564,16 +563,14 @@ struct ASTExpression : ASTNode {
     ASTExpression() { }
     ASTExpressionType type;
     lexer::SourceLocation location;
+    bool uses_cast_operator = false; // needed for all exprs
+    StringView namedValue{}; // needed for all exprs
+    
+    bool computeWhenPossible = false;
     #ifdef gone
-    // enum ConstantType {
-    //     NONE,
-    //     CONSTANT
-    // };
     bool isConstant() { return constantValue; }
     // TODO: Bit field for all the bools
     bool constantValue = false;
-    bool computeWhenPossible = false;
-
     #endif
 
     template<typename T>
@@ -581,10 +578,6 @@ struct ASTExpression : ASTNode {
         Assert(type == T::TYPE);
         return (T*)this;
     }
-
-    bool uses_cast_operator = false; // needed for all exprs
-
-    StringView namedValue{}; // needed for all exprs
 
     void printArgTypes(AST* ast, QuickArray<TypeId>& argTypes);
 
@@ -958,7 +951,7 @@ struct ASTFunction : ASTNode {
     std::string export_alias; // empty means no export, same name as function means no alias, different means alias
 
     bool is_compiler_func = false;
-
+    bool contains_run_directive = false;
 
     struct PolyState {
         DynamicArray<TypeId> argTypes;

@@ -1927,7 +1927,19 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
         //  If the arguments are strictly variables or constants then you can use a mov instruction 
         //  instead messing with push and pop.
         auto& name = funcImpl->astFunction->name;
-        if(name == "memcpy"){
+        if(name == "prints"){
+            builder.emit_pop(BC_REG_A);
+            builder.emit_pop(BC_REG_B);
+            
+            builder.emit_opcode(BC_PRINTS);
+            builder.emit_operand(BC_REG_A);
+            builder.emit_operand(BC_REG_B);
+        } else if(name == "printc"){
+            builder.emit_pop(BC_REG_A);
+            
+            builder.emit_opcode(BC_PRINTC);
+            builder.emit_operand(BC_REG_A);
+        } else if(name == "memcpy"){
             builder.emit_pop(BC_REG_C);
             builder.emit_pop(BC_REG_B);
             builder.emit_pop(BC_REG_A);
@@ -2090,7 +2102,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
         
         // TODO: There should be no link convention
         builder.emit_call_reg(reg, LinkConvention::NONE, call_convention);
-    } else if(astFunc->linkConvention == LinkConvention::NONE ||astFunc->linkConvention == LinkConvention::NATIVE) {
+    } else if(astFunc->linkConvention == LinkConvention::NONE) {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
             info.addCallToResolve(reloc, funcImpl);
     } else {
@@ -2228,8 +2240,6 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
     using namespace engone;
     TRACE_FUNC()
     
-    
-
     ZoneScopedC(tracy::Color::Blue2);
     if(idScope==(ScopeId)-1)
         idScope = info.currentScopeId;
@@ -2255,60 +2265,153 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
     // }
     // castType = info.ast->ensureNonVirtualId(castType);
 
-    // if(expression->computeWhenPossible) {
-    //     if(expression->constantValue){
-    //         u32 startInstruction = bytecode->length();
+    if(base_expression->computeWhenPossible && !inside_compile_time_execution) {
+        // @nocheckin TODO: Polymorphic scope is not considered
+        VirtualMachine vm{};
+    
+        ScopeId scopeId = currentScopeId;
+        ASTExpression* expression = base_expression;
 
-    //         int moment = builder.saveStackMoment();
-    //         int startVirual = info.virtualStackPointer;
+        CALLBACK_ON_ASSERT(
+            ERR_SECTION(
+                ERR_HEAD2(expression->location)
+                ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+                for(int i=0;i<vm.call_stack.size();i++) {
+                    log::out << " " << vm.call_stack[i].func->name << "\n";
+                }
+                // TODO: Call stack
+                ERR_LINE2(expression->location, "here")
+            )
+        )
+
+        // TODO: Code below should be the same as the one in generateFunction.
+        //   If we change the code in generateFunction but forget to here then
+        //   we will be in trouble. So, how do we combine the code?
+
+        BytecodeBuilder prev_builder = std::move(builder);
+
+        auto temp_tinycode = compiler->get_temp_tinycode();
+
+        tinycode = temp_tinycode;
+        new(&builder)BytecodeBuilder();
+        builder.init(bytecode, tinycode, compiler);
+        currentScopeId = ast->globalScopeId;
+        currentFrameOffset = 0;
+        currentScopeDepth = -1;
+        currentPolyVersion = 0;
+
+        TEMP_ARRAY_N(TypeId, tempTypes, 5)
+        expression->computeWhenPossible = false; // temporarily disable to preven infinite loop
+        Assert(!inside_compile_time_execution);
+        inside_compile_time_execution = true;
+        auto result = generateExpression(expression, &tempTypes, 0);
+        inside_compile_time_execution = false;
+        expression->computeWhenPossible = true;
+        
+        // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
+        if (result != SIGNAL_SUCCESS) {
+            // We should have printed an error
+            Assert(info.hasAnyErrors());
+            return SIGNAL_FAILURE;
+        }
+        
+        if (tempTypes.size() > 1) {
+            ERR_SECTION(
+                ERR_HEAD2(expression->location)
+                ERR_MSG("Expression for run directives cannot produce more than one value.")
+                ERR_LINE2(expression->location, "here")
+            )
+            return SIGNAL_FAILURE;
+        }
+
+        // log::out << log::GOLD <<"global: " <<stmt->varnames[0].name << "\n";
+        // tinycode->print(0,-1,bytecode);
+
+        vm.silent = true;
+        vm.init_stack();
+        if(REGISTER_SIZE == 4) {
+            void* ptr_to_global_data = bytecode->dataSegment.data();
+            u32 mem = 0x1000'0000;
+            u32 mem_size = bytecode->dataSegment.size();
+            vm.add_memory_mapping(mem, (u64)ptr_to_global_data, mem_size);
+        }
+        // let VM evaluate expression and put into global data
+        vm.execute(bytecode, temp_tinycode->name, true);
+        
+        POP_LAST_CALLBACK()
+        
+        if(vm.error.type != VM_ERROR_NONE) {
+            printVMFailedMessage(vm, expression->location);
+            return SIGNAL_FAILURE;
+        }
+        
+        builder.~BytecodeBuilder();
+        builder = std::move(prev_builder);
+        
+        // At this point, the stack has stuff on it.
+        // We need to get those values into bytecode of the current function.
+        // We could place them in global data and then push values from there.
+        // Preferably we inline data if possible, if it's small.
+        // I guess we should put it in read only section otherwise?
+        
+        if(tempTypes.size() != 0 && tempTypes[0] != TYPE_VOID) {
+            generateDefaultValue(BC_REG_INVALID, 0, tempTypes[0], &expression->location);
+        }
+
+        return SIGNAL_SUCCESS;
+        
+        // u32 startInstruction = bytecode->get_pc();
+
+        // int moment = builder.saveStackMoment();
+        // int startVirual = info.virtualStackPointer;
+        
+        // expression->computeWhenPossible = false; // temporarily disable to preven infinite loop
+        // SignalIO result = generateExpression(expression, outTypeIds, idScope);
+        // expression->computeWhenPossible = true; // must enable since other polymorphic implementations want to compute too
+
+        // int endVirtual = info.virtualStackPointer;
+        // Assert(endVirtual < startVirual);
+
+        // builder.restoreStackMoment(moment, false, true);
+
+        // u32 endInstruction = bytecode->length();
+
+        // // TODO: Would it be better to put interpreter in GenContext. It would be possible to
+        // //   reuse allocations the interpreter made.
+        // VirtualMachine interpreter{};
+        // interpreter.expectValuesOnStack = true;
+        // interpreter.silent = true;
+        // interpreter.executePart(bytecode, startInstruction, endInstruction);
+        // log::out.flush();
+        // // interpreter.printRegisters();
+        // // this won't work with the stack
+        // info.popInstructions(endInstruction-startInstruction);
+
+        // if(!info.disableCodeGeneration) {
+        //     bytecode->ensureAlignmentInData(REGISTER_SIZE);
+
+        //     void* pushedValues = (void*)interpreter.sp;
+        //     int pushedSize = -(endVirtual - startVirual);
             
-    //         expression->computeWhenPossible = false; // temporarily disable to preven infinite loop
-    //         SignalIO result = generateExpression(expression, outTypeIds, idScope);
-    //         expression->computeWhenPossible = true; // must enable since other polymorphic implementations want to compute too
-
-    //         int endVirtual = info.virtualStackPointer;
-    //         Assert(endVirtual < startVirual);
-
-    //         builder.restoreStackMoment(moment, false, true);
-
-    //         u32 endInstruction = bytecode->length();
-
-    //         // TODO: Would it be better to put interpreter in GenContext. It would be possible to
-    //         //   reuse allocations the interpreter made.
-    //         VirtualMachine interpreter{};
-    //         interpreter.expectValuesOnStack = true;
-    //         interpreter.silent = true;
-    //         interpreter.executePart(bytecode, startInstruction, endInstruction);
-    //         log::out.flush();
-    //         // interpreter.printRegisters();
-    //         // this won't work with the stack
-    //         info.popInstructions(endInstruction-startInstruction);
-
-    //         if(!info.disableCodeGeneration) {
-    //             bytecode->ensureAlignmentInData(REGISTER_SIZE);
-
-    //             void* pushedValues = (void*)interpreter.sp;
-    //             int pushedSize = -(endVirtual - startVirual);
-                
-    //             int offset = bytecode->appendData(pushedValues, pushedSize);
-    //             builder.emit_da taptr(BC_REG_B, );
-    //             info.addImm(offset);
-    //             for(int i=0;i<(int)outTypeIds->size();i++){
-    //                 SignalIO result = GeneratePushFromValues(info, BC_REG_B, 0, outTypeIds->get(i));
-    //             }
-    //         }
-            
-    //         interpreter.cleanup();
-    //         return SIGNAL_SUCCESS;
-    //     } else {
-    //         ERR_SECTION(
-    //             ERR_HEAD2(expression->location)
-    //             ERR_MSG("Cannot compute non-constant expression at compile time.")
-    //             ERR_LINE2(expression->location, "run only works on constant expressions")
-    //         )
-    //         // TODO: Find which part of the expression isn't constant
-    //     }
-    // }
+        //     int offset = bytecode->appendData(pushedValues, pushedSize);
+        //     builder.emit_dataptr(BC_REG_B, );
+        //     info.addImm(offset);
+        //     for(int i=0;i<(int)outTypeIds->size();i++){
+        //         SignalIO result = GeneratePushFromValues(info, BC_REG_B, 0, outTypeIds->get(i));
+        //     }
+        // }
+        
+        // interpreter.cleanup();
+        // return SIGNAL_SUCCESS;
+        // } else {
+        //     ERR_SECTION(
+        //         ERR_HEAD2(expression->location)
+        //         ERR_MSG("Cannot compute non-constant expression at compile time.")
+        //         ERR_LINE2(expression->location, "run only works on constant expressions")
+        //     )
+        //     // TODO: Find which part of the expression isn't constant
+        // }
+    }
 
     if (base_expression->type == EXPR_VALUE) {
         // data type
@@ -4429,69 +4532,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             )
             return SIGNAL_FAILURE;
         }
-        if(function->linkConvention == NATIVE ||
-            info.compiler->options->target == TARGET_BYTECODE
-        ){
-            auto nativeRegistry = NativeRegistry::GetGlobal();
-            auto nativeFunction = nativeRegistry->findFunction(function->name);
-            // auto nativeFunction = info.compileInfo->nativeRegistry->findFunction(function->name);
-            if(nativeFunction){
-                if(function->_impls.size()>0){
-                    // impls may be zero if type checker found multiple definitions for native functions.
-                    // we don't want to crash here when that happens and we don't need to throw an error
-                    // because type checker already did.
-                    // Assert(false);
-                    function->_impls.last()->tinycode_id = nativeFunction->jumpAddress;
-                }
-            } else {
-                if(function->linkConvention != NATIVE){
-                    if(function->linked_library.size() != 0) {
-                        bool found = false;
-                        for(int i=0;i<imp->libraries.size();i++) {
-                            auto& lib = imp->libraries[i];
-                            if(lib.named_as == function->linked_library) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if(found) {
-
-                        } else {
-                            ERR_SECTION(
-                                ERR_HEAD2(function->location)
-                                ERR_MSG_COLORED("The imported function refers to the library '"<<log::LIME<<function->linked_library<<log::NO_COLOR<<"' but it does not exist in the file. (loaded/linked libraries are scoped per file).")
-                                ERR_LINE2(function->location, "unknown '"+function->linked_library+"' in @import");
-                                ERR_EXAMPLE(1,"#load \"path_to_library.dll\" as your_lib\n"
-                                            "fn @import(your_lib) func_in_library();")
-                            )
-                        }
-                    } else {
-                        ERR_SECTION(
-                            ERR_HEAD2(function->location)
-                            ERR_MSG("Imported functions must come from a library which is specified in the annotation.")
-                            ERR_LINE2(function->location, "missing library");
-                            ERR_EXAMPLE(1,"#load \"path_to_library.dll\" as your_lib\n"
-                                            "fn @import(your_lib) func_in_library();")
-                        )
-                    }
-                } else {
-                    ERR_SECTION(
-                        ERR_HEAD2(function->location)
-                        ERR_MSG("'"<<function->name<<"' is not a native function. None of the "<<nativeRegistry->nativeFunctions.size()<<" native functions matched.")
-                        ERR_LINE2(function->location, "bad")
-                    )
-                }
-                return SIGNAL_FAILURE;
-            }
-            _GLOG(log::out << "Native function "<<function->name<<"\n";)
-        } else {
-            // exports not handled
-            Assert(IS_IMPORT(function->linkConvention));
-            // if(function->_impls.size()>0){
-            //     function->_impls.last()->address = FuncImpl::ADDRESS_EXTERNAL;
-            // }
-            _GLOG(log::out << "External function "<<function->name<<"\n";)
-        }
         return SIGNAL_SUCCESS;
     }
 
@@ -4870,7 +4910,8 @@ SignalIO GenContext::generateFunctions(ASTScope* body){
             // Not calling function reducess log messages
             generateFunctions(it->body);
         }
-        generateFunction(it);
+        if(it->contains_run_directive == gen_func_with_run_directives)
+            generateFunction(it);
     }
     for(auto it : body->statements) {
         if(it->firstBody) {
@@ -4884,7 +4925,8 @@ SignalIO GenContext::generateFunctions(ASTScope* body){
         for (auto function : it->functions) {
             Assert(function->body);
             generateFunctions(function->body);
-            generateFunction(function, it);
+            if(function->contains_run_directive == gen_func_with_run_directives)
+                generateFunction(function, it);
         }
     }
     return SIGNAL_SUCCESS;
@@ -6251,20 +6293,26 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             builder.emit_ret();
             // info.currentFrameOffset = lastOffset; // nocheckin TODO: Should we reset frame like this? If so, should we not break this loop and skip the rest of the statements too?
             // break; // Let's try?
-        }
-        else if (statement->type == ASTStatement::EXPRESSION) {
+        } else if (statement->type == ASTStatement::EXPRESSION) {
             _GLOG(SCOPE_LOG("EXPRESSION"))
 
-            TEMP_ARRAY_N(TypeId, exprTypes, 5);
-            // IMPORTANT: There is a bug here if expression returns more than 5 expressions, the scratch allocator would mess things up
-            SignalIO result = generateExpression(statement->firstExpression, &exprTypes);
-            if (result != SIGNAL_SUCCESS) {
-                continue;
-            }
-            if(exprTypes.size() > 0 && exprTypes[0] != TYPE_VOID){
-                for(int i = 0; i < (int) exprTypes.size();i++) {
-                    TypeId dtype = exprTypes[i];
-                    generatePop(BC_REG_INVALID, 0, dtype);
+            if(inside_global_level && statement->firstExpression->computeWhenPossible) {
+                GlobalRunDirective rundir{};
+                rundir.expression = statement->firstExpression;
+                rundir.scope = currentScopeId;
+                compiler->global_run_directives.add(rundir);
+            } else {
+                TEMP_ARRAY_N(TypeId, exprTypes, 5);
+                // IMPORTANT: There is a bug here if expression returns more than 5 expressions, the scratch allocator would mess things up
+                SignalIO result = generateExpression(statement->firstExpression, &exprTypes);
+                if (result != SIGNAL_SUCCESS) {
+                    continue;
+                }
+                if(exprTypes.size() > 0 && exprTypes[0] != TYPE_VOID){
+                    for(int i = 0; i < (int) exprTypes.size();i++) {
+                        TypeId dtype = exprTypes[i];
+                        generatePop(BC_REG_INVALID, 0, dtype);
+                    }
                 }
             }
         }
@@ -6875,14 +6923,17 @@ SignalIO GenContext::generateGlobalData() {
         vm.silent = true;
         vm.init_stack();
         if(REGISTER_SIZE == 4) {
-            void* ptr_to_global_data = bytecode->dataSegment.data() + stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
+            void* ptr_to_global_data = bytecode->dataSegment.data();
             u32 mem = 0x1000'0000;
             u32 mem_size = bytecode->dataSegment.size();
             vm.add_memory_mapping(mem, (u64)ptr_to_global_data, mem_size);
-            *((u32*)(vm.stack.data() + vm.stack.max - REGISTER_SIZE)) = mem;
+            
+            int offset = stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
+            *((u32*)(vm.stack.data() + vm.stack.max - REGISTER_SIZE)) = mem + offset;
         } else {
-            void* ptr_to_global_data = bytecode->dataSegment.data() + stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
-            *((void**)(vm.stack.data() + vm.stack.max - REGISTER_SIZE)) = ptr_to_global_data;
+            void* ptr_to_global_data = bytecode->dataSegment.data();
+            int offset = stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
+            *((void**)(vm.stack.data() + vm.stack.max - REGISTER_SIZE)) = (char*)ptr_to_global_data + offset;
         }
         // let VM evaluate expression and put into global data
         vm.execute(bytecode, temp_tinycode->name, true);
@@ -6892,9 +6943,114 @@ SignalIO GenContext::generateGlobalData() {
 
     return SIGNAL_SUCCESS;
 }
+
+// Generate data from the type checker
+SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive) {
+    using namespace engone;
+
+    TRACE_FUNC()
+
+    // TODO: Polymorphism is not considered for globals inside functions, we need to set poly version for that
+
+    VirtualMachine vm{};
+    
+    ScopeId scopeId = run_directive->scope;
+    ASTExpression* expression = run_directive->expression;
+
+    CALLBACK_ON_ASSERT(
+        ERR_SECTION(
+            ERR_HEAD2(expression->location)
+            ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+            for(int i=0;i<vm.call_stack.size();i++) {
+                log::out << " " << vm.call_stack[i].func->name << "\n";
+            }
+            // TODO: Call stack
+            ERR_LINE2(expression->location, "here")
+        )
+    )
+
+    // TODO: Code below should be the same as the one in generateFunction.
+    //   If we change the code in generateFunction but forget to here then
+    //   we will be in trouble. So, how do we combine the code?
+
+    auto temp_tinycode = compiler->get_temp_tinycode();
+
+    tinycode = temp_tinycode;
+    builder.init(bytecode, tinycode, compiler);
+    currentScopeId = ast->globalScopeId;
+    currentFrameOffset = 0;
+    currentScopeDepth = -1;
+    currentPolyVersion = 0;
+
+    TEMP_ARRAY_N(TypeId, tempTypes, 5)
+    inside_compile_time_execution = true;
+    expression->computeWhenPossible = false;
+    auto result = generateExpression(expression, &tempTypes, 0);
+    expression->computeWhenPossible = true;
+    inside_compile_time_execution = false;
+    // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
+    if (result != SIGNAL_SUCCESS) {
+        if (!info.hasForeignErrors()) {
+            ERR_SECTION(
+                ERR_HEAD2(expression->location)
+                ERR_MSG("Cannot evaluate expression for global variable at compile time.")
+                // TODO: Provide better error message
+                ERR_LINE2(expression->location, "here")
+            )
+        }
+        return SIGNAL_FAILURE;
+    }
+
+    // log::out << log::GOLD <<"global: " <<stmt->varnames[0].name << "\n";
+    // tinycode->print(0,-1,bytecode);
+
+    vm.silent = true;
+    vm.init_stack();
+    if(REGISTER_SIZE == 4) {
+        void* ptr_to_global_data = bytecode->dataSegment.data();
+        u32 mem = 0x1000'0000;
+        u32 mem_size = bytecode->dataSegment.size();
+        vm.add_memory_mapping(mem, (u64)ptr_to_global_data, mem_size);
+    }
+    // let VM evaluate expression and put into global data
+    vm.execute(bytecode, temp_tinycode->name, true);
+
+    POP_LAST_CALLBACK()
+    
+    if(vm.error.type != VM_ERROR_NONE) {
+        printVMFailedMessage(vm, expression->location);
+        return SIGNAL_FAILURE;
+    }
+
+    return SIGNAL_SUCCESS;
+}
+
+void GenContext::printVMFailedMessage(VirtualMachine& vm, lexer::SourceLocation location) {
+    using namespace engone;
+    if(vm.error.type == VM_UNRESOLVED_CALL) {
+        ERR_SECTION(
+            ERR_HEAD2(location)
+            ERR_MSG_LOG("One of the functions the virtual machine tried to call was incomplete. A function may be incomplete if it contains a run directive, removing it will fix this error. Call stack:\n")
+            for(int i=0;i<vm.call_stack.size();i++) {
+                log::out << " " << vm.call_stack[i].func->name << "\n";
+            }
+            ERR_LINE2(location, "here")
+        )
+    } else {
+        ERR_SECTION(
+            ERR_HEAD2(location)
+            ERR_MSG_LOG("Virtual machine failed for an unspecified reason. Call stack:\n")
+            for(int i=0;i<vm.call_stack.size();i++) {
+                log::out << " " << vm.call_stack[i].func->name << "\n";
+            }
+            ERR_LINE2(location, "here")
+        )
+    }
+}
+
 void TestGenerate(BytecodeBuilder& b);
 
-bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import) {
+bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import, bool gen_func_with_run_directives) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue);
 
@@ -6904,11 +7060,13 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     context.init_context(compiler);
     context.imp = imp;
     context.out_codes = out_codes;
+    context.gen_func_with_run_directives = gen_func_with_run_directives;
 
     context.generateFunctions(scope);
     
     Identifier* iden = nullptr;
-    if(is_initial_import) {
+    // we assume main function has run directives
+    if(is_initial_import && gen_func_with_run_directives) {
         if(compiler->entry_point.size() != 0) {
             iden = compiler->ast->findIdentifier(imp->scopeId,0,compiler->entry_point, nullptr, true, true);
             if(!iden) {
@@ -6938,6 +7096,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 context.currentFrameOffset = 0;
                 context.currentScopeDepth = -1;
                 context.currentPolyVersion = 0;
+                context.inside_global_level = true;
 
                 out_codes->add(tb_main);
 

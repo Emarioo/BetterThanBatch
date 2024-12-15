@@ -4,7 +4,7 @@
 // #include "BetBat/Tokenizer.h"
 // #include "BetBat/old_Preprocessor.h"
 // #include "BetBat/old_Parser.h"
-#include "BetBat/NativeRegistry.h"
+#include "BetBat/IntrinsicRegistry.h"
 
 #include "BetBat/UserProfile.h"
 #include "BetBat/CompilerOptions.h"
@@ -117,7 +117,8 @@ enum TaskType : u32 {
     TASK_TYPE_BODY            = 0x80,
     
     TASK_GEN_BYTECODE         = 0x100,
-    TASK_GEN_MACHINE_CODE     = 0x200,
+    TASK_GEN_BYTECODE_RUNDIR  = 0x200,
+    TASK_GEN_MACHINE_CODE     = 0x400,
 };
 struct CompilerTask {
     TaskType type;
@@ -161,6 +162,11 @@ struct TestLocation {
     std::string file;
     int line=0;
     int column=0;
+};
+struct GlobalRunDirective {
+    // statement or expression?
+    ASTExpression* expression = nullptr;
+    ScopeId scope{};
 };
 struct Compiler {
     ~Compiler() {
@@ -221,8 +227,11 @@ struct Compiler {
 
     bool code_has_exceptions = false; // true if source code contains at least one try-catch
     bool have_prepared_global_data = false;
+    bool have_run_global_run_directives = false;
     volatile bool have_generated_comp_time_global_data = false; // this variable should be volatile to prevent compiler from rearraning it in dangerous ways when multiple threads modify it.
     bool compiler_got_stuck = false;
+   
+    DynamicArray<GlobalRunDirective> global_run_directives;
 
     int struct_tasks_since_last_change = 0;
 

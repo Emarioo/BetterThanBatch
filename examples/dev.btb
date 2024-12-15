@@ -1,58 +1,39 @@
 
-// #import "Array"
-// #import "Asserts"
+// #import "Logger"
 
-// len := 0
-// if len + 1 > 2 {
+
+/*
+    Compile time execution:
     
-// }
-
-// #import "Lang"
-
-#if !BUILD_EXE
-
-    struct Data {
-        x: i32;
-        mydawn: Data**;
-        Thecoast_inside_my_halls: f32;
-        _: char[];
-    }
-
-    fn @export(alias="btb_func") func(data: Data*) -> bool {
-        data.x += 23
-        return true
-    }
-
-#else
-
-    #import "lib/math_decl"
-    #import "Logger"
-
-    data: Data;
-
-    func(&data)
-
-    log(&data)
-
-#endif
+    1. Run directives at global level runs at the bytecode generation like evaulation of global values.
+    
+    2. Run directives in expressions 
+    
+    2. Detect circular dependency.
+        We can't execute run directive inside a function that
+        the run eventually calls since it's not generated yet and the 
+        run needs to execute before we can generate it.
+        
+*/
 
 
+fn @export build() {
+    #run forn()
+}
+fn forn() {
+    go()
+}
+fn @export go() {
+    #run build()
+}
 
-// a := "okay"
+// If run directive is encountered in another run directive then it is ignored.
+// #run 1 + #run 5
+#run 1 + (#run 5)
 
-// fn func() {
-//     // arr: Array<i32>
-//     // arr.add(123)
-//     // arr.add(-23)
-//     // arr.cleanup()
-// }
-// // global ok: i32;
+go()
 
-// fn main() -> i32{
-//     loc: i32;
-//     loc2: i32;
-//     loc = 23
-//     // func()
-//     // Assert(false)
-//     return loc + 2
-// }
+fn oc() {
+    // run directive in global should not affect the function
+    global g := #run 1
+}

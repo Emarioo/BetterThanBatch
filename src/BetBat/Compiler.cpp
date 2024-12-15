@@ -616,6 +616,26 @@ void Compiler::processImports() {
                         break;
                     }
                 }
+            } else if (task.type == TASK_GEN_BYTECODE_RUNDIR) {
+                // functions without run directives should have been generated before
+                // we start running those with.
+
+                // TODO: Optimize, store an integer of how many non-type checked tasks
+                //   we have left instead of iterating all tasks every time.
+                for(int i=0;i<tasks.size();i++) {
+                    CompilerTask& t = tasks[i];
+                    // log::out << "type " << t.type << "\n";
+                    // TODO: We may only have tasks to generate bytecodes but a thread
+                    //   may have taken out a task and be working on it right now.
+                    //   Redesign this
+                    if(t.type < TASK_GEN_BYTECODE_RUNDIR) {
+                        LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
+                        missing_dependency = true;
+                        // we miss a dependency in that all other imports have
+                        // not been type checked yet
+                        break;
+                    }
+                }
             } else if (task.type == TASK_GEN_MACHINE_CODE) {
                 // TinyBytecodes must be generated so that we can apply function relocations.
                 // relocation.funcImpl->tinycode_id may be zero otherwise.
@@ -975,13 +995,13 @@ void Compiler::processImports() {
                 // NOTE: TypeCheckBody may call addTask_type_body.
                 //   TASK_TYPE_BODY is per function, not per import so
                 //   we can't add GEN_BYTECODE task here.
-            } else if(picked_task.type == TASK_GEN_BYTECODE) {
+            } else if(picked_task.type == TASK_GEN_BYTECODE || picked_task.type == TASK_GEN_BYTECODE_RUNDIR) {
                 auto my_scope = ast->getScope(compiler_imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Gen bytecode: "<<compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
 
                 // NOTE: Type checker reserves all require global data.
                 //   The generator phase does not create new global data.
-                if(!have_prepared_global_data) { // cheap quick check, will the compiler optimize it away?
+                if(!have_prepared_global_data) { // cheap quick check
                     lock_miscellaneous.lock();
                     if(!have_prepared_global_data) { // thread safe check
                         GenContext c{};
@@ -995,19 +1015,29 @@ void Compiler::processImports() {
                     }
                     lock_miscellaneous.unlock();
                 }
+                if(!have_run_global_run_directives && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check
+                    lock_miscellaneous.lock();
+                    if(!have_run_global_run_directives) { // thread safe check
+                        GenContext c{};
+                        c.init_context(this);
+                        for(int i=0;i<global_run_directives.size();i++) {
+                            auto& rundir = global_run_directives[i];
+                            c.executeGlobalRunDirective(&rundir);
+                        }
+                        have_run_global_run_directives = true;
+                    }
+                    lock_miscellaneous.unlock();
+                 }
 
                 int prev_errors = compile_stats.errors;
-
-                if(initial_import_id == compiler_imp->import_id) {
-                    auto yes = GenerateScope(my_scope->astScope, this, compiler_imp, &compiler_imp->tinycodes, true);
-                } else {
-                    auto yes = GenerateScope(my_scope->astScope, this, compiler_imp, &compiler_imp->tinycodes, false);
-                }
+                
+                bool is_initial_import = initial_import_id == compiler_imp->import_id;
+                bool gen_func_with_run_directives = picked_task.type == TASK_GEN_BYTECODE_RUNDIR;
+                auto yes = GenerateScope(my_scope->astScope, this, compiler_imp, &compiler_imp->tinycodes, is_initial_import, gen_func_with_run_directives);
                 // TODO: Print some interesting info?
                 //  LOG(LOG_TASKS, log::GRAY
                 //     << " tokens: "<<tokens
                 //     << "\n")
-
 
                 bool new_errors = false;
                 if(prev_errors < compile_stats.errors) {
@@ -1017,6 +1047,7 @@ void Compiler::processImports() {
                 if(!new_errors) {
                     if(bytecode->debugDumps.size() != 0) {
                         for(int i=0;i<(int)bytecode->debugDumps.size();i++) {
+                            // TODO: Mutex lock when popping debug dump?
                             auto& dump = bytecode->debugDumps[i];
                             bool found = false;
                             for(int j=0;j<compiler_imp->tinycodes.size();j++) {
@@ -1046,7 +1077,6 @@ void Compiler::processImports() {
                         }
                     }
                     
-                    
                     // @DEBUG
                     LOG_CODE(LOG_BYTECODE,
                         for(auto t : compiler_imp->tinycodes) {
@@ -1056,7 +1086,10 @@ void Compiler::processImports() {
                     )
                     
                     compiler_imp->state = (TaskType)(compiler_imp->state | picked_task.type);
-                    picked_task.type = TASK_GEN_MACHINE_CODE;
+                    if(picked_task.type == TASK_GEN_BYTECODE)
+                        picked_task.type = TASK_GEN_BYTECODE_RUNDIR;
+                    else
+                        picked_task.type = TASK_GEN_MACHINE_CODE;
                     picked_task.import_id = compiler_imp->import_id;
 
                     SCOPE_LOCK
@@ -1071,7 +1104,7 @@ void Compiler::processImports() {
                     if(!have_generated_comp_time_global_data) { // thread safe check
                         GenContext c{};
                         c.init_context(this);
-                        c.generateGlobalData(); // make sure this function doesn't call lock_miscellaneous
+                        c.generateGlobalData();
                         have_generated_comp_time_global_data = true;
                     }
                     lock_miscellaneous.unlock();
@@ -1347,9 +1380,8 @@ void Compiler::run(CompileOptions* options) {
         "    beg: i32;\n"
         "    end: i32;\n"
         "}\n"
-        "fn @native prints(str: char[]);\n"
-        "fn @native printc(str: char);\n"
-        "fn @native printi(n: i32);\n"
+        "fn @intrinsic prints(str: char[])\n"
+        "fn @intrinsic printc(str: char);\n"
         "fn @intrinsic rdtsc() -> i64;\n"
         "fn @intrinsic strlen(str: char*) -> i32;\n"
 

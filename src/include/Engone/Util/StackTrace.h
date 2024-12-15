@@ -15,7 +15,7 @@
 
 #include <functional>
 
-// #define ENABLE_ASSERT_HANDLER
+#define ENABLE_ASSERT_HANDLER
 
 #ifdef ENABLE_ASSERT_HANDLER
     #ifdef OS_WINDOWS

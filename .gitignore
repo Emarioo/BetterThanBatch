@@ -24,6 +24,7 @@ bin
 *.elf
 # exported functions from btb.exe when compiling library 
 *_decl.btb
+*_decl.h
 
 # vscode extension package
 *.vsix

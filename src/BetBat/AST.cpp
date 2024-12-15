@@ -21,7 +21,6 @@ const char* ToString(LinkConvention stuff){
     #define CASE(X,N) case X: return N;
     switch(stuff){
         CASE(NONE,"none")
-        CASE(NATIVE,"native")
         CASE(IMPORT,"import")
         CASE(DYNAMIC_IMPORT,STR_DYNAMIC_IMPORT)
         CASE(STATIC_IMPORT,STR_STATIC_IMPORT)

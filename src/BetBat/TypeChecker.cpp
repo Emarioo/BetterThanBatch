@@ -3667,7 +3667,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
             auto ac = ambiguousOverload->astFunc->callConvention;
             auto bc = function->callConvention;
             
-            if ((ac == INTRINSIC && bc == INTRINSIC) || (al == NATIVE && bl == NATIVE)) {
+            if ((ac == INTRINSIC && bc == INTRINSIC)) {
                 // We should check signature just so that you don't do
                 //     strlen(n: i32) or strlen(b: f32)
                 // doesn't have to happen here though.
@@ -3683,7 +3683,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
                 // print list of overloads?
             }
         } else {
-            if(iden && iden->funcOverloads.overloads.size()>0 && function->linkConvention == NATIVE) {
+            if(iden && iden->funcOverloads.overloads.size()>0 && function->linkConvention == INTRINSIC) {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
                     ERR_MSG("There already is an overload of the native function '"<<function->name<<"'.")

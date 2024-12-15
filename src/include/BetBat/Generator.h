@@ -5,7 +5,9 @@
 #include "BetBat/PhaseContext.h"
 #include "BetBat/DebugInformation.h"
 #include "BetBat/Util/Profiler.h"
+#include "BetBat/VirtualMachine.h"
 
+struct GlobalRunDirective;
 struct CompilerImport;
 struct GenContext : public PhaseContext {
     TinyBytecode* tinycode = nullptr;
@@ -22,6 +24,9 @@ struct GenContext : public PhaseContext {
     GenContext& info;
 
     int currentFrameOffset = 0;
+
+    bool inside_global_level = false;
+    bool inside_compile_time_execution = false;
 
     BytecodeBuilder builder{};
 
@@ -61,6 +66,8 @@ struct GenContext : public PhaseContext {
     // bool disableCodeGeneration = false; // used with @no-code
     bool ignoreErrors = false; // used with @no-code
     bool showErrors = true;
+
+    bool gen_func_with_run_directives = false;
 
     int funcDepth=0;
     struct LoopScope {
@@ -133,10 +140,13 @@ struct GenContext : public PhaseContext {
     SignalIO generatePreload();
     SignalIO generateData();
     SignalIO generateGlobalData(); // runs after all functions have been generated, that way we know that applyRelocations won't fail because of missing tinycodes.
+    SignalIO executeGlobalRunDirective(GlobalRunDirective* run_directive);
     
     bool performSafeCast(TypeId from, TypeId to, bool less_strict = false);
 
     void init_context(Compiler* compiler);
+    
+    void printVMFailedMessage(VirtualMachine& vm, lexer::SourceLocation location);
 };
 struct NodeScope {
     NodeScope(GenContext* info) : info(info) {}
@@ -146,6 +156,6 @@ struct NodeScope {
     GenContext* info = nullptr;
 };
 // Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
-bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import);
+bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import, bool gen_func_with_run_directives);
 
 LinkConvention DetermineLinkConvention(const std::string& lib_path);

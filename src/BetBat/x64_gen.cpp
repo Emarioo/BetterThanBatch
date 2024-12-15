@@ -63,7 +63,7 @@ bool GenerateX64(Compiler *compiler, TinyBytecode *tinycode) {
 
 
     // make sure dependencies have been fixed first
-    bool yes = tinycode->applyRelocations(compiler->bytecode);
+    bool yes = tinycode->applyRelocations(compiler->bytecode, true);
     if (!yes) {
         log::out << "Incomplete call relocation\n";
         return false;

@@ -2,8 +2,19 @@
 
 #include "BetBat/CompilerOptions.h"
 #include "BetBat/Bytecode.h"
-#include "BetBat/NativeRegistry.h"
+#include "BetBat/IntrinsicRegistry.h"
 // #include "Native/NativeLayer.h"
+
+
+enum VMErrorType {
+    VM_ERROR_NONE = 0,
+    VM_ERROR_UNKNOWN,
+    VM_UNRESOLVED_CALL,
+};
+struct VMError {
+    VMErrorType type = VM_ERROR_NONE;
+    std::string message;
+};
 
 /*
     VirtualMachine may not be the accurate term for executing bytecode.
@@ -21,6 +32,14 @@ struct VirtualMachine {
     i64 registers[BC_REG_MAX];
     // engone::Memory<u8> stack{};
     QuickArray<u8> stack{};
+    
+    struct CallFrame {
+        TinyBytecode* func;
+        int return_address;
+    };
+    DynamicArray<CallFrame> call_stack{};
+
+    VMError error{};
 
     bool has_return_values_on_stack = false;
     int ret_offset = 0;
@@ -55,8 +74,6 @@ struct VirtualMachine {
     void reset();
     void cleanup();
     void printRegisters();
-
-    void executeNative(int tiny_index);
 
     void moveMemory(u8 reg, volatile void* from, volatile void* to);
     volatile void* getReg(u8 id);

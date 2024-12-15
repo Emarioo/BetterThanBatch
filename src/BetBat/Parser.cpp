@@ -1553,11 +1553,15 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
     bool shouldComputeExpression = false;
 
     StringView view{};
-    // auto token = info.getinfo(&view);
-    // if(token->type == lexer::TOKEN_ANNOTATION && view == "run") {
-    //     info.advance();
-    //     shouldComputeExpression = true;
-    // }
+    auto token = info.getinfo();
+    auto token2 = info.getinfo(&view, 1);
+    if(token->type == '#' && token2->type == lexer::TOKEN_IDENTIFIER && view == "run") {
+        info.advance(2);
+        shouldComputeExpression = true;
+        if(functionScopes.size() > 0 && functionScopes.last().function) {
+            functionScopes.last().function->contains_run_directive = true;
+        }
+    }
 
     // bool negativeNumber=false;
     bool expectOperator=false;
@@ -2552,7 +2556,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                             ERR_LINE2(tok,"bad")
                         )
                         continue;
-                    }
+                    } 
                 }
                 // log::out << "Parse initializer "<<count<<"\n";
                 values.add(initExpr);
@@ -3037,7 +3041,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
         expectOperator=!expectOperator;
         if(ending){
             expression = values.last();
-            // expression->computeWhenPossible = shouldComputeExpression;// 
+            expression->computeWhenPossible = shouldComputeExpression;
             if(!info.hasAnyErrors()) {
                 Assert(values.size()==1);
             }
@@ -3813,11 +3817,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                     default: Assert(false);
                 }
                 specifiedConvention = true;
-            } else if (view_fn_name == "native"){
-                function->linkConvention = NATIVE;
             } else if (view_fn_name == "intrinsic"){
                 function->callConvention = CallConvention::INTRINSIC;
-                // function->linkConvention = NATIVE;
             } else if (view_fn_name == "blank"){
                 function->blank_body = true;
             } else if (view_fn_name == "entry"){

@@ -187,7 +187,6 @@ int main(int argc, const char** argv){
     options.cleanup();
     ProfilerCleanup();
 
-    NativeRegistry::DestroyGlobal();
     int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
     // int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
     if(finalMemory!=0){
