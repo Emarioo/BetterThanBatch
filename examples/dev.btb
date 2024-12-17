@@ -15,9 +15,7 @@
         run needs to execute before we can generate it.
         
 */
-
 #import "Logger"
-
 
 fn first() {
     log("first")
@@ -27,6 +25,109 @@ fn second() {
     log("second")
     #run first()
 }
+
+// #import "Memory"
+
+// x := #run Allocate(4) // try this line if you are curious
+
+// #import "Logger"
+
+// struct Funcs {
+//     start: fn();
+//     finish: fn();
+// }
+
+// for 0..2 {
+//     x := #run get_funcs()
+    
+//     x.start()
+//     x.finish()
+// }
+
+// fn get_funcs() -> Funcs {
+//     log("Get funcs")
+//     return { Start, Finish }
+// }
+
+// fn Start() {
+//     log("START")
+// }
+// fn Finish() {
+//     log("FINISH")
+// }
+
+// #import "Logger"
+
+// struct Stuff {
+//     str: char[];
+//     x: i32;
+// }
+// x := fun()
+// y := fun()
+// log(&x," ", &y)
+
+// fn comp() -> Stuff {
+//     log("comp")
+//     return { "hello", 23 }
+// }
+// fn fun() -> Stuff {
+//     res := #run comp()
+//     return res
+// }
+                       
+// #import "File"
+// #import "String"
+// #import "Memory"
+
+
+
+
+// global BUILD_VERSION: i32 = get_version();
+
+// fn main() {
+//     log("Build Version: ", BUILD_VERSION);  
+// }
+
+
+// #import "Logger"
+
+
+// fn okay() -> i32 {
+//     log("okay")
+//     return 5
+// }
+
+// fn main() {
+//     log("main begin")
+    
+//     #run log("I am auxiliary but local")
+    
+//     x := #run okay()
+    
+//     log("main end ", y)
+// }
+
+// #run {
+//     log("I am auxiliary and global")
+// }
+
+// global y: i32 = temp()
+// fn temp() -> i32 {
+//     log("I am global variable")
+//     return 5
+// }
+
+// #import "Logger"
+
+
+// fn first() {
+//     log("first")
+//     #run second()
+// }
+// fn second() {
+//     log("second")
+//     #run first()
+// }
 // first() // Should trigger a compiler error for circular dependency.
 
 

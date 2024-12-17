@@ -194,6 +194,9 @@ fn @import(Kernel) HeapFree(
 
 #macro ERROR_FILE_NOT_FOUND             2
 
+#macro WIN32_FILE_BEGIN 0
+#macro WIN32_FILE_CURRENT 1
+#macro WIN32_FILE_END 2
 
 // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea
 fn @import(Kernel) CreateFileA(
@@ -241,6 +244,12 @@ fn @import(Kernel) GetFileSizeEx(
   hFile: HANDLE,
   lpFileSizeHigh: i64*
 ) -> bool;
+fn @import(Kernel) SetFilePointerEx(
+    hFile: HANDLE,
+    liDistanceToMove: i64,
+    lpNewFilePointer: i64*, // can be null
+    method: i32,
+) -> i32;
 fn @import(Kernel) GetFileTime(
   hFile: HANDLE,
   lpCreationTime: i64*, // arguments actually use FILETIME but they are basically i64

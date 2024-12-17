@@ -6619,11 +6619,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }
         };
         
-        if(statement->computeWhenPossible && !inside_compile_time_execution) {
-            GlobalRunDirective rundir{};
-            rundir.statement = statement;
-            rundir.scope = currentScopeId;
-            compiler->global_run_directives.add(rundir);
+        // if(statement->computeWhenPossible && !inside_compile_time_execution) {
+        if(statement->computeWhenPossible) {
+            if(!at_top_level) { // if top level then it was already added in type checker
+                GlobalRunDirective rundir{};
+                rundir.statement = statement;
+                rundir.scope = currentScopeId;
+                compiler->global_run_directives.add(rundir);
+            }
             continue;
         }
 
@@ -7267,7 +7270,9 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
 
                 context.generatePreload();
 
+                context.at_top_level = true;
                 context.generateBody(scope);
+                context.at_top_level = false;
                 // TestGenerate(context.builder);
                 
                 // We can't skip ret like this the last ret may exist in a

@@ -4913,9 +4913,13 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
         if(token->type == '#' && token2->type == lexer::TOKEN_IDENTIFIER && view == "run") {
             info.advance(2);
             shouldComputeExpression = true;
-            if(functionScopes.size() > 0 && functionScopes.last().function) {
-                functionScopes.last().function->contains_run_directive = true;
-            }
+            // An auxiliary run directive does not affect the function
+            // and contains_run_directive is used to delay functions that do.
+            // inline run directives insert literals into the code which requires
+            // all other functions to be evaluated first, and then the inline directives.
+            // if(functionScopes.size() > 0 && functionScopes.last().function) {
+            //     functionScopes.last().function->contains_run_directive = true;
+            // }
         }
         
         lexer::Token stmt_loc = info.gettok();

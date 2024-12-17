@@ -5198,6 +5198,14 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
         info.currentContentOrder.last() = contentOrder;
         auto now = scope->statements[scope->content[contentOrder].index];
 
+        if(now->computeWhenPossible) {
+            GlobalRunDirective rundir{};
+            rundir.statement = now;
+            rundir.scope = scope->scopeId;
+            compiler->global_run_directives.add(rundir);
+            continue;
+        }
+
         if(now->type != ASTStatement::DECLARATION || !now->globalDeclaration)
             continue;
 

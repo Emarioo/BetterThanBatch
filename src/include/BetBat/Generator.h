@@ -27,6 +27,7 @@ struct GenContext : public PhaseContext {
 
     bool inside_compile_time_execution = false;
     bool inside_global = false;
+    bool at_top_level = false;
 
     BytecodeBuilder builder{};
 

@@ -1007,10 +1007,32 @@ void Compiler::processImports() {
                         GenContext c{};
                         c.init_context(this);
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
-                        GenContext c2{};
-                        c2.init_context(this);
-                        c2.generateGlobalData();
                         have_prepared_global_data = true;
+                    }
+                    lock_miscellaneous.unlock();
+                }
+                if(!have_generated_comp_time_global_data && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check, will the compiler optimize it away?
+                    lock_miscellaneous.lock();
+                    if(!have_generated_comp_time_global_data) { // thread safe check
+                        // We need to generate global data here when
+                        // all functions have been generated.
+                        GenContext c{};
+                        c.init_context(this);
+                        c.generateGlobalData();
+                        have_generated_comp_time_global_data = true;
+                    }
+                    lock_miscellaneous.unlock();
+                }
+                if(!have_run_global_run_directives && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check
+                    lock_miscellaneous.lock();
+                    if(!have_run_global_run_directives) { // thread safe check
+                        GenContext c{};
+                        c.init_context(this);
+                        for(int i=0;i<global_run_directives.size();i++) {
+                            auto& rundir = global_run_directives[i];
+                            c.executeGlobalRunDirective(&rundir);
+                        }
+                        have_run_global_run_directives = true;
                     }
                     lock_miscellaneous.unlock();
                 }
@@ -1088,6 +1110,8 @@ void Compiler::processImports() {
                 // if(!have_generated_comp_time_global_data) { // cheap quick check, will the compiler optimize it away?
                 //     lock_miscellaneous.lock();
                 //     if(!have_generated_comp_time_global_data) { // thread safe check
+                //         // We need to generate global data here when
+                //         // all functions have been generated.
                 //         GenContext c{};
                 //         c.init_context(this);
                 //         c.generateGlobalData();
@@ -1095,19 +1119,19 @@ void Compiler::processImports() {
                 //     }
                 //     lock_miscellaneous.unlock();
                 // }
-                if(!have_run_global_run_directives) { // cheap quick check
-                    lock_miscellaneous.lock();
-                    if(!have_run_global_run_directives) { // thread safe check
-                        GenContext c{};
-                        c.init_context(this);
-                        for(int i=0;i<global_run_directives.size();i++) {
-                            auto& rundir = global_run_directives[i];
-                            c.executeGlobalRunDirective(&rundir);
-                        }
-                        have_run_global_run_directives = true;
-                    }
-                    lock_miscellaneous.unlock();
-                }
+                // if(!have_run_global_run_directives) { // cheap quick check
+                //     lock_miscellaneous.lock();
+                //     if(!have_run_global_run_directives) { // thread safe check
+                //         GenContext c{};
+                //         c.init_context(this);
+                //         for(int i=0;i<global_run_directives.size();i++) {
+                //             auto& rundir = global_run_directives[i];
+                //             c.executeGlobalRunDirective(&rundir);
+                //         }
+                //         have_run_global_run_directives = true;
+                //     }
+                //     lock_miscellaneous.unlock();
+                // }
 
                 if(compile_stats.errors == 0) {
                     // can't generate if bytecode is messed up.

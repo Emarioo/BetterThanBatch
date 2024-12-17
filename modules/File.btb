@@ -60,6 +60,8 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
     creation: i32 = OPEN_EXISTING;
     if flags & FILE_CLEAR_AND_WRITE
         creation = CREATE_ALWAYS;
+    if flags & FILE_READ_AND_WRITE
+        creation = OPEN_ALWAYS
     
     // if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){
     //     std::string temp;
@@ -124,7 +126,7 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
     if flags & FILE_READ_ONLY
         open_flags = O_RDONLY
     if flags & FILE_READ_AND_WRITE
-        open_flags = O_RDWR
+        open_flags = O_RDWR | O_CREAT
     if flags & FILE_CLEAR_AND_WRITE {
         open_flags = O_CREAT | O_TRUNC | O_RDWR;
         // open_flags = O_CREAT | O_RDWR;
@@ -217,6 +219,24 @@ fn FileSize(path: char[]) -> i64 {
     
     CloseHandle(handle)
     return size
+}
+enum FileSetHeadMethod {
+    FILE_SET_BEG = 0,
+    FILE_SET_CUR = 1,
+    FILE_SET_END = 2,
+}
+fn FileSetHead(file: FileHandle, offset: i64, method: FileSetHeadMethod = FILE_SET_BEG) -> i64 {
+    off: i64
+    #if OS_WINDOWS
+        res := SetFilePointerEx(FILE_TO_OS_HANDLE(file), offset, &off, cast<i32>method)
+        if !res
+            return -1
+    #else
+        off = lseek(FILE_TO_OS_HANDLE(file), offset, cast<i32>method)
+        if off < 0
+            return -1
+    #endif
+    return off
 }
 fn DirectoryCreate(path: char[]) -> bool {
     #if OS_WINDOWS
