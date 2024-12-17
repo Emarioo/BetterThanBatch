@@ -131,6 +131,25 @@ a:hover {
     color: var(--nav-link-color-hover);
 }
 
+.work-in-progress {
+    // position: absolute;
+    top: 0;
+    right: 0;
+
+    background-color: #d38c12;
+    color: white;
+    padding: 5px 15px;
+    font-size: 1rem;
+    border-radius: 3px;
+    z-index: 1001;
+    opacity: 1;
+    transition: opacity 1s ease-out;
+    pointer-events: none;
+}
+.hide-wip {
+    opacity: 0;
+}
+
 .search-bar {
     display: flex;
     align-items: center; 
@@ -201,6 +220,7 @@ a:hover {
 .cto_download:hover {
     background-color: var(--download-background-hover);
     color: var(--download-text-color-hover);
+    box-shadow: 1px 1px 5px 1px #0af7;
 }
 
 .cto_guide:hover {
@@ -284,9 +304,11 @@ a:hover {
     margin-bottom: 40px;
     transition: background 0.2s ease; 
 }
+/* no highlight on hover, it leads users to believe you can click on the background which you can't
 .community:hover {
     background: var(--community-background-hover);
 }
+*/
 
 /* Footer */
 footer {

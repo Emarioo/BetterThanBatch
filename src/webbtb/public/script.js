@@ -22,8 +22,17 @@ function update_download_link() {
     }
 }
 
-window.onload = () => {
+window.onload = function() {
     update_download_link()
+    
+    // TODO: Temporary
+    /*
+    const wipMessage = document.querySelector('.work-in-progress');
+
+    setTimeout(() => {
+        wipMessage.classList.add('hide-wip');
+    }, 7000);
+    */
 }
 
 function componentToHex(c) {

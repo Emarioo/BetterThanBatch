@@ -16,6 +16,9 @@
                 <a href="docs">Docs</a>
                 <a href="https://github.com/Emarioo/BetterThanBatch">Github</a>
             </div>
+            <div class="work-in-progress">
+                This website is a work in progress.
+            </div>
             <div class="search-bar">
                 <input class="search-input" placeholder="Search..."/>
             </div>
@@ -150,6 +153,57 @@ log("This is the box: ", &box)
                     </div> 
                 </div>
             </div>
+            <div class="feature-section">
+                <div class="feature-item">
+                    <div class="feature-desc">
+                        <h3><b>Compile-time Execution</b> for your metaprogramming needs!</h3>
+                        <p>
+                        Pre-calculate global data, read and set up configuration files, create your own build system that runs at compile time, and automate repetitive tasks or scripts. These are just a few examples of what this feature can do.
+                        </p>
+                        <b>It works likes this:</b> global variables are always evaluated at compile time and the <b>#run</b> directive can be placed anywhere to execute any code, even if it calls functions from the operating system or other dynamic library! You can also use <b>#run</b> as an expression where it's final value is inserted as a literal in the program.
+                        </p>
+                        <p>
+                        <b>The program on the side</b> reads and increments a build version number from a file and includes it into the program. It also writes back the new version number to the file which means that every time you compile the program, each executable will get it's own build number! 
+                        </p>
+                    </div>
+                    <div class="feature-code">
+                        <code>                       
+#import "File"
+#import "String"
+#import "Memory"
+
+global BUILD_VERSION: i32 = get_version();
+
+fn main() {
+    log("Build Version: ", BUILD_VERSION);  
+}
+
+fn get_version() -&gt i32 {
+    file_size: i64
+    file := FileOpen("version.txt", FILE_READ_AND_WRITE, &file_size);
+    if !file  return 0
+    
+    buffer: char[32]
+    if file_size &lt buffer.len
+        buffer.len = file_size
+    FileRead(file, buffer.ptr, buffer.len)
+    
+    version := parse_i64(buffer);
+    
+    text: StringBuilder
+    text.append(version + 1)
+    text.append("\n")
+    
+    FileSetHead(file, 0)
+    FileWrite(file, text.ptr, text.len)
+    FileClose(file)
+    
+    return version;  
+}
+                        </code>
+                    </div> 
+                </div>
+            </div>
             <div class="feature-item">
                     <div class="feature-desc">
                         <h3>Inline assembly</h3>
@@ -159,7 +213,7 @@ log("This is the box: ", &box)
                         <code>
 #import "Logger"
 
-value := asm<i32>(9,10) {
+value := asm&lti32&gt(9,10) {
     pop rbx      // 10
     pop rax      // 9
     
