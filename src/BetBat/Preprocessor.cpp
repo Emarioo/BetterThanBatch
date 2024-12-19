@@ -757,8 +757,8 @@ void FunctionInsert::print() {
     int indent = 0;
     Expr unindent{};
     unindent.type = (ExprType)10;
-    Expr and{};
-    and.type = (ExprType)9;
+    Expr andexpr{};
+    andexpr.type = (ExprType)9;
     exprs.add(&pattern);
     while(exprs.size()>0) {
         auto expr = exprs.last();
@@ -793,8 +793,10 @@ void FunctionInsert::print() {
                         auto& e = innerlist[j];
                         exprs.add(&e);
                     }
-                    exprs.add(&and);
+                    exprs.add(&andexpr);
                 }
+            break;
+            case PATTERN_NONE:
             break;
         }
     }

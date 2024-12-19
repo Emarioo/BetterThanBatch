@@ -6,7 +6,7 @@
 #import "Lang"
 
 fn main(argc: i32, argv: char**, envp: char**) -> i32 {
-    #load "c" as libc
+    #load "libc.so.6" as libc
     fn @import(libc) malloc(size: i32) -> void*;
 
     ptr := malloc(8) // commenting this line fixes the error

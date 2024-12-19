@@ -1194,6 +1194,7 @@ ASTExpression *AST::createExpression(ASTExpressionType type) {
             new(ptr) T(); \
         } break;
     switch(type) {
+        case EXPR_NONE: Assert(false); break;
         case EXPR_VALUE: GEN_EXPR(ASTExpressionValue)
         case EXPR_STRING : GEN_EXPR(ASTExpressionString)
         case EXPR_IDENTIFIER : GEN_EXPR(ASTExpressionIdentifier)
@@ -2326,6 +2327,7 @@ void AST::destroy(ASTExpression *expression) {
     //     destroy(expression->right);
     #define CASE(T) case T::TYPE: { expression->as<T>()->~T(); return; } break;
     switch(expression->type) {
+    case EXPR_NONE: Assert(false); break;
     CASE(ASTExpressionValue)
     CASE(ASTExpressionString)
     CASE(ASTExpressionIdentifier)

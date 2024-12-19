@@ -267,7 +267,7 @@ def compile(config):
         MSVC_COMPILE_OPTIONS += " /FI pch.h"
 
         if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.obj"):
-            cmd("ml64 /nologo /Fo"+config["bin_dir"]+"/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
+            cmd("ml64 /nologo /Zd /Zi /Fo"+config["bin_dir"]+"/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
         object_files.append(config["bin_dir"]+"/hacky_stdcall.obj")
 
         # Create sub directories in bin, this part must be single-threaded
@@ -399,11 +399,11 @@ def compile(config):
       
         if platform.system() == "Windows":
             if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.o"):
-                cmd("as -c src/BetBat/hacky_stdcall.s -o "+config["bin_dir"]+"/hacky_stdcall.o")
+                cmd("as -c -g src/BetBat/hacky_stdcall.s -o "+config["bin_dir"]+"/hacky_stdcall.o")
             object_files.append(config["bin_dir"]+"/hacky_stdcall.o")
         else:
             if not os.path.exists(config["bin_dir"]+"/hacky_sysvcall.o"):
-                cmd("as -c src/BetBat/hacky_sysvcall.s -o "+config["bin_dir"]+"/hacky_sysvcall.o")
+                cmd("as -c -g src/BetBat/hacky_sysvcall.s -o "+config["bin_dir"]+"/hacky_sysvcall.o")
             object_files.append(config["bin_dir"]+"/hacky_sysvcall.o")
         
         # TODO: Add include directories to compute_modified_files? We assume that all includes come from "include/"

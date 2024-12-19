@@ -560,6 +560,7 @@ struct ASTExpressionInitializer;
 struct ASTExpressionCast;
 struct ASTExpressionBuiltin;
 struct ASTExpression : ASTNode {
+    static const ASTExpressionType TYPE = EXPR_NONE;
     ASTExpression() { }
     ASTExpressionType type;
     lexer::SourceLocation location;

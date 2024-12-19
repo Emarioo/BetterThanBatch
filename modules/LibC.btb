@@ -2,7 +2,7 @@
     Work in progress
 */
 
-#load "c" as libc
+#load "libc.so.6" as libc
 fn @import(libc) malloc(size: i32) -> void*;
 fn @import(libc) free(ptr: void*);
 

@@ -1587,11 +1587,12 @@ void Compiler::run(CompileOptions* options) {
         } break;
         default: Assert(false);
     }
-    
-    int at = output_path.find_last_of("/");
-    if(at != -1) {
-        std::string output_dir = output_path.substr(0,at);
-        DirectoryCreate(output_dir);
+    {
+        int at = output_path.find_last_of("/");
+        if(at != -1) {
+            std::string output_dir = output_path.substr(0,at);
+            DirectoryCreate(output_dir);
+        }
     }
     
     if(!obj_write_success) {
@@ -1757,6 +1758,7 @@ void Compiler::run(CompileOptions* options) {
                             // parsing command line arguments is though.
                             // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
                         } else {
+                            // IMPORTANT: 'aligned_16_byte_on_entry_point' needs to be set when using nostdlib!
                             // cmd += "-nostdlib ";
                             // if (entry_point == "main")
                             //     cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
@@ -1823,9 +1825,16 @@ void Compiler::run(CompileOptions* options) {
                 } else {
                     // System library
                     std::string file = path;
-                    int pos = file.find_last_of(".");
-                    if(pos != file.npos)
-                        file = file.substr(0,file.find_last_of("."));
+                    if(options->target == TARGET_WINDOWS_x64) {
+                        int pos = file.find_last_of(".");
+                        if(pos != file.npos)
+                            file = file.substr(0,file.find_last_of("."));
+                    } else {
+                        int pos = file.find(".");
+                        if(file.size() > 3 && file.substr(0,3) == "lib" && pos != -1) {
+                            file = file.substr(3, pos-3);
+                        }
+                    }
                     if(file != "")
                         cmd += "-l" + file + " ";
                 }
@@ -2218,10 +2227,10 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
     using namespace engone;
     if(options->target == TARGET_LINUX_x64) {
         // TODO: When on Windows, use default entry point if a C runtime was specified.
-        if(path == "c") { // libc
+        if(path.find("libc") != -1) { // libc
             if(has_generated_entry_point) {
                 // TODO: Improve error message, although it shouldn't happen.
-                log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR <<"When using libc, your program should no longer be the entry point. The libc's entry point should be used instead (things might break otherwise). However, the entry point was generated before libc library was detected. This should not happen, contact developer for a quick fix.\n";
+                log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR <<"When using libc, your program should no longer be the entry point. The libc's entry point should be used instead (things might break otherwise). However, the entry point was generated before libc library was detected. This should not happen, contact developer for a quick fix. (path: '"<<path<<"')\n";
             }
             force_default_entry_point = true;
         }
@@ -2291,7 +2300,7 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     }
     #if OS_LINUX
     if(fullPath.text.size() > 0 && fullPath.text[0] == '~') {
-        std::string value = EnvironmentVariable("HOME");
+        std::string value = GetEnvVar("HOME");
         if(value.size() != 0) {
             // log::out << "HOME="<<value<<"\n";
             // check traling slashes, join them, make sure value and path is separated by ONE slash

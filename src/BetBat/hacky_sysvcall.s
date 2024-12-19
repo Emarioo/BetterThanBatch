@@ -9,13 +9,13 @@ Makeshift_sysvcall:
     push rbx     # callee saved register
     mov rbx, rsp # save pointer for safe keeping
     
-    mov rsp, rdx # set makeshift stack
-    mov rax, rcx # rcx is needed for arguments
+    mov rsp, rsi # set makeshift stack
+    mov rax, rdi # rcx is needed for arguments
 
-    mov rcx, QWORD PTR [rsp]      # Set arguments even if we don't use all since
-    mov rdx, QWORD PTR [rsp + 8]  # it is easier than conditional jumps and stuff
-    mov r8,  QWORD PTR [rsp + 16]
-    mov r9,  QWORD PTR [rsp + 24] # we always allocate 32 bytes so we won't read out of bounds
+    mov rdi, QWORD PTR [rsp]      # Set arguments even if we don't use all since
+    mov rsi, QWORD PTR [rsp + 8]  # it is easier than conditional jumps and stuff
+    mov rdx, QWORD PTR [rsp + 16]
+    mov rcx, QWORD PTR [rsp + 24] # we always allocate 32 bytes so we won't read out of bounds
 
     call rax          # call function pointer
     mov [rsp-24], rax # put return on stack where bytecode expects it

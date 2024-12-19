@@ -15,22 +15,22 @@
         run needs to execute before we can generate it.
         
 */
+
+
+#import "Memory"
 #import "Logger"
 
-fn first() {
-    log("first")
-    #run second()
-}
-fn second() {
-    log("second")
-    #run first()
-}
+prints("\x1b[0;32mHello sir\n")
 
-// #import "Memory"
 
-// x := #run Allocate(4) // try this line if you are curious
+// std_print(LOG_BLUE)
 
-// #import "Logger"
+// #run {
+//     log("hello")
+//     ptr: i32* = Allocate(4);
+//     *ptr = 'A'
+//     printc(*ptr)
+// }
 
 // struct Funcs {
 //     start: fn();

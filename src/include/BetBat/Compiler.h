@@ -218,6 +218,7 @@ struct Compiler {
     lexer::SourceLocation location_of_entry_point;
     bool has_generated_entry_point = false;
     bool force_default_entry_point = false; // libc requires it's own entry point
+    bool aligned_16_byte_on_entry_point = false;
 
     u32 initial_import_id = 0;
     u32 preload_import_id = 0;
