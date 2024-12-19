@@ -849,11 +849,13 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             char* ptr = (char*)registers[op0];
             int len = (int)registers[op1];
             log::out.print(ptr, len);
+            log::out.flush();
         } break;
         case BC_PRINTC: {
             op0 = (BCRegister)instructions[pc++];
-            char chr = sqrtf(*(float*)&registers[op0]);
+            char chr = *(char*)&registers[op0];
             log::out.print(&chr, 1);
+            log::out.flush();
         } break;
         case BC_CALL_REG: {
             op0 = (BCRegister)instructions[pc++];

@@ -83,7 +83,7 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
     // TODO: We might implement a custom heap allocator for Linux, or maybe not but
     //   we shall use libc's heap for now.
 
-    #load "c" as libc
+    #load "libc.so.6" as libc
     fn @import(libc) malloc(size: i32) -> void*;
     fn @import(libc) realloc(ptr: void*, size: i32) -> void*;
     fn @import(libc) free(ptr: void*);

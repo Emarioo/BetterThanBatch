@@ -2334,6 +2334,9 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
 
     // switch
     switch(expr->type) {
+    case EXPR_NONE: {
+        Assert(false);
+    } break;
     case EXPR_VALUE: {
         auto stmp = expr->as<ASTExpressionValue>();
         // Assert(stmp->typeId.getId() < AST_PRIMITIVE_COUNT);
@@ -3683,7 +3686,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
                 // print list of overloads?
             }
         } else {
-            if(iden && iden->funcOverloads.overloads.size()>0 && function->linkConvention == INTRINSIC) {
+            if(iden && iden->funcOverloads.overloads.size()>0 && function->callConvention == INTRINSIC) {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
                     ERR_MSG("There already is an overload of the native function '"<<function->name<<"'.")

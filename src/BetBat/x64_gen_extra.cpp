@@ -596,11 +596,14 @@ bool X64Builder::generate() {
         is_blank = tinycode->debugFunction->funcAst->blank_body; // TODO: We depend on debugFunction, change this
     }
 
+    bool pushed_base_pointer = false;
     if(!is_blank) {
-        if(!is_entry_point || compiler->options->target == TARGET_WINDOWS_x64) {
-            // entry point on unix systems don't need BP restored
-            // the stack is also already 16-byte aligned.
+        if((!is_entry_point || !compiler->aligned_16_byte_on_entry_point) || compiler->options->target == TARGET_WINDOWS_x64) {
+            // entry point on unix systems (without C stdlib runtime start code) is
+            // aligned by 16 bytes, hence we don't push stack pointer here.
+            // in all other case we do.
             emit_push(X64_REG_BP);
+            pushed_base_pointer = true;
         }
         emit1(PREFIX_REXW);
         emit1(OPCODE_MOV_REG_RM);
@@ -1523,6 +1526,9 @@ bool X64Builder::generate() {
                     emit1(OPCODE_RET);
                 } else if(compiler->options->target == TARGET_LINUX_x64 && is_entry_point) {
                     Assert(tinycode->call_convention == UNIXCALL);
+                    if(pushed_base_pointer)
+                        emit_pop(X64_REG_BP);
+                        
                     emit1(OPCODE_MOV_REG_RM);
                     emit_modrm(MODE_REG, X64_REG_DI, X64_REG_A);
 

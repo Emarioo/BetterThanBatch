@@ -3595,11 +3595,12 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         FuncImpl* operatorImpl = nullptr;
         if(base_expression->type == EXPR_OPERATION) {
             auto expression = base_expression->as<ASTExpressionOperation>();
-            if(expression->versions_overload.size()>0)
+            if(expression->versions_overload.size()>0) {
                 operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
                 if(operatorImpl){
                     return generateFncall(expression, outTypeIds, true);
                 }
+            }
         }
         TypeId ltype = TYPE_VOID;
         if(base_expression->type != EXPR_ASSIGN) {

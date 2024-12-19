@@ -1019,6 +1019,7 @@ bool ARMBuilder::generate() {
                     case BC_BRSHIFT: {
                         emit_lsr(reg_dst, reg_dst, reg_op);
                     } break;
+                    default: Assert(false);
                 }
                 
                 //  TODO: less than, equal, bitwise ops

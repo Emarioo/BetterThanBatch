@@ -14,7 +14,7 @@
 
 #if OS_LINUX // wraps everything in this file
 
-#load "c" as LibC
+#load "libc.so.6" as LibC
 
 #macro STDIN_FILENO  0
 #macro STDOUT_FILENO 1
