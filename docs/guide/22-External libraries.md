@@ -86,7 +86,7 @@ When you compile an executable that uses dynamic libraries, you must also distri
 
 This part of the compiler is work in progress on Linux but on Windows, the dlls are copied to the working directory where you ran the compiler. These dlls need to be distributed.
 
-# Compiling libraries
+# Creating libraries
 Compile executable: `btb main.btb -o app.exe`
 
 Compile dynamic library: `btb main.btb -o app.dll`
@@ -125,17 +125,17 @@ add(9,10)
 // math_decl.btb (auto-generated)
 #load "math.lib" as math
 
-fn @stdcall @import(math) add(x: i32, y: f32) -> i32;
+fn @import(math) add(x: i32, y: f32) -> i32;
 ```
 
 Assuming the two files above is in the same directory you can run `btb math.btb -o math.lib` which
 will create `math.lib` and `math_decl.btb`. Then you can run `btb app.btb -r` to compile and execute the program.
 
-If you take a look at *math_decl.btb* you will see a *#load* directive at the top. The path is based on the relative path to the library. `btb math.btb -o libs/math.lib` will result in `#load "./libs/math.lib" as math`. The name of the library (*math*) is derived from the output path. `btb math.btb -o MyMaTH.lib` results in `#load "./libs/MyMaTH.lib" as MyMaTH`.
+If you take a look at *math_decl.btb* you will see a *#load* directive at the top. The path is based on the relative path to the library. `btb math.btb -o libs/math.lib` will result in `#load "./libs/math.lib" as math`. The name of the library (*math*) is derived from the output path. `btb math.btb -o MyMaTH.lib` results in `#load "MyMaTH.lib" as MyMaTH`.
 
 The compiler will also generate `math_decl.h` for C/C++ but there are a few considerations.
 - Exported functions with *betcall* calling convention will be skipped.
-- Polymoprhic struct types will be skipped. May be changed in the future such as specializing the struct (**Array<i32>** -> **Array_i32**).
+- Polymoprhic struct types will "specialized" (**Array<i32>** -> **Array_i32**).
 
 **KNOWN PROBLEMS:** Compiler will generate types for structs in the standard library so you may unfortunately experience type mismatch with types from standard library.
 
@@ -152,8 +152,9 @@ This section covers details which is useful to know if your program is crashing 
 
 **sound.btb**
 ```c++
-// btb sound.btb -o sound.dll
-// btb sound.btb -o sound.lib
+// Compile with:
+//   btb sound.btb -o sound.dll
+//   btb sound.btb -o sound.lib
 
 #import "Logger"
 
@@ -170,7 +171,8 @@ This section covers details which is useful to know if your program is crashing 
 
 **test_link.btb**
 ```c++
-// btb test_link.btb -o test_link.exe -r
+// Compiler and run with:
+//   btb test_link.btb -o test_link.exe -r
 
 #load "./sound.dll" as Sound_dll
 #load "./sound.lib" as Sound_lib
@@ -186,7 +188,7 @@ fn main() {
 
 First, let's figure out what we are dealing with. When we link the final executable `test_link.exe` we have `test_link.o` which contains the `main` function, `sound.lib` which contains `Play_lib`, and `sound.dll` which contains `Play_dll`. These libraries were linked because the `main` function calls the play functions. If we didn't call any play function, the compiler would not link with the libraries because they weren't used. If only `Play_dll` was used then only `sound.dll` would be linked. I recommend commenting out the functions and testing this.
 
-Before we move on it is important to remember that different compilers do things differently. For example, you cannot link dlls to an executable using MSVC linker. There you have to link with a static import library. When compiling `btb sound.btb -o sound.dll --linker msvc`, a `sounddll.lib` file created alongside `sound.dll`. Internally, the compiler will automatically link with `sounddll.lib` when using MSVC instead of `sound.dll` while with the GCC linker, `sound.dll` will be linked directly.
+Before we move on it is important to remember that different compilers do things differently. For example, you cannot link dlls to an executable using MSVC linker. There you have to link with a static import library. When compiling `btb sound.btb -o sound.dll --linker msvc`, a `sounddll.lib` file is created alongside `sound.dll`. Internally, the compiler will automatically link with `sounddll.lib` when using MSVC instead of `sound.dll` while with the GCC linker, `sound.dll` will be linked directly.
 
 ```
 // Linker command when using MSVC
@@ -203,7 +205,8 @@ The x64 code for calling a function from the static library is very simple. It i
 To understand the purpose of the *Import Address Table* we must first understand the usage of dynamic libraries. Dynamic libraries can be loaded and called programmatically using functions from the operating system. There are usually three functions: loading a dynamic library, acquiring a pointer to a function, and freeing the library. Below is some code that does this, I urge you to test it yourself.
 
 ```c++
-#import "OS" // imports LoadDynamicLibrary and DynamicLibrary
+#import "OS" // imports LoadDynamicLibrary and the struct DynamicLibrary
+             // On windows, LoadDynamicLibrary = LoadLibrary and DynamicLibrary.get_pointer = GetProcAddress
 
 fn main() {
     dll := LoadDynamicLibrary("sound.dll")
@@ -219,7 +222,7 @@ fn main() {
 
     Play_dll("it works".ptr)
 
-    dll.cleanup()
+    dll.cleanup() // FreeLibrary on Windows
 }
 ```
 
@@ -230,7 +233,8 @@ Now we can answer the question of how we call `Play_dll`. The pointer to the fun
 With all this knowledge we can write a program in assembly.
 
 ```c++
-// btb test_link.btb -o test_link.exe -r
+// Compile with:
+//   btb test_link.btb -o test_link.exe -r
 
 // The compiler doesn't know that the assembly uses
 // these libraries so we must forcefully link them
@@ -249,15 +253,15 @@ fn main() {
         .extern Play_lib
         .extern __imp_Play_dll
 
-        // NOTE: We assume stdcall convention...
+        // NOTE: We assume stdcall convention
         pop rbx // pop pointer to string which was passed to inline assembly
 
         sub rsp, 32 // alloc space for args, stdcall needs 32 bytes
         
-        mov rcx, rbx
+        mov rcx, rbx // Set first argument
         call Play_lib
         
-        mov rcx, rbx
+        mov rcx, rbx // Set first argument again because rcx is a volatile register while rbx isn't
         call qword ptr [rip+__imp_Play_dll]
         // rip+ tells the assembler to use rip relative instruction
         // We get the wrong instruction and relocation without it
@@ -296,7 +300,7 @@ fn main() {
         
         mov rcx, rbx
         call qword ptr [__imp_Play_dll]
-        // MSVC assembler generate the call we want, no need for rip+ (it's not even valid syntax)
+        // MSVC assembler generate the call we want, no need for rip+ (rip+ isn't even valid syntax)
 
         add rsp, 32 // free space for args
     }
@@ -306,7 +310,7 @@ fn main() {
 ```
 
 
-**NOTE:** There is an extra thing that linkers do which is stubs for functions from dynamic libraries. These are created if the compiler created a `call rel32` (`call Play_dll`) instead of a `call reg` (`call [__imp_Play_dll]`). Since the `call rel32` instruction cannot call functions from dlls and you can't convert it to a `call reg`, a stub is created where the relative call (`call Play_dll`, Play_dll is a symbol to the stub) jumps to the stub which contains a jump instruction that can jump to code in dlls (`jmp [__imp_Play_dll]`). This is not relevant in the BTB Compiler because you have to explicitly state where the function comes from. Therefore, we always know what type of call to use.
+**NOTE:** There is an extra thing that linkers do which is stubs for functions from dynamic libraries. These are created if the compiler created a `call rel32` (`call Play_dll`) instead of a `call reg` (`call [__imp_Play_dll]`). Since the `call rel32` instruction cannot call functions from dlls and you can't convert it to a `call reg`, a stub is created where the relative call (`call Play_dll`, Play_dll is a symbol to the stub) jumps to the stub which contains a jump instruction that can jump to code in dlls (`jmp [__imp_Play_dll]`). This is not relevant in the BTB Compiler because you have to explicitly state where the function comes from (dynamic library or not). Therefore, we always know what type of call to use.
 
 **NOTE:** I have not explained the various relocation types and symbols because I barely now what the different types do myself. I have managed to make things work by analyzing the object files created by gcc and msvc but I plan to take some time to better understand the relocation types.
 
@@ -330,9 +334,9 @@ namespace @import(Math) {
 }
 ```
 
-Even though that's great, we still have a problem with alias. What if every function is prefixed with `math_`. We would then need something like this:
+Even though that's great, we still have a problem with alias. What if every function is prefixed with `math_`. We would then want something like this:
 ```c++
-namespace @import(Math, alias="math_*") { /* ... */ }
+#apply_annotation @import(Math, alias="math_*") { /* ... */ }
 
-namespace @import(Math, prefix_alias="math_") { /* ... */ }
+#apply_annotation @import(Math, prefix_alias="math_") { /* ... */ }
 ```
