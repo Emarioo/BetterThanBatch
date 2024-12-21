@@ -76,6 +76,7 @@
             // "args": ["examples/dev","-o","lib/math.lib"],
             // "args": "examples/dev -t arm -r -d -qd",
             // "args": ["-dev"],
+            // "args": ["conv"],
             // "args": ["sandbox/main"],
             // "args": ["examples/setlib/math.btb","-o","math.lib"],
             // "args": ["./math.btb","-o","math.lib"],
