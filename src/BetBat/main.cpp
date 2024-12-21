@@ -12,6 +12,8 @@
 #include "BetBat/Fuzzer.h"
 #include "BetBat/Lexer.h"
 
+#include "BetBat/CParser.h"
+
 #undef FILE_READ_ONLY // bye bye Windows defined flag
 #undef IMAGE_REL_AMD64_REL32
 #undef coff
@@ -233,6 +235,23 @@ bool CheckDeveloperCommand(const BaseArray<std::string>& args) {
             log::out << log::RED << "You forgot an argument after 'decode'. If this message comes as a suprise, 'decode' is a special command for developers which deconstructs and prints the content of COFF files. \n";
             return false;
         }
+    }
+    index = contains(args, "conv");
+    if(index != -1) {
+        std::string path = "dev.c";
+        if(args.size() > index + 1) {
+            path = args[index + 1];
+        }
+        std::string text = TranspileCFileToBTB(path);
+        
+        std::string outpath = "conv.btb";
+        auto file = FileOpen(outpath,FILE_CLEAR_AND_WRITE);
+        FileWrite(file, text.c_str(), text.size());
+        FileClose(file);
+        log::out << "Transpiled " << path << " to "<<outpath<<"\n";
+        // log::out << text;
+
+        return false;
     }
 
     // args do not contain a developer command

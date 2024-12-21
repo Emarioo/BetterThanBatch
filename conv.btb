@@ -1,0 +1,96 @@
+
+
+
+
+ #if    !GLAPI
+    #if         GLAD_GLAPI_EXPORT
+        #if         _WIN32||             __CYGWIN__
+            #if         GLAD_GLAPI_EXPORT_BUILD
+                #if         __GNUC__
+                     #macro GLAPI @export                     #endmacro
+                 #else
+                     #macro GLAPI @export               #endmacro
+                 #endif
+             #else
+                #if         __GNUC__
+                     #macro GLAPI                             @import(LIB_GLAPI)
+                                                              #endmacro
+                 #else
+                     #macro GLAPI                       @import(LIB_GLAPI)
+                                                        #endmacro
+                 #endif
+             #endif
+        #elif         __GNUC__&&             GLAD_GLAPI_EXPORT_BUILD
+             #macro GLAPI @export                                  #endmacro
+         #else
+             #macro GLAPI @import(LIB_GLAPI)
+                          #endmacro
+         #endif
+     #else
+         #macro GLAPI @import(LIB_GLAPI)
+                      #endmacro
+     #endif
+ #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ #macro GL_TRIANGLES 0x0004
+                     #endmacro
+ #macro GL_TRIANGLE_STRIP 0x0005
+                          #endmacro
+ #macro GL_TRIANGLE_FAN 0x0006
+                        #endmacro
+ #macro GL_QUADS 0x0007
+                 #endmacro
+ #macro GL_NEVER 0x0200
+                 #endmacro
+ #macro GL_LESS 0x0201
+                #endmacro
+ #macro GL_EQUAL 0x0202
+                 #endmacro
+ #macro GL_LEQUAL 0x0203
+                  #endmacro
+ #macro GL_GREATER 0x0204
+                   #endmacro
+ #macro GL_NOTEQUAL 0x0205
+                    #endmacro
+ #macro GL_GEQUAL 0x0206
+                  #endmacro
+ #macro GL_ALWAYS 0x0207#endmacro#macro GLAPI @import(LIB_GLAPI)
+#macro GL_TRIANGLES 0x0004
+#macro GL_LESS 0x0201
+#macro GL_TRIANGLE_STRIP 0x0005
+#macro GL_QUADS 0x0007
+#macro GL_TRIANGLE_FAN 0x0006
+#macro GL_NEVER 0x0200
+#macro GL_EQUAL 0x0202
+#macro GL_GREATER 0x0204
+#macro GL_LEQUAL 0x0203
+#macro GL_NOTEQUAL 0x0205
+#macro GL_GEQUAL 0x0206
+#macro GL_ALWAYS 0x0207
+#macro GLenum u32
+#macro GLboolean u8
+#macro GLbitfield u32
+#macro khronos_int8_t 
+#macro GLvoid void
+global GLVersion: gladGLversionStruct
+fn gladLoadGL() -> i32
+fn gladLoadGLLoader(arg0: GLADloadproc) -> i32
+struct gladGLversionStruct {
+   major: i32;
+   minor: i32;
+}
