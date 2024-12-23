@@ -2,6 +2,7 @@
 
 // needed for FRAME_SIZE
 #include "BetBat/Generator.h"
+#include "BetBat/CompilerInterface.h"
 
 #include <iostream>
 
@@ -83,6 +84,7 @@ TinyBytecode* VirtualMachine::fetch_tinycode(Bytecode* bytecode, const std::stri
     }
     return nullptr;
 }
+
 
 void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations, CompileOptions* options){
     using namespace engone;
@@ -245,6 +247,26 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     }
     
     for(auto& pair_lib : libs) {
+        if(pair_lib.first == "<compiler>") {
+            pair_lib.second->dll = nullptr;
+            for(auto& pair_fn : pair_lib.second->functions) {
+                pair_fn.second->func_ptr = lang::get_compiler_function(pair_fn.first.c_str(), pair_fn.first.size());
+                if(!pair_fn.second->func_ptr) {
+                    Assert(false);
+                }
+
+                int index = dll_functions.size();
+                dll_functions.add(pair_fn.second->func_ptr);
+                dll_function_names.add(pair_fn.first);
+                // APPLY RELOCATIONS
+                for(auto r : pair_fn.second->relocs) {
+                    auto& t = bytecode->tinyBytecodes[r->tinycode_index];
+                    // log::out << "Apply reloc "<< t->index << ", " << r->pc << ", "<<r->name<<"\n";
+                    *(i32*)&t->instructionSegment[r->pc] = Bytecode::BEGIN_DLL_FUNC_INDEX + index;
+                }
+            }
+            continue;
+        }
         // log::out << "VM lib "<< pair_lib.first<<"\n";
         pair_lib.second->dll = LoadDynamicLibrary(pair_lib.first, false); // false = don't log error
         if(!pair_lib.second->dll) {
@@ -272,7 +294,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 // APPLY RELOCATIONS
                 for(auto r : pair_fn.second->relocs) {
                     auto& t = bytecode->tinyBytecodes[r->tinycode_index];
-                    // log::out << "Apply reloc "<< r->pc << ", "<<r->name<<"\n";
+                    // log::out << "Apply reloc "<< t->index <<", "<< r->pc << ", "<<r->name<<"\n";
                     *(i32*)&t->instructionSegment[r->pc] = Bytecode::BEGIN_DLL_FUNC_INDEX + index;
                 }
             }
@@ -1478,7 +1500,9 @@ void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
         }
     }
     was_mapped = false;
+    // If you crash and are accesing a pointer from global data at compile time
+    // then perhaps it wasn't initialized. Runtime type information for example.
     // suspicious pointer
-    Assert((i64)virtual_pointer >= 0x100000 && (i64)virtual_pointer < 0x0010'0000'0000'0000);
+    Assert(((i64)virtual_pointer >= 0x100000 && (i64)virtual_pointer < 0x0010'0000'0000'0000) || (i64)virtual_pointer == 0);
     return (void*)virtual_pointer;
 }

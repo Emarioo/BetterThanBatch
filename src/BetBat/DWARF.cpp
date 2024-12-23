@@ -1047,6 +1047,12 @@ namespace dwarf {
                 int lowest_index = -1;
                 for(int j=0;j<debug->functions.size();j++) {
                     auto fun = debug->functions[j];
+
+                    auto tinycode = fun->tinycode;
+                    auto tinyprog = program->functionPrograms[tinycode->index];
+                    if(!tinyprog->do_not_skip)
+                        continue;
+
                     if(fun->asm_start == fun->asm_end) {
                         Assert(false); // why would this happen?
                         continue;
@@ -1337,6 +1343,12 @@ namespace dwarf {
             int symindex_text = objectFile->getSectionSymbol(section_text);
             for (int fi=0;fi<debug->functions.size();fi++) {
                 auto& fun = debug->functions[fi];
+
+                auto tinycode = fun->tinycode;
+                auto tinyprog = program->functionPrograms[tinycode->index];
+                if(!tinyprog->do_not_skip)
+                    continue;
+                    
                 Assert(fun->asm_end != 0);
 
                 Assert(stream->getWriteHead() % REGISTER_SIZE == 0);

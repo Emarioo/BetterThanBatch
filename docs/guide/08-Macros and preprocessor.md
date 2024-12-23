@@ -215,8 +215,9 @@ The compiler pre-defines a couple of macros.
 - **BUILD_OBJ** - When building object file
 <!-- - **BUILD_BC** - When building bytecode (not supported) -->
 - **BUILT_FOR_VM** - When building and directly running code in virtual machine
-- **LINKER_MSVC** - When linking with Microsoft Visual C/C++ Compiler (link)
-- **LINKER_GCC** - When linking with GNU Compiler Collection (gcc)
+- **LINK_MSVC** - When linking with Microsoft Visual C/C++ Compiler (link)
+- **LINK_GCC** - When linking with GNU Compiler Collection (gcc)
+- **LINK_CLANG** - When linking with Clang (clang)
 
 # Function inserts
 **Added in 0.2.1**

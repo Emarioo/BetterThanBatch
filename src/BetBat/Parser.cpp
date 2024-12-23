@@ -3643,8 +3643,6 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
     // function->tokenRange.firstToken = fnToken;
     // function->tokenRange.endIndex = info.at()+1;;
 
-    bool needsExplicitCallConvention = false;
-    bool specifiedConvention = false;
     // Token linkToken{};
 
     bool is_entry_point = false;
@@ -3665,18 +3663,13 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                 function->setHidden(true);
             } else if (view_fn_name == STR_STATIC_IMPORT || view_fn_name == STR_DYNAMIC_IMPORT || view_fn_name == "import" || view_fn_name == "export"){
                 // Implicitly specify convention
-                if(!specifiedConvention) {
-                    if(info.compiler->options->target == TARGET_WINDOWS_x64) {
-                        specifiedConvention = true;
-                        function->callConvention = CallConvention::STDCALL;
-                    } else if(info.compiler->options->target == TARGET_LINUX_x64) {
-                        specifiedConvention = true;
-                        function->callConvention = CallConvention::UNIXCALL;
-                    } else if(info.compiler->options->target == TARGET_ARM) {   
-                        function->callConvention = CallConvention::UNIXCALL;
-                        // function->callConvention = CallConvention::ARMCALL;
-                    } else Assert(false);
-                }
+                if(info.compiler->options->target == TARGET_WINDOWS_x64) {
+                    function->callConvention = CallConvention::STDCALL;
+                } else if(info.compiler->options->target == TARGET_LINUX_x64) {
+                    function->callConvention = CallConvention::UNIXCALL;
+                } else if(info.compiler->options->target == TARGET_ARM) {
+                    function->callConvention = CallConvention::UNIXCALL;
+                } else Assert(false);
                 
                 if (view_fn_name == STR_DYNAMIC_IMPORT) {
                     function->linkConvention = LinkConvention::DYNAMIC_IMPORT;
@@ -3785,11 +3778,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                 }
 
                 info.advance(-1);
-                
-                needsExplicitCallConvention = true;
             } else if (view_fn_name == "stdcall"){
                 function->callConvention = CallConvention::STDCALL;
-                specifiedConvention = true;
             // } else if (Equal(name,"@cdecl")){
             // cdecl has not been implemented. It doesn't seem important.
             // default x64 calling convention is used.
@@ -3798,7 +3788,6 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             //     specifiedConvention = true;
             } else if (view_fn_name == "betcall"){
                 function->callConvention = CallConvention::BETCALL;
-                specifiedConvention = true;
                 if(compiler->options->target == TARGET_ARM) {
                     ERR_SECTION(
                         ERR_HEAD2(function->location)
@@ -3809,7 +3798,6 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
             } else if (view_fn_name == "unixcall"){
                 function->callConvention = CallConvention::UNIXCALL;
-                specifiedConvention = true;
             } else if (view_fn_name == "oscall"){
                 switch(compiler->options->target) {
                     case TARGET_WINDOWS_x64: {
@@ -3826,15 +3814,35 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                     } break;
                     default: Assert(false);
                 }
-                specifiedConvention = true;
             } else if (view_fn_name == "intrinsic"){
                 function->callConvention = CallConvention::INTRINSIC;
             } else if (view_fn_name == "blank"){
                 function->blank_body = true;
             } else if (view_fn_name == "entry"){
                 is_entry_point = true;
+            } else if (view_fn_name == "builtin"){
+                function->is_builtin = true;
             } else if (view_fn_name == "compiler"){
                 function->is_compiler_func = true;
+                switch(compiler->options->target) {
+                    case TARGET_WINDOWS_x64: {
+                        function->callConvention = CallConvention::STDCALL;
+                    } break;
+                    case TARGET_LINUX_x64: {
+                        function->callConvention = CallConvention::UNIXCALL;
+                    } break;
+                    case TARGET_ARM: {
+                        function->callConvention = CallConvention::UNIXCALL;
+                    } break;
+                    case TARGET_BYTECODE: {
+                        #ifdef OS_WINDOWS
+                            function->callConvention = CallConvention::STDCALL;
+                        #else
+                            function->callConvention = CallConvention::UNIXCALL;
+                        #endif
+                    } break;
+                    default: Assert(false);
+                }
             } else {
                 auto tok = info.gettok();
                 // It should not warn you because it is quite important that you use the right annotations with functions
@@ -3854,17 +3862,17 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             tok_name = info.gettok();
             continue;
         }
-        if(function->linkConvention != LinkConvention::NONE){
-            // function->setHidden(true);
-            // native doesn't use a calling convention
-            if(needsExplicitCallConvention && !specifiedConvention){
-                ERR_SECTION(
-                    ERR_HEAD2(tok_name)
-                    ERR_MSG("You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @unixcall.")
-                    ERR_LINE2(tok_name, "missing call convention")
-                )
-            }
-        }
+        // if(function->linkConvention != LinkConvention::NONE){
+        //     // function->setHidden(true);
+        //     // native doesn't use a calling convention
+        //     if(needsExplicitCallConvention && !specifiedConvention){
+        //         ERR_SECTION(
+        //             ERR_HEAD2(tok_name)
+        //             ERR_MSG("You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @unixcall.")
+        //             ERR_LINE2(tok_name, "missing call convention")
+        //         )
+        //     }
+        // }
         
         if(token_name->type != lexer::TOKEN_IDENTIFIER){
             info.ast->destroy(function);

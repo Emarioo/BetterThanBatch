@@ -396,8 +396,6 @@ struct TinyBytecode {
         call_relocations.resize(0);
         try_blocks.resize(0);
         funcImpl = nullptr;
-        index = 0;
-        
     }
 };
 struct BytecodeLocation {

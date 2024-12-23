@@ -1,202 +1,31 @@
 
-// #import "Logger"
-
+#import "Logger"
+#import "Compiler"
 
 /*
-    Compile time execution:
+    Disallow relocations for compile time functions that
+    are used by runtime functions.
     
-    1. Run directives at global level runs at the bytecode generation like evaulation of global values.
+    We have a bunch of functions.
+    They are put into the executable.
+    Some functions call compile time functions and cannot be relocated.
+    How do we track them and filter them out?
     
-    2. Run directives in expressions 
+    Keep track of compile time functions with @compiler (ASTFunction::is_compiler_func).
     
-    2. Detect circular dependency.
-        We can't execute run directive inside a function that
-        the run eventually calls since it's not generated yet and the 
-        run needs to execute before we can generate it.
-        
+    If a tinycode has a relocation to compile time function (library <compiler>), mark it as comp time only.
+
+    
 */
 
+#run {
+    u := create_buildunit()
+    log("Unit: ", u)
 
-#import "Memory"
-#import "Logger"
-
-prints("\x1b[0;32mHello sir\n")
-
-
-// std_print(LOG_BLUE)
-
-// #run {
-//     log("hello")
-//     ptr: i32* = Allocate(4);
-//     *ptr = 'A'
-//     printc(*ptr)
-// }
-
-// struct Funcs {
-//     start: fn();
-//     finish: fn();
-// }
-
-// for 0..2 {
-//     x := #run get_funcs()
+    // I want to link with specific libraries, how?
+    // GLFW.btb specifies path libs/glfw/lib-vc2022
+    // but that might not be the path i want.
+    // u.set_library_path("GLFW", "new_path") // let's use change the path
     
-//     x.start()
-//     x.finish()
-// }
-
-// fn get_funcs() -> Funcs {
-//     log("Get funcs")
-//     return { Start, Finish }
-// }
-
-// fn Start() {
-//     log("START")
-// }
-// fn Finish() {
-//     log("FINISH")
-// }
-
-// #import "Logger"
-
-// struct Stuff {
-//     str: char[];
-//     x: i32;
-// }
-// x := fun()
-// y := fun()
-// log(&x," ", &y)
-
-// fn comp() -> Stuff {
-//     log("comp")
-//     return { "hello", 23 }
-// }
-// fn fun() -> Stuff {
-//     res := #run comp()
-//     return res
-// }
-                       
-// #import "File"
-// #import "String"
-// #import "Memory"
-
-
-
-
-// global BUILD_VERSION: i32 = get_version();
-
-// fn main() {
-//     log("Build Version: ", BUILD_VERSION);  
-// }
-
-
-// #import "Logger"
-
-
-// fn okay() -> i32 {
-//     log("okay")
-//     return 5
-// }
-
-// fn main() {
-//     log("main begin")
-    
-//     #run log("I am auxiliary but local")
-    
-//     x := #run okay()
-    
-//     log("main end ", y)
-// }
-
-// #run {
-//     log("I am auxiliary and global")
-// }
-
-// global y: i32 = temp()
-// fn temp() -> i32 {
-//     log("I am global variable")
-//     return 5
-// }
-
-// #import "Logger"
-
-
-// fn first() {
-//     log("first")
-//     #run second()
-// }
-// fn second() {
-//     log("second")
-//     #run first()
-// }
-// first() // Should trigger a compiler error for circular dependency.
-
-
-// #import "Memory"
-
-// fn compute() -> i32 {
-//     x: i32* = Allocate(4);
-//     *x = 99;
-//     return *x
-// }
-// // we can call functions that calls external functions from dynamic libraries
-// _test 99; #run compute();
-// _test 99; compute();
-
-// #import "Memory"
-
-// fn compute() -> i32 {
-//     x: i32* = Allocate(4);
-//     *x = 99;
-//     return *x
-// }
-// // we can call functions that calls external functions from dynamic libraries
-// // x := #run compute();
-// _test 99; #run compute();
-// // log(x)
-
-// fn compute() -> i32 {
-//     a := 5;
-//     b := #run a + 5;
-//     return b;
-// }
-// log(compute())
-
-// global counter: i32 = #run 5;
-
-// x := #run counter++;
-// y := #run counter++;
-
-// log(x," ",y," ", counter)
-// make sure #run are executed in the right order
-// _test 5; x;
-// _test 6; y;
-
-// fn hello() { }
-
-// global f: fn() = #run hello; // error, we don't allow this
-
-// @TEST_ERROR(E3001) #run hello();
-// fn hello() { }
-
-// struct app {
-//     x: fn();
-// }
-
-// // global f: fn() = app{}; // error, we don't allow this
-// global f: app = app{hello}; // error, we don't allow this
-
-// log(cast_unsafe<i64>f)
-
-// struct app {
-//     x: i32 = 4;
-//     y: char[] = "Hello";
-// }
-
-// y := #run "Hello"
-// y := #run app{}
-
-// #run for 0..5 {
-//     log("Hello")   
-// }
-
-// log("Runtime")
+    // u.set_output("game.exe")
+}

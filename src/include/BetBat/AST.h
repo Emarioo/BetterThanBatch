@@ -420,7 +420,8 @@ struct FuncImpl {
     // std::string name;
     ASTFunction* astFunction = nullptr;
     int usages = 0;
-    bool isUsed() { return usages!=0; }
+    int comptime_usages = 0;
+    bool isUsed() { return usages!=0 || comptime_usages!=0; }
     
     FunctionSignature signature;
 
@@ -953,6 +954,7 @@ struct ASTFunction : ASTNode {
     std::string export_alias; // empty means no export, same name as function means no alias, different means alias
 
     bool is_compiler_func = false;
+    bool is_builtin = false;
     bool contains_run_directive = false;
 
     struct PolyState {
@@ -984,7 +986,7 @@ struct ASTFunction : ASTNode {
     // When function should have a body or not has changed a lot recently
     // and I have needed to rewrite a lot. Having the requirement abstracted in
     // a function will prevent some of the changes you would need to make.
-    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC && !is_compiler_func; }
+    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC && !is_compiler_func && !is_builtin; }
 
     void print(AST* ast, int depth);
 };

@@ -8,7 +8,7 @@
 */
 
 #if OS_WINDOWS
-    #if LINKER_MSVC
+    #if LINK_MSVC
         #if USE_DYNAMIC_LIBS
             #load "libs/stb/lib-vc2022/stb_image.dll" as STB_IMAGE
         #else

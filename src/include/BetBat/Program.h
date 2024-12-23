@@ -14,6 +14,8 @@ struct FunctionProgram {
     u8* text=nullptr;
     u64 _allocationSize=0;
     u64 head=0;
+
+    bool do_not_skip = false; // skip if contains fncall to compile time func
     
     void printHex(const char* path = nullptr);
 };

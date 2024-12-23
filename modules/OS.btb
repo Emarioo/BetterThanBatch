@@ -21,7 +21,7 @@
 #endif
 
 
-// #if LINKER_MSVC
+// #if LINK_MSVC
 //     #load "bin/NativeLayer.lib" as native_layer
 // #else
 //     #load "bin/NativeLayer_gcc.lib" as native_layer

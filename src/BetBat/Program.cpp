@@ -1,8 +1,8 @@
 #include "BetBat/Program.h"
-
 #include "BetBat/Compiler.h"
 
 void Program::compute_libraries() {
+    using namespace engone;
     libraries.resize(0);
 
     for (auto &rel : namedUndefinedRelocations) {
@@ -16,6 +16,10 @@ void Program::compute_libraries() {
 
             // Inline assembly may also create relocations without library names.
             // We just have to trust that the user linked with the library manually.
+            continue;
+        }
+        if (rel.library_path == "<compiler>") {
+            // log::out << log::RED << "Relocation to "<<rel.library_path<<" not allowed for machine program, it's a compile time thing.\n";
             continue;
         }
         for (auto &s : libraries) {
@@ -57,6 +61,7 @@ Program *Program::Create() {
 }
 
 bool Program::finalize_program(Compiler* compiler) {
+    using namespace engone;
     Assert(debugInformation); // we expect debug information?
 
     auto bytecode = compiler->bytecode;
@@ -73,14 +78,69 @@ bool Program::finalize_program(Compiler* compiler) {
         // OutputAsHex("data.txt", (char*)prog->globalData, prog->globalSize);
     }
 
+    DynamicArray<TinyBytecode*> codes_to_check{};
+    int check_index = 0;
+
     for (int i = 0; i < bytecode->exportedFunctions.size(); i++) {
         auto &sym = bytecode->exportedFunctions[i];
         if(sym.tinycode_index < functionPrograms.size() && functionPrograms[sym.tinycode_index]) {
             addExportedSymbol(sym.name, sym.tinycode_index);
+            codes_to_check.add(bytecode->tinyBytecodes[sym.tinycode_index]);
         } else {
             // exported symbol was added to temporary
             // compile time tinycode
         }
+    }
+
+    if(bytecode->index_of_main != -1)
+        codes_to_check.add(bytecode->tinyBytecodes[bytecode->index_of_main]);
+
+    while(check_index < codes_to_check.size()) {
+        auto t = codes_to_check[check_index];
+        check_index++;
+        functionPrograms[t->index]->do_not_skip = true;
+
+        for (int i=0;i<t->call_relocations.size();i++) {
+            auto& rel = t->call_relocations[i];
+            if (!rel.funcImpl || rel.funcImpl->tinycode_id <= 0)
+                continue;
+
+            auto tcode = bytecode->tinyBytecodes[rel.funcImpl->tinycode_id-1];
+            bool found = false;
+            for(int j=0;j<codes_to_check.size();j++) {
+                if (tcode == codes_to_check[j]) {
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) {
+                codes_to_check.add(tcode);
+            }
+        }
+    }
+
+    for(int i=0;i<bytecode->externalRelocations.size();i++) {
+        auto& r = bytecode->externalRelocations[i];
+        if(r.library_path.size() == 0 || r.library_path != "<compiler>") {
+            continue;
+        }
+
+        // Check if the VM encounters the external relocation, if not then
+        // we don't need to load the dynamic library and function pointer.
+        bool comp_time_only = false;
+        TinyBytecode* tcode = nullptr;
+        for (auto t : codes_to_check) {
+            if(t->index == r.tinycode_index) {
+                comp_time_only = true;
+                tcode = t;
+                break;
+            }
+        }
+        if(!comp_time_only)
+            continue;
+
+        log::out << log::RED << "ERROR: "<<log::NO_COLOR<<"A relocation in the program refers to a compile time function which isn't allowed. The function '"<<log::LIME<<tcode->name<<log::NO_COLOR<<"' calls this compile time function '" <<log::LIME << r.name << log::NO_COLOR<<"'.\n";
+        return false;
     }
 
     compute_libraries();

@@ -1,4 +1,5 @@
 #include "BetBat/Compiler.h"
+#include "BetBat/CompilerInterface.h"
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
@@ -1190,6 +1191,8 @@ void Compiler::run(CompileOptions* options) {
     ZoneScopedC(tracy::Color::Gray19);
     // auto tp = engone::StartMeasure();
 
+    global_compiler = this;
+
     if(options->linker == LINKER_MSVC) {
         if(!is_msvc_configured()) {
             bool yes = configure_msvc();
@@ -1395,8 +1398,8 @@ void Compiler::run(CompileOptions* options) {
         "operator []<T>(slice: Slice<T>, index: i32) -> T {\n"
         "    return slice.ptr[index];\n"
         "}\n"
-        "fn @compiler init_preload()\n" // init global data and stuff
-        "fn @compiler global_slice() -> Slice<char>\n" // retrieves a slice of global data
+        "fn @builtin init_preload();\n" // init global data and stuff
+        "fn @builtin global_slice() -> Slice<char>;\n" // retrieves a slice of global data
 
         "struct Range {\n"
         // "struct @hide Range {" 
@@ -1435,9 +1438,11 @@ void Compiler::run(CompileOptions* options) {
         }
         
         if(options->linker == LINKER_MSVC) {
-            preload += "#macro LINKER_MSVC #endmacro\n";
+            preload += "#macro LINK_MSVC #endmacro\n";
         } else if(options->linker == LINKER_GCC) {
-            preload += "#macro LINKER_GCC #endmacro\n";
+            preload += "#macro LINK_GCC #endmacro\n";
+        } else if(options->linker == LINKER_CLANG) {
+            preload += "#macro LINK_CLANG #endmacro\n";
         }
         
         auto virtual_path = PRELOAD_NAME;
@@ -1501,29 +1506,39 @@ void Compiler::run(CompileOptions* options) {
         goto JUMP_TO_EXEC;
         // return;
     }
-    
-    switch(options->target) {
-        case TARGET_BYTECODE: {
-            // do nothing
-        } break;
-        case TARGET_WINDOWS_x64:
-        case TARGET_LINUX_x64: {
-            this->program->finalize_program(this);
-        } break;
-        case TARGET_ARM: {
-            this->program->finalize_program(this);
-        } break;
-        default: Assert(false);
+    {
+        GenContext context{};
+        context.init_context(this);
+        // reset type information pointers in global data section
+        // these should be set when program starts each time.
+        context.resetPreload();
     }
-    
-    if(compile_stats.errors!=0){ 
-        if(!options->silent)
-            compile_stats.printFailed();
-        return;
-    }
-    if(compile_stats.warnings!=0){
-        if(!options->silent)
-            compile_stats.printWarnings();
+    {
+        bool finalize_success = false;
+        switch(options->target) {
+            case TARGET_BYTECODE: {
+                // do nothing
+            } break;
+            case TARGET_WINDOWS_x64:
+            case TARGET_LINUX_x64: {
+                finalize_success = this->program->finalize_program(this);
+            } break;
+            case TARGET_ARM: {
+                finalize_success = this->program->finalize_program(this);
+            } break;
+            default: Assert(false);
+        }
+        if(!finalize_success)
+            compile_stats.errors++;
+        if(compile_stats.errors!=0){ 
+            if(!options->silent)
+                compile_stats.printFailed();
+            return;
+        }
+        if(compile_stats.warnings!=0){
+            if(!options->silent)
+                compile_stats.printWarnings();
+        }
     }
 
     if(options->only_preprocess) {
@@ -2532,3 +2547,32 @@ const char* annotation_names[]{
 };
 const char* const PRELOAD_NAME = "<preload>";
 const char* const TYPEINFO_NAME = "Lang.btb";
+
+Compiler* global_compiler = nullptr;
+
+extern "C" {
+namespace lang {
+
+BuildUnit* create_buildunit() {
+    using namespace engone;
+    log::out << "Called create_buildunit\n";
+    log::out.flush();
+    auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit));
+    new(unit)BuildUnit();
+    unit->name = "Tinycodes: ";
+    unit->length = strlen(unit->name);
+    unit->size = global_compiler->bytecode->tinyBytecodes.size();
+    return unit;
+}
+
+engone::VoidFunction get_compiler_function(const char* name, int length) {
+    using namespace engone;
+    #define CASE(N,F) if(strcmp(name, N) == 0) return (VoidFunction)F;
+    CASE("create_buildunit",      create_buildunit)
+    CASE("get_compiler_function", get_compiler_function)
+    #undef CASE
+    return nullptr;
+}
+
+} // namespace lang
+} // extern "C"

@@ -1,10 +1,7 @@
 #include "BetBat/Generator.h"
 #include "BetBat/Compiler.h"
 
-// include Lang.h here so that we don't
-// have to recompile everything if we
-// make a change in it.
-#include "BetBat/Lang.h"
+#include "BetBat/CompilerInterface.h"
 
 #undef ERRTYPE
 #undef ERRTYPE1
@@ -2104,8 +2101,13 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
         // TODO: There should be no link convention
         builder.emit_call_reg(reg, LinkConvention::NONE, call_convention);
     } else if(astFunc->linkConvention == LinkConvention::NONE) {
+        if(astFunc->is_compiler_func) {
+            builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
+            addExternalRelocation(astFunc->name, "<compiler>", reloc, BC_REL_FUNCTION);
+        } else {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
             info.addCallToResolve(reloc, funcImpl);
+        }
     } else {
         // determine link convention
         LinkConvention link_convention = astFunc->linkConvention;
@@ -4566,6 +4568,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // is this okay?
         return SIGNAL_SUCCESS;
     }
+    if(function->is_compiler_func) {
+        // compile time functions
+        return SIGNAL_SUCCESS;
+    }
     if(function->linkConvention != LinkConvention::NONE){
         if(function->polyArgs.size()!=0 || (astStruct && astStruct->polyArgs.size()!=0)){
             ERR_SECTION(
@@ -4849,7 +4855,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
         }
 
-        if (function->is_compiler_func) {
+        if (function->is_builtin) {
             if (function->name == "init_preload") {
                 generatePreload();
             } else if (function->name == "global_slice") {
@@ -4872,9 +4878,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
 
                 builder.emit_set_ret(reg, -REGISTER_SIZE, REGISTER_SIZE, false);
             } else {
+                // TODO: Provide a list or the docs where you can read about the builtins
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
-                    ERR_MSG_COLORED("'"<<log::LIME<<function->name<<log::NO_COLOR<<"' is not a function from the compiler.")
+                    ERR_MSG_COLORED("'"<<log::LIME<<function->name<<log::NO_COLOR<<"' is not a builtin function by the compiler.")
                     ERR_LINE2(function->location,"here")
                 )
             }
@@ -4929,7 +4936,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             
         // add return with no return values if it doesn't exist
         // this is only fine if the function doesn't return values
-        if(function->body->statements.size() == 0 || function->body->statements.last()->type != ASTStatement::RETURN) {
+        if(!function->body || function->body->statements.size() == 0 || function->body->statements.last()->type != ASTStatement::RETURN) {
             if(!function->blank_body) {
                 int index;
                 builder.emit_free_local(&index);
@@ -4977,10 +4984,11 @@ SignalIO GenContext::generateFunctions(ASTScope* body){
     }
     for(auto it : body->structs) {
         for (auto function : it->functions) {
-            Assert(function->body);
-            generateFunctions(function->body);
-            if(function->contains_run_directive == gen_func_with_run_directives)
-                generateFunction(function, it);
+            if(function->body) {
+                generateFunctions(function->body);
+                if(function->contains_run_directive == gen_func_with_run_directives)
+                    generateFunction(function, it);
+            }
         }
     }
     return SIGNAL_SUCCESS;
@@ -6661,6 +6669,37 @@ SignalIO GenContext::generatePreload() {
     builder.emit_mov_mr(dst_reg, src_reg, REGISTER_SIZE);
     return SIGNAL_SUCCESS;
 }
+SignalIO GenContext::preparePreloadData() {
+    int polyVersion = 0;
+    if(!compiler->varInfos[VAR_INFOS])
+        return SIGNAL_SUCCESS;
+
+    // Reset type info pointers in global data section
+    // because we set them at compile time since it uses them
+    // but we want to keep them zero at start of runtime
+    // so we don't have random invalid pointers in data section
+    i64 ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_types);
+    memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_INFOS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
+    ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_members);
+    memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
+    ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_strings);
+    memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
+    return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::resetPreload() {
+    int polyVersion = 0;
+    if(!compiler->varInfos[VAR_INFOS])
+        return SIGNAL_SUCCESS;
+
+    // Reset type info pointers in global data section
+    // because we set them at compile time since it uses them
+    // but we want to keep them zero at start of runtime
+    // so we don't have random invalid pointers in data section
+    memset(bytecode->dataSegment.data() + compiler->varInfos[VAR_INFOS]->versions_dataOffset[polyVersion], 0, REGISTER_SIZE);
+    memset(bytecode->dataSegment.data() + compiler->varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion], 0, REGISTER_SIZE);
+    memset(bytecode->dataSegment.data() + compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion], 0, REGISTER_SIZE);
+    return SIGNAL_SUCCESS;
+}
 // Generate data from the type checker
 SignalIO GenContext::generateData() {
     using namespace engone;
@@ -6892,6 +6931,9 @@ SignalIO GenContext::generateData() {
             //     (u32)off_stringdata});
         }
     }
+
+    // We prepare type info globals for compile time execution
+    preparePreloadData();
 
     return SIGNAL_SUCCESS;
 }

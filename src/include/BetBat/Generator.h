@@ -141,6 +141,8 @@ struct GenContext : public PhaseContext {
     SignalIO generateStatement(ASTStatement *statement);
     
     SignalIO generatePreload();
+    SignalIO preparePreloadData();
+    SignalIO resetPreload();
     SignalIO generateData();
     SignalIO generateGlobalData(); // runs after all functions have been generated, that way we know that applyRelocations won't fail because of missing tinycodes.
     SignalIO executeGlobalRunDirective(GlobalRunDirective* run_directive);

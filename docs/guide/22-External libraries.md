@@ -246,7 +246,7 @@ fn @import(Sound_lib) Play_lib(path: char*);
 
 fn main() {
     asm("cool".ptr) {
-    #if !LINKER_MSVC
+    #if !LINK_MSVC
         // GCC syntax with intel flavour
             
         // declare external symbols

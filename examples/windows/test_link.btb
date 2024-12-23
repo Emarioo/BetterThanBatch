@@ -11,7 +11,7 @@ fn @import(Sound_lib) Play_lib(path: char*);
 fn main() {
     asm("cool".ptr) {
         // declare external symbols
-        #if LINKER_MSVC
+        #if LINK_MSVC
             // MSVC MASM syntax with intel flavour
             extern Play_lib : proto
             extern __imp_Play_dll : proto
@@ -30,7 +30,7 @@ fn main() {
         call Play_lib
         
         mov rcx, rbx
-        #if LINKER_MSVC
+        #if LINK_MSVC
             call qword ptr [__imp_Play_dll]
             // MSVC assembler generate the call we want, no need for rip+ (it's not even valid syntax)
         #else
