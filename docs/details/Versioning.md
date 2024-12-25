@@ -5,7 +5,7 @@ If a user finds a bug then we want to know which release of the program they are
 The version gives the user an idea off how they differ. If major number changed then it's a big change and it can be difficult to upgrade to.
 
 # Version format for BTB
-We don't use semantic versioning (for now) because want to test my own ideas about versioning.
+We don't use semantic versioning (for now).
 
 The full format looks like this: `major.minor.patch.revision/name-year.month.day`.
 Revision, name and date is optional: `major.minor.patch.[revision]/[name]-[year.month.day]`.

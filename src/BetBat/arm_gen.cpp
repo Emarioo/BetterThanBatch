@@ -29,7 +29,7 @@ bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode) {
 
 
     // make sure dependencies have been fixed first
-    bool yes = tinycode->applyRelocations(compiler->bytecode);
+    bool yes = tinycode->applyRelocations(compiler->bytecode, true);
     if (!yes) {
         log::out << "Incomplete call relocation\n";
         return false;
@@ -48,7 +48,7 @@ bool ARMBuilder::generate() {
     TRACE_FUNC()
 
     CALLBACK_ON_ASSERT(
-        tinycode->print(0,-1, code);
+        tinycode->print(0,-1, bytecode);
     )
     
     // Useful when debugging
@@ -225,7 +225,7 @@ bool ARMBuilder::generate() {
         if(is_blank && accessed_params.size()) {
             log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
             log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
-            compiler->compile_stats.errors++; // nochecking, TODO: call some function instead
+            compiler->compile_stats.errors++; // nocheckin, TODO: call some function instead
         }
         if (is_entry_point) {
             // entry point has it's arguments put on the stack, not in rdi, rsi...
@@ -1019,6 +1019,7 @@ bool ARMBuilder::generate() {
                     case BC_BRSHIFT: {
                         emit_lsr(reg_dst, reg_dst, reg_op);
                     } break;
+                    default: Assert(false);
                 }
                 
                 //  TODO: less than, equal, bitwise ops
@@ -1129,8 +1130,6 @@ bool ARMBuilder::generate() {
 
      for(int i=0;i<tinycode->call_relocations.size();i++) {
         auto& r = tinycode->call_relocations[i];
-        if(r.funcImpl->astFunction->linkConvention == NATIVE)
-            continue;
         int ind = r.funcImpl->tinycode_id - 1;
         program->addInternalFuncRelocation(current_funcprog_index, get_map_translation(r.pc), ind);
         // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";

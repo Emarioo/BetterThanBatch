@@ -56,7 +56,7 @@ SignalIO TyperContext::checkEnums(ASTScope* scope){
         TypeInfo* typeInfo = info.ast->createType(aenum->name, scope->scopeId);
         // log::out << "Enum " << aenum->name<<"\n";
         if(typeInfo){
-            aenum->actualType = typeInfo->id;
+            aenum->typeId = typeInfo->id;
             _TCLOG(log::out << "Defined enum "<<info.ast->typeToString(typeInfo->id)<<"\n";)
             
             if(aenum->colonType.isValid()) {
@@ -160,7 +160,7 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
             inferred_type = prev;
 
             if(tempTypes.size()==0)
-                tempTypes.add(AST_VOID);
+                tempTypes.add(TYPE_VOID);
             if(!info.ast->castable(implMem.typeId, tempTypes.last(), false)){
                 std::string deftype = info.ast->typeToString(tempTypes.last());
                 std::string memtype = info.ast->typeToString(implMem.typeId);
@@ -460,7 +460,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
         auto type = info.ast->findOrAddFunctionSignature(args, rets, convention);
         
         if(!type)
-            return AST_VOID;
+            return TYPE_VOID;
         return type->id;
     } else {
         // TODO: namespace?
@@ -738,7 +738,7 @@ SignalIO TyperContext::checkStructs(ASTScope* scope) {
     // }
     return SIGNAL_SUCCESS;
 }
-SignalIO TyperContext::checkDefaultArguments(ASTFunction* astFunc, FuncImpl* funcImpl, ASTExpression* expr, bool implicit_this, ScopeId scopeId) {
+SignalIO TyperContext::checkDefaultArguments(ASTFunction* astFunc, FuncImpl* funcImpl, ASTExpressionCall* expr, bool implicit_this, ScopeId scopeId) {
     SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
     TEMP_ARRAY(TypeId, tempTypes);
     
@@ -764,7 +764,7 @@ SignalIO TyperContext::checkDefaultArguments(ASTFunction* astFunc, FuncImpl* fun
         SignalIO result = checkExpression(scopeId, arg.defaultValue,&tempTypes,false);
         inferred_type = prev;
         if(tempTypes.size()==0)
-            tempTypes.add(AST_VOID);
+            tempTypes.add(TYPE_VOID);
 
         bool is_castable = info.ast->castable(tempTypes.last(),argImpl.typeId, false);
         // if(!is_castable){
@@ -790,13 +790,13 @@ SignalIO TyperContext::checkDefaultArguments(ASTFunction* astFunc, FuncImpl* fun
     return SIGNAL_SUCCESS;
 }
 
-SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs) {
+SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs) {
     using namespace engone;
 
     TRACE_FUNC()
 
     CALLBACK_ON_ASSERT(
-        ERR_LINE2(expr->location, "crash why?")
+        ERR_LINE2(base_expr->location, "crash why?")
     )
 
     Assert(!outTypes || outTypes->size()==0);
@@ -805,11 +805,14 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             for(auto& ret : overload->funcImpl->signature.returnTypes)\
                 outTypes->add(ret.typeId); \
             if(overload->funcImpl->signature.returnTypes.size()==0)\
-                outTypes->add(AST_VOID);\
+                outTypes->add(TYPE_VOID);\
         }\
-        expr->versions_overload[info.currentPolyVersion] = *overload;
+        if(base_expr->type == EXPR_CALL)\
+            base_expr->as<ASTExpressionCall>()->versions_overload[info.currentPolyVersion] = *overload; \
+        else if(base_expr->type == EXPR_OPERATION) \
+            base_expr->as<ASTExpressionOperation>()->versions_overload[info.currentPolyVersion] = *overload;
     #define FNCALL_FAIL \
-        if(outTypes) outTypes->add(AST_VOID); \
+        if(outTypes) outTypes->add(TYPE_VOID); \
         FIX_NO_SPECIAL_ACTIONS
 
     #define FIX_NO_SPECIAL_ACTIONS for (auto& ent : possible_overload_groups) { ent.iden = nullptr; ent.set_implicit_this = false; }
@@ -822,12 +825,19 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
     TEMP_ARRAY(TypeId, fnPolyArgs);
     TEMP_ARRAY(StringView, polyTypes);
 
+    Assert(base_expr->type == EXPR_CALL || base_expr->type == EXPR_OPERATION);
+
+    auto& expr_identifier = base_expr->type == EXPR_CALL ? base_expr->as<ASTExpressionCall>()->identifier : base_expr->as<ASTExpressionOperation>()->identifier;
+    auto& expr_nonNamedArgs = base_expr->type == EXPR_CALL ? base_expr->as<ASTExpressionCall>()->nonNamedArgs : base_expr->as<ASTExpressionOperation>()->nonNamedArgs;
+
     // Token baseName{};
     StringView baseName{};
     
     if(operatorOverloadAttempt) {
-        baseName = OP_NAME((OperationType)expr->typeId.getId());
+        auto expr = base_expr->as<ASTExpressionOperation>();
+        baseName = OP_NAME(expr->op_type);
     } else {
+        auto expr = base_expr->as<ASTExpressionCall>();
         // baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
         AST::DecomposePolyTypes(expr->name, &baseName, &polyTypes);
         for(int i=0;i<(int)polyTypes.size();i++){
@@ -894,14 +904,14 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         //   We might throw an error instead haven't decided yet.
         // SignalIO resultLeft = checkExpression(scopeId,expr->left,&tempTypes, true);
         // if(tempTypes.size()==0){
-        //     argTypes.add(AST_VOID);
+        //     argTypes.add(TYPE_VOID);
         // } else {
         //     argTypes.add(tempTypes[0]);
         // }
         // tempTypes.resize(0);
         // SignalIO resultRight = checkExpression(scopeId,expr->right,&tempTypes, true);
         // if(tempTypes.size()==0){
-        //     argTypes.add(AST_VOID);
+        //     argTypes.add(TYPE_VOID);
         // } else {
         //     argTypes.add(tempTypes[0]);
         // }
@@ -911,6 +921,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         // Assert(argTypes.size() == 2);
 
     } else {
+        auto expr = base_expr->as<ASTExpressionCall>();
         bool thisFailed=false;
         // for(int i = 0; i<(int)expr->args->size();i++){
         //     auto argExpr = expr->args->get(i);
@@ -921,12 +932,12 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
             tempTypes.resize(0);
             SignalIO signal = SIGNAL_SUCCESS;
-            if(argExpr->is_inferred_initializer()) {
+            if(argExpr->type == EXPR_INITIALIZER && argExpr->as<ASTExpressionInitializer>()->is_inferred_initializer()) {
                 // do not check inferred initializer because the type comes from
                 // function argument. Since we don't know the function to call,
                 // we can't check the expression yet.
                 // We still add something though.
-                argTypes.add(AST_VOID);
+                argTypes.add(TYPE_VOID);
                 inferred_args.add(true);
                 continue;
             } else
@@ -966,7 +977,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
     //-- Get identifier, the namespace of overloads for the function/method.
     
-    if(expr->isMemberCall()){
+    if(base_expr->type == EXPR_CALL && base_expr->as<ASTExpressionCall>()->isMemberCall()){
+        auto expr = base_expr->as<ASTExpressionCall>();
         // Assert(expr->args->size()>0);
         // ASTExpression* thisArg = expr->args->get(0);
         Assert(expr->args.size()>0);
@@ -1116,7 +1128,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             
             if(outTypes) {
                 if(f->returnTypes.size()==0)
-                    outTypes->add(AST_VOID);
+                    outTypes->add(TYPE_VOID);
                 else
                     for(auto& ret : f->returnTypes)
                         outTypes->add(ret.typeId);
@@ -1145,9 +1157,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         ;
     } else {
         // special functions
-        if(expr->name == "destruct" || expr->name == "construct") {
-
-             if(expr->args.size() != 1){
+        
+        if(base_expr->type == EXPR_CALL && (base_expr->as<ASTExpressionCall>()->name == "destruct" || base_expr->as<ASTExpressionCall>()->name == "construct")) {
+            auto expr = base_expr->as<ASTExpressionCall>();
+            if(expr->args.size() != 1){
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
                     ERR_MSG("'"<<expr->name<<"' takes one argument, not "<<expr->args.size()<<".")
@@ -1304,7 +1317,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             }
 
             if(outTypes)
-                outTypes->add(AST_VOID);
+                outTypes->add(TYPE_VOID);
             return SIGNAL_SUCCESS;
         }
 
@@ -1342,13 +1355,14 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             //     FNCALL_FAIL
             //     return SIGNAL_FAILURE;
             // }
-            expr->identifier = iden;
+            
+            expr_identifier = iden;
             if(iden->type == Identifier::FUNCTION) {
                 possible_overload_groups.add({});
                 possible_overload_groups.last().fn_overloads = &iden->cast_fn()->funcOverloads;
                 possible_overload_groups.last().iden = iden;
             } else if(iden->is_var()){
-                auto var = expr->identifier->cast_var();
+                auto var = expr_identifier->cast_var();
                 // auto var = info.ast->getVariableByIdentifier(iden);
                 auto type = var->versions_typeId[info.currentPolyVersion];
                 
@@ -1362,24 +1376,24 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     }
 
                     ERR_SECTION(
-                        ERR_HEAD2(expr->location)
+                        ERR_HEAD2(base_expr->location)
                         ERR_MSG("The identifier '"<<baseName <<"' is a variable but not a function pointer. You can only \"call\" variables if they are a function pointer.")
-                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                        ERR_LINE2(base_expr->location, info.ast->typeToString(type))
                     )
                     FNCALL_FAIL
                     return SIGNAL_FAILURE;
                 }
                 
-                if(expr->nonNamedArgs != argTypes.size()) {
+                if(expr_nonNamedArgs != argTypes.size()) {
                     if(operatorOverloadAttempt || attempt) {
                         FIX_NO_SPECIAL_ACTIONS
                         return SIGNAL_NO_MATCH;
                     }
 
                     ERR_SECTION(
-                        ERR_HEAD2(expr->location)
+                        ERR_HEAD2(base_expr->location)
                         ERR_MSG("Named arguments is not possible when calling a function pointer that does not have parameter names.")
-                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                        ERR_LINE2(base_expr->location, info.ast->typeToString(type))
                     )
                     FNCALL_FAIL
                     return SIGNAL_FAILURE;
@@ -1408,47 +1422,52 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     }
 
                     ERR_SECTION(
-                        ERR_HEAD2(expr->location)
+                        ERR_HEAD2(base_expr->location)
                         ERR_MSG("Args don't match with function pointer.")
-                        ERR_LINE2(expr->location, info.ast->typeToString(type))
+                        ERR_LINE2(base_expr->location, info.ast->typeToString(type))
                     )
                     FNCALL_FAIL
                     return SIGNAL_FAILURE;
                 }
-
-                for(int i=0;i<expr->args.size();i++) {
-                    auto argExpr = expr->args[i];
-                    if (inferred_args[i]) {
-                        Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
-                        // nocheckin TODO: argTypes index is displaced if methods or implicit this.
-                        argTypes[i] = f->argumentTypes[i].typeId;
-                        auto prev = inferred_type;
-                        inferred_type = argTypes[i];
-                        auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
-                        inferred_type = prev;
+                if(base_expr->type == EXPR_CALL) {
+                    auto expr = base_expr->as<ASTExpressionCall>();
+                    for(int i=0;i<expr->args.size();i++) {
+                        auto argExpr = expr->args[i];
+                        if (inferred_args[i]) {
+                            Assert(argExpr->namedValue.size() == 0); // Fix named args later, i need to know if this will work first.
+                            // nocheckin TODO: argTypes index is displaced if methods or implicit this.
+                            argTypes[i] = f->argumentTypes[i].typeId;
+                            auto prev = inferred_type;
+                            inferred_type = argTypes[i];
+                            auto signal = checkExpression(scopeId,argExpr,&tempTypes, false);
+                            inferred_type = prev;
+                        }
                     }
                 }
                 
                 if(outTypes) {
                     if(f->returnTypes.size()==0)
-                        outTypes->add(AST_VOID);
+                        outTypes->add(TYPE_VOID);
                     else
                         for(auto& ret : f->returnTypes)
                             outTypes->add(ret.typeId);
                 }
-                expr->versions_func_type.set(currentPolyVersion, f);
+                if(base_expr->type == EXPR_CALL)
+                    base_expr->as<ASTExpressionCall>()->versions_func_type.set(currentPolyVersion, f);
+                else
+                    base_expr->as<ASTExpressionOperation>()->versions_func_type.set(currentPolyVersion, f);
                 return SIGNAL_SUCCESS;
             }
         }
     }
 
     #define FIX_SPECIAL_ACTIONS \
-        if(ent.set_implicit_this) {                     \
-            expr->setImplicitThis(true);                \
+        if(base_expr->type == EXPR_CALL && ent.set_implicit_this) {                     \
+            base_expr->as<ASTExpressionCall>()->setImplicitThis(true);                \
             ent.set_implicit_this = false;              \
         }                                               \
         if(ent.iden) {                                  \
-            expr->identifier = ent.iden;                \
+            expr_identifier = ent.iden;                \
             ent.iden = nullptr;                         \
         }                                               \
         for (auto& ent2 : possible_overload_groups) {   \
@@ -1478,9 +1497,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
             // match args with normal impls
             
-            OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, expr, fnOverloads->overloads.size()==1, &inferred_args);
+            OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, base_expr, fnOverloads->overloads.size()==1, &inferred_args);
             if(!overload)
-                overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, expr, true, &inferred_args);
+                overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, base_expr, true, &inferred_args);
             
             if(operatorOverloadAttempt && !overload) {
                 // FIX_NO_SPECIAL_ACTIONS
@@ -1494,6 +1513,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
                 // Check inferred expressions, initializers
                 if(!operatorOverloadAttempt) {
+                    auto expr = base_expr->as<ASTExpressionCall>();
                     Assert(argTypes.size() == expr->args.size());
 
                     for(int i=0; i<argTypes.size();i++) {
@@ -1507,8 +1527,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                         SignalIO result = checkExpression(scopeId, exprArg, &tempTypes, false);
                         inferred_type = prev;
                     }
+                    checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
                 }
-                checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
                 
                 FIX_SPECIAL_ACTIONS
 
@@ -1531,9 +1551,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
     
     // log::out << "Poly overloads ("<<possible_overload_groups.size()<<"):\n";
     // ERR_LINE2(expr->location,"here");
-    if(expr->nodeId == 5542) {
-        int x=0;   
-    }
+    // if(base_expr->nodeId == 5542) {
+    //     int x=0;   
+    // }
     for(auto& ent : possible_overload_groups) {
         auto fnOverloads = ent.fn_overloads;
 
@@ -1546,11 +1566,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         bool implicitPoly = (fnPolyArgs.size()==0);
         // TODO: Optimize by checking what in the overloads didn't match. If all parent structs are a bad match then
         //  we don't have we don't need to getOverload the second time with canCast=true
-        OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, &inferred_args);
+        OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, implicitPoly, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
-            checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
+            checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
             
             FIX_SPECIAL_ACTIONS
 
@@ -1558,11 +1578,11 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             return SIGNAL_SUCCESS;
         }
         // bool useCanCast = false;
-        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, implicitPoly, true, &inferred_args);
+        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, implicitPoly, true, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
-            checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
+            checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
 
             FIX_SPECIAL_ACTIONS
 
@@ -1575,7 +1595,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             // log::out << "Poly overloads ("<<ent.iden->name<<"):\n";
             // ERR_LINE2(expr->location,"here");
 
-            polyFunc = findPolymorphicFunction(fnOverloads, expr->nonNamedArgs,argTypes,ent.set_implicit_this, scopeId, parentStructImpl, parentAstStruct, fnPolyArgs, &inferred_args, expr, operatorOverloadAttempt);
+            polyFunc = findPolymorphicFunction(fnOverloads, expr_nonNamedArgs,argTypes,ent.set_implicit_this, scopeId, parentStructImpl, parentAstStruct, fnPolyArgs, &inferred_args, base_expr, operatorOverloadAttempt);
 
         } else {
             int lessArguments = 0;
@@ -1588,8 +1608,8 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     continue;
                 // continue if more args than possible
                 // continue if less args than minimally required
-                if(expr->nonNamedArgs > overload.astFunc->arguments.size() - lessArguments || 
-                    expr->nonNamedArgs < overload.astFunc->nonDefaults - lessArguments ||
+                if(expr_nonNamedArgs > overload.astFunc->arguments.size() - lessArguments || 
+                    expr_nonNamedArgs < overload.astFunc->nonDefaults - lessArguments ||
                     argTypes.size() > overload.astFunc->arguments.size() - lessArguments
                     )
                     continue;
@@ -1599,15 +1619,15 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     overload.astFunc->popPolyState();
                 };
                 bool found = true;
-                for (u32 j=0;j<expr->nonNamedArgs;j++){
-                    if(expr->isMemberCall() && j == 0)
+                for (u32 j=0;j<expr_nonNamedArgs;j++){
+                    if(base_expr->type == EXPR_CALL && base_expr->as<ASTExpressionCall>()->isMemberCall() && j == 0)
                         continue; // skip first argument because they will be the same.
 
                     // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
                     lexer::SourceLocation loc = overload.astFunc->arguments[j+lessArguments].location;
                     if(loc.tok.type == lexer::TOKEN_NONE) {
                         // bad token
-                        loc = expr->location;
+                        loc = base_expr->location;
                     }
                     TypeId argType = checkType(overload.astFunc->scopeId,overload.astFunc->arguments[j+lessArguments].stringType,
                         loc,nullptr);
@@ -1672,14 +1692,14 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
         OverloadGroup::Overload* newOverload = computePolymorphicFunction(polyFunc, parentStructImpl, fnPolyArgs, fnOverloads);
 
         // Can overload be null since we generate a new func impl?
-        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr);
+        overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr);
         if(!overload)
-            overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, expr, false, true);
+            overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, false, true);
         Assert(overload == newOverload);
         if(!overload){
             auto funcImpl = newOverload->funcImpl;
             ERR_SECTION(
-                ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
+                ERR_HEAD2(base_expr->location, ERROR_OVERLOAD_MISMATCH)
                 ERR_MSG_LOG("Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
                     log::out << log::CYAN<<"Generates args: "<<log::NO_COLOR;
                     if(argTypes.size()==0){
@@ -1694,7 +1714,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
                     if(argTypes.size()==0){
                         log::out << "zero arguments";
                     } else {
-                        expr->printArgTypes(info.ast, argTypes);
+                        base_expr->printArgTypes(info.ast, argTypes);
                     }
                     log::out << "\n"
                 )
@@ -1704,7 +1724,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
             return SIGNAL_FAILURE;
         }
         
-        checkDefaultArguments(overload->astFunc, overload->funcImpl, expr, ent.set_implicit_this, scopeId);
+        checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
 
         FIX_SPECIAL_ACTIONS
 
@@ -1721,9 +1741,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
 
     if(possible_overload_groups.size() == 0) {
         ERR_SECTION(
-            ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
+            ERR_HEAD2(base_expr->location, ERROR_OVERLOAD_MISMATCH)
             ERR_MSG_LOG("There is no function called '" << log::LIME << baseName << log::NO_COLOR <<"' in the scope.\n\n");
-            ERR_LINE2(expr->location, "bad");
+            ERR_LINE2(base_expr->location, "bad");
         )
 
         FNCALL_FAIL
@@ -1733,10 +1753,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* expr, QuickAr
     // Arguments for fname does not match an overload. These were the arguments:
     // These are the valid overloads: 
     ERR_SECTION(
-        ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
+        ERR_HEAD2(base_expr->location, ERROR_OVERLOAD_MISMATCH)
         // custom code for error message
         log::out << "Arguments for '"<<baseName <<"' does not match an overload. (note, named arguments is only allowed on default arguments)\n";
-        ERR_LINE2(expr->location, "bad");
+        ERR_LINE2(base_expr->location, "bad");
         log::out << "These were the arguments: ";
         if(argTypes.size()==0){
             log::out << "zero arguments";
@@ -1861,7 +1881,7 @@ OverloadGroup::Overload* TyperContext::computePolymorphicFunction(ASTFunction* p
     return newOverload;
 }
 
-ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, ASTStruct* parentAstStruct, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpression* expr, bool operatorOverloadAttempt) {
+ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, int nonNamedArgs, const BaseArray<TypeId>& argTypes, bool implicit_this, ScopeId scopeId, StructImpl* parentStructImpl, ASTStruct* parentAstStruct, QuickArray<TypeId>& out_polyArgs, const BaseArray<bool>* inferred_args, ASTExpression* base_expr, bool operatorOverloadAttempt) {
     // log::out << "Poly overloads ("<<ent.iden->name<<"):\n";
     // ERR_LINE2(expr->location,"here");
 
@@ -1909,6 +1929,7 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
         bool found = true;
         for (int j=0;j<nonNamedArgs;j++){
             if(inferred_args && inferred_args->get(j)) {
+                auto expr = base_expr->as<ASTExpressionCall>();
                 ERR_SECTION(
                     ERR_HEAD2(expr->args[i]->location)
                     ERR_MSG("Inferred initializers are not allowed with polymorphic functions.")
@@ -2219,7 +2240,7 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
             if(i < realChoosenTypes.size()) {
                 out_polyArgs[i] = realChoosenTypes[i];
             } else {
-                out_polyArgs[i] = AST_VOID;
+                out_polyArgs[i] = TYPE_VOID;
             }
         }
         //-- Double check so that the types we choose actually works.
@@ -2247,8 +2268,9 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
         if(found) {
            return polyFunc; 
         } else {
-            if (expr) {
+            if (base_expr) {
                 if (operatorOverloadAttempt) {
+                    auto expr = base_expr->as<ASTExpressionOperation>();
                     ERR_SECTION(
                         ERR_HEAD2(expr->location)
                         ERR_MSG("COMPILER BUG, when matching operator overloads. Polymorphic overload was generated which didn't match the actual arguments. It's also possible that we shouldn't have generated one to begin with.")
@@ -2259,7 +2281,9 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
                             ERR_LINE2(expr->right->location,ast->typeToString(argTypes[1]))
                         }
                     )
+                    return nullptr;
                 } else {
+                    auto expr = base_expr->as<ASTExpressionCall>();
                     ERR_SECTION(
                         ERR_HEAD2(expr->location)
                         ERR_MSG("COMPILER BUG, when matching function overloads. The matching generated a polymorphic overload that was meant to match the arguments but which doesn't.")
@@ -2270,6 +2294,7 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
                             }
                         }
                     )
+                    return nullptr;
                 }
                 Assert(found); // If function we thought would match doesn't then the code is incorrect.
             }
@@ -2285,7 +2310,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
     
     defer {
         if(outTypes && outTypes->size()==0){
-            outTypes->add(AST_VOID);
+            outTypes->add(TYPE_VOID);
         }
     };
 
@@ -2308,212 +2333,206 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
     TEMP_ARRAY_N(TypeId, operatorArgs, 2);
 
     // switch
-    if(expr->isValue) {
-        if(expr->typeId == AST_ID){
-            // NOTE: When changing this code, don't forget to do the same with AST_SIZEOF. It also has code for AST_ID.
-            //   Some time later...
-            //   Oh, nice comment! Good job me. - Emarioo, 2024-02-03
-            
-            // ScopeInfo* sc = info.ast->getScope(scopeId);
-            // sc->print(info.ast);
-            // TODO: What about enum?
-            bool crossed_function_boundary = false;
-            // BREAK(expr->name == "argc")
-            auto _iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name, &crossed_function_boundary);
-            if(_iden){
-                expr->identifier = _iden;
-                if(_iden->is_var()){
-                    auto iden = _iden->cast_var();
+    switch(expr->type) {
+    case EXPR_NONE: {
+        Assert(false);
+    } break;
+    case EXPR_VALUE: {
+        auto stmp = expr->as<ASTExpressionValue>();
+        // Assert(stmp->typeId.getId() < AST_PRIMITIVE_COUNT);
+        if(outTypes) outTypes->add(stmp->typeId);
+    } break;
+    case EXPR_IDENTIFIER: {
+        // NOTE: When changing this code, don't forget to do the same with AST_SIZEOF. It also has code for AST_ID.
+        //   Some time later...
+        //   Oh, nice comment! Good job me. - Emarioo, 2024-02-03
+        
+        // ScopeInfo* sc = info.ast->getScope(scopeId);
+        // sc->print(info.ast);
+        // TODO: What about enum?
+        auto stmp = expr->as<ASTExpressionIdentifier>();
+        bool crossed_function_boundary = false;
+        // BREAK(expr->name == "argc")
+        auto _iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), stmp->name, &crossed_function_boundary);
+        if(_iden){
+            stmp->identifier = _iden;
+            if(_iden->is_var()){
+                auto iden = _iden->cast_var();
 
-                    if (iden->type != Identifier::GLOBAL_VARIABLE && crossed_function_boundary) {
-                        /* NOTE:
-                            crossed_function_boundary tells us that the variable we found is
-                            within a parent scope outside of the current function. We should not
-                            be able to access such variables, hence the error. See example below.
+                if (iden->type != Identifier::GLOBAL_VARIABLE && crossed_function_boundary) {
+                    /* NOTE:
+                        crossed_function_boundary tells us that the variable we found is
+                        within a parent scope outside of the current function. We should not
+                        be able to access such variables, hence the error. See example below.
 
-                            fn outer() {
-                                n := 8
-                                fn inner() {
-                                    n // should not be accessible
-                                }
+                        fn outer() {
+                            n := 8
+                            fn inner() {
+                                n // should not be accessible
                             }
-                        */
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->location, ERROR_UNDECLARED)
-                            ERR_MSG("'"<<expr->name<<"' is not a declared variable.")
-                            ERR_LINE2(expr->location,"undeclared")
-                        )
+                        }
+                    */
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location, ERROR_UNDECLARED)
+                        ERR_MSG("'"<<stmp->name<<"' is not a declared variable.")
+                        ERR_LINE2(expr->location,"undeclared")
+                    )
 
-                        if(outTypes) outTypes->add(AST_VOID);
+                    if(outTypes) outTypes->add(TYPE_VOID);
+                    return SIGNAL_FAILURE;
+                }
+                
+                if(iden->type == Identifier::MEMBER_VARIABLE) {
+                    auto& mem = currentAstFunc->parentStruct->members[iden->memberIndex];
+                    if (mem.array_length) {
+                        TypeId type = iden->versions_typeId[info.currentPolyVersion];
+
+                        Assert(type.getPointerLevel() < 3);
+                        type.setPointerLevel(type.getPointerLevel() + 1);
+                        if(array_length)
+                            *array_length = mem.array_length;
+
+                        // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
+                        // bool printed = false;
+                        // TypeId type = checkType(scopeId, real_type, expr->location, &printed);
+                        
+                        outTypes->add(type);
+                        return SIGNAL_SUCCESS;
+                    }
+                }
+                
+                if(outTypes) {
+                    // NOTE: NASTY FUTURE BUG! Accessing a global at the
+                    //   import scope should use 0 as poly version
+                    //   BUT when writing code you may copy some code
+                    //   and forget this and assume that currentPolyVersion
+                    //   is correct which it isn't, currentPolyVersion
+                    //   specifies the version for the current polymorphic
+                    //   scope that is evaluated, the global variable doesn't
+                    //   have a polymorphic scope and should therefore not
+                    //   use a poly version. This would get crazier if we
+                    //   allow polymorphic namespace...
+                    //   Ohh goodness me, imagine the madness we would have to deal with.
+                    if(iden->is_import_global) {
+                        outTypes->add(iden->versions_typeId[0]);
+                    } else
+                        outTypes->add(iden->versions_typeId[info.currentPolyVersion]);
+                }
+            } else if(_iden->is_fn()) {
+                auto iden = _iden->cast_fn();
+                if(iden->funcOverloads.overloads.size() == 1) {
+                    auto overload = &iden->funcOverloads.overloads[0];
+                    
+                    if (overload->astFunc->callConvention == INTRINSIC) {
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("You cannot take a pointer to an intrinsic function.")
+                            ERR_LINE2(expr->location, "here")
+                            ERR_LINE2(overload->astFunc->location, "this function")
+                        )
+                        if(outTypes) outTypes->add(TYPE_VOID);
+                        return SIGNAL_FAILURE;
+                    }
+                    if (overload->astFunc->linkConvention != LinkConvention::NONE) {
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("You cannot take a pointer to an external/imported function (yet).")
+                            ERR_LINE2(expr->location, "here")
+                            ERR_LINE2(overload->astFunc->location, "this function")
+                        )
+                        if(outTypes) outTypes->add(TYPE_VOID);
                         return SIGNAL_FAILURE;
                     }
                     
-                    if(iden->type == Identifier::MEMBER_VARIABLE) {
-                        auto& mem = currentAstFunc->parentStruct->members[iden->memberIndex];
-                        if (mem.array_length) {
-                            TypeId type = iden->versions_typeId[info.currentPolyVersion];
-
-                            Assert(type.getPointerLevel() < 3);
-                            type.setPointerLevel(type.getPointerLevel() + 1);
-                            if(array_length)
-                                *array_length = mem.array_length;
-
-                            // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
-                            // bool printed = false;
-                            // TypeId type = checkType(scopeId, real_type, expr->location, &printed);
-                            
-                            outTypes->add(type);
-                            return SIGNAL_SUCCESS;
-                        }
-                    }
+                    info.ast->declareUsageOfOverload(overload);
                     
-                    if(outTypes) {
-                        // NOTE: NASTY FUTURE BUG! Accessing a global at the
-                        //   import scope should use 0 as poly version
-                        //   BUT when writing code you may copy some code
-                        //   and forget this and assume that currentPolyVersion
-                        //   is correct which it isn't, currentPolyVersion
-                        //   specifies the version for the current polymorphic
-                        //   scope that is evaluated, the global variable doesn't
-                        //   have a polymorphic scope and should therefore not
-                        //   use a poly version. This would get crazier if we
-                        //   allow polymorphic namespace...
-                        //   Ohh goodness me, imagine the madness we would have to deal with.
-                        if(iden->is_import_global) {
-                            outTypes->add(iden->versions_typeId[0]);
-                        } else
-                            outTypes->add(iden->versions_typeId[info.currentPolyVersion]);
-                    }
-                } else if(_iden->is_fn()) {
-                    auto iden = _iden->cast_fn();
-                    if(iden->funcOverloads.overloads.size() == 1) {
-                        auto overload = &iden->funcOverloads.overloads[0];
-                        
-                        if (overload->astFunc->callConvention == INTRINSIC) {
-                            ERR_SECTION(
-                                ERR_HEAD2(expr->location)
-                                ERR_MSG("You cannot take a pointer to an intrinsic function.")
-                                ERR_LINE2(expr->location, "here")
-                                ERR_LINE2(overload->astFunc->location, "this function")
-                            )
-                            if(outTypes) outTypes->add(AST_VOID);
-                            return SIGNAL_FAILURE;
-                        }
-                        if (overload->astFunc->linkConvention != LinkConvention::NONE) {
-                            ERR_SECTION(
-                                ERR_HEAD2(expr->location)
-                                ERR_MSG("You cannot take a pointer to an external/imported function (yet).")
-                                ERR_LINE2(expr->location, "here")
-                                ERR_LINE2(overload->astFunc->location, "this function")
-                            )
-                            if(outTypes) outTypes->add(AST_VOID);
-                            return SIGNAL_FAILURE;
-                        }
-                        
-                        info.ast->declareUsageOfOverload(overload);
-                        
-                        // TODO: Don't create new arrays, restructure funcImpl so that you can just
-                        //   pass arrays when finding function type
-                        // DynamicArray<TypeId> args{};
-                        // DynamicArray<TypeId> rets{};
-                        // auto f = overload->funcImpl;
-                        // args.reserve(f->signature.argumentTypes.size());
-                        // rets.reserve(f->signature.returnTypes.size());
-                        // for(auto& t : f->signature.argumentTypes)
-                        //     args.add(t.typeId);
-                        // for(auto& t : f->signature.returnTypes)
-                        //     rets.add(t.typeId);
-                        auto type = info.ast->findOrAddFunctionSignature(&overload->funcImpl->signature);
-                        if(!type) {
-                            Assert(("can this crash?",false));
-                        } else {
-                            if(outTypes)
-                                outTypes->add(type->id);
-                        }
+                    // TODO: Don't create new arrays, restructure funcImpl so that you can just
+                    //   pass arrays when finding function type
+                    // DynamicArray<TypeId> args{};
+                    // DynamicArray<TypeId> rets{};
+                    // auto f = overload->funcImpl;
+                    // args.reserve(f->signature.argumentTypes.size());
+                    // rets.reserve(f->signature.returnTypes.size());
+                    // for(auto& t : f->signature.argumentTypes)
+                    //     args.add(t.typeId);
+                    // for(auto& t : f->signature.returnTypes)
+                    //     rets.add(t.typeId);
+                    auto type = info.ast->findOrAddFunctionSignature(&overload->funcImpl->signature);
+                    if(!type) {
+                        Assert(("can this crash?",false));
                     } else {
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->location)
-                            ERR_MSG("Function is overloaded. Taking a reference would therefore be ambiguous. You must rename the function so that it only has one overload.")
-                            ERR_LINE2(expr->location, "ambiguous")
-                        )
-                        if(outTypes) outTypes->add(AST_VOID);
+                        if(outTypes)
+                            outTypes->add(type->id);
                     }
                 } else {
-                    INCOMPLETE
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("Function is overloaded. Taking a reference would therefore be ambiguous. You must rename the function so that it only has one overload.")
+                        ERR_LINE2(expr->location, "ambiguous")
+                    )
+                    if(outTypes) outTypes->add(TYPE_VOID);
                 }
             } else {
-                // Perhaps it's an enum member?
-                int memberIndex = -1;
-                ASTEnum* astEnum = nullptr;
-                bool found = info.ast->findEnumMember(scopeId, expr->name, &astEnum, &memberIndex);
-                if(found){
-                    expr->enum_ast = astEnum;
-                    expr->enum_member = memberIndex;
-                    if(outTypes) outTypes->add(astEnum->actualType);
-                    return SIGNAL_SUCCESS;
-                } else if(astEnum) {
-                    ERR_SECTION(
-                        ERR_HEAD2(expr->location, ERROR_UNDECLARED)
-                        ERR_MSG("'"<<expr->name<<"' is not declared but a member of the enum '"<<astEnum->name<<"' could have matched if it wasn't @enclosed.")
-                        ERR_LINE2(astEnum->members[memberIndex].location,"could have matched")
-                        ERR_LINE2(expr->location,"undeclared")
-                    )
-                } else {
-                    ERR_SECTION(
-                        ERR_HEAD2(expr->location, ERROR_UNDECLARED)
-                        ERR_MSG("'"<<expr->name<<"' is not a declared variable.")
-                        ERR_LINE2(expr->location,"undeclared")
-                    )
-                }
-                return SIGNAL_FAILURE;
+                INCOMPLETE
             }
-        } else if(expr->typeId == AST_FNCALL){
-            return checkFncall(scopeId,expr, outTypes, attempt, false);
-        } else if(expr->typeId == AST_STRING){
-            u32 index=0;
-            
-            auto constString = info.ast->getConstString(expr->name,&index);
-            // Assert(constString);
-            // log::out << " "<<expr->name << " "<<index<<"\n";
-            expr->versions_constStrIndex.set(currentPolyVersion, index);
-
-            if(expr->flags & ASTNode::NULL_TERMINATED) {
-                TypeId theType = checkType(scopeId, "char*", expr->location, nullptr);
-                Assert(theType.isValid()); if(outTypes) outTypes->add(theType);
+        } else {
+            // Perhaps it's an enum member?
+            int memberIndex = -1;
+            ASTEnum* astEnum = nullptr;
+            bool found = info.ast->findEnumMember(scopeId, stmp->name, &astEnum, &memberIndex);
+            if(found){
+                stmp->enum_ast = astEnum;
+                stmp->enum_member = memberIndex;
+                if(outTypes) outTypes->add(astEnum->typeId);
+                return SIGNAL_SUCCESS;
+            } else if(astEnum) {
+                ERR_SECTION(
+                    ERR_HEAD2(stmp->location, ERROR_UNDECLARED)
+                    ERR_MSG("'"<<stmp->name<<"' is not declared but a member of the enum '"<<astEnum->name<<"' could have matched if it wasn't @enclosed.")
+                    ERR_LINE2(astEnum->members[memberIndex].location,"could have matched")
+                    ERR_LINE2(stmp->location,"undeclared")
+                )
             } else {
-                TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
-                Assert(theType.isValid());
-                if(outTypes) outTypes->add(theType);
-            } 
-        } else if(expr->typeId == AST_SIZEOF || expr->typeId == AST_NAMEOF || expr->typeId == AST_TYPEID) {
-            TypeId finalType = {};
-            if(expr->left) {
-                if(expr->left->typeId == AST_ID){
-                    // AST_ID could result in a type or a variable
-                    auto& name = expr->left->name;
-                    // TODO: Handle function pointer type
-                    // This code may need to update when code for AST_ID does
+                ERR_SECTION(
+                    ERR_HEAD2(stmp->location, ERROR_UNDECLARED)
+                    ERR_MSG("'"<<stmp->name<<"' is not a declared variable.")
+                    ERR_LINE2(stmp->location,"undeclared")
+                )
+            }
+            return SIGNAL_FAILURE;
+        }
+    } break;
+    case EXPR_CALL: {
+        return checkFncall(scopeId,expr->as<ASTExpressionCall>(), outTypes, attempt, false);
+    } break;
+    case EXPR_STRING: {
+        u32 index=0;
+        auto stmp = expr->as<ASTExpressionString>();
+        auto constString = info.ast->getConstString(stmp->name,&index);
+        // Assert(constString);
+        // log::out << " "<<expr->name << " "<<index<<"\n";
+        stmp->versions_constStrIndex.set(currentPolyVersion, index);
 
-                    bool crossed_boundary = false;
-                    Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
+        if(expr->flags & ASTNode::NULL_TERMINATED) {
+            TypeId theType = checkType(scopeId, "char*", expr->location, nullptr);
+            Assert(theType.isValid()); if(outTypes) outTypes->add(theType);
+        } else {
+            TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
+            Assert(theType.isValid());
+            if(outTypes) outTypes->add(theType);
+        } 
+    } break;
+    case EXPR_BUILTIN: {
+        auto stmp = expr->as<ASTExpressionBuiltin>();
+        TypeId finalType = {};
+        if(stmp->left) {
+            if(stmp->left->type == EXPR_IDENTIFIER){
+                // AST_ID could result in a type or a variable
+                auto ltmp = stmp->left->as<ASTExpressionIdentifier>();
+                auto& name = ltmp->name;
+                // TODO: Handle function pointer type
+                // This code may need to update when code for AST_ID does
 
-                    if(iden && !iden->is_fn() && (iden->type == Identifier::GLOBAL_VARIABLE || !crossed_boundary)){
-                        auto var = iden->cast_var();
-                        finalType = var->versions_typeId[info.currentPolyVersion];
-                    } else {
-                        // auto sc = info.ast->getScope(scopeId);
-                        // sc->print(info.ast);
-                        finalType = checkType(scopeId, name, expr->location, nullptr);
-                    }
-                }
-                if(!finalType.isValid()) {
-                    // DynamicArray<TypeId> temps{};
-                    tempTypes.resize(0);
-                    SignalIO result = checkExpression(scopeId, expr->left, &tempTypes, attempt);
-                    finalType = tempTypes.size()==0 ? AST_VOID : tempTypes.last();
-                }
-            } else {
-                auto& name = expr->name;
                 bool crossed_boundary = false;
                 Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
 
@@ -2525,105 +2544,437 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     // sc->print(info.ast);
                     finalType = checkType(scopeId, name, expr->location, nullptr);
                 }
-                if(!finalType.isValid()) {
-                    if(!hasForeignErrors()) {
-                        // Assert(expr->name.size()); // error, if we didn't have any
-                    } else {
-                        // return SIGNAL_FAILURE; // OI, WE DO NOTHING HERE, OK!
-                    }
-                    finalType = checkType(scopeId, expr->name, expr->location, nullptr);
-                }
             }
-            
-            if(finalType.isValid()) {
-                if(expr->typeId == AST_SIZEOF) {
-                    expr->versions_outTypeSizeof.set(currentPolyVersion, finalType);
-                    if(outTypes)  outTypes->add(AST_INT32);
-                } else if(expr->typeId == AST_NAMEOF) {
-                    std::string name = info.ast->typeToString(finalType);
-                    u32 index=0;
-                    auto constString = info.ast->getConstString(name,&index);
-                    // Assert(constString);
-                    expr->versions_constStrIndex.set(currentPolyVersion, index);
-                    // expr->constStrIndex = index;
+            if(!finalType.isValid()) {
+                // DynamicArray<TypeId> temps{};
+                tempTypes.resize(0);
+                SignalIO result = checkExpression(scopeId, stmp->left, &tempTypes, attempt);
+                finalType = tempTypes.size()==0 ? TYPE_VOID : tempTypes.last();
+            }
+        } else {
+            auto& name = stmp->name;
+            bool crossed_boundary = false;
+            Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
 
-                    TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
-                    if(outTypes)  outTypes->add(theType);
-                } else if(expr->typeId == AST_TYPEID) {
-                    
-                    expr->versions_outTypeTypeid.set(currentPolyVersion, finalType);
-                    
-                    const char* tname = "lang_TypeId";
-                    TypeId theType = checkType(scopeId, tname, expr->location, nullptr);
-                    if(!theType.isValid()) {
-                        // TODO: Don't hardcode "Lang" import. It may change in the future.
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->location)
-                            ERR_MSG("'"<<tname << "' was not a valid type. Did you forget to #import \"Lang\".")
-                            ERR_LINE2(expr->location, "bad")
-                        )
-                    }
-                    if(outTypes)  outTypes->add(theType);
-                }
+            if(iden && !iden->is_fn() && (iden->type == Identifier::GLOBAL_VARIABLE || !crossed_boundary)){
+                auto var = iden->cast_var();
+                finalType = var->versions_typeId[info.currentPolyVersion];
             } else {
-                 ERR_SECTION(
-                    ERR_HEAD2(expr->location, ERROR_UNDECLARED)
-                    ERR_MSG("Type/name in sizeof/nameof/typeid is not defined.")
+                // auto sc = info.ast->getScope(scopeId);
+                // sc->print(info.ast);
+                finalType = checkType(scopeId, name, expr->location, nullptr);
+            }
+            if(!finalType.isValid()) {
+                if(!hasForeignErrors()) {
+                    // Assert(expr->name.size()); // error, if we didn't have any
+                } else {
+                    // return SIGNAL_FAILURE; // OI, WE DO NOTHING HERE, OK!
+                }
+                finalType = checkType(scopeId, stmp->name, expr->location, nullptr);
+            }
+        }
+        
+        if(finalType.isValid()) {
+            if(stmp->builtin_type == AST_SIZEOF) {
+                stmp->versions_outTypeSizeof.set(currentPolyVersion, finalType);
+                if(outTypes)  outTypes->add(TYPE_INT32);
+            } else if(stmp->builtin_type == AST_NAMEOF) {
+                std::string name = info.ast->typeToString(finalType);
+                u32 index=0;
+                auto constString = info.ast->getConstString(name,&index);
+                // Assert(constString);
+                stmp->versions_constStrIndex.set(currentPolyVersion, index);
+                // expr->constStrIndex = index;
+
+                TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
+                if(outTypes)  outTypes->add(theType);
+            } else if(stmp->builtin_type == AST_TYPEOF) {
+                
+                stmp->versions_outTypeTypeid.set(currentPolyVersion, finalType);
+                
+                const char* tname = "lang_TypeId";
+                TypeId theType = checkType(scopeId, tname, expr->location, nullptr);
+                if(!theType.isValid()) {
+                    // TODO: Don't hardcode "Lang" import. It may change in the future.
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("'"<<tname << "' was not a valid type. Did you forget to #import \"Lang\".")
+                        ERR_LINE2(expr->location, "bad")
+                    )
+                }
+                if(outTypes)  outTypes->add(theType);
+            }
+        } else {
+                ERR_SECTION(
+                ERR_HEAD2(expr->location, ERROR_UNDECLARED)
+                ERR_MSG("Type/name in sizeof/nameof/typeid is not defined.")
+                ERR_LINE2(expr->location, "here")
+            )
+            // We may use @TEST_ERROR in which case we expect something to go wrong,
+            // but we don't expect an error from, hence no assert.
+            // We should have provided some message from checkType. (see usage of finalType above)
+            if(outTypes) outTypes->add(TYPE_VOID);
+            return SIGNAL_FAILURE;
+        }
+    } break;
+    case EXPR_ASSEMBLY: {
+        auto stmp = expr->as<ASTExpressionAssembly>();
+        for(auto a : stmp->args) {
+            QuickArray<TypeId> types{};
+            auto signal = checkExpression(scopeId, a, &types, false, nullptr);
+        }
+        
+        if(!stmp->asmTypeString.isString()) {
+            // asm has not type
+            stmp->versions_asmType.set(currentPolyVersion, TYPE_VOID);
+            if(outTypes)
+                outTypes->add(TYPE_VOID);   
+        } else {
+            bool printedError = false;
+            auto ti = checkType(scopeId, stmp->asmTypeString, expr->location, &printedError);
+            if (ti.isValid()) {
+                if(outTypes)
+                    outTypes->add(ti);
+                stmp->versions_asmType.set(currentPolyVersion, ti);
+            } else {
+                if(!printedError){
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("Type "<<info.ast->getStringFromTypeString(stmp->castType) << " does not exist.")
+                        ERR_LINE2(expr->location,"bad")
+                    )
+                }
+                if(outTypes)
+                    outTypes->add(TYPE_VOID);
+            }
+        }
+    } break;
+    case EXPR_NULL: {
+        // u32 index=0;
+        // auto constString = info.ast->getConstString(expr->name,&index);
+        // // Assert(constString);
+        // expr->versions_constStrIndex[info.currentPolyVersion] = index;
+
+        // TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
+        TypeId theType = TYPE_VOID;
+        theType.setPointerLevel(1);
+        if(outTypes)
+            outTypes->add(theType);
+    } break;
+    case EXPR_INITIALIZER: {
+        auto stmp = expr->as<ASTExpressionInitializer>();
+        TypeId ti{};
+        if (!stmp->castType.isValid()) {
+            // infer type
+            if (!inferred_type.isValid()) {
+                ERR_SECTION(
+                    ERR_HEAD2(expr->location)
+                    ERR_MSG_COLORED("Struct name was not specified for initializer. This requires that the type is inferred but the inferred type was '" << log::LIME << ast->typeToString(inferred_type) << log::NO_COLOR << "'. Types can only be inferred from assignments, function arguments, and return values.")
                     ERR_LINE2(expr->location, "here")
+                    ERR_EXAMPLE(1, "a: vec2 = {1,2}")
+                    ERR_EXAMPLE(1, "fn hi(a: vec2) {}\nhi({1,2})")
                 )
-                // We may use @TEST_ERROR in which case we expect something to go wrong,
-                // but we don't expect an error from, hence no assert.
-                // We should have provided some message from checkType. (see usage of finalType above)
-                if(outTypes) outTypes->add(AST_VOID);
+                return SIGNAL_FAILURE;
+            } else {
+                ti = inferred_type;
+                // inferred_type = {};
+            }
+        }
+        if(!ti.isValid())
+            ti = checkType(scopeId, stmp->castType, expr->location, nullptr);
+        if(!ti.isValid()) {
+            ERR_SECTION(
+                ERR_HEAD2(expr->location)
+                ERR_MSG("'"<<info.ast->typeToString(stmp->castType)<<"' is not a type.")
+                ERR_LINE2(expr->location,"bad")
+            )
+            return SIGNAL_FAILURE;
+        }
+        TypeInfo* typeinfo = nullptr;
+        if(ti.isNormalType())
+            typeinfo = ast->getTypeInfo(ti);
+        for(int i=0;i<stmp->args.size();i++) {
+            auto arg_expr = stmp->args[i];
+            auto prev = inferred_type;
+            if(typeinfo && typeinfo->structImpl) {
+                // getMember returns invalid type if 'i' is out of bounds
+                inferred_type = typeinfo->getMember(i).typeId;
+            }
+            checkExpression(scopeId, arg_expr, nullptr, attempt);
+            inferred_type = prev;
+        }
+        if(outTypes)
+            outTypes->add(ti);
+        stmp->versions_castType.set(currentPolyVersion, ti);
+    } break;
+    case EXPR_CAST: {
+        auto stmp = expr->as<ASTExpressionCast>();
+        // DynamicArray<TypeId> temp{};
+        Assert(stmp->left);
+        checkExpression(scopeId, stmp->left, &tempTypes, attempt);
+        Assert(tempTypes.size()==1);
+
+        Assert(stmp->castType.isString());
+        bool printedError = false;
+        auto ti = checkType(scopeId, stmp->castType, expr->location, &printedError);
+        if (ti.isValid()) {
+
+        } else if(!printedError){
+            ERR_SECTION(
+                ERR_HEAD2(expr->location)
+                ERR_MSG("Type "<<info.ast->getStringFromTypeString(stmp->castType) << " does not exist.")
+                ERR_LINE2(expr->location,"bad")
+            )
+        }
+        if(outTypes)
+            outTypes->add(ti);
+        stmp->versions_castType.set(currentPolyVersion, ti);
+        
+        if(stmp->isUnsafeCast()) {
+            int ls = info.ast->getTypeSize(ti);
+            int rs = info.ast->getTypeSize(tempTypes.last());
+            if(ls != rs) {
+                std::string strleft = info.ast->typeToString(tempTypes.last()) + " ("+std::to_string(ls)+")";
+                std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
+                ERR_SECTION(
+                    ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
+                    ERR_MSG("cast_unsafe requires that both types have the same size. "<<ls << " != "<<rs<<"'.")
+                    ERR_LINE2(stmp->left->location,strleft)
+                    ERR_LINE2(expr->location,strcast)
+                    ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
+                )
+            }
+        } else if(!(tempTypes.last().getPointerLevel() > 0 && ti.getPointerLevel() > 0) && !info.ast->castable(tempTypes.last(),ti, true)){
+            std::string strleft = info.ast->typeToString(tempTypes.last());
+            std::string strcast = info.ast->typeToString(ti);
+            ERR_SECTION(
+                ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
+                ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?")
+                ERR_LINE2(stmp->left->location,strleft)
+                ERR_LINE2(expr->location,strcast)
+                ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
+            )
+        }
+        break;
+    }
+    case EXPR_ASSIGN: {
+        auto stmp = expr->as<ASTExpressionAssign>();
+        TypeId leftType{};
+        TypeId rightType{};
+        // Keep compiling even if left or right is null to catch more errors.
+        if(stmp->left) {
+            tempTypes.resize(0);
+            checkExpression(scopeId, stmp->left, &tempTypes, attempt);
+            if(tempTypes.size() > 1) {
+                // Error message for right expr is the same as below, DON'T
+                // forget to modify both when changing stuff!
+                ERR_SECTION(
+                    ERR_HEAD2(stmp->right->location)
+                    ERR_MSG("Left expression produced more than one value which isn't allowed with assignments in expressions.")
+                    ERR_LINE2(stmp->right->location,tempTypes.size() << " values");
+                )
                 return SIGNAL_FAILURE;
             }
-        } else if(expr->typeId == AST_ASM){
-            for(auto a : expr->args) {
-                QuickArray<TypeId> types{};
-                auto signal = checkExpression(scopeId, a, &types, false, nullptr);
+            if(tempTypes.size()>0) {
+                leftType = tempTypes.last();
+                // operatorArgs.add(tempTypes.last());
             }
+        }
+        if(stmp->right) {
+            tempTypes.resize(0);
+            bool is_assignment = (stmp->assign_op_type == (OperationType)0);
+            auto prev = inferred_type;
+            if(is_assignment) {
+                inferred_type = leftType;
+            }
+            auto signal = checkExpression(scopeId, stmp->right, &tempTypes, attempt);
+            inferred_type = prev;
             
-            if(!expr->asmTypeString.isString()) {
-                // asm has not type
-                expr->versions_asmType.set(currentPolyVersion, AST_VOID);
-                if(outTypes)
-                    outTypes->add(AST_VOID);   
-            } else {
-                bool printedError = false;
-                auto ti = checkType(scopeId, expr->asmTypeString, expr->location, &printedError);
-                if (ti.isValid()) {
-                    if(outTypes)
-                        outTypes->add(ti);
-                    expr->versions_asmType.set(currentPolyVersion, ti);
+            if(tempTypes.size() > 0 && tempTypes[0] == TYPE_VOID) {
+                if(hasAnyErrors()) {
+                    return SIGNAL_FAILURE;
                 } else {
-                    if(!printedError){
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->location)
-                            ERR_MSG("Type "<<info.ast->getStringFromTypeString(expr->castType) << " does not exist.")
-                            ERR_LINE2(expr->location,"bad")
-                        )
-                    }
-                    if(outTypes)
-                        outTypes->add(AST_VOID);
+                    log::out << log::RED << "WHY WAS TYPE VOID\n";
+                    Assert(false);
                 }
             }
-        } else if(expr->typeId == AST_NULL){
-            // u32 index=0;
-            // auto constString = info.ast->getConstString(expr->name,&index);
-            // // Assert(constString);
-            // expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
-            // TypeId theType = checkType(scopeId, "Slice<char>", expr->location, nullptr);
-            TypeId theType = AST_VOID;
-            theType.setPointerLevel(1);
-            if(outTypes)
-                outTypes->add(theType);
-        } else {
-            Assert(expr->typeId.getId() < AST_PRIMITIVE_COUNT);
-            if(outTypes) outTypes->add(expr->typeId);
+            if(is_assignment) {
+                // TODO: Skipping values with assignment is okay.
+                //   But user may want to specify that you can't skip
+                //   values from certain functions (like error codes).
+                //   How do we do that here?
+                if(tempTypes.size()>0) {
+                    rightType = tempTypes[0];
+                    operatorArgs.add(tempTypes[0]);
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(stmp->right->location)
+                        ERR_MSG("Right expression produced zero values but the expression must produce at least one value for assignments.")
+                        ERR_LINE2(stmp->right->location, "zero values");
+                    )
+                    return SIGNAL_FAILURE;
+                }
+            } else {
+                if(tempTypes.size() > 1) {
+                    // Error message for left expr is the same as above, DON'T
+                    // forget to modify both when changing stuff!
+                    ERR_SECTION(
+                        ERR_HEAD2(stmp->right->location)
+                        ERR_MSG("Right expression produced more than one value which isn't allowed for assignments in expressions.")
+                        ERR_LINE2(stmp->right->location,tempTypes.size() << " values");
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                if(tempTypes.size()>0) {
+                    rightType = tempTypes[0];
+                    operatorArgs.add(tempTypes[0]);
+                }
+            }
         }
-        // if(outTypes) outTypes->add(expr->typeId);
-    } else {
+        
+        if(outTypes) {
+            outTypes->add(leftType);
+        }
+        break;
+    }
+    case EXPR_MEMBER: {
+        auto stmp = expr->as<ASTExpressionMember>();
+        TypeId leftType{};
+        Assert(stmp->left);
+        if(stmp->left->type == EXPR_IDENTIFIER){
+            auto iden_expr = stmp->left->as<ASTExpressionIdentifier>();
+            // TODO: Generator passes idScope. What is it and is it required in type checker?
+            // A simple check to see if the identifier in the expr node is an enum type.
+            // no need to check for pointers or so.
+            TypeInfo *typeInfo = info.ast->convertToTypeInfo(iden_expr->name, scopeId, true);
+            if (typeInfo && typeInfo->astEnum) {
+                i32 enumValue;
+                bool found = typeInfo->astEnum->getMember(stmp->name, &enumValue);
+                if (!found) {
+                    ERR_SECTION(
+                        ERR_HEAD2(stmp->location)
+                        ERR_MSG("'"<<stmp->name << "' is not a member of enum " << typeInfo->astEnum->name <<".")
+                    )
+                    return SIGNAL_FAILURE;
+                }
+
+                if(outTypes) outTypes->add(typeInfo->id);
+                return SIGNAL_SUCCESS;
+            }
+        }
+        int expr_array_length = 0;
+        if(stmp->left) {
+            // Operator overload checking does not run on AST_MEMBER since it can't be overloaded
+            // leftType has therefore note been set and expression not checked.
+            // We must check it here.
+            checkExpression(scopeId, stmp->left, &tempTypes, attempt, &expr_array_length);
+            if(tempTypes.size()>0)  
+                leftType = tempTypes.last();
+        }
+
+        // if(tempTypes.size()==0) 
+        //     tempTypes.add(TYPE_VOID);
+        // outType holds the type of expr->left
+        TypeInfo* ti = info.ast->getTypeInfo(leftType.baseType());
+        if(leftType.getPointerLevel() >= 2) {
+            ERR_SECTION(
+                ERR_HEAD2(stmp->left->location)
+                ERR_MSG("Cannot access member of a double pointer type. Single pointers will be implicitly dereferenced.")
+                ERR_LINE2(stmp->left->location,info.ast->typeToString(leftType))
+            )
+            // Assert(leftType.getPointerLevel()<2);
+            return SIGNAL_FAILURE;
+        }
+        if(expr_array_length) {
+            if(stmp->name == "len") {
+                if(outTypes)
+                    outTypes->add(TYPE_INT32);
+            } else if(stmp->name == "ptr") {
+                if(outTypes)
+                    outTypes->add(leftType);
+            } else {
+                ERR_SECTION(
+                    ERR_HEAD2(stmp->location)
+                    ERR_MSG("'"<<info.ast->typeToString(leftType)<<"' is an array within a struct and does not have members. If the elements of the array are structs then index into the array first.")
+                    ERR_LINE2(stmp->left->location, info.ast->typeToString(leftType).c_str())
+                )
+                return SIGNAL_FAILURE;
+            }
+        } else if(ti && ti->astStruct){
+            TypeInfo::MemberData memdata = ti->getMember(stmp->name);
+            if(memdata.index!=-1){
+                auto& mem = ti->astStruct->members[memdata.index];
+                if(mem.array_length > 0) {
+                    // TODO: Possible bug here
+                    if(array_length) {
+                        TypeId id = memdata.typeId;
+                        id.setPointerLevel(id.getPointerLevel()+1);
+                        if(outTypes)
+                            outTypes->add(id);
+                        *array_length = mem.array_length;
+                    } else {
+                        TypeId id = memdata.typeId;
+                        id.setPointerLevel(id.getPointerLevel()+1);
+                        if(outTypes)
+                            outTypes->add(id);
+
+                        // NOTE: Previously, We returned slice type but now we return pointer instead. We do this because indexing pointer doesn't require operator overload and things work better.
+                        // std::string slice_name = "Slice<" + info.ast->typeToString(memdata.typeId) + ">";
+                        // TypeId id = checkType(scopeId, slice_name, expr->location, nullptr);
+                        // // if(!slice_info) {
+                        // //     ERR_SECTION(
+                        // //         ERR_HEAD2(expr->location)
+                        // //         ERR_MSG("Member '"<<expr->name<<"' was an array within a struct which evaluates to the type '"<<slice_name<<"' BUT it was not a valid type.")
+                        // //         ERR_LINE2(expr->location,"bad type?");
+                        // //     )
+                        // //     if(outTypes)
+                        // //         outTypes->add(TYPE_VOID);
+                        // //     return SIGNAL_FAILURE;
+                        // // }
+                        // if(outTypes)
+                        //     outTypes->add(id);
+                    }
+                } else {
+                    if(outTypes)
+                        outTypes->add(memdata.typeId);
+                }
+            } else {
+                std::string msgtype = "not member of "+info.ast->typeToString(leftType);
+                ERR_SECTION(
+                    ERR_HEAD2(stmp->location)
+                    ERR_MSG("'"<<stmp->name<<"' is not a member in struct '"<<info.ast->typeToString(leftType)<<"'.")
+                    ERR_LINE2(stmp->location,msgtype.c_str());
+                    log::out << "These are the members: ";
+                    for(int i=0;i<(int)ti->astStruct->members.size();i++){
+                        if(i!=0)
+                            log::out << ", ";
+                        log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR;
+                        // TODO: Option to print types along with member names.
+                        // log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
+                    }
+                    log::out <<"\n";
+                    log::out << "\n"
+                )
+                if(outTypes)
+                    outTypes->add(TYPE_VOID);
+                return SIGNAL_FAILURE;
+            }
+        } else {
+            ERR_SECTION(
+                ERR_HEAD2(expr->location)
+                ERR_MSG("Member access only works on variable with a struct type and enums. The type '" << info.ast->typeToString(tempTypes.last()) << "' is neither (astStruct/astEnum were null).")
+                ERR_LINE2(stmp->left->location,"cannot take a member from this")
+                ERR_LINE2(expr->location,"member to access")
+            )
+            if(outTypes)
+                outTypes->add(TYPE_VOID);
+            return SIGNAL_FAILURE;
+        }
+    } break;
+    case EXPR_OPERATION: {
+        auto& base_expr = expr;
+        auto expr = base_expr->as<ASTExpressionOperation>();
         TypeId leftType{};
         TypeId rightType{};
         
@@ -2632,7 +2983,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         // log::out << "Check " << str << "\n";
         // if(str) {
 
-        if(expr->typeId != AST_REFER && expr->typeId != AST_DEREF && expr->typeId != AST_MEMBER&& expr->typeId != AST_CAST && expr->typeId != AST_INITIALIZER) {
+        if(expr->op_type != AST_REFER && expr->op_type != AST_DEREF && expr->op_type != AST_CAST && expr->op_type != AST_INITIALIZER) {
             // BREAK(expr->nodeId == 2606)
             
             if(expr->left) {
@@ -2643,7 +2994,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     // forget to modify both when changing stuff!
                     ERR_SECTION(
                         ERR_HEAD2(expr->right->location)
-                        ERR_MSG("Left expression produced more than one value which isn't allowed with the operation '"<<info.ast->typeToString(expr->typeId)<<"'.")
+                        ERR_MSG("Left expression produced more than one value which isn't allowed with the operation '"<<OP_NAME(expr->op_type)<<"'.")
                         ERR_LINE2(expr->right->location,tempTypes.size() << " values");
                     )
                     return SIGNAL_FAILURE;
@@ -2655,15 +3006,11 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             }
             if(expr->right) {
                 tempTypes.resize(0);
-                bool is_assignment = (expr->typeId == AST_ASSIGN && expr->assignOpType == (OperationType)0);
                 auto prev = inferred_type;
-                if(is_assignment) {
-                    inferred_type = leftType;
-                }
                 auto signal = checkExpression(scopeId, expr->right, &tempTypes, attempt);
                 inferred_type = prev;
                 
-                if(tempTypes.size() > 0 && tempTypes[0] == AST_VOID) {
+                if(tempTypes.size() > 0 && tempTypes[0] == TYPE_VOID) {
                     if(hasAnyErrors()) {
                         return SIGNAL_FAILURE;
                     } else {
@@ -2672,50 +3019,32 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     }
                 }
 
-                if(is_assignment) {
-                    // TODO: Skipping values with assignment is okay.
-                    //   But user may want to specify that you can't skip
-                    //   values from certain functions (like error codes).
-                    //   How do we do that here?
-                    if(tempTypes.size()>0) {
-                        rightType = tempTypes[0];
-                        operatorArgs.add(tempTypes[0]);
-                    } else {
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->right->location)
-                            ERR_MSG("Right expression produced zero values but the expression must produce at least one value for assignments.")
-                            ERR_LINE2(expr->right->location, "zero values");
-                        )
-                        return SIGNAL_FAILURE;
-                    }
-                } else {
-                    if(tempTypes.size() > 1) {
-                        // Error message for left expr is the same as above, DON'T
-                        // forget to modify both when changing stuff!
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->right->location)
-                            ERR_MSG("Right expression produced more than one value which isn't allowed with the operation '"<<info.ast->typeToString(expr->typeId)<<"'.")
-                            ERR_LINE2(expr->right->location,tempTypes.size() << " values");
-                        )
-                        return SIGNAL_FAILURE;
-                    }
-                    if(tempTypes.size()>0) {
-                        rightType = tempTypes[0];
-                        operatorArgs.add(tempTypes[0]);
-                    }
+                if(tempTypes.size() > 1) {
+                    // Error message for left expr is the same as above, DON'T
+                    // forget to modify both when changing stuff!
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->right->location)
+                        ERR_MSG("Right expression produced more than one value which isn't allowed with the operation '"<<OP_NAME(expr->op_type)<<"'.")
+                        ERR_LINE2(expr->right->location,tempTypes.size() << " values");
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                if(tempTypes.size()>0) {
+                    rightType = tempTypes[0];
+                    operatorArgs.add(tempTypes[0]);
                 }
             }
             // TODO: Optimize operator overload check. checkExpression executes in 250 ms where checking operator overloading is responsible for 100 ms. If we could optimize then we may run checkExpression in 150 + 20 ms instead. The key is a fast determination of whether expression is operator overloaded.
 
             // TODO: You should not be allowed to overload all operators.
             //  Fix some sort of way to limit which ones you can.
-            const char* str = OP_NAME(expr->typeId.getId());
+            const char* str = OP_NAME(expr->op_type);
             // // log::out << "Check " << str << "\n";
             if(str && operatorArgs.size() == 2) {
                 ZoneScopedNC("check operator",tracy::Color::WebPurple);
                 int prev = expr->nonNamedArgs;
                 expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
-                SignalIO result = checkFncall(scopeId,expr, outTypes, attempt, true, &operatorArgs);
+                SignalIO result = checkFncall(scopeId, expr, outTypes, attempt, true, &operatorArgs);
                 
                 // log::out << "Check, " << expr->nodeId<<"\n";
                 if(result == SIGNAL_SUCCESS) {
@@ -2734,7 +3063,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
 
         ZoneScopedNC("check operation",tracy::Color::WebPurple);
 
-        switch(expr->typeId.getId()) {
+        switch(expr->op_type) {
         case AST_REFER: {
             if(expr->left) {
                 checkExpression(scopeId, expr->left, outTypes, attempt);
@@ -2759,137 +3088,6 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                         outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
                     }
                 }
-            }
-        } break;
-        case AST_MEMBER: {
-            Assert(expr->left);
-            if(expr->left->typeId == AST_ID){
-                // TODO: Generator passes idScope. What is it and is it required in type checker?
-                // A simple check to see if the identifier in the expr node is an enum type.
-                // no need to check for pointers or so.
-                TypeInfo *typeInfo = info.ast->convertToTypeInfo(expr->left->name, scopeId, true);
-                if (typeInfo && typeInfo->astEnum) {
-                    i32 enumValue;
-                    bool found = typeInfo->astEnum->getMember(expr->name, &enumValue);
-                    if (!found) {
-                        ERR_SECTION(
-                            ERR_HEAD2(expr->location)
-                            ERR_MSG("'"<<expr->name << "' is not a member of enum " << typeInfo->astEnum->name <<".")
-                        )
-                        return SIGNAL_FAILURE;
-                    }
-
-                    if(outTypes) outTypes->add(typeInfo->id);
-                    return SIGNAL_SUCCESS;
-                }
-            }
-            int expr_array_length = 0;
-            if(expr->left) {
-                // Operator overload checking does not run on AST_MEMBER since it can't be overloaded
-                // leftType has therefore note been set and expression not checked.
-                // We must check it here.
-                checkExpression(scopeId, expr->left, &tempTypes, attempt, &expr_array_length);
-                if(tempTypes.size()>0)  
-                    leftType = tempTypes.last();
-            }
-
-            // if(tempTypes.size()==0) 
-            //     tempTypes.add(AST_VOID);
-            // outType holds the type of expr->left
-            TypeInfo* ti = info.ast->getTypeInfo(leftType.baseType());
-            if(leftType.getPointerLevel() >= 2) {
-                ERR_SECTION(
-                    ERR_HEAD2(expr->left->location)
-                    ERR_MSG("Cannot access member of a double pointer type. Single pointers will be implicitly dereferenced.")
-                    ERR_LINE2(expr->left->location,info.ast->typeToString(leftType))
-                )
-                // Assert(leftType.getPointerLevel()<2);
-                return SIGNAL_FAILURE;
-            }
-            if(expr_array_length) {
-                if(expr->name == "len") {
-                    if(outTypes)
-                        outTypes->add(AST_INT32);
-                } else if(expr->name == "ptr") {
-                    if(outTypes)
-                        outTypes->add(leftType);
-                } else {
-                    ERR_SECTION(
-                        ERR_HEAD2(expr->location)
-                        ERR_MSG("'"<<info.ast->typeToString(leftType)<<"' is an array within a struct and does not have members. If the elements of the array are structs then index into the array first.")
-                        ERR_LINE2(expr->left->location, info.ast->typeToString(leftType).c_str())
-                    )
-                    return SIGNAL_FAILURE;
-                }
-            } else if(ti && ti->astStruct){
-                TypeInfo::MemberData memdata = ti->getMember(expr->name);
-                if(memdata.index!=-1){
-                    auto& mem = ti->astStruct->members[memdata.index];
-                    if(mem.array_length > 0) {
-                        // TODO: Possible bug here
-                        if(array_length) {
-                            TypeId id = memdata.typeId;
-                            id.setPointerLevel(id.getPointerLevel()+1);
-                            if(outTypes)
-                                outTypes->add(id);
-                            *array_length = mem.array_length;
-                        } else {
-                            TypeId id = memdata.typeId;
-                            id.setPointerLevel(id.getPointerLevel()+1);
-                            if(outTypes)
-                                outTypes->add(id);
-
-                            // NOTE: Previously, We returned slice type but now we return pointer instead. We do this because indexing pointer doesn't require operator overload and things work better.
-                            // std::string slice_name = "Slice<" + info.ast->typeToString(memdata.typeId) + ">";
-                            // TypeId id = checkType(scopeId, slice_name, expr->location, nullptr);
-                            // // if(!slice_info) {
-                            // //     ERR_SECTION(
-                            // //         ERR_HEAD2(expr->location)
-                            // //         ERR_MSG("Member '"<<expr->name<<"' was an array within a struct which evaluates to the type '"<<slice_name<<"' BUT it was not a valid type.")
-                            // //         ERR_LINE2(expr->location,"bad type?");
-                            // //     )
-                            // //     if(outTypes)
-                            // //         outTypes->add(AST_VOID);
-                            // //     return SIGNAL_FAILURE;
-                            // // }
-                            // if(outTypes)
-                            //     outTypes->add(id);
-                        }
-                    } else {
-                        if(outTypes)
-                            outTypes->add(memdata.typeId);
-                    }
-                } else {
-                    std::string msgtype = "not member of "+info.ast->typeToString(leftType);
-                    ERR_SECTION(
-                        ERR_HEAD2(expr->location)
-                        ERR_MSG("'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(leftType)<<"'.")
-                        ERR_LINE2(expr->location,msgtype.c_str());
-                        log::out << "These are the members: ";
-                        for(int i=0;i<(int)ti->astStruct->members.size();i++){
-                            if(i!=0)
-                                log::out << ", ";
-                            log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR;
-                            // TODO: Option to print types along with member names.
-                            // log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
-                        }
-                        log::out <<"\n";
-                        log::out << "\n"
-                    )
-                    if(outTypes)
-                        outTypes->add(AST_VOID);
-                    return SIGNAL_FAILURE;
-                }
-            } else {
-                ERR_SECTION(
-                    ERR_HEAD2(expr->location)
-                    ERR_MSG("Member access only works on variable with a struct type and enums. The type '" << info.ast->typeToString(tempTypes.last()) << "' is neither (astStruct/astEnum were null).")
-                    ERR_LINE2(expr->left->location,"cannot take a member from this")
-                    ERR_LINE2(expr->location,"member to access")
-                )
-                if(outTypes)
-                    outTypes->add(AST_VOID);
-                return SIGNAL_FAILURE;
             }
         } break;
         case AST_INDEX: {
@@ -2919,7 +3117,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             //     checkExpression(scopeId, expr->left, &tempTypes, attempt);
             //     if(tempTypes.)
             //     // if(tempTypes.size()==0){
-            //     //     tempTypes.add(AST_VOID);
+            //     //     tempTypes.add(TYPE_VOID);
             //     // }
             // }
             // if(expr->right) {
@@ -2937,7 +3135,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             // }
             // DynamicArray<TypeId> tempTypes{};
             
-            // if(outTypes) outTypes->add(AST_VOID);
+            // if(outTypes) outTypes->add(TYPE_VOID);
             // DynamicArray<TypeId> temp{};
             TypeInfo* linfo = nullptr;
             if(leftType.isNormalType()) {
@@ -2978,106 +3176,6 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             TypeId theType = checkType(scopeId, "Range", expr->location, nullptr);
             if(outTypes) outTypes->add(theType);
         } break;
-        case AST_INITIALIZER: {
-            TypeId ti{};
-            if (!expr->castType.isValid()) {
-                // infer type
-                if (!inferred_type.isValid()) {
-                    ERR_SECTION(
-                        ERR_HEAD2(expr->location)
-                        ERR_MSG_COLORED("Struct name was not specified for initializer. This requires that the type is inferred but the inferred type was '" << log::LIME << ast->typeToString(inferred_type) << log::NO_COLOR << "'. Types can only be inferred from assignments, function arguments, and return values.")
-                        ERR_LINE2(expr->location, "here")
-                        ERR_EXAMPLE(1, "a: vec2 = {1,2}")
-                        ERR_EXAMPLE(1, "fn hi(a: vec2) {}\nhi({1,2})")
-                    )
-                    return SIGNAL_FAILURE;
-                } else {
-                    ti = inferred_type;
-                    // inferred_type = {};
-                }
-            }
-            if(!ti.isValid())
-                ti = checkType(scopeId, expr->castType, expr->location, nullptr);
-            if(!ti.isValid()) {
-                ERR_SECTION(
-                    ERR_HEAD2(expr->location)
-                    ERR_MSG("'"<<info.ast->typeToString(expr->castType)<<"' is not a type.")
-                    ERR_LINE2(expr->location,"bad")
-                )
-                return SIGNAL_FAILURE;
-            }
-            TypeInfo* typeinfo = nullptr;
-            if(ti.isNormalType())
-                typeinfo = ast->getTypeInfo(ti);
-            for(int i=0;i<expr->args.size();i++) {
-                auto arg_expr = expr->args[i];
-                auto prev = inferred_type;
-                if(typeinfo && typeinfo->structImpl) {
-                    // getMember returns invalid type if 'i' is out of bounds
-                    inferred_type = typeinfo->getMember(i).typeId;
-                }
-                checkExpression(scopeId, arg_expr, nullptr, attempt);
-                inferred_type = prev;
-            }
-            if(outTypes)
-                outTypes->add(ti);
-            expr->versions_castType.set(currentPolyVersion, ti);
-        } break;
-        case AST_CAST: {
-            // DynamicArray<TypeId> temp{};
-            Assert(expr->left);
-            checkExpression(scopeId, expr->left, &tempTypes, attempt);
-            Assert(tempTypes.size()==1);
-
-            Assert(expr->castType.isString());
-            bool printedError = false;
-            auto ti = checkType(scopeId, expr->castType, expr->location, &printedError);
-            if (ti.isValid()) {
-
-            } else if(!printedError){
-                ERR_SECTION(
-                    ERR_HEAD2(expr->location)
-                    ERR_MSG("Type "<<info.ast->getStringFromTypeString(expr->castType) << " does not exist.")
-                    ERR_LINE2(expr->location,"bad")
-                )
-            }
-            if(outTypes)
-                outTypes->add(ti);
-            expr->versions_castType.set(currentPolyVersion, ti);
-            
-            if(expr->isUnsafeCast()) {
-                int ls = info.ast->getTypeSize(ti);
-                int rs = info.ast->getTypeSize(tempTypes.last());
-                if(ls != rs) {
-                    std::string strleft = info.ast->typeToString(tempTypes.last()) + " ("+std::to_string(ls)+")";
-                    std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
-                    ERR_SECTION(
-                        ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
-                        ERR_MSG("cast_unsafe requires that both types have the same size. "<<ls << " != "<<rs<<"'.")
-                        ERR_LINE2(expr->left->location,strleft)
-                        ERR_LINE2(expr->location,strcast)
-                        ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
-                    )
-                }
-            } else if(!(tempTypes.last().getPointerLevel() > 0 && ti.getPointerLevel() > 0) && !info.ast->castable(tempTypes.last(),ti, true)){
-                std::string strleft = info.ast->typeToString(tempTypes.last());
-                std::string strcast = info.ast->typeToString(ti);
-                ERR_SECTION(
-                    ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
-                    ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?")
-                    ERR_LINE2(expr->left->location,strleft)
-                    ERR_LINE2(expr->location,strcast)
-                    ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
-                )
-            }
-            break;
-        }
-        case AST_ASSIGN: {
-            if(outTypes) {
-                outTypes->add(leftType);
-            }
-            break;
-        }
         case AST_ADD:
         case AST_SUB:
         case AST_MUL:
@@ -3085,7 +3183,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         case AST_MODULO:
         case AST_UNARY_SUB: {
             if(outTypes) {
-                if(!rightType.isValid() || rightType == AST_VOID) {
+                if(!rightType.isValid() || rightType == TYPE_VOID) {
                     outTypes->add(leftType); // unary operator
                 } else if(leftType.isPointer() && AST::IsInteger(rightType)){
                     outTypes->add(leftType);
@@ -3101,10 +3199,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                         Assert(AST::IsSigned(outtype) && AST::IsInteger(outtype));
                     }
                     outTypes->add(outtype);
-                } else if ((AST::IsInteger(leftType) || leftType == AST_CHAR) && (AST::IsInteger(rightType) || rightType == AST_CHAR)){
+                } else if ((AST::IsInteger(leftType) || leftType == TYPE_CHAR) && (AST::IsInteger(rightType) || rightType == TYPE_CHAR)){
                     // '0' + 5 should return a char and not an integer
                     // std_print('0' + 5) this would print integer instead of char otherwise
-                    outTypes->add(AST_CHAR);
+                    outTypes->add(TYPE_CHAR);
                 } else if ((AST::IsDecimal(leftType) || AST::IsInteger(leftType)) && (AST::IsDecimal(rightType) || AST::IsInteger(rightType))){
                     if(AST::IsDecimal(leftType))
                         outTypes->add(leftType);
@@ -3132,7 +3230,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             //   The generator catches does bugs but it would be nice to do so here.
 
             if(outTypes) {
-                outTypes->add(TypeId(AST_BOOL));
+                outTypes->add(TypeId(TYPE_BOOL));
             }
         } break;
         case AST_BAND:
@@ -3143,7 +3241,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             auto rinfo = info.ast->getTypeInfo(rightType);
             int lsize = info.ast->getTypeSize(leftType);
             int rsize = info.ast->getTypeSize(rightType);
-            if((AST::IsInteger(leftType) || leftType == AST_CHAR) && (AST::IsInteger(rightType) || rightType == AST_CHAR) && lsize == rsize) {
+            if((AST::IsInteger(leftType) || leftType == TYPE_CHAR) && (AST::IsInteger(rightType) || rightType == TYPE_CHAR) && lsize == rsize) {
                 if(outTypes) {
                     outTypes->add(leftType);
                 }
@@ -3172,8 +3270,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 outTypes->add(leftType);
             }
         } break;
-        case AST_INCREMENT:
-        case AST_DECREMENT: {
+        case AST_PRE_INCREMENT:
+        case AST_PRE_DECREMENT:
+        case AST_POST_INCREMENT:
+        case AST_POST_DECREMENT: {
             if(outTypes) {
                 outTypes->add(leftType);
             }
@@ -3182,6 +3282,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             Assert(false);
         }
         }
+    }
     }
     return SIGNAL_SUCCESS;
 }
@@ -3232,7 +3333,7 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
             } else
                 ti = checkType(func->scopeId, arg.stringType, func->location, &printedError);
             
-            if(ti == AST_VOID){
+            if(ti == TYPE_VOID){
                 if(!info.hasAnyErrors()) { 
                     std::string msg = info.ast->typeToString(arg.stringType);
                     ERR_SECTION(
@@ -3267,7 +3368,7 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
         //     info.temp_defaultArgs.resize(0);
         //     checkExpression(func->scopeId, arg.defaultValue, &info.temp_defaultArgs, false);
         //     if(info.temp_defaultArgs.size()==0)
-        //         info.temp_defaultArgs.add(AST_VOID);
+        //         info.temp_defaultArgs.add(TYPE_VOID);
         //     if(!info.ast->castable(info.temp_defaultArgs.last(),argImpl.typeId)){
         //     // if(temp.last() != argImpl.typeId){
         //         std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
@@ -3376,7 +3477,7 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
     funcImpl->signature.returnSize = offset;
 
     if(outTypes && funcImpl->signature.returnTypes.size()==0){
-        outTypes->add(AST_VOID);
+        outTypes->add(TYPE_VOID);
     }
     
     if (func->callConvention == UNIXCALL) {
@@ -3569,7 +3670,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
             auto ac = ambiguousOverload->astFunc->callConvention;
             auto bc = function->callConvention;
             
-            if ((ac == INTRINSIC && bc == INTRINSIC) || (al == NATIVE && bl == NATIVE)) {
+            if ((ac == INTRINSIC && bc == INTRINSIC)) {
                 // We should check signature just so that you don't do
                 //     strlen(n: i32) or strlen(b: f32)
                 // doesn't have to happen here though.
@@ -3585,7 +3686,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
                 // print list of overloads?
             }
         } else {
-            if(iden && iden->funcOverloads.overloads.size()>0 && function->linkConvention == NATIVE) {
+            if(iden && iden->funcOverloads.overloads.size()>0 && function->callConvention == INTRINSIC) {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
                     ERR_MSG("There already is an overload of the native function '"<<function->name<<"'.")
@@ -3836,7 +3937,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
         inferred_type = prev;
         
         for(int i=0;i<poly_typeArray.size();i++){
-            if(poly_typeArray[i].isValid() && poly_typeArray[i] != AST_VOID)
+            if(poly_typeArray[i].isValid() && poly_typeArray[i] != TYPE_VOID)
                 continue;
 
             if(result == SIGNAL_SUCCESS) { // expressions said we were successful but that's not actually true
@@ -4324,7 +4425,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
         } else if(now->type == ASTStatement::EXPRESSION){
             checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             // if(tempTypes.size()==0)
-            //     tempTypes.add(AST_VOID);
+            //     tempTypes.add(TYPE_VOID);
         } else if(now->type == ASTStatement::RETURN){
             for(int i=0;i<now->arrayValues.size();i++) {
                 auto ret = now->arrayValues[i];
@@ -4408,8 +4509,8 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     bad_var(varinfo_index, varnameNr.name);
                     
                     // Identifier* nrId = nullptr;
-                    varinfo_index->versions_typeId.set(currentPolyVersion, AST_INT64);
-                    varnameNr.versions_assignType.set(info.currentPolyVersion, AST_INT64);
+                    varinfo_index->versions_typeId.set(currentPolyVersion, TYPE_INT64);
+                    varnameNr.versions_assignType.set(info.currentPolyVersion, TYPE_INT64);
                     
                     auto memdata = iterinfo->getMember("ptr");
                     auto itemtype = memdata.typeId;
@@ -4689,7 +4790,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     }
                     ast->declareUsageOfOverload(iterate_overload);
                     
-                    if(iterate_overload->funcImpl->signature.returnTypes.size() != 1 || iterate_overload->funcImpl->signature.returnTypes[0].typeId != AST_BOOL) {
+                    if(iterate_overload->funcImpl->signature.returnTypes.size() != 1 || iterate_overload->funcImpl->signature.returnTypes[0].typeId != TYPE_BOOL) {
                         ERR_SECTION(
                             ERR_HEAD2(now->firstExpression->location)
                             ERR_MSG_COLORED("The '"<<log::LIME<<NAME_OF_ITERATE<<log::NO_COLOR<<"' method when used in for loops should return a " << BOLD("boolean") << " to indicate whether iteration should continue.")
@@ -4950,9 +5051,10 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
             
             FOR(now->switchCases){
                 bool wasMember = false;
-                if(astEnum && it.caseExpr->typeId == AST_ID) {
+                if(astEnum && it.caseExpr->type == EXPR_IDENTIFIER) {
+                    auto id_expr = it.caseExpr->as<ASTExpressionIdentifier>();
                     int index = -1;
-                    bool yes = astEnum->getMember(it.caseExpr->name, &index);
+                    bool yes = astEnum->getMember(id_expr->name, &index);
                     if(yes) {
                         wasMember = true;
                         if(usedMembers[index]) {
@@ -5098,6 +5200,14 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
 
         info.currentContentOrder.last() = contentOrder;
         auto now = scope->statements[scope->content[contentOrder].index];
+
+        if(now->computeWhenPossible) {
+            GlobalRunDirective rundir{};
+            rundir.statement = now;
+            rundir.scope = scope->scopeId;
+            compiler->global_run_directives.add(rundir);
+            continue;
+        }
 
         if(now->type != ASTStatement::DECLARATION || !now->globalDeclaration)
             continue;

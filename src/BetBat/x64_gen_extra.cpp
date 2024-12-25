@@ -15,7 +15,7 @@ bool X64Builder::generate() {
     TRACE_FUNC()
 
     CALLBACK_ON_ASSERT(
-        tinycode->print(0,-1, code);
+        tinycode->print(0,-1, bytecode);
     )
 
     using namespace engone;
@@ -36,6 +36,36 @@ bool X64Builder::generate() {
     if(failed)
         return false;
     
+    // TODO: Optimize, store external relocations per tinycode instead
+    // bool found = bytecode->externalRelocations.size() == 0;
+    for(int i=0;i<bytecode->externalRelocations.size();i++) {
+        auto& rel = bytecode->externalRelocations[i];
+        if(tinycode->index == rel.tinycode_index) {
+            auto& lib = bytecode->libraries->get(rel.library_index);
+            LinkConvention link = DetermineLinkConvention(lib.path);
+
+            if(link != LinkConvention::STATIC_IMPORT && link != LinkConvention::DYNAMIC_IMPORT) {
+                // TODO: Print the location of the directive that wasn't resolved.
+                //   Track modifications made by run directives?
+                log::out << log::RED << "ERROR: "<<log::NO_COLOR<<"The path to '"<<log::LIME<<lib.name<<log::NO_COLOR<<"' (\""<<lib.path<<"\") is not a dynamic or static library.\n";
+                return false;
+            }
+
+            u8 opcode0 = tinycode->instructionSegment[rel.pc-3];
+            if(opcode0 == BC_CALL) {
+                // BC call instruction has opcode|link|callconv|imm32
+                // the offset (rel.pc) points to the immediate which is why we do 'rel.pc-2'.
+                // We need to update the link convention to use static or dynamic import
+                // because compile time execution may change it at any time before x64 generation.
+                tinycode->instructionSegment[rel.pc-2] = link;
+            } else if(opcode0 == BC_EXT_DATAPTR) {
+                // BC ext dataptr instruction has opcode|reg|link
+                // the relocation points to the byte after the instruction
+                tinycode->instructionSegment[rel.pc-1] = link;
+            }
+        }
+    }
+
     // NOTE: The generator makes assumptions about the bytecode.
     //  - alloc_local isn't called iteratively unless it's scoped
     //  - registers aren't saved between calls and jumps
@@ -107,6 +137,8 @@ bool X64Builder::generate() {
         || t == BC_ATOMIC_CMP_SWAP
         || t == BC_MEMCPY
         || t == BC_MEMZERO
+        || t == BC_PRINTS
+        || t == BC_PRINTC
         || t == BC_ASM
         || t == BC_TEST_VALUE
         || t == BC_ALLOC_ARGS
@@ -594,11 +626,14 @@ bool X64Builder::generate() {
         is_blank = tinycode->debugFunction->funcAst->blank_body; // TODO: We depend on debugFunction, change this
     }
 
+    bool pushed_base_pointer = false;
     if(!is_blank) {
-        if(!is_entry_point || compiler->options->target == TARGET_WINDOWS_x64) {
-            // entry point on unix systems don't need BP restored
-            // the stack is also already 16-byte aligned.
+        if((!is_entry_point || !compiler->aligned_16_byte_on_entry_point) || compiler->options->target == TARGET_WINDOWS_x64) {
+            // entry point on unix systems (without C stdlib runtime start code) is
+            // aligned by 16 bytes, hence we don't push stack pointer here.
+            // in all other case we do.
             emit_push(X64_REG_BP);
+            pushed_base_pointer = true;
         }
         emit1(PREFIX_REXW);
         emit1(OPCODE_MOV_REG_RM);
@@ -771,7 +806,7 @@ bool X64Builder::generate() {
         if(is_blank && accessed_params.size()) {
             log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
             log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
-            compiler->compile_stats.errors++; // nochecking, TODO: call some function instead
+            compiler->compile_stats.errors++; // nocheckin, TODO: call some function instead
         }
         if (is_entry_point) {
             // entry point has it's arguments put on the stack, not in rdi, rsi...
@@ -1446,6 +1481,12 @@ bool X64Builder::generate() {
                     } break;
                     default: Assert(false);
                 }
+                //     if(compiler->options->target == TARGET_WINDOWS_x64) {
+        //         // Windows has an import table of pointers and we
+        //         // prefix with __imp_ to refer to that table.
+        //         // Linux does not.
+        //         alias = "__imp_" + alias;
+        //     }
                 recent_set_args.resize(0);
                 ret_offset = 0;
                 if(opcode == BC_CALL_REG) {
@@ -1493,180 +1534,6 @@ bool X64Builder::generate() {
                     map_strict_translation(n->bc_index + 3, offset);
                     // bc_to_x64_translation[n->bc_index + 3] = offset;
                     // prog->addInternalFuncRelocation(current_tinyprog_index, offset, n->imm);
-
-                } else if (base->link == LinkConvention::NATIVE){
-                    //-- native function
-                    switch((i32)base->imm32) {
-                    // You could perhaps implement a platform layer which the language always links too.
-                    // That way, you don't need to write different code for each platform.
-                    // case NATIVE_malloc: {
-                        
-                    // }
-                    // break;
-                    case NATIVE_prints: {
-                        // TODO: Check platform target instead
-                        #ifdef OS_WINDOWS
-                        // ptr = [rsp + 0]
-                        // len = [rsp + 8]
-                        // char* ptr = *(char**)(fp+argoffset);
-                        // u64 len = *(u64*)(fp+argoffset+8);
-                        emit_mov_reg_mem(X64_REG_SI, X64_REG_SP, CONTROL_64B, 0); // ptr
-                        emit_mov_reg_mem(X64_REG_DI, X64_REG_SP, CONTROL_64B, 8); // Length
-
-                        // TODO: You may want to save registers. This is not needed right
-                        //   now since we basically handle everything through push and pop.
-                        // TODO: 16-byte alignment on native functions
-                        /*
-                        sub    rsp,0x38
-                        mov    ecx,0xfffffff5
-                        call   QWORD PTR [rip+0x0]          # GetStdHandle(-11)
-                        mov    QWORD PTR [rsp+0x20],0x0
-                        xor    r9,r9
-                        mov    r8,rdi                       # rdi = length
-                        mov    rdx,rsi                      # rsi = buffer
-                        mov    rcx,rax
-                        call   QWORD PTR [rip+0x0]          # WriteFile(...)
-                        add    rsp,0x38
-                        */
-                        // rdx should be buffer and r8 length
-                        u32 start_addr = code_size();
-                        u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xF8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
-                        emit_bytes(arr,sizeof(arr));
-
-                        // C creates these symbol names in it's object file
-                        program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_funcprog_index);
-                        // prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
-                        program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_funcprog_index);
-                        // prog->namedUndefinedRelocations.add(reloc0);
-                        // prog->namedUndefinedRelocations.add(reloc1);
-                    #else
-                        // ptr = [rsp + 0]
-                        // len = [rsp + 8]
-                        // char* ptr = *(char**)(fp+argoffset);
-                        // u64 len = *(u64*)(fp+argoffset+8);
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_MOV_REG_RM);
-                        emit_modrm(MODE_DEREF, X64_REG_SI, X64_REG_SP);
-                        
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_MOV_REG_RM);
-                        emit_modrm(MODE_DEREF_DISP8, X64_REG_D, X64_REG_SP);
-                        emit1((u8)8);
-
-                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
-                        emit4((u32)1); // 1 = stdout
-
-                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, X64_REG_A);
-                        emit4((u32)SYS_write);
-
-                        emit2(OPCODE_2_SYSCALL);
-
-                        // emit1(OPCODE_CALL_IMM);
-                        // int reloc_pos = code_size();
-                        // emit4((u32)0);
-
-                        // prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
-                    #endif
-                        break;
-                    }
-                    case NATIVE_printc: {
-                    #ifdef OS_WINDOWS
-                        // char = [rsp + 7]
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_MOV_REG_RM);
-                        emit_modrm(MODE_REG, X64_REG_SI, X64_REG_SP);
-
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_ADD_RM_IMM_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, X64_REG_SI);
-                        emit4((u32)0);
-
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
-                        emit4((u32)1);
-
-                        // TODO: You may want to save registers. This is not needed right
-                        //   now since we basically handle everything through push and pop.
-
-                        /*
-                        sub    rsp,0x38
-                        mov    ecx,0xfffffff5
-                        call   QWORD PTR [rip+0x0]          # GetStdHandle(-11)
-                        mov    QWORD PTR [rsp+0x20],0x0
-                        xor    r9,r9
-                        mov    r8,rdi                       # rdi = length
-                        mov    rdx,rsi                      # rsi = buffer (this might be wrong)
-                        mov    rcx,rax
-                        call   QWORD PTR [rip+0x0]          # WriteFile(...)
-                        add    rsp,0x38
-                        */
-                        int offset = code_size();
-                        u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xF8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
-                        emit_bytes(arr,sizeof(arr));
-
-                        // C creates these symbol names in it's object file
-                        program->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_funcprog_index);
-                        program->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_funcprog_index);
-
-                    #else
-                        // char = [rsp + 7]
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_MOV_REG_RM);
-                        emit_modrm(MODE_REG, X64_REG_SI, X64_REG_SP);
-
-                        // add an offset, but not needed?
-                        // prog->add(PREFIX_REXW);
-                        // prog->add(OPCODE_ADD_RM_IMM_SLASH_0);
-                        // prog->addModRM(MODE_REG, 0, REG_SI);
-                        // prog->add4((u32)8);
-
-                        // TODO: You may want to save registers. This is not needed right
-                        //   now since we basically handle everything through push and pop.
-
-                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, X64_REG_D);
-                        emit4((u32)1); // 1 byte/char length
-
-                        // prog->add(OPCODE_MOV_RM_REG);
-                        // prog->addModRM(MODE_REG, REG_SI, REG_SI); // pointer to buffer
-
-                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
-                        emit4((u32)1); // stdout
-
-                        
-                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        emit_modrm_slash(MODE_REG, 0, X64_REG_A);
-                        emit4((u32)SYS_write);
-
-                        emit2(OPCODE_2_SYSCALL);
-
-                        // emit1(OPCODE_CALL_IMM);
-                        // int reloc_pos = code_size();
-                        // emit4((u32)0);
-
-                        // prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
-                    #endif
-                        break;
-                    }
-                    default: {
-                        // failure = true;
-                        // Assert(bytecode->nativeRegistry);
-                        auto nativeRegistry = NativeRegistry::GetGlobal();
-                        auto nativeFunction = nativeRegistry->findFunction(base->imm32);
-                        // auto* nativeFunction = bytecode->nativeRegistry->findFunction(imm);
-                        if(nativeFunction){
-                            log::out << log::RED << "Native '"<<nativeFunction->name<<"' (id: "<<base->imm32<<") is not implemented in x64 converter (" OS_NAME ").\n";
-                        } else {
-                            log::out << log::RED << base->imm32<<" is not a native function (message from x64 converter).\n";
-                        }
-                    }
-                    } // switch
-                } else {
-                    Assert(false);
                 }
                 switch(conv) {
                     case BETCALL: break;
@@ -1695,6 +1562,9 @@ bool X64Builder::generate() {
                     emit1(OPCODE_RET);
                 } else if(compiler->options->target == TARGET_LINUX_x64 && is_entry_point) {
                     Assert(tinycode->call_convention == UNIXCALL);
+                    if(pushed_base_pointer)
+                        emit_pop(X64_REG_BP);
+                        
                     emit1(OPCODE_MOV_REG_RM);
                     emit_modrm(MODE_REG, X64_REG_DI, X64_REG_A);
 
@@ -3558,6 +3428,174 @@ bool X64Builder::generate() {
                 }
                 
             } break;
+            case BC_PRINTS: {
+                FIX_PRE_IN_OPERAND(1)
+                FIX_PRE_IN_OPERAND(0)
+                
+                push_alignment();
+                
+                if(bytecode->target == TARGET_WINDOWS_x64) {
+                    // ptr = [rsp + 0]
+                    // len = [rsp + 8]
+                    // char* ptr = *(char**)(fp+argoffset);
+                    // u64 len = *(u64*)(fp+argoffset+8);
+                    // emit_mov_reg_mem(X64_REG_SI, X64_REG_SP, CONTROL_64B, 0); // ptr
+                    // emit_mov_reg_mem(X64_REG_DI, X64_REG_SP, CONTROL_64B, 8); // Length
+
+                    emit_mov_reg_reg(X64_REG_SI, reg0->reg);
+                    emit_mov_reg_reg(X64_REG_DI, reg1->reg);
+
+                    // TODO: You may want to save registers. This is not needed right
+                    //   now since we basically handle everything through push and pop.
+                    // TODO: 16-byte alignment on native functions
+                    /*
+                    sub    rsp,0x38
+                    mov    ecx,0xfffffff5
+                    call   QWORD PTR [rip+0x0]          # GetStdHandle(-11)
+                    mov    QWORD PTR [rsp+0x20],0x0
+                    xor    r9,r9
+                    mov    r8,rdi                       # rdi = length
+                    mov    rdx,rsi                      # rsi = buffer
+                    mov    rcx,rax
+                    call   QWORD PTR [rip+0x0]          # WriteFile(...)
+                    add    rsp,0x38
+                    */
+                    // rdx should be buffer and r8 length
+                    u32 start_addr = code_size();
+                    u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xF8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
+                    emit_bytes(arr,sizeof(arr));
+
+                    // C creates these symbol names in it's object file
+                    program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_funcprog_index);
+                    // prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
+                    program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_funcprog_index);
+                    // prog->namedUndefinedRelocations.add(reloc0);
+                    // prog->namedUndefinedRelocations.add(reloc1);
+                } else if(bytecode->target == TARGET_LINUX_x64) {
+                    // ptr = [rsp + 0]
+                    // len = [rsp + 8]
+                    // char* ptr = *(char**)(fp+argoffset);
+                    // u64 len = *(u64*)(fp+argoffset+8);
+                    // emit1(PREFIX_REXW);
+                    // emit1(OPCODE_MOV_REG_RM);
+                    // emit_modrm(MODE_DEREF, X64_REG_SI, X64_REG_SP);
+                    
+                    // emit1(PREFIX_REXW);
+                    // emit1(OPCODE_MOV_REG_RM);
+                    // emit_modrm(MODE_DEREF_DISP8, X64_REG_D, X64_REG_SP);
+                    // emit1((u8)8);
+                    
+                    emit_mov_reg_reg(X64_REG_SI, reg0->reg);
+                    emit_mov_reg_reg(X64_REG_D, reg1->reg);
+
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
+                    emit4((u32)1); // 1 = stdout
+
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                    emit4((u32)SYS_write);
+
+                    emit2(OPCODE_2_SYSCALL);
+
+                    // emit1(OPCODE_CALL_IMM);
+                    // int reloc_pos = code_size();
+                    // emit4((u32)0);
+
+                    // prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
+                }
+                pop_alignment();
+                FIX_POST_IN_OPERAND(0)
+                FIX_POST_IN_OPERAND(1)
+            } break;
+            case BC_PRINTC: {
+                FIX_PRE_IN_OPERAND(0)
+                
+                emit_push(reg0->reg, 8);
+                if (bytecode->target == TARGET_WINDOWS_x64) {
+                    
+                    emit1(PREFIX_REXW);
+                    emit1(OPCODE_MOV_REG_RM);
+                    emit_modrm(MODE_REG, X64_REG_SI, X64_REG_SP);
+
+                    // emit1(PREFIX_REXW);
+                    // emit1(OPCODE_ADD_RM_IMM_SLASH_0);
+                    // emit_modrm_slash(MODE_REG, 0, X64_REG_SI);
+                    // emit4((u32)0);
+
+                    emit1(PREFIX_REXW);
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
+                    emit4((u32)1);
+
+                    // TODO: You may want to save registers. This is not needed right
+                    //   now since we basically handle everything through push and pop.
+
+                    /*
+                    sub    rsp,0x38
+                    mov    ecx,0xfffffff5
+                    call   QWORD PTR [rip+0x0]          # GetStdHandle(-11)
+                    mov    QWORD PTR [rsp+0x20],0x0
+                    xor    r9,r9
+                    mov    r8,rdi                       # rdi = length
+                    mov    rdx,rsi                      # rsi = buffer (this might be wrong)
+                    mov    rcx,rax
+                    call   QWORD PTR [rip+0x0]          # WriteFile(...)
+                    add    rsp,0x38
+                    */
+                    int offset = code_size();
+                    u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xF8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
+                    emit_bytes(arr,sizeof(arr));
+
+                    // C creates these symbol names in it's object file
+                    program->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_funcprog_index);
+                    program->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_funcprog_index);
+                    
+                    
+                } else if(bytecode->target == TARGET_LINUX_x64) {
+                    
+                    // char = [rsp + 7]
+                    emit1(PREFIX_REXW);
+                    emit1(OPCODE_MOV_REG_RM);
+                    emit_modrm(MODE_REG, X64_REG_SI, X64_REG_SP);
+
+                    // add an offset, but not needed?
+                    // prog->add(PREFIX_REXW);
+                    // prog->add(OPCODE_ADD_RM_IMM_SLASH_0);
+                    // prog->addModRM(MODE_REG, 0, REG_SI);
+                    // prog->add4((u32)8);
+
+                    // TODO: You may want to save registers. This is not needed right
+                    //   now since we basically handle everything through push and pop.
+
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, X64_REG_D);
+                    emit4((u32)1); // 1 byte/char length
+
+                    // prog->add(OPCODE_MOV_RM_REG);
+                    // prog->addModRM(MODE_REG, REG_SI, REG_SI); // pointer to buffer
+
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, X64_REG_DI);
+                    emit4((u32)1); // stdout
+
+                    
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                    emit4((u32)SYS_write);
+
+                    emit2(OPCODE_2_SYSCALL);
+
+                    // emit1(OPCODE_CALL_IMM);
+                    // int reloc_pos = code_size();
+                    // emit4((u32)0);
+
+                    // prog->addNamedUndefinedRelocation("write", reloc_pos, current_tinyprog_index);
+                }
+                emit_pop(reg0->reg, 8);
+                
+                FIX_POST_IN_OPERAND(0)
+            } break;
             case BC_TEST_VALUE: {
                 #ifdef DISABLE_BC_TEST_VALUE
                 FIX_POST_IN_OPERAND(0)
@@ -3768,21 +3806,30 @@ bool X64Builder::generate() {
     
     for(int i=0;i<tinycode->call_relocations.size();i++) {
         auto& r = tinycode->call_relocations[i];
-        if(r.funcImpl->astFunction->linkConvention == NATIVE)
-            continue;
         int ind = r.funcImpl->tinycode_id - 1;
         // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";
         program->addInternalFuncRelocation(current_funcprog_index, get_map_translation(r.pc), ind);
     }
 
-    
     // TODO: Optimize, store external relocations per tinycode instead
     // bool found = bytecode->externalRelocations.size() == 0;
     for(int i=0;i<bytecode->externalRelocations.size();i++) {
         auto& rel = bytecode->externalRelocations[i];
         if(tinycode->index == rel.tinycode_index) {
             int off = get_map_translation(rel.pc);
-            program->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.type == BC_REL_GLOBAL_VAR);
+            auto& lib = bytecode->libraries->get(rel.library_index);
+            LinkConvention link = DetermineLinkConvention(lib.path);
+            std::string alias = rel.name;
+            if(link == LinkConvention::DYNAMIC_IMPORT) {
+                if(compiler->options->target == TARGET_WINDOWS_x64) {
+                    // Windows has an import table of pointers and we
+                    // prefix with __imp_ to refer to that table.
+                    // Linux does not.
+                    alias = "__imp_" + alias;
+                }
+            }
+
+            program->addNamedUndefinedRelocation(alias, off, rel.tinycode_index, lib.path, rel.type == BC_REL_GLOBAL_VAR);
             // found = true;
             // break;
         }

@@ -1,11 +1,18 @@
 #pragma once
 // #include "BetBat/Tokenizer.h"
-#include "BetBat/NativeRegistry.h"
+#include "BetBat/IntrinsicRegistry.h"
 #include "BetBat/DebugInformation.h"
 #include "BetBat/CompilerOptions.h"
 #include "BetBat/ExceptionInformation.h"
 
 #include "BetBat/AST.h"
+
+// static/dynamic library
+struct ProgramLibrary {
+    int index = 0;
+    std::string name;
+    std::string path; // can be changed in compile time execution
+};
 
 struct Compiler; // check for errors
 enum InstructionControl : u8 {
@@ -145,6 +152,9 @@ enum InstructionOpcode : u8 {
     BC_ROUND,
 
     BC_ASM,
+    
+    BC_PRINTS,
+    BC_PRINTC,
 
     // used when running test cases
     // The stack must be aligned to 16 bytes because
@@ -329,7 +339,7 @@ enum ExternalRelocationType : u8{
 };
 struct ExternalRelocation {
     std::string name;
-    std::string library_path;
+    int library_index=-1;
     int tinycode_index=0;
     int pc=0;
     
@@ -356,6 +366,7 @@ struct TinyBytecode {
     };
     DynamicArray<Line> lines{};
     DebugFunction* debugFunction = nullptr;
+    FuncImpl* funcImpl = nullptr;
     DynamicArray<TryBlock> try_blocks{};
     DynamicArray<int> required_asm_instances; // x64 gen needs to know what inline assembly to generate
 
@@ -367,7 +378,7 @@ struct TinyBytecode {
         // std::string func_name;
     };
     DynamicArray<Relocation> call_relocations;
-    bool applyRelocations(Bytecode* code);
+    bool applyRelocations(Bytecode* code, bool assert_on_failure, FuncImpl** unresolved_func = nullptr);
     // void addRelocation(int pc, const std::string& name) {
     //     call_relocations.add({});
     //     call_relocations.last().pc = pc;
@@ -391,6 +402,7 @@ struct TinyBytecode {
         required_asm_instances.resize(0);
         call_relocations.resize(0);
         try_blocks.resize(0);
+        funcImpl = nullptr;
     }
 };
 struct BytecodeLocation {
@@ -425,6 +437,8 @@ struct Bytecode {
     
     TargetPlatform target = {};
     ArchitectureInfo arch = {};
+    
+    DynamicArray<ProgramLibrary>* libraries = nullptr; // pointer to Compiler::libraries
 
     DynamicArray<TinyBytecode*> tinyBytecodes;
     int index_of_main = -1; // rename to index_of_entry_point?
@@ -483,7 +497,7 @@ struct Bytecode {
     
     // Relocation for external functions
     DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,const std::string& library_path, int tinycode_index, int pc, ExternalRelocationType rel_type);
+    void addExternalRelocation(const std::string& name,int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type);
 
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;
@@ -646,7 +660,6 @@ struct BytecodeBuilder {
         return { tinycode->index, (int)tinycode->instructionSegment.size() + offset };
     }
 
-private:
     // building blocks for every instruction
     void emit_opcode(InstructionOpcode type);
     void emit_operand(BCRegister reg);
@@ -655,6 +668,7 @@ private:
     void emit_imm16(i16 imm);
     void emit_imm32(i32 imm);
     void emit_imm64(i64 imm);
+private:
     
     // call the functions, don't access the fields directly
     static const int PREVIOUS_INSTRUCTIONS_MAX = 5;

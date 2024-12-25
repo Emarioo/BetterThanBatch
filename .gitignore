@@ -22,6 +22,9 @@ bin
 *.obj
 *.pdb
 *.elf
+# exported functions from btb.exe when compiling library 
+*_decl.btb
+*_decl.h
 
 # vscode extension package
 *.vsix
@@ -47,6 +50,7 @@ sandbox
 # Ignore temporary C/C++ files from root
 /*.cpp
 /*.c
+/*.h
 /*.s
 /*.asm
 

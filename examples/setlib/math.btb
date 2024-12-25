@@ -1,0 +1,7 @@
+#import "Logger"
+
+fn @export add(x: i32, y: i32) -> i32 {
+    res := x+y;
+    log("ADD ",x," ",y," -> ", res);
+    return res;
+}

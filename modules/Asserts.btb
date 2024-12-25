@@ -11,6 +11,7 @@
 fn CheckAssert(condition: bool, line: i32, file: char[], expr_string: char[]) {
     // TODO: NOT THREAD SAFE, we need a boolean per thread. thread local storage?
     global disable_asserts: bool;
+    loc: i32;
     if condition
         return;
         
@@ -20,7 +21,7 @@ fn CheckAssert(condition: bool, line: i32, file: char[], expr_string: char[]) {
     disable_asserts = true
     defer disable_asserts = false
     
-    PrintStackTrace()
+    // PrintStackTrace()
     
     prints("\n");
     
@@ -29,7 +30,7 @@ fn CheckAssert(condition: bool, line: i32, file: char[], expr_string: char[]) {
     prints(" - ")
     prints(file)
     prints(":")
-    std_print(line)
+    // std_print(line)
     prints("\n");
     
     *(cast<i32*>null) = 0

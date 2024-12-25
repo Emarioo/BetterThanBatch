@@ -27,12 +27,12 @@ fn main() {
     // btb-linux-x64-2024-06a // a = revision
 
     path_release: StringBuilder
-    path_release.append("bin/")
+    path_release.append("bin/btb-0.2.0.1")
     #if OS_WINDOWS
-        path_release.append("btb-0.2.0-win_x64")
+        path_release.append("-win_x64")
         path_exe        := "bin/btb.exe"
     #else
-        path_release.append("btb-0.2.0-linux_x64")
+        path_release.append("-linux_x64")
         path_exe        := "bin/btb"
     #endif
     path_bin := path_release.copy()
@@ -56,13 +56,13 @@ fn main() {
 
     cmd: StringBuilder
     #if OS_WINDOWS
-        cmd.append("python build.py use_optimizations use_debug=false use_tracy=false output=")
+        cmd.append("python build.py use_optimizations use_debug use_tracy=false output=")
         cmd.append(path_release)
         cmd.append("/btb.exe msvc")
         cmd.append(" bin_dir=")
         cmd.append(path_bin)
     #else
-        cmd.append("python3 build.py use_optimizations use_debug=false use_tracy=false output=")
+        cmd.append("python3 build.py use_optimizations use_debug use_tracy=false output=")
         cmd.append(path_release)
         cmd.append("/btb gcc")
         cmd.append(" bin_dir=")

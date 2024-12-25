@@ -1,0 +1,147 @@
+@TEST_CASE(comp_time_function)
+fn compute(x: i32) -> i32 {
+    return x + 5
+}
+// #run in expressions
+_test 17; 2 + #run compute(10);
+
+@TEST_CASE(comp_time_nested)
+// Outermost #run is executed. the inner ones don't create a new compile time execution context.
+// (no way to check that this is the case but we make sure it doesn't cause an error)
+_test 6; #run 3 * #run 2;
+
+fn compute() -> i32 {
+    return #run 5
+}
+// can't call function that contains a run directive
+// implementation is simpler since we don't need to worry about circular dependencies and dependency graphs
+@TEST_ERROR(ERROR_UNSPECIFIED) _test 5; #run compute();
+
+@TEST_CASE(comp_time_func_ptr)
+fn addOne(x: i32) -> i32 {
+    return x + 1;
+}
+
+// BC_CODEPTR instruction is emited
+f:= #run addOne;
+_test 6; f(5);
+
+@TEST_CASE(comp_time_circular)
+fn first() -> i32 {
+    @TEST_ERROR(ERROR_UNSPECIFIED) x := #run second()
+    return 5
+}
+fn second() -> i32 {
+    y := #run first()
+    return 20
+}
+first() // Should trigger a compiler error for circular dependency.
+
+@TEST_CASE(comp_time_circular_okay)
+// this is fine because the run directives don't affect
+// the effect of the function by being replaced by literals.
+fn first() {
+    #run second()
+}
+fn second() {
+    #run first()
+}
+first()
+
+
+@TEST_CASE(comp_time_order)
+global counter: i32 = 5;
+
+x := #run counter++;
+y := #run counter++;
+
+// make sure #run are executed in the right order
+_test 5; x;
+_test 6; y;
+
+// @TEST_CASE(comp_time_order2)
+// fn compute() -> i32 {
+//     a := 10;
+//     @TEST_ERROR(ERROR_UNSPECIFIED) b := #run a + 5;
+//     return b;
+// }
+// _test 15; compute();
+
+@TEST_CASE(comp_time_global_local)
+global x: i32 = 5 + 5;
+
+fn compute() -> i32 {
+    return x + 10;
+}
+
+_test 20; #run compute();
+
+@TEST_CASE(comp_time_null_ptr)
+#run null
+
+@TEST_CASE(comp_time_external_func)
+#import "Memory"
+
+fn compute() -> i32 {
+    x: i32* = Allocate(4);
+    *x = 99;
+    return *x
+}
+// we can call functions that calls external functions from dynamic libraries
+_test 99; #run compute();
+
+@TEST_CASE(comp_time_invalid_ptr)
+#import "Memory"
+
+// We cannot heap pointers from compile time to runtime
+// The pointer is invalidated when compiler is finishedme
+@TEST_ERROR(ERROR_UNSPECIFIED) ptr := #run Allocate(4);
+
+@TEST_CASE(comp_time_modify_global)
+global data: i32 = 0;
+
+fn modify() -> i32 {
+    return #run @iknow data = 42
+}
+
+_test 42; modify();
+// modify is called at runtime but all run directives are still evaluated
+_test 42; data;
+
+@TEST_CASE(comp_time_modify_global2)
+global data: i32 = 0;
+
+fn modify() -> i32 {
+    return #run data += 10
+}
+
+_test 10; data;
+modify();
+// the run directive evaluates to a constant and does not affect the global at runtime
+_test 10; data;
+
+@TEST_CASE(comp_time_invalid_bytecode)
+
+// hello isn't defined, make sure we get a sensible error message
+@TEST_ERROR(E3001) #run hello();
+
+@TEST_CASE(comp_time_global_func_ptr)
+fn hello() { }
+
+global f: fn() = #run hello; // error, we don't allow this
+
+@TEST_CASE(comp_time_struct)
+#import "String"
+
+struct Block {
+    x: i32;
+    str: char[] = "unnamed";
+}
+
+fn first() -> Block {
+    return Block{4}
+}
+
+b := #run first()
+_test b.x; 4;
+_test 1; substring(b.str, 1) == "nnamed";

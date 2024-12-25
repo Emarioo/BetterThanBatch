@@ -1,0 +1,42 @@
+
+noimp.o:     file format pe-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <main>:
+   0:	ff f5                	push   %rbp
+   2:	48 8b ec             	mov    %rsp,%rbp
+   5:	ff f3                	push   %rbx
+   7:	ff f7                	push   %rdi
+   9:	ff f6                	push   %rsi
+   b:	41 ff f4             	push   %r12
+   e:	48 81 ec 18 00 00 00 	sub    $0x18,%rsp
+  15:	33 c9                	xor    %ecx,%ecx
+  17:	89 4d d0             	mov    %ecx,-0x30(%rbp)
+  1a:	b9 17 00 00 00       	mov    $0x17,%ecx
+  1f:	ff f1                	push   %rcx
+  21:	48 c7 c1 d0 ff ff ff 	mov    $0xffffffffffffffd0,%rcx
+  28:	48 03 cd             	add    %rbp,%rcx
+  2b:	8f c2                	pop    %rdx
+  2d:	89 11                	mov    %edx,(%rcx)
+  2f:	48 81 ec 08 00 00 00 	sub    $0x8,%rsp
+  36:	e8 2b 00 00 00       	call   66 <main+0x66>
+  3b:	48 81 c4 08 00 00 00 	add    $0x8,%rsp
+  42:	8b 4d d0             	mov    -0x30(%rbp),%ecx
+  45:	ff f1                	push   %rcx
+  47:	b9 02 00 00 00       	mov    $0x2,%ecx
+  4c:	8f c2                	pop    %rdx
+  4e:	03 d1                	add    %ecx,%edx
+  50:	48 8b c2             	mov    %rdx,%rax
+  53:	48 81 c4 18 00 00 00 	add    $0x18,%rsp
+  5a:	41 8f c4             	pop    %r12
+  5d:	8f c6                	pop    %rsi
+  5f:	8f c7                	pop    %rdi
+  61:	8f c3                	pop    %rbx
+  63:	8f c5                	pop    %rbp
+  65:	c3                   	ret
+  66:	ff f5                	push   %rbp
+  68:	48 8b ec             	mov    %rsp,%rbp
+  6b:	8f c5                	pop    %rbp
+  6d:	c3                   	ret

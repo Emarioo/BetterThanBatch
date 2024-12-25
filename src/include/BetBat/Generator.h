@@ -5,7 +5,9 @@
 #include "BetBat/PhaseContext.h"
 #include "BetBat/DebugInformation.h"
 #include "BetBat/Util/Profiler.h"
+#include "BetBat/VirtualMachine.h"
 
+struct GlobalRunDirective;
 struct CompilerImport;
 struct GenContext : public PhaseContext {
     TinyBytecode* tinycode = nullptr;
@@ -22,6 +24,10 @@ struct GenContext : public PhaseContext {
     GenContext& info;
 
     int currentFrameOffset = 0;
+
+    bool inside_compile_time_execution = false;
+    bool inside_global = false;
+    bool at_top_level = false;
 
     BytecodeBuilder builder{};
 
@@ -42,9 +48,9 @@ struct GenContext : public PhaseContext {
 
     void generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo);
 
-    void addExternalRelocation(const std::string& name, const std::string& lib_path, u32 codeAddress, ExternalRelocationType rel_type) {
+    void addExternalRelocation(const std::string& name, int lib_index, u32 codeAddress, ExternalRelocationType rel_type) {
         if(!disableCodeGeneration)
-            bytecode->addExternalRelocation(name, lib_path, tinycode->index, codeAddress, rel_type);
+            bytecode->addExternalRelocation(name, lib_index, tinycode->index, codeAddress, rel_type);
     }
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
@@ -61,6 +67,8 @@ struct GenContext : public PhaseContext {
     // bool disableCodeGeneration = false; // used with @no-code
     bool ignoreErrors = false; // used with @no-code
     bool showErrors = true;
+
+    bool gen_func_with_run_directives = false;
 
     int funcDepth=0;
     struct LoopScope {
@@ -117,26 +125,33 @@ struct GenContext : public PhaseContext {
     SignalIO generateArtificialPush(TypeId typeId);
     // Generate a push from pointer (baseReg) where a list of pushed values are stored. generatePush reads memory from a struct layout while this function "copies" pushed values from a pointer.
     SignalIO generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr);
+    SignalIO generatePushedLiterals(TypeId type, char* stack, ASTExpression* expression, TypeInfo* structImpl = nullptr, int memberIndex = 0);
     void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, int offset);
     void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
     
     SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);
     SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr, int* array_length = nullptr);
     SignalIO generateFncall(ASTExpression* expression, QuickArray<TypeId>* outTypeIds, bool isOperator);
-    SignalIO generateSpecialFncall(ASTExpression* expression);
+    SignalIO generateSpecialFncall(ASTExpressionCall* expression);
     SignalIO generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope = -1);
     SignalIO generateExpression(ASTExpression *expression, QuickArray<TypeId> *outTypeIds, ScopeId idScope = -1);
     SignalIO generateFunction(ASTFunction* function, ASTStruct* astStruct = nullptr);
     SignalIO generateFunctions(ASTScope* body);
     SignalIO generateBody(ASTScope *body);
+    SignalIO generateStatement(ASTStatement *statement);
     
     SignalIO generatePreload();
+    SignalIO preparePreloadData();
+    SignalIO resetPreload();
     SignalIO generateData();
     SignalIO generateGlobalData(); // runs after all functions have been generated, that way we know that applyRelocations won't fail because of missing tinycodes.
+    SignalIO executeGlobalRunDirective(GlobalRunDirective* run_directive);
     
     bool performSafeCast(TypeId from, TypeId to, bool less_strict = false);
 
     void init_context(Compiler* compiler);
+    
+    void printVMFailedMessage(VirtualMachine& vm, lexer::SourceLocation location);
 };
 struct NodeScope {
     NodeScope(GenContext* info) : info(info) {}
@@ -146,6 +161,6 @@ struct NodeScope {
     GenContext* info = nullptr;
 };
 // Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
-bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import);
+bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import, bool gen_func_with_run_directives);
 
 LinkConvention DetermineLinkConvention(const std::string& lib_path);

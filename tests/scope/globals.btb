@@ -37,7 +37,7 @@ fn main() {
 #if OS_WINDOWS
     // what about windows
 #elif OS_LINUX
-    #load "c" as libc
+    #load "libc.so.6" as libc
 
     #import "Logger"
 

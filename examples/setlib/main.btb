@@ -1,0 +1,46 @@
+/*
+    In this example we compile a static library at compile time
+    and include it in this program.
+
+    It also showcases set_library_path which allows you to 
+*/
+
+// some general useful imports and the main code
+#import "Compiler"
+#import "OS"
+
+fn main() {
+    add(5,6)
+}
+
+// =====================================================
+//    Code for linking and compiling C static library
+// =====================================================
+#load "math.lib" as MATH
+fn @import(MATH) add(x: i32, y: i32) -> i32;
+
+#run {
+    ExecuteCommand("gcc -c math.c -o math.o")
+    ExecuteCommand("ar rcs math.lib math.o")
+}
+
+// =====================================================
+//    Code for linking and compiling BTB static library
+// =====================================================
+#import "math_decl.btb"
+
+#run {
+    ExecuteCommand("btb math.btb -o math.lib")
+
+    u := current_buildunit()
+    u.set_library_path("math","./math.lib")
+}
+
+// Here we change the path that the #load directive in math_decl.btb specifies.
+// We can do this with set_library_path at compile time.
+// This is actually not necessary in this case because math_decl.btb
+// already contains the correct path './math.lib'. However, if you
+// were to move around the libraries or use a _decl.btb from some
+// library on github which uses an absolute path "C:/MyLibs/math.lib"
+// then set_library_path is very useful. (absolute paths should not be
+// used but if they are, you can work around it)

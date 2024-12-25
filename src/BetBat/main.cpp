@@ -75,7 +75,7 @@ int main(int argc, const char** argv){
         options.threadCount = 1;
         // options.disable_multithreading = false;
         // options.target = TARGET_BYTECODE;
-        options.target = TARGET_WINDOWS_x64;
+        // options.target = TARGET_WINDOWS_x64;
         // options.linker = LINKER_MSVC;
         // options.linker = LINKER_GCC;
         // options.target = TARGET_ARM;
@@ -187,7 +187,6 @@ int main(int argc, const char** argv){
     options.cleanup();
     ProfilerCleanup();
 
-    NativeRegistry::DestroyGlobal();
     int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
     // int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
     if(finalMemory!=0){

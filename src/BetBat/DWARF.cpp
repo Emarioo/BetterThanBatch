@@ -93,10 +93,13 @@ namespace dwarf {
             // WRITE_FORM(DW_AT_language,  DW_FORM_data1)
             WRITE_FORM(DW_AT_name,      DW_FORM_string)
             WRITE_FORM(DW_AT_comp_dir,  DW_FORM_string)
-            WRITE_FORM(DW_AT_low_pc,    DW_FORM_data4)
-            WRITE_FORM(DW_AT_high_pc,   DW_FORM_data4)
-            // WRITE_FORM(DW_AT_low_pc,    DW_FORM_addr)
-            // WRITE_FORM(DW_AT_high_pc,   DW_FORM_addr)
+            if(REGISTER_SIZE == 4) {
+                WRITE_FORM(DW_AT_low_pc,    DW_FORM_data4)
+                WRITE_FORM(DW_AT_high_pc,   DW_FORM_data4)
+            } else {
+                WRITE_FORM(DW_AT_low_pc,    DW_FORM_addr)
+                WRITE_FORM(DW_AT_high_pc,   DW_FORM_addr)
+            }
             WRITE_FORM(DW_AT_stmt_list, DW_FORM_data4)
             WRITE_LEB(0) // value?
             WRITE_LEB(0) // end attributes for abbreviation
@@ -112,10 +115,13 @@ namespace dwarf {
             WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
             WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             // WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
-            WRITE_FORM(DW_AT_low_pc,       DW_FORM_data4)
-            WRITE_FORM(DW_AT_high_pc,      DW_FORM_data4)
-            // WRITE_FORM(DW_AT_low_pc,       DW_FORM_addr)
-            // WRITE_FORM(DW_AT_high_pc,      DW_FORM_addr)
+            if(REGISTER_SIZE == 4) {
+                WRITE_FORM(DW_AT_low_pc,       DW_FORM_data4)
+                WRITE_FORM(DW_AT_high_pc,      DW_FORM_data4)
+            } else {
+                WRITE_FORM(DW_AT_low_pc,       DW_FORM_addr)
+                WRITE_FORM(DW_AT_high_pc,      DW_FORM_addr)
+            }
             WRITE_FORM(DW_AT_frame_base,   DW_FORM_block1)
             // WRITE_FORM(DW_AT_call_all_tail_calls, DW_FORM_flag_present)
             WRITE_FORM(DW_AT_sibling,      DW_FORM_ref4)
@@ -260,11 +266,13 @@ namespace dwarf {
             WRITE_LEB(DW_TAG_lexical_block) // tag
             stream->write1(DW_CHILDREN_yes);
 
-            // WRITE_FORM(DW_AT_low_pc,           DW_FORM_addr)
-            // WRITE_FORM(DW_AT_high_pc,          DW_FORM_addr)
-            
-            WRITE_FORM(DW_AT_low_pc,           DW_FORM_data4)
-            WRITE_FORM(DW_AT_high_pc,          DW_FORM_data4)
+            if(REGISTER_SIZE == 4) {
+                WRITE_FORM(DW_AT_low_pc,           DW_FORM_data4)
+                WRITE_FORM(DW_AT_high_pc,          DW_FORM_data4)
+            } else {
+                WRITE_FORM(DW_AT_low_pc,           DW_FORM_addr)
+                WRITE_FORM(DW_AT_high_pc,          DW_FORM_addr)
+            }
             
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
@@ -322,12 +330,18 @@ namespace dwarf {
             // stream->write("unknown.btb"); // source file
             // stream->write("project/src"); // project dir
             relocs.add({ stream->getWriteHead() - offset_section, 0 });
-            stream->write4(0); // start address of code
-            // stream->write8(0); // start address of code
+            if(REGISTER_SIZE == 4) {
+                stream->write4(0); // start address of code
+            } else {
+                stream->write8(0); // start address of code
+            }
             // Assert(false);
             relocs.add({ stream->getWriteHead() - offset_section, (u32)stream_text->getWriteHead() });
-            stream->write4(stream_text->getWriteHead()); // end address of text code
-            // stream->write8(stream_text->getWriteHead()); // end address of text code
+            if(REGISTER_SIZE == 4) {
+                stream->write4(stream_text->getWriteHead()); // end address of text code
+            } else {
+                stream->write8(stream_text->getWriteHead()); // end address of text code
+            }
             int reloc_statement_list = stream->getWriteHead() - offset_section;
             stream->write4(0); // statement list, address/pointer to reloc thing
 
@@ -428,11 +442,11 @@ namespace dwarf {
                         // stream->write(tmp.c_str(), tmp.length());
                         // // stream->write(memAst.name.ptr, memAst.name.len);
                         // stream->write1('\0');
-                        // int typeref = getTypeRef(AST_UINT32);
+                        // int typeref = getTypeRef(TYPE_UINT32);
                         // if(typeref == 0) {
-                        //     addType(AST_UINT32);
+                        //     addType(TYPE_UINT32);
                         //     // log::out << "Late "<<ast->typeToString(memImpl.typeId)<<" at "<< (stream->getWriteHead() - offset_section)<<"\n";
-                        //     lateTypeRefs.add({stream->getWriteHead() - offset_section, AST_UINT32 });
+                        //     lateTypeRefs.add({stream->getWriteHead() - offset_section, TYPE_UINT32 });
                         //     stream->write4(DEBUG_VAL32); // not known yet
                         // } else {
                         //     stream->write4(typeref); // ref4
@@ -533,7 +547,7 @@ namespace dwarf {
                     //     stream->write1(8); // size
                     //     stream->write1(DW_ATE_unsigned);
                     } else {
-                        Assert(queuedType.getId() < AST_TRUE_PRIMITIVES);
+                        Assert(queuedType.getId() < TYPE_PRIMITIVE_COUNT);
                         // other type
 
                         log::out << " prim\n";
@@ -545,30 +559,30 @@ namespace dwarf {
                         stream->write1(typeInfo->getSize()); // size
 
                         switch(typeInfo->id.getId()) { // encoding (1 byte)
-                            case AST_VOID:
+                            case TYPE_VOID:
                                 // Assert(false);
                                 stream->write1(DW_ATE_unsigned);
                                 break;
-                            case AST_UINT8:
-                            case AST_UINT16:
-                            case AST_UINT32:
-                            case AST_UINT64:
+                            case TYPE_UINT8:
+                            case TYPE_UINT16:
+                            case TYPE_UINT32:
+                            case TYPE_UINT64:
                                 stream->write1(DW_ATE_unsigned);
                                 break;
-                            case AST_INT8:
-                            case AST_INT16:
-                            case AST_INT32:
-                            case AST_INT64:
+                            case TYPE_INT8:
+                            case TYPE_INT16:
+                            case TYPE_INT32:
+                            case TYPE_INT64:
                                 stream->write1(DW_ATE_signed);
                                 break;
-                            case AST_BOOL:
+                            case TYPE_BOOL:
                                 stream->write1(DW_ATE_boolean);
                                 break;
-                            case AST_CHAR:
+                            case TYPE_CHAR:
                                 stream->write1(DW_ATE_unsigned_char);
                                 break;
-                            case AST_FLOAT32:
-                            case AST_FLOAT64:
+                            case TYPE_FLOAT32:
+                            case TYPE_FLOAT64:
                                 stream->write1(DW_ATE_float);
                                 break;
                             default: {
@@ -601,34 +615,34 @@ namespace dwarf {
                 // stream->write_at<u32>(offset_section + ref.section_offset, 0x102);
             }
            
-            for(int i=0;i<debug->global_variables.size();i++) {
-                auto& var = *debug->global_variables[i];
-                WRITE_LEB(abbrev_global_var)
-                stream->write(var.name.c_str());
+            // for(int i=0;i<debug->global_variables.size();i++) {
+            //     auto& var = *debug->global_variables[i];
+            //     WRITE_LEB(abbrev_global_var)
+            //     stream->write(var.name.c_str());
 
-                // TODO: Store line and column information in local variables in DebugInformation
-                int var_file = var.file;
-                int var_line = var.line;
-                int var_column = var.column;
+            //     // TODO: Store line and column information in local variables in DebugInformation
+            //     int var_file = var.file + 1;
+            //     int var_line = var.line;
+            //     int var_column = var.column;
 
-                stream->write2(var_file); // file
-                Assert(var_line < 0x10000); // make sure we don't overflow
-                stream->write2(var_line); // line
-                Assert(var_column < 0x10000); // make sure we don't overflow
-                stream->write2(var_column); // column
+            //     stream->write2(var_file); // file
+            //     Assert(var_line < 0x10000); // make sure we don't overflow
+            //     stream->write2(var_line); // line
+            //     Assert(var_column < 0x10000); // make sure we don't overflow
+            //     stream->write2(var_column); // column
 
-                int typeref = allTypes[var.typeId.getId()].reference[var.typeId.getPointerLevel()];
-                Assert(typeref != 0);
-                stream->write4(typeref); // type reference
+            //     int typeref = allTypes[var.typeId.getId()].reference[var.typeId.getPointerLevel()];
+            //     Assert(typeref != 0);
+            //     stream->write4(typeref); // type reference
 
-                u8* block_length = nullptr;
-                stream->write1(5); // DW_AT_location, begins with block length
-                stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
-                int offset = stream->getWriteHead();
-                stream->write4(var.location);
+            //     u8* block_length = nullptr;
+            //     stream->write1(5); // DW_AT_location, begins with block length
+            //     stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
+            //     int offset = stream->getWriteHead();
+            //     stream->write4(var.location);
                 
-                objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.location);
-            }
+            //     objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.location);
+            // }
             // We need this because we added a 16-byte offset in .debug_frame.
             // I don't know why gcc generates DWARF that way but we do the same because I don't know how it works.
             // This offset makes things work and I can't be bothered to question it at the moment.
@@ -665,11 +679,17 @@ namespace dwarf {
                 u32 proc_low = fun->asm_start;
                 u32 proc_high = fun->asm_end;
                 relocs.add({ stream->getWriteHead() - offset_section, proc_low });
-                stream->write4(proc_low); // pc low
-                // stream->write8(proc_low); // pc low
+                if(REGISTER_SIZE == 4) {
+                    stream->write4(proc_low); // pc low
+                } else {
+                    stream->write8(proc_low); // pc low
+                }
                 relocs.add({ stream->getWriteHead() - offset_section, proc_high });
-                stream->write4(proc_high); // pc high
-                // stream->write8(proc_high); // pc high
+                if(REGISTER_SIZE == 4) {
+                    stream->write4(proc_high); // pc high
+                } else {
+                    stream->write8(proc_high); // pc high
+                }
 
                 stream->write1((u8)(1)); // frame base, begins with block length
                 stream->write1((u8)(DW_OP_call_frame_cfa)); // block content
@@ -825,16 +845,21 @@ namespace dwarf {
                             ScopeInfo* scope = ast->getScope(scopes_to_generate[i]);
                             scopeStack.add({scopes_to_generate[i]});
                             u32 proc_low = fun->asm_start + scope->asm_start;
-                            u32 proc_high = fun->asm_end + scope->asm_end;
+                            u32 proc_high = fun->asm_start + scope->asm_end;
                             
                             WRITE_LEB(abbrev_lexical_block)
                             relocs.add({ stream->getWriteHead() - offset_section, proc_low });
-                            stream->write4(proc_low); // pc low
-                            // stream->write8(proc_low); // pc low
+                            if(REGISTER_SIZE == 4) {
+                                stream->write4(proc_low); // pc low
+                            } else {
+                                stream->write8(proc_low); // pc low
+                            }
                             relocs.add({ stream->getWriteHead() - offset_section, proc_high });
-                            
-                            stream->write4(proc_high); // pc high
-                            // stream->write8(proc_high); // pc high
+                            if(REGISTER_SIZE == 4) {
+                                stream->write4(proc_high); // pc high
+                            } else {
+                                stream->write8(proc_high); // pc high
+                            }
                             indent(curLevel);
                             curLevel++;
                             log::out << "scope "<<curLevel<<"\n";
@@ -871,7 +896,13 @@ namespace dwarf {
                     if(var.is_global) {
                         stream->write1(DW_OP_addr); // operation, addr describes that we should use 4 bytes
                         int offset = stream->getWriteHead();
-                        stream->write4(var.frameOffset);
+                        // stream->write4(var.frameOffset);
+                        if(REGISTER_SIZE == 8) {
+                            stream->write8(var.frameOffset);
+                        } else {
+                            stream->write4(var.frameOffset);
+                            // stream->write8(0);
+                        }
                         objectFile->addRelocation(section_info, ObjectFile::RELOCA_ADDR64, offset, objectFile->getSectionSymbol(section_data), var.frameOffset);
                     } else {
                         stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
@@ -1016,6 +1047,12 @@ namespace dwarf {
                 int lowest_index = -1;
                 for(int j=0;j<debug->functions.size();j++) {
                     auto fun = debug->functions[j];
+
+                    auto tinycode = fun->tinycode;
+                    auto tinyprog = program->functionPrograms[tinycode->index];
+                    if(!tinyprog->do_not_skip)
+                        continue;
+
                     if(fun->asm_start == fun->asm_end) {
                         Assert(false); // why would this happen?
                         continue;
@@ -1133,6 +1170,9 @@ namespace dwarf {
                 }
 
                 // TODO: Set column
+                // log::out << fun->name<<" "<<fun->asm_start << " " <<fun->declared_at_line<<"\n";
+                add_row(fun->asm_start, fun->declared_at_line);
+                
                 add_row(fun->asm_start, fun->declared_at_line);
 
                 int lastOffset = 0;
@@ -1144,7 +1184,7 @@ namespace dwarf {
                     // Assert(lastLine <= line.lineNumber);
                     lastOffset = line.asm_address;
                     lastLine = line.lineNumber;
-
+                    // log::out << "line " << line.lineNumber << " " << (fun->asm_start + line.asm_address)<<"\n";
                     add_row(line.asm_address + fun->asm_start, line.lineNumber);
                 }
 
@@ -1303,6 +1343,12 @@ namespace dwarf {
             int symindex_text = objectFile->getSectionSymbol(section_text);
             for (int fi=0;fi<debug->functions.size();fi++) {
                 auto& fun = debug->functions[fi];
+
+                auto tinycode = fun->tinycode;
+                auto tinyprog = program->functionPrograms[tinycode->index];
+                if(!tinyprog->do_not_skip)
+                    continue;
+                    
                 Assert(fun->asm_end != 0);
 
                 Assert(stream->getWriteHead() % REGISTER_SIZE == 0);

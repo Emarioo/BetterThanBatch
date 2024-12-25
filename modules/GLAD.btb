@@ -3,7 +3,7 @@
 */
 #if OS_WINDOWS
     #load "OpenGL32.lib"
-    #if LINKER_MSVC
+    #if LINK_MSVC
         #if USE_DYNAMIC_LIBS
             #load "libs/glad/lib-vc2022/glad.dll" as GLAD
         #else

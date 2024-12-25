@@ -1,5 +1,3 @@
-fn @native printc(chr: char);
-fn @native prints(slice: Slice<char>);
 fn @import @unixcall write(fd: i32, buf: void*, count: u64) -> u64;
 
 // #macro STDIN_FILENO 0

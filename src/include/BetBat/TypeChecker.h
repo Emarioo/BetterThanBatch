@@ -79,7 +79,7 @@ struct TyperContext : public PhaseContext {
     SignalIO checkRest(ASTScope* scope);
     SignalIO checkExpression(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length = nullptr);
     
-    SignalIO checkDefaultArguments(ASTFunction* astFunc, FuncImpl* funcImpl, ASTExpression* expr, bool implicit_this, ScopeId scopeId);
+    SignalIO checkDefaultArguments(ASTFunction* astFunc, FuncImpl* funcImpl, ASTExpressionCall* expr, bool implicit_this, ScopeId scopeId);
     SignalIO checkFncall(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs = nullptr);
     
     // used by checkFnCall and for-loop with user iterators (in checkRest)

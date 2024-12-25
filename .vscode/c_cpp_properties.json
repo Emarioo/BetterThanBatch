@@ -23,7 +23,10 @@
             "compilerPath": "cl.exe",
             "cStandard": "c11",
             "cppStandard": "c++14",
-            "intelliSenseMode": "windows-msvc-x64"
+            "intelliSenseMode": "windows-msvc-x64",
+            "forcedInclude": [
+                "${workspaceFolder}/src/include/pch.h"
+            ]
         },
         {
             "name": "LINUX",

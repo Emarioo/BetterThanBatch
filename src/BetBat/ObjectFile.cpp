@@ -104,6 +104,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
             auto tinyprog = program->functionPrograms[i];
             if(!tinyprog)
                 continue; // the index (i) may have been a temporary tinycode for compile time, that is why no tinyprogram was created
+            if(!tinyprog->do_not_skip)
+                continue;
 
             tinyprogram_offsets[i] = text_stream->getWriteHead();
             text_stream->write(tinyprog->text, tinyprog->head);
@@ -158,7 +160,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
             auto tinyprog = program->functionPrograms[t->index];
             if(!tinyprog)
                 continue; // the index (i) may have been a temporary tinycode for compile time, that is why no tinyprogram was created
-
+            if(!tinyprog->do_not_skip)
+                continue;
             valid_tinycodes.add(t);
         }
         func_to_unwind.resize(valid_tinycodes.size());
@@ -288,13 +291,18 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
                 objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(8), sym_unwind, 0);
                 #undef ADDR
             };
-            // main is first
-            gen_entry(program->index_of_main);
+            // TODO: Optimize, main has to be first
+            for(int ci=0;ci<valid_tinycodes.size();ci++) {
+                if(program->index_of_main != valid_tinycodes[ci]->index)
+                    continue;
+                gen_entry(ci); // always gen main
+                break;
+            }
             for(int ci=0;ci<valid_tinycodes.size();ci++) {
                 if(program->index_of_main == valid_tinycodes[ci]->index)
                     continue;
-
                 gen_entry(ci);
+                // gen everything else
             }
         }
 
@@ -359,6 +367,11 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         symdata = objectFile.getSectionSymbol(section_data);
     for(int i=0;i<program->dataRelocations.size();i++){
         auto& rel = program->dataRelocations[i];
+
+        auto tinyprog = program->functionPrograms[rel.tinyprog_index];
+        if(!tinyprog->do_not_skip)
+            continue;
+
         u32 real_offset = tinyprogram_offsets[rel.tinyprog_index] + rel.textOffset;
         if(compiler->options->target == TARGET_ARM) {
             objectFile.addRelocation(section_text, RELOC_ARM_RELOC_DATA ,real_offset, symdata, 0);
@@ -374,6 +387,10 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
 
     for(int i=0;i<program->namedUndefinedRelocations.size();i++){
         auto& namedRelocation = program->namedUndefinedRelocations[i];
+
+        auto tinyprog = program->functionPrograms[namedRelocation.tinyprog_index];
+        if(!tinyprog->do_not_skip)
+            continue;
 
         int sym = objectFile.findSymbol(namedRelocation.name);
         if(sym == -1) {
@@ -400,6 +417,10 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     for(int i=0;i<program->internalFuncRelocations.size();i++){
         auto& rel = program->internalFuncRelocations[i];
          
+        auto tinyprog = program->functionPrograms[rel.from_tinyprog_index];
+        if(!tinyprog->do_not_skip)
+            continue;
+
         if(compiler->options->target == TARGET_ARM) {
             u32 from_real_offset = tinyprogram_offsets[rel.from_tinyprog_index] + rel.textOffset;
             u32 to_real_offset = tinyprogram_offsets[rel.to_tinyprog_index];

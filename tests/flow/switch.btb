@@ -1,7 +1,5 @@
 @TEST_CASE(switch_integers)
 
-fn @native printc(str: char);
-
 msg := 9
 out := 0
 switch msg {

@@ -4,6 +4,8 @@
     WORK IN PROGRESS
 */
 
+#import "String"
+
 // THIS ENUM SHOULD BE THE EXACT SAME AS THE ONE IN CompilerOptions.h
 enum TargetPlatform {
     TARGET_UNKNOWN = 0,
@@ -12,7 +14,7 @@ enum TargetPlatform {
     TARGET_LINUX_x64,
 
     TARGET_END,
-    TARGET_START = TARGET_UNKNOWN + 1,
+    TARGET_START = 1,
 }
 // THIS ENUM SHOULD BE THE EXACT SAME AS THE ONE IN CompilerOptions.h
 // Also known as linker tools
@@ -23,7 +25,7 @@ enum LinkerChoice : u32 {
     LINKER_CLANG,
 
     LINKER_END,
-    LINKER_START = LINKER_UNKNOWN + 1,
+    LINKER_START = 1,
 }
 enum OptimizationFlags {
     OPTIMIZE_NONE = 0,
@@ -90,6 +92,17 @@ struct BuildOptions {
         modules_directory.append(s)
     }
 }
+
+struct BuildUnit {
+    output: char[];
+    size: i32;
+    fn @compiler set_library_path(name: char*, path: char*);
+    fn set_library_path(name: char[], path: char[]) {
+        set_library_path(name.ptr, path.ptr)
+    }
+}
+fn @compiler create_buildunit() -> BuildUnit*;
+fn @compiler current_buildunit() -> BuildUnit*;
 
 fn compile_code(b: BuildOptions*) {
     // internals

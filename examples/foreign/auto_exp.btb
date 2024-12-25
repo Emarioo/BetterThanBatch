@@ -1,0 +1,32 @@
+/*
+    Compile library with: btb auto_exp.btb -o math.lib
+    Compile exe with: btb auto_exp -r
+*/
+
+
+#if !BUILD_EXE
+    // when compiling library
+    struct Data {
+        x: i32;
+        mydawn: Data**;
+        str: char[];
+    }
+
+    fn @export(alias="btb_func") func(data: Data*) -> bool {
+        data.x += 23
+        data.str = "Hello from func, x ="
+        return true
+    }
+
+#else
+    // when compiling executable
+    #import "math_decl"
+    #import "Logger"
+
+    data: Data;
+
+    func(&data)
+
+    log(&data)
+
+#endif

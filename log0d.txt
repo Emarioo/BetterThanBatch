@@ -1,0 +1,51 @@
+
+imp.o:     file format pe-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <main>:
+   0:	ff f5                	push   %rbp
+   2:	48 8b ec             	mov    %rsp,%rbp
+   5:	ff f3                	push   %rbx
+   7:	ff f7                	push   %rdi
+   9:	ff f6                	push   %rsi
+   b:	41 ff f4             	push   %r12
+   e:	48 81 ec 18 00 00 00 	sub    $0x18,%rsp
+  15:	48 8d 0d 00 00 00 00 	lea    0x0(%rip),%rcx        # 1c <main+0x1c>
+  1c:	48 8d 15 00 00 00 00 	lea    0x0(%rip),%rdx        # 23 <main+0x23>
+  23:	48 89 0a             	mov    %rcx,(%rdx)
+  26:	48 8d 0d 00 00 00 00 	lea    0x0(%rip),%rcx        # 2d <main+0x2d>
+  2d:	48 8d 15 00 00 00 00 	lea    0x0(%rip),%rdx        # 34 <main+0x34>
+  34:	48 89 0a             	mov    %rcx,(%rdx)
+  37:	48 8d 0d 00 00 00 00 	lea    0x0(%rip),%rcx        # 3e <main+0x3e>
+  3e:	48 8d 15 00 00 00 00 	lea    0x0(%rip),%rdx        # 45 <main+0x45>
+  45:	48 89 0a             	mov    %rcx,(%rdx)
+  48:	33 c9                	xor    %ecx,%ecx
+  4a:	89 4d d0             	mov    %ecx,-0x30(%rbp)
+  4d:	b9 17 00 00 00       	mov    $0x17,%ecx
+  52:	ff f1                	push   %rcx
+  54:	48 c7 c1 d0 ff ff ff 	mov    $0xffffffffffffffd0,%rcx
+  5b:	48 03 cd             	add    %rbp,%rcx
+  5e:	8f c2                	pop    %rdx
+  60:	89 11                	mov    %edx,(%rcx)
+  62:	48 81 ec 08 00 00 00 	sub    $0x8,%rsp
+  69:	e8 2b 00 00 00       	call   99 <main+0x99>
+  6e:	48 81 c4 08 00 00 00 	add    $0x8,%rsp
+  75:	8b 4d d0             	mov    -0x30(%rbp),%ecx
+  78:	ff f1                	push   %rcx
+  7a:	b9 02 00 00 00       	mov    $0x2,%ecx
+  7f:	8f c2                	pop    %rdx
+  81:	03 d1                	add    %ecx,%edx
+  83:	48 8b c2             	mov    %rdx,%rax
+  86:	48 81 c4 18 00 00 00 	add    $0x18,%rsp
+  8d:	41 8f c4             	pop    %r12
+  90:	8f c6                	pop    %rsi
+  92:	8f c7                	pop    %rdi
+  94:	8f c3                	pop    %rbx
+  96:	8f c5                	pop    %rbp
+  98:	c3                   	ret
+  99:	ff f5                	push   %rbp
+  9b:	48 8b ec             	mov    %rsp,%rbp
+  9e:	8f c5                	pop    %rbp
+  a0:	c3                   	ret

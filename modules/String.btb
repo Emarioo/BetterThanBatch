@@ -458,35 +458,35 @@ struct StringBuilder {
             return;   
         }
         enum ASTPrimitives {
-            AST_VOID = 0,
-            AST_UINT8,
-            AST_UINT16,
-            AST_UINT32,
-            AST_UINT64,
-            AST_INT8,
-            AST_INT16,
-            AST_INT32,
-            AST_INT64,
-            AST_BOOL,
-            AST_CHAR,
-            AST_FLOAT32,
-            AST_FLOAT64,   
+            TYPE_VOID = 0,
+            TYPE_UINT8,
+            TYPE_UINT16,
+            TYPE_UINT32,
+            TYPE_UINT64,
+            TYPE_INT8,
+            TYPE_INT16,
+            TYPE_INT32,
+            TYPE_INT64,
+            TYPE_BOOL,
+            TYPE_CHAR,
+            TYPE_FLOAT32,
+            TYPE_FLOAT64,   
         }
         
         type_id := type.index();
         switch type_id {
-        case AST_UINT8:     append(*cast<u8*>  (data)) return;
-        case AST_UINT16:    append(*cast<u16*> (data)) return;
-        case AST_UINT32:    append(*cast<u32*> (data)) return;
-        case AST_UINT64:    append(*cast<u64*> (data)) return;
-        case AST_INT8:      append(*cast<i8*>  (data)) return;
-        case AST_INT16:     append(*cast<i16*> (data)) return;
-        case AST_INT32:     append(*cast<i32*> (data)) return;
-        case AST_INT64:     append(*cast<i64*> (data)) return;
-        case AST_BOOL:      append(*cast<bool*>(data)) return;
-        case AST_CHAR:      append(*cast<char*>(data)) return;
-        case AST_FLOAT32:   append(*cast<f32*> (data)) return;
-        case AST_FLOAT64:   append(*cast<f64*> (data)) return;
+        case TYPE_UINT8:     append(*cast<u8*>  (data)) return;
+        case TYPE_UINT16:    append(*cast<u16*> (data)) return;
+        case TYPE_UINT32:    append(*cast<u32*> (data)) return;
+        case TYPE_UINT64:    append(*cast<u64*> (data)) return;
+        case TYPE_INT8:      append(*cast<i8*>  (data)) return;
+        case TYPE_INT16:     append(*cast<i16*> (data)) return;
+        case TYPE_INT32:     append(*cast<i32*> (data)) return;
+        case TYPE_INT64:     append(*cast<i64*> (data)) return;
+        case TYPE_BOOL:      append(*cast<bool*>(data)) return;
+        case TYPE_CHAR:      append(*cast<char*>(data)) return;
+        case TYPE_FLOAT32:   append(*cast<f32*> (data)) return;
+        case TYPE_FLOAT64:   append(*cast<f64*> (data)) return;
         }
         
         fn indent(n: i32, this: StringBuilder* = this) { for 0..n this.append("  ") }

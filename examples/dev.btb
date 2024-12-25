@@ -1,11 +1,28 @@
-#import "arm/xilinx-zynq-a9"
 
-init_uart0_RxTx_115200_8N1()
+#import "Logger"
+#import "Compiler"
 
-v := asm<i32> {
-    mov r0, #66
-    push {r0}
+
+#run {
+    u := current_buildunit()
+    log("Unit: ", u)
+
+    u.set_library_path("Yoo!", "path/to")
+
+    // set library path for some lib name.
+
+    // Multiple imports may specify MathLib but choose different path.
+    // Combine them?
+    // Warn about different defafult path?
+    // Maybe a user imports two libraries which specifies a different path.
+    // Collision there is bad.
+    // Technically we should always specify a path?
+    // Can we combine the path? 
+
+    // I want to link with specific libraries, how?
+    // GLFW.btb specifies path libs/glfw/lib-vc2022
+    // but that might not be the path i want.
+    // u.set_library_path("GLFW", "new_path") // let's use change the path
+    
+    // u.set_output("game.exe")
 }
-
-sendUART0char(v)
-sendUART0char('\n')

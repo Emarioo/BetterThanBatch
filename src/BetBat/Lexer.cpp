@@ -241,6 +241,8 @@ u32 Lexer::tokenize(const char* text, u64 length, const std::string& path_name, 
 
     bool foundNonSpaceOnLine = false;
     
+    _TLOG(log::out << log::LIME << "#### "<<path_name<<"\n";)
+
     // Token quote_token{};
 
     #define IS_CHR_SPACE(C) (C == ' ' || C == '\t')

@@ -74,12 +74,6 @@
 
 void PrintExample(int line, const StringBuilder& stringBuilder);
 
-// namespace lexer {
-//     struct Token;
-//     struct Lexer;
-//     struct Import;
-// }
-
 /*
     Old messaging code
     Should be deprecated when possible

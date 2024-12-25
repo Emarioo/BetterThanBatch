@@ -237,13 +237,17 @@ fn std_print(value: LogColor) {
         PCOLOR(MAGENTA)
         PCOLOR(PURPLE)
         */
-        if(value == 0) {
-            prints("\033[0m")
+        if(cast<i32>value == 0) {
+            prints("\e[0m")
             // fprintf(stdout,"\033[0m");
             // fflush(stdout);
             // printf("\033[0m");
         } else {
-            log("\033[",foreExtra,";",fore,"m")
+            prints("\e[")
+            std_print(foreExtra)
+            prints(";")
+            std_print(fore)
+            prints("m")
             
             // fprintf(stdout,"\033[%u;%um",foreExtra, fore);
             // fflush(stdout);

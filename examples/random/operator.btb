@@ -1,6 +1,4 @@
 #import "Logger"
-// fn @native printi(n: i64);
-// fn @native prints(s: char[]);
 // #macro NL prints("\n");
 
 struct vec2 {

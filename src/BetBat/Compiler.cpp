@@ -1,11 +1,11 @@
 #include "BetBat/Compiler.h"
+#include "BetBat/CompilerInterface.h"
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
 #else
 #include <x86intrin.h>
 #endif
-
 
 Path::Path(const char* path) : text(path), _type((Type)0) {
     ReplaceChar((char*)text.data(), text.length(), '\\', '/');
@@ -364,7 +364,7 @@ void Compiler::processImports() {
         bool found = false;
         CompilerTask picked_task{};
         int task_index=tasks.size()-1;
-        while(task_index < tasks.size()) {
+        while(task_index < tasks.size() && task_index >= 0) {
             // NOTE: We process tasks backwards so that most macro dependencies are evaluated first
             int cur_task_index = task_index;
             task_index--;
@@ -610,6 +610,26 @@ void Compiler::processImports() {
                     //   may have taken out a task and be working on it right now.
                     //   Redesign this
                     if(t.type < TASK_GEN_BYTECODE) {
+                        LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
+                        missing_dependency = true;
+                        // we miss a dependency in that all other imports have
+                        // not been type checked yet
+                        break;
+                    }
+                }
+            } else if (task.type == TASK_GEN_BYTECODE_RUNDIR) {
+                // functions without run directives should have been generated before
+                // we start running those with.
+
+                // TODO: Optimize, store an integer of how many non-type checked tasks
+                //   we have left instead of iterating all tasks every time.
+                for(int i=0;i<tasks.size();i++) {
+                    CompilerTask& t = tasks[i];
+                    // log::out << "type " << t.type << "\n";
+                    // TODO: We may only have tasks to generate bytecodes but a thread
+                    //   may have taken out a task and be working on it right now.
+                    //   Redesign this
+                    if(t.type < TASK_GEN_BYTECODE_RUNDIR) {
                         LOG(LOG_TASKS, log::GRAY<<" depend on task "<<i<< " (import_id: "<<t.import_id<<")\n")
                         missing_dependency = true;
                         // we miss a dependency in that all other imports have
@@ -976,39 +996,57 @@ void Compiler::processImports() {
                 // NOTE: TypeCheckBody may call addTask_type_body.
                 //   TASK_TYPE_BODY is per function, not per import so
                 //   we can't add GEN_BYTECODE task here.
-            } else if(picked_task.type == TASK_GEN_BYTECODE) {
+            } else if(picked_task.type == TASK_GEN_BYTECODE || picked_task.type == TASK_GEN_BYTECODE_RUNDIR) {
                 auto my_scope = ast->getScope(compiler_imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Gen bytecode: "<<compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
 
                 // NOTE: Type checker reserves all require global data.
                 //   The generator phase does not create new global data.
-                if(!have_prepared_global_data) { // cheap quick check, will the compiler optimize it away?
+                if(!have_prepared_global_data) { // cheap quick check
                     lock_miscellaneous.lock();
                     if(!have_prepared_global_data) { // thread safe check
                         GenContext c{};
-                        c.ast = ast;
-                        c.bytecode = bytecode;
-                        c.reporter = &reporter;
-                        c.compiler = this;
                         c.init_context(this);
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
                         have_prepared_global_data = true;
                     }
                     lock_miscellaneous.unlock();
                 }
+                if(!have_generated_comp_time_global_data && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check, will the compiler optimize it away?
+                    lock_miscellaneous.lock();
+                    if(!have_generated_comp_time_global_data) { // thread safe check
+                        // We need to generate global data here when
+                        // all functions have been generated.
+                        GenContext c{};
+                        c.init_context(this);
+                        c.generateGlobalData();
+                        have_generated_comp_time_global_data = true;
+                    }
+                    lock_miscellaneous.unlock();
+                }
+                if(!have_run_global_run_directives && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check
+                    lock_miscellaneous.lock();
+                    if(!have_run_global_run_directives) { // thread safe check
+                        GenContext c{};
+                        c.init_context(this);
+                        for(int i=0;i<global_run_directives.size();i++) {
+                            auto& rundir = global_run_directives[i];
+                            c.executeGlobalRunDirective(&rundir);
+                        }
+                        have_run_global_run_directives = true;
+                    }
+                    lock_miscellaneous.unlock();
+                }
 
                 int prev_errors = compile_stats.errors;
-
-                if(initial_import_id == compiler_imp->import_id) {
-                    auto yes = GenerateScope(my_scope->astScope, this, compiler_imp, &compiler_imp->tinycodes, true);
-                } else {
-                    auto yes = GenerateScope(my_scope->astScope, this, compiler_imp, &compiler_imp->tinycodes, false);
-                }
+                
+                bool is_initial_import = initial_import_id == compiler_imp->import_id;
+                bool gen_func_with_run_directives = picked_task.type == TASK_GEN_BYTECODE_RUNDIR;
+                auto yes = GenerateScope(my_scope->astScope, this, compiler_imp, &compiler_imp->tinycodes, is_initial_import, gen_func_with_run_directives);
                 // TODO: Print some interesting info?
                 //  LOG(LOG_TASKS, log::GRAY
                 //     << " tokens: "<<tokens
                 //     << "\n")
-
 
                 bool new_errors = false;
                 if(prev_errors < compile_stats.errors) {
@@ -1018,6 +1056,7 @@ void Compiler::processImports() {
                 if(!new_errors) {
                     if(bytecode->debugDumps.size() != 0) {
                         for(int i=0;i<(int)bytecode->debugDumps.size();i++) {
+                            // TODO: Mutex lock when popping debug dump?
                             auto& dump = bytecode->debugDumps[i];
                             bool found = false;
                             for(int j=0;j<compiler_imp->tinycodes.size();j++) {
@@ -1047,7 +1086,6 @@ void Compiler::processImports() {
                         }
                     }
                     
-                    
                     // @DEBUG
                     LOG_CODE(LOG_BYTECODE,
                         for(auto t : compiler_imp->tinycodes) {
@@ -1057,7 +1095,10 @@ void Compiler::processImports() {
                     )
                     
                     compiler_imp->state = (TaskType)(compiler_imp->state | picked_task.type);
-                    picked_task.type = TASK_GEN_MACHINE_CODE;
+                    if(picked_task.type == TASK_GEN_BYTECODE)
+                        picked_task.type = TASK_GEN_BYTECODE_RUNDIR;
+                    else
+                        picked_task.type = TASK_GEN_MACHINE_CODE;
                     picked_task.import_id = compiler_imp->import_id;
 
                     SCOPE_LOCK
@@ -1067,16 +1108,31 @@ void Compiler::processImports() {
                 // auto my_scope = ast->getScope(compiler_imp->scopeId);
                 LOGD(LOG_TASKS, log::GREEN<<"Gen machine code: "<<compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
 
-                if(!have_generated_comp_time_global_data) { // cheap quick check, will the compiler optimize it away?
-                    lock_miscellaneous.lock();
-                    if(!have_generated_comp_time_global_data) { // thread safe check
-                        GenContext c{};
-                        c.init_context(this);
-                        c.generateGlobalData(); // make sure this function doesn't call lock_miscellaneous
-                        have_generated_comp_time_global_data = true;
-                    }
-                    lock_miscellaneous.unlock();
-                }
+                // if(!have_generated_comp_time_global_data) { // cheap quick check, will the compiler optimize it away?
+                //     lock_miscellaneous.lock();
+                //     if(!have_generated_comp_time_global_data) { // thread safe check
+                //         // We need to generate global data here when
+                //         // all functions have been generated.
+                //         GenContext c{};
+                //         c.init_context(this);
+                //         c.generateGlobalData();
+                //         have_generated_comp_time_global_data = true;
+                //     }
+                //     lock_miscellaneous.unlock();
+                // }
+                // if(!have_run_global_run_directives) { // cheap quick check
+                //     lock_miscellaneous.lock();
+                //     if(!have_run_global_run_directives) { // thread safe check
+                //         GenContext c{};
+                //         c.init_context(this);
+                //         for(int i=0;i<global_run_directives.size();i++) {
+                //             auto& rundir = global_run_directives[i];
+                //             c.executeGlobalRunDirective(&rundir);
+                //         }
+                //         have_run_global_run_directives = true;
+                //     }
+                //     lock_miscellaneous.unlock();
+                // }
 
                 if(compile_stats.errors == 0) {
                     // can't generate if bytecode is messed up.
@@ -1134,6 +1190,8 @@ void Compiler::run(CompileOptions* options) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Gray19);
     // auto tp = engone::StartMeasure();
+
+    global_compiler = this;
 
     if(options->linker == LINKER_MSVC) {
         if(!is_msvc_configured()) {
@@ -1306,9 +1364,12 @@ void Compiler::run(CompileOptions* options) {
     preprocessor.init(&lexer, this);
     ast = AST::Create(this);
     bytecode = Bytecode::Create();
+    bytecode->libraries = &libraries;
     bytecode->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;
 
+    libraries.add({libraries.size(), "<compiler>", "<compiler>"});
+    compiler_library_index = libraries.size()-1;
     
     bytecode->target = options->target;
     bytecode->arch = arch;
@@ -1340,17 +1401,16 @@ void Compiler::run(CompileOptions* options) {
         "operator []<T>(slice: Slice<T>, index: i32) -> T {\n"
         "    return slice.ptr[index];\n"
         "}\n"
-        "fn @compiler init_preload()\n" // init global data and stuff
-        "fn @compiler global_slice() -> Slice<char>\n" // retrieves a slice of global data
+        "fn @builtin init_preload();\n" // init global data and stuff
+        "fn @builtin global_slice() -> Slice<char>;\n" // retrieves a slice of global data
 
         "struct Range {\n"
         // "struct @hide Range {" 
         "    beg: i32;\n"
         "    end: i32;\n"
         "}\n"
-        "fn @native prints(str: char[]);\n"
-        "fn @native printc(str: char);\n"
-        "fn @native printi(n: i32);\n"
+        "fn @intrinsic prints(str: char[])\n"
+        "fn @intrinsic printc(str: char);\n"
         "fn @intrinsic rdtsc() -> i64;\n"
         "fn @intrinsic strlen(str: char*) -> i32;\n"
 
@@ -1381,9 +1441,11 @@ void Compiler::run(CompileOptions* options) {
         }
         
         if(options->linker == LINKER_MSVC) {
-            preload += "#macro LINKER_MSVC #endmacro\n";
+            preload += "#macro LINK_MSVC #endmacro\n";
         } else if(options->linker == LINKER_GCC) {
-            preload += "#macro LINKER_GCC #endmacro\n";
+            preload += "#macro LINK_GCC #endmacro\n";
+        } else if(options->linker == LINKER_CLANG) {
+            preload += "#macro LINK_CLANG #endmacro\n";
         }
         
         auto virtual_path = PRELOAD_NAME;
@@ -1404,7 +1466,8 @@ void Compiler::run(CompileOptions* options) {
         initial_import_id = addOrFindImport(virtual_path);
     } else {
         // preload is added as dependency automatically
-        initial_import_id = addOrFindImport(options->source_file);
+        std::string cwd = engone::GetWorkingDirectory();
+        initial_import_id = addOrFindImport(options->source_file, cwd, nullptr, true);
     }
     if(initial_import_id == 0) {
         log::out << log::RED << "Could not find '"<<options->source_file << "'\n";
@@ -1447,29 +1510,39 @@ void Compiler::run(CompileOptions* options) {
         goto JUMP_TO_EXEC;
         // return;
     }
-    
-    switch(options->target) {
-        case TARGET_BYTECODE: {
-            // do nothing
-        } break;
-        case TARGET_WINDOWS_x64:
-        case TARGET_LINUX_x64: {
-            this->program->finalize_program(this);
-        } break;
-        case TARGET_ARM: {
-            this->program->finalize_program(this);
-        } break;
-        default: Assert(false);
+    {
+        GenContext context{};
+        context.init_context(this);
+        // reset type information pointers in global data section
+        // these should be set when program starts each time.
+        context.resetPreload();
     }
-    
-    if(compile_stats.errors!=0){ 
-        if(!options->silent)
-            compile_stats.printFailed();
-        return;
-    }
-    if(compile_stats.warnings!=0){
-        if(!options->silent)
-            compile_stats.printWarnings();
+    {
+        bool finalize_success = false;
+        switch(options->target) {
+            case TARGET_BYTECODE: {
+                // do nothing
+            } break;
+            case TARGET_WINDOWS_x64:
+            case TARGET_LINUX_x64: {
+                finalize_success = this->program->finalize_program(this);
+            } break;
+            case TARGET_ARM: {
+                finalize_success = this->program->finalize_program(this);
+            } break;
+            default: Assert(false);
+        }
+        if(!finalize_success)
+            compile_stats.errors++;
+        if(compile_stats.errors!=0){ 
+            if(!options->silent)
+                compile_stats.printFailed();
+            return;
+        }
+        if(compile_stats.warnings!=0){
+            if(!options->silent)
+                compile_stats.printWarnings();
+        }
     }
 
     if(options->only_preprocess) {
@@ -1532,6 +1605,13 @@ void Compiler::run(CompileOptions* options) {
             compile_stats.generatedFiles.add(object_path);
         } break;
         default: Assert(false);
+    }
+    {
+        int at = output_path.find_last_of("/");
+        if(at != -1) {
+            std::string output_dir = output_path.substr(0,at);
+            DirectoryCreate(output_dir);
+        }
     }
     
     if(!obj_write_success) {
@@ -1697,6 +1777,7 @@ void Compiler::run(CompileOptions* options) {
                             // parsing command line arguments is though.
                             // TODO: Look into manually parsing it. Maybe an entry.btb file with parsing code and other global initialization?
                         } else {
+                            // IMPORTANT: 'aligned_16_byte_on_entry_point' needs to be set when using nostdlib!
                             // cmd += "-nostdlib ";
                             // if (entry_point == "main")
                             //     cmd += "--entry main "; // we must explicitly set entry point with nodstdlib even if main is used
@@ -1763,9 +1844,16 @@ void Compiler::run(CompileOptions* options) {
                 } else {
                     // System library
                     std::string file = path;
-                    int pos = file.find_last_of(".");
-                    if(pos != file.npos)
-                        file = file.substr(0,file.find_last_of("."));
+                    if(options->target == TARGET_WINDOWS_x64) {
+                        int pos = file.find_last_of(".");
+                        if(pos != file.npos)
+                            file = file.substr(0,file.find_last_of("."));
+                    } else {
+                        int pos = file.find(".");
+                        if(file.size() > 3 && file.substr(0,3) == "lib" && pos != -1) {
+                            file = file.substr(3, pos-3);
+                        }
+                    }
                     if(file != "")
                         cmd += "-l" + file + " ";
                 }
@@ -1940,6 +2028,10 @@ void Compiler::run(CompileOptions* options) {
         //   app.bc as outputfile should we write out a bytecode file format?
     }
     
+    if(output_type == OUTPUT_DLL || output_type == OUTPUT_LIB || output_type == OUTPUT_OBJ) {
+        WriteDeclFiles(options->output_file, bytecode, ast, output_type == OUTPUT_DLL);
+    }
+    
     compile_stats.end_compile = engone::StartMeasure();
     
     if(compile_stats.errors==0) {
@@ -2066,8 +2158,15 @@ JUMP_TO_EXEC:
     if(!options->silent)
         log::out << log::GRAY << "not executing program\n";
 }
-u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error) {
-    Path abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
+u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs) {
+    Path abs_path{};
+    if (from_cwd_ignore_import_dirs) {
+        if(engone::FileExist(path)){
+            abs_path = Path(path).getAbsolute();
+        }
+    } else {
+        abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
+    }
     if(abs_path.text.empty()) {
         return 0; // file does not exist? caller should throw error
     }
@@ -2154,10 +2253,10 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
     using namespace engone;
     if(options->target == TARGET_LINUX_x64) {
         // TODO: When on Windows, use default entry point if a C runtime was specified.
-        if(path == "c") { // libc
+        if(path.find("libc") != -1) { // libc
             if(has_generated_entry_point) {
                 // TODO: Improve error message, although it shouldn't happen.
-                log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR <<"When using libc, your program should no longer be the entry point. The libc's entry point should be used instead (things might break otherwise). However, the entry point was generated before libc library was detected. This should not happen, contact developer for a quick fix.\n";
+                log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR <<"When using libc, your program should no longer be the entry point. The libc's entry point should be used instead (things might break otherwise). However, the entry point was generated before libc library was detected. This should not happen, contact developer for a quick fix. (path: '"<<path<<"')\n";
             }
             force_default_entry_point = true;
         }
@@ -2167,17 +2266,18 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
     Assert(imp);
     // imports.requestSpot(dep_import_id-1,nullptr);
     bool found = false;
+
+    ProgramLibrary lib{};
+    lib.index = libraries.size();
+    lib.name = as_name;
+    lib.path = path;
+    libraries.add(lib);
+    
     if(as_name.size() != 0) {
         for(int i=0;i<imp->libraries.size();i++) {
-            auto& lib = imp->libraries[i];
-            if(lib.path == path) {
-                // Multiple paths could possibly be the same.
-                // Imagine "src/math.lib" and "./math.lib" where the dot indicates
-                // the directory of the current source file ("src/main.btb")
-                found = true;
-                break;
-            }
-            if(lib.named_as == as_name) {
+            auto& lib = libraries[imp->libraries[i]];
+            
+            if(lib.name == as_name) {
                 found = true;
                 // TODO: Improve error message, which source file the library came from
                 compile_stats.errors++;
@@ -2189,7 +2289,7 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
         }
     }
     if(!found) {
-        imp->libraries.add({path, as_name});
+        imp->libraries.add(lib.index);
     }
     lock_imports.unlock();
 }
@@ -2227,7 +2327,7 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     }
     #if OS_LINUX
     if(fullPath.text.size() > 0 && fullPath.text[0] == '~') {
-        std::string value = EnvironmentVariable("HOME");
+        std::string value = GetEnvVar("HOME");
         if(value.size() != 0) {
             // log::out << "HOME="<<value<<"\n";
             // check traling slashes, join them, make sure value and path is separated by ONE slash
@@ -2236,71 +2336,43 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     }
     #endif
 
-    bool keep_searching = true;
+    //-- Search import directories
+    Path temp{};
+    for(int i=0;i<(int)importDirectories.size();i++){
+        const Path& dir = importDirectories[i];
+        Assert(dir.isDir() && dir.isAbsolute());
+        if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
+            temp = dir.text + fullPath.text;
+        else
+            temp = dir.text + "/" + fullPath.text;
 
+        if(FileExist(temp.text)) {
+            fullPath = temp.getAbsolute();
+            return fullPath;
+        }
+    }
+    
     //-- Search directory of current source file
+    Assert(!sourceDirectory.text.empty());
     if(fullPath.text.find("./")==0) {
-        Assert(!sourceDirectory.text.empty());
         if(sourceDirectory.text[sourceDirectory.text.size()-1] == '/') {
             fullPath = sourceDirectory.text + fullPath.text.substr(2);
         } else {
             fullPath = sourceDirectory.text + fullPath.text.substr(1);
         }
-        fullPath = fullPath.getAbsolute();
-        if(!engone::FileExist(fullPath.text)) {
-            if(assumed_path_on_error)
-                *assumed_path_on_error = fullPath.text;
-            return {};
-        }
-    }
-    
-    //-- Search cwd or absolute path
-    // if(keep_searching){
-    //     if(engone::FileExist(fullPath.text)){
-    //         // if(!fullPath.isAbsolute())
-    //         fullPath = fullPath.getAbsolute();
-    //     }
-    // }
-    if (keep_searching) {
-        Path temp{}; // = sourceDirectory.text;
-        // if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
-        //     temp.text += "/";
-        // temp.text += fullPath.text;
-        for(int i=0;i<(int)importDirectories.size();i++){
-            const Path& dir = importDirectories[i];
-            Assert(dir.isDir() && dir.isAbsolute());
-            if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
-                temp = dir.text + fullPath.text;
-            else
-                temp = dir.text + "/" + fullPath.text;
-
-            if(FileExist(temp.text)) {
-                fullPath = temp.getAbsolute();
-                keep_searching = false;
-                break;
-            }
-        }
-    }
-    if (keep_searching) {
-        if(engone::FileExist(fullPath.text)){
-            fullPath = fullPath.getAbsolute();
-            keep_searching = false;
-        }
-    }
-    if (keep_searching) {
+    } else {
         Path temp = sourceDirectory.text;
         if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
             temp.text += "/";
         temp.text += fullPath.text;
-        if(FileExist(temp.text)){ // search directory of current source file again but implicit ./
-            fullPath = temp.getAbsolute();
-            keep_searching = false;
-        }
     }
-    if(keep_searching) {
-        fullPath = ""; // failure, file not found
+    fullPath = fullPath.getAbsolute();
+    if(engone::FileExist(fullPath.text)) {
+        return fullPath;
     }
-    return fullPath;
+    if(assumed_path_on_error)
+        *assumed_path_on_error = fullPath.text;
+    return {};
 }
 
 void Compiler::addError(const lexer::SourceLocation& loc, CompileError errorType) {
@@ -2459,3 +2531,58 @@ const char* annotation_names[]{
 };
 const char* const PRELOAD_NAME = "<preload>";
 const char* const TYPEINFO_NAME = "Lang.btb";
+
+Compiler* global_compiler = nullptr;
+
+extern "C" {
+namespace lang {
+
+BuildUnit* create_buildunit() {
+    using namespace engone;
+    log::out << "create_buildunit leaks memory!\n";
+    log::out.flush();
+    auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit));
+    new(unit)BuildUnit();
+    unit->name = "some unit";
+    unit->length = strlen(unit->name);
+    unit->size = global_compiler->bytecode->tinyBytecodes.size();
+    return unit;
+}
+BuildUnit* current_buildunit() {
+    using namespace engone;
+    static BuildUnit dummy{};
+    return &dummy;
+}
+void set_library_path(BuildUnit* unit, const char* name, const char* path) {
+    using namespace engone;
+    // log::out << "set "<<name << " "<<path<<"\n";
+    bool changed_any = false;
+    for(int i=0;i<global_compiler->libraries.size();i++) {
+        auto& lib = global_compiler->libraries[i];
+        if(lib.name == name) {
+            lib.path = path;
+            changed_any = true;
+        }
+    }
+    if(!changed_any) {
+        static bool once = false;
+        log::out << log::YELLOW << "WARNING: " << log::NO_COLOR << "Call to set_library_path(\""<<log::LIME<<name <<log::NO_COLOR<< "\", \""<<log::LIME<<path<<log::NO_COLOR<<"\") didn't affect any known library.\n";
+        for(int i=0;i<global_compiler->libraries.size();i++) {
+            auto& lib = global_compiler->libraries[i];
+            log::out << i <<": " << lib.name << " " << lib.path << "\n";
+        }
+    }
+}
+
+engone::VoidFunction get_compiler_function(const char* name, int length) {
+    using namespace engone;
+    #define CASE(N,F) if(strcmp(name, N) == 0) return (VoidFunction)F;
+    CASE("create_buildunit",      create_buildunit)
+    CASE("current_buildunit",     current_buildunit)
+    CASE("set_library_path",      set_library_path)
+    #undef CASE
+    return nullptr;
+}
+
+} // namespace lang
+} // extern "C"

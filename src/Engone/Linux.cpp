@@ -503,10 +503,14 @@ namespace engone {
 
         return path;
 	}
-    std::string EnvironmentVariable(const std::string& name){
+    std::string GetEnvVar(const std::string& name){
 		char* value = getenv(name.c_str());
         return value;
 	}
+	bool SetEnvVar(const std::string& name, const std::string& value) {
+        int err = setenv(name.c_str(), value.c_str(), 1);
+        return err == 0;
+    }
     // struct AllocInfo {
 	// 	std::string name;
 	// 	int count;
@@ -1329,9 +1333,11 @@ namespace engone {
 		Free(argv, totalSize);
 	}
 	DynamicLibrary LoadDynamicLibrary(const std::string& path, bool log_error) {
-		auto ptr = dlopen(path.c_str(), 0);
+		auto ptr = dlopen(path.c_str(), RTLD_LAZY);
 		if (log_error) {
-			// TODO: Print error
+            if (!ptr) {
+                printf("Could not load %s\n",path.c_str());
+            }
 		}
 		return ptr;
 	}

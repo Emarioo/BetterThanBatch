@@ -38,7 +38,7 @@ fn ceil(v: f32) -> f32 { // TODO: Intrinsic
 #if OS_WINDOWS
     #load "Kernel32.lib" as Dummy
 #else
-    #load "c" as Dummy
+    #load "libc.so.6" as Dummy
 #endif
 fn @import(Dummy) sinf(v: f32) -> f32
 fn @import(Dummy) cosf(v: f32) -> f32

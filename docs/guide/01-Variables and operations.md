@@ -23,26 +23,23 @@ c = 2 * b  // reassign a value to a variable, note the sole '=' without the ':'
 ```
 
 ## Primitive types
-The language is typed which means that every variable has a **type**. A type describes the kind of data that is stored in a variable and it's size.
+The language is typed which means that every variable has a **type**. A type describes the kind of data that is stored in a variable and it's size. These are the primitive types:
 
-These are the (current) primitive types:
+**Signed integers**: `i8`, `i16`, `i32`, `i64` (1, 2, 4, and 8 bytes respectively)
 
-**Signed integers**: i8, i16, i32, i64 (1, 2, 4, and 8 bytes respectively)
+**Unsigned integers**: `u8`, `u16`, `u32`, `u64` (cannot represent a negative number)
 
-**Unsigned integers**: u8, u16, u32, u64 (cannot represent a negative number)
+**Word integers**: `uword`, `iword` (the size depends on the target architecture, uword = u32 on a 32-bit system while uword is u64 on a 64-bit system)
 
-**Word integers**: uword, iword (the size depends on the target architecture, uword = u32 on a 32-bit system while uword is u64 on a 64-bit system)
+**Character**: `char` (represents a 1-byte character, ASCII)
 
-**Character**: char (represents a 1-byte character, ASCII)
+**Boolean**: `bool` (represents a 1-byte true or false value)
 
-**Boolean**: bool (represents a 1-byte true or false value)
+**Decimal/floating point numbers**: `f32`, `f64` (4 and 8 bytes respectively)
 
-**Decimal/floating point numbers**: f32, f64 (4 and 8 bytes respectively)
+**Pointers**: `void*`, `i32*`, `char*` (8 bytes on a 64-bit computer)
 
-**Pointers**: void*, i32*, char* (8 bytes on a 64-bit computer)
-
-**Function pointers**: fn(), fn(i32*)->i32 (8 bytes on a 64-bit computer)
-(function pointers is covered in the chapter about functions)
+**Function pointers**: `fn()`, `fn(i32*)->i32` (8 bytes on a 64-bit computer, function pointers are covered in the chapter about functions)
 
 The type of a variable can be specified between the colon and equal sign. Otherwise, the type is infered from the expression.
 ```c++
@@ -54,7 +51,7 @@ chr: char = 'A'
 yes: bool = true
 ```
 
-**NOTE:** Some implementation detail, uword/iword is an alias for the specific integer type and will show up as i64 in most error messages (on a 64-bit system).
+**NOTE:** uword/iword is an alias for the specific integer type and will show up as i64 instead of iword in error messages.
 
 ## Literals
 Literals refer to the constant numbers, strings, and floats in the code.
@@ -148,7 +145,7 @@ arr.ptr[arr.len-1] = 92
 **NOTE**: In the future, not having the automatic scaling may be a nuisance and thus could change. The reason we don't is because we want pointer arithmetic on `void*` but since it is 0 in size, it doesn't make since to scale it by 0 bytes. You could of course see void* as an edge case and use a 1-byte scaling. In C/C++ you are required to do quite a few casts and it would be nice if you didn't need to. Sometimes you can feel as though you are fighting the pointer arithmetic which isn't good.
 
 ## Strings
-There is not a primitive type for strings. There is however character slice (*char[]*) for string views and **StringBuilder** for common string operations.
+There is not a primitive type for strings. The character slice (*char[]*) is used for string views and **StringBuilder** for transforming a string.
 
 ```c++
 // char slice when passing strings to functions
@@ -170,6 +167,43 @@ msg: StringBuilder
 appends(msg, "This is the string: ", string)
 ```
 
+Quotes and backslash in literal strings are special.
+```c++
+// quotes in string
+s0 := "Hello \"cat\" and \'dog\'"
+
+// special characters
+s1 := "newline: \n"
+s2 := "tab: \t"
+s3 := "carriage return: \r"
+s4 := "null char: \0"
+s5 := "escape char: \e"
+s6 := "backslash: \\"
+
+// hexidecimal
+s7 := "hex: \x1f" // escape character
+s8 := "hex: \x00" // null character
+s9 := "hex: \x20" // space character
+sa := "hex: \x41" // 'A'
+```
+
+There is also a text block which puts the exact characters into the text literal. Backslash and quotes do not require escaping with a backslash.
+```c++
+text := @strbeg
+Hello "cat" and 'dog'. Backslash \x23 does not do anything.
+Newline is handled correctly.
+@strend
+```
+
+<!-- Work in progress
+
+This is useful when printing.
+```
+x := 11
+y := 23
+prints("$x + $y = $(x+y)")
+```
+-->
 ## More operations
 Words: bitwise operator, comparison/equality operator, logical operator
 
