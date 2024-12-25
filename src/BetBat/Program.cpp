@@ -121,7 +121,10 @@ bool Program::finalize_program(Compiler* compiler) {
 
     for(int i=0;i<bytecode->externalRelocations.size();i++) {
         auto& r = bytecode->externalRelocations[i];
-        if(r.library_path.size() == 0 || r.library_path != "<compiler>") {
+        if(r.library_index == -1)
+            continue;
+        auto& lib = compiler->libraries[r.library_index];
+        if(lib.path.size() == 0 || lib.path != "<compiler>") {
             continue;
         }
 

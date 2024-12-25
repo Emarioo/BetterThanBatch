@@ -321,23 +321,24 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
     using namespace engone;
 
     std::string alias = varinfo->declaration->linked_alias.size() == 0 ? varinfo->declaration->varnames[0].name : varinfo->declaration->linked_alias;
-    std::string lib_path = "";
+    int lib_index = -1;
     auto imp = info.compiler->lexer.getImport_unsafe(varinfo->declaration->location);
     
     auto func_imp = info.compiler->getImport(imp->file_id);
     Assert(func_imp);
 
-    for(auto& lib : func_imp->libraries) {
-        if(varinfo->declaration->linked_library == lib.named_as) {
-            lib_path = lib.path;
+    for(auto& libindex : func_imp->libraries) {
+        auto& lib = compiler->libraries[libindex];
+        if(varinfo->declaration->linked_library == lib.name) {
+            lib_index = libindex;
             break;
         }
     }
     LinkConvention link_convention = varinfo->declaration->linkConvention;
-    if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
-        link_convention = DetermineLinkConvention(lib_path);
-    }
-    if (lib_path.size() == 0) {
+    // if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
+    //     link_convention = DetermineLinkConvention(lib_path);
+    // }
+    if (lib_index == -1) {
         int errs = reporter->get_lib_errors(varinfo->declaration->linked_library);
         reporter->add_lib_error(varinfo->declaration->linked_library);
         if (errs >= Reporter::LIB_ERROR_LIMIT) {
@@ -352,7 +353,7 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
                 log::out << "These are the available libraries: ";
                 for(int i=0;i<func_imp->libraries.size();i++){
                     if(i!=0) log::out << ", ";
-                    log::out << log::LIME << func_imp->libraries[i].named_as << log::NO_COLOR;
+                    log::out << log::LIME << compiler->libraries[func_imp->libraries[i]].name << log::NO_COLOR;
                 }
                 log::out << "\n";
             )
@@ -360,31 +361,31 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         }
     }
     
-    if(link_convention == LinkConvention::IMPORT) {
-        builder.emit_ext_dataptr(reg, LinkConvention::NONE); // emit to prevent triggering asserts to make sure we keep compiling and catch more errors
-        ERR_SECTION(
-            ERR_HEAD2(varinfo->declaration->location)
-            ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. dll/lib can be determined automatically based on the of the library or you can manually specify @importdll or @importlib. The library name and path was this: '"<<log::LIME << varinfo->declaration->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'.")
-            ERR_LINE2(varinfo->declaration->location,"this function")
-        )
-    } else {
+    // if(link_convention == LinkConvention::IMPORT) {
+    //     builder.emit_ext_dataptr(reg, LinkConvention::NONE); // emit to prevent triggering asserts to make sure we keep compiling and catch more errors
+    //     ERR_SECTION(
+    //         ERR_HEAD2(varinfo->declaration->location)
+    //         ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. dll/lib can be determined automatically based on the of the library or you can manually specify @importdll or @importlib. The library name and path was this: '"<<log::LIME << varinfo->declaration->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'.")
+    //         ERR_LINE2(varinfo->declaration->location,"this function")
+    //     )
+    // } else {
         builder.emit_ext_dataptr(reg, link_convention);
         int reloc = builder.get_pc(); // ext_dataptr doesn't have an immediate,
         // reloc therefore points to the next instruction which may seem wierd BUT,
         // the x64 generator knows this and generates an instruction with an immediate
         // that is relocated. It's just that the bytecode doesn't need an immediate so we skip it.
 
-        if(link_convention == LinkConvention::DYNAMIC_IMPORT && compiler->options->target == TARGET_WINDOWS_x64) {
-            // Windows has an import table with a bunch of pointers.
-            // Linux works a little differently and does not have this.
-            alias = "__imp_" + alias;
-        }
+        // if(link_convention == LinkConvention::DYNAMIC_IMPORT && compiler->options->target == TARGET_WINDOWS_x64) {
+        //     // Windows has an import table with a bunch of pointers.
+        //     // Linux works a little differently and does not have this.
+        //     alias = "__imp_" + alias;
+        // }
         if(varinfo->is_var()) {
-            addExternalRelocation(alias, lib_path, reloc, BC_REL_GLOBAL_VAR);
+            addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR);
         } else {
-            addExternalRelocation(alias, lib_path, reloc, BC_REL_FUNCTION);
+            addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
         }
-    }
+    // }
 }
 SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
     using namespace engone;
@@ -2103,7 +2104,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
     } else if(astFunc->linkConvention == LinkConvention::NONE) {
         if(astFunc->is_compiler_func) {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-            addExternalRelocation(astFunc->name, "<compiler>", reloc, BC_REL_FUNCTION);
+            addExternalRelocation(astFunc->name, compiler->compiler_library_index, reloc, BC_REL_FUNCTION);
         } else {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
             info.addCallToResolve(reloc, funcImpl);
@@ -2116,21 +2117,21 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
         if (astFunc->linked_alias.size() != 0)
             alias = astFunc->linked_alias;
 
-        std::string lib_path = "";
+        int lib_index = -1;
         auto func_imp = info.compiler->getImport(astFunc->getImportId(&info.compiler->lexer));
         Assert(func_imp);
 
-        for(auto& lib : func_imp->libraries) {
-            if(astFunc->linked_library == lib.named_as) {
-                lib_path = lib.path;
+        for(auto& libindex : func_imp->libraries) {
+            if(astFunc->linked_library == compiler->libraries[libindex].name) {
+                lib_index = libindex;
                 break;
             }
         }
-        if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
-            link_convention = DetermineLinkConvention(lib_path);
-        }
+        // if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
+        //     link_convention = DetermineLinkConvention(lib_path);
+        // }
         // log::out << "Try " << lib_path << " -> " << link_convention<<"\n";
-        if (lib_path.size() == 0) {
+        if (lib_index == -1) {
             if(astFunc->linked_library.size() != 0) {
                 // TODO: If many functions complain about GLAD then only display the first 5 or so.
                 int errs = reporter->get_lib_errors(astFunc->linked_library);
@@ -2147,7 +2148,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
                         log::out << "These are the available libraries: ";
                         for(int i=0;i<func_imp->libraries.size();i++){
                             if(i!=0) log::out << ", ";
-                            log::out << log::LIME << func_imp->libraries[i].named_as << log::NO_COLOR;
+                            log::out << log::LIME << compiler->libraries[func_imp->libraries[i]].name << log::NO_COLOR;
                         }
                         log::out << "\n";
                     )
@@ -2167,29 +2168,31 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
                 )
             }
         }
-        if(link_convention == STATIC_IMPORT) {
-            builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-            addExternalRelocation(alias, lib_path, reloc, BC_REL_FUNCTION);
-        } else if(link_convention == DYNAMIC_IMPORT){
-            builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-            if(compiler->options->target == TARGET_WINDOWS_x64) {
-                // Windows has an import table of pointers and we
-                // prefix with __imp_ to refer to that table.
-                // Linux does not.
-                alias = "__imp_" + alias;
-            }
-            addExternalRelocation(alias, lib_path, reloc, BC_REL_FUNCTION);
-        } else {
-            // NOTE: We emit call to prevent asserts and keep compiling since this link problem
-            //   is a problem in x64.
-            builder.emit_call(LinkConvention::NONE, astFunc->callConvention, &reloc);
-            ERR_SECTION(
-                ERR_HEAD2(astFunc->location)
-                ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. This was the library name and path: '"<<log::LIME << astFunc->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<lib_path<<log::NO_COLOR<<"'. You can always specify @importdll or @importlib manually.")
-                ERR_LINE2(astFunc->location,"function")
-                ERR_LINE2(base_expression->location,"call")
-            )
-        }
+        builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
+        addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
+        // if(link_convention == STATIC_IMPORT) {
+        //     builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
+        //     addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
+        // } else if(link_convention == DYNAMIC_IMPORT){
+        //     builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
+        //     if(compiler->options->target == TARGET_WINDOWS_x64) {
+        //         // Windows has an import table of pointers and we
+        //         // prefix with __imp_ to refer to that table.
+        //         // Linux does not.
+        //         alias = "__imp_" + alias;
+        //     }
+        //     addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
+        // } else {
+        //     // NOTE: We emit call to prevent asserts and keep compiling since this link problem
+        //     //   is a problem in x64.
+        //     builder.emit_call(LinkConvention::NONE, astFunc->callConvention, &reloc);
+        //     ERR_SECTION(
+        //         ERR_HEAD2(astFunc->location)
+        //         ERR_MSG_COLORED("Link convention (@import) for function could not be determined to @importdll or @importlib. This was the library name and path: '"<<log::LIME << astFunc->linked_library <<log::NO_COLOR<<"', '"<<log::LIME<<compiler->libraries[lib_index].path<<log::NO_COLOR<<"'. You can always specify @importdll or @importlib manually. (the shown path is the default path, it may be changed by a run directive later)")
+        //         ERR_LINE2(astFunc->location,"function")
+        //         ERR_LINE2(base_expression->location,"call")
+        //     )
+        // }
     }
     
     builder.emit_free_args(allocated_stack_space);

@@ -159,7 +159,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 if(!yes) {
                     error.type = VM_UNRESOLVED_CALL;
                     error.message = unresolved_func->astFunction->name + " called from " + t->name;
-                    // log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
+                    log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
                     return;
                 }
             }
@@ -172,7 +172,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             if(!yes) {
                 error.type = VM_UNRESOLVED_CALL;
                 error.message = unresolved_func->astFunction->name + " called from " + t->name;
-                // log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
+                log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
                 return;
             }
         }
@@ -206,9 +206,13 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     DynamicArray<std::string> dll_function_names{};
     for(int i=0;i<bytecode->externalRelocations.size();i++) {
         auto& r = bytecode->externalRelocations[i];
+        if(r.library_index == -1)
+            continue;
+        auto& proglib = bytecode->libraries->get(r.library_index);
         // log::out << log::LIME << r.name << " " << r.library_path<<"\n";
-        if(r.library_path.size() == 0) {
+        if(proglib.path.size() == 0) {
             any_failure = true;
+            log::out << log::RED << "Lib path is zero, this lib: "<<proglib.name << " this function call: "<<r.name<<".\n";
             continue;
         }
 
@@ -227,11 +231,11 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         if(!load_lib)
             continue;
 
-        auto pair_lib = libs.find(r.library_path);
+        auto pair_lib = libs.find(proglib.path);
         Lib* lib = nullptr;
         if(pair_lib == libs.end()) {
             lib = new Lib();
-            libs[r.library_path] = lib;
+            libs[proglib.path] = lib;
         } else {
             lib = pair_lib->second;
         }
@@ -252,6 +256,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             for(auto& pair_fn : pair_lib.second->functions) {
                 pair_fn.second->func_ptr = lang::get_compiler_function(pair_fn.first.c_str(), pair_fn.first.size());
                 if(!pair_fn.second->func_ptr) {
+                    log::out << log::RED << "ERROR: "<<log::NO_COLOR << "lang::get_compiler_function did not map '"<<log::LIME <<pair_fn.first<<log::NO_COLOR << "' to a function\n";
                     Assert(false);
                 }
 

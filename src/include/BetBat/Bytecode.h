@@ -7,6 +7,13 @@
 
 #include "BetBat/AST.h"
 
+// static/dynamic library
+struct ProgramLibrary {
+    int index = 0;
+    std::string name;
+    std::string path; // can be changed in compile time execution
+};
+
 struct Compiler; // check for errors
 enum InstructionControl : u8 {
     CONTROL_NONE,
@@ -332,7 +339,7 @@ enum ExternalRelocationType : u8{
 };
 struct ExternalRelocation {
     std::string name;
-    std::string library_path;
+    int library_index=-1;
     int tinycode_index=0;
     int pc=0;
     
@@ -430,6 +437,8 @@ struct Bytecode {
     
     TargetPlatform target = {};
     ArchitectureInfo arch = {};
+    
+    DynamicArray<ProgramLibrary>* libraries = nullptr; // pointer to Compiler::libraries
 
     DynamicArray<TinyBytecode*> tinyBytecodes;
     int index_of_main = -1; // rename to index_of_entry_point?
@@ -488,7 +497,7 @@ struct Bytecode {
     
     // Relocation for external functions
     DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,const std::string& library_path, int tinycode_index, int pc, ExternalRelocationType rel_type);
+    void addExternalRelocation(const std::string& name,int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type);
 
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;

@@ -7,6 +7,8 @@ Versioning for this project works like this: [Versioning](/docs/details/05-Versi
 ## v0.2.1 - ...
 
 ### Added
+- `set_library_path` to change the path of a library specified with `#load` directive.
+- `@compiler` annotation for functions that interact with the compiler.
 - `#run` directive for compile time execution. You can call operating system functions, read files, allocate memory from heap (temporarily), and calculating data at compile time resulting in a literal at runtime.
 - Added automatic generation of function import declarations when compiling static and dynamic libraries.
 - Automatic configuration of MSVC environment when running compiler.

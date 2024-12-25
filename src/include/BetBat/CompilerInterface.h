@@ -69,6 +69,8 @@ struct BuildUnit {
 
 // IMPORTANT: Add function to get_compiler_function so VirtualMachine has access to it!
 BuildUnit* create_buildunit();
+BuildUnit* current_buildunit();
+void set_library_path(BuildUnit* unit, const char* name, const char* path);
 
 engone::VoidFunction get_compiler_function(const char* name, int len);
 

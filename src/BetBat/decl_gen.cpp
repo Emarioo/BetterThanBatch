@@ -125,7 +125,7 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
     DynamicArray<bool> emitted_types{};
     DynamicArray<bool> defined_types{};
     emitted_types.resize(ast->_typeInfos.size());
-    log::out << log::YELLOW << "Total types: "<<emitted_types.size()<<"\n";
+    // log::out << log::YELLOW << "Total types: "<<emitted_types.size()<<"\n";
     
     DynamicArray<TinyBytecode*> tinycodes{};
     DynamicArray<TypeId> types{};
@@ -215,7 +215,7 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
         TypeId type = types[ti];
         TypeInfo* typeinfo = ast->getTypeInfo(type);
         
-        log::out << "Emit " << log::LIME << ast->typeToString(type) << "\n";
+        // log::out << "Emit " << log::LIME << ast->typeToString(type) << "\n";
         
         // TODO: Add comments from original file where type was defined
         if(typeinfo->astEnum) {

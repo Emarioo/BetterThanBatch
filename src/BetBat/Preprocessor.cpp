@@ -257,6 +257,13 @@ SignalIO PreprocContext::parseLoad(){
     using namespace engone;
     // ZoneScopeC(tracy::Color::Wheat);
 
+    // #load GLFW
+    // #load "path" as GLFW
+    // #load "path"
+    // #load @force "path" as GLFW
+    // #load @force GLFW
+    // #link "-g"
+
     bool do_force = false;
 
     StringView anot_view{};
@@ -275,31 +282,41 @@ SignalIO PreprocContext::parseLoad(){
     }
 
     StringView path{};
+    StringView name{};
     lexer::Token name_token = gettok(&path);
-    if(name_token.type != lexer::TOKEN_LITERAL_STRING){
-        ERR_SECTION(
-            ERR_HEAD2(name_token)
-            ERR_MSG("Expected a string not "<<lexer->tostring(name_token)<<".")
-        )
-        return SIGNAL_COMPLETE_FAILURE;
-    }
-    advance();
-
-    StringView view_as{};
-    bool has_as = false;
-    lexer::Token tok = gettok(&view_as);
-    if(tok.type == lexer::TOKEN_IDENTIFIER && view_as == "as") {
+    if(name_token.type == lexer::TOKEN_LITERAL_STRING){
         advance();
+        // ERR_SECTION(
+        //     ERR_HEAD2(name_token)
+        //     ERR_MSG("Expected a string not "<<lexer->tostring(name_token)<<".")
+        // )
+        // return SIGNAL_COMPLETE_FAILURE;
+        StringView view{};
+        lexer::Token tok = gettok(&view);
+        if(tok.type == lexer::TOKEN_IDENTIFIER && view == "as") {
+            advance();
 
-        tok = gettok(&view_as);
+            tok = gettok(&name);
+            if(tok.type != lexer::TOKEN_IDENTIFIER) {
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Expected a string not "<<lexer->tostring(tok)<<".")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            } else {
+                advance();
+            }
+        }
+    } else {
+        path = {}; // no path
+        auto tok = gettok(&name);
         if(tok.type != lexer::TOKEN_IDENTIFIER) {
             ERR_SECTION(
                 ERR_HEAD2(tok)
-                ERR_MSG("Expected a string not "<<lexer->tostring(tok)<<".")
+                ERR_MSG("Expected a string or identifier not "<<lexer->tostring(tok)<<".")
             )
             return SIGNAL_COMPLETE_FAILURE;
         } else {
-            has_as = true;
             advance();
         }
     }
@@ -339,9 +356,9 @@ SignalIO PreprocContext::parseLoad(){
         LOG_CODE(LOG_LIBS,
             log::out << ""<<path << " -> " << real_path<<"\n";
         )
-        if(view_as.size() != 0)
-            compiler->addLibrary(import_id, real_path, view_as);
-        if(view_as.size() == 0 || do_force) {
+        if(name.size() != 0)
+            compiler->addLibrary(import_id, real_path, name);
+        if(name.size() == 0 || do_force) {
             Assert(compiler->program);
             compiler->program->addForcedLibrary(real_path);
         }

@@ -149,11 +149,7 @@ struct CompilerImport {
         bool circular_dependency_to_myself = false;
     };
     DynamicArray<Dep> dependencies;
-    struct Lib {
-        std::string path;
-        std::string named_as;
-    };
-    DynamicArray<Lib> libraries;
+    DynamicArray<int> libraries; // index to Compiler::libraries
 };
 extern const char* const PRELOAD_NAME;
 extern const char* const TYPEINFO_NAME;
@@ -169,6 +165,12 @@ struct GlobalRunDirective {
     // ASTExpression* expression = nullptr;
     ScopeId scope{};
 };
+// static/dynamic library
+// struct ProgramLibrary {
+//     int index = 0;
+//     std::string name;
+//     std::string path; // can be changed in compile time execution
+// };
 struct Compiler {
     ~Compiler() {
         cleanup();   
@@ -211,6 +213,9 @@ struct Compiler {
     CompileOptions* options = nullptr;
     std::string compiler_executable_dir="";
     CompileStats compile_stats{};
+
+    DynamicArray<ProgramLibrary> libraries;
+    int compiler_library_index = -1;
 
     ArchitectureInfo arch = {};
 
@@ -275,10 +280,10 @@ struct Compiler {
     
     // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
     // adds task if new import was created
-    u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "", std::string* assumed_path_on_error = nullptr);
+    u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "", std::string* assumed_path_on_error = nullptr, bool from_cwd_ignore_import_dirs = false);
     // addImport existed but was removed because of addOrFindImport
     void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "", bool disabled = false);
-    void addLibrary(u32 import_id, const std::string& path, const std::string& as_name = "");
+    void addLibrary(u32 import_id, const std::string& path, const std::string& as_name);
     
     DynamicArray<Path> importDirectories;
     Path findSourceFile(const Path& path, const Path& sourceDirectory = "", std::string* assumed_path_on_error = nullptr);

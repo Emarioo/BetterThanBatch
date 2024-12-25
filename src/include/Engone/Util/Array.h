@@ -211,8 +211,8 @@ public:
         return *(_ptr + used - 1);
     }
     T* data() const { return _ptr; }
-    u32 size() const { return used; }
-    u32 capacity() const { return max; }
+    int size() const { return used; }
+    int capacity() const { return max; }
     T* begin() const { return _ptr; }
     T* end() const { return _ptr + used; }
 

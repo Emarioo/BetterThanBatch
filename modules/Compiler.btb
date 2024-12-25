@@ -91,14 +91,18 @@ struct BuildOptions {
         modules_directory.clear()
         modules_directory.append(s)
     }
-    fn @compiler set_library_path();
 }
 
 struct BuildUnit {
-    name: char[];
+    output: char[];
     size: i32;
+    fn @compiler set_library_path(name: char*, path: char*);
+    fn set_library_path(name: char[], path: char[]) {
+        set_library_path(name.ptr, path.ptr)
+    }
 }
 fn @compiler create_buildunit() -> BuildUnit*;
+fn @compiler current_buildunit() -> BuildUnit*;
 
 fn compile_code(b: BuildOptions*) {
     // internals

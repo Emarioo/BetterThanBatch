@@ -36,6 +36,36 @@ bool X64Builder::generate() {
     if(failed)
         return false;
     
+    // TODO: Optimize, store external relocations per tinycode instead
+    // bool found = bytecode->externalRelocations.size() == 0;
+    for(int i=0;i<bytecode->externalRelocations.size();i++) {
+        auto& rel = bytecode->externalRelocations[i];
+        if(tinycode->index == rel.tinycode_index) {
+            auto& lib = bytecode->libraries->get(rel.library_index);
+            LinkConvention link = DetermineLinkConvention(lib.path);
+
+            if(link != LinkConvention::STATIC_IMPORT && link != LinkConvention::DYNAMIC_IMPORT) {
+                // TODO: Print the location of the directive that wasn't resolved.
+                //   Track modifications made by run directives?
+                log::out << log::RED << "ERROR: "<<log::NO_COLOR<<"The path to '"<<log::LIME<<lib.name<<log::NO_COLOR<<"' (\""<<lib.path<<"\") is not a dynamic or static library.\n";
+                return false;
+            }
+
+            u8 opcode0 = tinycode->instructionSegment[rel.pc-3];
+            if(opcode0 == BC_CALL) {
+                // BC call instruction has opcode|link|callconv|imm32
+                // the offset (rel.pc) points to the immediate which is why we do 'rel.pc-2'.
+                // We need to update the link convention to use static or dynamic import
+                // because compile time execution may change it at any time before x64 generation.
+                tinycode->instructionSegment[rel.pc-2] = link;
+            } else if(opcode0 == BC_EXT_DATAPTR) {
+                // BC ext dataptr instruction has opcode|reg|link
+                // the relocation points to the byte after the instruction
+                tinycode->instructionSegment[rel.pc-1] = link;
+            }
+        }
+    }
+
     // NOTE: The generator makes assumptions about the bytecode.
     //  - alloc_local isn't called iteratively unless it's scoped
     //  - registers aren't saved between calls and jumps
@@ -1451,6 +1481,12 @@ bool X64Builder::generate() {
                     } break;
                     default: Assert(false);
                 }
+                //     if(compiler->options->target == TARGET_WINDOWS_x64) {
+        //         // Windows has an import table of pointers and we
+        //         // prefix with __imp_ to refer to that table.
+        //         // Linux does not.
+        //         alias = "__imp_" + alias;
+        //     }
                 recent_set_args.resize(0);
                 ret_offset = 0;
                 if(opcode == BC_CALL_REG) {
@@ -3775,14 +3811,25 @@ bool X64Builder::generate() {
         program->addInternalFuncRelocation(current_funcprog_index, get_map_translation(r.pc), ind);
     }
 
-    
     // TODO: Optimize, store external relocations per tinycode instead
     // bool found = bytecode->externalRelocations.size() == 0;
     for(int i=0;i<bytecode->externalRelocations.size();i++) {
         auto& rel = bytecode->externalRelocations[i];
         if(tinycode->index == rel.tinycode_index) {
             int off = get_map_translation(rel.pc);
-            program->addNamedUndefinedRelocation(rel.name, off, rel.tinycode_index, rel.library_path, rel.type == BC_REL_GLOBAL_VAR);
+            auto& lib = bytecode->libraries->get(rel.library_index);
+            LinkConvention link = DetermineLinkConvention(lib.path);
+            std::string alias = rel.name;
+            if(link == LinkConvention::DYNAMIC_IMPORT) {
+                if(compiler->options->target == TARGET_WINDOWS_x64) {
+                    // Windows has an import table of pointers and we
+                    // prefix with __imp_ to refer to that table.
+                    // Linux does not.
+                    alias = "__imp_" + alias;
+                }
+            }
+
+            program->addNamedUndefinedRelocation(alias, off, rel.tinycode_index, lib.path, rel.type == BC_REL_GLOBAL_VAR);
             // found = true;
             // break;
         }

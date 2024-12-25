@@ -2,25 +2,22 @@
 #import "Logger"
 #import "Compiler"
 
-/*
-    Disallow relocations for compile time functions that
-    are used by runtime functions.
-    
-    We have a bunch of functions.
-    They are put into the executable.
-    Some functions call compile time functions and cannot be relocated.
-    How do we track them and filter them out?
-    
-    Keep track of compile time functions with @compiler (ASTFunction::is_compiler_func).
-    
-    If a tinycode has a relocation to compile time function (library <compiler>), mark it as comp time only.
-
-    
-*/
 
 #run {
-    u := create_buildunit()
+    u := current_buildunit()
     log("Unit: ", u)
+
+    u.set_library_path("Yoo!", "path/to")
+
+    // set library path for some lib name.
+
+    // Multiple imports may specify MathLib but choose different path.
+    // Combine them?
+    // Warn about different defafult path?
+    // Maybe a user imports two libraries which specifies a different path.
+    // Collision there is bad.
+    // Technically we should always specify a path?
+    // Can we combine the path? 
 
     // I want to link with specific libraries, how?
     // GLFW.btb specifies path libs/glfw/lib-vc2022

@@ -25,7 +25,6 @@ struct VirtualMachine {
     ~VirtualMachine(){
         cleanup();
     }
-
     int REGISTER_SIZE = -1;
     int FRAME_SIZE = -1;
     

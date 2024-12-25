@@ -1025,7 +1025,7 @@ struct ASTScope : ASTNode {
     };
     struct Spot {
         SpotType spotType = STRUCT;
-        u32 index = 0;
+        int index = 0;
     };
     QuickArray<Spot> content{};
 

@@ -46,10 +46,10 @@ bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index, 
     exportedFunctions.last().tinycode_index = tinycode_index;
     return true;
 }
-void Bytecode::addExternalRelocation(const std::string& name, const std::string& library_path, int tinycode_index, int pc, ExternalRelocationType rel_type){
+void Bytecode::addExternalRelocation(const std::string& name, int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type){
     ExternalRelocation tmp{};
     tmp.name = name;
-    tmp.library_path = library_path;
+    tmp.library_index = library_index;
     tmp.tinycode_index = tinycode_index;
     tmp.pc = pc;
     tmp.type = rel_type;
@@ -476,7 +476,7 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
 void BytecodeBuilder::emit_call(LinkConvention l, CallConvention c, i32* index_of_relocation, i32 imm) {
     if(disable_code_gen) return;
 
-    Assert(l != LinkConvention::IMPORT);
+    // Assert(l != LinkConvention::IMPORT);
 
     emit_opcode(BC_CALL);
     emit_imm8(l);
@@ -825,7 +825,7 @@ void BytecodeBuilder::emit_dataptr(BCRegister reg, i32 imm) {
     emit_imm32(imm);
 }
 void BytecodeBuilder::emit_ext_dataptr(BCRegister reg, LinkConvention link) {
-    Assert(link != LinkConvention::IMPORT);
+    // Assert(link != LinkConvention::IMPORT);
     emit_opcode(BC_EXT_DATAPTR);
     emit_operand(reg);
     emit_imm8(link);

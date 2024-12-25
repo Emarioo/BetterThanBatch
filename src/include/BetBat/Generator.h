@@ -48,9 +48,9 @@ struct GenContext : public PhaseContext {
 
     void generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo);
 
-    void addExternalRelocation(const std::string& name, const std::string& lib_path, u32 codeAddress, ExternalRelocationType rel_type) {
+    void addExternalRelocation(const std::string& name, int lib_index, u32 codeAddress, ExternalRelocationType rel_type) {
         if(!disableCodeGeneration)
-            bytecode->addExternalRelocation(name, lib_path, tinycode->index, codeAddress, rel_type);
+            bytecode->addExternalRelocation(name, lib_index, tinycode->index, codeAddress, rel_type);
     }
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 

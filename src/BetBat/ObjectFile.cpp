@@ -291,13 +291,18 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
                 objectFile.addRelocation(section_pdata, RELOCA_ADDR32NB, ADDR(8), sym_unwind, 0);
                 #undef ADDR
             };
-            // main is first
-            gen_entry(program->index_of_main);
+            // TODO: Optimize, main has to be first
+            for(int ci=0;ci<valid_tinycodes.size();ci++) {
+                if(program->index_of_main != valid_tinycodes[ci]->index)
+                    continue;
+                gen_entry(ci); // always gen main
+                break;
+            }
             for(int ci=0;ci<valid_tinycodes.size();ci++) {
                 if(program->index_of_main == valid_tinycodes[ci]->index)
                     continue;
-
                 gen_entry(ci);
+                // gen everything else
             }
         }
 

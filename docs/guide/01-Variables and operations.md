@@ -145,7 +145,7 @@ arr.ptr[arr.len-1] = 92
 **NOTE**: In the future, not having the automatic scaling may be a nuisance and thus could change. The reason we don't is because we want pointer arithmetic on `void*` but since it is 0 in size, it doesn't make since to scale it by 0 bytes. You could of course see void* as an edge case and use a 1-byte scaling. In C/C++ you are required to do quite a few casts and it would be nice if you didn't need to. Sometimes you can feel as though you are fighting the pointer arithmetic which isn't good.
 
 ## Strings
-There is not a primitive type for strings. There is however character slice (*char[]*) for string views and **StringBuilder** for common string operations.
+There is not a primitive type for strings. The character slice (*char[]*) is used for string views and **StringBuilder** for transforming a string.
 
 ```c++
 // char slice when passing strings to functions
@@ -167,6 +167,43 @@ msg: StringBuilder
 appends(msg, "This is the string: ", string)
 ```
 
+Quotes and backslash in literal strings are special.
+```c++
+// quotes in string
+s0 := "Hello \"cat\" and \'dog\'"
+
+// special characters
+s1 := "newline: \n"
+s2 := "tab: \t"
+s3 := "carriage return: \r"
+s4 := "null char: \0"
+s5 := "escape char: \e"
+s6 := "backslash: \\"
+
+// hexidecimal
+s7 := "hex: \x1f" // escape character
+s8 := "hex: \x00" // null character
+s9 := "hex: \x20" // space character
+sa := "hex: \x41" // 'A'
+```
+
+There is also a text block which puts the exact characters into the text literal. Backslash and quotes do not require escaping with a backslash.
+```c++
+text := @strbeg
+Hello "cat" and 'dog'. Backslash \x23 does not do anything.
+Newline is handled correctly.
+@strend
+```
+
+<!-- Work in progress
+
+This is useful when printing.
+```
+x := 11
+y := 23
+prints("$x + $y = $(x+y)")
+```
+-->
 ## More operations
 Words: bitwise operator, comparison/equality operator, logical operator
 

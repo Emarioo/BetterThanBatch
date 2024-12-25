@@ -364,7 +364,7 @@ void Compiler::processImports() {
         bool found = false;
         CompilerTask picked_task{};
         int task_index=tasks.size()-1;
-        while(task_index < tasks.size()) {
+        while(task_index < tasks.size() && task_index >= 0) {
             // NOTE: We process tasks backwards so that most macro dependencies are evaluated first
             int cur_task_index = task_index;
             task_index--;
@@ -1364,9 +1364,12 @@ void Compiler::run(CompileOptions* options) {
     preprocessor.init(&lexer, this);
     ast = AST::Create(this);
     bytecode = Bytecode::Create();
+    bytecode->libraries = &libraries;
     bytecode->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;
 
+    libraries.add({libraries.size(), "<compiler>", "<compiler>"});
+    compiler_library_index = libraries.size()-1;
     
     bytecode->target = options->target;
     bytecode->arch = arch;
@@ -1463,7 +1466,8 @@ void Compiler::run(CompileOptions* options) {
         initial_import_id = addOrFindImport(virtual_path);
     } else {
         // preload is added as dependency automatically
-        initial_import_id = addOrFindImport(options->source_file);
+        std::string cwd = engone::GetWorkingDirectory();
+        initial_import_id = addOrFindImport(options->source_file, cwd, nullptr, true);
     }
     if(initial_import_id == 0) {
         log::out << log::RED << "Could not find '"<<options->source_file << "'\n";
@@ -2154,8 +2158,15 @@ JUMP_TO_EXEC:
     if(!options->silent)
         log::out << log::GRAY << "not executing program\n";
 }
-u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error) {
-    Path abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
+u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs) {
+    Path abs_path{};
+    if (from_cwd_ignore_import_dirs) {
+        if(engone::FileExist(path)){
+            abs_path = Path(path).getAbsolute();
+        }
+    } else {
+        abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
+    }
     if(abs_path.text.empty()) {
         return 0; // file does not exist? caller should throw error
     }
@@ -2255,17 +2266,18 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
     Assert(imp);
     // imports.requestSpot(dep_import_id-1,nullptr);
     bool found = false;
+
+    ProgramLibrary lib{};
+    lib.index = libraries.size();
+    lib.name = as_name;
+    lib.path = path;
+    libraries.add(lib);
+    
     if(as_name.size() != 0) {
         for(int i=0;i<imp->libraries.size();i++) {
-            auto& lib = imp->libraries[i];
-            if(lib.path == path) {
-                // Multiple paths could possibly be the same.
-                // Imagine "src/math.lib" and "./math.lib" where the dot indicates
-                // the directory of the current source file ("src/main.btb")
-                found = true;
-                break;
-            }
-            if(lib.named_as == as_name) {
+            auto& lib = libraries[imp->libraries[i]];
+            
+            if(lib.name == as_name) {
                 found = true;
                 // TODO: Improve error message, which source file the library came from
                 compile_stats.errors++;
@@ -2277,7 +2289,7 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
         }
     }
     if(!found) {
-        imp->libraries.add({path, as_name});
+        imp->libraries.add(lib.index);
     }
     lock_imports.unlock();
 }
@@ -2324,71 +2336,43 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     }
     #endif
 
-    bool keep_searching = true;
+    //-- Search import directories
+    Path temp{};
+    for(int i=0;i<(int)importDirectories.size();i++){
+        const Path& dir = importDirectories[i];
+        Assert(dir.isDir() && dir.isAbsolute());
+        if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
+            temp = dir.text + fullPath.text;
+        else
+            temp = dir.text + "/" + fullPath.text;
 
+        if(FileExist(temp.text)) {
+            fullPath = temp.getAbsolute();
+            return fullPath;
+        }
+    }
+    
     //-- Search directory of current source file
+    Assert(!sourceDirectory.text.empty());
     if(fullPath.text.find("./")==0) {
-        Assert(!sourceDirectory.text.empty());
         if(sourceDirectory.text[sourceDirectory.text.size()-1] == '/') {
             fullPath = sourceDirectory.text + fullPath.text.substr(2);
         } else {
             fullPath = sourceDirectory.text + fullPath.text.substr(1);
         }
-        fullPath = fullPath.getAbsolute();
-        if(!engone::FileExist(fullPath.text)) {
-            if(assumed_path_on_error)
-                *assumed_path_on_error = fullPath.text;
-            return {};
-        }
-    }
-    
-    //-- Search cwd or absolute path
-    // if(keep_searching){
-    //     if(engone::FileExist(fullPath.text)){
-    //         // if(!fullPath.isAbsolute())
-    //         fullPath = fullPath.getAbsolute();
-    //     }
-    // }
-    if (keep_searching) {
-        Path temp{}; // = sourceDirectory.text;
-        // if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
-        //     temp.text += "/";
-        // temp.text += fullPath.text;
-        for(int i=0;i<(int)importDirectories.size();i++){
-            const Path& dir = importDirectories[i];
-            Assert(dir.isDir() && dir.isAbsolute());
-            if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
-                temp = dir.text + fullPath.text;
-            else
-                temp = dir.text + "/" + fullPath.text;
-
-            if(FileExist(temp.text)) {
-                fullPath = temp.getAbsolute();
-                keep_searching = false;
-                break;
-            }
-        }
-    }
-    if (keep_searching) {
-        if(engone::FileExist(fullPath.text)){
-            fullPath = fullPath.getAbsolute();
-            keep_searching = false;
-        }
-    }
-    if (keep_searching) {
+    } else {
         Path temp = sourceDirectory.text;
         if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
             temp.text += "/";
         temp.text += fullPath.text;
-        if(FileExist(temp.text)){ // search directory of current source file again but implicit ./
-            fullPath = temp.getAbsolute();
-            keep_searching = false;
-        }
     }
-    if(keep_searching) {
-        fullPath = ""; // failure, file not found
+    fullPath = fullPath.getAbsolute();
+    if(engone::FileExist(fullPath.text)) {
+        return fullPath;
     }
-    return fullPath;
+    if(assumed_path_on_error)
+        *assumed_path_on_error = fullPath.text;
+    return {};
 }
 
 void Compiler::addError(const lexer::SourceLocation& loc, CompileError errorType) {
@@ -2555,21 +2539,47 @@ namespace lang {
 
 BuildUnit* create_buildunit() {
     using namespace engone;
-    log::out << "Called create_buildunit\n";
+    log::out << "create_buildunit leaks memory!\n";
     log::out.flush();
     auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit));
     new(unit)BuildUnit();
-    unit->name = "Tinycodes: ";
+    unit->name = "some unit";
     unit->length = strlen(unit->name);
     unit->size = global_compiler->bytecode->tinyBytecodes.size();
     return unit;
+}
+BuildUnit* current_buildunit() {
+    using namespace engone;
+    static BuildUnit dummy{};
+    return &dummy;
+}
+void set_library_path(BuildUnit* unit, const char* name, const char* path) {
+    using namespace engone;
+    // log::out << "set "<<name << " "<<path<<"\n";
+    bool changed_any = false;
+    for(int i=0;i<global_compiler->libraries.size();i++) {
+        auto& lib = global_compiler->libraries[i];
+        if(lib.name == name) {
+            lib.path = path;
+            changed_any = true;
+        }
+    }
+    if(!changed_any) {
+        static bool once = false;
+        log::out << log::YELLOW << "WARNING: " << log::NO_COLOR << "Call to set_library_path(\""<<log::LIME<<name <<log::NO_COLOR<< "\", \""<<log::LIME<<path<<log::NO_COLOR<<"\") didn't affect any known library.\n";
+        for(int i=0;i<global_compiler->libraries.size();i++) {
+            auto& lib = global_compiler->libraries[i];
+            log::out << i <<": " << lib.name << " " << lib.path << "\n";
+        }
+    }
 }
 
 engone::VoidFunction get_compiler_function(const char* name, int length) {
     using namespace engone;
     #define CASE(N,F) if(strcmp(name, N) == 0) return (VoidFunction)F;
     CASE("create_buildunit",      create_buildunit)
-    CASE("get_compiler_function", get_compiler_function)
+    CASE("current_buildunit",     current_buildunit)
+    CASE("set_library_path",      set_library_path)
     #undef CASE
     return nullptr;
 }
