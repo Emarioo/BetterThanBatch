@@ -98,7 +98,8 @@ bool Program::finalize_program(Compiler* compiler) {
     while(check_index < codes_to_check.size()) {
         auto t = codes_to_check[check_index];
         check_index++;
-        functionPrograms[t->index]->do_not_skip = true;
+        if(t->index < functionPrograms.size())
+            functionPrograms[t->index]->do_not_skip = true;
 
         for (int i=0;i<t->call_relocations.size();i++) {
             auto& rel = t->call_relocations[i];

@@ -75,6 +75,8 @@ namespace engone {
 	void* Allocate(u64 bytes);
     void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes);
 	void Free(void* ptr, u64 bytes);
+	
+	bool VerifyAllocHeap();
 
 	// These are thread safe
 	// Successful calls to Allocate

@@ -779,10 +779,10 @@ namespace engone {
 	// #define ENABLE_MEMORY_CORRUPTION_DETECTION
 
 	int VERIFICATION_SPACING = 0x100;
-	const int SAFE_MEMORY_MAX = 0x100'0000;
+	const int SAFE_MEMORY_MAX = 0x1000'0000;
 	const char VERIFICATION_CHAR = 0x11;
 	u64 VERIFICATION_CHAR64 = 0x1111'1111'1111'1111;
-	const int SAFE_ALLOCATIONS_MAX = 4000; // tweak this as you need
+	const int SAFE_ALLOCATIONS_MAX = 80000; // tweak this as you need
 
 	void* safe_memory = nullptr;
 	u64 safe_memory_max = SAFE_MEMORY_MAX;
@@ -803,6 +803,7 @@ namespace engone {
 		}
 		return -1;
 	}
+	// IMPORTANT: NOT THREAD SAFE!
 	bool VerifyAllocHeap() {
 		u8* ptr = (u8*)safe_memory;
 		ptr += VERIFICATION_SPACING;
@@ -811,18 +812,22 @@ namespace engone {
 			ptr += info->size_plus_align;
 			for(int j=0;j<VERIFICATION_SPACING/8;j++) {
 				if(*(u64*)ptr != VERIFICATION_CHAR64) {
-					Assert(false);
+					
+					EnableAssertHandler(false);
+					Assert(false); // buffer overflow or something bad in the code
 				}
 				ptr += 8;
 			}
 		}
 		return true;
 	}
+	// IMPORTANT: NOT THREAD SAFE!
 	void* AllocHeap(u64 new_bytes, void* ptr, u64 old_bytes) {
 		if(!init_safe_memory) {
 			init_safe_memory = true;
 			// TODO: Allocate pages so that we hopefully recieve an access violation if we write beyond the page.
 			safe_memory = malloc(safe_memory_max);
+			Assert(safe_memory);
 			safe_memory_used = 0;
 			memset(safe_memory, VERIFICATION_CHAR, VERIFICATION_SPACING);
 			safe_memory_used += VERIFICATION_SPACING;
@@ -884,9 +889,8 @@ namespace engone {
 
 		if(new_ptr) {
 			// create verification space
-			int space = 0x100;
-			memset((u8*)safe_memory + safe_memory_used, VERIFICATION_CHAR, space);
-			safe_memory_used += space;
+			memset((u8*)safe_memory + safe_memory_used, VERIFICATION_CHAR, VERIFICATION_SPACING);
+			safe_memory_used += VERIFICATION_SPACING;
 		}
 
 		return new_ptr;
@@ -916,6 +920,8 @@ namespace engone {
 
 		#ifdef ENABLE_PTR_MAP
 		LOCK_PTR_MAP
+		auto pair = ptr_map.find(ptr);
+		Assert(pair == ptr_map.end());
 		ptr_map[ptr] = bytes;
 		UNLOCK_PTR_MAP
 		#endif

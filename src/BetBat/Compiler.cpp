@@ -2161,8 +2161,16 @@ JUMP_TO_EXEC:
 u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs) {
     Path abs_path{};
     if (from_cwd_ignore_import_dirs) {
-        if(engone::FileExist(path)){
-            abs_path = Path(path).getAbsolute();
+        std::string modifiedpath = path;
+        int dotindex = path.find_last_of(".");
+        int slashindex = path.find_last_of("/");
+        if(dotindex==-1 || dotindex<slashindex){
+            modifiedpath = path+".btb";
+        } else {
+            modifiedpath = path;
+        }
+        if(engone::FileExist(modifiedpath)){
+            abs_path = Path(modifiedpath).getAbsolute();
         }
     } else {
         abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);

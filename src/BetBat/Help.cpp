@@ -115,6 +115,10 @@ void print_help(){
     log::out << log::GRAY<<"TODO: -d=DWARF, -d=PDB\n";
     END
     
+    USAGE("-nd,--nodebug")
+    DESC("Disables debug info.\n")
+    END
+    
     USAGE("-qd,--qemu-gdb [port]")
     DESC("If --run is used and target is ARM where is started QEMU, the '-S -gdb tcp::<port>' flags will be passed to QEMU allowing you to debug it if you start GDB and type 'target remote :port'.\n")
     END

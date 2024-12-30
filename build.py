@@ -36,8 +36,8 @@ def main():
     else:
         config["output"] = "bin/btb"
 
-    # config["use_compiler"] = "gcc"
-    config["use_compiler"] = "msvc"
+    config["use_compiler"] = "gcc"
+    # config["use_compiler"] = "msvc"
     # config["use_compiler"] = "clang"
 
     config["use_debug"] = True
@@ -399,7 +399,9 @@ def compile(config):
       
         if platform.system() == "Windows":
             if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.o"):
-                cmd("as -c -g src/BetBat/hacky_stdcall.s -o "+config["bin_dir"]+"/hacky_stdcall.o")
+                # -g flag causes relocation truncated to fit: IMAGE_REL_AMD64_ADDR32 against `.text'
+                # not sure why so no debug info here
+                cmd("as -c src/BetBat/hacky_stdcall.s -o "+config["bin_dir"]+"/hacky_stdcall.o")
             object_files.append(config["bin_dir"]+"/hacky_stdcall.o")
         else:
             if not os.path.exists(config["bin_dir"]+"/hacky_sysvcall.o"):

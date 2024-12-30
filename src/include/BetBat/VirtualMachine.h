@@ -10,6 +10,7 @@ enum VMErrorType {
     VM_ERROR_NONE = 0,
     VM_ERROR_UNKNOWN,
     VM_UNRESOLVED_CALL,
+    VM_STACK_VIOLATION,
 };
 struct VMError {
     VMErrorType type = VM_ERROR_NONE;
@@ -65,7 +66,7 @@ struct VirtualMachine {
     // was_mapped is set to false if no mapping was found
     void* map_pointer(u64 virtual_pointer, bool& was_mapped);
 
-    void init_stack(int stack_size = 0x10000);
+    void init_stack(int stack_size = 0x100000); // default 1 MB stack size, you may experience problems when calling external functions if you use less
     void execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations = false, CompileOptions* options = nullptr);
     TinyBytecode* fetch_tinycode(Bytecode* bytecode, const std::string& tinycode_name);
     

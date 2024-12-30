@@ -20,10 +20,19 @@
 // returns false if program should quit, or if something failed
 bool CheckDeveloperCommand(const BaseArray<std::string>& args);
 
+typedef void*(*FnCreateWindow)(int,int,const char*,void*,void*);
+
 int main(int argc, const char** argv){
     using namespace engone;
     #define EXIT_CODE_SUCCESS 0
     #define EXIT_CODE_FAILURE 1
+
+    // auto lib = LoadDynamicLibrary("libs/glfw-3.3.9/lib-mingw-w64-debug/glfw3.dll");
+    // auto f = (FnCreateWindow)GetFunctionPointer(lib, "glfwCreateWindow");
+
+    // auto ret = f(600,400,"title",nullptr,nullptr);
+
+    // return 0;
 
     auto main_start = StartMeasure();
 
@@ -73,6 +82,7 @@ int main(int argc, const char** argv){
         // options.output_file = "main.elf";
         options.source_file = "examples/dev.btb";
         options.threadCount = 1;
+        // options.threadCount = 2;
         // options.disable_multithreading = false;
         // options.target = TARGET_BYTECODE;
         // options.target = TARGET_WINDOWS_x64;

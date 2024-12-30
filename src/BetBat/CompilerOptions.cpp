@@ -84,6 +84,8 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
             }
         } else if (arg == "--debug" || arg == "-d") {
             options->useDebugInformation = true;
+        } else if (arg == "--nodebug" || arg == "-nd") {
+            options->useDebugInformation = false;
         } else if (arg == "--qemu-gdb" || arg == "-qd") {
             options->debug_qemu_with_gdb = true;
             if(i+1 < commands.size() && commands[i+1][0] >= '0' && commands[i+1][0] <= '9') {
