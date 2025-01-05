@@ -1037,6 +1037,24 @@ namespace engone {
 
 		// s_allocStatsMutex.unlock();
 	}
+	
+	
+	void* AllocateExec(int size) {
+		void* ptr = VirtualAlloc(NULL, size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+		if(!ptr) {
+			int err = GetLastError();
+			Assert(ptr);
+		}
+		return ptr;
+	}
+	void FreeExec(void* ptr, int size) {
+		int suc = VirtualFree(ptr, 0, MEM_RELEASE);
+		if(!suc) {
+			int err = GetLastError();
+			Assert(false);
+		}
+	}
+	
 	u64 GetTotalAllocatedBytes(){
 		return s_totalAllocatedBytes;
 	}

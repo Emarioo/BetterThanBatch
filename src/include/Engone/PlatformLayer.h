@@ -78,6 +78,9 @@ namespace engone {
 	
 	bool VerifyAllocHeap();
 
+	void* AllocateExec(int size);
+	void FreeExec(void* ptr, int size);
+
 	// These are thread safe
 	// Successful calls to Allocate
 	u64 GetTotalNumberAllocations();

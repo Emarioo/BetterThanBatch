@@ -3,6 +3,7 @@
 #include "BetBat/CompilerOptions.h"
 #include "BetBat/Bytecode.h"
 #include "BetBat/IntrinsicRegistry.h"
+#include "Engone/PlatformLayer.h"
 // #include "Native/NativeLayer.h"
 
 
@@ -16,7 +17,6 @@ struct VMError {
     VMErrorType type = VM_ERROR_NONE;
     std::string message;
 };
-
 /*
     VirtualMachine may not be the accurate term for executing bytecode.
     VirtualMachine is more executing high level code, statement by statement.
@@ -26,29 +26,89 @@ struct VirtualMachine {
     ~VirtualMachine(){
         cleanup();
     }
+    Bytecode* bytecode=nullptr;
+    CompileOptions* options=nullptr;
     int REGISTER_SIZE = -1;
     int FRAME_SIZE = -1;
-    
-    i64 registers[BC_REG_MAX];
-    // engone::Memory<u8> stack{};
     QuickArray<u8> stack{};
+    VMError error{};
+    
+    bool logging = false;
+    bool interactive = false;
+    bool is_callback_from_stub = false;
     
     struct CallFrame {
         TinyBytecode* func;
         int return_address;
     };
-    DynamicArray<CallFrame> call_stack{};
+    struct VMState {
+        i64 pc = 0;
+        i64 prev_pc;
+        i64 registers[BC_REG_MAX];
+        i64 stack_pointer = 0;
+        i64 base_pointer = 0;
 
-    VMError error{};
+        int ret_offset = 0;
+        bool has_return_values_on_stack = false;
+        bool expectValuesOnStack = false;
 
-    bool has_return_values_on_stack = false;
-    int ret_offset = 0;
-    // int push_offset = 0;
-    DynamicArray<int> push_offsets;
-    i64 stack_pointer = 0;
-    i64 base_pointer = 0;
+        bool running = true;
+        DynamicArray<CallFrame> call_stack{};
+        DynamicArray<int> push_offsets;
+        u64 expectedStackPointer = stack_pointer;
 
-    bool expectValuesOnStack = false;
+        TinyBytecode* tinycode = nullptr;
+        int tiny_index = -1;
+    };
+
+    // VMState state{};
+    DynamicArray<VMState> states{};
+    void push_state(int index, i64 sp);
+    void pop_state();
+
+    i64 userAllocatedBytes=0;
+    u64 executedInstructions = 0;
+    bool enable_fncall_logging = true;
+    std::unordered_map<std::string, u64> number_of_fncalls{};
+    BytecodePrintCache print_cache{};
+    
+    struct Breakpoint {
+        int pc;
+        // TODO: break on tinycode name
+    };
+    DynamicArray<Breakpoint> breakpoints{};
+    
+    struct BytecodePointer {
+        void* ptr;
+        int size=0;
+    };
+    DynamicArray<BytecodePointer> bytecode_pointers;
+
+    engone::VoidFunction get_bytecode_pointer(int index);
+
+    DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
+
+    engone::TimePoint tp = 0;
+
+    struct LibFunc {
+        DynamicArray<ExternalRelocation*> relocs;
+        engone::VoidFunction func_ptr;
+    };
+    struct Lib {
+        std::unordered_map<std::string, LibFunc*> functions;
+        engone::DynamicLibrary dll;
+    };
+
+    DynamicArray<TinyBytecode*> checked_codes{};
+    DynamicArray<TinyBytecode*> codes_to_check{};
+
+    std::unordered_map<std::string, Lib*> libs;
+    DynamicArray<engone::VoidFunction> dll_functions{};
+    DynamicArray<void*> dll_variables{};
+    DynamicArray<std::string> dll_function_names{};
+
+    bool force_mapping = false;
+    bool temp_ptr_was_mapped = false;
     bool silent = false;
     
     struct MemoryMapping {
@@ -68,6 +128,7 @@ struct VirtualMachine {
 
     void init_stack(int stack_size = 0x100000); // default 1 MB stack size, you may experience problems when calling external functions if you use less
     void execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations = false, CompileOptions* options = nullptr);
+    void execute();
     TinyBytecode* fetch_tinycode(Bytecode* bytecode, const std::string& tinycode_name);
     
     // resets registers and other things but keeps the alloctions.
