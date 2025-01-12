@@ -2373,15 +2373,16 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         ASTExpression* expression = base_expression;
 
         CALLBACK_ON_ASSERT(
-            ERR_SECTION(
-                ERR_HEAD2(expression->location)
-                ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
-                for(int i=0;i<vm.call_stack.size();i++) {
-                    log::out << " " << vm.call_stack[i].func->name << "\n";
-                }
-                // TODO: Call stack
-                ERR_LINE2(expression->location, "here")
-            )
+        // @nocheckin add this back
+        //     ERR_SECTION(
+        //         ERR_HEAD2(expression->location)
+        //         ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+        //         for(int i=0;i<vm.call_stack.size();i++) {
+        //             log::out << " " << vm.call_stack[i].func->name << "\n";
+        //         }
+        //         // TODO: Call stack
+        //         ERR_LINE2(expression->location, "here")
+        //     )
         )
 
         // TODO: Code below should be the same as the one in generateFunction.
@@ -2465,7 +2466,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         
         if(tempTypes.size() != 0 && tempTypes[0] != TYPE_VOID) {
             TypeId type = tempTypes[0];
-            SignalIO result = generatePushedLiterals(type, (char*)vm.stack_pointer, expression);
+            SignalIO result = generatePushedLiterals(type, (char*)vm.states.last().stack_pointer, expression);
             return result;
         }
         return SIGNAL_SUCCESS;
@@ -6491,7 +6492,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             vm.init_stack();
             vm.execute(bytecode, temp_tinycode->name, true);
 
-            int* value = (int*)(vm.stack_pointer);
+            int* value = (int*)(vm.states.last().stack_pointer);
             block.filter_exception_code = *value;
             temp_tinycode->restore_to_empty();
 
@@ -7131,15 +7132,16 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
     lexer::SourceLocation location = statement->location;
 
     CALLBACK_ON_ASSERT(
-        ERR_SECTION(
-            ERR_HEAD2(location)
-            ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
-            for(int i=0;i<vm.call_stack.size();i++) {
-                log::out << " " << vm.call_stack[i].func->name << "\n";
-            }
-            // TODO: Call stack
-            ERR_LINE2(location, "here")
-        )
+        // @nocheckin add back
+        // ERR_SECTION(
+        //     ERR_HEAD2(location)
+        //     ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+        //     for(int i=0;i<vm.call_stack.size();i++) {
+        //         log::out << " " << vm.call_stack[i].func->name << "\n";
+        //     }
+        //     // TODO: Call stack
+        //     ERR_LINE2(location, "here")
+        // )
     )
 
     // TODO: Code below should be the same as the one in generateFunction.
@@ -7232,14 +7234,15 @@ void GenContext::printVMFailedMessage(VirtualMachine& vm, lexer::SourceLocation 
             ERR_LINE2(location, "here")
         )
     } else {
-        ERR_SECTION(
-            ERR_HEAD2(location)
-            ERR_MSG_LOG("Virtual machine failed for an unspecified reason. Call stack:\n")
-            for(int i=0;i<vm.call_stack.size();i++) {
-                log::out << " " << vm.call_stack[i].func->name << "\n";
-            }
-            ERR_LINE2(location, "here")
-        )
+        // @noceckin add this back
+        // ERR_SECTION(
+        //     ERR_HEAD2(location)
+        //     ERR_MSG_LOG("Virtual machine failed for an unspecified reason. Call stack:\n")
+        //     for(int i=0;i<vm.call_stack.size();i++) {
+        //         log::out << " " << vm.call_stack[i].func->name << "\n";
+        //     }
+        //     ERR_LINE2(location, "here")
+        // )
     }
 }
 

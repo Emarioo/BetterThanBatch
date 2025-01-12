@@ -325,7 +325,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
     push_state(tiny_index, stack_pointer);
     execute();
-    pop_state();
+    // don't pop, we want to access the stack and registers afterwards
+    // to move data into data section or inline literals or whatever.
+    // pop_state();
 }
 
 void VirtualMachine::execute(){
@@ -357,7 +359,7 @@ void VirtualMachine::execute(){
     auto CHECK_PTR_MAPPED = [this](void* PTR) {
         if(force_mapping && !temp_ptr_was_mapped) { 
             log::out << log::RED << "PTR "<<PTR<<" was not mapped\n"; 
-            return; 
+            return;
         }
     };
     
@@ -598,6 +600,8 @@ void VirtualMachine::execute(){
             CHECK_PTR_MAPPED(ptr);
             ptr_from_mov = ptr;
 
+            // log::out << "SET_ARG " << *(float*)&registers[op0] << "\n";
+
             if(size == CONTROL_8B)       *(i8*) ptr = registers[op0];
             else if(size == CONTROL_16B) *(i16*)ptr = registers[op0];
             else if(size == CONTROL_32B) *(i32*)ptr = registers[op0];
@@ -764,6 +768,13 @@ void VirtualMachine::execute(){
                 auto f = dll_functions[index];
                 // fix arguments?
                 if(c == STDCALL) {
+                    // log::out << "Calling " << dll_function_names[index] << "\n";
+                    // float a0 = *(float*)(stack_pointer + 0);
+                    // float a1 = *(float*)(stack_pointer + 8);
+                    // float a2 = *(float*)(stack_pointer + 16);
+                    // float a3 = *(float*)(stack_pointer + 24);
+                    // log::out << " " << a0 << " " << a1 << " " << a2 << " " << a3 << "\n";
+
                     // Makehshift is a bad name
                     // it's more like a StackSwitcher_stdcall
                     #ifdef OS_WINDOWS
@@ -876,11 +887,18 @@ void VirtualMachine::execute(){
 
                 Assert((stack_pointer & 0xF) == 0); // ensure aligned stack
 
-                int index = imm - Bytecode::BEGIN_DLL_FUNC_INDEX;
+                // int index = imm - Bytecode::BEGIN_DLL_FUNC_INDEX;
                 auto f = (void(*)(void))registers[op0];
                 Assert(f);
                 // fix arguments?
                 if(c == STDCALL) {
+                    // log::out << "Calling ?\n";
+                    // float a0 = *(float*)(stack_pointer + 0);
+                    // float a1 = *(float*)(stack_pointer + 8);
+                    // float a2 = *(float*)(stack_pointer + 16);
+                    // float a3 = *(float*)(stack_pointer + 24);
+                    // log::out << " " << a0 << " " << a1 << " " << a2 << " " << a3 << "\n";
+
                     // Makehshift is a bad name
                     // it's more like a StackSwitcher_stdcall
                     #ifdef OS_WINDOWS
