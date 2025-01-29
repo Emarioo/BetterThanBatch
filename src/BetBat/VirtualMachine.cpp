@@ -1588,18 +1588,45 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
         //   created code. That code stats/continues the VM execution.
         
         /*
-            MSVC, rax, r10, r10 are volatile registers
+            MSVC, rax, r10, r11 are volatile registers
+            
+            argument scome
+            put arguments onto the stack
+            start execute in VM
+            
 
             stub:
                 push rbp
-
+                mov rbp, rsp
+                
+                // make space for current arguments
+                // 
+                sub sp, 64 
+                
+                the first 4 arguments are placed in rcx, rdx, r9, r10
+                the rest are placed in at rbp+0x20 (and above)
                 
 
-                mov rcx, h9999999999999999 # vm
+                // get new stack pointer
+                push rcx
+                mov rcx, this
+                sub sp, 32
+                mov rax, PrepareStackPointer
+                call rax
+                add sp, 32
+                pop rcx
+                
+                mov r10, rsp // save current stack pointer,
+                mov rsp, rax // set new one
+                
+                push r10     // save previous stack pointer on stack
+                
+                mov rcx, this
                 mov rdx, rsp
                 mov r8d, h0 # tinycode index
                 
-                call BaseBytecodeStubFunction
+                mov rax, BaseBytecodeStubFunction
+                call rax
 
                 pop rbp
                 ret
@@ -1607,6 +1634,11 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
     }
 
     return (engone::VoidFunction)ptr.ptr;
+}
+i64 PrepareStackPointer(VirtualMachine* vm) {
+    using namespace engone;
+    auto leak = Allocate(0x10000);
+    return (i64)leak;
 }
 void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index) {
     vm->push_state(index, sp);

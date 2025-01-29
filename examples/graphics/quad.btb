@@ -34,7 +34,7 @@ fn main(){
 
     glfwMakeContextCurrent(window);
 
-    // glfwSetMouseButtonCallback(window, MouseCallback2)
+    glfwSetMouseButtonCallback(window, MouseCallback2)
 
     yes = gladLoadGL();
     if !yes {

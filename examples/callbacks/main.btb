@@ -1,0 +1,23 @@
+/*
+    btb examples/callbacks/main.btb -r
+*/
+
+#load "./examples/callbacks/util.dll" as util
+
+fn @import(util) set_callback(f: fn(i32)->i32);
+fn @import(util) call_func(n: i32) -> i32;
+
+#import "Logger"
+
+
+fn some_func(n: i32) -> i32 {
+    return n*n
+}
+
+#run {
+    log("Setting callback...")
+    set_callback(some_func)
+    log("Running callback...")
+    res := call_func(3)
+    log("End with ", res)
+}

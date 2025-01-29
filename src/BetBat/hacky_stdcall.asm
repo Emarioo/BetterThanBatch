@@ -14,6 +14,12 @@ Makeshift_stdcall proc
     mov r8,  QWORD PTR [rsp + 16]
     mov r9,  QWORD PTR [rsp + 24] ; we always allocate 32 bytes so we won't read out of bounds
 
+    # TODO: Handle 64-bit floats
+    movss xmm0, [rsp]
+    movss xmm1, [rsp + 8]
+    movss xmm2, [rsp + 16]
+    movss xmm3, [rsp + 24]
+
     call rax          ; call function pointer
     mov [rsp-24], rax ; put return on stack where bytecode expects it
 

@@ -16,6 +16,8 @@ Makeshift_sysvcall:
     mov rsi, QWORD PTR [rsp + 8]  # it is easier than conditional jumps and stuff
     mov rdx, QWORD PTR [rsp + 16]
     mov rcx, QWORD PTR [rsp + 24] # we always allocate 32 bytes so we won't read out of bounds
+    
+    # TODO: Handle floats
 
     call rax          # call function pointer
     mov [rsp-24], rax # put return on stack where bytecode expects it
