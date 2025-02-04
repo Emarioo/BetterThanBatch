@@ -3031,7 +3031,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 }
                 if(tempTypes.size()>0) {
                     rightType = tempTypes[0];
-                    operatorArgs.add(tempTypes[0]);
+                operatorArgs.add(tempTypes[0]);
                 }
             }
             // TODO: Optimize operator overload check. checkExpression executes in 250 ms where checking operator overloading is responsible for 100 ms. If we could optimize then we may run checkExpression in 150 + 20 ms instead. The key is a fast determination of whether expression is operator overloaded.
@@ -5191,10 +5191,8 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     defer {
         info.currentContentOrder.pop();
     };
-
     // Check global declarations
     for(int contentOrder=0;contentOrder<scope->content.size();contentOrder++){
-        
         if(scope->content[contentOrder].spotType!=ASTScope::STATEMENT)
             continue;
 
@@ -5206,6 +5204,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
             rundir.statement = now;
             rundir.scope = scope->scopeId;
             compiler->global_run_directives.add(rundir);
+            compiler->addTask_type_body(now->firstBody->scopeId, -1);
             continue;
         }
 

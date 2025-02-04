@@ -962,20 +962,30 @@ void Compiler::processImports() {
                     tasks.add(picked_task);
                 }
             } else if(picked_task.type == TASK_TYPE_BODY) {
-                auto my_scope = ast->getScope(compiler_imp->scopeId);
+                int prev_errors = compile_stats.errors;
                 if(picked_task.astFunc) {
                     LOGD(LOG_TASKS, log::GREEN<<"Type function body: "<<picked_task.astFunc->name <<" (from import: "<<compiler_imp->import_id<<", "<<TrimCWD(compiler_imp->path)<<")\n")
-                } else {
+                } else if(compiler_imp) {
                     LOGD(LOG_TASKS, log::GREEN<<"Type global body: "<< compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
+                } else {
+                    ScopeInfo* scop = ast->getScope(picked_task.scopeId);
+                    std::string line = lexer.getline(scop->astScope->location);
+                    LOGD(LOG_TASKS, log::GREEN<<"Type scope: "<< picked_task.scopeId <<" ("<<line<<")\n")
                 }
-                
-                int prev_errors = compile_stats.errors;
-                
-                ASTScope* import_scope = my_scope->astScope;
-                if(compiler_imp->type_checked_import_scope)
-                    import_scope = nullptr;
-                TypeCheckBody(this, picked_task.astFunc,picked_task.funcImpl, import_scope);
-                compiler_imp->type_checked_import_scope = true;
+                if(compiler_imp || picked_task.astFunc) {
+                    ASTScope* import_scope = nullptr;
+                    if(compiler_imp && compiler_imp->type_checked_import_scope) {
+                        auto my_scope = ast->getScope(compiler_imp->scopeId);
+                        import_scope = my_scope->astScope;
+                    }
+                    TypeCheckBody(this, picked_task.astFunc,picked_task.funcImpl, import_scope);
+                    if(compiler_imp)
+                        compiler_imp->type_checked_import_scope = true;
+                } else if(picked_task.scopeId != -1) {
+                    auto scope = ast->getScope(picked_task.scopeId);
+                    auto astscope = scope->astScope;
+                    TypeCheckBody(this, nullptr, nullptr, astscope);
+                }
                 
                 if(picked_task.astFunc) {
                     lock_imports.lock();
@@ -2255,6 +2265,15 @@ void Compiler::addTask_type_body(u32 import_id) {
     CompilerTask picked_task{};
     picked_task.type = TASK_TYPE_BODY;
     picked_task.import_id = import_id;
+    tasks.add(picked_task); // TODO: lock tasks
+}
+void Compiler::addTask_type_body(ScopeId scope_id, u32 import_id) {
+    lock_imports.lock();
+    defer { lock_imports.unlock(); };
+    CompilerTask picked_task{};
+    picked_task.type = TASK_TYPE_BODY;
+    picked_task.import_id = import_id;
+    picked_task.scopeId = scope_id;
     tasks.add(picked_task); // TODO: lock tasks
 }
 void Compiler::addLibrary(u32 import_id, const std::string& path, const std::string& as_name) {

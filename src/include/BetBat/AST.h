@@ -994,6 +994,7 @@ struct ASTScope : ASTNode {
     std::string name = ""; // namespace
     ScopeId scopeId=0;
     bool isNamespace = false;
+    lexer::SourceLocation location;
 
     QuickArray<ASTStruct*> structs{};
     void add(AST* ast, ASTStruct* astStruct);

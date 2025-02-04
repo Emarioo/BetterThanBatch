@@ -2,7 +2,7 @@
 # Change Log
 All notable changes to this project will be documented in this file. Every version will not have a release on github but every version that does will be marked.
  
-Versioning for this project works like this: [Versioning](/docs/details/05-Versioning.md).
+Versioning for this project works like this: [Versioning](/docs/details/Versioning.md).
  
 ## v0.2.1 - ...
 

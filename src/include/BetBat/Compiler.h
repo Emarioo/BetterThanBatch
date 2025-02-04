@@ -267,6 +267,7 @@ struct Compiler {
 
     void addTask_type_body(ASTFunction* ast_func, FuncImpl* func_impl);
     void addTask_type_body(u32 import_id);
+    void addTask_type_body(ScopeId scope_id, u32 import_id);
     
     // DynamicArray<u32> queue_import_ids;
         

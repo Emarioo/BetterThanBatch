@@ -18,6 +18,7 @@
 
 // #define DECODE_TYPE(ptr) (*((u8*)ptr+1))
 
+void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index);
 
 void VirtualMachine::cleanup(){
     stack.resize(0);
@@ -871,6 +872,8 @@ void VirtualMachine::execute(){
             LinkConvention l = (LinkConvention)instructions[pc++];
             CallConvention c = (CallConvention)instructions[pc++];
 
+            // nocheckin How to call callback? maybe C style callback?
+
             // Finish printing the instruction so that the function
             // we call doesn't print it's own stuff within the instruction.
             if(logging)
@@ -974,6 +977,12 @@ void VirtualMachine::execute(){
             }
         } break;
         case BC_RET: {
+            call_stack.pop();
+            if(call_stack.size() == 0) {
+                running = false;
+                break;
+            }
+            
             i64 diff = stack_pointer - (i64)stack.data();
             if(diff == (i64)(stack.max)) {
                 // no previous call frame so we quit
@@ -1004,7 +1013,6 @@ void VirtualMachine::execute(){
 
             registers[BC_REG_LOCALS] = base_pointer;
 
-            call_stack.pop();
 
             has_return_values_on_stack = true;
             ret_offset = 0;
@@ -1051,12 +1059,10 @@ void VirtualMachine::execute(){
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
-
-            registers[op0] = imm;
-            // How do we pass function pointer to C code we call from a library?
-
-            // The pointer must represent an actual pointer the C function can call.
-            // The function pointers must differ in a way that we can map them to tiny bytecodes.
+            
+            // nocheckin
+            registers[op0] = (i64)get_bytecode_pointer(imm);
+            // registers[op0] = imm;
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
@@ -1209,8 +1215,10 @@ void VirtualMachine::execute(){
             if(!silent) {
                 log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
             }
-            // TODO: Print what assembly we tried to execute.
-            //   Show call stack too?
+            // TODO: Run assembler on the inline assembly (like we do in x64 gen).
+            //   Allocate executable memory and then start executing.
+            //   We need to add some instructions to populate the stack with values
+            //   and then extract the final values.
             running = false;
         } break;
         case BC_ADD:
@@ -1577,8 +1585,50 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
         //   executable memory for all the function pointers instead
         //   of many small once.
         ptr.size = 1024;
-        auto f = AllocateExec(ptr.size);
+        u8* f = (u8*)AllocateExec(ptr.size);
         ptr.ptr = f;
+        
+        /* For this function: fn(i32) -> i32
+           we need to create executable memory that:
+              - save current stack pointer
+              - allocate new stack space
+              - move arguments from registers and stack to the mini VM 
+              - prepares arguments onto the stack for the bytecode function
+              - replace current stack pointer with a temporary one for the mini VM call frame
+              - calls StubBytecodeFunction
+              - prepares return value into registers and onto the stack
+              - undo everything we did
+        */
+        
+        /*
+            mov r10, rsp
+            sub rsp, 2048
+            mov [rsp],
+            # set arguments?
+            
+            mov r11, rsp
+            mov rsp, r10
+            mov rcx, 0x1000200030004000 # VM pointer
+            mov rdx, r11
+            mov r8d, 0x10002000 # tinycode index
+            mov rbx, 0x1000200030004000 # stub function pointer
+            call rbx
+
+            add rsp, 2048
+            mov eax, 55
+            ret
+        */
+        // log::out << "YOO!\n";
+        u8 code[]{ 0x49, 0x89, 0xE2, 0x48, 0x81, 0xEC, 0x00, 0x08, 0x00, 0x00, 0x89, 0x0C, 0x24, 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x4C, 0x89, 0xD2, 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10, 0x48, 0xBB, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0xFF, 0xD3, 0x48, 0x81, 0xC4, 0x00, 0x08, 0x00, 0x00, 0xB8, 0x37, 0x00, 0x00, 0x00, 0xC3 };
+        memcpy(f, code, sizeof(code));
+        *(i64*)(f + 0xd+2) = (i64)this;
+        *(i32*)(f + 0x1a+2) = (i32)index-1;
+        *(i64*)(f + 0x20+2) = (i64)(void*)BaseBytecodeStubFunction;
+        
+        // mov eax, 55
+        // ret
+        // u8 code[]{ 0xB8, 0x37, 0x00, 0x00, 0x00, 0xC3 };
+        // memcpy(f, code, sizeof(code));
 
         // we call this stub
         // We need new stack space?
@@ -1641,6 +1691,8 @@ i64 PrepareStackPointer(VirtualMachine* vm) {
     return (i64)leak;
 }
 void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index) {
+    using namespace engone;
+    log::out << "Hello " << sp << " " << index << "\n";
     vm->push_state(index, sp);
 
     auto prev = vm->is_callback_from_stub;
@@ -1649,6 +1701,7 @@ void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index) {
     vm->is_callback_from_stub = prev;
 
     vm->pop_state();
+    log::out << "Leave " << sp << " " << index << "\n";
 }
 void VirtualMachine::push_state(int index, i64 sp) {
     if(states.size() == 0) {
