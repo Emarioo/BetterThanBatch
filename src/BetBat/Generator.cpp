@@ -3175,6 +3175,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
             if (yes) {
                 outTypeIds->add(castType);
             } else {
+                log::out << compiler->lexer.getline(expression->location)<<"\n";
                 Assert(info.hasForeignErrors());
                 
                 outTypeIds->add(ltype); // ltype since cast failed
