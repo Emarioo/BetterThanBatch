@@ -55,7 +55,6 @@ struct VirtualMachine {
         bool running = true;
         DynamicArray<CallFrame> call_stack{};
         DynamicArray<int> push_offsets;
-        u64 expectedStackPointer = stack_pointer;
 
         TinyBytecode* tinycode = nullptr;
         int tiny_index = -1;

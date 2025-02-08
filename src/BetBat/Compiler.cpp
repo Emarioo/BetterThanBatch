@@ -974,7 +974,7 @@ void Compiler::processImports() {
                 }
                 if(compiler_imp || picked_task.astFunc) {
                     ASTScope* import_scope = nullptr;
-                    if(compiler_imp && compiler_imp->type_checked_import_scope) {
+                    if(compiler_imp &&!compiler_imp->type_checked_import_scope) {
                         auto my_scope = ast->getScope(compiler_imp->scopeId);
                         import_scope = my_scope->astScope;
                     }

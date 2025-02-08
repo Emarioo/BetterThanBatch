@@ -267,8 +267,8 @@ def compile(config):
         MSVC_COMPILE_OPTIONS += " /FI pch.h"
 
         hacky_obj_path = config["bin_dir"]+"/hacky_stdcall.obj"
-        if not os.path.exists(hacky_obj_path)  or os.path.getmtime(hacky_obj_path) < os.path.getmtime("src/BetBat/hacky_stdcall.asm"):
-            cmd("ml64 /nologo /Zd /Zi /Fo"+hacky_obj_path+" /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
+        if not os.path.exists(hacky_obj_path) or os.path.getmtime(hacky_obj_path) < os.path.getmtime("src/BetBat/hacky_stdcall.asm"):
+            cmd("ml64 /nologo /Zd /Zi /Fo"+hacky_obj_path+" /c src/BetBat/hacky_stdcall.asm") # TODO: piping output to nul might not work with os.system
         object_files.append(hacky_obj_path)
 
         # Create sub directories in bin, this part must be single-threaded

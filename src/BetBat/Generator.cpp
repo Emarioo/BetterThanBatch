@@ -2807,7 +2807,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
             builder.emit_li32(BC_REG_A, result_typeId._infoIndex1);
             builder.emit_push(BC_REG_A);
 
-            builder.emit_li32(BC_REG_A, result_typeId._infoIndex0);
+            builder.emit_li32(BC_REG_A, result_typeId.union_primtive);
             builder.emit_push(BC_REG_A);
 
             outTypeIds->add(typeInfo->id);
@@ -3175,8 +3175,14 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
             if (yes) {
                 outTypeIds->add(castType);
             } else {
-                log::out << compiler->lexer.getline(expression->location)<<"\n";
-                Assert(info.hasForeignErrors());
+                if (!info.hasForeignErrors()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG("Compiler bug.")
+                        ERR_LINE2(expression->location, "here")
+                    )
+                    Assert(info.hasForeignErrors());
+                }
                 
                 outTypeIds->add(ltype); // ltype since cast failed
                 return SIGNAL_FAILURE;
@@ -4268,7 +4274,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                         }
                         if(AST::IsSigned(ltype) || AST::IsSigned(rtype)) {
                             if(!AST::IsSigned(outType))
-                                outType._infoIndex0 += 4;
+                                outType.union_primtive = (PrimitiveType)(outType.union_primtive + 4);
                             Assert(AST::IsSigned(outType));
                         }
                     }
@@ -6859,7 +6865,7 @@ SignalIO GenContext::generateData() {
 
                         // TODO: Enum member
 
-                        memberdata[member_count].type.index0 = mem.typeId._infoIndex0;
+                        memberdata[member_count].type.index0 = mem.typeId.union_primtive;
                         memberdata[member_count].type.index1 = mem.typeId._infoIndex1;
                         memberdata[member_count].type.ptr_level = mem.typeId.getPointerLevel();
                         memberdata[member_count].offset = mem.offset;

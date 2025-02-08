@@ -3195,7 +3195,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     auto outtype = lsize > rsize ? leftType : rightType;
                     if(AST::IsSigned(leftType) || AST::IsSigned(rightType)) {
                         if(!AST::IsSigned(outtype))
-                            outtype._infoIndex0 += 4;
+                            outtype.union_primtive = (PrimitiveType)(outtype.union_primtive+4);
                         Assert(AST::IsSigned(outtype) && AST::IsInteger(outtype));
                     }
                     outTypes->add(outtype);
@@ -5249,6 +5249,8 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     TyperContext info = {};
     info.init_context(compiler);
     
+    Assert(import_scope || ast_func);
+
     info.do_not_check_global_globals = true;
     
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
