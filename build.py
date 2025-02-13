@@ -28,6 +28,7 @@ def main():
     #####################
     #   CONFIGURATIONS
     #     Comment/uncomment the options you want
+    #     'build.py clean' if you change the options
     #####################
 
     config["bin_dir"] = "bin"

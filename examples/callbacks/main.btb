@@ -4,8 +4,8 @@
 
 #load "./examples/callbacks/util.dll" as util
 
-fn @import(util) set_callback(f: fn(i32)->i32);
-fn @import(util) call_func(n: i32) -> i32;
+fn @import(util) set_callback(f: fn(i32)->i32)
+fn @import(util) call_func(n: i32) -> i32
 
 // #import "Logger"
 

@@ -4421,7 +4421,13 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
         if(now->type == ASTStatement::CONTINUE || now->type == ASTStatement::BREAK){
             // nothing
         } else if(now->type == ASTStatement::BODY || now->type == ASTStatement::DEFER){
+            bool prev = do_not_check_global_globals;
+            if (now->computeWhenPossible) {
+                // In a 
+                do_not_check_global_globals = false;
+            }
             SignalIO result = checkRest(now->firstBody);
+            do_not_check_global_globals = prev;
         } else if(now->type == ASTStatement::EXPRESSION){
             checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             // if(tempTypes.size()==0)
