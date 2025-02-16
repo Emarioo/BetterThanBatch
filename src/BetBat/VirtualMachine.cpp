@@ -381,7 +381,6 @@ void VirtualMachine::execute(){
     };
 
     #define instructions tinycode->instructionSegment
-    running = !is_callback_from_stub;
     while(running) {
         for(int i=0;i<breakpoints.size();i++) {
             if (breakpoints[i].pc == pc) {
@@ -1600,33 +1599,28 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
         */
         
         /*
-            # mov r10, rsp
-            # sub rsp, 0x2000
+            push rbp
             
-            #mov r11, rsp
-            #mov rsp, r10
-            mov rcx, 0x1000200030004000 # VM pointer
-            mov rdx, r11
-            mov r8d, 0x10002000 # tinycode index
-            mov rbx, 0x1000200030004000 # stub function pointer
-            call rbx
+            mov rdx, rsp
+            sub rdx, 0x4000
 
-            #add rsp, 0x2000
+            mov rcx, 0x1000200030004000 # VM pointer
+            mov r8d, 0x10002000 # tinycode index
+            mov rax, 0x1000200030004000 # stub function pointer
+            sub rsp, 32
+            call rax
+            add rsp, 32
+
             mov eax, 55
+            pop rbp
             ret
         */
-        // log::out << "YOO!\n";
-        // u8 code[]{ 0x49, 0x89, 0xE2, 0x48, 0x81, 0xEC, 0x00, 0x08, 0x00, 0x00, 0x89, 0x0C, 0x24, 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x4C, 0x89, 0xD2, 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10, 0x48, 0xBB, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0xFF, 0xD3, 0x48, 0x81, 0xC4, 0x00, 0x08, 0x00, 0x00, 0xB8, 0x37, 0x00, 0x00, 0x00, 0xC3 };
-        u8 code[]{ 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x4C, 0x89, 0xDA, 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10, 0x48, 0xBB, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0xFF, 0xD3, 0xB8, 0x37, 0x00, 0x00, 0x00, 0xC3 };
+        u8 code[]{ 0x55, 0x48, 0x89, 0xE2, 0x48, 0x81, 0xEA, 0x00, 0x40, 0x00, 0x00, 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10, 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x48, 0x83, 0xEC, 0x20, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x20, 0xB8, 0x37, 0x00, 0x00, 0x00, 0x5D, 0xC3 };
         memcpy(f, code, sizeof(code));
-        *(i64*)(f + 0x0+2) = (i64)this;
-        *(i32*)(f + 0xd+2) = (i32)index-1;
-        *(i64*)(f + 0x13+2) = (i64)(void*)BaseBytecodeStubFunction;
+        *(i64*)(f + 0xb+2) = (i64)this;
+        *(i32*)(f + 0x15 +2) = (i32)index-1;
+        *(i64*)(f + 0x1b+2) = (i64)(void*)BaseBytecodeStubFunction;
         
-        // mov eax, 55
-        // ret
-        // u8 code[]{ 0xB8, 0x37, 0x00, 0x00, 0x00, 0xC3 };
-        // memcpy(f, code, sizeof(code));
 
         // we call this stub
         // We need new stack space?
@@ -1690,16 +1684,16 @@ i64 PrepareStackPointer(VirtualMachine* vm) {
 }
 void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index) {
     using namespace engone;
-    // log::out << "Hello " << sp << " " << index << "\n";
-    // vm->push_state(index, sp);
+    log::out << "Hello " << sp << " " << index << "\n";
+    vm->push_state(index, sp);
 
-    // auto prev = vm->is_callback_from_stub;
-    // vm->is_callback_from_stub = true;
-    // vm->execute();
-    // vm->is_callback_from_stub = prev;
+    auto prev = vm->is_callback_from_stub;
+    vm->is_callback_from_stub = true;
+    vm->execute();
+    vm->is_callback_from_stub = prev;
 
-    // vm->pop_state();
-    // log::out << "Leave " << sp << " " << index << "\n";
+    vm->pop_state();
+    log::out << "Leave " << sp << " " << index << "\n";
 }
 void VirtualMachine::push_state(int index, i64 sp) {
     if(states.size() == 0) {

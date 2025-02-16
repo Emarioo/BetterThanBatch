@@ -5210,7 +5210,9 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
             rundir.statement = now;
             rundir.scope = scope->scopeId;
             compiler->global_run_directives.add(rundir);
-            compiler->addTask_type_body(now->firstBody->scopeId, -1);
+            if(!is_initial_import){
+                compiler->addTask_type_body(now->firstBody->scopeId, -1);
+            }
             continue;
         }
 
@@ -5249,7 +5251,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     info.compiler->compile_stats.errors += info.errors;
 }
 
-void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope) {
+void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope, bool is_initial_scope) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     TyperContext info = {};
@@ -5258,6 +5260,7 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     Assert(import_scope || ast_func);
 
     info.do_not_check_global_globals = true;
+    info.is_initial_import = is_initial_scope;
     
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 

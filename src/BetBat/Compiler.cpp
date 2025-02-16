@@ -978,7 +978,7 @@ void Compiler::processImports() {
                         auto my_scope = ast->getScope(compiler_imp->scopeId);
                         import_scope = my_scope->astScope;
                     }
-                    TypeCheckBody(this, picked_task.astFunc,picked_task.funcImpl, import_scope);
+                    TypeCheckBody(this, picked_task.astFunc,picked_task.funcImpl, import_scope, import_scope != nullptr);
                     if(compiler_imp)
                         compiler_imp->type_checked_import_scope = true;
                 }

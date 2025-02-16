@@ -2,14 +2,21 @@
 // #import "examples/graphics/quad.btb"
 // #import "examples/callbacks/main.btb"
 
+#import "Logger"
 
-fn some_func(n: i32) -> i32 {
-    return n*n
+// fn @stdcall some_func(n: i32) -> i32 {
+//     return n*n
+// }
+fn @stdcall some_func() {
+    log("INSIDE")
 }
 #run {
+    
     // log("Setting callback...")
     f := some_func
     // log("Running callback...")
-    res := f(3)
+    // res := f(3)
+    f()
+    // log("End with ")
     // log("End with ", res)
 }

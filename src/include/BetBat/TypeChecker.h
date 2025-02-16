@@ -96,6 +96,6 @@ void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler);
 SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ignore_errors, bool* changed);
 void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_initial_import);
 // DO NOT TYPE CHECK IMPORT SCOPE TWICE!
-void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope = nullptr);
+void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope = nullptr, bool is_initial_scope = false);
 // deprecated
 // void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler);
