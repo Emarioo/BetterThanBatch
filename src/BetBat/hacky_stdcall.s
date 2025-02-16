@@ -29,7 +29,7 @@ Makeshift_stdcall:
     call rax          # call function pointer
     add rsp, 32
     
-    # mov [rsp-24], rax # put return on stack where bytecode expects it
+    mov [rsp-24], rax # put return on stack where bytecode expects it
     
     mov rsp, rbx
     pop rbx

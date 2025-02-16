@@ -305,12 +305,12 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     
     // _ILOG(log::out << "sp = "<<sp<<"\n";)
 
-    CALLBACK_ON_ASSERT(
-        log::out << log::RED << "Dump of bytecode\n";
-        tinycode->print(0,-1, bytecode);
-        log::out << "Asserted at instruction " << log::CYAN << states.last().prev_pc << "\n";
-        tinycode->print(states.last().prev_pc - 10, states.last().prev_pc+50, bytecode);
-    )
+    // CALLBACK_ON_ASSERT(
+    //     log::out << log::RED << "Dump of bytecode\n";
+    //     tinycode->print(0,-1, bytecode);
+    //     log::out << "Asserted at instruction " << log::CYAN << states.last().prev_pc << "\n";
+    //     tinycode->print(states.last().prev_pc - 10, states.last().prev_pc+50, bytecode);
+    // )
 
     // hardcoded breakpoints when debugging
     // breakpoints.add({945});
@@ -363,6 +363,13 @@ void VirtualMachine::execute(){
     auto& has_return_values_on_stack = states.last().has_return_values_on_stack;
     auto& ret_offset = states.last().ret_offset;
     auto& call_stack = states.last().call_stack;
+
+    CALLBACK_ON_ASSERT(
+        log::out << log::RED << "Dump of bytecode\n";
+        tinycode->print(0,-1, bytecode);
+        log::out << "Asserted at instruction " << log::CYAN << states.last().prev_pc << "\n";
+        tinycode->print(states.last().prev_pc - 10, states.last().prev_pc+50, bytecode);
+    )
 
     // #define CHECK_PTR_MAPPED(PTR) if(force_mapping && !temp_ptr_was_mapped) { log::out << log::RED << "PTR "<<PTR<<" was not mapped\n"; return; }
     auto CHECK_PTR_MAPPED = [this](void* PTR) {
@@ -647,7 +654,7 @@ void VirtualMachine::execute(){
             else if(size == CONTROL_16B) *(i16*)ptr = registers[op0];
             else if(size == CONTROL_32B) *(i32*)ptr = registers[op0];
             else if(size == CONTROL_64B) *(i64*)ptr = registers[op0];
-
+            // log::out << "SET RET " << (void*)(ptr) << " " << registers[op0]<<"\n";
         } break;
         case BC_GET_VAL: {
             op0 = (BCRegister)instructions[pc++];
@@ -1068,7 +1075,7 @@ void VirtualMachine::execute(){
             pc+=4;
             
             // nocheckin
-            registers[op0] = (i64)get_bytecode_pointer(imm);
+            registers[op0] = (i64)get_bytecode_pointer(imm-1);
             // registers[op0] = imm;
         } break;
         case BC_CAST: {
@@ -1586,23 +1593,12 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
         u8* f = (u8*)AllocateExec(ptr.size);
         ptr.ptr = f;
         
-        /* For this function: fn(i32) -> i32
-           we need to create executable memory that:
-              - save current stack pointer
-              - allocate new stack space
-              - move arguments from registers and stack to the mini VM 
-              - prepares arguments onto the stack for the bytecode function
-              - replace current stack pointer with a temporary one for the mini VM call frame
-              - calls StubBytecodeFunction
-              - prepares return value into registers and onto the stack
-              - undo everything we did
-        */
-        
         /*
             push rbp
-            
             mov rdx, rsp
             sub rdx, 0x4000
+            
+            # prepare args to rdx
 
             mov rcx, 0x1000200030004000 # VM pointer
             mov r8d, 0x10002000 # tinycode index
@@ -1611,15 +1607,117 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
             call rax
             add rsp, 32
 
-            mov eax, 55
+            # prepare return values
+            # mov eax, 55
+            
             pop rbp
             ret
         */
-        u8 code[]{ 0x55, 0x48, 0x89, 0xE2, 0x48, 0x81, 0xEA, 0x00, 0x40, 0x00, 0x00, 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10, 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x48, 0x83, 0xEC, 0x20, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x20, 0xB8, 0x37, 0x00, 0x00, 0x00, 0x5D, 0xC3 };
-        memcpy(f, code, sizeof(code));
-        *(i64*)(f + 0xb+2) = (i64)this;
-        *(i32*)(f + 0x15 +2) = (i32)index-1;
-        *(i64*)(f + 0x1b+2) = (i64)(void*)BaseBytecodeStubFunction;
+        // [rdx+40]
+        // [rdx+32]
+        // [rdx+24]
+        // [rdx+16]
+        // [rdx-8]
+        
+        // TODO: Doesn't work on LINUX! Different calling convention (we should allocate 32 stack space for arguments, arguments are passed in different registers)
+        
+        const u32 MINI_VM_STACK_LIMIT = 0x4000;
+        const u8 PROLOG[] {
+            // /* push rbp        */ 0x55,
+            /* push rbx        */ 0x53,
+            /* mov rdx, rsp    */ 0x48, 0x89, 0xE2,
+            /* sub rdx, 0x4000 */ 0x48, 0x81, 0xEA, (MINI_VM_STACK_LIMIT>>0)&0xFF, (MINI_VM_STACK_LIMIT>>8)&0xFF, (MINI_VM_STACK_LIMIT>>16)&0xFF, (MINI_VM_STACK_LIMIT>>24)&0xFF,
+            /* mov rbx, rdx    */  0x48, 0x89, 0xD3,
+        };
+        const u8 MAIN_BODY[] {
+            /* mov rcx, 0x1000200030004000 # VM pointer            */ 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* mov r8d, 0x10002000         # tinycode index        */ 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10,
+            /* mov rax, 0x1000200030004000 # stub function pointer */ 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* sub rsp, 32                                         */ 0x48, 0x83, 0xEC, 0x20,
+            /* call rax                                            */ 0xFF, 0xD0,
+            /* add rsp, 32                                         */ 0x48, 0x83, 0xC4, 0x20,
+        };
+        const u8 EPILOG[] {
+            // /* pop rbp */ 0x5D,
+            /* pop rbx */ 0x5b,
+            /* ret     */ 0xC3,
+        };
+        
+        int head = 0;
+        memcpy(f+head, PROLOG, sizeof(PROLOG));
+        head += sizeof(PROLOG);
+        
+        // Prepare arguments
+        
+        //  TODO: We are always using 64 bit registers, maybe a problem? Should we be casting signed unsigned 64/32 bit integers?
+        
+        auto& tc = bytecode->tinyBytecodes[index];
+        auto impl = tc->funcImpl;
+        if(impl) { // comp_time function doesn't have funcImpl
+            for (int i=0;i<impl->signature.argumentTypes.size();i++) {
+                auto& arg = impl->signature.argumentTypes[i];
+                // TODO: Handle 64-bit floats
+                /*
+                    mov [rdx+16], rcx
+                    mov [rdx+24], rdx
+                    mov [rdx+32], r8
+                    mov [rdx+40], r9
+                */
+                if (i == 0) {
+                    u8 mov[] { 0x48, 0x89, 0x4A, 0x10, };
+                    memcpy(f+head, mov, sizeof(mov));
+                    head+=sizeof(mov);
+                } else if(i == 1) {
+                    u8 mov[] { 0x48, 0x89, 0x52, 0x18, };
+                    memcpy(f+head, mov, sizeof(mov));
+                    head+=sizeof(mov);
+                } else if(i == 2) {
+                    u8 mov[] { 0x4C, 0x89, 0x42, 0x20, };
+                    memcpy(f+head, mov, sizeof(mov));
+                    head+=sizeof(mov);
+                } else if(i == 3) {
+                    u8 mov[] { 0x4C, 0x89, 0x4A, 0x28, };
+                    memcpy(f+head, mov, sizeof(mov));
+                    head+=sizeof(mov);
+                } else {
+                    // mov rax, [rsp+0x8]
+                    // mov [rdx+0x8], rax
+                    u8 mova[] { 0x48, 0x8B, 0x44, 0x24, 16 + i*8, };
+                    u8 movb[] { 0x48, 0x89, 0x42, 16 + i*8, };
+                    memcpy(f+head, mova, sizeof(mova));
+                    head+=sizeof(mova);
+                    memcpy(f+head, movb, sizeof(movb));
+                    head+=sizeof(movb);
+                }
+            }
+        }
+        
+        memcpy(f+head, MAIN_BODY, sizeof(MAIN_BODY));
+        *(i64*)(f + head + 2)  = (i64)this;
+        *(i32*)(f + head + 12) = (i32)index;
+        *(i64*)(f + head + 18) = (i64)(void*)BaseBytecodeStubFunction;
+        head += sizeof(MAIN_BODY);
+        
+        
+        // Prepare return values
+        if (impl && impl->signature.returnTypes.size() > 0) {
+            // mov rax, [rbx-8]
+            u8 mov[] { 0x48, 0x8b, 0x43, 0xf8, };
+            memcpy(f+head, mov, sizeof(mov));
+            head+=sizeof(mov);
+            
+            Assert(impl->signature.returnTypes.size() <= 1);
+        }
+        
+        
+        memcpy(f+head, EPILOG, sizeof(EPILOG));
+        head += sizeof(EPILOG);
+        
+        // u8 code[]{ 0x55, 0x48, 0x89, 0xE2, 0x48, 0x81, 0xEA, 0x00, 0x40, 0x00, 0x00, 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10, 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x48, 0x83, 0xEC, 0x20, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x20, 0xB8, 0x37, 0x00, 0x00, 0x00, 0x5D, 0xC3 };
+        // memcpy(f, code, sizeof(code));
+        // *(i64*)(f + 0xb+2) = (i64)this;
+        // *(i32*)(f + 0x15 +2)= (i32)index-1;
+        // *(i64*)(f + 0x1b+2) = (i64)(void*)BaseBytecodeStubFunction;
         
 
         // we call this stub
