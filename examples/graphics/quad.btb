@@ -11,7 +11,7 @@
 #import "Logger"
 #import "OS"
 
-#run main()
+#run { main() }
 
 fn main(){
     yes := glfwInit();

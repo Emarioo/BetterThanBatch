@@ -2,21 +2,42 @@
     btb examples/callbacks/main.btb -r
 */
 
+#import "Logger"
+
 #load "./examples/callbacks/util.dll" as util
 
-fn @import(util) set_callback(f: fn(i32)->i32)
-fn @import(util) call_func(n: i32) -> i32
-
-// #import "Logger"
-
-
-fn some_func(n: i32) -> i32 {
-    return n*n
+fn @import(util) set_callback(f: fn @stdcall(i32,i32,i32,i32,i32)->i32)
+fn @import(util) call_func(n: i32,d:i32,a:i32,b:i32,c:i32) -> i32
+// fn @import(util) set_callback(f: fn @stdcall(i32,i32,i32,i32)->i32)
+// fn @import(util) call_func(n: i32,d:i32,a:i32,b:i32) -> i32
+fn @stdcall some_func(a: i32, b: i32, c: i32, d: i32, e: i32) -> i32 {
+// fn @stdcall some_func(a: i32, b: i32, c: i32, d: i32) -> i32 {
+    return a+b+c+d+e
+    // return a+b+c+d
 }
+
+// fn @import(util) set_callback(f: fn(i64,i64,i64,i64,i64)->i64)
+// fn @import(util) call_func(n: i64,d:i64,a:i64,b:i64,c:i64) -> i64
+// fn some_func(a: i64, b: i64, c: i64, d: i64, e: i64) -> i64 {
+//     return a+b+c+d+e
+// }
+
+// fn @import(util) set_callback(f: fn(f32,f32,f32,f32,f32)->f32)
+// fn @import(util) call_func(n: f32,d:f32,a:f32,b:f32,c:f32) -> f32
+// fn some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
+//     return a+b+c+d+e
+// }
 #run {
     // log("Setting callback...")
     set_callback(some_func)
     // log("Running callback...")
-    res := call_func(3)
-    // log("End with ", res)
+    // res := call_func(1.1,2.2,3.3,4.4,5.5)
+    res := call_func(1,2,3,4,5)
+    
+    // Pointer to imported function is not supported yet. When we do, Makeshift for BC_CALL_REG has to be updated.
+    // cfun := call_func
+    // res := cfun(1,2,3,4,5)
+    
+    // res := call_func(1,2,3,4)
+    log("End with ", res)
 }

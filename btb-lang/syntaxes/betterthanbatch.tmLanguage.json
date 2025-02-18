@@ -17,6 +17,9 @@
 		{
 			"include": "#commentline"
 		},
+        {
+			"include": "#binbash"
+		},
 		{
 			"include": "#commentblock"	
 		},
@@ -43,6 +46,11 @@
         }
 	],
 	"repository": {
+        "binbash": {
+			"name":"comment.line",
+			"begin":"^(?<!\n)#!/",
+			"end":"\n"
+		},
 		"commentline": {
 			"name":"comment.line",
 			"begin":"//",

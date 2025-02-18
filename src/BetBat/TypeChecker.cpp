@@ -5211,7 +5211,15 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
             rundir.scope = scope->scopeId;
             compiler->global_run_directives.add(rundir);
             if(!is_initial_import){
-                compiler->addTask_type_body(now->firstBody->scopeId, -1);
+                if(now->firstBody) {
+                    compiler->addTask_type_body(now->firstBody->scopeId, -1);
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location)   
+                        ERR_MSG("Wrap expression in curly braces. Compile time execution at top level wants a scope which is made from curly braces.")
+                        ERR_LINE2(now->location, "here")
+                    )
+                }
             }
             continue;
         }

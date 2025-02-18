@@ -272,7 +272,7 @@ void FunctionProgram::printHex(const char *path) {
     using namespace engone;
     Assert(this);
     if (path) {
-        OutputAsHex(path, (char *)text, head);
+        OutputAsHex(path, (u8*)text, head);
     } else {
 #define HEXIFY(X) (char)(X < 10 ? '0' + X : 'A' + X - 10)
         log::out << log::LIME << "HEX:\n";

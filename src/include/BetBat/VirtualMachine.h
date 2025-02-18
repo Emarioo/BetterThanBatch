@@ -17,6 +17,7 @@ struct VMError {
     VMErrorType type = VM_ERROR_NONE;
     std::string message;
 };
+typedef void(*FnMakeshift)(engone::VoidFunction, void*);
 /*
     VirtualMachine may not be the accurate term for executing bytecode.
     VirtualMachine is more executing high level code, statement by statement.
@@ -92,6 +93,7 @@ struct VirtualMachine {
     struct LibFunc {
         DynamicArray<ExternalRelocation*> relocs;
         engone::VoidFunction func_ptr;
+        FunctionSignature* signature;
     };
     struct Lib {
         std::unordered_map<std::string, LibFunc*> functions;
@@ -102,7 +104,8 @@ struct VirtualMachine {
     DynamicArray<TinyBytecode*> codes_to_check{};
 
     std::unordered_map<std::string, Lib*> libs;
-    DynamicArray<engone::VoidFunction> dll_functions{};
+    DynamicArray<LibFunc*> dll_functions{};
+    // DynamicArray<engone::VoidFunction> dll_functions{};
     DynamicArray<void*> dll_variables{};
     DynamicArray<std::string> dll_function_names{};
 
@@ -139,13 +142,12 @@ struct VirtualMachine {
     volatile void* getReg(u8 id);
     void* setReg(u8 id);
 
-    // engone::Memory<char> cmdArgsBuffer{};
-    // Language::Slice<Language::Slice<char>> cmdArgs{};
-    // void setCmdArgs(const DynamicArray<std::string>& inCmdArgs);
-
-    static const int CWD_LIMIT = 256;
-    char cwdBuffer[CWD_LIMIT]{0};
-    u32 usedCwd=0;
+    struct MakeshiftAssembly {
+        FnMakeshift func;
+        int size;
+    };
+    std::unordered_map<FunctionSignature*, MakeshiftAssembly> makeshift_map;
+    FnMakeshift get_makeshift(FunctionSignature* signature);
 };
 
 // defined in hacky_stdcall_asm

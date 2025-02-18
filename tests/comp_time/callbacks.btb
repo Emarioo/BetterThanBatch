@@ -1,11 +1,10 @@
+@TEST_CASE(comptime_func_ptr_stubs)
 
-#import "examples/graphics/quad.btb"
+// TODO: Work in progress
+
+_test 1; 0;
+// #import "examples/graphics/quad.btb"
 // #import "examples/callbacks/main.btb"
-
-// #run {
-//     #import "Logger"
-//     log("What the")
-// }
 
 // #import "Logger"
 

@@ -92,7 +92,7 @@ u64 ConvertHexadecimal_content(char* str, int length){
 //     printf("ReadFile : Error %s\n",path);
 //     return {};
 // }
-void OutputAsHex(const char* path, char* data, int size) {
+void OutputAsHex(const char* path, const void* data, int size) {
     using namespace engone;
     auto file = engone::FileOpen(path,FILE_CLEAR_AND_WRITE);
     Assert(file);
@@ -103,16 +103,14 @@ void OutputAsHex(const char* path, char* data, int size) {
     char* buffer = (char*)engone::Allocate(bufferSize);
     int offset = 0;
     for(int i = 0;i<size;i++){
-        u8 a = data[i]>>4;
-        u8 b = data[i]&0xF;
+        u8 a = ((const u8*)data)[i]>>4;
+        u8 b = ((const u8*)data)[i]&0xF;
         
         #define HEXIFY(X) (char)(X<10 ? '0'+X : 'A'+X - 10)
-        buffer[offset] = HEXIFY(a);
-        buffer[offset+1] = HEXIFY(b);
-        offset+=2;
+        buffer[offset++] = HEXIFY(a);
+        buffer[offset++] = HEXIFY(b);
         if(i%stride == stride - 1) {
-            buffer[offset] = '\n';
-            offset++;
+            buffer[offset++] = '\n';
         }
         #undef HEXIFY
     }

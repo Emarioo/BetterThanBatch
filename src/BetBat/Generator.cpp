@@ -381,9 +381,10 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         //     alias = "__imp_" + alias;
         // }
         if(varinfo->is_var()) {
-            addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR);
+            addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR, {});
         } else {
-            addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
+            TypeInfo* typeinfo = ast->getTypeInfo(varinfo->versions_typeId[currentPolyVersion]);
+            addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION, typeinfo->funcType);
         }
     // }
 }
@@ -2104,7 +2105,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
     } else if(astFunc->linkConvention == LinkConvention::NONE) {
         if(astFunc->is_compiler_func) {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-            addExternalRelocation(astFunc->name, compiler->compiler_library_index, reloc, BC_REL_FUNCTION);
+            addExternalRelocation(astFunc->name, compiler->compiler_library_index, reloc, BC_REL_FUNCTION, &funcImpl->signature);
         } else {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
             info.addCallToResolve(reloc, funcImpl);
@@ -2169,7 +2170,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
             }
         }
         builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-        addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
+        addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION, &funcImpl->signature);
         // if(link_convention == STATIC_IMPORT) {
         //     builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
         //     addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);

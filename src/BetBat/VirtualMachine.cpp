@@ -195,6 +195,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             fn = pair_fn->second;
         }
         fn->relocs.add(&r);
+        fn->signature = r.signature;
     }
     
     for(auto& pair_lib : libs) {
@@ -239,7 +240,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 continue;
             } else {
                 int index = dll_functions.size();
-                dll_functions.add(pair_fn.second->func_ptr);
+                dll_functions.add(pair_fn.second);
+                // dll_functions.add(pair_fn.second->func_ptr);
                 dll_function_names.add(pair_fn.first);
                 // APPLY RELOCATIONS
                 for(auto r : pair_fn.second->relocs) {
@@ -795,13 +797,26 @@ void VirtualMachine::execute(){
                     #ifdef OS_WINDOWS
                     // log::out << "Calling "<<dll_function_names[index]<<"\n";
                     // IMPORTANT: Debugging DLL requires compiling DLL and BTB with the same toolchain! GCC or MSVC for both.
-                    Makeshift_stdcall(f, (void*)stack_pointer);
+                    FnMakeshift mk_func = get_makeshift(f->signature);
+                    mk_func(f->func_ptr, (void*)stack_pointer);
+                    
+                    // Makeshift_stdcall(f->func_ptr, (void*)stack_pointer);
+                    // Float values are returned in xmm0. Since Makeshift_stdcall is general for all types of functions we don't know the argument or return types.
+                    // Hence it returnes both the rax and xmm0 values.
+                    // if (f->signature->returnTypes.size()>0&&f->signature->returnTypes[0].typeId == TYPE_FLOAT32) {
+                    //     // TODO: Handle 64-bit floats
+                    //     *(float*)(stack_pointer-24) = *(float*)(stack_pointer-32);
+                    //     log::out << "MOVE "<<*(float*)(stack_pointer-32)<< " to "<<*(float*)(stack_pointer-24)<<"\n";
+                    // }
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
                     #endif
                 } else if(c == UNIXCALL) {
                     // Makeshift_unixcall(f, (void*)stack_pointer);
                     #ifdef OS_LINUX
+                    // TODO: Use get_makeshift and add sysvcall convention to it.
+                    //   Same when generating tinycode stub function. Remove the Makeshift_x.s assembly files since we generate the specific machine code we need.
+                    // TODO: Handle 32-bit float returned value...
                     Makeshift_sysvcall(f, (void*)stack_pointer);
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
@@ -921,6 +936,9 @@ void VirtualMachine::execute(){
                     #ifdef OS_WINDOWS
                     // log::out << "Calling "<<dll_function_names[index]<<"\n";
                     // IMPORTANT: Debugging DLL requires compiling DLL and BTB with the same toolchain! GCC or MSVC for both.
+                    // FnMakeshift mk_func = get_makeshift(f->signature);
+                    // mk_func(f->func_ptr, (void*)stack_pointer);
+                    // TODO: Use get_makeshift for BC_CALL_REG too. We need signature though.
                     Makeshift_stdcall(f, (void*)stack_pointer);
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
@@ -1613,24 +1631,18 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
             pop rbp
             ret
         */
-        // [rdx+40]
-        // [rdx+32]
-        // [rdx+24]
-        // [rdx+16]
-        // [rdx-8]
         
         // TODO: Doesn't work on LINUX! Different calling convention (we should allocate 32 stack space for arguments, arguments are passed in different registers)
         
         const u32 MINI_VM_STACK_LIMIT = 0x4000;
         const u8 PROLOG[] {
-            // /* push rbp        */ 0x55,
             /* push rbx        */ 0x53,
-            /* mov rdx, rsp    */ 0x48, 0x89, 0xE2,
-            /* sub rdx, 0x4000 */ 0x48, 0x81, 0xEA, (MINI_VM_STACK_LIMIT>>0)&0xFF, (MINI_VM_STACK_LIMIT>>8)&0xFF, (MINI_VM_STACK_LIMIT>>16)&0xFF, (MINI_VM_STACK_LIMIT>>24)&0xFF,
-            /* mov rbx, rdx    */  0x48, 0x89, 0xD3,
+            /* mov rbx, rsp    */ 0x48, 0x89, 0xe3,
+            /* sub rbx, 0x4000 */ 0x48, 0x81, 0xeb, (MINI_VM_STACK_LIMIT>>0)&0xFF, (MINI_VM_STACK_LIMIT>>8)&0xFF, (MINI_VM_STACK_LIMIT>>16)&0xFF, (MINI_VM_STACK_LIMIT>>24)&0xFF,
         };
         const u8 MAIN_BODY[] {
             /* mov rcx, 0x1000200030004000 # VM pointer            */ 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* mov rdx, rbx                                        */ 0x48, 0x89, 0xDA,
             /* mov r8d, 0x10002000         # tinycode index        */ 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10,
             /* mov rax, 0x1000200030004000 # stub function pointer */ 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
             /* sub rsp, 32                                         */ 0x48, 0x83, 0xEC, 0x20,
@@ -1638,7 +1650,6 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
             /* add rsp, 32                                         */ 0x48, 0x83, 0xC4, 0x20,
         };
         const u8 EPILOG[] {
-            // /* pop rbp */ 0x5D,
             /* pop rbx */ 0x5b,
             /* ret     */ 0xC3,
         };
@@ -1657,33 +1668,34 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
             for (int i=0;i<impl->signature.argumentTypes.size();i++) {
                 auto& arg = impl->signature.argumentTypes[i];
                 // TODO: Handle 64-bit floats
-                /*
-                    mov [rdx+16], rcx
-                    mov [rdx+24], rdx
-                    mov [rdx+32], r8
-                    mov [rdx+40], r9
-                */
-                if (i == 0) {
-                    u8 mov[] { 0x48, 0x89, 0x4A, 0x10, };
-                    memcpy(f+head, mov, sizeof(mov));
-                    head+=sizeof(mov);
-                } else if(i == 1) {
-                    u8 mov[] { 0x48, 0x89, 0x52, 0x18, };
-                    memcpy(f+head, mov, sizeof(mov));
-                    head+=sizeof(mov);
-                } else if(i == 2) {
-                    u8 mov[] { 0x4C, 0x89, 0x42, 0x20, };
-                    memcpy(f+head, mov, sizeof(mov));
-                    head+=sizeof(mov);
-                } else if(i == 3) {
-                    u8 mov[] { 0x4C, 0x89, 0x4A, 0x28, };
-                    memcpy(f+head, mov, sizeof(mov));
-                    head+=sizeof(mov);
+                const i32 float_mov_stride = 5;
+                const u8 float_mov[]{
+                    /* movss [rbx+16], xmm0 */ 0xF3, 0x0F, 0x11, 0x42, 0x10, 
+                    /* movsd [rbx+16], xmm0 */ 0xF2, 0x0F, 0x11, 0x42, 0x10,
+                    /* movss [rbx+24], xmm1 */ 0xF3, 0x0F, 0x11, 0x4A, 0x18,
+                    /* movsd [rbx+24], xmm1 */ 0xF2, 0x0F, 0x11, 0x4A, 0x18,
+                    /* movss [rbx+32], xmm2 */ 0xF3, 0x0F, 0x11, 0x52, 0x20,
+                    /* movsd [rbx+32], xmm2 */ 0xF2, 0x0F, 0x11, 0x52, 0x20,
+                    /* movss [rbx+40], xmm3 */ 0xF3, 0x0F, 0x11, 0x5A, 0x28,
+                    /* movsd [rbx+40], xmm3 */ 0xF2, 0x0F, 0x11, 0x5A, 0x28,
+                };
+                const u8 norm_mov[] {
+                    /* mov [rbx+16], rcx */ 0x48, 0x89, 0x4B, 0x10,
+                    /* mov [rbx+24], rdx */ 0x48, 0x89, 0x53, 0x18, 
+                    /* mov [rbx+32], r8  */ 0x4C, 0x89, 0x43, 0x20,
+                    /* mov [rbx+40], r9  */ 0x4C, 0x89, 0x4B, 0x28,
+                };
+                if (i >= 0 && i <= 3 && (arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64)) {
+                    memcpy(f+head, float_mov + i*2*float_mov_stride + (arg.typeId == TYPE_FLOAT64 ? 1 : 0), float_mov_stride);
+                    head += float_mov_stride;
+                } else if (i >= 0 && i <= 3) {
+                    memcpy(f+head, norm_mov + i*4, 4);
+                    head+=4;
                 } else {
                     // mov rax, [rsp+0x8]
-                    // mov [rdx+0x8], rax
+                    // mov [rbx+0x8], rax
                     u8 mova[] { 0x48, 0x8B, 0x44, 0x24, 16 + i*8, };
-                    u8 movb[] { 0x48, 0x89, 0x42, 16 + i*8, };
+                    u8 movb[] { 0x48, 0x89, 0x43, 16 + i*8, };
                     memcpy(f+head, mova, sizeof(mova));
                     head+=sizeof(mova);
                     memcpy(f+head, movb, sizeof(movb));
@@ -1693,87 +1705,199 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
         }
         
         memcpy(f+head, MAIN_BODY, sizeof(MAIN_BODY));
-        *(i64*)(f + head + 2)  = (i64)this;
-        *(i32*)(f + head + 12) = (i32)index;
-        *(i64*)(f + head + 18) = (i64)(void*)BaseBytecodeStubFunction;
+        *(i64*)(f + head + 0x0+2)  = (i64)this;
+        *(i32*)(f + head + 0xd+2)  = (i32)index;
+        *(i64*)(f + head + 0x13+2) = (i64)(void*)BaseBytecodeStubFunction;
         head += sizeof(MAIN_BODY);
-        
         
         // Prepare return values
         if (impl && impl->signature.returnTypes.size() > 0) {
-            // mov rax, [rbx-8]
-            u8 mov[] { 0x48, 0x8b, 0x43, 0xf8, };
-            memcpy(f+head, mov, sizeof(mov));
-            head+=sizeof(mov);
-            
             Assert(impl->signature.returnTypes.size() <= 1);
+            if (impl->signature.returnTypes[0].typeId == TYPE_FLOAT32) {
+                // movss xmm0, [rbx-0x8]
+                u8 mov[] { 0xF3, 0x0F, 0x10, 0x43, 0xF8, };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            } else  if (impl->signature.returnTypes[0].typeId == TYPE_FLOAT64) {
+                // movsd xmm0, [rbx-0x8]
+                u8 mov[] { 0xF2, 0x0F, 0x10, 0x43 };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            } else {
+                // mov rax, [rbx-8]
+                u8 mov[] { 0x48, 0x8b, 0x43, 0xf8, };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            }
         }
-        
         
         memcpy(f+head, EPILOG, sizeof(EPILOG));
         head += sizeof(EPILOG);
         
-        // u8 code[]{ 0x55, 0x48, 0x89, 0xE2, 0x48, 0x81, 0xEA, 0x00, 0x40, 0x00, 0x00, 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10, 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10, 0x48, 0x83, 0xEC, 0x20, 0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x20, 0xB8, 0x37, 0x00, 0x00, 0x00, 0x5D, 0xC3 };
-        // memcpy(f, code, sizeof(code));
-        // *(i64*)(f + 0xb+2) = (i64)this;
-        // *(i32*)(f + 0x15 +2)= (i32)index-1;
-        // *(i64*)(f + 0x1b+2) = (i64)(void*)BaseBytecodeStubFunction;
+        Assert(head < ptr.size);
         
-
-        // we call this stub
-        // We need new stack space?
-        
-        // End goal: C function calls a function pointer with some arguments on stack
-        //   BC_CODEPTR creates a pointer to an address with runtime
-        //   created code. That code stats/continues the VM execution.
-        
-        /*
-            MSVC, rax, r10, r11 are volatile registers
-            
-            argument scome
-            put arguments onto the stack
-            start execute in VM
-            
-
-            stub:
-                push rbp
-                mov rbp, rsp
-                
-                // make space for current arguments
-                // 
-                sub sp, 64 
-                
-                the first 4 arguments are placed in rcx, rdx, r9, r10
-                the rest are placed in at rbp+0x20 (and above)
-                
-
-                // get new stack pointer
-                push rcx
-                mov rcx, this
-                sub sp, 32
-                mov rax, PrepareStackPointer
-                call rax
-                add sp, 32
-                pop rcx
-                
-                mov r10, rsp // save current stack pointer,
-                mov rsp, rax // set new one
-                
-                push r10     // save previous stack pointer on stack
-                
-                mov rcx, this
-                mov rdx, rsp
-                mov r8d, h0 # tinycode index
-                
-                mov rax, BaseBytecodeStubFunction
-                call rax
-
-                pop rbp
-                ret
-        */
+        // OutputAsHex("asm.log", (u8*)f, head);
     }
 
     return (engone::VoidFunction)ptr.ptr;
+}
+FnMakeshift VirtualMachine::get_makeshift(FunctionSignature* signature) {
+    /*
+        This function generates a function to transition from VM to external C function.
+        (or a call to a function pointer which could be stub machine code to transition back to VM to run bytecode)
+    */
+    auto pair = makeshift_map.find(signature);
+    if (pair != makeshift_map.end())
+        return pair->second.func;
+    
+    int max = 1024;
+    u8* f = (u8*)engone::AllocateExec(max);
+    int head = 0;
+    
+    const u8 PROLOG[]{
+        /* push rbx                                     */ 0x53,
+        /* mov rbx, rsp # save pointer for safe keeping */ 0x48, 0x89, 0xE3,
+        /* mov r10, rcx # set function pointer          */ 0x49, 0x89, 0xCA,
+        /* mov rsp, rdx # set makeshift stack           */ 0x48, 0x89, 0xD4,
+    };
+    const u8 EPILOG[]{
+        /* mov rsp, rbx */ 0x48, 0x89, 0xDC,
+        /* pop rbx      */ 0x5B,
+        /* ret          */ 0xC3,
+    };
+    
+    memcpy(f+head, PROLOG, sizeof(PROLOG));
+    head += sizeof(PROLOG);
+    
+    // Prepare arguments
+    const int float_mov_stride = 6;
+    const u8 float_movs[]{
+        /* movss xmm0, [rsp]      */ 0xF3, 0x0F, 0x10, 0x44, 0x24, 0x00,
+        /* movsd xmm0, [rsp]      */ 0xF2, 0x0F, 0x10, 0x44, 0x24, 0x00,
+        /* movss xmm1, [rsp + 8]  */ 0xF3, 0x0F, 0x10, 0x4C, 0x24, 0x08,
+        /* movsd xmm1, [rsp + 8]  */ 0xF2, 0x0F, 0x10, 0x4C, 0x24, 0x08,
+        /* movss xmm2, [rsp + 16] */ 0xF3, 0x0F, 0x10, 0x54, 0x24, 0x10,
+        /* movsd xmm2, [rsp + 16] */ 0xF2, 0x0F, 0x10, 0x54, 0x24, 0x10,
+        /* movss xmm3, [rsp + 24] */ 0xF3, 0x0F, 0x10, 0x5C, 0x24, 0x18,
+        /* movsd xmm3, [rsp + 24] */ 0xF2, 0x0F, 0x10, 0x5C, 0x24, 0x18,
+    };
+    const int norm_mov_stride = 5;
+    const u8 norm_movs[]{
+        /* mov rcx, QWORD PTR [rsp]      */ 0x48, 0x8B, 0x4C, 0x24, 0x00,
+        /* mov rdx, QWORD PTR [rsp + 8]  */ 0x48, 0x8B, 0x54, 0x24, 0x08,
+        /* mov r8,  QWORD PTR [rsp + 16] */ 0x4C, 0x8B, 0x44, 0x24, 0x10,
+        /* mov r9,  QWORD PTR [rsp + 24] */ 0x4C, 0x8B, 0x4C, 0x24, 0x18,
+    };
+    // TODO: We use 8-bit immediates in the instructions. Is that enough for 16 arguments?
+    Assert(signature->argumentTypes.size() < 16);
+    int stack_space = signature->argumentTypes.size()*8;
+    if(stack_space < 32)
+        stack_space = 32;
+    if((stack_space & 15) != 0) {
+        stack_space += 16 - (stack_space&15);
+    }
+    
+    for(int i=0;i<signature->argumentTypes.size();i++) {
+        auto& arg = signature->argumentTypes[i].typeId;
+        if(i>=0&&i<=3 && arg == TYPE_FLOAT32 && arg == TYPE_FLOAT64) {
+            memcpy(f+head, float_movs + i*2*float_mov_stride + norm_mov_stride*(arg == TYPE_FLOAT64?1:0), float_mov_stride);
+            head += float_mov_stride;
+        } else if(i>=0&&i<=3) {
+            memcpy(f+head, norm_movs + i*norm_mov_stride, norm_mov_stride);
+            head += norm_mov_stride;
+        } else {
+            u8 mov[]{
+                /* mov rax, [rsp+32] */ 0x48, 0x8B, 0x44, 0x24, i*8,
+                /* mov [rsp-48], rax */ 0x48, 0x89, 0x44, 0x24, i*8 - stack_space,
+            };
+            memcpy(f+head, mov, sizeof(mov));
+            head += sizeof(mov);
+        }
+    }
+    
+    u8 MAIN_BODY[]{
+        /* sub rsp, 32 */ 0x48, 0x83, 0xEC, stack_space,
+        /* call r10    */ 0x41, 0xFF, 0xD2,
+        /* add rsp, 32 */ 0x48, 0x83, 0xC4, stack_space,
+    };
+    memcpy(f+head, MAIN_BODY, sizeof(MAIN_BODY));
+    head += sizeof(MAIN_BODY);
+    
+    // Prepare return values
+    if(signature->returnTypes.size() > 0) {
+        if(signature->returnTypes[0].typeId == TYPE_FLOAT32) {
+            // movss [rsp-32], xmm0 # float values are returned in xmm0 register
+            u8 mov[]{ 0xF3, 0x0F, 0x11, 0x44, 0x24, 0xE8 };
+            memcpy(f+head, mov, sizeof(mov));
+            head += sizeof(mov);
+        } else if(signature->returnTypes[0].typeId == TYPE_FLOAT64) {
+            // movsd [rsp-24], xmm0 # float values are returned in xmm0 register
+            u8 mov[]{ 0xF2, 0x0F, 0x11, 0x44, 0x24, 0xE8 };
+            memcpy(f+head, mov, sizeof(mov));
+            head += sizeof(mov);
+        } else {
+            // mov [rsp-24], rax # put return on stack where bytecode expects it
+            u8 mov[]{ 0x48, 0x89, 0x44, 0x24, 0xE8 };
+            memcpy(f+head, mov, sizeof(mov));
+            head += sizeof(mov);
+        }
+    }
+    
+    memcpy(f+head, EPILOG, sizeof(EPILOG));
+    head += sizeof(EPILOG);
+    
+    // OutputAsHex("mk_asm.log", (u8*)f, head);
+    
+    /*
+    push rbx
+    mov rbx, rsp # save pointer for safe keeping
+    mov r10, rcx # set function pointer
+    mov rsp, rdx # set makeshift stack
+
+    mov rcx, QWORD PTR [rsp]      # Set arguments even if we don't use all since
+    mov rdx, QWORD PTR [rsp + 8]  # it is easier than conditional jumps and stuff
+    mov r8,  QWORD PTR [rsp + 16]
+    mov r9,  QWORD PTR [rsp + 24] # we always allocate 32 bytes so we won't read out of bounds
+    
+    mov [rsp + 32 - 48], [rsp+32]
+    
+    sub rsp, 48
+    
+    mov [rsp+32], [rsp+32+48]
+        
+    mov rax, [rsp+32]
+    mov [rsp+8], rax
+    
+
+    # TODO: Handle 64-bit floats
+    movss xmm0, [rsp]
+    movss xmm1, [rsp + 8]
+    movss xmm2, [rsp + 16]
+    movss xmm3, [rsp + 24]
+
+    sub rsp, 32
+    call r10          # call function pointer
+    add rsp, 32
+    
+    add rsp,16
+    
+    # TODO: Handle returned 64 bit float
+    mov [rsp-24], rax # put return on stack where bytecode expects it
+    movss [rsp-32], xmm0 # float values are returned in xmm0 register
+    
+    mov rsp, rbx
+    pop rbx
+    ret
+
+    */
+    
+    Assert(head < max);
+    
+    MakeshiftAssembly mk{};
+    mk.func = (FnMakeshift)f;
+    mk.size = max;
+    makeshift_map[signature] = mk;
+    return (FnMakeshift)f;
 }
 i64 PrepareStackPointer(VirtualMachine* vm) {
     using namespace engone;
@@ -1782,7 +1906,7 @@ i64 PrepareStackPointer(VirtualMachine* vm) {
 }
 void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index) {
     using namespace engone;
-    log::out << "Hello " << sp << " " << index << "\n";
+    // log::out << "Hello " << sp << " " << index << "\n";
     vm->push_state(index, sp);
 
     auto prev = vm->is_callback_from_stub;
@@ -1791,7 +1915,7 @@ void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index) {
     vm->is_callback_from_stub = prev;
 
     vm->pop_state();
-    log::out << "Leave " << sp << " " << index << "\n";
+    // log::out << "Leave " << sp << " " << index << "\n";
 }
 void VirtualMachine::push_state(int index, i64 sp) {
     if(states.size() == 0) {

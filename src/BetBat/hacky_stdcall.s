@@ -29,7 +29,9 @@ Makeshift_stdcall:
     call rax          # call function pointer
     add rsp, 32
     
+    # TODO: Handle returned 64 bit float
     mov [rsp-24], rax # put return on stack where bytecode expects it
+    movss [rsp-32], xmm0 # float values are returned in xmm0 register
     
     mov rsp, rbx
     pop rbx

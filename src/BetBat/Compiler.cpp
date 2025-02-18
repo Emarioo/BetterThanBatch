@@ -1035,7 +1035,7 @@ void Compiler::processImports() {
                     }
                     lock_miscellaneous.unlock();
                 }
-                if(!have_run_global_run_directives && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check
+                if(compile_stats.errors == 0 && !have_run_global_run_directives && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check
                     lock_miscellaneous.lock();
                     if(!have_run_global_run_directives) { // thread safe check
                         GenContext c{};
@@ -2569,10 +2569,14 @@ BuildUnit* create_buildunit() {
     using namespace engone;
     log::out << "create_buildunit leaks memory!\n";
     log::out.flush();
-    auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit));
+    auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit)); // TODO: Memory leak?
     new(unit)BuildUnit();
-    unit->name = "some unit";
-    unit->length = strlen(unit->name);
+    
+    char* temp_name = "some unit";
+    unit->length = strlen(temp_name);
+    unit->name = (char*)Allocate(unit->length+1); // TODO: Memory leak?
+    memcpy(unit->name, temp_name, unit->length+1);
+    
     unit->size = global_compiler->bytecode->tinyBytecodes.size();
     return unit;
 }

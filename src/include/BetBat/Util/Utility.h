@@ -64,7 +64,7 @@ Function usage:
 */
 int PatternMatchFiles(const std::string& pattern, DynamicArray<std::string>* matched_files, const std::string& root_path = "", bool output_relative_to_cwd = true);
 
-void OutputAsHex(const char* path, char* data, int size);
+void OutputAsHex(const char* path, const void* data, int size);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
 

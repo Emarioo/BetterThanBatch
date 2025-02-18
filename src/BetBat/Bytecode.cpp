@@ -46,13 +46,14 @@ bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index, 
     exportedFunctions.last().tinycode_index = tinycode_index;
     return true;
 }
-void Bytecode::addExternalRelocation(const std::string& name, int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type){
+void Bytecode::addExternalRelocation(const std::string& name, int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type, FunctionSignature* signature){
     ExternalRelocation tmp{};
     tmp.name = name;
     tmp.library_index = library_index;
     tmp.tinycode_index = tinycode_index;
     tmp.pc = pc;
     tmp.type = rel_type;
+    tmp.signature = signature;
     externalRelocations.add(tmp);
 }
 void Bytecode::cleanup(){

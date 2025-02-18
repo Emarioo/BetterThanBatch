@@ -20,8 +20,13 @@ Makeshift_stdcall proc
     movss xmm2, DWORD PTR [rsp + 16]
     movss xmm3, DWORD PTR [rsp + 24]
 
+    sub rsp, 32
     call rax          ; call function pointer
+    add rsp, 32
+
     mov [rsp-24], rax ; put return on stack where bytecode expects it
+    ; TODO: Handle 64 bit returned float
+    movss [rsp-32], xmm0 ; float values are returned in xmm register
 
     mov rsp, rbx      ; restore original stack
     pop rbx
