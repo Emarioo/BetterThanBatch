@@ -6995,8 +6995,6 @@ SignalIO GenContext::generateGlobalData() {
         // we do 16 because of 16-byte alignment rule in calling conventions
         builder.emit_alloc_local(BC_REG_INVALID, 16);
 
-        // log::out << "glob " << stmt->varnames[0].name << " " << stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion]<<"\n";
-
         TypeId type{};
         if(!stmt->firstExpression) {
             type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
