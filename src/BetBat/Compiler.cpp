@@ -962,20 +962,31 @@ void Compiler::processImports() {
                     tasks.add(picked_task);
                 }
             } else if(picked_task.type == TASK_TYPE_BODY) {
-                auto my_scope = ast->getScope(compiler_imp->scopeId);
+                int prev_errors = compile_stats.errors;
                 if(picked_task.astFunc) {
                     LOGD(LOG_TASKS, log::GREEN<<"Type function body: "<<picked_task.astFunc->name <<" (from import: "<<compiler_imp->import_id<<", "<<TrimCWD(compiler_imp->path)<<")\n")
-                } else {
+                } else if(compiler_imp) {
                     LOGD(LOG_TASKS, log::GREEN<<"Type global body: "<< compiler_imp->import_id <<" ("<<TrimCWD(compiler_imp->path)<<")\n")
+                } else {
+                    ScopeInfo* scop = ast->getScope(picked_task.scopeId);
+                    std::string line = lexer.getline(scop->astScope->location);
+                    LOGD(LOG_TASKS, log::GREEN<<"Type scope: "<< picked_task.scopeId <<" ("<<line<<")\n")
                 }
-                
-                int prev_errors = compile_stats.errors;
-                
-                ASTScope* import_scope = my_scope->astScope;
-                if(compiler_imp->type_checked_import_scope)
-                    import_scope = nullptr;
-                TypeCheckBody(this, picked_task.astFunc,picked_task.funcImpl, import_scope);
-                compiler_imp->type_checked_import_scope = true;
+                if(compiler_imp || picked_task.astFunc) {
+                    ASTScope* import_scope = nullptr;
+                    if(compiler_imp &&!compiler_imp->type_checked_import_scope && !picked_task.astFunc) {
+                        auto my_scope = ast->getScope(compiler_imp->scopeId);
+                        import_scope = my_scope->astScope;
+                    }
+                    TypeCheckBody(this, picked_task.astFunc,picked_task.funcImpl, import_scope, import_scope != nullptr);
+                    if(compiler_imp)
+                        compiler_imp->type_checked_import_scope = true;
+                }
+                else if(picked_task.scopeId != -1) {
+                    auto scope = ast->getScope(picked_task.scopeId);
+                    auto astscope = scope->astScope;
+                    TypeCheckBody(this, nullptr, nullptr, astscope);
+                }
                 
                 if(picked_task.astFunc) {
                     lock_imports.lock();
@@ -1024,7 +1035,7 @@ void Compiler::processImports() {
                     }
                     lock_miscellaneous.unlock();
                 }
-                if(!have_run_global_run_directives && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check
+                if(compile_stats.errors == 0 && !have_run_global_run_directives && picked_task.type == TASK_GEN_BYTECODE_RUNDIR) { // cheap quick check
                     lock_miscellaneous.lock();
                     if(!have_run_global_run_directives) { // thread safe check
                         GenContext c{};
@@ -2161,8 +2172,16 @@ JUMP_TO_EXEC:
 u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs) {
     Path abs_path{};
     if (from_cwd_ignore_import_dirs) {
-        if(engone::FileExist(path)){
-            abs_path = Path(path).getAbsolute();
+        std::string modifiedpath = path;
+        int dotindex = path.find_last_of(".");
+        int slashindex = path.find_last_of("/");
+        if(dotindex==-1 || dotindex<slashindex){
+            modifiedpath = path+".btb";
+        } else {
+            modifiedpath = path;
+        }
+        if(engone::FileExist(modifiedpath)){
+            abs_path = Path(modifiedpath).getAbsolute();
         }
     } else {
         abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
@@ -2247,6 +2266,15 @@ void Compiler::addTask_type_body(u32 import_id) {
     CompilerTask picked_task{};
     picked_task.type = TASK_TYPE_BODY;
     picked_task.import_id = import_id;
+    tasks.add(picked_task); // TODO: lock tasks
+}
+void Compiler::addTask_type_body(ScopeId scope_id, u32 import_id) {
+    lock_imports.lock();
+    defer { lock_imports.unlock(); };
+    CompilerTask picked_task{};
+    picked_task.type = TASK_TYPE_BODY;
+    picked_task.import_id = import_id;
+    picked_task.scopeId = scope_id;
     tasks.add(picked_task); // TODO: lock tasks
 }
 void Compiler::addLibrary(u32 import_id, const std::string& path, const std::string& as_name) {
@@ -2541,10 +2569,14 @@ BuildUnit* create_buildunit() {
     using namespace engone;
     log::out << "create_buildunit leaks memory!\n";
     log::out.flush();
-    auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit));
+    auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit)); // TODO: Memory leak?
     new(unit)BuildUnit();
-    unit->name = (char*)"some unit";
-    unit->length = strlen(unit->name);
+    
+    char* temp_name = "some unit";
+    unit->length = strlen(temp_name);
+    unit->name = (char*)Allocate(unit->length+1); // TODO: Memory leak?
+    memcpy(unit->name, temp_name, unit->length+1);
+    
     unit->size = global_compiler->bytecode->tinyBytecodes.size();
     return unit;
 }

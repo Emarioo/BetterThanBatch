@@ -240,14 +240,14 @@ private:
 };
 struct TypeId {
     TypeId() = default;
-    TypeId(PrimitiveType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
-    // TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
+    TypeId(PrimitiveType type) : union_primtive((PrimitiveType)type), _infoIndex1(0), _flags(VALID_MASK) {}
+    // TypeId(OperationType type) : union_primtive((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
     static TypeId Create(u32 id, int level = 0) {
         TypeId out={}; 
         // TODO: ENUM or STRUCT?
         // out._flags = VALID_MASK;
         out.valid = true;
-        out._infoIndex0 = id&0xFFFF;
+        out.union_primtive = (PrimitiveType)(id&0xFFFF);
         out._infoIndex1 = id>>16;
         out.pointer_level = level;
         return out; 
@@ -257,7 +257,7 @@ struct TypeId {
         // out._flags = VALID_MASK | STRING;
         out.valid = true;
         out.string = true;
-        out._infoIndex0 = index&0xFFFF;
+        out.union_primtive = (PrimitiveType)(index&0xFFFF);
         out._infoIndex1 = index>>16;
         return out;
     }
@@ -270,10 +270,10 @@ struct TypeId {
         POINTER_MASK = 0x8 | 0x10,
         POINTER_SHIFT = 3,
     };
-    union {
-        u16 _infoIndex0 = 0;
+    // union {
+        // u16 _infoIndex0 = 0;
         PrimitiveType union_primtive;
-    };
+    // };
     u8 _infoIndex1 = 0;
     union {
         u8 _flags = 0;
@@ -291,7 +291,7 @@ struct TypeId {
     }
     bool operator==(TypeId type) const {
         // Assert(!isVirtual() && !type.isVirtual());
-        return _flags == type._flags && _infoIndex0 == type._infoIndex0 && _infoIndex1 == type._infoIndex1;
+        return _flags == type._flags && union_primtive == type.union_primtive && _infoIndex1 == type._infoIndex1;
     }
     bool operator==(PrimitiveType primitiveType) const {
         return *this == TypeId(primitiveType);
@@ -323,7 +323,7 @@ struct TypeId {
         _flags = (_flags & ~POINTER_MASK) | ((level<<POINTER_SHIFT) & POINTER_MASK);
     }
     u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_SHIFT; }
-    u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
+    u32 getId() const { return (u32)union_primtive | ((u32)_infoIndex1<<8); }
     // returns true if valid, no string, and no pointer
     bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
     //  && !isVirtual(); }
@@ -994,6 +994,7 @@ struct ASTScope : ASTNode {
     std::string name = ""; // namespace
     ScopeId scopeId=0;
     bool isNamespace = false;
+    lexer::SourceLocation location;
 
     QuickArray<ASTStruct*> structs{};
     void add(AST* ast, ASTStruct* astStruct);
@@ -1162,6 +1163,7 @@ struct AST {
     void initLinear(){
         Assert(!linearAllocation);
         linearAllocationMax = 0x1000'000; // tweak this
+        // linearAllocationMax = 0x100'000; // tweak this
         linearAllocationUsed = 0;
         linearAllocation = TRACK_ARRAY_ALLOC(char, linearAllocationMax);
          // (char*)engone::Allocate(linearAllocationMax);

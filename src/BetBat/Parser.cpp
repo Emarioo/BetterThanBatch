@@ -4706,6 +4706,7 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
 
     } else {
         bodyLoc = info.ast->createBody();
+        bodyLoc->location = info.getloc();
 
         if ((in_flags & PARSE_SKIP_ENTRY_BRACES) == 0) {
             auto token = info.getinfo();

@@ -1,0 +1,16 @@
+
+fn func() -> i32 {}
+
+#run {
+    /* This error occured at one point. It was a problem in type checker where
+       top-level local variables are not type checked because they won't run.
+       Only the top-level local variables in the first compiled file is checked.
+       BUT, variables in run directives needs to be checked.
+    tests/comp_time/extra.btb:6:5 (E1): To many variables.
+    6 | res := func()
+        ^~~ 1 variables
+    6 | res := func()
+               ^~~~ 0 return values
+    */
+    res := func()
+}

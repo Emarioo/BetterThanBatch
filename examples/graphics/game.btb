@@ -756,9 +756,9 @@ fn RenderEntities() {
 
 fn RenderBackground() {
     // draw based on camera
-    sky := textures[cast<i32>IMG_BACK_LEVEL0]
+    sky := textures.ptr[cast<i32>IMG_BACK_LEVEL0]
     // ground := textures[IMG_BACK_LEVEL1]
-    mountains := textures[IMG_BACK_LEVEL2]
+    mountains := textures.ptr[IMG_BACK_LEVEL2]
 
     tile_size := sky.width * 1.0 // image scaling
 

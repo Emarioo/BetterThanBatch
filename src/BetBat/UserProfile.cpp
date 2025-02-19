@@ -2,7 +2,7 @@
 
 #include "Engone/PlatformLayer.h"
 
-#include "BetBat/Util/Tracker.h"
+// #include "BetBat/Util/Tracker.h"
 
 // #define _UP_LOG(X) X
 #define _UP_LOG(X) ;

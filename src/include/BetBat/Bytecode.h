@@ -342,6 +342,7 @@ struct ExternalRelocation {
     int library_index=-1;
     int tinycode_index=0;
     int pc=0;
+    FunctionSignature* signature{};
     
     ExternalRelocationType type = BC_REL_FUNCTION;
 };
@@ -497,7 +498,7 @@ struct Bytecode {
     
     // Relocation for external functions
     DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type);
+    void addExternalRelocation(const std::string& name,int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type, FunctionSignature* signature);
 
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;

@@ -376,8 +376,10 @@ struct DynamicArray : public BaseArray<T> {
         YES_THESE_FIELDS
         TRACE_FUNC()
 
-        if(used==0)
+        if(used==0) {
+            Assert(false);
             return false;
+        }
         if(IS_PRIMITIVE(T)) {
             used--;
         } else {

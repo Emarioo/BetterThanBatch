@@ -381,9 +381,10 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         //     alias = "__imp_" + alias;
         // }
         if(varinfo->is_var()) {
-            addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR);
+            addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR, {});
         } else {
-            addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
+            TypeInfo* typeinfo = ast->getTypeInfo(varinfo->versions_typeId[currentPolyVersion]);
+            addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION, typeinfo->funcType);
         }
     // }
 }
@@ -2104,7 +2105,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
     } else if(astFunc->linkConvention == LinkConvention::NONE) {
         if(astFunc->is_compiler_func) {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-            addExternalRelocation(astFunc->name, compiler->compiler_library_index, reloc, BC_REL_FUNCTION);
+            addExternalRelocation(astFunc->name, compiler->compiler_library_index, reloc, BC_REL_FUNCTION, &funcImpl->signature);
         } else {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
             info.addCallToResolve(reloc, funcImpl);
@@ -2169,7 +2170,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
             }
         }
         builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
-        addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
+        addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION, &funcImpl->signature);
         // if(link_convention == STATIC_IMPORT) {
         //     builder.emit_call(link_convention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
         //     addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION);
@@ -2373,15 +2374,16 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         ASTExpression* expression = base_expression;
 
         CALLBACK_ON_ASSERT(
-            ERR_SECTION(
-                ERR_HEAD2(expression->location)
-                ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
-                for(int i=0;i<vm.call_stack.size();i++) {
-                    log::out << " " << vm.call_stack[i].func->name << "\n";
-                }
-                // TODO: Call stack
-                ERR_LINE2(expression->location, "here")
-            )
+        // @nocheckin add this back
+        //     ERR_SECTION(
+        //         ERR_HEAD2(expression->location)
+        //         ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+        //         for(int i=0;i<vm.call_stack.size();i++) {
+        //             log::out << " " << vm.call_stack[i].func->name << "\n";
+        //         }
+        //         // TODO: Call stack
+        //         ERR_LINE2(expression->location, "here")
+        //     )
         )
 
         // TODO: Code below should be the same as the one in generateFunction.
@@ -2465,7 +2467,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         
         if(tempTypes.size() != 0 && tempTypes[0] != TYPE_VOID) {
             TypeId type = tempTypes[0];
-            SignalIO result = generatePushedLiterals(type, (char*)vm.stack_pointer, expression);
+            SignalIO result = generatePushedLiterals(type, (char*)vm.states.last().stack_pointer, expression);
             return result;
         }
         return SIGNAL_SUCCESS;
@@ -2806,7 +2808,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
             builder.emit_li32(BC_REG_A, result_typeId._infoIndex1);
             builder.emit_push(BC_REG_A);
 
-            builder.emit_li32(BC_REG_A, result_typeId._infoIndex0);
+            builder.emit_li32(BC_REG_A, result_typeId.union_primtive);
             builder.emit_push(BC_REG_A);
 
             outTypeIds->add(typeInfo->id);
@@ -3174,7 +3176,14 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
             if (yes) {
                 outTypeIds->add(castType);
             } else {
-                Assert(info.hasForeignErrors());
+                if (!info.hasForeignErrors()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG("Compiler bug.")
+                        ERR_LINE2(expression->location, "here")
+                    )
+                    Assert(info.hasForeignErrors());
+                }
                 
                 outTypeIds->add(ltype); // ltype since cast failed
                 return SIGNAL_FAILURE;
@@ -4266,7 +4275,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                         }
                         if(AST::IsSigned(ltype) || AST::IsSigned(rtype)) {
                             if(!AST::IsSigned(outType))
-                                outType._infoIndex0 += 4;
+                                outType.union_primtive = (PrimitiveType)(outType.union_primtive + 4);
                             Assert(AST::IsSigned(outType));
                         }
                     }
@@ -6491,7 +6500,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             vm.init_stack();
             vm.execute(bytecode, temp_tinycode->name, true);
 
-            int* value = (int*)(vm.stack_pointer);
+            int* value = (int*)(vm.states.last().stack_pointer);
             block.filter_exception_code = *value;
             temp_tinycode->restore_to_empty();
 
@@ -6857,7 +6866,7 @@ SignalIO GenContext::generateData() {
 
                         // TODO: Enum member
 
-                        memberdata[member_count].type.index0 = mem.typeId._infoIndex0;
+                        memberdata[member_count].type.index0 = mem.typeId.union_primtive;
                         memberdata[member_count].type.index1 = mem.typeId._infoIndex1;
                         memberdata[member_count].type.ptr_level = mem.typeId.getPointerLevel();
                         memberdata[member_count].offset = mem.offset;
@@ -6985,8 +6994,6 @@ SignalIO GenContext::generateGlobalData() {
         // VM will manually put the pointer at this memory location
         // we do 16 because of 16-byte alignment rule in calling conventions
         builder.emit_alloc_local(BC_REG_INVALID, 16);
-
-        // log::out << "glob " << stmt->varnames[0].name << " " << stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion]<<"\n";
 
         TypeId type{};
         if(!stmt->firstExpression) {
@@ -7131,15 +7138,16 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
     lexer::SourceLocation location = statement->location;
 
     CALLBACK_ON_ASSERT(
-        ERR_SECTION(
-            ERR_HEAD2(location)
-            ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
-            for(int i=0;i<vm.call_stack.size();i++) {
-                log::out << " " << vm.call_stack[i].func->name << "\n";
-            }
-            // TODO: Call stack
-            ERR_LINE2(location, "here")
-        )
+        // @nocheckin add back
+        // ERR_SECTION(
+        //     ERR_HEAD2(location)
+        //     ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+        //     for(int i=0;i<vm.call_stack.size();i++) {
+        //         log::out << " " << vm.call_stack[i].func->name << "\n";
+        //     }
+        //     // TODO: Call stack
+        //     ERR_LINE2(location, "here")
+        // )
     )
 
     // TODO: Code below should be the same as the one in generateFunction.
@@ -7232,14 +7240,15 @@ void GenContext::printVMFailedMessage(VirtualMachine& vm, lexer::SourceLocation 
             ERR_LINE2(location, "here")
         )
     } else {
-        ERR_SECTION(
-            ERR_HEAD2(location)
-            ERR_MSG_LOG("Virtual machine failed for an unspecified reason. Call stack:\n")
-            for(int i=0;i<vm.call_stack.size();i++) {
-                log::out << " " << vm.call_stack[i].func->name << "\n";
-            }
-            ERR_LINE2(location, "here")
-        )
+        // @noceckin add this back
+        // ERR_SECTION(
+        //     ERR_HEAD2(location)
+        //     ERR_MSG_LOG("Virtual machine failed for an unspecified reason. Call stack:\n")
+        //     for(int i=0;i<vm.call_stack.size();i++) {
+        //         log::out << " " << vm.call_stack[i].func->name << "\n";
+        //     }
+        //     ERR_LINE2(location, "here")
+        // )
     }
 }
 

@@ -3031,7 +3031,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 }
                 if(tempTypes.size()>0) {
                     rightType = tempTypes[0];
-                    operatorArgs.add(tempTypes[0]);
+                operatorArgs.add(tempTypes[0]);
                 }
             }
             // TODO: Optimize operator overload check. checkExpression executes in 250 ms where checking operator overloading is responsible for 100 ms. If we could optimize then we may run checkExpression in 150 + 20 ms instead. The key is a fast determination of whether expression is operator overloaded.
@@ -3195,7 +3195,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     auto outtype = lsize > rsize ? leftType : rightType;
                     if(AST::IsSigned(leftType) || AST::IsSigned(rightType)) {
                         if(!AST::IsSigned(outtype))
-                            outtype._infoIndex0 += 4;
+                            outtype.union_primtive = (PrimitiveType)(outtype.union_primtive+4);
                         Assert(AST::IsSigned(outtype) && AST::IsInteger(outtype));
                     }
                     outTypes->add(outtype);
@@ -4421,7 +4421,13 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
         if(now->type == ASTStatement::CONTINUE || now->type == ASTStatement::BREAK){
             // nothing
         } else if(now->type == ASTStatement::BODY || now->type == ASTStatement::DEFER){
+            bool prev = do_not_check_global_globals;
+            if (now->computeWhenPossible) {
+                // In a 
+                do_not_check_global_globals = false;
+            }
             SignalIO result = checkRest(now->firstBody);
+            do_not_check_global_globals = prev;
         } else if(now->type == ASTStatement::EXPRESSION){
             checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             // if(tempTypes.size()==0)
@@ -5191,10 +5197,8 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     defer {
         info.currentContentOrder.pop();
     };
-
     // Check global declarations
     for(int contentOrder=0;contentOrder<scope->content.size();contentOrder++){
-        
         if(scope->content[contentOrder].spotType!=ASTScope::STATEMENT)
             continue;
 
@@ -5206,6 +5210,17 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
             rundir.statement = now;
             rundir.scope = scope->scopeId;
             compiler->global_run_directives.add(rundir);
+            if(!is_initial_import){
+                if(now->firstBody) {
+                    compiler->addTask_type_body(now->firstBody->scopeId, -1);
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location)   
+                        ERR_MSG("Wrap expression in curly braces. Compile time execution at top level wants a scope which is made from curly braces.")
+                        ERR_LINE2(now->location, "here")
+                    )
+                }
+            }
             continue;
         }
 
@@ -5244,13 +5259,16 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     info.compiler->compile_stats.errors += info.errors;
 }
 
-void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope) {
+void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope, bool is_initial_scope) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     TyperContext info = {};
     info.init_context(compiler);
     
+    Assert(import_scope || ast_func);
+
     info.do_not_check_global_globals = true;
+    info.is_initial_import = is_initial_scope;
     
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 

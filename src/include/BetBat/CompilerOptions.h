@@ -61,8 +61,8 @@ struct CompileOptions {
     // std::string linker_cmd = "";
     TextBuffer source_buffer; // pure text instead of a path to some file
 
-    // bool useDebugInformation = true;
-    bool useDebugInformation = false;
+    bool useDebugInformation = true;
+    // bool useDebugInformation = false;
     bool silent = false;
     bool verbose = false;
     bool executeOutput = false;
@@ -70,6 +70,7 @@ struct CompileOptions {
     bool stable_global_data = false; // I though about disallowing stable globals when using executable and mostly allowing it for dlls and libs but then I thought, "I dont know how users will use it so why should I limit the possibilities.".
 
     bool disable_multithreading = true; // TODO: Should be false
+    // bool disable_multithreading = false;
     bool disable_preload = false;
 
     bool quit = false;
@@ -96,6 +97,7 @@ struct CompileOptions {
 
     DynamicArray<std::string> importDirectories; // Directories to look for imports (source files)
     int threadCount=0; // zero will use the CPU's number of core
+    // int threadCount=1; // zero will use the CPU's number of core
 };
 // returns false if failure, error message is printed, you just have to exit the program
 bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* options);

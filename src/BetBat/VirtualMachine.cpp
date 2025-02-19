@@ -18,9 +18,11 @@
 
 // #define DECODE_TYPE(ptr) (*((u8*)ptr+1))
 
+void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index);
 
 void VirtualMachine::cleanup(){
     stack.resize(0);
+    states.cleanup();
     reset();
     // cmdArgsBuffer.resize(0);
     // engone::Free(cmdArgs.ptr, sizeof(Language::Slice<char>)*cmdArgs.len);
@@ -28,32 +30,9 @@ void VirtualMachine::cleanup(){
     // cmdArgs.len = 0;
 }
 void VirtualMachine::reset(){
-    memset((void*)registers, 0, sizeof(registers));
+    states.resize(0);
     memset(stack.data(), 0, stack.max);
 }
-// void VirtualMachine::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
-//     using namespace engone;
-//     Assert(false); // this needs a rewrite
-//     // cmdArgs.resize(inCmdArgs.size());
-//     // cmdArgs.ptr = TRACK_ARRAY_ALLOC(Language::Slice<char>);
-//     cmdArgs.ptr = (Language::Slice<char>*)engone::Allocate(sizeof(Language::Slice<char>)*inCmdArgs.size());
-//     cmdArgs.len = inCmdArgs.size();
-//     u64 totalText = 0;
-//     for(int i=0;i<inCmdArgs.size();i++){
-//         totalText += inCmdArgs[i].length()+1;
-//     }
-//     cmdArgsBuffer.resize(totalText);
-//     for(int i=0;i<inCmdArgs.size();i++){
-//         char* ptr = cmdArgsBuffer.data + cmdArgsBuffer.used;
-//         memcpy(ptr, inCmdArgs[i].data(),inCmdArgs[i].length());
-//         *(ptr + inCmdArgs[i].length()) = 0;
-//         cmdArgs.ptr[i].ptr = ptr;
-//         cmdArgs.ptr[i].len = inCmdArgs[i].length();
-//         // log::out << cmdArgs.ptr[i].ptr<<" "<<inCmdArgs[i].length()<<"\n";
-//         // log::out << cmdArgs.ptr[i];
-//         cmdArgsBuffer.used = inCmdArgs[i].length() + 1;
-//     }
-// }
 void PrintPointer(volatile void* ptr){
     u64 v = (u64)ptr;
     engone::log::out << "0x";
@@ -67,14 +46,10 @@ void PrintPointer(volatile void* ptr){
         engone::log::out << chr; 
     }
 }
-
-// void VirtualMachine::execute(Bytecode* bytecode){
-//     executePart(bytecode, 0, bytecode->length());
-// }
 void VirtualMachine::init_stack(int stack_size) {
     stack.resize(stack_size);
     memset(stack.data(), 0, stack.max);
-    memset((void*)registers, 0, sizeof(registers));
+    // memset((void*)registers, 0, sizeof(registers));
 }
 TinyBytecode* VirtualMachine::fetch_tinycode(Bytecode* bytecode, const std::string& tinycode_name){
     for(int i=0;i<bytecode->tinyBytecodes.size();i++) {
@@ -88,6 +63,11 @@ TinyBytecode* VirtualMachine::fetch_tinycode(Bytecode* bytecode, const std::stri
 
 void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations, CompileOptions* options){
     using namespace engone;
+    this->bytecode = bytecode;
+    this->options = options;
+    // IMPORTANT: Put variables in VM struct as fields since local variables
+    //   won't be accessible when calling a bytecode function is passed as
+    //   function pointer to C function.
 
     TRACE_FUNC()
 
@@ -95,6 +75,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
     TinyBytecode* tinycode = nullptr;
     int tiny_index = -1;
+
     for(int i=0;i<bytecode->tinyBytecodes.size();i++) {
         if(bytecode->tinyBytecodes[i]->name == tinycode_name) {
             tinycode = bytecode->tinyBytecodes[i];
@@ -110,65 +91,43 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     REGISTER_SIZE = bytecode->arch.REGISTER_SIZE;
     FRAME_SIZE = bytecode->arch.FRAME_SIZE;
 
-    {
-        CallFrame frame{};
-        frame.func = bytecode->tinyBytecodes[tiny_index];
-        frame.return_address = 0;
-        call_stack.add(frame);
+    // TODO: Appling partial relocations and checking for dependencies (other tinycodes)
+    //   may be expensive. Avoiding partial relocation might be best.
+    //   Also, if relocations have been applied once, we don't need to do so again.
+    checked_codes.resize(0);
+    codes_to_check.resize(0);
+
+    codes_to_check.add(tinycode);
+    checked_codes.add(tinycode);
+    while(codes_to_check.size()) {
+        auto t = codes_to_check[0];
+        codes_to_check.removeAt(0);
+
+        // log::out << "apply " << t->name<<"\n";
+
+        for (int i=0;i<t->call_relocations.size();i++) {
+            auto& rel = t->call_relocations[i];
+            if (!rel.funcImpl || rel.funcImpl->tinycode_id <= 0)
+                continue;
+
+            auto tcode = bytecode->tinyBytecodes[rel.funcImpl->tinycode_id-1];
+            bool found = false;
+            for(int j=0;j<checked_codes.size();j++) {
+                if (tcode == checked_codes[j]) {
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) {
+                checked_codes.add(tcode);
+                codes_to_check.add(tcode);
+            }
+        }
     }
-
-    DynamicArray<TinyBytecode*> checked_codes{};
-    bool compute_related_codes = true; // we compute so that we only load relevant libraries
-
-    if (apply_related_relocations || compute_related_codes) {
-        // TODO: Appling partial relocations and checking for dependencies (other tinycodes)
-        //   may be expensive. Avoiding partial relocation might be best.
-        //   Also, if relocations have been applied once, we don't need to do so again.
-        DynamicArray<TinyBytecode*> codes_to_check{};
-        codes_to_check.add(tinycode);
-        checked_codes.add(tinycode);
-        while(codes_to_check.size()) {
-            auto t = codes_to_check[0];
-            codes_to_check.removeAt(0);
-
-            // log::out << "apply " << t->name<<"\n";
-
-            for (int i=0;i<t->call_relocations.size();i++) {
-                auto& rel = t->call_relocations[i];
-                if (!rel.funcImpl || rel.funcImpl->tinycode_id <= 0)
-                    continue;
-
-                auto tcode = bytecode->tinyBytecodes[rel.funcImpl->tinycode_id-1];
-                bool found = false;
-                for(int j=0;j<checked_codes.size();j++) {
-                    if (tcode == checked_codes[j]) {
-                        found = true;
-                        break;
-                    }
-                }
-                if(!found) {
-                    checked_codes.add(tcode);
-                    codes_to_check.add(tcode);
-                }
-            }
-        }
-        if(apply_related_relocations) {
-            FuncImpl* unresolved_func = nullptr;
-            for(auto& t : checked_codes) {
-                bool yes = t->applyRelocations(bytecode, false, &unresolved_func);
-                if(!yes) {
-                    error.type = VM_UNRESOLVED_CALL;
-                    error.message = unresolved_func->astFunction->name + " called from " + t->name;
-                    log::out << log::RED << "Incomplete call relocation, "<<t->name<<"\n";
-                    return;
-                }
-            }
-        }
-    } else {
+    if(apply_related_relocations) {
         FuncImpl* unresolved_func = nullptr;
-        for(auto& t : bytecode->tinyBytecodes) {
+        for(auto& t : checked_codes) {
             bool yes = t->applyRelocations(bytecode, false, &unresolved_func);
-            FuncImpl* unresolved_func = nullptr;
             if(!yes) {
                 error.type = VM_UNRESOLVED_CALL;
                 error.message = unresolved_func->astFunction->name + " called from " + t->name;
@@ -178,19 +137,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         }
     }
 
-    struct LibFunc {
-        DynamicArray<ExternalRelocation*> relocs;
-        VoidFunction func_ptr;
-    };
-    struct Lib {
-        std::unordered_map<std::string, LibFunc*> functions;
-        DynamicLibrary dll;
-    };
-    
     // TODO: Reuse loaded dlls and function pointers because we
     //   may run VM again. Mapping function pointers multiple times is unnecessary.
-    bool any_failure = false;
-    std::unordered_map<std::string, Lib*> libs;
     defer {
         for(auto& pair : libs) {
             for (auto& pair2 : pair.second->functions) {
@@ -202,8 +150,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         }
         libs.clear();
     };
-    DynamicArray<VoidFunction> dll_functions{};
-    DynamicArray<std::string> dll_function_names{};
+    bool any_failure = false;
     for(int i=0;i<bytecode->externalRelocations.size();i++) {
         auto& r = bytecode->externalRelocations[i];
         if(r.library_index == -1)
@@ -248,59 +195,70 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             fn = pair_fn->second;
         }
         fn->relocs.add(&r);
+        fn->signature = r.signature;
     }
     
     for(auto& pair_lib : libs) {
-        if(pair_lib.first == "<compiler>") {
+        const std::string& path = pair_lib.first;
+        if(path == "<compiler>") {
             pair_lib.second->dll = nullptr;
-            for(auto& pair_fn : pair_lib.second->functions) {
-                pair_fn.second->func_ptr = lang::get_compiler_function(pair_fn.first.c_str(), pair_fn.first.size());
-                if(!pair_fn.second->func_ptr) {
-                    log::out << log::RED << "ERROR: "<<log::NO_COLOR << "lang::get_compiler_function did not map '"<<log::LIME <<pair_fn.first<<log::NO_COLOR << "' to a function\n";
-                    Assert(false);
-                }
-
-                int index = dll_functions.size();
-                dll_functions.add(pair_fn.second->func_ptr);
-                dll_function_names.add(pair_fn.first);
-                // APPLY RELOCATIONS
-                for(auto r : pair_fn.second->relocs) {
-                    auto& t = bytecode->tinyBytecodes[r->tinycode_index];
-                    // log::out << "Apply reloc "<< t->index << ", " << r->pc << ", "<<r->name<<"\n";
-                    *(i32*)&t->instructionSegment[r->pc] = Bytecode::BEGIN_DLL_FUNC_INDEX + index;
-                }
+        } else {
+            // log::out << "VM lib "<< path<<"\n";
+            // if static library was specified, try to replace file extension with dynamic library.
+            int slash = path.find_last_of("/");
+            int dot = path.substr(slash == -1 ? 0 : slash).find(".");
+            if (dot != -1 && slash != -1)
+                dot += slash;
+            // TODO: check out of bounds
+            std::string alt_path = path;
+            if(path.substr(dot+1) == "a") {
+                alt_path = path.substr(0, dot);
+                alt_path += ".so";
+            } else if(path.substr(dot+1) == "lib") { 
+                alt_path = path.substr(0, dot);
+                alt_path += ".dll";
             }
-            continue;
-        }
-        // log::out << "VM lib "<< pair_lib.first<<"\n";
-        pair_lib.second->dll = LoadDynamicLibrary(pair_lib.first, false); // false = don't log error
-        if(!pair_lib.second->dll) {
-            // TODO: This solution is cheeky.
-            int at = pair_lib.first.find_last_of(".");
-            std::string alt_path = pair_lib.first.substr(0, at);
-            alt_path += ".dll";
             pair_lib.second->dll = LoadDynamicLibrary(alt_path, false);
-        }
-        if(!pair_lib.second->dll) {
-            any_failure = true;
-            log::out << log::RED << "Could not load library "<<pair_lib.first<<"\n";
-            continue;
+            if(!pair_lib.second->dll) {
+                any_failure = true;
+                log::out << log::RED << "Could not load library "<<path<<"\n";
+                continue;
+            } else {
+                // log::out << log::LIME << "Load '"<<alt_path<<"'\n";
+            }
         }
         for(auto& pair_fn : pair_lib.second->functions) {
-            pair_fn.second->func_ptr = GetFunctionPointer(pair_lib.second->dll, pair_fn.first);
+            if(path == "<compiler>") {
+                pair_fn.second->func_ptr = lang::get_compiler_function(pair_fn.first.c_str(), pair_fn.first.size());
+            } else {
+                pair_fn.second->func_ptr = GetFunctionPointer(pair_lib.second->dll, pair_fn.first);
+                // log::out << log::LIME << " fn '"<<pair_fn.first<<"'\n";
+            }
             if(!pair_fn.second->func_ptr) {
                 any_failure = true;
                 log::out << log::RED << "Could not load function pointer "<<pair_fn.first<<"\n";
                 continue;
             } else {
                 int index = dll_functions.size();
-                dll_functions.add(pair_fn.second->func_ptr);
+                dll_functions.add(pair_fn.second);
+                // dll_functions.add(pair_fn.second->func_ptr);
                 dll_function_names.add(pair_fn.first);
                 // APPLY RELOCATIONS
                 for(auto r : pair_fn.second->relocs) {
                     auto& t = bytecode->tinyBytecodes[r->tinycode_index];
-                    // log::out << "Apply reloc "<< t->index <<", "<< r->pc << ", "<<r->name<<"\n";
-                    *(i32*)&t->instructionSegment[r->pc] = Bytecode::BEGIN_DLL_FUNC_INDEX + index;
+                    
+                    if(t->instructionSegment[r->pc-3] == BC_EXT_DATAPTR) {
+                        // TODO: This is a temporary fix for external global variables.
+                        int reli = ((i64)r - (i64)bytecode->externalRelocations._ptr)/sizeof(*bytecode->externalRelocations._ptr);
+                        // log::out << r->name << " at "<<r->pc << " val "<<reli<< " " << (void*)pair_fn.second->func_ptr <<"\n";
+                        if(reli >= dll_variables.size()) {
+                            dll_variables.resize(reli+1);
+                        }
+                        dll_variables[reli] = (void*)pair_fn.second->func_ptr;
+                    } else {
+                        // log::out << "Apply reloc "<< t->index <<", "<< r->pc << ", "<<r->name<<"\n";
+                        *(i32*)&t->instructionSegment[r->pc] = Bytecode::BEGIN_DLL_FUNC_INDEX + index;
+                    }
                 }
             }
         }
@@ -308,12 +266,16 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     if(any_failure){
         return;
     }
+
+    // NOTE: Bytecode function pointers are "stubs" which
+    //   C functions from a library can call which "leads back" to the VM.
+    bytecode_pointers.resize(bytecode->tinyBytecodes.size());
     
     // log::out << log::GOLD << "VirtualMachine:\n";
 
     // TODO: Setup argc, argv on the stack with betcall convention
     
-    push_offsets.add(0);
+    // push_offsets.add(0);
 
     if(stack.max == 0) {
         // only init stack if we haven't already
@@ -322,25 +284,100 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         init_stack();
     }
 
-    bool force_mapping = false;
-    bool temp_ptr_was_mapped = false;
+    // Set safety check
+    #define VM_STACK_MAGIC 0x91620761
+    *(i64*)stack.data() = VM_STACK_MAGIC;
+
+    i64 stack_pointer = 0;
     if(bytecode->target == TARGET_ARM) {
         force_mapping = true;
         u64 stack_start = 0xFFFF'FFFF;
         bool yes = add_memory_mapping(stack_start-stack.max, (u64)stack.data(), stack.max);
         stack_pointer = stack_start;
-        base_pointer = stack_pointer;
     } else {
         stack_pointer = (i64)(stack.data() + stack.max);
-        base_pointer = stack_pointer;
     }
-    registers[BC_REG_LOCALS] = base_pointer;
     
+    tp = StartMeasure();
+
+    #ifdef ILOG
+    #undef _ILOG
+    #define _ILOG(X) if(!silent){X};
+    #endif
+    
+    // _ILOG(log::out << "sp = "<<sp<<"\n";)
+
+    // CALLBACK_ON_ASSERT(
+    //     log::out << log::RED << "Dump of bytecode\n";
+    //     tinycode->print(0,-1, bytecode);
+    //     log::out << "Asserted at instruction " << log::CYAN << states.last().prev_pc << "\n";
+    //     tinycode->print(states.last().prev_pc - 10, states.last().prev_pc+50, bytecode);
+    // )
+
+    // hardcoded breakpoints when debugging
+    // breakpoints.add({945});
+
+    if(options) {
+        if(options->interactive_vm)
+            interactive = true;
+        if(options->logged_vm)
+            logging = true;
+    }
+    // interactive = true;
+    // logging = true;
+
+    push_state(tiny_index, stack_pointer);
+    execute();
+    // don't pop, we want to access the stack and registers afterwards
+    // to move data into data section or inline literals or whatever.
+    // pop_state();
+    auto time = StopMeasure(tp);
+    if(!silent){
+        log::out << "\n";
+        log::out << log::LIME << "Executed "<<executedInstructions<<" insts. in "<<FormatTime(time)<< " ("<<FormatUnit(executedInstructions/time)<< " inst/s)\n";
+        #ifdef ILOG_REGS
+        printRegisters();
+        #endif
+    }
+}
+
+void VirtualMachine::execute(){
+    using namespace engone;
+
+    {
+        CallFrame frame{};
+        frame.func = bytecode->tinyBytecodes[states.last().tiny_index];
+        frame.return_address = 0;
+        states.last().call_stack.add(frame);
+    }
+    
+    states.last().push_offsets.add(0);
+
+    auto& push_offsets = states.last().push_offsets;
+    auto& stack_pointer = states.last().stack_pointer;
+    auto& base_pointer = states.last().base_pointer;
+    auto& pc = states.last().pc;
+    auto& prev_pc = states.last().prev_pc;
+    auto& running = states.last().running;
+    auto& tiny_index = states.last().tiny_index;
+    auto& tinycode = states.last().tinycode;
+    auto& registers = states.last().registers;
+    auto& has_return_values_on_stack = states.last().has_return_values_on_stack;
+    auto& ret_offset = states.last().ret_offset;
+    auto& call_stack = states.last().call_stack;
+
+    CALLBACK_ON_ASSERT(
+        log::out << log::RED << "Dump of bytecode\n";
+        tinycode->print(0,-1, bytecode);
+        log::out << "Asserted at instruction " << log::CYAN << states.last().prev_pc << "\n";
+        tinycode->print(states.last().prev_pc - 10, states.last().prev_pc+50, bytecode);
+    )
+
     // #define CHECK_PTR_MAPPED(PTR) if(force_mapping && !temp_ptr_was_mapped) { log::out << log::RED << "PTR "<<PTR<<" was not mapped\n"; return; }
-    auto CHECK_PTR_MAPPED = [&](void* PTR) {
+    auto CHECK_PTR_MAPPED = [this](void* PTR) {
         if(force_mapping && !temp_ptr_was_mapped) { 
             log::out << log::RED << "PTR "<<PTR<<" was not mapped\n"; 
-            return; 
+            return;
         }
     };
     
@@ -352,73 +389,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         }
     };
 
-    u64 expectedStackPointer = stack_pointer;
-
-
-    auto tp = StartMeasure();
-
-    #ifdef ILOG
-    #undef _ILOG
-    #define _ILOG(X) if(!silent){X};
-    #endif
-    
-    // _ILOG(log::out << "sp = "<<sp<<"\n";)
-
-    // auto& instructions = tinycode->instructionSegment;
     #define instructions tinycode->instructionSegment
-    i64 userAllocatedBytes=0;
-    u64 executedInstructions = 0;
-    bool enable_fncall_logging = true;
-    std::unordered_map<std::string, u64> number_of_fncalls{};
-    // u64 length = bytecode->instructionSegment.used;
-    // if(length==0)
-    //     log::out << log::YELLOW << "VirtualMachine ran bytecode with zero instructions. Bug?\n";
-    // Instruction* codePtr = (Instruction*)bytecode->instructionSegment.data;
-    // Bytecode::Location* prevLocation = nullptr;
-    BytecodePrintCache print_cache{};
-    bool running = true;
-
-    DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
-
-    // TODO: x64 had a bug with push_offsets, ALLOC_ARGS and SET_ARG
-    //   I applied the same here but didn't test it.
-
-    // NOTE: We don't need to track relative stack pointer and stack moments like we do in x64 generator because
-    //   the VM is running in real time. We have the actual stack pointer and can align it to 16-bytes whenever we want.
-
-    i64 pc = 0;
-    i64 prev_pc;
-    InstructionOpcode opcode;
-    BCRegister op0=BC_REG_INVALID, op1, op2;
-    InstructionControl control;
-    i64 imm;
-
-    CALLBACK_ON_ASSERT(
-        log::out << log::RED << "Dump of bytecode\n";
-        tinycode->print(0,-1, bytecode);
-        log::out << "Asserted at instruction " << log::CYAN << prev_pc << "\n";
-    )
-
-    struct Breakpoint {
-        int pc;
-        // TODO: break on tinycode name
-    };
-    DynamicArray<Breakpoint> breakpoints{};
-
-    // hardcoded breakpoints when debugging
-    // breakpoints.add({945});
-
-    bool logging = false;
-    bool interactive = false;
-    if(options) {
-        if(options->interactive_vm)
-            interactive = true;
-        if(options->logged_vm)
-            logging = true;
-    }
-    // interactive = true;
-    // logging = true;
-    
     while(running) {
         for(int i=0;i<breakpoints.size();i++) {
             if (breakpoints[i].pc == pc) {
@@ -474,12 +445,11 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         if(pc>=(u64)tinycode->instructionSegment.used)
             break;
 
-        opcode = (InstructionOpcode)instructions[pc++];
+        InstructionOpcode opcode = (InstructionOpcode)instructions[pc++];
         executedInstructions++;
-        
-        // BCRegister op0=BC_REG_INVALID, op1, op2;
-        // InstructionControl control;
-        // i64 imm;
+        BCRegister op0=BC_REG_INVALID, op1=BC_REG_INVALID, op2=BC_REG_INVALID;
+        InstructionControl control=CONTROL_NONE;
+        i64 imm=0;
         
         // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
         
@@ -528,6 +498,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         }
 
         void* ptr_from_mov = nullptr;
+
+        VerifyAllocHeap();
 
         executedInstructions++;
         switch (opcode) {
@@ -645,6 +617,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             CHECK_PTR_MAPPED(ptr);
             ptr_from_mov = ptr;
 
+            // log::out << "SET_ARG " << *(float*)&registers[op0] << "\n";
+
             if(size == CONTROL_8B)       *(i8*) ptr = registers[op0];
             else if(size == CONTROL_16B) *(i16*)ptr = registers[op0];
             else if(size == CONTROL_32B) *(i32*)ptr = registers[op0];
@@ -682,7 +656,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             else if(size == CONTROL_16B) *(i16*)ptr = registers[op0];
             else if(size == CONTROL_32B) *(i32*)ptr = registers[op0];
             else if(size == CONTROL_64B) *(i64*)ptr = registers[op0];
-
+            // log::out << "SET RET " << (void*)(ptr) << " " << registers[op0]<<"\n";
         } break;
         case BC_GET_VAL: {
             op0 = (BCRegister)instructions[pc++];
@@ -805,19 +779,44 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             printed_newline = true;
 
             if(imm >= Bytecode::BEGIN_DLL_FUNC_INDEX) {
-                auto f = dll_functions[imm - Bytecode::BEGIN_DLL_FUNC_INDEX];
+                Assert((stack_pointer & 0xF) == 0); // ensure aligned stack
+
+                int index = imm - Bytecode::BEGIN_DLL_FUNC_INDEX;
+                auto f = dll_functions[index];
                 // fix arguments?
                 if(c == STDCALL) {
+                    // log::out << "Calling " << dll_function_names[index] << "\n";
+                    // float a0 = *(float*)(stack_pointer + 0);
+                    // float a1 = *(float*)(stack_pointer + 8);
+                    // float a2 = *(float*)(stack_pointer + 16);
+                    // float a3 = *(float*)(stack_pointer + 24);
+                    // log::out << " " << a0 << " " << a1 << " " << a2 << " " << a3 << "\n";
+
                     // Makehshift is a bad name
                     // it's more like a StackSwitcher_stdcall
                     #ifdef OS_WINDOWS
-                    Makeshift_stdcall(f, (void*)stack_pointer);
+                    // log::out << "Calling "<<dll_function_names[index]<<"\n";
+                    // IMPORTANT: Debugging DLL requires compiling DLL and BTB with the same toolchain! GCC or MSVC for both.
+                    FnMakeshift mk_func = get_makeshift(f->signature);
+                    mk_func(f->func_ptr, (void*)stack_pointer);
+                    
+                    // Makeshift_stdcall(f->func_ptr, (void*)stack_pointer);
+                    // Float values are returned in xmm0. Since Makeshift_stdcall is general for all types of functions we don't know the argument or return types.
+                    // Hence it returnes both the rax and xmm0 values.
+                    // if (f->signature->returnTypes.size()>0&&f->signature->returnTypes[0].typeId == TYPE_FLOAT32) {
+                    //     // TODO: Handle 64-bit floats
+                    //     *(float*)(stack_pointer-24) = *(float*)(stack_pointer-32);
+                    //     log::out << "MOVE "<<*(float*)(stack_pointer-32)<< " to "<<*(float*)(stack_pointer-24)<<"\n";
+                    // }
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
                     #endif
                 } else if(c == UNIXCALL) {
                     // Makeshift_unixcall(f, (void*)stack_pointer);
                     #ifdef OS_LINUX
+                    // TODO: Use get_makeshift and add sysvcall convention to it.
+                    //   Same when generating tinycode stub function. Remove the Makeshift_x.s assembly files since we generate the specific machine code we need.
+                    // TODO: Handle 32-bit float returned value...
                     Makeshift_sysvcall(f, (void*)stack_pointer);
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
@@ -826,6 +825,19 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                     // Makeshift function for betcall?
                     Assert(false); 
                 }
+
+                if(*(i64*)stack.data() != VM_STACK_MAGIC) {
+                    // If we wrote beyond the stack than malloc, calloc, free functions
+                    // may cause an exception because we messed with stuff we shouldn't have.
+                    // Since log::out may call Reallocate, we use normal printf so
+                    // we don't crash when printing the error.
+                    fprintf(stderr,"VirtualMachine: Stack overflow from external function, needs more than %d bytes for stack!\n", (int)stack.max);
+                    fflush(stderr);
+                    // log::out << log::RED << "VirtualMachine: Stack overflow from external function, you need more than "<<stack.max<<" bytes for the stack!\n";
+                    error.type = VM_STACK_VIOLATION;
+                    return;
+                }
+
                 has_return_values_on_stack = true; // NOTE: potential return values
                 ret_offset = 0;
             } else {
@@ -889,6 +901,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             LinkConvention l = (LinkConvention)instructions[pc++];
             CallConvention c = (CallConvention)instructions[pc++];
 
+            // nocheckin How to call callback? maybe C style callback?
+
             // Finish printing the instruction so that the function
             // we call doesn't print it's own stuff within the instruction.
             if(logging)
@@ -899,42 +913,108 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             int new_tiny_index = registers[op0] - 1; // -1 very important
             
             if (!(new_tiny_index >= 0 && new_tiny_index < bytecode->tinyBytecodes.size())) {
-                // not valid index
+                // Not a valid index, we assume it's a function pointer from
+                // ext_dataptr, will crash if bytecode instructions
+                // are wrong and we call call_reg on an immediate.
+
+                Assert((stack_pointer & 0xF) == 0); // ensure aligned stack
+
+                // int index = imm - Bytecode::BEGIN_DLL_FUNC_INDEX;
+                auto f = (void(*)(void))registers[op0];
+                Assert(f);
+                // fix arguments?
+                if(c == STDCALL) {
+                    // log::out << "Calling ?\n";
+                    // float a0 = *(float*)(stack_pointer + 0);
+                    // float a1 = *(float*)(stack_pointer + 8);
+                    // float a2 = *(float*)(stack_pointer + 16);
+                    // float a3 = *(float*)(stack_pointer + 24);
+                    // log::out << " " << a0 << " " << a1 << " " << a2 << " " << a3 << "\n";
+
+                    // Makehshift is a bad name
+                    // it's more like a StackSwitcher_stdcall
+                    #ifdef OS_WINDOWS
+                    // log::out << "Calling "<<dll_function_names[index]<<"\n";
+                    // IMPORTANT: Debugging DLL requires compiling DLL and BTB with the same toolchain! GCC or MSVC for both.
+                    // FnMakeshift mk_func = get_makeshift(f->signature);
+                    // mk_func(f->func_ptr, (void*)stack_pointer);
+                    // TODO: Use get_makeshift for BC_CALL_REG too. We need signature though.
+                    Makeshift_stdcall(f, (void*)stack_pointer);
+                    #else
+                    Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
+                    #endif
+                } else if(c == UNIXCALL) {
+                    // Makeshift_unixcall(f, (void*)stack_pointer);
+                    #ifdef OS_LINUX
+                    Makeshift_sysvcall(f, (void*)stack_pointer);
+                    #else
+                    Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
+                    #endif
+                } else { 
+                    // Makeshift function for betcall?
+                    Assert(false); 
+                }
+
+                if(*(i64*)stack.data() != VM_STACK_MAGIC) {
+                    // If we wrote beyond the stack than malloc, calloc, free functions
+                    // may cause an exception because we messed with stuff we shouldn't have.
+                    // Since log::out may call Reallocate, we use normal printf so
+                    // we don't crash when printing the error.
+                    fprintf(stderr,"VirtualMachine: Stack overflow from external function, needs more than %d bytes for stack!\n", (int)stack.max);
+                    fflush(stderr);
+                    // log::out << log::RED << "VirtualMachine: Stack overflow from external function, you need more than "<<stack.max<<" bytes for the stack!\n";
+                    error.type = VM_STACK_VIOLATION;
+                    return;
+                }
+
+                has_return_values_on_stack = true; // NOTE: potential return values
+                ret_offset = 0;
+            } else {
+
+                // if (!(new_tiny_index >= 0 && new_tiny_index < bytecode->tinyBytecodes.size())) {
+                //     // not valid index
+                //     running = false;
+                //     break;
+                // }
+                
+                stack_pointer -= REGISTER_SIZE;
+                CHECK_STACK();
+                void* ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+                CHECK_PTR_MAPPED(ptr);
+                if(REGISTER_SIZE == 4) {
+                    *(i32*)ptr = pc | ((i64)tiny_index << 16);
+                } else {
+                    *(i64*)ptr = pc | ((i64)tiny_index << 32);
+                }
+
+                stack_pointer -= REGISTER_SIZE;
+                CHECK_STACK();
+                ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
+                CHECK_PTR_MAPPED(ptr);
+                memcpy(ptr, &base_pointer, REGISTER_SIZE);
+                base_pointer = stack_pointer;
+                registers[BC_REG_LOCALS] = base_pointer;
+
+                pc = 0;
+                tiny_index = new_tiny_index;
+                tinycode = bytecode->tinyBytecodes[tiny_index];
+                
+                if(enable_fncall_logging) {
+                    auto pair = number_of_fncalls.find(tinycode->name);
+                    if (pair == number_of_fncalls.end())
+                        number_of_fncalls[tinycode->name] = 1;
+                    else
+                        pair->second += 1;
+                }
+            }
+        } break;
+        case BC_RET: {
+            call_stack.pop();
+            if(call_stack.size() == 0) {
                 running = false;
                 break;
             }
             
-            stack_pointer -= REGISTER_SIZE;
-            CHECK_STACK();
-            void* ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
-            CHECK_PTR_MAPPED(ptr);
-            if(REGISTER_SIZE == 4) {
-                *(i32*)ptr = pc | ((i64)tiny_index << 16);
-            } else {
-                *(i64*)ptr = pc | ((i64)tiny_index << 32);
-            }
-
-            stack_pointer -= REGISTER_SIZE;
-            CHECK_STACK();
-            ptr = map_pointer(stack_pointer, temp_ptr_was_mapped);
-            CHECK_PTR_MAPPED(ptr);
-            memcpy(ptr, &base_pointer, REGISTER_SIZE);
-            base_pointer = stack_pointer;
-            registers[BC_REG_LOCALS] = base_pointer;
-
-            pc = 0;
-            tiny_index = new_tiny_index;
-            tinycode = bytecode->tinyBytecodes[tiny_index];
-            
-             if(enable_fncall_logging) {
-                auto pair = number_of_fncalls.find(tinycode->name);
-                if (pair == number_of_fncalls.end())
-                    number_of_fncalls[tinycode->name] = 1;
-                else
-                    pair->second += 1;
-            }
-        } break;
-        case BC_RET: {
             i64 diff = stack_pointer - (i64)stack.data();
             if(diff == (i64)(stack.max)) {
                 // no previous call frame so we quit
@@ -965,6 +1045,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
             registers[BC_REG_LOCALS] = base_pointer;
 
+
             has_return_values_on_stack = true;
             ret_offset = 0;
             if(REGISTER_SIZE == 4) {
@@ -989,18 +1070,31 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             op0 = (BCRegister)instructions[pc++];
             LinkConvention l = (LinkConvention)instructions[pc++];
 
-            log::out << log::RED << "Cannot access imported variable in virtual machine (not implemented)\n";
-            running = false;
-            break;
-            // Assert(bytecode->dataSegment.size() > imm);
-            // registers[op0] = (u64)(bytecode->dataSegment.data() + imm);
+            int reli = -1;
+            for(int i=0;i<bytecode->externalRelocations.size();i++) {
+                auto& rel = bytecode->externalRelocations[i];
+                if (rel.pc == pc && rel.tinycode_index == tiny_index) {
+                    reli = i;
+                    break;
+                }
+            }
+            if(reli != -1) {
+                void* ptr = dll_variables[reli];
+                registers[op0] = (i64)ptr;
+            } else {
+                log::out << log::RED << "Cannot access imported variable in virtual machine (not implemented)\n";
+                running = false;
+                break;
+            }
         } break;
         case BC_CODEPTR: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
-
-            registers[op0] = imm;
+            
+            // nocheckin
+            registers[op0] = (i64)get_bytecode_pointer(imm-1);
+            // registers[op0] = imm;
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
@@ -1153,8 +1247,10 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             if(!silent) {
                 log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
             }
-            // TODO: Print what assembly we tried to execute.
-            //   Show call stack too?
+            // TODO: Run assembler on the inline assembly (like we do in x64 gen).
+            //   Allocate executable memory and then start executing.
+            //   We need to add some instructions to populate the stack with values
+            //   and then extract the final values.
             running = false;
         } break;
         case BC_ADD:
@@ -1472,14 +1568,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         // }
     // }
     // silent = false;
-    auto time = StopMeasure(tp);
-    if(!silent){
-        log::out << "\n";
-        log::out << log::LIME << "Executed "<<executedInstructions<<" insts. in "<<FormatTime(time)<< " ("<<FormatUnit(executedInstructions/time)<< " inst/s)\n";
-        #ifdef ILOG_REGS
-        printRegisters();
-        #endif
-    }
 }
 bool VirtualMachine::add_memory_mapping(u64 start, u64 physical, u64 size) {
     // check for overlap
@@ -1510,4 +1598,345 @@ void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
     // suspicious pointer
     Assert(((i64)virtual_pointer >= 0x100000 && (i64)virtual_pointer < 0x0010'0000'0000'0000) || (i64)virtual_pointer == 0);
     return (void*)virtual_pointer;
+}
+engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
+    using namespace engone;
+    auto& ptr = bytecode_pointers[index];
+
+    if(!ptr.ptr) {
+        // NOTE: If we're smart, we could allocate a big chunk of
+        //   executable memory for all the function pointers instead
+        //   of many small once.
+        ptr.size = 1024;
+        u8* f = (u8*)AllocateExec(ptr.size);
+        ptr.ptr = f;
+        
+        /*
+            push rbp
+            mov rdx, rsp
+            sub rdx, 0x4000
+            
+            # prepare args to rdx
+
+            mov rcx, 0x1000200030004000 # VM pointer
+            mov r8d, 0x10002000 # tinycode index
+            mov rax, 0x1000200030004000 # stub function pointer
+            sub rsp, 32
+            call rax
+            add rsp, 32
+
+            # prepare return values
+            # mov eax, 55
+            
+            pop rbp
+            ret
+        */
+        
+        // TODO: Doesn't work on LINUX! Different calling convention (we should allocate 32 stack space for arguments, arguments are passed in different registers)
+        
+        const u32 MINI_VM_STACK_LIMIT = 0x4000;
+        const u8 PROLOG[] {
+            /* push rbx        */ 0x53,
+            /* mov rbx, rsp    */ 0x48, 0x89, 0xe3,
+            /* sub rbx, 0x4000 */ 0x48, 0x81, 0xeb, (MINI_VM_STACK_LIMIT>>0)&0xFF, (MINI_VM_STACK_LIMIT>>8)&0xFF, (MINI_VM_STACK_LIMIT>>16)&0xFF, (MINI_VM_STACK_LIMIT>>24)&0xFF,
+        };
+        const u8 MAIN_BODY[] {
+            /* mov rcx, 0x1000200030004000 # VM pointer            */ 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* mov rdx, rbx                                        */ 0x48, 0x89, 0xDA,
+            /* mov r8d, 0x10002000         # tinycode index        */ 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10,
+            /* mov rax, 0x1000200030004000 # stub function pointer */ 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* sub rsp, 32                                         */ 0x48, 0x83, 0xEC, 0x20,
+            /* call rax                                            */ 0xFF, 0xD0,
+            /* add rsp, 32                                         */ 0x48, 0x83, 0xC4, 0x20,
+        };
+        const u8 EPILOG[] {
+            /* pop rbx */ 0x5b,
+            /* ret     */ 0xC3,
+        };
+        
+        int head = 0;
+        memcpy(f+head, PROLOG, sizeof(PROLOG));
+        head += sizeof(PROLOG);
+        
+        // Prepare arguments
+        
+        //  TODO: We are always using 64 bit registers, maybe a problem? Should we be casting signed unsigned 64/32 bit integers?
+        
+        auto& tc = bytecode->tinyBytecodes[index];
+        auto impl = tc->funcImpl;
+        if(impl) { // comp_time function doesn't have funcImpl
+            for (int i=0;i<impl->signature.argumentTypes.size();i++) {
+                auto& arg = impl->signature.argumentTypes[i];
+                // TODO: Handle 64-bit floats
+                const i32 float_mov_stride = 5;
+                const u8 float_mov[]{
+                    /* movss [rbx+16], xmm0 */ 0xF3, 0x0F, 0x11, 0x42, 0x10, 
+                    /* movsd [rbx+16], xmm0 */ 0xF2, 0x0F, 0x11, 0x42, 0x10,
+                    /* movss [rbx+24], xmm1 */ 0xF3, 0x0F, 0x11, 0x4A, 0x18,
+                    /* movsd [rbx+24], xmm1 */ 0xF2, 0x0F, 0x11, 0x4A, 0x18,
+                    /* movss [rbx+32], xmm2 */ 0xF3, 0x0F, 0x11, 0x52, 0x20,
+                    /* movsd [rbx+32], xmm2 */ 0xF2, 0x0F, 0x11, 0x52, 0x20,
+                    /* movss [rbx+40], xmm3 */ 0xF3, 0x0F, 0x11, 0x5A, 0x28,
+                    /* movsd [rbx+40], xmm3 */ 0xF2, 0x0F, 0x11, 0x5A, 0x28,
+                };
+                const u8 norm_mov[] {
+                    /* mov [rbx+16], rcx */ 0x48, 0x89, 0x4B, 0x10,
+                    /* mov [rbx+24], rdx */ 0x48, 0x89, 0x53, 0x18, 
+                    /* mov [rbx+32], r8  */ 0x4C, 0x89, 0x43, 0x20,
+                    /* mov [rbx+40], r9  */ 0x4C, 0x89, 0x4B, 0x28,
+                };
+                if (i >= 0 && i <= 3 && (arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64)) {
+                    memcpy(f+head, float_mov + i*2*float_mov_stride + (arg.typeId == TYPE_FLOAT64 ? 1 : 0), float_mov_stride);
+                    head += float_mov_stride;
+                } else if (i >= 0 && i <= 3) {
+                    memcpy(f+head, norm_mov + i*4, 4);
+                    head+=4;
+                } else {
+                    // mov rax, [rsp+0x8]
+                    // mov [rbx+0x8], rax
+                    u8 mova[] { 0x48, 0x8B, 0x44, 0x24, 16 + i*8, };
+                    u8 movb[] { 0x48, 0x89, 0x43, 16 + i*8, };
+                    memcpy(f+head, mova, sizeof(mova));
+                    head+=sizeof(mova);
+                    memcpy(f+head, movb, sizeof(movb));
+                    head+=sizeof(movb);
+                }
+            }
+        }
+        
+        memcpy(f+head, MAIN_BODY, sizeof(MAIN_BODY));
+        *(i64*)(f + head + 0x0+2)  = (i64)this;
+        *(i32*)(f + head + 0xd+2)  = (i32)index;
+        *(i64*)(f + head + 0x13+2) = (i64)(void*)BaseBytecodeStubFunction;
+        head += sizeof(MAIN_BODY);
+        
+        // Prepare return values
+        if (impl && impl->signature.returnTypes.size() > 0) {
+            Assert(impl->signature.returnTypes.size() <= 1);
+            if (impl->signature.returnTypes[0].typeId == TYPE_FLOAT32) {
+                // movss xmm0, [rbx-0x8]
+                u8 mov[] { 0xF3, 0x0F, 0x10, 0x43, 0xF8, };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            } else  if (impl->signature.returnTypes[0].typeId == TYPE_FLOAT64) {
+                // movsd xmm0, [rbx-0x8]
+                u8 mov[] { 0xF2, 0x0F, 0x10, 0x43 };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            } else {
+                // mov rax, [rbx-8]
+                u8 mov[] { 0x48, 0x8b, 0x43, 0xf8, };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            }
+        }
+        
+        memcpy(f+head, EPILOG, sizeof(EPILOG));
+        head += sizeof(EPILOG);
+        
+        Assert(head < ptr.size);
+        
+        // OutputAsHex("asm.log", (u8*)f, head);
+    }
+
+    return (engone::VoidFunction)ptr.ptr;
+}
+FnMakeshift VirtualMachine::get_makeshift(FunctionSignature* signature) {
+    /*
+        This function generates a function to transition from VM to external C function.
+        (or a call to a function pointer which could be stub machine code to transition back to VM to run bytecode)
+    */
+    auto pair = makeshift_map.find(signature);
+    if (pair != makeshift_map.end())
+        return pair->second.func;
+    
+    int max = 1024;
+    u8* f = (u8*)engone::AllocateExec(max);
+    int head = 0;
+    
+    const u8 PROLOG[]{
+        /* push rbx                                     */ 0x53,
+        /* mov rbx, rsp # save pointer for safe keeping */ 0x48, 0x89, 0xE3,
+        /* mov r10, rcx # set function pointer          */ 0x49, 0x89, 0xCA,
+        /* mov rsp, rdx # set makeshift stack           */ 0x48, 0x89, 0xD4,
+    };
+    const u8 EPILOG[]{
+        /* mov rsp, rbx */ 0x48, 0x89, 0xDC,
+        /* pop rbx      */ 0x5B,
+        /* ret          */ 0xC3,
+    };
+    
+    memcpy(f+head, PROLOG, sizeof(PROLOG));
+    head += sizeof(PROLOG);
+    
+    // Prepare arguments
+    const int float_mov_stride = 6;
+    const u8 float_movs[]{
+        /* movss xmm0, [rsp]      */ 0xF3, 0x0F, 0x10, 0x44, 0x24, 0x00,
+        /* movsd xmm0, [rsp]      */ 0xF2, 0x0F, 0x10, 0x44, 0x24, 0x00,
+        /* movss xmm1, [rsp + 8]  */ 0xF3, 0x0F, 0x10, 0x4C, 0x24, 0x08,
+        /* movsd xmm1, [rsp + 8]  */ 0xF2, 0x0F, 0x10, 0x4C, 0x24, 0x08,
+        /* movss xmm2, [rsp + 16] */ 0xF3, 0x0F, 0x10, 0x54, 0x24, 0x10,
+        /* movsd xmm2, [rsp + 16] */ 0xF2, 0x0F, 0x10, 0x54, 0x24, 0x10,
+        /* movss xmm3, [rsp + 24] */ 0xF3, 0x0F, 0x10, 0x5C, 0x24, 0x18,
+        /* movsd xmm3, [rsp + 24] */ 0xF2, 0x0F, 0x10, 0x5C, 0x24, 0x18,
+    };
+    const int norm_mov_stride = 5;
+    const u8 norm_movs[]{
+        /* mov rcx, QWORD PTR [rsp]      */ 0x48, 0x8B, 0x4C, 0x24, 0x00,
+        /* mov rdx, QWORD PTR [rsp + 8]  */ 0x48, 0x8B, 0x54, 0x24, 0x08,
+        /* mov r8,  QWORD PTR [rsp + 16] */ 0x4C, 0x8B, 0x44, 0x24, 0x10,
+        /* mov r9,  QWORD PTR [rsp + 24] */ 0x4C, 0x8B, 0x4C, 0x24, 0x18,
+    };
+    // TODO: We use 8-bit immediates in the instructions. Is that enough for 16 arguments?
+    Assert(signature->argumentTypes.size() < 16);
+    int stack_space = signature->argumentTypes.size()*8;
+    if(stack_space < 32)
+        stack_space = 32;
+    if((stack_space & 15) != 0) {
+        stack_space += 16 - (stack_space&15);
+    }
+    
+    for(int i=0;i<signature->argumentTypes.size();i++) {
+        auto& arg = signature->argumentTypes[i].typeId;
+        if(i>=0&&i<=3 && arg == TYPE_FLOAT32 && arg == TYPE_FLOAT64) {
+            memcpy(f+head, float_movs + i*2*float_mov_stride + norm_mov_stride*(arg == TYPE_FLOAT64?1:0), float_mov_stride);
+            head += float_mov_stride;
+        } else if(i>=0&&i<=3) {
+            memcpy(f+head, norm_movs + i*norm_mov_stride, norm_mov_stride);
+            head += norm_mov_stride;
+        } else {
+            u8 mov[]{
+                /* mov rax, [rsp+32] */ 0x48, 0x8B, 0x44, 0x24, i*8,
+                /* mov [rsp-48], rax */ 0x48, 0x89, 0x44, 0x24, i*8 - stack_space,
+            };
+            memcpy(f+head, mov, sizeof(mov));
+            head += sizeof(mov);
+        }
+    }
+    
+    u8 MAIN_BODY[]{
+        /* sub rsp, 32 */ 0x48, 0x83, 0xEC, stack_space,
+        /* call r10    */ 0x41, 0xFF, 0xD2,
+        /* add rsp, 32 */ 0x48, 0x83, 0xC4, stack_space,
+    };
+    memcpy(f+head, MAIN_BODY, sizeof(MAIN_BODY));
+    head += sizeof(MAIN_BODY);
+    
+    // Prepare return values
+    if(signature->returnTypes.size() > 0) {
+        if(signature->returnTypes[0].typeId == TYPE_FLOAT32) {
+            // movss [rsp-32], xmm0 # float values are returned in xmm0 register
+            u8 mov[]{ 0xF3, 0x0F, 0x11, 0x44, 0x24, 0xE8 };
+            memcpy(f+head, mov, sizeof(mov));
+            head += sizeof(mov);
+        } else if(signature->returnTypes[0].typeId == TYPE_FLOAT64) {
+            // movsd [rsp-24], xmm0 # float values are returned in xmm0 register
+            u8 mov[]{ 0xF2, 0x0F, 0x11, 0x44, 0x24, 0xE8 };
+            memcpy(f+head, mov, sizeof(mov));
+            head += sizeof(mov);
+        } else {
+            // mov [rsp-24], rax # put return on stack where bytecode expects it
+            u8 mov[]{ 0x48, 0x89, 0x44, 0x24, 0xE8 };
+            memcpy(f+head, mov, sizeof(mov));
+            head += sizeof(mov);
+        }
+    }
+    
+    memcpy(f+head, EPILOG, sizeof(EPILOG));
+    head += sizeof(EPILOG);
+    
+    // OutputAsHex("mk_asm.log", (u8*)f, head);
+    
+    /*
+    push rbx
+    mov rbx, rsp # save pointer for safe keeping
+    mov r10, rcx # set function pointer
+    mov rsp, rdx # set makeshift stack
+
+    mov rcx, QWORD PTR [rsp]      # Set arguments even if we don't use all since
+    mov rdx, QWORD PTR [rsp + 8]  # it is easier than conditional jumps and stuff
+    mov r8,  QWORD PTR [rsp + 16]
+    mov r9,  QWORD PTR [rsp + 24] # we always allocate 32 bytes so we won't read out of bounds
+    
+    mov [rsp + 32 - 48], [rsp+32]
+    
+    sub rsp, 48
+    
+    mov [rsp+32], [rsp+32+48]
+        
+    mov rax, [rsp+32]
+    mov [rsp+8], rax
+    
+
+    # TODO: Handle 64-bit floats
+    movss xmm0, [rsp]
+    movss xmm1, [rsp + 8]
+    movss xmm2, [rsp + 16]
+    movss xmm3, [rsp + 24]
+
+    sub rsp, 32
+    call r10          # call function pointer
+    add rsp, 32
+    
+    add rsp,16
+    
+    # TODO: Handle returned 64 bit float
+    mov [rsp-24], rax # put return on stack where bytecode expects it
+    movss [rsp-32], xmm0 # float values are returned in xmm0 register
+    
+    mov rsp, rbx
+    pop rbx
+    ret
+
+    */
+    
+    Assert(head < max);
+    
+    MakeshiftAssembly mk{};
+    mk.func = (FnMakeshift)f;
+    mk.size = max;
+    makeshift_map[signature] = mk;
+    return (FnMakeshift)f;
+}
+i64 PrepareStackPointer(VirtualMachine* vm) {
+    using namespace engone;
+    auto leak = Allocate(0x10000);
+    return (i64)leak;
+}
+void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index) {
+    using namespace engone;
+    // log::out << "Hello " << sp << " " << index << "\n";
+    vm->push_state(index, sp);
+
+    auto prev = vm->is_callback_from_stub;
+    vm->is_callback_from_stub = true;
+    vm->execute();
+    vm->is_callback_from_stub = prev;
+
+    vm->pop_state();
+    // log::out << "Leave " << sp << " " << index << "\n";
+}
+void VirtualMachine::push_state(int index, i64 sp) {
+    if(states.size() == 0) {
+        states.reserve(4);
+    } else {
+        // Prepare 4 states and crash if we use more than that.
+        // We reference fields of the last state in the main execute function
+        // and if we resize allocation that memory would be invalidated.
+        // We can use bucket array or something else but I
+        // choose to set a limit of 4. We can increase if we run into problems.
+        Assert(states.size() + 1 <= states.capacity());
+    }
+    states.add({});
+    auto& state = states.last();
+    state.stack_pointer = sp;
+    Assert(index >= 0 && index < bytecode->tinyBytecodes.size());
+    state.tiny_index = index;
+    state.tinycode = bytecode->tinyBytecodes[index];
+    state.base_pointer = sp;
+    state.registers[BC_REG_LOCALS] = state.base_pointer;
+}
+void VirtualMachine::pop_state() {
+    states.pop();
 }

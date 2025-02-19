@@ -8,20 +8,31 @@
 .text
 .globl Makeshift_stdcall
 Makeshift_stdcall:
-    push rbx     # callee saved register
+    push rbx
     mov rbx, rsp # save pointer for safe keeping
     
+    mov rax, rcx # set function pointer
     mov rsp, rdx # set makeshift stack
-    mov rax, rcx # rcx is needed for arguments
 
     mov rcx, QWORD PTR [rsp]      # Set arguments even if we don't use all since
     mov rdx, QWORD PTR [rsp + 8]  # it is easier than conditional jumps and stuff
     mov r8,  QWORD PTR [rsp + 16]
     mov r9,  QWORD PTR [rsp + 24] # we always allocate 32 bytes so we won't read out of bounds
 
-    call rax          # call function pointer
-    mov [rsp-24], rax # put return on stack where bytecode expects it
+    # TODO: Handle 64-bit floats
+    movss xmm0, [rsp]
+    movss xmm1, [rsp + 8]
+    movss xmm2, [rsp + 16]
+    movss xmm3, [rsp + 24]
 
-    mov rsp, rbx      # restore original stack
+    sub rsp, 32
+    call rax          # call function pointer
+    add rsp, 32
+    
+    # TODO: Handle returned 64 bit float
+    mov [rsp-24], rax # put return on stack where bytecode expects it
+    movss [rsp-32], xmm0 # float values are returned in xmm0 register
+    
+    mov rsp, rbx
     pop rbx
     ret

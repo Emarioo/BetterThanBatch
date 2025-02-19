@@ -2,12 +2,16 @@
     bin\btb examples/dev2 -d -o bin/math.dll
     bin\btb examples/dev2 -d -o main.exe -r
 */  
+#import "Logger"
 
-fn func() {
-    #macro HI a := 5
-
-    GLOBAL_MAC
+fn @export glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void* {
+    log("w ",width, " h ",height, " ", title, " ", monitor, " ",share)
+    return cast_unsafe<void*>cast<i64>5
 }
+
+// fn @export func(x: i32, y: i32, z: i32, a: i32, b: i32, c: i32) -> i32 {
+//     return x+y+z+a+b+c
+// }
 
 // #if !BUILD_EXE
 //     // DLL

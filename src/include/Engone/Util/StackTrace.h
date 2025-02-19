@@ -53,6 +53,7 @@ void SetSingleCallbackOnAssert(std::function<void()> func);
 void PopLastCallback();
 // calls added callbacks for each trace and prints the stack trace
 void FireAssertHandler();
+void EnableAssertHandler(bool yes);
 
 
 

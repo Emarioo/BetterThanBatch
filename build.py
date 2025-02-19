@@ -28,6 +28,7 @@ def main():
     #####################
     #   CONFIGURATIONS
     #     Comment/uncomment the options you want
+    #     'build.py clean' if you change the options
     #####################
 
     config["bin_dir"] = "bin"
@@ -36,8 +37,8 @@ def main():
     else:
         config["output"] = "bin/btb"
 
-    # config["use_compiler"] = "gcc"
-    config["use_compiler"] = "msvc"
+    config["use_compiler"] = "gcc"
+    # config["use_compiler"] = "msvc"
     # config["use_compiler"] = "clang"
 
     config["use_debug"] = True
@@ -266,9 +267,10 @@ def compile(config):
 
         MSVC_COMPILE_OPTIONS += " /FI pch.h"
 
-        if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.obj"):
-            cmd("ml64 /nologo /Zd /Zi /Fo"+config["bin_dir"]+"/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
-        object_files.append(config["bin_dir"]+"/hacky_stdcall.obj")
+        hacky_obj_path = config["bin_dir"]+"/hacky_stdcall.obj"
+        if not os.path.exists(hacky_obj_path) or os.path.getmtime(hacky_obj_path) < os.path.getmtime("src/BetBat/hacky_stdcall.asm"):
+            cmd("ml64 /nologo /Zd /Zi /Fo"+hacky_obj_path+" /c src/BetBat/hacky_stdcall.asm") # TODO: piping output to nul might not work with os.system
+        object_files.append(hacky_obj_path)
 
         # Create sub directories in bin, this part must be single-threaded
         for f in modified_files:
@@ -398,13 +400,17 @@ def compile(config):
         # Code below compiles the necessary object files
       
         if platform.system() == "Windows":
-            if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.o"):
-                cmd("as -c -g src/BetBat/hacky_stdcall.s -o "+config["bin_dir"]+"/hacky_stdcall.o")
-            object_files.append(config["bin_dir"]+"/hacky_stdcall.o")
+            hacky_obj_path = config["bin_dir"]+"/hacky_stdcall.o"
+            if not os.path.exists(hacky_obj_path) or os.path.getmtime(hacky_obj_path) < os.path.getmtime("src/BetBat/hacky_stdcall.s"):
+                # -g flag causes relocation truncated to fit: IMAGE_REL_AMD64_ADDR32 against `.text'
+                # not sure why so no debug info here
+                cmd("as -c src/BetBat/hacky_stdcall.s -o "+hacky_obj_path)
+            object_files.append(hacky_obj_path)
         else:
-            if not os.path.exists(config["bin_dir"]+"/hacky_sysvcall.o"):
-                cmd("as -c -g src/BetBat/hacky_sysvcall.s -o "+config["bin_dir"]+"/hacky_sysvcall.o")
-            object_files.append(config["bin_dir"]+"/hacky_sysvcall.o")
+            hacky_obj_path = config["bin_dir"]+"/hacky_sysvcall.o"
+            if not os.path.exists(hacky_obj_path) or os.path.getmtime(hacky_obj_path) < os.path.getmtime("src/BetBat/hacky_sysvcall.s"):
+                cmd("as -c -g src/BetBat/hacky_sysvcall.s -o "+hacky_obj_path)
+            object_files.append(hacky_obj_path)
         
         # TODO: Add include directories to compute_modified_files? We assume that all includes come from "include/"
 

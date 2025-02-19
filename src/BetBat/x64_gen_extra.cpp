@@ -243,6 +243,7 @@ bool X64Builder::generate() {
 
         if(n->base->opcode == BC_POP) {
             auto base = (InstBase_op1*)n->base;
+            Assert(base->op0 >= 0 && base->op0 < BC_REG_MAX);
             auto& v = bc_register_map[base->op0];
             auto recipient = v.used_by;
             auto reg_nr = v.reg_nr;
@@ -929,7 +930,7 @@ bool X64Builder::generate() {
             log::out << n->bc_index<< " "<< *n << "\n";
         }
         log::out << "Asserted on " << log::GRAY <<  cur_node->bc_index <<" " << *cur_node << "\n";
-        // tinycode->print(0,-1, code);
+        // tinycode->print(0,-1, bytecode);
     )
 
     #ifdef DEBUG_REGISTER_USAGE
@@ -1205,7 +1206,9 @@ bool X64Builder::generate() {
                 }
                 ret_offset -= imm;
                 virtual_stack_pointer += imm;
-                push_offsets.pop();
+                if(opcode == BC_FREE_ARGS) {
+                    push_offsets.pop();
+                }
             } break;
             case BC_SET_ARG: {
                 auto base = (InstBase_op1_ctrl_imm16*)n->base;
