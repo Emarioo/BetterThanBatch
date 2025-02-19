@@ -1,0 +1,7 @@
+// btb broadcast.btb -o libbroadcast.so
+
+#import "Logger"
+
+fn @export BroadcastMsg(text: char*){
+    log("Broadcast: ", text);
+}

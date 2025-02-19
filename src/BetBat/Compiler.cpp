@@ -2543,7 +2543,7 @@ BuildUnit* create_buildunit() {
     log::out.flush();
     auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit));
     new(unit)BuildUnit();
-    unit->name = "some unit";
+    unit->name = (char*)"some unit";
     unit->length = strlen(unit->name);
     unit->size = global_compiler->bytecode->tinyBytecodes.size();
     return unit;

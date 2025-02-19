@@ -248,6 +248,21 @@ u32 Lexer::tokenize(const char* text, u64 length, const std::string& path_name, 
     #define IS_CHR_SPACE(C) (C == ' ' || C == '\t')
 
     u64 index=0;
+
+    // skip shebang
+    if(length >= 2 && text[0] == '#' && text[1] == '!') {
+        index+=2;
+        while(index<length) {
+            char chr = text[index];
+            index++;
+            if(chr == '\n') {
+                break;
+            }
+        }
+        line = 2;
+        column = 1;
+    }
+
     while(index<length) {
         char prevChr = 0;
         char nextChr = 0;

@@ -1,111 +1,104 @@
-**A common mistake** is tangling the calling conventions. Normally, a custom convention is used for functions but if you import or export a function it is implicitly changed to the native standard convention (stdcall or System V ABI). If you are casting function pointers, make sure to annotate them with the correct convention.
 
-# Linking in the compiler
-We begin with the basics.
+For quick reference:
+- Compile dynamic library: `btb main.btb -o main.dll` (or `-o main.so`)
+- Compile static library: `btb main.btb -o main.lib` (or `-o libmain.a`)
+- Compile executable: `btb main.btb -o main.exe` (or `-o main`)
+
+# Linking with libraries
+<!-- We begin with the basics.
 1. The compiler generates an object file (bin/main.o).
 2. The compiler provides information to the linker (MSVC, GCC, CLANG) such as the object file, path of output file, and libraries to link with.
-
-Libraries to link with is specified in the program itself. There are two ways of doing this.
-
-`#load "path_to_lib"` - Passes a library to the linker.
-`#load "path_to_lib" as Lib` - Passes the library to the linker **if** any function or variable refers to `Lib`.
-`#link "path_to_lib"` - Pass any kind of argument to the linker.
-
-`#link` exists in case you want to interact with the linker in a way that the language and compiler doesn't support. This will often require one `#link` per linker since all linkers don't have the same options (MSVC, GCC).
-
-`#load` exists to link with libraries independently from the linker. The compiler uses the right compiler options depending on the linker. `g++ -Ldir_to_lib -llib_file` (GNU Linux or MinGW Windows), `link path_to_lib` (MSVC Windows).
-
-Path after `#load` can be relative to current working directory, relative to folder where the compiler executable is, and relative to import directories specified in arguments passed to the compiler executable. (absolute paths also work of course)
-
-<!-- I don't think this is true anymore
-One important thing is that `#load "your.lib"` without slashes is assumed to be a system library. It will be linked like this: `gcc -llib_file`. This `#load "./your.lib"` will be linked as a user library like this:`gcc your.lib`.
 -->
+Libraries to link with are specified in the source code of the program using the `#load` directive. This is different from C compilers where you specify libraries as arguments to the linker.
 
-## Linking libraries
-**WARNING:** You cannot link with shared libraries on Linux yet.
+Functions from a library are marked with `@import(LibName)`. Below are some practical examples.
 
-Let's say this is your project structure.
+## Linking with a dynamic library
+Let's say this is your project structure. You want to compile two dynamic libraries, sound.so and broadcast.so, which should should be linked when compiling the main program.
 ```
 project
-├─main.btb
-├─libs
-│ ├─sound.lib
-│ ├─sound.dll
+|-main.btb
+|-sound.c
+|-broadcast.btb
 ```
-
-The purpose of your program is to play the sound file specified
-through command line arguments. The static library 'sound.lib' contains
-a function that lets you play a sound from a file and you want to call it.
-The following code does just that.
-
+**main.btb**
 ```c++
+// btb main.btb --run
+
 // Tell the compiler to link with 'libs/sound.lib' and let functions
 // refer to this library as 'Sound'.
-#load "libs/sound.lib" as Sound
+#load "./libsound.so" as Sound
+#load "./libbroadcast.so" as Broadcast
 
 // @import tells the compiler that this function comes from a library
 // and shouldn't have a body.
 fn @import(Sound) PlaySoundFromFile(path: char*);
+fn @import(Broadcast) BroadcastMsg(text: char*);
 
-fn main(argc: i32, argv: char**) {
-    // Now we just call the function
-    PlaySoundFromFile(argv[1])
-}
-
-// If the name 'PlaySoundFromFile' is to long then you can use an alias.
-fn @import(Sound, alias = "PlaySoundFromFile") do_sound(path: char*);
-// Also useful when importing name mangled functions.
-// (in this case, name mangling using GCC Compiler, g++)
-fn @import(Sound, alias = "_Z17PlaySoundFromFilePc") do_sound(path: char*);
-
-fn main(argc: i32, argv: char**) {
-    do_sound(argv[1])
-}
+PlaySoundFromFile("theme.mp3".ptr)
+BroadcastMsg("main is done".ptr)
 ```
+**sound.c**
+```c
+// gcc sound.c -fpic -shared -o libsound.so
 
-Linking with a dynamic library is as easy as changing the path.
-```c++
-#load "libs/sound.dll" as Sound
+#include <stdio.h>
 
-fn @import(Sound) PlaySoundFromFile(path: char*);
-```
-
-Under the hood, different things are happening but this is hidden to make things more convenient. If you want to link a dll as a static library you can do the following, altough this will crash your program.
-```c++
-#load "libs/sound.dll" as Sound
-
-// @importlib to link with a static library no matter the
-// file Sound refers to, @importdll for dynamic libraries
-fn @importlib(Sound) PlaySoundFromFile(path: char*);
-```
-
-**NOTE**: When importing (or exporting) the calling convention defaults to `@oscall` (stdcall when  targeting Windows, System V ABI for Linux). You can change the convention by writing `fn @betcall @import(...`.
-
-## Distributing executables and dynamic libraries
-When you compile an executable that uses dynamic libraries, you must also distribute the dynamic libraries along with your executable. Otherwise Windows will complain, "sound.dll not found" on the user's computer.
-
-This part of the compiler is work in progress on Linux but on Windows, the dlls are copied to the working directory where you ran the compiler. These dlls need to be distributed.
-
-# Creating libraries
-Compile executable: `btb main.btb -o app.exe`
-
-Compile dynamic library: `btb main.btb -o app.dll`
-
-Compile static library: `btb main.btb -o app.lib`
-
-When compiling libraries, the functions you want to export must be annotated with `@export`. Exported functions cannot be polymorphic and you cannot export functions with the same name. You can alias the name.
-```c++
-fn @export multiply(x: f32, y: f32) -> f32 {
-    return x * y
-}
-fn @export(alias="multiply_int") multiply(x: i32, y: i32) -> i32 {
-    return x * y
+void PlaySoundFromFile(const char* path){
+    printf("Play sound: %s\n", path);
 }
 ```
 
-A thing to note is that only the functions that are used such as the entry point and exported functions are present in the binary as symbols.
+**broadcast.btb**
+```c
+// btb broadcast.btb -o libbroadcast.so
 
-**NOTE**: Exported functions default to @oscall. Write `fn @betcall @import(...)` to force another calling convention.
+#import "Logger"
+
+fn @export BroadcastMsg(text: char*){
+    log("Broadcast: ", text);
+}
+```
+
+Compile and run the files with these commands.
+```bash
+gcc sound.c -fpic -shared -o libsound.so
+btb broadcast.btb -o libbroadcast.so
+btb main.btb -o main
+
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
+./main
+```
+
+`export LD_LIBRARY_PATH=.` tells Linux to search current working directory for libsound.so when running `main`.
+
+## Other information
+
+You can use an alias for the imported/exported function like this:
+```cpp
+fn @import(Sound, alias="PlaySoundFromFile") do_sound(path: char*);
+fn @export(Sound, alias="btb_sendmsg") sendmsg(path: char*) { /* ... */ }
+```
+
+Exported functions cannot be polymorphic. You cannot export functions with the same name.
+
+You can use `#link` to pass an argument to the linker, useful when the compiler is lacking support for something. This may require one `#link` per toolchain since all linkers don't have the same options (MSVC vs GCC).
+```cpp
+#link "nostdlib"
+```
+
+`#load` exists to link with libraries independently from the linker. The compiler uses the right compiler options depending on the linker. `g++ -Ldir_to_lib -llib_file` (GNU Linux or MinGW Windows), `link path_to_lib` (MSVC Windows).
+
+The path specified in the `#load` directive should be one of these:
+- Relative to current working directory
+- Absolute path
+- Relative to the directory of the compiler executable
+- Relative to import directories (specified through arguments to the compiler)
+- A path without a slash is assumes to be a system library. `#load "lib_file"` -> `gcc -llib_file`. Use `#load "./lib_file"` for relative path.
+
+<!-- TODO: Cover variations of #load, without as and so on -->
+
+When importing (or exporting) the calling convention defaults to `@oscall` (stdcall when targeting Windows, System V ABI for Linux). You can change the convention by writing `fn @betcall @import(Lib) func(...)`. (betcall is the language's own calling convention which allows multiple return values and structs passed as values)
 
 ## Auto-generated declarations
 When compiling a library, a `libname_decl.btb` file is automatically created which contains the import declarations for that specific library along with enum and struct types.
@@ -340,3 +333,5 @@ Even though that's great, we still have a problem with alias. What if every func
 
 #apply_annotation @import(Math, prefix_alias="math_") { /* ... */ }
 ```
+
+<!-- **A common mistake** is tangling the calling conventions. Normally, a custom convention is used for functions but if you import or export a function it is implicitly changed to the native standard convention (stdcall or System V ABI). If you are casting function pointers, make sure to annotate them with the correct convention. -->

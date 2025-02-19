@@ -1,0 +1,18 @@
+
+// btb main.btb --run
+
+// Tell the compiler to link with 'libs/sound.lib' and let functions
+// refer to this library as 'Sound'.
+#load "./libsound.so" as Sound
+#load "./libbroadcast.so" as Broadcast
+
+// @import tells the compiler that this function comes from a library
+// and shouldn't have a body.
+fn @import(Sound) PlaySoundFromFile(path: char*);
+fn @import(Broadcast) BroadcastMsg(text: char*);
+
+// Now we just call the function
+PlaySoundFromFile("theme.mp3".ptr)
+
+BroadcastMsg("main is done".ptr)
+

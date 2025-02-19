@@ -159,9 +159,9 @@ enum LogColor : u8 {
 };
 
 fn std_print(value: LogColor) {
-    if(value == LOG_NO_COLOR)
-        value = LOG_SILVER
     #if OS_WINDOWS
+        if(value == LOG_NO_COLOR)
+            value = LOG_SILVER
         m_consoleHandle := GetStdHandle(STD_OUTPUT_HANDLE);
         // if (m_consoleHandle == NULL) {
 		// 	if (m_consoleHandle == NULL)

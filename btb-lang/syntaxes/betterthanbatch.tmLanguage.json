@@ -40,6 +40,9 @@
 		},
         {
             "include": "#assembly"
+        },
+        {
+            "include": "#shebang"
         }
 	],
 	"repository": {
@@ -103,6 +106,14 @@
                 {
                     "name":"entity.name.selector",
                     "match":"#\\w+"
+                }
+            ]
+		},
+		"shebang":{
+			"patterns": [
+                {
+                    "name":"entity.name.tag",
+                    "match":"^#\\!.*$"
                 }
             ]
 		},

@@ -513,7 +513,7 @@ fn @import(LibC) freeaddrinfo(res: addrinfo*);
 global @import(LibC) environ: char**;
 
 
-#load "pthread" as pthreads
+#load "libpthread.so.0" as pthreads
 
 // #macro pthread_t u64
 struct pthread_t {
