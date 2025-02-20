@@ -1,7 +1,7 @@
 #!/home/emarioo/BetterThanBatch/bin/btb
 
-#import "examples/graphics/quad.btb"
-// #import "examples/callbacks/main.btb"
+// #import "examples/graphics/quad.btb"
+#import "examples/callbacks/main.btb"
 
 // #run {
 //     #import "Logger"

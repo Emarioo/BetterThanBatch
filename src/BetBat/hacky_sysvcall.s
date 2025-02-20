@@ -9,8 +9,8 @@ Makeshift_sysvcall:
     push rbx     # callee saved register
     mov rbx, rsp # save pointer for safe keeping
     
+    mov rax, rdi # set function pointer
     mov rsp, rsi # set makeshift stack
-    mov rax, rdi # rcx is needed for arguments
 
     mov rdi, QWORD PTR [rsp]      # Set arguments even if we don't use all since
     mov rsi, QWORD PTR [rsp + 8]  # it is easier than conditional jumps and stuff
