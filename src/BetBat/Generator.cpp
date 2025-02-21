@@ -6673,39 +6673,54 @@ SignalIO GenContext::generatePreload() {
     BCRegister dst_reg = BC_REG_E;
     int polyVersion = 0;
 
-    if(!compiler->varInfos[VAR_INFOS])
-        return SIGNAL_SUCCESS;
+    if(compiler->varInfos[VAR_INFOS]) {
+        // Take pointer of type information arrays
+        // and move into the global slices.
+        builder.emit_dataptr(src_reg, compiler->dataOffset_types);
+        builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
+        builder.emit_mov_mr(dst_reg, src_reg, REGISTER_SIZE);
+        
+        builder.emit_dataptr(src_reg, compiler->dataOffset_members);
+        builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
+        builder.emit_mov_mr(dst_reg, src_reg, REGISTER_SIZE);
 
-    // Take pointer of type information arrays
-    // and move into the global slices.
-    builder.emit_dataptr(src_reg, compiler->dataOffset_types);
-    builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
-    builder.emit_mov_mr(dst_reg, src_reg, REGISTER_SIZE);
+        builder.emit_dataptr(src_reg, compiler->dataOffset_strings);
+        builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
+        builder.emit_mov_mr(dst_reg, src_reg, REGISTER_SIZE);
+    }
     
-    builder.emit_dataptr(src_reg, compiler->dataOffset_members);
-    builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
-    builder.emit_mov_mr(dst_reg, src_reg, REGISTER_SIZE);
-
-    builder.emit_dataptr(src_reg, compiler->dataOffset_strings);
-    builder.emit_dataptr(dst_reg, compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
-    builder.emit_mov_mr(dst_reg, src_reg, REGISTER_SIZE);
+    for (int i=0;i<compiler->runtime_global_data_fixups.size();i++) {
+        auto& var = compiler->runtime_global_data_fixups[i];
+        builder.emit_dataptr(src_reg, var.src_data_offset);
+        builder.emit_dataptr(dst_reg, var.dst_data_offset);
+        builder.emit_mov_mr(dst_reg, src_reg, REGISTER_SIZE);
+    }
+    // OutputAsHex("data.txt", bytecode->dataSegment.data(), bytecode->dataSegment.size());
     return SIGNAL_SUCCESS;
 }
 SignalIO GenContext::preparePreloadData() {
-    int polyVersion = 0;
-    if(!compiler->varInfos[VAR_INFOS])
-        return SIGNAL_SUCCESS;
+    // We need to use memory mapping if we want to allow preparePreloadData in VM on 32-bit systems
+    Assert(REGISTER_SIZE == 8);
 
-    // Reset type info pointers in global data section
-    // because we set them at compile time since it uses them
-    // but we want to keep them zero at start of runtime
-    // so we don't have random invalid pointers in data section
-    i64 ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_types);
-    memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_INFOS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
-    ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_members);
-    memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
-    ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_strings);
-    memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
+    int polyVersion = 0;
+    if(compiler->varInfos[VAR_INFOS]) {
+        // Reset type info pointers in global data section
+        // because we set them at compile time since it uses them
+        // but we want to keep them zero at start of runtime
+        // so we don't have random invalid pointers in data section
+        i64 ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_types);
+        memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_INFOS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
+        ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_members);
+        memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
+        ptr = (i64)(bytecode->dataSegment.data() + compiler->dataOffset_strings);
+        memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
+    }    
+    for (int i=0;i<compiler->runtime_global_data_fixups.size();i++) {
+        auto& var = compiler->runtime_global_data_fixups[i];
+        i64 ptr = (i64)(bytecode->dataSegment.data() + var.src_data_offset);
+        memcpy(bytecode->dataSegment.data() + var.dst_data_offset, &ptr, REGISTER_SIZE);
+    }
+    
     return SIGNAL_SUCCESS;
 }
 SignalIO GenContext::resetPreload() {
@@ -6982,7 +6997,7 @@ SignalIO GenContext::generateGlobalData() {
         last_stmt = stmt;
         ScopeId scopeId = ast->globals_to_evaluate[i].scope;
         // Assert(stmt->firstExpression); // statement should not have been added if there was no expression
-        Assert(stmt->arrayValues.size() == 0); // we don't handle initializer lists
+        // Assert(stmt->arrayValues.size() == 0); // we don't handle initializer lists
         Assert(stmt->varnames.size() == 1); // multiple varnames means that the expression produces multiple values which is annoying to handle so skip it for now
 
         // TODO: Code below should be the same as the one in generateFunction.
@@ -7004,61 +7019,129 @@ SignalIO GenContext::generateGlobalData() {
         // VM will manually put the pointer at this memory location
         // we do 16 because of 16-byte alignment rule in calling conventions
         builder.emit_alloc_local(BC_REG_INVALID, 16);
-
+        
         TypeId type{};
-        if(!stmt->firstExpression) {
-            type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
+        if(stmt->varnames[0].arrayLength > 0) {
+            
+            TypeInfo* arrTypeInfo = ast->getTypeInfo(stmt->varnames.last().versions_assignType[currentPolyVersion].baseType());
+            Assert(arrTypeInfo->structImpl->members.size() == 2); // slice type
+            TypeId element_type = arrTypeInfo->structImpl->members[0].typeId.baseType();
+            // TypeInfo* element_typeinfo = ast->getTypeInfo(element_type);
+            int element_size = ast->getTypeSize(element_type);
+            
+            u8* ptr_to_global_data = (u8*)bytecode->dataSegment.data();
+            *(i32*)(ptr_to_global_data + stmt->varnames.last().identifier->versions_dataOffset[currentPolyVersion] + arrTypeInfo->getMember(1).offset) = stmt->varnames.last().arrayLength;
+            
+            for(int i=0;i<stmt->varnames[0].arrayLength;i++) {
+                if(i >= stmt->arrayValues.size()) {
+                    type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
 
-            if(!type.isValid()) {
-                continue;
+                    if(!type.isValid()) {
+                        continue;
+                    }
+                    
+                    auto info = ast->getTypeInfo(type);
+                    if(!info || !info->astStruct) {
+                        continue;
+                    }
+
+                    generateDefaultValue(BC_REG_INVALID, 0, type, &stmt->location);
+                } else {
+                    auto& arrval = stmt->arrayValues[i];
+                    TEMP_ARRAY_N(TypeId, tempTypes, 5)
+                    inside_compile_time_execution = true;
+                    inside_global = true;
+                    auto result = generateExpression(arrval, &tempTypes, 0);
+                    inside_global = false;
+                    inside_compile_time_execution = false;
+                    // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
+                    if (result != SIGNAL_SUCCESS) {
+                        if (!info.hasForeignErrors()) {
+                            ERR_SECTION(
+                                ERR_HEAD2(arrval->location)
+                                ERR_MSG("Cannot evaluate expression for global variable at compile time. TODO: Provide better error message.")
+                                ERR_LINE2(arrval->location, "here")
+                            )
+                        }
+                        continue;
+                    }
+                    if (tempTypes.size() == 0 || !tempTypes[0].isValid()) {
+                        if (!info.hasForeignErrors()) {
+                            ERR_SECTION(
+                                ERR_HEAD2(arrval->location)
+                                ERR_MSG("Bad type.")
+                                ERR_LINE2(arrval->location, "here")
+                            )
+                        }
+                        continue;
+                    }
+                    type = tempTypes[0];
+                }
+                
+                // TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
+
+                // get pointer to global data from stack
+                builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
+
+                auto result = generatePop(data_ptr, i * element_size, type);
+                Assert(result == SIGNAL_SUCCESS);
+            }
+        } else {
+            if(!stmt->firstExpression) {
+                type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
+
+                if(!type.isValid()) {
+                    continue;
+                }
+                
+                auto info = ast->getTypeInfo(type);
+                if(!info || !info->astStruct) {
+                    continue;
+                }
+
+                generateDefaultValue(BC_REG_INVALID, 0, type, &stmt->location);
+            } else {
+                TEMP_ARRAY_N(TypeId, tempTypes, 5)
+                inside_compile_time_execution = true;
+                inside_global = true;
+                auto result = generateExpression(stmt->firstExpression, &tempTypes, 0);
+                inside_global = false;
+                inside_compile_time_execution = false;
+                // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
+                if (result != SIGNAL_SUCCESS) {
+                    if (!info.hasForeignErrors()) {
+                        ERR_SECTION(
+                            ERR_HEAD2(stmt->location)
+                            ERR_MSG("Cannot evaluate expression for global variable at compile time. TODO: Provide better error message.")
+                            ERR_LINE2(stmt->location, "here")
+                        )
+                    }
+                    continue;
+                }
+                if (tempTypes.size() == 0 || !tempTypes[0].isValid()) {
+                    if (!info.hasForeignErrors()) {
+                        ERR_SECTION(
+                            ERR_HEAD2(stmt->location)
+                            ERR_MSG("Bad type.")
+                            ERR_LINE2(stmt->location, "here")
+                        )
+                    }
+                    continue;
+                }
+                type = tempTypes[0];
             }
             
-            auto info = ast->getTypeInfo(type);
-            if(!info || !info->astStruct) {
-                continue;
-            }
+            
+            compiler->compile_stats.errors += errors;
 
-            generateDefaultValue(BC_REG_INVALID, 0, type, &stmt->location);
-        } else {
-            TEMP_ARRAY_N(TypeId, tempTypes, 5)
-            inside_compile_time_execution = true;
-            inside_global = true;
-            auto result = generateExpression(stmt->firstExpression, &tempTypes, 0);
-            inside_global = false;
-            inside_compile_time_execution = false;
-            // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
-            if (result != SIGNAL_SUCCESS) {
-                if (!info.hasForeignErrors()) {
-                    ERR_SECTION(
-                        ERR_HEAD2(stmt->location)
-                        ERR_MSG("Cannot evaluate expression for global variable at compile time. TODO: Provide better error message.")
-                        ERR_LINE2(stmt->location, "here")
-                    )
-                }
-                continue;
-            }
-            if (tempTypes.size() == 0 || !tempTypes[0].isValid()) {
-                if (!info.hasForeignErrors()) {
-                    ERR_SECTION(
-                        ERR_HEAD2(stmt->location)
-                        ERR_MSG("Bad type.")
-                        ERR_LINE2(stmt->location, "here")
-                    )
-                }
-                continue;
-            }
-            type = tempTypes[0];
+            // TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
+
+            // get pointer to global data from stack
+            builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
+
+            auto result = generatePop(data_ptr, 0, type);
+            Assert(result == SIGNAL_SUCCESS);
         }
-        
-        compiler->compile_stats.errors += errors;
-
-        // TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
-
-        // get pointer to global data from stack
-        builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
-
-        auto result = generatePop(data_ptr, 0, type);
-        Assert(result == SIGNAL_SUCCESS);
 
         // log::out << log::GOLD <<"global: " <<stmt->varnames[0].name << "\n";
         // tinycode->print(0,-1,bytecode);
@@ -7069,6 +7152,9 @@ SignalIO GenContext::generateGlobalData() {
         vm.init_stack();
         u8* ptr_to_global_data = (u8*)bytecode->dataSegment.data();
         int data_offset = stmt->varnames[0].identifier->versions_dataOffset[currentPolyVersion];
+        if(stmt->varnames[0].arrayLength > 0) {
+            data_offset = stmt->varnames[0].identifier->versions_array_dataOffset[currentPolyVersion];
+        }
         u8* ptr_to_value = ptr_to_global_data + data_offset;
         if(REGISTER_SIZE == 4) {
             u32 mem = 0x1000'0000;
@@ -7126,6 +7212,8 @@ SignalIO GenContext::generateGlobalData() {
             }
         }
     }
+    
+    // OutputAsHex("data.txt", bytecode->dataSegment.data(), bytecode->dataSegment.size());
 
     POP_LAST_CALLBACK()
 

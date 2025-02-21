@@ -3053,7 +3053,7 @@ BuildUnit* create_buildunit() {
     auto unit = (BuildUnit*)Allocate(sizeof(BuildUnit)); // TODO: Memory leak?
     new(unit)BuildUnit();
     
-    char* temp_name = "some unit";
+    const char* temp_name = "some unit";
     unit->length = strlen(temp_name);
     unit->name = (char*)Allocate(unit->length+1); // TODO: Memory leak?
     memcpy(unit->name, temp_name, unit->length+1);

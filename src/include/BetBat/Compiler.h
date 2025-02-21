@@ -320,6 +320,11 @@ struct Compiler {
 
     engone::Mutex lock_imports;
 
+    struct GlobalDataPtrFixup {
+        int dst_data_offset; // example: offset to ptr field in slice struct
+        int src_data_offset; //          offset to array data in data section
+    };
+    DynamicArray<GlobalDataPtrFixup> runtime_global_data_fixups;
     
     const char* const TEMP_TINYCODE_NAME = "_comp_time_";
     TinyBytecode* temp_tinycode = nullptr;

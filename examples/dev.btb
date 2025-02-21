@@ -5,29 +5,27 @@
 
 #import "Logger"
 
-struct Funcs {
-    start: fn();
-    finish: fn();
+global arr: i32[5]{2,7,4,5,6};
+
+#run {
+    log("OLD: ", arr[1], ", ",arr[2])
+    arr[1] = 55
+    arr[2] = 56
+    log("NEW: ", arr[1], ", ",arr[2])
 }
 
-for 0..2 {
-    x := #run get_funcs()
-    
-    x.start()
-    x.finish()
-}
+// log(&arr)
 
-fn get_funcs() -> Funcs {
-    log("Get funcs")
-    return { Start, Finish }
-}
+// log(arr[0])
 
-fn Start() {
-    log("START")
-}
-fn Finish() {
-    log("FINISH")
-}
+// for @ptr arr {
+//     *it = nr*2
+//     log(nr," ",*it)
+// }
+
+// log(arr[0])
+
+log(arr[0], ", ", arr[1], ", ", arr[2], ", ", arr[3], ", ", arr[4])
 
 // #run {
 //     #import "Logger"

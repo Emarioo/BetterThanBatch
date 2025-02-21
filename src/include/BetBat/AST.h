@@ -481,6 +481,8 @@ struct IdentifierVariable : public Identifier {
 
     PolyVersions<int> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
+    
+    PolyVersions<int> versions_array_dataOffset{}; // only used with global arrays
 
     bool is_import_global = false;
 

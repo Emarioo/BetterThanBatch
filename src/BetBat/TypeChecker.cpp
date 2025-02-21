@@ -4254,12 +4254,16 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             varinfo->declaration = now;
         }
         if (varname.arrayLength>0 && now->globalDeclaration){
-            ERR_SECTION(
-                ERR_HEAD2(now->location)
-                ERR_MSG("Global arrays have not been implemented.")
-                ERR_LINE2(now->location, "here")
-            )
-            return SIGNAL_FAILURE;
+            TypeInfo* arrTypeInfo = ast->getTypeInfo(now->varnames.last().versions_assignType[currentPolyVersion]);
+            int element_size = ast->getTypeSize(arrTypeInfo->getMember(1).typeId.baseType());
+            
+            int offset = info.ast->aquireGlobalSpace(varname.arrayLength * element_size);
+            varinfo->versions_array_dataOffset.set(currentPolyVersion, offset);
+            compiler->lock_miscellaneous.lock();
+            compiler->runtime_global_data_fixups.add({now->varnames.last().identifier->versions_dataOffset[currentPolyVersion],
+                now->varnames.last().identifier->versions_array_dataOffset[currentPolyVersion]});
+            compiler->lock_miscellaneous.unlock();
+            ast->globals_to_evaluate.add({now, scope->scopeId});
         }
         // Array initializer list
         if(now->arrayValues.size()!=0) {
