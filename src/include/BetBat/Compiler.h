@@ -25,6 +25,8 @@
 #include "BetBat/Parser.h"
 #include "BetBat/VirtualMachine.h"
 
+typedef void(*FnMakeshift)(engone::VoidFunction, void*);
+
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
 // The Unix way is the standard
@@ -328,7 +330,20 @@ struct Compiler {
         temp_tinycode->restore_to_empty();
         return temp_tinycode;
     }
-
+    
+    struct BytecodePointer {
+        void* ptr;
+        int size=0;
+    };
+    DynamicArray<BytecodePointer> bytecode_pointers;
+    engone::VoidFunction get_bytecode_pointer(int index);
+    struct MakeshiftAssembly {
+        FnMakeshift func;
+        int size;
+    };
+    std::unordered_map<FunctionSignature*, MakeshiftAssembly> makeshift_map;
+    FnMakeshift get_makeshift(FunctionSignature* signature);
+    
     DynamicArray<TestLocation> testLocations;
     // returns index of the newly added test location
     TestLocation* getTestLocation(int index);

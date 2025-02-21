@@ -2287,27 +2287,37 @@ SignalIO GenContext::generatePushedLiterals(TypeId type, char* stack, ASTExpress
         Assert(("TODO: handle 32 bit function pointer in comp time on ARM", REGISTER_SIZE == 8));
         i64 value = 0;
         memcpy(&value, stack, REGISTER_SIZE);
-        int tinycode_id = value; // see how virtual machine handles BC_CODEPTR and BC_CALL_REG
-        int func_start = 1;
-        int func_end = bytecode->tinyBytecodes.size() + 1;
-        if(tinycode_id >= func_start && tinycode_id < func_end) {
+        // int tinycode_id = value; // see how virtual machine handles BC_CODEPTR and BC_CALL_REG
+        // int func_start = 1;
+        // int func_end = bytecode->tinyBytecodes.size() + 1;
+        
+        int found = -1;
+        for(int i=0;i<compiler->bytecode_pointers.size();i++) {
+            if (compiler->bytecode_pointers[i].ptr == (void*)value) {
+                found = i;
+                break;
+            }
+        }
+        
+        if(found != -1) {
+        // if(tinycode_id >= func_start && tinycode_id < func_end) {
             int reloc = builder.get_pc() + 2;
-            builder.emit_codeptr(BC_REG_A, tinycode_id);
+            builder.emit_codeptr(BC_REG_A, found+1);
             builder.emit_push(BC_REG_A);
             if(compiler->options->target != TARGET_ARM) {
-                info.addCallToResolve(reloc, bytecode->tinyBytecodes[tinycode_id-1]->funcImpl);
+                info.addCallToResolve(reloc, bytecode->tinyBytecodes[found]->funcImpl);
             }
         } else {
             if(structType) {
                 ERR_SECTION(
                     ERR_HEAD2(expression->location)
-                    ERR_MSG_COLORED("Local run directive returned a function pointer that didn't refer to a function within the program. "<<log::LIME << tinycode_id << log::NO_COLOR <<" was returned which wasn't within this range of function ids: " << log::LIME << func_start << log::NO_COLOR << " - " << log::LIME << func_end << log::NO_COLOR<<". Type from this struct member: '"<<structType->name<<"."<<structType->astStruct->members[memberIndex].name<<"'.")
+                    ERR_MSG_COLORED("Local run directive returned a function pointer that didn't refer to a function within the program, "<<log::LIME << (void*)value << log::NO_COLOR <<" was the value. Type from this struct member: '"<<structType->name<<"."<<structType->astStruct->members[memberIndex].name<<"'.")
                     ERR_LINE2(expression->location, ast->typeToString(type))
                 )
             } else {
                 ERR_SECTION(
                     ERR_HEAD2(expression->location)
-                    ERR_MSG_COLORED("Local run directive returned a function pointer that didn't refer to a function within the program. "<<log::LIME << tinycode_id << log::NO_COLOR <<" was returned which wasn't within this range of function ids: " << log::LIME << func_start << log::NO_COLOR << " - " << log::LIME << func_end << log::NO_COLOR<<".")
+                    ERR_MSG_COLORED("Local run directive returned a function pointer that didn't refer to a function within the program, "<<log::LIME << (void*)value << log::NO_COLOR <<" was the value.")
                     ERR_LINE2(expression->location, ast->typeToString(type))
                 )
             }
@@ -2368,7 +2378,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
 
     if(base_expression->computeWhenPossible && !inside_compile_time_execution) {
         // @nocheckin TODO: Polymorphic scope is not considered
-        VirtualMachine vm{};
+        VirtualMachine vm{compiler};
     
         ScopeId scopeId = currentScopeId;
         ASTExpression* expression = base_expression;
@@ -6495,7 +6505,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             // log::out << log::GOLD <<"catch filter\n";
             // temp_tinycode->print(0,-1,bytecode);
             
-            VirtualMachine vm{};
+            VirtualMachine vm{compiler};
             vm.silent = true;
             vm.init_stack();
             vm.execute(bytecode, temp_tinycode->name, true);
@@ -7054,7 +7064,7 @@ SignalIO GenContext::generateGlobalData() {
         // tinycode->print(0,-1,bytecode);
 
         // setup VM with stack and global pointer
-        VirtualMachine vm{};
+        VirtualMachine vm{compiler};
         vm.silent = true;
         vm.init_stack();
         u8* ptr_to_global_data = (u8*)bytecode->dataSegment.data();
@@ -7131,7 +7141,7 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
 
     // TODO: Polymorphism is not considered for globals inside functions, we need to set poly version for that
 
-    VirtualMachine vm{};
+    VirtualMachine vm{compiler};
     
     ScopeId scopeId = run_directive->scope;
     ASTStatement* statement = run_directive->statement;

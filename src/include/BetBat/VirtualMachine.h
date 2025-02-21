@@ -6,6 +6,7 @@
 #include "Engone/PlatformLayer.h"
 // #include "Native/NativeLayer.h"
 
+struct Compiler;
 
 enum VMErrorType {
     VM_ERROR_NONE = 0,
@@ -17,16 +18,19 @@ struct VMError {
     VMErrorType type = VM_ERROR_NONE;
     std::string message;
 };
-typedef void(*FnMakeshift)(engone::VoidFunction, void*);
 /*
     VirtualMachine may not be the accurate term for executing bytecode.
     VirtualMachine is more executing high level code, statement by statement.
     A virtual machine or bytecode runner would be more accurate.
 */
 struct VirtualMachine {
+    VirtualMachine(Compiler* compiler) {
+        this->compiler = compiler;
+    }
     ~VirtualMachine(){
         cleanup();
     }
+    Compiler* compiler=nullptr;
     Bytecode* bytecode=nullptr;
     CompileOptions* options=nullptr;
     int REGISTER_SIZE = -1;
@@ -78,13 +82,6 @@ struct VirtualMachine {
     };
     DynamicArray<Breakpoint> breakpoints{};
     
-    struct BytecodePointer {
-        void* ptr;
-        int size=0;
-    };
-    DynamicArray<BytecodePointer> bytecode_pointers;
-
-    engone::VoidFunction get_bytecode_pointer(int index);
 
     DynamicArray<int> misalignments{}; // used by BC_ALLOC_ARGS and BC_FREE_ARGS
 
@@ -141,13 +138,6 @@ struct VirtualMachine {
     void moveMemory(u8 reg, volatile void* from, volatile void* to);
     volatile void* getReg(u8 id);
     void* setReg(u8 id);
-
-    struct MakeshiftAssembly {
-        FnMakeshift func;
-        int size;
-    };
-    std::unordered_map<FunctionSignature*, MakeshiftAssembly> makeshift_map;
-    FnMakeshift get_makeshift(FunctionSignature* signature);
 };
 
 // defined in hacky_stdcall_asm

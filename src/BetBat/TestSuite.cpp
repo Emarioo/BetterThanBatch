@@ -516,7 +516,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         } else {
             if(useInterp) {
                 bool good_to_go = true;
-                VirtualMachine vm{};
+                VirtualMachine vm{&compiler};
                 
                 auto tinycode = vm.fetch_tinycode(compiler.bytecode, compiler.entry_point);
                 

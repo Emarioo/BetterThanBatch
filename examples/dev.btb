@@ -1,7 +1,33 @@
 #!/home/emarioo/BetterThanBatch/bin/btb
 
 // #import "examples/graphics/quad.btb"
-#import "examples/callbacks/main.btb"
+// #import "examples/callbacks/main.btb"
+
+#import "Logger"
+
+struct Funcs {
+    start: fn();
+    finish: fn();
+}
+
+for 0..2 {
+    x := #run get_funcs()
+    
+    x.start()
+    x.finish()
+}
+
+fn get_funcs() -> Funcs {
+    log("Get funcs")
+    return { Start, Finish }
+}
+
+fn Start() {
+    log("START")
+}
+fn Finish() {
+    log("FINISH")
+}
 
 // #run {
 //     #import "Logger"
