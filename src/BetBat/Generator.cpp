@@ -2101,7 +2101,10 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
         }
         
         // TODO: There should be no link convention
+        int pc = builder.get_pc();
         builder.emit_call_reg(reg, LinkConvention::NONE, call_convention);
+        // VirtualMachine needs to know about argument and return types when using makeshift call and transition stack pointers and stub functions and stuff.
+        builder.tinycode->pc_signature_map[pc] = signature;
     } else if(astFunc->linkConvention == LinkConvention::NONE) {
         if(astFunc->is_compiler_func) {
             builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
@@ -2236,7 +2239,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
     }
     return SIGNAL_SUCCESS;
 }
-SignalIO GenContext::generatePushedLiterals(TypeId type, char* stack, ASTExpression* expression, TypeInfo* structType, int memberIndex) {
+SignalIO GenContext::generatePushedLiterals(VirtualMachine* vm, TypeId type, char* stack, ASTExpression* expression, TypeInfo* structType, int memberIndex) {
     using namespace engone;
     TypeInfo* typeinfo = ast->getTypeInfo(type.baseType());
     if(AST::IsInteger(type) || AST::IsDecimal(type) || type == TYPE_BOOL || type == TYPE_CHAR || typeinfo->astEnum) {
@@ -2292,8 +2295,8 @@ SignalIO GenContext::generatePushedLiterals(TypeId type, char* stack, ASTExpress
         // int func_end = bytecode->tinyBytecodes.size() + 1;
         
         int found = -1;
-        for(int i=0;i<compiler->bytecode_pointers.size();i++) {
-            if (compiler->bytecode_pointers[i].ptr == (void*)value) {
+        for(int i=0;i<vm->bytecode_pointers.size();i++) {
+            if (vm->bytecode_pointers[i].ptr == (void*)value) {
                 found = i;
                 break;
             }
@@ -2325,7 +2328,7 @@ SignalIO GenContext::generatePushedLiterals(TypeId type, char* stack, ASTExpress
         }
     } else if(typeinfo->structImpl) {
         for(int i=typeinfo->structImpl->members.size()-1;i>=0;i--) {
-            SignalIO result = generatePushedLiterals(typeinfo->structImpl->members[i].typeId, stack + i * REGISTER_SIZE, expression, typeinfo, i);
+            SignalIO result = generatePushedLiterals(vm, typeinfo->structImpl->members[i].typeId, stack + i * REGISTER_SIZE, expression, typeinfo, i);
             if(result != SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
         }
@@ -2477,7 +2480,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         
         if(tempTypes.size() != 0 && tempTypes[0] != TYPE_VOID) {
             TypeId type = tempTypes[0];
-            SignalIO result = generatePushedLiterals(type, (char*)vm.states.last().stack_pointer, expression);
+            SignalIO result = generatePushedLiterals(&vm, type, (char*)vm.states.last().stack_pointer, expression);
             return result;
         }
         return SIGNAL_SUCCESS;

@@ -405,6 +405,8 @@ struct TinyBytecode {
         try_blocks.resize(0);
         funcImpl = nullptr;
     }
+    
+    std::unordered_map<int, FunctionSignature*> pc_signature_map{};
 };
 struct BytecodeLocation {
     TinyBytecodeID id; // id-1 to get index

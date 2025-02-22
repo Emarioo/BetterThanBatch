@@ -138,6 +138,18 @@ struct VirtualMachine {
     void moveMemory(u8 reg, volatile void* from, volatile void* to);
     volatile void* getReg(u8 id);
     void* setReg(u8 id);
+    
+    struct BytecodePointer {
+        void* ptr;
+        int size=0;
+    };
+    // The stub functions we generate have hardcoded address to current VM.
+    // Each instance of a VM requires its own stub functions (since we want to allow multi-threading).
+    // TODO: This could be seen as expensive, having to generate them everytime and allocating memory but its not.
+    //   Generating x64 for the small stub code is fast, the memory allocation could be moved to the Compiler.
+    //   It would manage executable memory where VMs ask for it and then release it when they are done.
+    DynamicArray<BytecodePointer> bytecode_pointers;
+    engone::VoidFunction get_bytecode_pointer(int index);
 };
 
 // defined in hacky_stdcall_asm

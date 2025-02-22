@@ -336,12 +336,6 @@ struct Compiler {
         return temp_tinycode;
     }
     
-    struct BytecodePointer {
-        void* ptr;
-        int size=0;
-    };
-    DynamicArray<BytecodePointer> bytecode_pointers;
-    engone::VoidFunction get_bytecode_pointer(int index);
     struct MakeshiftAssembly {
         FnMakeshift func;
         int size;

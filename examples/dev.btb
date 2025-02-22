@@ -5,56 +5,19 @@
 
 #import "Logger"
 
-global arr: i32[5]{2,7,4,5,6};
-
-#run {
-    log("OLD: ", arr[1], ", ",arr[2])
-    arr[1] = 55
-    arr[2] = 56
-    log("NEW: ", arr[1], ", ",arr[2])
-}
-
-// log(&arr)
-
-// log(arr[0])
-
-// for @ptr arr {
-//     *it = nr*2
-//     log(nr," ",*it)
-// }
-
-// log(arr[0])
-
-log(arr[0], ", ", arr[1], ", ", arr[2], ", ", arr[3], ", ", arr[4])
-
-// #run {
-//     #import "Logger"
-//     log("What the")
-// }
-
 // #import "Logger"
 
-// fn @stdcall some_func(n: f32) -> f32 {
-//     return n*n
-// }
-// // fn @stdcall some_func(n: i32) -> i32 {
-// //     return n*n
-// // }
-// // fn @stdcall some_func() -> i32 {
-// //     return 99
-// // }
-// // fn @stdcall some_func() {
-// //     log("INSIDE")
-// // }
-// #run {
+fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
+// fn @oscall some_func(a: i32, b: i32, c: i32, d: i32, e: i32) -> i32 {
+    return a+b+c+d+e
+}
+#run {
+    // res := some_func(1.1,2.2,3.3,4.4,5.5)
+    f := some_func
     
-//     // log("Setting callback...")
-//     f := some_func
-//     // log("Running callback...")
-//     res := f(3.5)
-//     // res := f(3)
-//     // res := f()
-//     // f()
-//     // log("End with ")
-//     log("End with ", res)
-// }
+    res := f(1.1,2.2,3.3,4.4,5.5)
+    // res := f(1,2,3,4,5)
+    
+    log(res)
+   
+}

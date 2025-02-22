@@ -3480,27 +3480,6 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
         outTypes->add(TYPE_VOID);
     }
     
-    if (func->callConvention == UNIXCALL) {
-        int fcount = 0;
-        int ncount = 0;
-        for(int i = 0; i < funcImpl->signature.argumentTypes.size();i++) {
-            auto& arg = funcImpl->signature.argumentTypes[i];
-            if(AST::IsDecimal(arg.typeId)) {
-                fcount++;
-            } else {
-                ncount++;
-            }
-        }
-        if(fcount > 4) {
-            ERR_SECTION(
-                ERR_HEAD2(func->location)
-                ERR_MSG_COLORED("The compiler does not support "<<log::LIME << " 4 "<<log::NO_COLOR << " floats with @unixcall (Sys V ABI calling convention). Decrease amount of float arguments by putting them in a struct and passing a pointer or annoy the developer to fix this.")
-                ERR_LINE2(func->location, "too many floats for unixcall")
-            )
-            return SIGNAL_FAILURE;
-        }
-    }
-    
     return SIGNAL_SUCCESS;
 }
 // Ensures that the function identifier exists.

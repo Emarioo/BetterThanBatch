@@ -669,6 +669,7 @@ namespace engone {
 	void FreeExec(void* ptr, int size) {
 		int suc = munmap(ptr, size);
 		if(suc < 0) {
+            printf("ERROR: %d\n", errno);
 			Assert(false);
 		}
 	}

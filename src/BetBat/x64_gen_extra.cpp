@@ -743,13 +743,10 @@ bool X64Builder::generate() {
         X64_REG_XMM1,
         X64_REG_XMM2,
         X64_REG_XMM3,
-        // Some instructions assume use temporary registers (xmm4-xmm7). If we want to 
-        // allow these instructions here then we may need to rewrite those instructions
-        // to save xmm7 before it is used as a temporary register.
-        // BC_REG_XMM4, 
-        // BC_REG_XMM5,
-        // BC_REG_XMM6,
-        // BC_REG_XMM7,
+        X64_REG_XMM4,
+        X64_REG_XMM5,
+        X64_REG_XMM6, // xmm6 and up are NON-VOLATILE on Windows x64 calling convention.
+        X64_REG_XMM7, // luckily they are all VOLATILE with System V ABI calling convention.
     };
 
     virtual_stack_pointer -= callee_saved_space; // if callee saved space is misaligned then we need to consider that when 16-byte alignment is required. (BC_ALLOC_ARGS)
@@ -878,15 +875,15 @@ bool X64Builder::generate() {
                 if(IS_CONTROL_FLOAT(control)) {
                     if(float_count < 8) {
                         // NOTE: Type checker provides a better error, this assert is here as a reminder to fix this code.
-                        Assert(("x64 generator can't handle more than 4 floats",float_count < 4));
                         reg = unixcall_float_regs[float_count];
                         emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
                     } else {
                         Assert(("x64 generator can't handle more than 8 floats",false));
-                        reg = X64_REG_XMM7; // is it safe to use xmm7 register?
+                        reg = X64_REG_A; // since we're just moving float values We can pass it in rax (no need to use xmm registers)
                         int src_off = FRAME_SIZE + stacked_count * 8;
-                        emit_mov_reg_mem(reg,reg_args,control,src_off);
-                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                        InstructionControl non_float_control = (InstructionControl)(control & ~CONTROL_FLOAT_OP);
+                        emit_mov_reg_mem(reg,reg_args,non_float_control,src_off);
+                        emit_mov_mem_reg(reg_args,reg,non_float_control,param.offset_from_rbp);
                         stacked_count++;
                     }
                     float_count++;

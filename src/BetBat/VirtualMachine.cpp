@@ -19,12 +19,15 @@
 
 // #define DECODE_TYPE(ptr) (*((u8*)ptr+1))
 
-void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index);
-
 void VirtualMachine::cleanup(){
     stack.resize(0);
     states.cleanup();
     reset();
+    for(auto& f : bytecode_pointers) {
+        if(f.ptr)
+            engone::FreeExec(f.ptr, f.size);
+    }
+    bytecode_pointers.cleanup();
     // cmdArgsBuffer.resize(0);
     // engone::Free(cmdArgs.ptr, sizeof(Language::Slice<char>)*cmdArgs.len);
     // cmdArgs.ptr = nullptr;
@@ -270,8 +273,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
     // NOTE: Bytecode function pointers are "stubs" which
     //   C functions from a library can call which "leads back" to the VM.
-    if (compiler->bytecode_pointers.size() < bytecode->tinyBytecodes.size()) {
-        compiler->bytecode_pointers.resize(bytecode->tinyBytecodes.size());
+    if (bytecode_pointers.size() < bytecode->tinyBytecodes.size()) {
+        bytecode_pointers.resize(bytecode->tinyBytecodes.size());
     }
     
     // log::out << log::GOLD << "VirtualMachine:\n";
@@ -926,6 +929,7 @@ void VirtualMachine::execute(){
 
                 // int index = imm - Bytecode::BEGIN_DLL_FUNC_INDEX;
                 auto f = (void(*)(void))registers[op0];
+                auto signature = tinycode->pc_signature_map[prev_pc];
                 Assert(f);
                 // fix arguments?
                 if(c == STDCALL) {
@@ -941,9 +945,8 @@ void VirtualMachine::execute(){
                     #ifdef OS_WINDOWS
                     // log::out << "Calling "<<dll_function_names[index]<<"\n";
                     // IMPORTANT: Debugging DLL requires compiling DLL and BTB with the same toolchain! GCC or MSVC for both.
-                    // FnMakeshift mk_func = get_makeshift(f->signature);
-                    // mk_func(f->func_ptr, (void*)stack_pointer);
-                    // TODO: Use get_makeshift for BC_CALL_REG too. We need signature though.
+                    FnMakeshift mk_func = compiler->get_makeshift(signature);
+                    mk_func(f, (void*)stack_pointer);
                     Makeshift_stdcall(f, (void*)stack_pointer);
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
@@ -951,7 +954,9 @@ void VirtualMachine::execute(){
                 } else if(c == UNIXCALL) {
                     // Makeshift_unixcall(f, (void*)stack_pointer);
                     #ifdef OS_LINUX
-                    Makeshift_sysvcall(f, (void*)stack_pointer);
+                    FnMakeshift mk_func = compiler->get_makeshift(signature);
+                    mk_func(f, (void*)stack_pointer);
+                    // Makeshift_sysvcall(f, (void*)stack_pointer);
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
                     #endif
@@ -1098,7 +1103,7 @@ void VirtualMachine::execute(){
             pc+=4;
             
             // nocheckin
-            registers[op0] = (i64)compiler->get_bytecode_pointer(imm-1);
+            registers[op0] = (i64)get_bytecode_pointer(imm-1);
             // registers[op0] = imm;
         } break;
         case BC_CAST: {
@@ -1626,4 +1631,226 @@ void VirtualMachine::push_state(int index, i64 sp) {
 }
 void VirtualMachine::pop_state() {
     states.pop();
+}
+void BaseBytecodeStubFunction(VirtualMachine* vm, i64 sp, int index) {
+    using namespace engone;
+    // log::out << "Hello " << sp << " " << index << "\n";
+    vm->push_state(index, sp);
+
+    auto prev = vm->is_callback_from_stub;
+    vm->is_callback_from_stub = true;
+    vm->execute();
+    vm->is_callback_from_stub = prev;
+
+    vm->pop_state();
+    // log::out << "Leave " << sp << " " << index << "\n";
+}
+engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
+    using namespace engone;
+    auto& ptr = bytecode_pointers[index];
+
+    if(!ptr.ptr) {
+        // NOTE: If we're smart, we could allocate a big chunk of
+        //   executable memory for all the function pointers instead
+        //   of many small once.
+        ptr.size = 1024;
+        u8* f = (u8*)AllocateExec(ptr.size);
+        ptr.ptr = f;
+        
+        /*
+            push rbp
+            mov rdx, rsp
+            sub rdx, 0x4000
+            
+            # prepare args to rdx
+
+            mov rcx, 0x1000200030004000 # VM pointer
+            mov r8d, 0x10002000 # tinycode index
+            mov rax, 0x1000200030004000 # stub function pointer
+            sub rsp, 32
+            call rax
+            add rsp, 32
+
+            # prepare return values
+            # mov eax, 55
+            
+            pop rbp
+            ret
+        */
+        
+        // TODO: Doesn't work on LINUX! Different calling convention (we should allocate 32 stack space for arguments, arguments are passed in different registers)
+        
+        const u32 MINI_VM_STACK_LIMIT = 0x4000;
+        const u8 PROLOG[] {
+            /* push rbx        */ 0x53,
+            /* mov rbx, rsp    */ 0x48, 0x89, 0xe3,
+            /* sub rbx, 0x4000 */ 0x48, 0x81, 0xeb, (MINI_VM_STACK_LIMIT>>0)&0xFF, (MINI_VM_STACK_LIMIT>>8)&0xFF, (MINI_VM_STACK_LIMIT>>16)&0xFF, (MINI_VM_STACK_LIMIT>>24)&0xFF,
+        };
+        const u8 MAIN_BODY[] { // Windows x64 calling convention (stdcall?)
+            /* mov rcx, 0x1000200030004000 # VM pointer            */ 0x48, 0xB9, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* mov rdx, rbx                                        */ 0x48, 0x89, 0xDA,
+            /* mov r8d, 0x10002000         # tinycode index        */ 0x41, 0xB8, 0x00, 0x20, 0x00, 0x10,
+            /* mov rax, 0x1000200030004000 # stub function pointer */ 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* sub rsp, 32                                         */ 0x48, 0x83, 0xEC, 0x20,
+            /* call rax                                            */ 0xFF, 0xD0,
+            /* add rsp, 32                                         */ 0x48, 0x83, 0xC4, 0x20,
+        };
+        const u8 MAIN_BODY_SYSVABI[] {
+            /* mov rdi, 0x1000200030004000 # VM pointer            */ 0x48, 0xBF, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* mov rsi, rbx                                        */ 0x48, 0x89, 0xDE,
+            /* mov edx, 0x10002000         # tinycode index        */ 0xBA, 0x00, 0x20, 0x00, 0x10,
+            /* mov rax, 0x1000200030004000 # stub function pointer */ 0x48, 0xB8, 0x00, 0x40, 0x00, 0x30, 0x00, 0x20, 0x00, 0x10,
+            /* call rax                                            */ 0xFF, 0xD0,
+        };
+        const u8 EPILOG[] {
+            /* pop rbx */ 0x5b,
+            /* ret     */ 0xC3,
+        };
+        
+        int head = 0;
+        memcpy(f+head, PROLOG, sizeof(PROLOG));
+        head += sizeof(PROLOG);
+        
+        // Prepare arguments
+        
+        //  TODO: We are always using 64 bit registers, maybe a problem? Should we be casting signed unsigned 64/32 bit integers?
+        
+        auto emit_mov=[&](TypeId type, int regnr, int offset){
+            Assert(offset >= -128 && offset <= 127);
+            if(type == TYPE_FLOAT32 || type == TYPE_FLOAT64) {
+                Assert(regnr >= 0 && regnr <= 7);
+                if(type == TYPE_FLOAT32) {
+                    f[head++] = 0xF3; // movss
+                    f[head++] = 0x0F;
+                    f[head++] = 0x11;
+                } else if(type == TYPE_FLOAT64) {
+                    f[head++] = 0xF2;  // movsd
+                    f[head++] = 0x0F;
+                    f[head++] = 0x11;
+                }
+                f[head++] = 0x43 | (regnr<<3);
+                f[head++] = offset;
+            } else {
+                Assert(regnr >= 0 && regnr <= 5);
+                if(regnr >= 4)
+                    f[head++] = 0x4C;
+                else
+                    f[head++] = 0x48;
+                f[head++] = 0x89;
+                const u8 reg_values[]{
+                    //   rdi,  rsi,  rdx,  rcx,   r8,   r9
+                        0x7b, 0x73, 0x53, 0x4b, 0x43, 0x4b
+                };
+                f[head++] = reg_values[regnr];
+                f[head++] = offset;
+            }
+        };
+        
+        auto& tc = bytecode->tinyBytecodes[index];
+        auto impl = tc->funcImpl;
+        if(impl) { // comp_time function doesn't have funcImpl
+            int arg_offset = 16;
+            int float_nr = 0;
+            int norm_nr = 0;
+            for (int i=0;i<impl->signature.argumentTypes.size();i++) {
+                auto& arg = impl->signature.argumentTypes[i];
+                // TODO: Handle 64-bit floats
+                // NOTE: Haha, have fun reading this code :D
+            #ifdef OS_WINDOWS
+                const i32 float_mov_stride = 5;
+                const u8 float_mov[]{
+                    /* movss [rbx+16], xmm0 */ 0xF3, 0x0F, 0x11, 0x43, 0x10, 
+                    /* movsd [rbx+16], xmm0 */ 0xF2, 0x0F, 0x11, 0x43, 0x10,
+                    /* movss [rbx+24], xmm1 */ 0xF3, 0x0F, 0x11, 0x4B, 0x18,
+                    /* movsd [rbx+24], xmm1 */ 0xF2, 0x0F, 0x11, 0x4B, 0x18,
+                    /* movss [rbx+32], xmm2 */ 0xF3, 0x0F, 0x11, 0x53, 0x20,
+                    /* movsd [rbx+32], xmm2 */ 0xF2, 0x0F, 0x11, 0x53, 0x20,
+                    /* movss [rbx+40], xmm3 */ 0xF3, 0x0F, 0x11, 0x5B, 0x28,
+                    /* movsd [rbx+40], xmm3 */ 0xF2, 0x0F, 0x11, 0x5B, 0x28,
+                };
+                const u8 norm_mov[] {
+                    /* mov [rbx+16], rcx */ 0x48, 0x89, 0x4B, 0x10,
+                    /* mov [rbx+24], rdx */ 0x48, 0x89, 0x53, 0x18, 
+                    /* mov [rbx+32], r8  */ 0x4C, 0x89, 0x43, 0x20,
+                    /* mov [rbx+40], r9  */ 0x4C, 0x89, 0x4B, 0x28,
+                };
+                if (i >= 0 && i <= 3 && (arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64)) {
+                    memcpy(f+head, float_mov + i*2*float_mov_stride + (arg.typeId == TYPE_FLOAT64 ? 1 : 0), float_mov_stride);
+                    head += float_mov_stride;
+                } else if (i >= 0 && i <= 3) {
+                    memcpy(f+head, norm_mov + i*4, 4);
+                    head+=4;
+            #elif OS_LINUX
+                if(((arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64) && float_nr <= 7) || (norm_nr <= 5)) {
+                    if (arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64) {
+                        emit_mov(arg.typeId, float_nr, arg_offset);
+                        float_nr++;
+                    } else {
+                        emit_mov(arg.typeId, norm_nr, arg_offset);
+                        norm_nr++;
+                    }
+                    arg_offset += 8;
+            #else
+                if(true) {
+                    Assert(("OS neither windows or linux?",false));
+            #endif
+                } else {
+                    // mov rax, [rsp+0x8]
+                    // mov [rbx+0x8], rax
+                    u8 mova[] { 0x48, 0x8B, 0x44, 0x24, 16 + i*8, };
+                    u8 movb[] { 0x48, 0x89, 0x43, 16 + i*8, };
+                    memcpy(f+head, mova, sizeof(mova));
+                    head+=sizeof(mova);
+                    memcpy(f+head, movb, sizeof(movb));
+                    head+=sizeof(movb);
+                }
+            }
+        }
+        
+        #if OS_WINDOWS
+            memcpy(f+head, MAIN_BODY, sizeof(MAIN_BODY));
+            *(i64*)(f + head + 0x0+2)  = (i64)this;
+            *(i32*)(f + head + 0xd+2)  = (i32)index;
+            *(i64*)(f + head + 0x13+2) = (i64)(void*)BaseBytecodeStubFunction;
+            head += sizeof(MAIN_BODY);
+        #elif OS_LINUX
+            memcpy(f+head, MAIN_BODY_SYSVABI, sizeof(MAIN_BODY_SYSVABI));
+            *(i64*)(f + head + 0x0+2)  = (i64)this;
+            *(i32*)(f + head + 0xd+1)  = (i32)index; // NOTE: offset to immediate differs from MAIN_BODY by one byte
+            *(i64*)(f + head + 0x12+2) = (i64)(void*)BaseBytecodeStubFunction;
+            head += sizeof(MAIN_BODY_SYSVABI);
+        #else
+            Assert(("what abi to use for this OS? we handle windows and linux",false));
+        #endif
+        
+        // Prepare return values
+        if (impl && impl->signature.returnTypes.size() > 0) {
+            Assert(impl->signature.returnTypes.size() <= 1);
+            if (impl->signature.returnTypes[0].typeId == TYPE_FLOAT32) {
+                // movss xmm0, [rbx-0x8]
+                u8 mov[] { 0xF3, 0x0F, 0x10, 0x43, 0xF8, };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            } else  if (impl->signature.returnTypes[0].typeId == TYPE_FLOAT64) {
+                // movsd xmm0, [rbx-0x8]
+                u8 mov[] { 0xF2, 0x0F, 0x10, 0x43 };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            } else {
+                // mov rax, [rbx-8]
+                u8 mov[] { 0x48, 0x8b, 0x43, 0xf8, };
+                memcpy(f+head, mov, sizeof(mov));
+                head+=sizeof(mov);
+            }
+        }
+        
+        memcpy(f+head, EPILOG, sizeof(EPILOG));
+        head += sizeof(EPILOG);
+        
+        Assert(head < ptr.size);
+        
+        // OutputAsHex("asm.log", (u8*)f, head);
+    }
+
+    return (engone::VoidFunction)ptr.ptr;
 }
