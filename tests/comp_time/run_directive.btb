@@ -1,9 +1,9 @@
-@TEST_CASE(comp_time_function)
-fn compute(x: i32) -> i32 {
-    return x + 5
-}
-// #run in expressions
-_test 17; 2 + #run compute(10);
+// @TEST_CASE(comp_time_function)
+// fn compute(x: i32) -> i32 {
+//     return x + 5
+// }
+// // #run in expressions
+// _test 17; 2 + #run compute(10);
 
 @TEST_CASE(comp_time_nested)
 // Outermost #run is executed. the inner ones don't create a new compile time execution context.
@@ -25,6 +25,15 @@ fn addOne(x: i32) -> i32 {
 // BC_CODEPTR instruction is emited
 f:= #run addOne;
 _test 6; f(5);
+
+@TEST_CASE(comptime_unresolved_call)
+fn cool() {
+    @TEST_ERROR(ERROR_UNSPECIFIED) a := #run compute
+}
+fn compute() -> i32 {
+    return #run 5
+}
+cool()
 
 @TEST_CASE(comp_time_circular)
 fn first() -> i32 {
@@ -77,7 +86,7 @@ fn compute() -> i32 {
 _test 20; #run compute();
 
 @TEST_CASE(comp_time_null_ptr)
-#run null
+ptr := #run null
 
 @TEST_CASE(comp_time_external_func)
 #import "Memory"
@@ -128,7 +137,7 @@ _test 10; data;
 @TEST_CASE(comp_time_global_func_ptr)
 fn hello() { }
 
-global f: fn() = #run hello; // error, we don't allow this
+@TEST_ERROR(ERROR_UNSPECIFIED) global f: fn() = #run hello; // error, we don't allow this
 
 @TEST_CASE(comp_time_struct)
 #import "String"

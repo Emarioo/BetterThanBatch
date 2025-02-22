@@ -286,6 +286,11 @@ u32 TestSuite(CompileOptions* options){
     
     tests.add("tests/macro/fn_inserts.btb");
     
+    tests.add("tests/comp_time/callbacks.btb");
+    tests.add("tests/comp_time/globals.btb");
+    tests.add("tests/comp_time/run_directive.btb");
+    tests.add("tests/comp_time/run_edge.btb");
+    
     return VerifyTests(options, tests);
 }
 

@@ -1,5 +1,8 @@
+// NOTE: Files with underscore are not tests, they are imported into other files with tests
 
-fn func() -> i32 {}
+fn func() -> i32 { gloob := 5 return 5 }
+
+global gloob: i32
 
 #run {
     /* This error occured at one point. It was a problem in type checker where
@@ -14,3 +17,5 @@ fn func() -> i32 {}
     */
     res := func()
 }
+
+_test 5; gloob;

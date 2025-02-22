@@ -2,33 +2,19 @@
 
 // TODO: Work in progress
 
-_test 1; 0;
-// #import "examples/graphics/quad.btb"
-// #import "examples/callbacks/main.btb"
-
 // #import "Logger"
 
-// fn @stdcall some_func(n: f32) -> f32 {
-//     return n*n
-// }
-// // fn @stdcall some_func(n: i32) -> i32 {
-// //     return n*n
-// // }
-// // fn @stdcall some_func() -> i32 {
-// //     return 99
-// // }
-// // fn @stdcall some_func() {
-// //     log("INSIDE")
-// // }
-// #run {
-    
-//     // log("Setting callback...")
-//     f := some_func
-//     // log("Running callback...")
-//     res := f(3.5)
-//     // res := f(3)
-//     // res := f()
-//     // f()
-//     // log("End with ")
-//     log("End with ", res)
-// }
+// TODO: Test passing function pointer to C code in DLL that calls a bytecode pointer (examples/callbacks does this)
+
+fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
+    return a+b+c+d+e
+}
+global glob_val: f32;
+#run {
+    f := some_func;
+    glob_val = f(1.1,2.2,3.3,4.4,5.5)
+}
+
+fn main() {
+    _test (1.1+2.2+3.3+4.4+5.5); glob_val;
+}

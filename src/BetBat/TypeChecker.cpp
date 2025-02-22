@@ -5192,16 +5192,21 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
             GlobalRunDirective rundir{};
             rundir.statement = now;
             rundir.scope = scope->scopeId;
+            // log::out << "Add run directive\n";
             compiler->global_run_directives.add(rundir);
             if(!is_initial_import){
+                // We need to type check run directives after globals are evaluated
+                // Right now we type check the import scope elsewhere including run directives but
+                // in the future we might not and therefore need to type check them here again (i'm leaving addTask_type_body commented out for the future)
                 if(now->firstBody) {
-                    compiler->addTask_type_body(now->firstBody->scopeId, -1);
+                    // compiler->addTask_type_body(now->firstBody->scopeId, -1);
                 } else {
-                    ERR_SECTION(
-                        ERR_HEAD2(now->location)   
-                        ERR_MSG("Wrap expression in curly braces. Compile time execution at top level wants a scope which is made from curly braces.")
-                        ERR_LINE2(now->location, "here")
-                    )
+                    // compiler->addTask_type_stmt(now, -1);
+                    // ERR_SECTION(
+                    //     ERR_HEAD2(now->location)   
+                    //     ERR_MSG("Wrap expression in curly braces. Compile time execution at top level wants a scope which is made from curly braces.")
+                    //     ERR_LINE2(now->location, "here")
+                    // )
                 }
             }
             continue;
@@ -5275,6 +5280,41 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     info.compiler->compile_stats.errors += info.errors;
     // return info.errors;
 }
+
+// void TypeCheckBody(Compiler* compiler, ASTStatement* stmt) {
+//     using namespace engone;
+//     ZoneScopedC(tracy::Color::Purple4);
+//     TyperContext info = {};
+//     info.init_context(compiler);
+    
+//     info.do_not_check_global_globals = true;
+//     // info.is_initial_import = is_initial_scope;
+    
+//     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
+
+//     // log::out << "Check " << ast_func->name<<"\n";
+
+//     // Check rest will go through scopes and create polymorphic implementations if necessary.
+//     // This includes structs and functions.
+    
+//     info.checkRest
+//     if(import_scope) {
+//         auto result = info.checkRest(import_scope);
+//     }
+
+//     info.do_not_check_global_globals = false;
+
+//     if(ast_func && ast_func->body) {
+//         // 1. ast_func may be nullptr if no main function was specified, the global scope is the main function if so.
+//         // 2. Native, imported or intrinsic functions does not have bodies and we cannot and should not check them.
+//         // log::out << "check "<<ast_func->name<<"\n";
+//         auto result = info.checkFunctionScope(ast_func, func_impl);
+//     }
+
+//     info.compiler->compile_stats.errors += info.errors;
+//     // return info.errors;
+// }
+
 void TyperContext::init_context(Compiler* compiler) {
     this->compiler = compiler;
     ast = compiler->ast;

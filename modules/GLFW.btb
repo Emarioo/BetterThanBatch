@@ -57,7 +57,7 @@ struct GLFWvidmode {
     greenBits:   i32; /* The bit depth of the green channel of the video mode. */
     blueBits:    i32; /* The bit depth of the blue channel of the video mode.  */
     refreshRate: i32; /* The refresh rate, in Hz, of the video mode.           */
-} GLFWvidmode;
+}
 
 fn GLFWAPI glfwTerminate();
 fn GLFWAPI glfwMakeContextCurrent(window: GLFWwindow*);

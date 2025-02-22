@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "GDB btb.exe",
+            "name": "GDB btb",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb",
@@ -33,9 +33,39 @@
                 //     "ignoreFailures": true
                 // }
             ]
+        },{
+            "name": "GDB btb test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/btb",
+            // "args": ["-dev"],
+            // "args": ["examples/net/serverclient","-r","-d"],
+            // "args": ["${workspaceFolder}/../EnderCompute/src/webserver"],
+            // "args": ["examples/graphics/quad","-d"],
+            "args": ["--test","*run_direct*"],
+            // "args": ["examples/crawler/GameCore","-d","-o","bin/code.dll"],
+            // "args": ["modules/Linux.btb","--preproc"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "setupCommands": [
+                // {
+                //     "description": "Enable pretty-printing for gdb",
+                //     "text": "-enable-pretty-printing",
+                //     "ignoreFailures": true
+                // },
+                // {
+                //     "description": "Set Disassembly Flavor to Intel",
+                //     "text": "-gdb-set disassembly-flavor intel",
+                //     "ignoreFailures": true
+                // }
+            ]
         },
         {
-            "name": "VS btb.exe",
+            "name": "VS btb",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
@@ -73,7 +103,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "VS Test btb.exe",
+            "name": "VS btb test",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",

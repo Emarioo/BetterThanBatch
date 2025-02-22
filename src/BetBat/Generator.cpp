@@ -1668,12 +1668,10 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
     } else {
         int hi = 0;
     }
-    if(!info.hasForeignErrors()) {
-        // not ok, type checker should have generated the right overload.
-        // May happen if  we put TEST_ERROR before statement
-        // Assert((astFunc && funcImpl) || signature);
-    }
     if((!astFunc || !funcImpl) && !signature) {
+        if(!info.hasForeignErrors()) {
+            Assert(("No astFunc, funcImpl",false));
+        }
         return SIGNAL_FAILURE;
     }
 
@@ -6653,8 +6651,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }
         };
         
-        // if(statement->computeWhenPossible && !inside_compile_time_execution) {
-        if(statement->computeWhenPossible) {
+        if(statement->computeWhenPossible && !inside_compile_time_execution) {
+        // if(statement->computeWhenPossible) {
             if(!at_top_level) { // if top level then it was already added in type checker
                 GlobalRunDirective rundir{};
                 rundir.statement = statement;
@@ -7304,8 +7302,7 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
             return SIGNAL_FAILURE;
         }
     }
-
-    // log::out << log::GOLD <<"global: " <<stmt->varnames[0].name << "\n";
+    // log::out << "Running global\n";
     // tinycode->print(0,-1,bytecode);
 
     vm.silent = true;

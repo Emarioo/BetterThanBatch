@@ -653,7 +653,6 @@ void VirtualMachine::execute(){
             int size = GET_CONTROL_SIZE(control);
             
             Assert(imm < 0);
-            // int FRAME_SIZE = 8 + 8; // nocheckin TODO: Do not assume frame size, maybe we disable base pointer!
             void* ptr = map_pointer(base_pointer + imm, temp_ptr_was_mapped);
             CHECK_PTR_MAPPED(ptr);
             ptr_from_mov = ptr;
@@ -850,7 +849,7 @@ void VirtualMachine::execute(){
                 ret_offset = 0;
             } else {
                 int new_tiny_index = imm-1;
-                if(new_tiny_index < 0 && new_tiny_index >= bytecode->tinyBytecodes.size()) {
+                if(new_tiny_index < 0 || new_tiny_index >= bytecode->tinyBytecodes.size()) {
                     error.type = VM_UNRESOLVED_CALL;
                     return;
                 }
@@ -909,8 +908,6 @@ void VirtualMachine::execute(){
             LinkConvention l = (LinkConvention)instructions[pc++];
             CallConvention c = (CallConvention)instructions[pc++];
 
-            // nocheckin How to call callback? maybe C style callback?
-
             // Finish printing the instruction so that the function
             // we call doesn't print it's own stuff within the instruction.
             if(logging)
@@ -933,13 +930,6 @@ void VirtualMachine::execute(){
                 Assert(f);
                 // fix arguments?
                 if(c == STDCALL) {
-                    // log::out << "Calling ?\n";
-                    // float a0 = *(float*)(stack_pointer + 0);
-                    // float a1 = *(float*)(stack_pointer + 8);
-                    // float a2 = *(float*)(stack_pointer + 16);
-                    // float a3 = *(float*)(stack_pointer + 24);
-                    // log::out << " " << a0 << " " << a1 << " " << a2 << " " << a3 << "\n";
-
                     // Makehshift is a bad name
                     // it's more like a StackSwitcher_stdcall
                     #ifdef OS_WINDOWS
@@ -947,16 +937,13 @@ void VirtualMachine::execute(){
                     // IMPORTANT: Debugging DLL requires compiling DLL and BTB with the same toolchain! GCC or MSVC for both.
                     FnMakeshift mk_func = compiler->get_makeshift(signature);
                     mk_func(f, (void*)stack_pointer);
-                    Makeshift_stdcall(f, (void*)stack_pointer);
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
                     #endif
                 } else if(c == UNIXCALL) {
-                    // Makeshift_unixcall(f, (void*)stack_pointer);
                     #ifdef OS_LINUX
                     FnMakeshift mk_func = compiler->get_makeshift(signature);
                     mk_func(f, (void*)stack_pointer);
-                    // Makeshift_sysvcall(f, (void*)stack_pointer);
                     #else
                     Assert(("Virtual machine does not support imported functions when using unixcall (System V ABI convention)",false));
                     #endif
@@ -1102,9 +1089,13 @@ void VirtualMachine::execute(){
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            // nocheckin
+            int new_tiny_index = imm-1;
+            if(new_tiny_index < 0 || new_tiny_index >= bytecode->tinyBytecodes.size()) {
+                error.type = VM_UNRESOLVED_CALL;
+                return;
+            }
+            
             registers[op0] = (i64)get_bytecode_pointer(imm-1);
-            // registers[op0] = imm;
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
@@ -1254,9 +1245,30 @@ void VirtualMachine::execute(){
             u8 outputs = (u8)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
-            if(!silent) {
-                log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
-            }
+            
+            // if(push_offsets.size())
+            //     push_offsets.last() += 8 * (-inputs + outputs);
+                
+            //     virtual_stack_pointer += (inputs - outputs) * 8; // inputs - outputs
+                
+            //     Bytecode::ASM& asmInstance = bytecode->asmInstances.get(base->imm32);
+            //     Assert(asmInstance.generated);
+            //     u32 len = asmInstance.iEnd - asmInstance.iStart;
+            //     if(len != 0) {
+            //         u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
+            //         int pc_start = code_size();
+            //         emit_bytes(ptr, len);
+            //         for (int i = 0; i < asmInstance.relocations.size();i++) {
+            //           auto& it = asmInstance.relocations[i];
+            //           program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+            //         }
+            //     } else {
+            //         // TODO: Better error, or handle error somewhere else?
+            //         log::out << log::RED << "BC_ASM at "<<n->bc_index<<" was incomplete\n";
+            //     }
+            
+            
+            log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
             // TODO: Run assembler on the inline assembly (like we do in x64 gen).
             //   Allocate executable memory and then start executing.
             //   We need to add some instructions to populate the stack with values
@@ -1748,62 +1760,61 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
         
         auto& tc = bytecode->tinyBytecodes[index];
         auto impl = tc->funcImpl;
-        if(impl) { // comp_time function doesn't have funcImpl
-            int arg_offset = 16;
-            int float_nr = 0;
-            int norm_nr = 0;
-            for (int i=0;i<impl->signature.argumentTypes.size();i++) {
-                auto& arg = impl->signature.argumentTypes[i];
-                // TODO: Handle 64-bit floats
-                // NOTE: Haha, have fun reading this code :D
-            #ifdef OS_WINDOWS
-                const i32 float_mov_stride = 5;
-                const u8 float_mov[]{
-                    /* movss [rbx+16], xmm0 */ 0xF3, 0x0F, 0x11, 0x43, 0x10, 
-                    /* movsd [rbx+16], xmm0 */ 0xF2, 0x0F, 0x11, 0x43, 0x10,
-                    /* movss [rbx+24], xmm1 */ 0xF3, 0x0F, 0x11, 0x4B, 0x18,
-                    /* movsd [rbx+24], xmm1 */ 0xF2, 0x0F, 0x11, 0x4B, 0x18,
-                    /* movss [rbx+32], xmm2 */ 0xF3, 0x0F, 0x11, 0x53, 0x20,
-                    /* movsd [rbx+32], xmm2 */ 0xF2, 0x0F, 0x11, 0x53, 0x20,
-                    /* movss [rbx+40], xmm3 */ 0xF3, 0x0F, 0x11, 0x5B, 0x28,
-                    /* movsd [rbx+40], xmm3 */ 0xF2, 0x0F, 0x11, 0x5B, 0x28,
-                };
-                const u8 norm_mov[] {
-                    /* mov [rbx+16], rcx */ 0x48, 0x89, 0x4B, 0x10,
-                    /* mov [rbx+24], rdx */ 0x48, 0x89, 0x53, 0x18, 
-                    /* mov [rbx+32], r8  */ 0x4C, 0x89, 0x43, 0x20,
-                    /* mov [rbx+40], r9  */ 0x4C, 0x89, 0x4B, 0x28,
-                };
-                if (i >= 0 && i <= 3 && (arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64)) {
-                    memcpy(f+head, float_mov + i*2*float_mov_stride + (arg.typeId == TYPE_FLOAT64 ? 1 : 0), float_mov_stride);
-                    head += float_mov_stride;
-                } else if (i >= 0 && i <= 3) {
-                    memcpy(f+head, norm_mov + i*4, 4);
-                    head+=4;
-            #elif OS_LINUX
-                if(((arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64) && float_nr <= 7) || (norm_nr <= 5)) {
-                    if (arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64) {
-                        emit_mov(arg.typeId, float_nr, arg_offset);
-                        float_nr++;
-                    } else {
-                        emit_mov(arg.typeId, norm_nr, arg_offset);
-                        norm_nr++;
-                    }
-                    arg_offset += 8;
-            #else
-                if(true) {
-                    Assert(("OS neither windows or linux?",false));
-            #endif
+        Assert(impl);
+        int arg_offset = 16;
+        int float_nr = 0;
+        int norm_nr = 0;
+        for (int i=0;i<impl->signature.argumentTypes.size();i++) {
+            auto& arg = impl->signature.argumentTypes[i];
+            // TODO: Handle 64-bit floats
+            // NOTE: Haha, have fun reading this code :D
+        #ifdef OS_WINDOWS
+            const i32 float_mov_stride = 5;
+            const u8 float_mov[]{
+                /* movss [rbx+16], xmm0 */ 0xF3, 0x0F, 0x11, 0x43, 0x10, 
+                /* movsd [rbx+16], xmm0 */ 0xF2, 0x0F, 0x11, 0x43, 0x10,
+                /* movss [rbx+24], xmm1 */ 0xF3, 0x0F, 0x11, 0x4B, 0x18,
+                /* movsd [rbx+24], xmm1 */ 0xF2, 0x0F, 0x11, 0x4B, 0x18,
+                /* movss [rbx+32], xmm2 */ 0xF3, 0x0F, 0x11, 0x53, 0x20,
+                /* movsd [rbx+32], xmm2 */ 0xF2, 0x0F, 0x11, 0x53, 0x20,
+                /* movss [rbx+40], xmm3 */ 0xF3, 0x0F, 0x11, 0x5B, 0x28,
+                /* movsd [rbx+40], xmm3 */ 0xF2, 0x0F, 0x11, 0x5B, 0x28,
+            };
+            const u8 norm_mov[] {
+                /* mov [rbx+16], rcx */ 0x48, 0x89, 0x4B, 0x10,
+                /* mov [rbx+24], rdx */ 0x48, 0x89, 0x53, 0x18, 
+                /* mov [rbx+32], r8  */ 0x4C, 0x89, 0x43, 0x20,
+                /* mov [rbx+40], r9  */ 0x4C, 0x89, 0x4B, 0x28,
+            };
+            if (i >= 0 && i <= 3 && (arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64)) {
+                memcpy(f+head, float_mov + i*2*float_mov_stride + (arg.typeId == TYPE_FLOAT64 ? 1 : 0), float_mov_stride);
+                head += float_mov_stride;
+            } else if (i >= 0 && i <= 3) {
+                memcpy(f+head, norm_mov + i*4, 4);
+                head+=4;
+        #elif OS_LINUX
+            if(((arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64) && float_nr <= 7) || (norm_nr <= 5)) {
+                if (arg.typeId == TYPE_FLOAT32 || arg.typeId == TYPE_FLOAT64) {
+                    emit_mov(arg.typeId, float_nr, arg_offset);
+                    float_nr++;
                 } else {
-                    // mov rax, [rsp+0x8]
-                    // mov [rbx+0x8], rax
-                    u8 mova[] { 0x48, 0x8B, 0x44, 0x24, 16 + i*8, };
-                    u8 movb[] { 0x48, 0x89, 0x43, 16 + i*8, };
-                    memcpy(f+head, mova, sizeof(mova));
-                    head+=sizeof(mova);
-                    memcpy(f+head, movb, sizeof(movb));
-                    head+=sizeof(movb);
+                    emit_mov(arg.typeId, norm_nr, arg_offset);
+                    norm_nr++;
                 }
+                arg_offset += 8;
+        #else
+            if(true) {
+                Assert(("OS neither windows or linux?",false));
+        #endif
+            } else {
+                // mov rax, [rsp+0x8]
+                // mov [rbx+0x8], rax
+                u8 mova[] { 0x48, 0x8B, 0x44, 0x24, 16 + i*8, };
+                u8 movb[] { 0x48, 0x89, 0x43, 16 + i*8, };
+                memcpy(f+head, mova, sizeof(mova));
+                head+=sizeof(mova);
+                memcpy(f+head, movb, sizeof(movb));
+                head+=sizeof(movb);
             }
         }
         
@@ -1824,7 +1835,7 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
         #endif
         
         // Prepare return values
-        if (impl && impl->signature.returnTypes.size() > 0) {
+        if (impl->signature.returnTypes.size() > 0) {
             Assert(impl->signature.returnTypes.size() <= 1);
             if (impl->signature.returnTypes[0].typeId == TYPE_FLOAT32) {
                 // movss xmm0, [rbx-0x8]

@@ -1,42 +1,21 @@
-/* Build with:
-    bin\btb examples/dev2 -d -o bin/math.dll
-    bin\btb examples/dev2 -d -o main.exe -r
-*/  
-#import "Logger"
+// NOTE: Files with underscore are not tests, they are imported into other files with tests
 
-fn @export glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void* {
-    log("w ",width, " h ",height, " ", title, " ", monitor, " ",share)
-    return cast_unsafe<void*>cast<i64>5
+fn func() -> i32 { gloob := 5 return 5 }
+
+global gloob: i32
+
+#run {
+    /* This error occured at one point. It was a problem in type checker where
+       top-level local variables are not type checked because they won't run.
+       Only the top-level local variables in the first compiled file is checked.
+       BUT, variables in run directives needs to be checked.
+    tests/comp_time/extra.btb:6:5 (E1): To many variables.
+    6 | res := func()
+        ^~~ 1 variables
+    6 | res := func()
+               ^~~~ 0 return values
+    */
+    res := func()
 }
 
-// fn @export func(x: i32, y: i32, z: i32, a: i32, b: i32, c: i32) -> i32 {
-//     return x+y+z+a+b+c
-// }
-
-// #if !BUILD_EXE
-//     // DLL
-//     fn @export(alias="mult") dll_mult(x: f32, y: f32) -> f32 {
-//         return x * y
-//     }
-// #else
-//     // EXE
-//     #import "Logger"
-//     #import "Lang"
-//     #import "OS"
-
-//     #load "bin/math.dll" as Math
-//     fn @import(Math) mult(x: f32, y: f32) -> f32
-
-//     fn main() {
-//         z := mult(1.9, 5)
-//         log("mult: ",z)
-
-//         lib := LoadDynamicLibrary("bin/math.dll")
-//         log("lib: ",&lib)
-//         f := cast_unsafe<fn @oscall(f32,f32)->f32> lib.get_pointer("mult")
-//         log("func ",cast_unsafe<void*>f)
-
-//         z2 := f(1.9, 5.0)
-//         log("mult2: ",z2)
-//     }
-// #endif
+_test 5; gloob;

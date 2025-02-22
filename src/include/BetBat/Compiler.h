@@ -127,6 +127,7 @@ struct CompilerTask {
     u32 import_id;
     ScopeId scopeId;
     bool no_change = false;
+    ASTStatement* stmt=nullptr;
 
     // used with TASK_TYPE_BODY
     ASTFunction* astFunc=nullptr;
@@ -270,6 +271,7 @@ struct Compiler {
     void addTask_type_body(ASTFunction* ast_func, FuncImpl* func_impl);
     void addTask_type_body(u32 import_id);
     void addTask_type_body(ScopeId scope_id, u32 import_id);
+    void addTask_type_stmt(ASTStatement* stmt, u32 import_id);
     
     // DynamicArray<u32> queue_import_ids;
         

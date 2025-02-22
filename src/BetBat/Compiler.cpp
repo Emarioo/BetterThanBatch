@@ -942,10 +942,10 @@ void Compiler::processImports() {
                             auto overload = fun->funcOverloads.overloads[0];
                             addTask_type_body(overload.astFunc, overload.funcImpl);
                         } else {
-                            if(is_initial_import) {
-                                addTask_type_body(compiler_imp->import_id);
-                            }
+                            // if(is_initial_import) {
+                            // }
                         }
+                        addTask_type_body(compiler_imp->import_id);
                     }
 
                     // We add GEN_BYTECODE now but it won't be processed
@@ -979,7 +979,7 @@ void Compiler::processImports() {
                         import_scope = my_scope->astScope;
                     }
                     TypeCheckBody(this, picked_task.astFunc,picked_task.funcImpl, import_scope, import_scope != nullptr);
-                    if(compiler_imp)
+                    if(compiler_imp && !picked_task.astFunc)
                         compiler_imp->type_checked_import_scope = true;
                 }
                 else if(picked_task.scopeId != -1) {
@@ -987,6 +987,11 @@ void Compiler::processImports() {
                     auto astscope = scope->astScope;
                     TypeCheckBody(this, nullptr, nullptr, astscope);
                 }
+                //  else if(picked_task.scopeId != -1) {
+                //     auto scope = ast->getScope(picked_task.scopeId);
+                //     auto astscope = scope->astScope;
+                //     TypeCheckBody(this, nullptr, nullptr, astscope);
+                // }
                 
                 if(picked_task.astFunc) {
                     lock_imports.lock();
@@ -2275,6 +2280,15 @@ void Compiler::addTask_type_body(ScopeId scope_id, u32 import_id) {
     picked_task.type = TASK_TYPE_BODY;
     picked_task.import_id = import_id;
     picked_task.scopeId = scope_id;
+    tasks.add(picked_task); // TODO: lock tasks
+}
+void Compiler::addTask_type_stmt(ASTStatement* stmt, u32 import_id) {
+    lock_imports.lock();
+    defer { lock_imports.unlock(); };
+    CompilerTask picked_task{};
+    picked_task.type = TASK_TYPE_BODY;
+    picked_task.import_id = import_id;
+    picked_task.stmt = stmt;
     tasks.add(picked_task); // TODO: lock tasks
 }
 void Compiler::addLibrary(u32 import_id, const std::string& path, const std::string& as_name) {

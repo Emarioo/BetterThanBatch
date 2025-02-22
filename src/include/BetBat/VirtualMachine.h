@@ -39,6 +39,7 @@ struct VirtualMachine {
     VMError error{};
     
     bool logging = false;
+    // bool logging = true;
     bool interactive = false;
     bool is_callback_from_stub = false;
     

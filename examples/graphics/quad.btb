@@ -195,6 +195,6 @@ fn main(){
     glfwTerminate();
 }
 
-fn @stdcall MouseCallback2(window: void*, button: i32, action: i32, mods: i32) {
+fn @oscall MouseCallback2(window: void*, button: i32, action: i32, mods: i32) {
     log("click ",button," ", action)
 }
