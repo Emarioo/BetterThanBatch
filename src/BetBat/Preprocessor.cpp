@@ -788,8 +788,9 @@ void FunctionInsert::print() {
             log::out << " ";
         if(expr->inverse)
             log::out << "not ";
+        const FunctionInsert::ExprType NINE=(FunctionInsert::ExprType)9;
         switch(expr->type) {
-            case (FunctionInsert::ExprType)9:
+            case NINE:
                 log::out << "and\n";
                 indent++;
             break;

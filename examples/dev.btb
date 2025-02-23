@@ -3,114 +3,38 @@
 // #import "examples/graphics/quad.btb"
 // #import "examples/callbacks/main.btb"
 
-// #import "Logger"
-
-// // #import "Logger"
-
-// fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
-// // fn @oscall some_func(a: i32, b: i32, c: i32, d: i32, e: i32) -> i32 {
-//     return a+b+c+d+e
-// }
-// #run {
-//     // res := some_func(1.1,2.2,3.3,4.4,5.5)
-//     f := some_func
-    
-//     res := f(1.1,2.2,3.3,4.4,5.5)
-//     // res := f(1,2,3,4,5)
-    
-//     log(res)
-// }
 
 #import "Logger"
-#import "OS"
+#import "File"
 
-#run {
-    log("Start...")
-    ProcessSleep(1.0)
-    log("End")
+global file_size: i32 = size_of_file("README.md")
+
+fn size_of_file(path: char[]) -> i32 {
+    size: i64 
+    f := FileOpen(path, FILE_READ_ONLY, &size)
+    FileClose(f)
+    log(size)
+    return size;
 }
 
-// Outermost #run is executed. the inner ones don't create a new compile time execution context.
-// (no way to check that this is the case but we make sure it doesn't cause an error)
-// _test 6; #run 3 * #run 2;
-// #import "Logger"
-// // fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
-// //     return a+b+c+d+e
-// // }
-// global glob_val: f32;
-// #run {
-//     log("WAHT")
-//     // f := some_func;
-//     // glob_val := f(1.1,2.2,3.3,4.4,5.5)
-// }
+fn main() {
+    log("size of README.md: ", file_size)
+    // _test 0; 0 == file_size; 
+}
 
-// fn main() {
-//     _test (1.1+2.2+3.3+4.4+5.5); glob_val;
-// }
-
-// hello isn't defined, make sure we get a sensible error message
-// #run hello();
-
-// #import "./dev2"
-
-// #import "Memory"
-
-// fn compute() -> i32 {
-//     x: i32* = Allocate(4);
-//     *x = 99;
-//     return *x
-//     // return 4
-// }
-// // we can call functions that calls external functions from dynamic libraries
-// _test 99; #run compute();
-
-// #import "Logger"
-
-// fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
-//     return a+b+c+d+e
-// }
-// global glob_val: f32;
-// #run {
-//     f := some_func;
-//     glob_val = f(1.1,2.2,3.3,4.4,5.5)
-//     log(glob_val, " ", cast_unsafe<void*>f)
-// }
-
-// fn main() {
-//     // _test (1.1+2.2+3.3+4.4+5.5); glob_val;
-//     log(glob_val)
-// }
-
-// x := #run null
-
-// #import "Logger"
-// fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
-//     return a+b+c+d+e
-// }
-// global glob_val: f32;
-// #run {
-//     f := some_func;
-//     glob_val := f(1.1,2.2,3.3,4.4,5.5)
-// //    res := f(1.1,2.2,3.3,4.4,5.5)
-// //    glob_val = res
+// NOTE: Code below does not work. We don't handle pushed struct elements from inline assembly. This somehow worked fine in x64_gen but crashes in VM because VM modifies the stack by 8 bytes when it should do 16. Probably not a problem in x64_gen because we still generate the two pop instructions required for the Pack struct. Since VM messes with the stackpointer it crashes even before it tries to do the pop instructions.
+// #run 
+// { @dumpbc
+//     struct Pack {
+//         x: i32;
+//         y: char;
+//     }
+//     b := asm<Pack> {
+//         mov eax, 'A'
+//         push rax
+//         mov eax, 5
+//         push rax
+//     }
     
-//     log(glob_val)
+//     // return b.x + b.y
 // }
-
-// fn main() {
-//     log(glob_val)
-//     // _test (1.1+2.2+3.3+4.4+5.5); glob_val;
-// }
-
-// fn compute() -> i32 {
-//     return #run 5
-// }
-// fn cool() {
-//     a := #run compute
-//     // return a
-// }
-// // can't call function that contains a run directive
-// // implementation is simpler since we don't need to worry about circular dependencies and dependency graphs
-
-// // return cool()
-// cool()

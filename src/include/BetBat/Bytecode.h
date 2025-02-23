@@ -350,6 +350,23 @@ struct BytecodePrintCache {
     int prev_tinyindex = -1;
     int prev_line = -1;
 };
+struct BytecodeASM {
+    u32 start = 0; // points to raw inline assembly
+    u32 end = 0; // exclusive
+    u32 iStart = 0; // points to raw instructions
+    u32 iEnd = 0; // exclusive
+    bool generated = false;
+    
+    u32 lineStart = 0;
+    u32 lineEnd = 0;
+    std::string file;
+    
+    struct ExternalNamedReloc {
+        std::string name; // name of function/symbol
+        u32 textOffset; // where to modify
+    };
+    DynamicArray<ExternalNamedReloc> relocations{}; // comes from prepare_assembly
+};
 struct Bytecode;
 typedef u32 TinyBytecodeID;
 // Look at me I'm tiny bytecode! 
@@ -370,6 +387,7 @@ struct TinyBytecode {
     FuncImpl* funcImpl = nullptr;
     DynamicArray<TryBlock> try_blocks{};
     DynamicArray<int> required_asm_instances; // x64 gen needs to know what inline assembly to generate
+    int asm_index=-1;
 
     // bool is_used_as_function_pointer = false; // used in x64 gen for enabling/disabling callee saved registers
 
@@ -468,24 +486,8 @@ struct Bytecode {
 
     QuickArray<char> rawInlineAssembly;
     QuickArray<u8> rawInstructions; // modified when passed converter
-    struct ASM {
-        u32 start = 0; // points to raw inline assembly
-        u32 end = 0; // exclusive
-        u32 iStart = 0; // points to raw instructions
-        u32 iEnd = 0; // exclusive
-        bool generated = false;
-        
-        u32 lineStart = 0;
-        u32 lineEnd = 0;
-        std::string file;
-        
-        struct ExternalNamedReloc {
-            std::string name; // name of function/symbol
-            u32 textOffset; // where to modify
-        };
-        DynamicArray<ExternalNamedReloc> relocations{}; // comes from prepare_assembly
-    };
-    DynamicArray<ASM> asmInstances;
+    
+    DynamicArray<BytecodeASM> asmInstances;
     int add_assembly(const char* text, int len, const std::string& file, int line_start, int line_end);
 
     // usually a function like main

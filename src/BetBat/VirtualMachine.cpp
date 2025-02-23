@@ -277,6 +277,34 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         bytecode_pointers.resize(bytecode->tinyBytecodes.size());
     }
     
+    // Generate inline assembly for all relevant tinycodes
+    bool failed = false;
+    for(auto tc : checked_codes) {
+        for(auto ind : tc->required_asm_instances) {
+            auto& inst = bytecode->asmInstances[ind];
+            if(!inst.generated) {
+                bool yes = prepare_assembly(compiler, tc, inst);
+                if(yes) {
+                    inst.generated = true; 
+                    if(inst.relocations.size() > 0) {
+                        failed = true;   
+                        compiler->compile_stats.errors++; // nocheckin add error a different way
+                        log::out << log::RED << inst.file << ":"<<inst.lineStart  << ": " <<log::NO_COLOR<<" Inline assembly run in VirtualMachine cannot have relocations.\n";
+                        for (int i = 0; i < inst.relocations.size();i++) {
+                            log::out << " " << inst.relocations[i].name << " - " << inst.relocations[i].textOffset << "\n";
+                        }
+                    }
+                } else {
+                    failed = true;
+                }
+            }
+        }
+    }
+    if(failed) {
+        // prepare_assembly already prints errors
+        return;
+    }
+    
     // log::out << log::GOLD << "VirtualMachine:\n";
 
     // TODO: Setup argc, argv on the stack with betcall convention
@@ -782,8 +810,22 @@ void VirtualMachine::execute(){
                 log::out << "\n";
             log::out.flush();
             printed_newline = true;
-
-            if(imm >= Bytecode::BEGIN_DLL_FUNC_INDEX) {
+                int new_tiny_index = imm-1;
+            
+            if(new_tiny_index >= 0 && new_tiny_index < bytecode->tinyBytecodes.size() && bytecode->tinyBytecodes[new_tiny_index]->asm_index != -1) {
+                auto& tc = bytecode->tinyBytecodes[new_tiny_index];
+                auto& asmInstance = bytecode->asmInstances[tc->asm_index];
+                Assert(asmInstance.generated);
+                int size = asmInstance.iEnd - asmInstance.iStart;
+                VoidFunction func_ptr = (VoidFunction)AllocateExec(size);
+                memcpy((void*)func_ptr, bytecode->rawInstructions.data() + asmInstance.iStart, size);
+                FnMakeshift mk_func = compiler->get_makeshift(&tc->funcImpl->signature);
+                mk_func(func_ptr, (void*)stack_pointer);
+                FreeExec((void*)func_ptr, size);
+                
+                has_return_values_on_stack = true; // NOTE: potential return values
+                ret_offset = 0;
+            } else if(imm >= Bytecode::BEGIN_DLL_FUNC_INDEX) {
                 Assert((stack_pointer & 0xF) == 0); // ensure aligned stack
 
                 int index = imm - Bytecode::BEGIN_DLL_FUNC_INDEX;
@@ -802,7 +844,7 @@ void VirtualMachine::execute(){
                     #ifdef OS_WINDOWS
                     // log::out << "Calling "<<dll_function_names[index]<<"\n";
                     // IMPORTANT: Debugging DLL requires compiling DLL and BTB with the same toolchain! GCC or MSVC for both.
-                    FnMakeshift mk_func = get_makeshift(f->signature);
+                    FnMakeshift mk_func = compiler->get_makeshift(f->signature);
                     mk_func(f->func_ptr, (void*)stack_pointer);
                     
                     // Makeshift_stdcall(f->func_ptr, (void*)stack_pointer);
@@ -848,7 +890,6 @@ void VirtualMachine::execute(){
                 has_return_values_on_stack = true; // NOTE: potential return values
                 ret_offset = 0;
             } else {
-                int new_tiny_index = imm-1;
                 if(new_tiny_index < 0 || new_tiny_index >= bytecode->tinyBytecodes.size()) {
                     error.type = VM_UNRESOLVED_CALL;
                     return;
@@ -1246,34 +1287,140 @@ void VirtualMachine::execute(){
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            // if(push_offsets.size())
-            //     push_offsets.last() += 8 * (-inputs + outputs);
-                
-            //     virtual_stack_pointer += (inputs - outputs) * 8; // inputs - outputs
-                
-            //     Bytecode::ASM& asmInstance = bytecode->asmInstances.get(base->imm32);
-            //     Assert(asmInstance.generated);
-            //     u32 len = asmInstance.iEnd - asmInstance.iStart;
-            //     if(len != 0) {
-            //         u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
-            //         int pc_start = code_size();
-            //         emit_bytes(ptr, len);
-            //         for (int i = 0; i < asmInstance.relocations.size();i++) {
-            //           auto& it = asmInstance.relocations[i];
-            //           program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
-            //         }
-            //     } else {
-            //         // TODO: Better error, or handle error somewhere else?
-            //         log::out << log::RED << "BC_ASM at "<<n->bc_index<<" was incomplete\n";
-            //     }
+            if(push_offsets.size())
+                push_offsets.last() += 8 * (outputs - inputs);
             
+            BytecodeASM& asmInstance = bytecode->asmInstances.get(imm);
+            Assert(asmInstance.generated);
+            u32 len = asmInstance.iEnd - asmInstance.iStart;
             
-            log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
+            if(len != 0) {
+                u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
+                
+                
+                // TODO: Reuse allocated executable memory
+                int max = 1024;
+                u8* f = (u8*)AllocateExec(max);
+                int head = 0;
+                /*
+                    push rbp
+                    push rdi
+                    # rdi is VM stack pointer
+                    mov rbp, rsi
+                    sub rsp, 16 # size based on inputs of ASM
+
+                    mov rax, [rdi + 0]
+                    mov [rsp+0], rax
+                    mov rax, [rdi + 8]
+                    mov [rsp+8], rax
+
+                    # body
+                    pop rax
+                    pop rcx
+                    add rax, rcx
+                    push rax
+
+                    add rsp, 16
+                    pop rdi
+                    mov rax, [rsp - 24]
+                    mov [rdi - 8], rax
+                    pop rbp
+                    ret
+                */
+                
+                // u8 PRELUDE[]{
+                //     /* push rbp */ 0x55,
+                //     /* push rdi */ 0x57,
+                //     /* mov rbp, rsi */ 0x48, 0x89, 0xF5,
+                //     /* sub rsp, 16 */ 0x48, 0x83, 0xEC, 0x10,
+                //     /* mov rax, [rdi + 0] */ 0x48, 0x8B, 0x47, 0x01,
+                //     /* mov [rsp+0], rax */ 0x48, 0x89, 0x44, 0x24, 0x01,
+                //     /* mov rax, [rdi + 8] */ 0x48, 0x8B, 0x47, 0x08,
+                //     /* mov [rsp+8], rax */ 0x48, 0x89, 0x44, 0x24, 0x08,
+                //     /*  */ /* 0x58, 0x59, 0x48, 0x01, 0xC8, 0x50,*/
+                // };
+                // u8 EPILOG[]{
+                //     /* add rsp */ 0x48, 0x83, 0xC4, 0x10,
+                //     /* pop rdi */ 0x5F,
+                //     /*  */ 0x48, 0x8B, 0x44, 0x24, 0xE8,
+                //     /*  */ 0x48, 0x89, 0x47, 0xF8,
+                //     /* pop rbp */ 0x5D,
+                //     /* ret */ 0xC3
+                // };
+                
+                // int stackspace = inputs * 8; // TODO: 16-byte alignment
+                // if(outputs*8 > stackspace) {
+                //     stackspace = outputs*8;
+                // }
+                {
+                    u8 code[] {
+                        /* push rbp     */ 0x55,
+                        /* push rdi     */ 0x57,
+                        /* mov rbp, rsi */ 0x48, 0x89, 0xF5,
+                        /* sub rsp, 16  */ 0x48, 0x83, 0xEC, inputs*8, // TODO: 16-byte alignment
+                    };
+                    memcpy(f+head, code, sizeof(code));
+                    head += sizeof(code);
+                }
+                
+                for(int i=0;i<inputs;i++) {
+                    u8 code[] {
+                        /* mov rax, [rdi + 0] */ 0x48, 0x8B, 0x47, i*8,
+                        /* mov [rsp+0], rax   */ 0x48, 0x89, 0x44, 0x24, i*8,
+                    };
+                    memcpy(f+head, code, sizeof(code));
+                    head += sizeof(code);
+                }
+                
+                memcpy(f+head, ptr, len);
+                head += len;
+                
+                {
+                    u8 code[] {
+                        /* add rsp */ 0x48, 0x83, 0xC4, outputs*8,
+                        /* pop rdi */ 0x5F,
+                    };
+                    memcpy(f+head, code, sizeof(code));
+                    head += sizeof(code);
+                }
+                
+                for(int i=0;i<outputs;i++) {
+                    u8 code[] {
+                        /* mov rax, [rsp - 24] */ 0x48, 0x8B, 0x44, 0x24, (i8)(-i*8-16),
+                        /* mov [rdi - 8], rax  */ 0x48, 0x89, 0x47, (i8)(inputs*8-i*8-8),
+                    };
+                    memcpy(f+head, code, sizeof(code));
+                    head += sizeof(code);
+                }
+                
+                {
+                    u8 code[] {
+                        /* pop rbp */ 0x5D,
+                        /* ret     */ 0xC3
+                    };
+                    memcpy(f+head, code, sizeof(code));
+                    head += sizeof(code);
+                }
+                
+                OutputAsHex("inl_asm.log", f, head);
+                
+                auto func = (void(*)(i64, i64))f;
+                func(stack_pointer, base_pointer);
+                
+                
+                FreeExec(f, max);
+            } else {
+                log::out << log::YELLOW << asmInstance.file <<":"<<asmInstance.lineStart<< ": "<<log::NO_COLOR <<" was incomplete or just empty?\n";
+            }
+            
+            stack_pointer += (inputs - outputs) * 8;
+            
+            // log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
             // TODO: Run assembler on the inline assembly (like we do in x64 gen).
             //   Allocate executable memory and then start executing.
             //   We need to add some instructions to populate the stack with values
             //   and then extract the final values.
-            running = false;
+            // running = false;
         } break;
         case BC_ADD:
         case BC_SUB:

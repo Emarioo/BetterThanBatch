@@ -4514,6 +4514,8 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
 SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruct){
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue2);
+    
+    // log::out << "VISIT "<<function->name << "\n";
 
     // TODO: THIS IS TEMPORARY CODE!
     WHILE_TRUE_N(1000) {
@@ -4617,6 +4619,17 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         }
         return SIGNAL_SUCCESS;
     }
+    if(function->callConvention != BETCALL) {
+        // Assert(!function->parentStruct);
+
+        if (function->returnValues.size() > 1) {
+            ERR_SECTION(
+                ERR_HEAD2(function->location)
+                ERR_MSG(ToString(function->callConvention) << " only allows one return value. BETCALL (the default calling convention in this language) supports multiple return values.")
+                ERR_LINE2(function->location, "bad")
+            )
+        }
+    };
 
     // When export is implemented I need to come back here and fix it.
     // The assert will notify me when that happens.
@@ -4626,8 +4639,11 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // IMPORTANT: If you uncomment this then you have to make sure
         //  that the type checker checked this function body. It won't if
         //  the implementation isn't used.
-        if(!funcImpl->isUsed())
+        if(!funcImpl->isUsed()) {
+            // log::out << " not used "<<function->name<<"\n";
             continue; // Skips implementation if it isn't used
+        }
+            
         Assert(("func has already been generated!",funcImpl->tinycode_id == 0));
 
         if(funcImpl->astFunction->name == compiler->entry_point) {
@@ -4651,8 +4667,28 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         tinycode->funcImpl = funcImpl;
         out_codes->add(tinycode);
         builder.init(bytecode, tinycode, compiler);
-        
         funcImpl->tinycode_id = tinycode->index + 1;
+        
+        if(function->assembly_body) {
+            auto imp = compiler->lexer.getImport_unsafe(function->asm_range.importId);
+            auto iterator = compiler->lexer.createFeedIterator(imp, function->asm_range.token_index_start, function->asm_range.token_index_end);
+            bool yes = compiler->lexer.feed(iterator);
+            if(!yes) {
+                // TODO: When does this happen and is it an error?
+            }
+            std::string assembly = std::string(iterator.data(), iterator.len());
+        
+            lexer::TokenSource* src_start, *src_end;
+            compiler->lexer.getTokenInfoFromImport(imp->file_id, function->asm_range.token_index_start, &src_start);
+            compiler->lexer.getTokenInfoFromImport(imp->file_id, function->asm_range.token_index_end-1, &src_end);
+            iterator.append('\n'); // if the last token didn't have a newline then we must add one here
+            int asm_index = bytecode->add_assembly(assembly.data(), assembly.size(), imp->path, src_start->line, src_end->line);
+            tinycode->asm_index = asm_index;
+            
+            bool result = prepare_assembly(compiler, tinycode, bytecode->asmInstances[asm_index]);
+            continue;
+        }
+        
         if(tinycode->name == compiler->entry_point) {
             bytecode->index_of_main = tinycode->index;
             int prev_tinyindex;
@@ -4734,18 +4770,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
 
         // int allocated_stack_space = 0;
 
-        if(function->callConvention != BETCALL) {
-            // Assert(!function->parentStruct);
-
-            if (funcImpl->signature.returnTypes.size() > 1) {
-                ERR_SECTION(
-                    ERR_HEAD2(function->location)
-                    ERR_MSG(ToString(function->callConvention) << " only allows one return value. BETCALL (the default calling convention in this language) supports multiple return values.")
-                    ERR_LINE2(function->location, "bad")
-                )
-            }
-        };
-
         // Why to we calculate var offsets here? Can't we do it in 
         if (function->arguments.size() != 0) {
             _GLOG(log::out << "set " << function->arguments.size() << " args\n");
@@ -4783,7 +4807,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         }
         int index_of_frame_size = 0;
         
-        if(function->blank_body) {
+        if(function->assembly_body) {
             // builder.emit_alloc_local(BC_REG_INVALID, (u16)0);
         } else {
             builder.emit_alloc_local(BC_REG_INVALID, &index_of_frame_size);
@@ -4801,7 +4825,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // #else
         // #endif
 
-            if(!function->blank_body) {
+            if(!function->assembly_body) {
                 // builder.emit_alloc_local(BC_REG_INVALID, funcImpl->signature.returnSize);
                 
 
@@ -4827,10 +4851,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             arg.virtualType->id = funcImpl->signature.polyArgs[i];
         }
 
-        if(function->blank_body && ((astStruct && astStruct->polyArgs.size()) || function->polyArgs.size())) {
+        if(function->assembly_body && ((astStruct && astStruct->polyArgs.size()) || function->polyArgs.size())) {
             ERR_SECTION(
                 ERR_HEAD2(function->location)
-                ERR_MSG("Specifying @blank for functions is a bad idea for polymorphic functions. @blank is meant to be used as a 'clean slate' for inline assembly.")
+                ERR_MSG("Specifying @asm for functions may be a bad idea for polymorphic functions. Solve your problem a different way.")
                 if(function->polyArgs.size()) {
                     ERR_LINE2(function->location,"this function is polymorphic")
                     if(astStruct && astStruct->polyArgs.size()) {
@@ -4846,10 +4870,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // dfun->codeStart = info.bytecode->length();
 
         if(funcImpl->astFunction->name == compiler->entry_point) {
-            if(function->blank_body) {
+            if(function->assembly_body) {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
-                    ERR_MSG("The entry point function cannot be @blank because it's the entry point which initializes type information and global data.")
+                    ERR_MSG("The entry point function cannot be @asm because it's the entry point which initializes type information and global data.")
                     ERR_LINE2(function->location, "here")
                 )
             }
@@ -4925,7 +4949,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
         }
 
-        if (funcImpl->signature.returnTypes.size() != 0 && !function->blank_body) { // blank body requires the user to manually return arguments through assembly. It's the user's fault if they did it incorrectly.
+        if (funcImpl->signature.returnTypes.size() != 0 && !function->assembly_body) { // blank body requires the user to manually return arguments through assembly. It's the user's fault if they did it incorrectly.
             // @compiler functions do not have bodies.
             if(function->body) {
                 // check last statement for a return and "exit" early
@@ -4960,7 +4984,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // add return with no return values if it doesn't exist
         // this is only fine if the function doesn't return values
         if(!function->body || function->body->statements.size() == 0 || function->body->statements.last()->type != ASTStatement::RETURN) {
-            if(!function->blank_body) {
+            if(!function->assembly_body) {
                 int index;
                 builder.emit_free_local(&index);
                 add_frame_fix(index);
@@ -5011,6 +5035,11 @@ SignalIO GenContext::generateFunctions(ASTScope* body){
                 generateFunctions(function->body);
                 if(function->contains_run_directive == gen_func_with_run_directives)
                     generateFunction(function, it);
+            }
+            if(function->assembly_body) {
+                // TODO: Assembly body has completely difference code from generateFunction
+                //   Maybe a separate function for it?
+                generateFunction(function, it);
             }
         }
     }

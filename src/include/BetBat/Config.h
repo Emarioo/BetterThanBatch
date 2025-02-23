@@ -142,6 +142,7 @@ enum LoggingSection : u64 {
     
 };
 extern LoggingSection global_loggingSection;
+extern bool VIRTUAL_MACHINE_LOGGING;
 
 #ifdef DEBUG
     #define _LOG(F,...) { if(global_loggingSection & F) { __VA_ARGS__; } }

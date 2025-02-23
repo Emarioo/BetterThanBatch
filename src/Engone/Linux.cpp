@@ -667,6 +667,10 @@ namespace engone {
 		return ptr;
 	}
 	void FreeExec(void* ptr, int size) {
+        int psize = getpagesize();
+        if((size % psize) != 0) {
+            size += psize - (size%psize);
+        }
 		int suc = munmap(ptr, size);
 		if(suc < 0) {
             printf("ERROR: %d\n", errno);

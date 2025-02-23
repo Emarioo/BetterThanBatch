@@ -980,15 +980,15 @@ struct ASTFunction : ASTNode {
     bool isPolymorphic(){
         return polyArgs.size()!=0;
     }
-    
-    bool blank_body = false; // tells the generator to create no instructions except a return.
+    bool assembly_body = false; // tells the generator to create no instructions except a return.
+    lexer::TokenRange asm_range{};
     LinkConvention linkConvention = LinkConvention::NONE;
     CallConvention callConvention = BETCALL;
     // A lot of places need to know whether a function has a body.
     // When function should have a body or not has changed a lot recently
     // and I have needed to rewrite a lot. Having the requirement abstracted in
     // a function will prevent some of the changes you would need to make.
-    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC && !is_compiler_func && !is_builtin; }
+    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC && !is_compiler_func && !is_builtin && !assembly_body; }
 
     void print(AST* ast, int depth);
 };

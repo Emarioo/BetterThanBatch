@@ -111,8 +111,10 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
             text_stream->write(tinyprog->text, tinyprog->head);
             
             auto tinycode = compiler->bytecode->tinyBytecodes[i];
-            tinycode->debugFunction->asm_start = tinyprogram_offsets[i];
-            tinycode->debugFunction->asm_end = text_stream->getWriteHead();
+            if(tinycode->asm_index == -1) { // we don't have debug function if tinycode is inline assembly function
+                tinycode->debugFunction->asm_start = tinyprogram_offsets[i];
+                tinycode->debugFunction->asm_end = text_stream->getWriteHead();
+            }
 
             if(text_stream->getWriteHead() > 0x4000'0000 && !messaged) {
                 messaged = true;

@@ -28,6 +28,9 @@ LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_INCLUDES   
 );
 
+bool VIRTUAL_MACHINE_LOGGING = false;
+// bool VIRTUAL_MACHINE_LOGGING = true;
+
 // static int s_activelogs=0;
 // void SetLog(int type, bool active){
 //     if(active) s_activelogs |= type;

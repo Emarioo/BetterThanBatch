@@ -38,7 +38,7 @@ struct VirtualMachine {
     QuickArray<u8> stack{};
     VMError error{};
     
-    bool logging = false;
+    bool logging = VIRTUAL_MACHINE_LOGGING;
     // bool logging = true;
     bool interactive = false;
     bool is_callback_from_stub = false;

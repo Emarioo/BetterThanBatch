@@ -2633,9 +2633,21 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             bool printedError = false;
             auto ti = checkType(scopeId, stmp->asmTypeString, expr->location, &printedError);
             if (ti.isValid()) {
-                if(outTypes)
-                    outTypes->add(ti);
-                stmp->versions_asmType.set(currentPolyVersion, ti);
+                TypeInfo* typeinfo = ast->getTypeInfo(ti);
+                if(typeinfo->astStruct) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("Inline assembly cannot return a struct, only primitive values. Go annoy the developer on discord to fix this (he was lazy and needs to pay for it).")
+                        ERR_LINE2(expr->location,"bad")
+                    )
+                    if(outTypes)
+                        outTypes->add(TYPE_VOID);
+                    return SIGNAL_FAILURE;
+                } else {
+                    if(outTypes)
+                        outTypes->add(ti);
+                    stmp->versions_asmType.set(currentPolyVersion, ti);
+                }
             } else {
                 if(!printedError){
                     ERR_SECTION(

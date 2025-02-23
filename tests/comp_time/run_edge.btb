@@ -1,3 +1,19 @@
 @TEST_CASE(type_check_top_local_if_in_run)
 
 #import "./_extra.btb"
+
+
+@TEST_CASE(comptime_inline_assembly)
+
+global glob: i32
+#run {
+    glob = asm<i32>(5,9){
+        pop rax
+        pop rcx
+        
+        add rax, rcx
+        push rax
+    }
+}
+
+_test 14; glob;

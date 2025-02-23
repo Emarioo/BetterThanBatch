@@ -45,6 +45,9 @@
             "include": "#assembly"
         },
         {
+            "include": "#func_assembly"
+        },
+        {
             "include": "#shebang"
         }
 	],
@@ -75,6 +78,25 @@
                 }
             ]
 		},
+        "func_assembly": {
+            "name": "support.function",
+            "begin": "(?<=@asm.*\\{)",
+            "end": "\\}",
+            "patterns": [
+                {
+                    "name": "keyword.control",
+                    "match": "^\\s*\\w+"
+                },
+                {
+                    "name": "comment.line",
+                    "match": "//.*$"
+                },
+                {
+                    "name": "comment.block",
+                    "match": "/\\*(.|\\n)*\\*//"
+                }
+            ]
+        },
         "assembly": {
             "name": "support.function",
             "begin": "(?<=asm\\s*(<.*>)?(\\(.*\\))?\\s*\\{)",
