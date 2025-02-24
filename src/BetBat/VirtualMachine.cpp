@@ -422,7 +422,7 @@ void VirtualMachine::execute(){
             log::out << log::RED << "VirtualMachine: Stack overflow\n";
         }
     };
-
+    
     #define instructions tinycode->instructionSegment
     while(running) {
         for(int i=0;i<breakpoints.size();i++) {

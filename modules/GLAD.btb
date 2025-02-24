@@ -26,7 +26,7 @@
 
 global glErrCode: bool = false;
 // #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",#file,":",cast<i64>#line," code: "cast<i64>glErrCode,", ",glewGetErrorString(glErrCode)); }
-#macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error ",#file,":",cast<i64>#line," code: ",cast<i64>glErrCode); }
+#macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error ",#file,":",cast<i64>#line,", code: ",cast<i64>glErrCode); }
 #if !GLCHECK
     #macro GLCHECK #endmacro
 #endif

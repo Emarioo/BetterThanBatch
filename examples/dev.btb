@@ -3,24 +3,51 @@
 // #import "examples/graphics/quad.btb"
 // #import "examples/callbacks/main.btb"
 
-
 #import "Logger"
-#import "File"
-
-global file_size: i32 = size_of_file("README.md")
-
-fn size_of_file(path: char[]) -> i32 {
-    size: i64 
-    f := FileOpen(path, FILE_READ_ONLY, &size)
-    FileClose(f)
-    log(size)
-    return size;
-}
 
 fn main() {
-    log("size of README.md: ", file_size)
-    // _test 0; 0 == file_size; 
+    log("main begin")
+    
+    #run log("I am auxiliary but local")
+    
+    log("main end")
 }
+
+#run log("I am auxiliary and global")
+
+global y: i32 = temp()
+fn temp() -> i32 {
+    log("I am global variable")
+    return 5
+}
+/*
+OUTPUT at compile time:
+  I am global variable
+  I am auxiliary and global
+  I am ALSO auxiliary and global
+ 
+OUTPUT at runtime:
+  main begin
+  main end
+*/
+
+// #import "Logger"
+// #import "File"
+
+// global file_size: i32 = size_of_file("README.md")
+
+// fn size_of_file(path: char[]) -> i32 {
+//     size: i64 
+//     f := FileOpen(path, FILE_READ_ONLY, &size)
+//     FileClose(f)
+//     log(size)
+//     return size;
+// }
+
+// fn main() {
+//     log("size of README.md: ", file_size)
+//     // _test 0; 0 == file_size; 
+// }
 
 // NOTE: Code below does not work. We don't handle pushed struct elements from inline assembly. This somehow worked fine in x64_gen but crashes in VM because VM modifies the stack by 8 bytes when it should do 16. Probably not a problem in x64_gen because we still generate the two pop instructions required for the Pack struct. Since VM messes with the stackpointer it crashes even before it tries to do the pop instructions.
 // #run 

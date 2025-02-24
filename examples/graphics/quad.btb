@@ -135,7 +135,7 @@ fn main(){
     glBufferData(GL_ARRAY_BUFFER, VERTEX_COUNT * sizeof f32 , null, GL_DYNAMIC_DRAW);
     GLCHECK
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof f32, cast<void*>cast<u64>0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof f32, null);
     GLCHECK
     glEnableVertexAttribArray(0);
     GLCHECK

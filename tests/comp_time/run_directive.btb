@@ -154,3 +154,22 @@ fn first() -> Block {
 b := #run first()
 _test b.x; 4;
 _test 1; substring(b.str, 1) == "nnamed";
+
+@TEST_CASE(comptime_func_ptr)
+
+// #import "Logger"
+
+// fn @oscall some_func(a: i32, b: i32, c: i32, d: i32, e: i32) -> i32 {
+fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
+    return a+b+c+d+e
+}
+#run {
+    // res := some_func(1.1,2.2,3.3,4.4,5.5)
+    f := some_func
+    
+    res := f(1.1,2.2,3.3,4.4,5.5)
+    // res := f(1,2,3,4,5)
+    
+    _test (1.1 + 2.2 + 3.3 + 4.4 + 5.5); res
+    // log(res)
+}

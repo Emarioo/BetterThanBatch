@@ -11,7 +11,7 @@ This code example shows the execution order of the auxiliary run directive and t
 fn main() {
     log("main begin")
     
-    #run log("I am auxiliary but local")
+    #run log("I am auxiliary BUT LOCAL")
     
     log("main end")
 }
@@ -27,7 +27,7 @@ fn temp() -> i32 {
 OUTPUT at compile time:
   I am global variable
   I am auxiliary and global
-  I am ALSO auxiliary and global
+  I am auxiliary BUT LOCAL
  
 OUTPUT at runtime:
   main begin
@@ -74,7 +74,6 @@ fn comp() -> Stuff {
 }
 ```
 
-
 Even function pointers are allowed. If they are defined in the program, operating system functions are not allowed.
 ```c++
 #import "Logger"
@@ -111,6 +110,21 @@ However, you cannot allocate heap memory and return such pointers to it since th
 x := #run Allocate(4) // cannot return pointer to heap
 
 #run Allocate(4) // does not inline a literal so this is fine albeit a memory leak
+```
+
+Inline assembly is also allowed but has certain limitations. Using the `ret` instruction will cause a crash because the VM allocates space on the stack for things and if you just return without freeing the space you would return using an incorrect return address. **IN ANY CASE, DO NOT USE THE `ret` INSTRUCTION!**
+```c++
+#import "Logger"
+
+#run {
+    val := asm<i32>(5,9) {
+        pop rax
+        pop rbx
+        add rax, rbx
+        push rax
+    }
+    log(val)
+}
 ```
 
 ## Corner cases
@@ -186,6 +200,11 @@ The run directives currently execute in a deterministic but not so obvious order
 An important restriction for Compile time evaluation has one restrictions which is returning pointers. Allocating heap at compile time and returning it is not allowed since that pointer isn't available at runtime. Any pointer that points to the data section is allowed however. The compiler will print an error message when this isn't the case. Returning a string is allowed because it lives in the data section. Returning a function pointer to a function defined in the program is also allowed.
 
 **NOTE:** When compiler is multi-threaded, you can use mutexes to prevent synchronization problems if multiple run directives accesses the same globals. Fortunately, all calls to the compiler session functions are thread-safe so you don't have to worry about that (the functions may not be foolproof from logical errors though).
+
+### Function pointers
+
+
+### Inline assembly
 
 # Future improvements
 - Temporary global data for compile-time execution. For storing temporary mutexes.

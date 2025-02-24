@@ -30,7 +30,7 @@
         {
             "name": "LINUX",
             "includePath": [
-                "~/BetterThanBatch/**"
+                "~/btb/**"
             ],
             "defines": [
                 "_DEBUG",

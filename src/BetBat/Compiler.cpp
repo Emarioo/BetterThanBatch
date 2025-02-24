@@ -1868,6 +1868,8 @@ void Compiler::run(CompileOptions* options) {
                         int pos = file.find(".");
                         if(file.size() > 3 && file.substr(0,3) == "lib" && pos != -1) {
                             file = file.substr(3, pos-3);
+                        } else if(pos != -1 && file.size() - pos >= 3 && file.substr(pos, 3) == ".so") {
+                            file = file.substr(0, pos);
                         }
                     }
                     if(file != "")
