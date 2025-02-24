@@ -5,6 +5,7 @@
 
 # Ignore generated binaries
 bin
+releases
 *.exe
 *.exp
 *.def
@@ -63,3 +64,6 @@ secure
 # personal convenient scripts
 deb.bat
 qem.bat
+
+# commited once to git repo, should never be modified by user, scripts modify it locally for release
+const_commit.cpp

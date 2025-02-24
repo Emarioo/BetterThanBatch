@@ -187,7 +187,6 @@ fn second() {
 // first() // <-- this is required
 ```
 
-
 ## Technical details (may be useful if you run in to issues)
 Functions that contain an inline run directive are delayed until the bytecode for all other functions are generated. Then the bytecode for the delayed functions are generated. When the run directive is encountered a new bytecode generation context is created where the bytecode for run directive's expression is generated. Then that expression is evaluated. And then inserted into the delayed function where the run directive was.
 
@@ -202,9 +201,10 @@ An important restriction for Compile time evaluation has one restrictions which 
 **NOTE:** When compiler is multi-threaded, you can use mutexes to prevent synchronization problems if multiple run directives accesses the same globals. Fortunately, all calls to the compiler session functions are thread-safe so you don't have to worry about that (the functions may not be foolproof from logical errors though).
 
 ### Function pointers
-
+**TODO:** Write about stub functions for bytecode functions in VM. How executable memory is allocated and x64 instructions generated to transition between VM and C code.
 
 ### Inline assembly
+**TODO:** Write about extra instructions being pre-appended and post-appended to the instructions in the inline assembly to allow Virtual Machine to transition between executing bytecode to calling a dynamically generated assembly function, to executing assembly, pushing popping values to/from stack and then returning back to VM.
 
 # Future improvements
 - Temporary global data for compile-time execution. For storing temporary mutexes.

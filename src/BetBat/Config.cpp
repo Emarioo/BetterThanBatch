@@ -5,6 +5,8 @@
    Make most edits here with global variables
 ############### */
 
+const char* COMPILER_VERSION = "0.2.1/comptime-2025-02-24";
+
 LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_ALL
 // | LOG_TASKS

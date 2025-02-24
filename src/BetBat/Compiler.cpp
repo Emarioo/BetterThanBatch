@@ -159,10 +159,6 @@ Path Path::getDirectory() const {
     return text.substr(0,lastSlash+1);
 }
 
-// You can search for "COMPILER_VERSION:" in the compiler executable to find the
-// version of the compiler. Useful in case it crashes and you can't get the version.
-static const char* str_static_version = "COMPILER_VERSION:" COMPILER_VERSION;
-
 const char* CompilerVersion::global_version = COMPILER_VERSION;
 CompilerVersion CompilerVersion::Current(){
     CompilerVersion version{};
