@@ -267,11 +267,6 @@ def compile(config):
 
         MSVC_COMPILE_OPTIONS += " /FI pch.h"
 
-        hacky_obj_path = config["bin_dir"]+"/hacky_stdcall.obj"
-        if not os.path.exists(hacky_obj_path) or os.path.getmtime(hacky_obj_path) < os.path.getmtime("src/BetBat/hacky_stdcall.asm"):
-            cmd("ml64 /nologo /Zd /Zi /Fo"+hacky_obj_path+" /c src/BetBat/hacky_stdcall.asm") # TODO: piping output to nul might not work with os.system
-        object_files.append(hacky_obj_path)
-
         # Create sub directories in bin, this part must be single-threaded
         for f in modified_files:
             index = source_files.index(f)
@@ -295,8 +290,8 @@ def compile(config):
                     fd.write("#include \"" + os.path.abspath(file) + "\"\n")
                 fd.close()
 
-                err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" "+config["bin_dir"]+"/hacky_stdcall.obj /OUT:"+config["output"])
-                # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
+                err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" /OUT:"+config["output"])
+                # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" /OUT:"+config["output"])
                 # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
 
                 compile_success = err == 0
@@ -399,19 +394,6 @@ def compile(config):
             
         # Code below compiles the necessary object files
       
-        if platform.system() == "Windows":
-            hacky_obj_path = config["bin_dir"]+"/hacky_stdcall.o"
-            if not os.path.exists(hacky_obj_path) or os.path.getmtime(hacky_obj_path) < os.path.getmtime("src/BetBat/hacky_stdcall.s"):
-                # -g flag causes relocation truncated to fit: IMAGE_REL_AMD64_ADDR32 against `.text'
-                # not sure why so no debug info here
-                cmd("as -c src/BetBat/hacky_stdcall.s -o "+hacky_obj_path)
-            object_files.append(hacky_obj_path)
-        else:
-            hacky_obj_path = config["bin_dir"]+"/hacky_sysvcall.o"
-            if not os.path.exists(hacky_obj_path) or os.path.getmtime(hacky_obj_path) < os.path.getmtime("src/BetBat/hacky_sysvcall.s"):
-                cmd("as -c -g src/BetBat/hacky_sysvcall.s -o "+hacky_obj_path)
-            object_files.append(hacky_obj_path)
-        
         # TODO: Add include directories to compute_modified_files? We assume that all includes come from "include/"
 
         # Find source files that were updated since last compilation, incremental build
@@ -563,12 +545,13 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
         if not os.path.exists(mingw_dll):
             cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ mingw_dll_defs + " " + src + " -o "+mingw_dll)
         
-        if not os.path.exists(vc_lib):
-            cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
-            cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
-        
-        if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
-            cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
+        if shutil.which("cl"): # only compile with cl if it's available
+            if not os.path.exists(vc_lib):
+                cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
+                cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
+            
+            if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
+                cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
         
     if platform.system() == "Linux":
         if not os.path.exists(ubuntu_path):

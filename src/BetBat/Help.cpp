@@ -9,6 +9,9 @@ void print_version(){
     CompilerVersion version = CompilerVersion::Current();
     version.serialize(buffer, sizeof(buffer),CompilerVersion::INCLUDE_AVAILABLE);
     log::out << "BTB Compiler, version: " << log::LIME<< buffer <<"\n";
+    if(strlen(GIT_COMMIT) > 0) {
+        log::out << log::GRAY << "git commit: " << GIT_COMMIT << "\n";
+    }
     // log::out << log::GRAY << "(major.minor.patch.revision/name-year.month.day)\n";
     // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)\n";
 }

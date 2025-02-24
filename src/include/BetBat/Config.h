@@ -27,8 +27,7 @@
 
 Try to edit Config.cpp instead of this file because you will have to compile all headers and translation units otherwise.
 */
-#define COMPILER_VERSION "0.2.2/comptime-2024-12-27"
-
+extern const char* COMPILER_VERSION;
 // DEV_FILE defaults to dev.btb if none is specified
 // #define DEV_FILE "examples/debug_test.btb"
 // #define DEV_FILE "examples/garb.btb"
@@ -109,6 +108,8 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 */
 
 #define INCOMPLETE Assert(("Incomplete",false));
+
+extern const char* GIT_COMMIT; // Value is auto-generated from const_commit.cpp
 
 #ifdef DEBUG
     #define LOG(CATEGORY, ...) if(global_loggingSection&(CATEGORY)) { engone::log::out << __VA_ARGS__; }
