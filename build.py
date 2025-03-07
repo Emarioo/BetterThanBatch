@@ -545,12 +545,13 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
         if not os.path.exists(mingw_dll):
             cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ mingw_dll_defs + " " + src + " -o "+mingw_dll)
         
-        if not os.path.exists(vc_lib):
-            cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
-            cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
-        
-        if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
-            cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
+        if shutil.which("cl"): # only compile with cl if it's available
+            if not os.path.exists(vc_lib):
+                cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
+                cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
+            
+            if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
+                cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
         
     if platform.system() == "Linux":
         if not os.path.exists(ubuntu_path):
