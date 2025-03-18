@@ -1,16 +1,14 @@
 #import "OS"
 #import "Logger"
-#import "Basic"
+#import "File"
 
 fn main() {
-    iter: DirectoryIterator*;
     // root = ".";
     root := "src";
     // root = "docs";
-    iter := DirectoryIteratorCreate(&root);
-    defer { DirectoryIteratorDestroy(iter); }
+    iter := CreateDirIterator(root);
+    defer { iter.cleanup() }
 
-    result: DirectoryIteratorData*;
     loop := 0;
     // // printData(iter);
     // // result = 
@@ -18,7 +16,10 @@ fn main() {
     // // DirectoryIteratorNext(iter._handle);
     // // iter.next()
     // // while cast<bool>(result = iter.next()) && loop < 100 {
-    while result = iter.next() {
+    while {
+        item := iter.next()
+        if !item  break
+
         loop++;
         // log("oh 1");
         // result = iter.next()
@@ -30,11 +31,12 @@ fn main() {
         // printData(result);
         //     // continue
         // }
-        eh := matchEnd(result.name,".cpp")
+        // log(item.name)
+        eh := equal_end(".cpp", item.name)
         if !eh
             continue;
         // log("):")
-        log(result.name);
+        log(item.name);
         // prints(result.name); prints("\n");
         // prints(": ");
         // printi(result.fileSize);

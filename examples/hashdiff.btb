@@ -1,0 +1,140 @@
+/*
+    Program takes two directories and tells you about the files
+    with different sha1 hashes.
+*/
+
+#import "String"
+#import "Logger"
+#import "OS"
+#import "File"
+#import "Math"
+#import "Asserts"
+
+fn main(argc: i32, argv: char**) -> i32 {
+
+    if argc < 3 {
+        log("Usage: hashdiff <path1> <path2>")
+        return 1
+    }
+
+    dir1: StringBuilder
+    dir1.append(argv[1])
+    dir2: StringBuilder
+    dir2.append(argv[2])
+
+    struct FileEntry {
+        path: StringBuilder;
+        timestamp: i64;
+        duplicate: bool;
+        hash: u8[];
+    }
+
+    files1 : Array<FileEntry>
+    files2 : Array<FileEntry>
+
+    // log("Files in ", dir1)
+    iter := CreateDirIterator(dir1)
+    while {
+        item := iter.next()
+        if !item   break;
+        if equal_end(".git", item.name) iter.skip()
+        else if equal_end("bin", item.name) iter.skip()
+        if item.is_directory  continue
+
+        // log(" ",item.name, " ", item.last_write_time)
+
+        hello dude i am here, squeeky board
+
+        entry := files1.add()
+        entry.path.append(dir1)
+        entry.path.append("/")
+        entry.path.append(item.name)
+        entry.timestamp = item.last_write_time
+        entry.hash = hash_file(entry.path)
+    }
+    iter.cleanup()
+
+    // log("Files in ", dir2)
+    iter = CreateDirIterator(dir2)
+    while {
+        item := iter.next()
+        if !item   break;
+        if equal_end(".git", item.name) iter.skip()
+        else if equal_end("bin", item.name) iter.skip()
+        if item.is_directory  continue
+
+        // log(" ",item.name, " ", item.last_write_time)
+
+        entry := files2.add()
+        entry.path.append(dir2)
+        entry.path.append("/")
+        entry.path.append(item.name)
+        entry.timestamp = item.last_write_time
+        entry.hash = hash_file(entry.path)
+    }
+    iter.cleanup()
+
+    log(files1.size(), " files in ", dir1)
+    log(files2.size(), " files in ", dir2)
+    
+    for it1, nr1 : files1 {
+        for it2, nr2 : files2 {
+            if equal_digest(it1.hash, it2.hash) {
+            // if it1.timestamp == it2.timestamp {
+                it1.duplicate = true
+                it2.duplicate = true
+            }
+        }
+    }
+
+    log("Unique in ", dir1)
+    for it1, nr1 : files1 {
+        if it1.duplicate   continue
+
+        log(" ",it1.path)
+    }
+    log("Unique in ", dir2)
+    for it2, nr2 : files2 {
+        if it2.duplicate   continue
+
+        log(" ",it2.path)
+    }
+    return 0
+}
+
+fn equal_digest(a: u8[], b: u8[]) -> bool {
+    Assert(a.len == 20 && a.len == b.len)
+
+    ai := cast_unsafe<i32*>a.ptr
+    bi := cast_unsafe<i32*>b.ptr
+
+    for 0..5 {
+        if ai[nr] != bi[nr]
+            return false 
+    }
+
+    return true
+}
+
+fn hash_file(path: char[]) -> u8[] {
+    // TODO: Error checking
+    filesize: i64
+    file := FileOpen(path, FILE_READ_ONLY, &filesize)
+    if !file {
+        log("Not a file ", path)
+        return {} // TODO: Error as output
+    }
+
+    defer FileClose(file)
+
+    data := Allocate(filesize)
+    defer Free(data, filesize)
+    FileRead(file, data, filesize)
+
+    digest: u8[]
+    digest.len = 20
+    digest.ptr = Allocate(digest.len)
+    hash_sha1({data, filesize}, &digest)
+
+    return digest
+}

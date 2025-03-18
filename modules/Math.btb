@@ -12,6 +12,7 @@
 #elif OS_LINUX
 #import "Linux"
 #endif
+#import "StackTrace"
 
 fn @intrinsic sqrt(v: f32) -> f32;
 fn @intrinsic round(v: f32) -> f32;
@@ -153,7 +154,7 @@ fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
     h3: u32 = 0x10325476
     h4: u32 = 0xC3D2E1F0
 
-    ml: u64 = message.len * 8u // message length in bits
+    ml: u64 = message.len * 8 // message length in bits
 
     // ##########################################
     //  Pre-processing of chunk and data length
@@ -161,10 +162,10 @@ fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
     
     data_size := message.len
     data_size += 1 // wiki: "append the bit '1' to the message"
-    mod := data_size % 64u // wiki: "append 0 ≤ k < 512 bits '0', such that the resulting message length in bits is congruent to −64 ≡ 448 (mod 512)"
-    if mod < 56u {
+    mod := data_size % 64 // wiki: "append 0 ≤ k < 512 bits '0', such that the resulting message length in bits is congruent to −64 ≡ 448 (mod 512)"
+    if mod < 56 {
         data_size += 56 - mod
-    } else if mod > 56u {
+    } else if mod > 56 {
         data_size += 56 + 64 - mod
     }
     data_size += 8 // wiki: "append ml, the original message length in bits"
@@ -211,8 +212,8 @@ fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
     // ##################
     words: u32[80]; // words
     w := words.ptr
-    chunk_index: u32 = 0 // 512-bit chunk
-    while chunk_index < data_size / 64u { // data_size (bytes) / 64 (512 bits)
+    chunk_index: i32 = 0 // 512-bit chunk
+    while chunk_index < data_size / 64 { // data_size (bytes) / 64 (512 bits)
         defer chunk_index++
 
         // TODO: Optimize with SIMD, there is also an alternative
@@ -220,7 +221,7 @@ fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
 
         // Load chunk data into words and switch endian?
         for 0..16 {
-            w[nr] = to_le(data[chunk_index * 16u + nr])
+            w[nr] = to_le(data[chunk_index * 16 + nr])
         }
         for 16..80 {
             i := nr
