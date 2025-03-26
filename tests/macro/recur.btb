@@ -39,3 +39,15 @@ _test 0; NOR(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
 
 // ORS(t,b,c,d,e,f)
 // ORS(type,#unwrap PART0,#unwrap PART1)
+
+@TEST_CASE(macro_rec_bug)
+
+#macro concat_str(X,...) str.append(X) concat_one(...)
+concat_one("A", "B")
+
+// This was a bug at one point because we got 2 arguments.
+// One for S and one for the variadic.
+#macro concat(S, X,...) S.append(X) concat(S, ...)
+#macro concat(S) #endmacro
+
+concat(str, "hi", "derp")

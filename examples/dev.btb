@@ -2,7 +2,69 @@
 
 // #import "examples/graphics/quad.btb"
 // #import "examples/callbacks/main.btb"
-#import "examples/diff.btb"
+// #import "examples/diff.btb"
+
+
+/*
+    Todays quest:
+        String concatenation using +, gone are the days we have to use the append method on strings.
+*/
+
+// #import "String"
+// #import "Logger"
+
+// #import "D:/dev/wander/src/main.btb"
+
+#import "BucketArray"
+
+ar: BucketArray<i32>
+ar.init(100)
+ar.add(24)
+ar.add(124)
+for ar {
+    log(it)
+}
+
+// #macro concat(S,X,...) S.append(X) concat(S, ...)
+// #macro concat(X,...) S.append(X) concat(...)
+// #macro concat() #endmacro
+
+// concat(str, "hi", "derp")
+
+// memory_tracker.init()
+// memory_tracker.disabled = false
+
+// path: StringBuilder
+// path.append("Gold")
+// name: char[] = "data"
+
+
+// fin := (path + "/") + (name + ".txt")
+// // fin := path + "/" + name + ".txt"
+
+// log(fin)
+
+// memory_tracker.print_memory();
+
+// operator +(a: StringBuilder, b: StringBuilder) -> StringBuilder {
+//     tmp := a.copy()
+//     tmp.append(b)
+//     log(a, " + ", b, " = ", tmp)
+//     return tmp
+// }
+// operator +(a: StringBuilder, b: char[]) -> StringBuilder {
+//     tmp := a.copy()
+//     tmp.append(b)
+//     log(a, " + ", b, " = ", tmp)
+//     return tmp
+// }
+// operator +(a: char[], b: char[]) -> StringBuilder {
+//     tmp: StringBuilder
+//     tmp.append(a)
+//     tmp.append(b)
+//     log(a, " + ", b, " = ", tmp)
+//     return tmp
+// }
 
 // #import "Logger"
 

@@ -22,9 +22,13 @@ Versioning for this project works like this: [Versioning](/docs/details/Versioni
 - Added *#function_insert*, see details in guide.
 - Added #fileabs which evaluates to absolute path, #file was changed to evaluate to relative path.
 
-## Bug fixes
+### Changes
+- Changed DirIterator functions in [File.btb](modules/File.btb).
+
+### Bug fixes
 - Graphics.btb module accidently swapped green and blue color values when rendering text (DrawText).
 - STB.btb always linked with dynamic library instead of static library.
+- Fixed bug with macro argument matching of variadic macros.
 
 ### Standard library additions and changes
 - Added std_print for colors (LogColor enum)

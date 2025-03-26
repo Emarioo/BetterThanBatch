@@ -138,9 +138,12 @@ DEF_GLAD_VAR(glUniform1f)(location: i32, v0: f32);
 DEF_GLAD_VAR(glUniform2f)(location: i32, v0: f32, v1: f32);
 DEF_GLAD_VAR(glUniform3f)(location: i32, v0: f32, v1: f32, v2: f32);
 DEF_GLAD_VAR(glUniform4f)(location: i32, v0: f32, v1: f32, v2: f32, v3: f32);
+DEF_GLAD_VAR(glUniformMatrix4fv)(location: i32, count: i32, transpose: bool, value: void*);
 
 DEF_GLAD_VAR(glVertexAttribPointer)(index: u32, size: i32, type: u32, normalized: bool, stride: i32, pointer: void*);
+DEF_GLAD_VAR(glVertexAttribDivisor)(index: u32, divisor: i32);
 DEF_GLAD_VAR(glEnableVertexAttribArray)(index: u32);
+DEF_GLAD_VAR(glDisableVertexAttribArray)(index: u32);
 DEF_GLAD_VAR(glGenVertexArrays)(b: i32, arrays: u32*);
 DEF_GLAD_VAR(glBindVertexArray)(array: u32);
 DEF_GLAD_VAR(glDeleteVertexArrays)(n: i32, arrays: u32*);

@@ -61,7 +61,7 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
             // dont have stable globals memory ready yet, scuffed and complicated but it works
             if stable_global_memory
         #endif
-            // memory_tracker.add(new_ptr, size)
+            memory_tracker.add(new_ptr, size)
         // else
         //     memory_tracker.add(new_ptr, size, type)
     } else {
@@ -238,6 +238,10 @@ struct MemoryTracker {
     fn print_memory() {
         disabled = true
         defer disabled = false
+
+        if !initialized
+            log("MemoryTracker::print_memory - Not initialized with init()")
+
         {
             log("Allocations:")
             iter := allocations.create_iterator()

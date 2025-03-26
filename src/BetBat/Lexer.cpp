@@ -2179,7 +2179,7 @@ bool Lexer::isIntegerLiteral(Token token, i64* value, int* significant_digits, i
     return true;
 }
 bool Lexer::get_source_information(SourceLocation loc, std::string* path, int* line, int* column, Import** out_imp) {
-    std::string cwd = engone::GetWorkingDirectory() + "/";
+    std::string cwd = engone::GetWorkingDirectory();
     ReplaceChar((char*)cwd.data(), cwd.length(), '\\','/');
     int index = 0;
     
@@ -2200,14 +2200,9 @@ bool Lexer::get_source_information(SourceLocation loc, std::string* path, int* l
     if(out_imp)
         *out_imp = imp;
 
-    while(imp->path.size() > index && cwd.size() > index) {
-        if(imp->path[index] != cwd[index])
-            break;
-        index++;
-    }
     if(path) {
-        if(index != 0)
-            *path = imp->path.substr(index);
+        if (imp->path.size() >= cwd.size() && imp->path.substr(0, cwd.size()) == cwd)
+            *path = "./" + imp->path.substr(cwd.size());
         else
             *path = imp->path;
     }

@@ -1,3 +1,5 @@
+**COMPILER IS WORK IN PROGRESS, IT WILL CHANGE AND BREAK YOUR CODE**
+
 # BetterThanBatch
 A neat compiler.
 

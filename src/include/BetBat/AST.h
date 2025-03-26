@@ -935,7 +935,7 @@ struct ASTFunction : ASTNode {
     QuickArray<IdentifierVariable*> memberIdentifiers; // only relevant with parent structs
 
     DynamicArray<PolyArg> polyArgs;
-    DynamicArray<Arg> arguments; // you could rename to parameters
+    DynamicArray<Arg> arguments; // you could rename to parameters, includes 'this' argument if it's a method
     DynamicArray<Ret> returnValues; // string type
     u32 nonDefaults=0; // used when matching overload, having it here avoids recalculations of it
 

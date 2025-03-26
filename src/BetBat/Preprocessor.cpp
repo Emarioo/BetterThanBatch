@@ -1474,6 +1474,18 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                 layer->adjacent_callee->add_input_arg(&scratch_allocator);
                                 // layer->adjacent_callee->input_arguments.add({});
                         }
+                        if(top_caller_spec->isVariadic() && param_index == top_caller_spec->indexOfVariadic) {
+                            if(layer->adjacent_callee->input_arguments.size() > 0 && layer->adjacent_callee->input_arguments.last().size() == 0) {
+                                // If variadic argument didn't provide any tokens then we don't want this extra empty argument
+                                // because it will mess up the macro matching. Below "concat(S, ...)" with 2 args would match with the inf variant instead of the blank macro
+                                // if we don't remove the last argument when its empty. This causes infinite recursion.
+                                //    #macro concat(S,X,...) S.append(X) concat(S, ...)
+                                //    #macro concat(S) #endmacro
+                                //    concat(str, "derp", "bam")
+
+                                layer->adjacent_callee->input_arguments.pop();
+                            }
+                        }
                         continue;
                     }
                 }

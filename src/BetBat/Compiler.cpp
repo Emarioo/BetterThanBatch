@@ -1356,6 +1356,9 @@ void Compiler::run(CompileOptions* options) {
         log::out << "  .elf     - kernel image (mainly meant for qemu)\n";
         return;
     }
+    if(output_type == OUTPUT_OBJ) {
+        object_path = output_path;
+    }
 
     if(options->target == TARGET_ARM && output_type != OUTPUT_OBJ && output_type != OUTPUT_ELF && output_type != OUTPUT_BC) {
         log::out << log::RED << "The compiler can only generate "<<log::NO_COLOR<<".o .elf .bc "<<log::RED<<" when targeting ARM, not '"<<output_extension<<"'.\n";

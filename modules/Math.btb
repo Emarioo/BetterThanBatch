@@ -43,6 +43,7 @@ fn ceil(v: f32) -> f32 { // TODO: Intrinsic
 #endif
 fn @import(Dummy) sinf(v: f32) -> f32
 fn @import(Dummy) cosf(v: f32) -> f32
+fn @import(Dummy) tanf(v: f32) -> f32
 
 fn random64() -> u64 {
 #if OS_WINDOWS
@@ -509,23 +510,12 @@ fn pow(x: i64, y: i64) -> i64 {
     return res
 }
 
+// ########################
+//    Vector operations
+// ########################
 struct vec2 {
     x: f32;
     y: f32;
-
-    // methods don't work on pushed values
-    // fn length() {}
-}
-struct vec3 {
-    x: f32;
-    y: f32;
-    z: f32;
-}
-struct vec4 {
-    x: f32;
-    y: f32;
-    z: f32;
-    w: f32;
 }
 operator +(a: vec2, b: vec2) -> vec2 {
     return vec2{a.x + b.x, a.y + b.y}
@@ -542,12 +532,158 @@ operator *(b: f32, a: vec2) -> vec2 {
 operator /(a: vec2, b: f32) -> vec2 {
     return vec2{a.x / b, a.y / b}
 }
-fn length(a: vec2) {
+
+struct vec3 {
+    x: f32;
+    y: f32;
+    z: f32;
+}
+
+operator +(a: vec3, b: vec3) -> vec3 {
+    return {a.x + b.x, a.y + b.y, a.z + b.z}
+}
+operator -(a: vec3, b: vec3) -> vec3 {
+    return {a.x - b.x, a.y - b.y, a.z - b.z}
+}
+operator *(a: vec3, b: f32) -> vec3 {
+    return {a.x * b, a.y * b, a.z * b}
+}
+operator *(b: f32, a: vec3) -> vec3 {
+    return {a.x * b, a.y * b, a.z * b}
+}
+operator /(a: vec3, b: f32) -> vec3 {
+    return {a.x / b, a.y / b, a.z / b}
+}
+
+struct vec4 {
+    x: f32;
+    y: f32;
+    z: f32;
+    w: f32;
+}
+
+operator +(a: vec4, b: vec4) -> vec4 {
+    return {a.x + b.x, a.y + b.y, a.z + b.z,  a.w + b.w}
+}
+operator -(a: vec4, b: vec4) -> vec4 {
+    return {a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w}
+}
+operator *(a: vec4, b: f32) -> vec4 {
+    return {a.x * b, a.y * b, a.z * b, a.w * b}
+}
+operator *(b: f32, a: vec4) -> vec4 {
+    return {a.x * b, a.y * b, a.z * b, a.w * b}
+}
+operator /(a: vec4, b: f32) -> vec4 {
+    return {a.x / b, a.y / b, a.z / b, a.w / b}
+}
+
+
+// #################
+//     3D MATH
+// ################
+
+struct mat4 {
+    v: f32[16];
+}
+
+operator *(a: mat4, b: mat4) -> mat4 {
+    t: mat4
+    for col : 0..4 {
+        for row : 0..4 {
+            t.v[col * 4 + row] = a.v[0*4 + row] * b.v[col * 4 + 0] +
+                a.v[1*4 + row] * b.v[col * 4 + 1] +
+                a.v[2*4 + row] * b.v[col * 4 + 2] +
+                a.v[3*4 + row] * b.v[col * 4 + 3]
+        }
+    }
+    return t
+}
+
+fn distance(a: vec2) -> f32 {
     return sqrt(a.x*a.x + a.y*a.y)
 }
-fn length2(a: vec2) {
+fn distance2(a: vec2) -> f32 {
     return a.x*a.x + a.y*a.y
 }
+fn dot(a: vec2, b: vec2) -> f32 {
+    return a.x * b.x + a.y * b.y
+}
+fn normalize(a: vec2) -> vec2 {
+    d := sqrt(a.x*a.x + a.y*a.y)
+    return { a.x / d, a.y / d }
+}
+
+fn distance(a: vec3) -> f32 {
+    return sqrt(a.x*a.x + a.y*a.y + a.z*a.z)
+}
+fn distance2(a: vec3) -> f32 {
+    return a.x*a.x + a.y*a.y + a.z*a.z
+}
+fn dot(a: vec3, b: vec3) -> f32 {
+    return a.x * b.x + a.y * b.y + a.z * b.z
+}
+fn normalize(a: vec3) -> vec3 {
+    d := sqrt(a.x*a.x + a.y*a.y + a.z*a.z)
+    return { a.x / d, a.y / d, a.z / d }
+}
+
+fn mat4_identity() -> mat4 {
+    m: mat4
+    m.v[0] = 1
+    m.v[5] = 1
+    m.v[10] = 1
+    m.v[15] = 1
+    return m
+}
+fn translate(m: mat4, v: vec3) -> mat4 {
+    t := mat4_identity()
+    t.v[12] = v.x
+    t.v[13] = v.y
+    t.v[14] = v.z
+    
+    m = m * t
+
+    return m
+}
+fn scale(m: mat4, v: vec3) -> mat4 {
+    t: mat4
+    t.v[0] = v.x
+    t.v[5] = v.y
+    t.v[10] = v.z
+    t.v[15] = 1
+
+    m = m * t
+
+    return t
+}
+// fn rotate(m: mat4, v: vec3) -> mat4 {
+//     t: mat4
+//     c := cos()
+// }
+// fov in radians
+fn perspective(fov: f32, aspect: f32, near: f32, far: f32) -> mat4 {
+    f := 1 / tanf(fov / 2)
+    m: mat4;
+    m.v[0] = aspect * f
+    m.v[5] = f
+    m.v[10] = (far + near) * (near - far)
+    m.v[11] = -1
+    m.v[14] = (2 * far * near) / (near - far)
+    return m
+    // return {
+    //     aspect * f, 0, 0, 0,
+    //     0, f, 0, 0,
+    //     0, 0, (far + near) * (near - far), -1,
+    //     0, 0, (2 * far * near) / (near - far), 0,
+    // }
+}
+
+
+
+// ########################
+//     EXTRA FUNCTIONS
+// ########################
 
 // a box collides with b box (aabb collision detection)
 fn collides(pos_a: vec2, size_a: vec2, pos_b: vec2, size_b: vec2) -> bool {

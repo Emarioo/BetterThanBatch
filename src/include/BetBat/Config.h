@@ -132,7 +132,7 @@ enum LoggingSection : u64 {
     LOG_CONVERTER       = 0x40,
     LOG_INTERPRETER     = 0x80,
     LOG_OVERVIEW        = 0x100,
-    LOG_MACRO_MATCH     = 0x200,
+    LOG_MACRO_MATCH     = 0x200, 
     
     LOG_BYTECODE        = 0x400,
 

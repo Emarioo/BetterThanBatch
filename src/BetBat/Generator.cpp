@@ -6053,21 +6053,41 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                 builder.emit_alloc_args(BC_REG_INVALID, allocated_stack_space);
                 currentFuncImpl->update_max_arguments(allocated_stack_space);
                 
+
                 TypeId iter_type{};
                 result = generateReference(statement->firstExpression, &iter_type, currentScopeId);
                 if (result != SIGNAL_SUCCESS)
                     return result;
                 iter_type.setPointerLevel(iter_type.getPointerLevel() + 1);
                 
-                // TODO: verify type is valid
-                Assert(signature->argumentTypes.size() == 1);
-                
-                Assert(signature->argumentTypes[0].typeId == iter_type);
+
+                Assert(create_overload.astFunc);
+                Assert(signature->argumentTypes.size() == create_overload.astFunc->arguments.size());
+                // NOTE: We skip first argument 'this'
+                for (int i=1;i<create_overload.astFunc->arguments.size();i++) {
+                    auto& arg = create_overload.astFunc->arguments[i];
+                    if(!arg.defaultValue) {
+                        ERR_SECTION(
+                            ERR_HEAD2(statement->firstExpression->location)
+                            ERR_MSG("You are using a struct in for loop with iterator functions (create_iterator). This function can have arguments but they must have default values.")
+                            ERR_LINE2(statement->firstExpression->location, "here")
+                        )
+                        return SIGNAL_COMPLETE_FAILURE;
+                    }
                     
-                result = generatePop_set_arg(signature->argumentTypes[0].offset, signature->argumentTypes[0].typeId);
-                if (result != SIGNAL_SUCCESS)
-                    return result;
-                
+                    TypeId dtype = {};
+                    SignalIO result = generateExpression(arg.defaultValue, &dtype);
+                    if (result != SIGNAL_SUCCESS) {
+                        return SIGNAL_FAILURE;
+                    }
+                }
+
+                Assert(signature->argumentTypes[0].typeId == iter_type);
+                for(int i=signature->argumentTypes.size()-1;i>=0;i--) {
+                    result = generatePop_set_arg(signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
+                    if (result != SIGNAL_SUCCESS)
+                        return result;
+                }
                 int reloc;
                 builder.emit_call(create_overload.astFunc->linkConvention, create_overload.astFunc->callConvention, &reloc);
                 info.addCallToResolve(reloc, create_overload.funcImpl);
@@ -6243,15 +6263,6 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                 )
                 return SIGNAL_FAILURE;
             }
-        } else {
-            if ((int)statement->arrayValues.size() != (int)info.currentFuncImpl->signature.returnTypes.size()) {
-                ERR_SECTION(
-                    ERR_HEAD2(statement->location)
-                    ERR_MSG("Found " << statement->arrayValues.size() << " return value(s) but should have " << info.currentFuncImpl->signature.returnTypes.size() << " for '" << info.currentFunction->name << "'.")
-                    ERR_LINE2(info.currentFunction->location, "X return values")
-                    ERR_LINE2(statement->location, "Y values")
-                )
-            }
         }
 
         if(info.currentFunction && (info.currentFunction->callConvention == STDCALL || info.currentFunction->callConvention == UNIXCALL)) {
@@ -6261,51 +6272,74 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
         }
 
         //-- Evaluate return values
+        int ret_index = 0;
         for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
             ASTExpression *expr = statement->arrayValues.get(argi);
-            // nextExpr = nextExpr->next;
-            // argi++;
 
-            TypeId dtype = {};
-            SignalIO result = generateExpression(expr, &dtype);
+            TEMP_ARRAY(TypeId, temp_args);
+            SignalIO result = generateExpression(expr, &temp_args);
             if (result != SIGNAL_SUCCESS) {
                 continue;
             }
-            if(info.currentFuncImpl) {
-                if (argi < (int)info.currentFuncImpl->signature.returnTypes.size()) {
-                    // auto a = info.ast->typeToString(dtype);
-                    // auto b = info.ast->typeToString(info.currentFuncImpl->returnTypes[argi].typeId);
-                    auto& retType = info.currentFuncImpl->signature.returnTypes[argi];
-                    if (!performSafeCast(dtype, retType.typeId)) {
-                        // if(info.currentFunction->returnTypes[argi]!=dtype){
-                        ERRTYPE1(expr->location, dtype, info.currentFuncImpl->signature.returnTypes[argi].typeId, "(return values)");
-                        
-                        generatePop(BC_REG_INVALID, 0, dtype);
+            for(int vali=0; vali < temp_args.size(); vali++) {
+                auto& dtype = temp_args[vali];
+                if(ret_index >= currentFuncImpl->signature.returnTypes.size()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(statement->location)
+                        ERR_MSG("Found at least " << (ret_index+1) << " return value(s) but should have " << currentFuncImpl->signature.returnTypes.size() << " for '" << currentFunction->name << "'.")
+                        ERR_LINE2(currentFunction->location, "X return values")
+                        ERR_LINE2(statement->location, "Y values")
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                auto& retType = info.currentFuncImpl->signature.returnTypes[ret_index];
+                ret_index++;
+                if(info.currentFuncImpl) {
+                    if (argi < (int)info.currentFuncImpl->signature.returnTypes.size()) {
+                        // auto a = info.ast->typeToString(dtype);
+                        // auto b = info.ast->typeToString(info.currentFuncImpl->returnTypes[argi].typeId);
+                        if (!performSafeCast(dtype, retType.typeId)) {
+                            // if(info.currentFunction->returnTypes[argi]!=dtype){
+                            ERRTYPE1(expr->location, dtype, retType.typeId, "(return values)");
+                            
+                            generatePop(BC_REG_INVALID, 0, dtype);
+                        } else {
+                            generatePop_set_ret(retType.offset - info.currentFuncImpl->signature.returnSize, retType.typeId);
+                            // generatePop(BC_REG_BP, retType.offset - info.currentFuncImpl->returnSize, retType.typeId);
+                        }
                     } else {
-                        generatePop_set_ret(retType.offset - info.currentFuncImpl->signature.returnSize, retType.typeId);
-                        // generatePop(BC_REG_BP, retType.offset - info.currentFuncImpl->returnSize, retType.typeId);
+                        // error here which has been printed somewhere
+                        // but we should throw away values on stack so that
+                        // we don't become desyncrhonized.
+                        generatePop(BC_REG_INVALID, 0, dtype);
                     }
                 } else {
-                    // error here which has been printed somewhere
-                    // but we should throw away values on stack so that
-                    // we don't become desyncrhonized.
-                    generatePop(BC_REG_INVALID, 0, dtype);
-                }
-            } else {
-                TypeId retType = TYPE_VOID;
-                if(compiler->options->target == TARGET_LINUX_x64) {
-                    retType = TYPE_UINT8;
-                } else {
-                    retType = TYPE_INT32;
-                }
-                if (!performSafeCast(dtype, retType)) {
-                    ERRTYPE1(expr->location, dtype, retType, ".");
-                    generatePop(BC_REG_INVALID, 0, dtype);
-                } else {
-                    generatePop_set_ret(0-REGISTER_SIZE, retType);
+                    // TODO: This code executes for return in main function. We shouldn't need this extra code.
+                    TypeId retType = TYPE_VOID;
+                    if(compiler->options->target == TARGET_LINUX_x64) {
+                        retType = TYPE_UINT8;
+                    } else {
+                        retType = TYPE_INT32;
+                    }
+                    if (!performSafeCast(dtype, retType)) {
+                        ERRTYPE1(expr->location, dtype, retType, ".");
+                        generatePop(BC_REG_INVALID, 0, dtype);
+                    } else {
+                        generatePop_set_ret(0-REGISTER_SIZE, retType);
+                    }
                 }
             }
         }
+        if(ret_index != currentFuncImpl->signature.returnTypes.size()) {
+            ERR_SECTION(
+                ERR_HEAD2(statement->location)
+                ERR_MSG("Found " << ret_index << " return value(s) but should have " << currentFuncImpl->signature.returnTypes.size() << " for '" << info.currentFunction->name << "'.")
+                ERR_LINE2(info.currentFunction->location, "X return values")
+                ERR_LINE2(statement->location, "Y values")
+            )
+            return SIGNAL_FAILURE;
+        }
+
         // if(currentFrameOffset != 0) {
             // builder.emit_free_local(-currentFrameOffset);
             int index;
