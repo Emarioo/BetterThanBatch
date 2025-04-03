@@ -1,4 +1,4 @@
-
+@TEST_CASE(debug_what)
 top := 2
 {
     {
@@ -24,5 +24,25 @@ top := 2
         {
             a := 9
         }
+    }
+}
+
+@TEST_GDB(debug_where,
+{
+    b test.btb:@1
+    c
+    p great
+},
+"$1 = 5"
+)
+
+fn @export fun() {
+    // There was a bug here where we had a subprogram (int DWARF) with
+    // two nested lexical scopes. One for the function, one for the inner local scope.
+    // The inner scope contains the variable BUT because the outer lexical scope didn't contain any variables,
+    // we didn't set the asm_beg/asm_end for it in x64_gen.cpp.
+    {
+        great := 23;
+        great = 5; // @GDBMARK 1
     }
 }

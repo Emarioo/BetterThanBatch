@@ -17,6 +17,8 @@ struct FuncImpl;
 struct ASTExpression;
 struct ASTScope;
 
+#define SCOPE_PARENT_NONE 0
+
 enum CallConvention : u8 {
     BETCALL, // The default. Native functions use this.
     STDCALL, // Currently default x64 calling convention.
@@ -514,7 +516,8 @@ struct ScopeInfo {
 
     ASTScope* astScope = nullptr; // may be null, some scopes don't belong to ASTScope
 
-    bool is_function_scope = false;
+    bool is_function_scope = false; // we need this to calculate instruction addresses for lexical scopes in debug info.
+                                    // also needed when iterating scopes
 
     // TODO: Move these elsewhere?
     u32 bc_start = 0; // we need tinycode id too

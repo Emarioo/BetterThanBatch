@@ -1353,21 +1353,42 @@ void VirtualMachine::execute(){
                 //     stackspace = outputs*8;
                 // }
                 {
+                #ifdef OS_WINDOWS
+                    u8 code[] {
+                        /* push rbp     */ 0x55,
+                        /* push rcx     */ 0x51,
+                        /* mov rbp, rdx */ 0x48, 0x89, 0xd5,
+                        /* sub rsp, 16  */ 0x48, 0x83, 0xEC, inputs*8, // TODO: 16-byte alignment
+                    };
+                #elif OS_LINUX
                     u8 code[] {
                         /* push rbp     */ 0x55,
                         /* push rdi     */ 0x57,
                         /* mov rbp, rsi */ 0x48, 0x89, 0xF5,
                         /* sub rsp, 16  */ 0x48, 0x83, 0xEC, inputs*8, // TODO: 16-byte alignment
                     };
+                    
+                #else
+                    Assert(false);
+                #endif
                     memcpy(f+head, code, sizeof(code));
                     head += sizeof(code);
                 }
                 
                 for(int i=0;i<inputs;i++) {
+                    #ifdef OS_WINDOWS
+                    u8 code[] {
+                        /* mov rax, [rcx + 0] */ 0x48, 0x8B, 0x41, i*8,
+                        /* mov [rsp+0], rax   */ 0x48, 0x89, 0x44, 0x24, i*8,
+                    };
+                    #elif OS_LINUX
                     u8 code[] {
                         /* mov rax, [rdi + 0] */ 0x48, 0x8B, 0x47, i*8,
                         /* mov [rsp+0], rax   */ 0x48, 0x89, 0x44, 0x24, i*8,
                     };
+                    #else
+                    Assert(false);
+                    #endif
                     memcpy(f+head, code, sizeof(code));
                     head += sizeof(code);
                 }
@@ -1376,19 +1397,37 @@ void VirtualMachine::execute(){
                 head += len;
                 
                 {
+                #ifdef OS_WINDOWS
+                    u8 code[] {
+                        /* add rsp */ 0x48, 0x83, 0xC4, outputs*8,
+                        /* pop rcx */ 0x59,
+                    };
+                #elif OS_LINUX
                     u8 code[] {
                         /* add rsp */ 0x48, 0x83, 0xC4, outputs*8,
                         /* pop rdi */ 0x5F,
                     };
+                #else
+                    Assert(false);
+                #endif
                     memcpy(f+head, code, sizeof(code));
                     head += sizeof(code);
                 }
                 
                 for(int i=0;i<outputs;i++) {
+                #ifdef OS_WINDOWS
+                    u8 code[] {
+                        /* mov rax, [rsp - 24] */ 0x48, 0x8B, 0x44, 0x24, (i8)(-i*8-16),
+                        /* mov [rcx - 8], rax  */ 0x48, 0x89, 0x41, (i8)(inputs*8-i*8-8),
+                    };
+                #elif OS_LINUX
                     u8 code[] {
                         /* mov rax, [rsp - 24] */ 0x48, 0x8B, 0x44, 0x24, (i8)(-i*8-16),
                         /* mov [rdi - 8], rax  */ 0x48, 0x89, 0x47, (i8)(inputs*8-i*8-8),
                     };
+                #else
+                    Assert(false);
+                #endif
                     memcpy(f+head, code, sizeof(code));
                     head += sizeof(code);
                 }
@@ -1402,11 +1441,10 @@ void VirtualMachine::execute(){
                     head += sizeof(code);
                 }
                 
-                OutputAsHex("inl_asm.log", f, head);
+                // OutputAsHex("inl_asm.log", f, head);
                 
                 auto func = (void(*)(i64, i64))f;
                 func(stack_pointer, base_pointer);
-                
                 
                 FreeExec(f, max);
             } else {
@@ -1414,13 +1452,6 @@ void VirtualMachine::execute(){
             }
             
             stack_pointer += (inputs - outputs) * 8;
-            
-            // log::out << log::RED << "VirtualMachine cannot execute inline assembly!\n";
-            // TODO: Run assembler on the inline assembly (like we do in x64 gen).
-            //   Allocate executable memory and then start executing.
-            //   We need to add some instructions to populate the stack with values
-            //   and then extract the final values.
-            // running = false;
         } break;
         case BC_ADD:
         case BC_SUB:

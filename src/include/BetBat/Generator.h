@@ -125,7 +125,7 @@ struct GenContext : public PhaseContext {
     SignalIO generateArtificialPush(TypeId typeId);
     // Generate a push from pointer (baseReg) where a list of pushed values are stored. generatePush reads memory from a struct layout while this function "copies" pushed values from a pointer.
     SignalIO generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr);
-    SignalIO generatePushedLiterals(VirtualMachine* vm, TypeId type, char* stack, ASTExpression* expression, TypeInfo* structImpl = nullptr, int memberIndex = 0);
+    SignalIO generatePushedLiterals(VirtualMachine* vm, TypeId type, char*& stack, ASTExpression* expression, TypeInfo* structImpl = nullptr, int memberIndex = 0);
     void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, int offset);
     void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
     
