@@ -921,7 +921,7 @@ void BytecodeBuilder::emit_opcode(InstructionOpcode type) {
 }
 void BytecodeBuilder::emit_operand(BCRegister reg) {
     if(disable_code_gen) return;
-    Assert(reg != BC_REG_INVALID);
+    // Assert(reg != BC_REG_INVALID);
     tinycode->instructionSegment.add((u8)reg);
 }
 void BytecodeBuilder::emit_control(InstructionControl control) {

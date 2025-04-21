@@ -53,6 +53,7 @@ def main():
     # config["log_cmds"] = True
     # config["silent"] = True # TODO: Fix
     config["build_times"] = True
+    config["exclude_src"] = ["PDB.cpp", "Fuzzer.cpp", "UserProfile.cpp"]
 
     # config["use_opengl"] = True # rarely used
     # config["thread_count"] = 8
@@ -210,6 +211,9 @@ def compile(config):
                 continue
 
         if file.find("/BetBat/") == -1 and file.find("/Engone/") == -1:
+            continue
+
+        if os.path.basename(file) in config["exclude_src"]:
             continue
 
         source_files.append(file)

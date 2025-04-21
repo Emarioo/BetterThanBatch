@@ -274,7 +274,8 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
         }
         if(objectFile->getSectionName(i) == ".debug$S") {
             u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
-            DeconstructDebugSymbols(data, sectionHeader->SizeOfRawData);
+            Assert(("Stop excluding PDB.cpp", false));
+            // DeconstructDebugSymbols(data, sectionHeader->SizeOfRawData);
         }
         if(objectFile->getSectionName(i) == ".debug$T") {
             u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
@@ -282,11 +283,13 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
         }
         if(objectFile->getSectionName(i) == ".pdata") {
             u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
-            DeconstructPData(data, sectionHeader->SizeOfRawData);
+            Assert(("Stop excluding PDB.cpp", false));
+            // DeconstructPData(data, sectionHeader->SizeOfRawData);
         }
         if(objectFile->getSectionName(i) == ".xdata") {
             u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
-            DeconstructXData(data, sectionHeader->SizeOfRawData);
+            Assert(("Stop excluding PDB.cpp", false));
+            // DeconstructXData(data, sectionHeader->SizeOfRawData);
         }
         bool is_text = false;
         if (objectFile->getSectionName(i).compare(0, 5, ".text") == 0) {

@@ -223,22 +223,11 @@ int main(int argc, const char** argv){
 }
 bool CheckDeveloperCommand(const BaseArray<std::string>& args) {
     using namespace engone;
-    auto contains = [&](const BaseArray<std::string>& arr, const std::string& str) {
-        int index = -1;
-        for(int i=0;i<arr.size();i++) {
-            if(arr[i] == str) {
-                index = i;
-                break;
-            }
-        }
-        return index;
-    };
     
     // TODO: Should developer commands be described in help messages?
-    int index = contains(args, "decode");
-    if(index != -1) {
-        if(args.size() > index + 1) {
-            std::string path = args[index + 1];
+    if(args[0] == "decode") {
+        if(1 < args.size()) {
+            std::string path = args[1];
             FileCOFF::Destroy(FileCOFF::DeconstructFile(path, false));
             return false;
         } else {
@@ -246,19 +235,21 @@ bool CheckDeveloperCommand(const BaseArray<std::string>& args) {
             return false;
         }
     }
-    index = contains(args, "conv");
-    if(index != -1) {
-        std::string path = "dev.c";
-        if(args.size() > index + 1) {
-            path = args[index + 1];
+    if(args[0] == "conv") {
+        std::string in_path = "dev.c";
+        std::string out_path = "dev-conv.btb";
+        if (1 < args.size()) {
+            in_path = args[1];
         }
-        std::string text = TranspileCFileToBTB(path);
+        if (2 < args.size()) {
+            out_path = args[2];
+        }
+        std::string text = TranspileCFileToBTB(in_path);
         
-        std::string outpath = "conv.btb";
-        auto file = FileOpen(outpath,FILE_CLEAR_AND_WRITE);
+        auto file = FileOpen(out_path,FILE_CLEAR_AND_WRITE);
         FileWrite(file, text.c_str(), text.size());
         FileClose(file);
-        log::out << "Transpiled " << path << " to "<<outpath<<"\n";
+        log::out << "Transpiled " << in_path << " to "<<out_path<<"\n";
         // log::out << text;
 
         return false;

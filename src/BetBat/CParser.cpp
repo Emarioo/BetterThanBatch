@@ -49,7 +49,7 @@ std::string TranspileCToBTB(const std::string& text) {
     //      LEX TOKENS
     // ====================
 
-    #define isalnum(chr) (((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' & chr <= '9') || chr == '_')
+    #define isalnum(chr) (((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' && chr <= '9') || chr == '_')
 
     LexerContext context{};
 
@@ -141,43 +141,43 @@ std::string TranspileCToBTB(const std::string& text) {
 
     context.parse_top();
 
-    for(auto& pair : context.macros) {
-        context.out += "#macro " + pair.first;
-        if(pair.second.args.size() < 0) {
-            context.out += "(";
-            for(int i=0;i<pair.second.args.size(); i++) {
-                auto& arg = pair.second.args[i];
-                if(i != 0)
-                    context.out += ", ";
-                context.out += arg;
-            }
-            context.out += ")\n";
-        } else {
-            context.out += " ";
-        }
-        if(pair.second.content.size() > 3) {
-            for(int i=0;i<pair.second.content.size(); i++) {
-                auto& tok = pair.second.content[i];
-                if(i != 0)
-                    context.out += " ";
-                context.out += tok.data;
-                if(tok.has_newline)
-                    context.out += "\n";
-            }
-            context.out += "#endmacro\n";
-        } else {
-            for(int i=0;i<pair.second.content.size(); i++) {
-                auto& tok = pair.second.content[i];
-                if(i != 0)
-                    context.out += " ";
-                context.out += tok.data;
-            }
-            context.out += "\n";
-        }
-    }
-    for(auto& pair : context.typedefs) {
-        context.out += "#macro " + pair.first + " " + pair.second + "\n";
-    }
+    // for(auto& pair : context.macros) {
+    //     context.out += "#macro " + pair.first;
+    //     if(pair.second.args.size() < 0) {
+    //         context.out += "(";
+    //         for(int i=0;i<pair.second.args.size(); i++) {
+    //             auto& arg = pair.second.args[i];
+    //             if(i != 0)
+    //                 context.out += ", ";
+    //             context.out += arg;
+    //         }
+    //         context.out += ")\n";
+    //     } else {
+    //         context.out += " ";
+    //     }
+    //     if(pair.second.content.size() > 3) {
+    //         for(int i=0;i<pair.second.content.size(); i++) {
+    //             auto& tok = pair.second.content[i];
+    //             if(i != 0)
+    //                 context.out += " ";
+    //             context.out += tok.data;
+    //             if(tok.has_newline)
+    //                 context.out += "\n";
+    //         }
+    //         context.out += "#endmacro\n";
+    //     } else {
+    //         for(int i=0;i<pair.second.content.size(); i++) {
+    //             auto& tok = pair.second.content[i];
+    //             if(i != 0)
+    //                 context.out += " ";
+    //             context.out += tok.data;
+    //         }
+    //         context.out += "\n";
+    //     }
+    // }
+    // for(auto& pair : context.typedefs) {
+    //     context.out += "#macro " + pair.first + " " + pair.second + "\n";
+    // }
     for(auto& var : context.variables) {
         context.out += "global " + var.name + ": " + var.type + "\n";
     }
@@ -193,14 +193,14 @@ std::string TranspileCToBTB(const std::string& text) {
 
         context.out += " -> " + fun.return_type + "\n";
     }
-    for(auto& str : context.structures) {
-        context.out += "struct " + str.name + " {\n";
-        for(int i=0;i<str.fields.size();i++){
-            context.out += "   " + str.fields[i].name + ": " + str.fields[i].type;
-            context.out+=";\n";
-        }
-        context.out += "}\n";
-    }
+    // for(auto& str : context.structures) {
+    //     context.out += "struct " + str.name + " {\n";
+    //     for(int i=0;i<str.fields.size();i++){
+    //         context.out += "   " + str.fields[i].name + ": " + str.fields[i].type;
+    //         context.out+=";\n";
+    //     }
+    //     context.out += "}\n";
+    // }
 
     return context.out;
 }
@@ -212,6 +212,34 @@ namespace clexer {
             auto& token = tokens[head];
             head++;
 
+            // When importing C header we can skip comments but
+            // if you manually want to convert C then this might be nice.
+            if (token.data == "/" && gettok(head).data == "/" && token.column+1 == gettok(head).column && token.line == gettok(head).line) {
+                // log::out << token.data << " "<<token.line<<" "<<token.column << " " << gettok(head).line << " " << gettok(head).column<<"\n";
+                head++;
+                write("//", token.line, token.column, false);
+                while(true) {
+                    write(gettok(head));
+                    if (gettok(head).has_newline)
+                        break;
+                    head++;
+                }
+            }
+            if (token.data == "/" && gettok(head).data == "*" && token.column+1 == gettok(head).column && token.line == gettok(head).line) {
+                // log::out << token.data << " "<<token.line<<" "<<token.column << " " << gettok(head).line << " " << gettok(head).column<<"\n";
+                write("/*", token.line, token.column, gettok(head).has_newline);
+                head++;
+                while(true) {
+                    write(gettok(head));
+                    if (gettok(head).data == "*" && gettok(head+1).data == "/") {
+                        write(gettok(head+1));
+                        head+=2;
+                        break;
+                    }
+                    head++;
+                }
+            }
+
             if(token.data == "typedef") {
                 if(head == tokens.size())
                     continue;
@@ -222,11 +250,18 @@ namespace clexer {
                 std::string name = tokens[head].data;
 
                 typedefs[name] = first_type;
+                write("#macro", token);
+                write(name, token.line, token.column + 7, false);
+                write(first_type, token.line, token.column + 8 + name.size(), false);
                 // void unsigned int char short long signed float double struct
             } else if(token.data == "#") {
                 auto& token = tokens[head];
                 head++;
-                if(token.data == "define") {
+                if(token.data == "undef") {
+                    // TODO: Proper error message
+                    log::out << log::RED << "#undef is not supported\n";
+                    return;
+                } else if(token.data == "define") {
                     if(head == tokens.size())
                         continue;
                     write("#macro", token);
@@ -258,6 +293,7 @@ namespace clexer {
                     bool had_import=false;
                     bool had_export=false;
                     // parse define content
+                    int head_bef = head;
                     while(head < tokens.size()) {
                         auto& tok = tokens[head];
                         head++;
@@ -277,27 +313,34 @@ namespace clexer {
                         } else if(getstr(head-1) == "__attribute__" && getstr(head) == "(" && getstr(head+1) == "(" && (getstr(head+2) == "dllexport"||getstr(head+2) == "dllimport") && getstr(head+3) == ")" && getstr(head+4) == ")") {
                             if(getstr(head+2) == "dllexport") {
                                 had_export = true;
-                                auto& last = gettok(head+4);
+                                auto last = gettok(head+4);
                                 std::string word = "@export";
                                 macro.content.add({word, tok.line, tok.column, last.has_newline});
                                 write(word, tok.line, tok.column, last.has_newline);
+                            } else {
+                                // Header shouldn't import?
+                                // It should import actually.
+                                // It shouldn't export.
                             }
                             head += 5;
                             // skip
-                        } else if(getstr(head-1) == "__attribute__" && getstr(head) == "(" && getstr(head+1) == "(" && getstr(head+2) == "visibility"||getstr(head+3) == "(" && getstr(head+4) == "\"default\"" && getstr(head+5) == ")" && getstr(head+6) == ")" && getstr(head+7) == ")") {
+                        } else if(getstr(head-1) == "__attribute__" && getstr(head) == "(" && getstr(head+1) == "(" && getstr(head+2) == "visibility" && getstr(head+3) == "(" && getstr(head+4) == "\"default\"" && getstr(head+5) == ")" && getstr(head+6) == ")" && getstr(head+7) == ")") {
+                            // NO export, what about import
                             had_export = true;
                             std::string word = "@export";
-                            auto& last = gettok(head+7);
+                            auto last = gettok(head+7);
                             macro.content.add({word, tok.line, tok.column, last.has_newline});
                             write(word, tok);
                             head += 8;
                         } else if(getstr(head-1) == "__declspec" && getstr(head) == "(" && (getstr(head+1) == "dllexport"||getstr(head+1) == "dllimport") && getstr(head+2) == ")") {
                             if(getstr(head+1) == "dllexport") {
                                 had_export = true;
-                                auto& last = gettok(head+2);
+                                auto last = gettok(head+2);
                                 std::string word = "@export";
                                 macro.content.add({word, tok.line, tok.column, last.has_newline});
                                 write(word, tok.line, tok.column, last.has_newline);
+                            } else {
+                                // Should be IMPORT NOT EXPORT
                             }
                             head += 3;
                             // skip
@@ -305,11 +348,15 @@ namespace clexer {
                             macro.content.add(tok);
                             write(tok);
                         }
-
-                        if(tok.has_newline || head == tokens.size()) {
-                            write("#endmacro", tok);
-                            break;
-                        }
+                        // if (macro.content.size() == 0) {
+                            if(tok.has_newline || head == tokens.size()) {
+                            //     write("#endmacro", tok);
+                                break;
+                            }
+                        // }
+                    }
+                    if (head_bef == head || gettok(head_bef).line != gettok(head-1).line) {
+                        write("#endmacro", gettok(head-1));
                     }
                 } else if(token.data == "ifdef" || token.data == "ifndef") {
                     auto& name = gettok(head);
@@ -318,6 +365,26 @@ namespace clexer {
                         write("!", name.line, name.column, false);
                     write(name);
                     head++;
+                } else if(token.data == "include") {
+                    auto& name = gettok(head);
+                    if (name.data[0] == '"') {
+                        head++;
+                        log::out << "include "<<name.data<<"\n";
+                    } else if (name.data[0] == '<') {
+                        head++;
+                        std::string path;
+                        while(head < tokens.size()){
+                            auto& tok = gettok(head);
+                            head++;
+                            if (tok.data == ">") {
+                                break;
+                            }
+                            path += tok.data;
+                        }
+                        log::out << "include "<<path<<"\n";
+                    } else {
+                        head++;
+                    }
                 } else if(token.data == "if" || token.data == "elif") {
                     write(gettok(head-2)); // #
                     write(token);
@@ -369,7 +436,13 @@ namespace clexer {
                     Structure structure{};
                     structure.name = name;
 
+                    write("struct", token);
+                    write(name, token.line, token.column + 7, false);
+                    write("{", token.line, token.column + 7 + name.size() + 1, false);
+
                     parse_struct_fields(head, structure);
+
+                    write("}", token);
                     // TODO: Handle error
                     structures.add(structure);
                 } else {
@@ -463,33 +536,39 @@ namespace clexer {
 
             std::string name = tokname.data;
 
-            auto& token0 = tokens[index];
+            auto token0 = tokens[index];
             if(token0.data == ";") {
                 index++;
             }
+            token0.has_newline = false;
+            write(name, token);
+            write(":", token);
+            write(fieldtype, token);
+            write(";", token);
+            writeln();
+
             structure.fields.add({name, fieldtype});
         }
     }
     std::string LexerContext::parse_base_type(int& index) {
         std::string typestring = "";
-        int extra = 0;
         if(tokens[index].data == "const")
-            extra++;
-        auto& token0 = tokens[extra+index];
-        auto& token1 = extra+index+1 < tokens.size() ? tokens[extra+index+1] : toknull;
-        auto& token2 = extra+index+2 < tokens.size() ? tokens[extra+index+2] : toknull;
+            index++;
+        auto& token0 = tokens[index];
+        auto& token1 = index+1 < tokens.size() ? tokens[index+1] : toknull;
+        auto& token2 = index+2 < tokens.size() ? tokens[index+2] : toknull;
         if(token0.data == "void" || token0.data == "bool") {
             // C doesn't have bool type, we handle it
             // anyway because you might want to parse C++ header
             // that is mostly C with some C++ elements (like bool)
             typestring = token0.data;
-            index+=extra+1;
+            index+=1;
         } else if(token0.data == "float") {
             typestring = "f32";
-            index+=extra+1;
+            index+=1;
         } else if(token0.data == "double") {
             typestring = "f64";
-            index+=extra+1;
+            index+=1;
         } else if (token0.data == "char" || token0.data == "short" || token0.data == "int") {
             if(token0.data == "char")
                 typestring += "i8";
@@ -497,10 +576,10 @@ namespace clexer {
                 typestring += "i16";
             else if(token0.data == "int")
                 typestring += "i32";
-            index+=extra+1;
+            index+=1;
         } else if (token0.data == "long" && (token1.data == "long" || token1.data == "int")) {
             typestring += "i64";
-            index+=extra+2;
+            index+=2;
         } else if((token0.data == "unsigned" || token0.data == "signed") && (token1.data == "char" || token1.data == "short" || token1.data == "int")) {
             if(token0.data == "signed")
                 typestring += "i";
@@ -515,16 +594,23 @@ namespace clexer {
             index += 2;
         } else if(token0.data == "struct") {
             typestring += token1.data;
-            index+=extra+2;
+            index+=2;
+        } else if(token0.data == "enum") {
+            typestring += token1.data;
+            index+=2;
         } else if((token0.data == "unsigned" || token0.data == "signed") && token1.data == "long" && (token2.data == "long" || token2.data == "int")) {
             if(token0.data == "signed")
                 typestring += "i";
             else
                 typestring += "u";
             typestring += "64";
-            index+=extra+3;
+            index+=3;
         } else {
-            // handle function pointer
+            // named thing?
+            typestring = token0.data;
+            index++;
+
+            // TODO: handle function pointer
         }
         return typestring;
     };

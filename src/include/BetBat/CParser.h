@@ -1,10 +1,25 @@
 /*
-    C to BTB transpiler
+    C header parser for transpiling C to BTB
 
-    Mostly for parsing headers
+    Features:
+        Parse macros
+        Parse comments
+        Parse function declarations (including attribute, declspec)
+        Parse structures
+        Parse enums
+        Parse typedefs
+        Parse external global variables
 
-    Not meant for speed right now.
-    We will optimize later.
+    Limitations:
+        Ignore function bodies
+        Statements
+        Non-external global variables
+        Undef is ignored, it does not exist in BTB
+    
+    Output:
+        A btb file with import declarations
+        Macros, enums and everything appears in the same order.
+
 */
 
 #pragma once
@@ -40,6 +55,8 @@ namespace clexer {
     struct Structure {
         std::string name;
         struct Field {
+            // Bit fields not allowed
+            // unions not allowed
             std::string name;
             std::string type;
         };
@@ -76,9 +93,16 @@ namespace clexer {
                 cur_line++;
                 cur_column=1;
             }
-            while(cur_column < column) {
-                out += " ";
-                cur_column++;
+            if (cur_column == 1) {
+                while(cur_column < column-1) {
+                    out += " ";
+                    cur_column++;
+                }
+            } else {
+                if(cur_column < column) {
+                    out += " ";
+                    cur_column++;
+                }
             }
             out += str;
             cur_column += str.size();
@@ -96,7 +120,7 @@ namespace clexer {
             }
             return tokens[index].data;
         }
-        Token gettok(int index) {
+        Token& gettok(int index) {
             if(index >= tokens.size()) {
                 return toknull;
             }
@@ -107,7 +131,7 @@ namespace clexer {
                 return "";
             }
             char chr = tokens[index].data[0];
-            return (((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' & chr <= '9') || chr == '_');
+            return (((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' && chr <= '9') || chr == '_');
         }
         void parse_struct_fields(int& index, Structure& structure);
         std::string parse_base_type(int& index);
