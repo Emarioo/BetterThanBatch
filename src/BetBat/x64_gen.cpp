@@ -620,27 +620,27 @@ void X64Builder::emit_mov_mem_reg(X64Register rm, X64Register reg, InstructionCo
     int size = GET_CONTROL_SIZE(control);
     // if (IS_CONTROL_FLOAT(control)) {
     if (IS_REG_XMM(reg)) {
-            emit_prefix(0, X64_REG_INVALID, rm);
-            if (size == CONTROL_32B)
-                emit3(OPCODE_3_MOVSS_RM_REG);
-            else if (size == CONTROL_64B)
-                emit3(OPCODE_3_MOVSD_RM_REG);
-            else
-                Assert(false);
+        emit_prefix(0, X64_REG_INVALID, rm);
+        if (size == CONTROL_32B)
+            emit3(OPCODE_3_MOVSS_RM_REG);
+        else if (size == CONTROL_64B)
+            emit3(OPCODE_3_MOVSD_RM_REG);
+        else
+            Assert(false);
 
-    u8 mode = MODE_DEREF_DISP32;
-    if (disp == 0) {
-            mode = MODE_DEREF;
-    } else if (disp >= -0x80 && disp < 0x7F) {
-            mode = MODE_DEREF_DISP8;
-    }
-    emit_modrm(mode, CLAMP_XMM(reg), CLAMP_EXT_REG(rm));
-    if (mode == MODE_DEREF) {
+        u8 mode = MODE_DEREF_DISP32;
+        if (disp == 0) {
+                mode = MODE_DEREF;
+        } else if (disp >= -0x80 && disp < 0x7F) {
+                mode = MODE_DEREF_DISP8;
+        }
+        emit_modrm(mode, CLAMP_XMM(reg), CLAMP_EXT_REG(rm));
+        if (mode == MODE_DEREF) {
 
-    } else if (mode == MODE_DEREF_DISP8)
-        emit1((u8)(i8)disp);
-    else
-        emit4((u32)(i32)disp);
+        } else if (mode == MODE_DEREF_DISP8)
+            emit1((u8)(i8)disp);
+        else
+            emit4((u32)(i32)disp);
     } else {
         Assert(!IS_CONTROL_FLOAT(control));
         if (size == CONTROL_16B) {

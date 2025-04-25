@@ -29,6 +29,7 @@ releases
 
 # vscode extension package
 *.vsix
+*.code-workspace
 
 # Don't ignore files from libs
 !libs/**

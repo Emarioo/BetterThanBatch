@@ -3886,8 +3886,23 @@ bool X64Builder::generate() {
 
     for(auto& v : fun->localVariables) {
         auto now = di->ast->getScope(v.scopeId);
-        now->asm_start = get_map_translation(now->bc_start);
-        now->asm_end = get_map_translation(now->bc_end);
+
+        // update scope instruction range for all parent scopes (in the function)
+        int limit = 100;
+        while(--limit) {
+            now->asm_start = get_map_translation(now->bc_start);
+            now->asm_end = get_map_translation(now->bc_end);
+            
+            if(now->is_function_scope)
+                break;
+
+            if (now->parent == SCOPE_PARENT_NONE)
+                break;
+
+            now = di->ast->getScope(now->parent);
+        }
+
+        Assert(limit > 0);
     }
     
     for(auto i : inst_list) {
