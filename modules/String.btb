@@ -727,7 +727,32 @@ operator ==(a: Slice<char>, b: Slice<char>) -> bool {
 operator !=(a: Slice<char>, b: Slice<char>) -> bool {
     return !(a == b);
 }
-
+fn parse_space(head: i32*, text: char[]) {
+    while *head < text.len {
+        c := text[*head]
+        if c != ' ' && c != '\r' && c != '\t' 
+            break
+        (*head)++
+    }
+}
+fn parse_line(head: i32*, text: char[]) {
+    while *head < text.len {
+        c := text[*head]
+        (*head)++
+        if c == '\n' 
+            break
+    }
+}
+fn parse_non_space(head: i32*, text: char[]) -> char[] {
+    start := *head
+    while *head < text.len {
+        c := text[*head]
+        if c == ' ' || c == '\r' || c == '\t' || c == '\n'
+            break
+        (*head)++
+    }
+    return { text.ptr + start, *head - start }
+}
 fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
     // TODO: Parse white space?
     // TODO: Parse negative number

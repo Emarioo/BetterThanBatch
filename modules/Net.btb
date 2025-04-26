@@ -46,7 +46,7 @@ enum NetHandlerResponse {
 struct NetEvent {
 	type: EventType;
 	who: ConnectionID; // only server
-	bytes: char[];
+	bytes: u8[];
     handler_response: NetHandlerResponse;
     handler_byte_count: i32; // used with NET_HANDLER_EXACT_MORE_BYTES to tell Server/Client that exactly this much data is needed
                              // if user specified NET_HANDLER_EXACT_MORE_BYTES or NET_HANDLER_SOME_MORE_BYTES then Server/Client
@@ -275,6 +275,7 @@ struct Server {
                                 total_bytes += bytes
                                 server.m_received_bytes += bytes
                             }
+                            bytes = total_bytes
                         } else {
                             
                             // TODO: resize message buffer if message_max - byte_offset is to small. Like less than 25% of the original.
@@ -324,7 +325,8 @@ struct Server {
                         if connection.server.m_event_callback {
                             connection.event.type = EVENT_RECEIVE
                             connection.event.who = connection.conn_id
-                            connection.event.bytes = Slice<char>{connection.message_data, byte_offset + bytes}
+                            connection.event.bytes.ptr = cast<void*>connection.message_data
+                            connection.event.bytes.len = byte_offset + bytes
                             connection.event.handler_response = NET_HANDLER_ACCEPT
                             connection.event.handler_byte_count = byte_offset
                             
@@ -761,7 +763,8 @@ struct Client {
                     e: NetEvent
                     e.type = EVENT_RECEIVE
                     e.who = 0
-                    e.bytes = Slice<char>{client.m_message_data,read_bytes}
+                    e.bytes.ptr = cast<void*>client.m_message_data
+                    e.bytes.len = read_bytes
                     client.m_event_callback(&e, client.m_user_data)
                 }
                 // std_prints("[READ ", read_bytes,"]")

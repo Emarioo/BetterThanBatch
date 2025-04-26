@@ -44,6 +44,12 @@ fn @import(Kernel) CreateProcessA(
   /* [in]                LPSTARTUPINFOA        */ lpStartupInfo: STARTUPINFOA*,
   /* [out]               LPPROCESS_INFORMATION */ lpProcessInformation: PROCESS_INFORMATION*
 ) -> u32;
+fn @import(Kernel) CreatePipe(
+  /* [out]          PHANDLE               */ hReadPipe: HANDLE*,
+  /* [out]          PHANDLE               */ hWritePipe: HANDLE*,
+  /* [in, optional] LPSECURITY_ATTRIBUTES */ lpPipeAttributes: SECURITY_ATTRIBUTES*,
+  /* [in]           DWORD                 */ nSize: i32
+) -> bool;
 fn @import(Kernel) GetProductInfo(
   /*[in]  DWORD  */ dwOSMajorVersion: u32,
   /*[in]  DWORD  */ dwOSMinorVersion: u32,
@@ -85,6 +91,18 @@ struct SECURITY_ATTRIBUTES {
   lpSecurityDescriptor: void*;
   bInheritHandle:       bool;
 }
+
+// Values for STARTUPINFOA.dwFlags
+#macro STARTF_USESHOWWINDOW       0x00000001
+#macro STARTF_USESIZE             0x00000002
+#macro STARTF_USEPOSITION         0x00000004
+#macro STARTF_USECOUNTCHARS       0x00000008
+#macro STARTF_USEFILLATTRIBUTE    0x00000010
+#macro STARTF_RUNFULLSCREEN       0x00000020  // ignored for non-x86 platforms
+#macro STARTF_FORCEONFEEDBACK     0x00000040
+#macro STARTF_FORCEOFFFEEDBACK    0x00000080
+#macro STARTF_USESTDHANDLES       0x00000100
+
 struct STARTUPINFOA {
   cb:               i32;
   lpReserved:       char*;

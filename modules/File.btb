@@ -240,15 +240,34 @@ fn FileSetHead(file: FileHandle, offset: i64, method: FileSetHeadMethod = FILE_S
 }
 fn DirectoryCreate(path: char[]) -> bool {
     #if OS_WINDOWS
-        success := CreateDirectoryA(path.ptr, null);
-		if(!success){
-			err := GetLastError();
-            if err == ERROR_ALREADY_EXISTS
-                return true // we want the directory to exist so the intention of the function succeded
 
-			log("[WinError ",err,"] CreateDirectoryA '",path,"'");
-            return false;
-		}
+        head := 0
+        while head < path.len {
+            c := path[head]
+            head++
+            if c == '/' || head == path.len {
+                end := head-1
+                if head == path.len
+                    end = head
+
+                dir := substring(path, 0, end)
+                prev := dir.ptr[dir.len]
+                dir.ptr[dir.len] = 0 // TODO: Don't write to memory beyond slice. This happens if you substring a slice. Substrings don't get zeros.
+                // log("try ", dir)
+                success := CreateDirectoryA(dir.ptr, null);
+                dir.ptr[dir.len] = prev
+                if !success {
+                	err := GetLastError();
+                    if err == ERROR_ALREADY_EXISTS
+                        continue
+
+                	// log("[WinError ",err,"] CreateDirectoryA '",path,"'");
+                	log("[WinError ",err,"] CreateDirectoryA '",dir,"'");
+                    return false;
+                }
+            }
+        }
+        
 		return true;
     #elif OS_LINUX
         err := mkdir(path.ptr,0o700)
