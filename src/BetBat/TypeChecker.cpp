@@ -235,7 +235,7 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
         // }
         
         implMem.offset = offset;
-        if(member.array_length)
+        if(member.array_length > 0)
             offset += size * member.array_length;
         else
             offset += size;
@@ -2384,7 +2384,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 
                 if(iden->type == Identifier::MEMBER_VARIABLE) {
                     auto& mem = currentAstFunc->parentStruct->members[iden->memberIndex];
-                    if (mem.array_length) {
+                    if (mem.array_length > 0) {
                         TypeId type = iden->versions_typeId[info.currentPolyVersion];
 
                         Assert(type.getPointerLevel() < 3);

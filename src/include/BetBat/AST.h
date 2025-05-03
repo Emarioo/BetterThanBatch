@@ -821,7 +821,7 @@ struct ASTStruct : ASTNode {
         lexer::SourceLocation location{};
         ASTExpression* defaultValue = nullptr;
         TypeId stringType{};
-        int array_length = 0;
+        int array_length = 0; // should never be negative
     };
     DynamicArray<Member> members{};
     struct PolyArg {

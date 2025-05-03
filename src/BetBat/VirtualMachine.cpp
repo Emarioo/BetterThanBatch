@@ -377,6 +377,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
 
 void VirtualMachine::execute(){
     using namespace engone;
+    
+    const u64 SANITY_MEMORY_ADDRESS_LOW = 0x10000;
 
     {
         CallFrame frame{};
@@ -1093,6 +1095,7 @@ void VirtualMachine::execute(){
                 pc = encoded_pc & 0xFFFF'FFFF;
                 tiny_index = encoded_pc >> 32;
             }
+            Assert(tiny_index < bytecode->tinyBytecodes.size());
             tinycode = bytecode->tinyBytecodes[tiny_index];
         } break;
         case BC_DATAPTR: {
@@ -1264,7 +1267,7 @@ void VirtualMachine::execute(){
             void* ptr = map_pointer(registers[op0], temp_ptr_was_mapped);
             CHECK_PTR_MAPPED(ptr);
 
-            Assert((u64)ptr > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
+            Assert((u64)ptr > SANITY_MEMORY_ADDRESS_LOW); // we rarely access memory below this address, nice way to catch bugs
             Assert(registers[op1] < 0x100000); // we rarely memzero memory larger than this
             memset(ptr, 0, registers[op1]);
         } break;
@@ -1276,8 +1279,8 @@ void VirtualMachine::execute(){
             CHECK_PTR_MAPPED(ptr);
             void* ptr1 = map_pointer(registers[op1], temp_ptr_was_mapped);
             CHECK_PTR_MAPPED(ptr1);
-            Assert((u64)ptr > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
-            Assert((u64)ptr1 > 0x8000000); // we rarely access memory below this address, nice way to catch bugs
+            Assert((u64)ptr > SANITY_MEMORY_ADDRESS_LOW); // we rarely access memory below this address, nice way to catch bugs
+            Assert((u64)ptr1 > SANITY_MEMORY_ADDRESS_LOW); // we rarely access memory below this address, nice way to catch bugs
             Assert(registers[op2] < 0x100000); // we rarely memzero memory larger than this
             memcpy(ptr, ptr1, registers[op2]);
         } break;
@@ -1784,6 +1787,7 @@ bool VirtualMachine::add_memory_mapping(u64 start, u64 physical, u64 size) {
     return true;
 }
 void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
+    using namespace engone;
     // find mapping
     for(int i=0;i<memory_map.size();i++) {
         auto& map = memory_map[i];
@@ -1796,7 +1800,7 @@ void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
     // If you crash and are accesing a pointer from global data at compile time
     // then perhaps it wasn't initialized. Runtime type information for example.
     // suspicious pointer
-    Assert(((i64)virtual_pointer >= 0x100000 && (i64)virtual_pointer < 0x0010'0000'0000'0000) || (i64)virtual_pointer == 0);
+    Assert(((i64)virtual_pointer >= 0x10000 && (i64)virtual_pointer < 0x0010'0000'0000'0000) || (i64)virtual_pointer == 0);
     return (void*)virtual_pointer;
 }
 void VirtualMachine::push_state(int index, i64 sp) {

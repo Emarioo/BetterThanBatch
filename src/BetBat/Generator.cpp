@@ -388,46 +388,57 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         }
     // }
 }
-SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
-    using namespace engone;
+// IMPORTANT: This function is commented out because it's not used. It may also be flawed because movingOffset doesn't
+//   isn't adjusted based on padding, just the size of the types.
+// SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
+//     using namespace engone;
+
+//     TypeInfo *typeInfo = 0;
+//     if(typeId.isNormalType())
+//         typeInfo = info.ast->getTypeInfo(typeId);
+//     // u32 size = info.ast->getTypeSize(typeId);
+//     u32 size = REGISTER_SIZE;
+//     int _movingOffset = baseOffset;
+//     if(!movingOffset)
+//         movingOffset = &_movingOffset;
     
-    TypeInfo *typeInfo = 0;
-    if(typeId.isNormalType())
-        typeInfo = info.ast->getTypeInfo(typeId);
-    // u32 size = info.ast->getTypeSize(typeId);
-    u32 size = REGISTER_SIZE;
-    int _movingOffset = baseOffset;
-    if(!movingOffset)
-        movingOffset = &_movingOffset;
-    
-    if(!typeInfo || !typeInfo->astStruct) {
-        // enum works here too
-        BCRegister reg = BC_REG_T0;
-        if(*movingOffset == 0){
-            // If you are here to optimize some instructions then you are out of luck.
-            // I checked where GeneratePush is used whether ADDI can LI can be removed and
-            // replaced with a MOV_MR_DISP32 but those instructions come from GenerateReference.
-            // What you need is a system to optimise away instructions while adding them (like pop after push)
-            // or an optimizer which runs after the generator.
-            // You need something more sophisticated to optimize further basically.
-            builder.emit_mov_rm(reg, baseReg, size);
-        }else{
-            builder.emit_mov_rm_disp(reg, baseReg, size, *movingOffset);
-        }
-        builder.emit_push(reg);
-        *movingOffset += size;
-    } else {
-        for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
-            auto& member = typeInfo->astStruct->members[i];
-            auto memdata = typeInfo->getMember(i);
-            
-            _GLOG(log::out << "push " << member.name << "\n";)
-            generatePushFromValues(baseReg, baseOffset, memdata.typeId, movingOffset);
-            *movingOffset += size;
-        }
-    }
-    return SIGNAL_SUCCESS;
-}
+//     if(!typeInfo || !typeInfo->astStruct) {
+//         // enum works here too
+//         BCRegister reg = BC_REG_T0;
+//         if(*movingOffset == 0){
+//             // If you are here to optimize some instructions then you are out of luck.
+//             // I checked where GeneratePush is used whether ADDI can LI can be removed and
+//             // replaced with a MOV_MR_DISP32 but those instructions come from GenerateReference.
+//             // What you need is a system to optimise away instructions while adding them (like pop after push)
+//             // or an optimizer which runs after the generator.
+//             // You need something more sophisticated to optimize further basically.
+//             builder.emit_mov_rm(reg, baseReg, size);
+//         }else{
+//             builder.emit_mov_rm_disp(reg, baseReg, size, *movingOffset);
+//         }
+//         builder.emit_push(reg);
+//         *movingOffset += size;
+//     } else {
+//         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
+//             auto& member = typeInfo->astStruct->members[i];
+//             auto memdata = typeInfo->getMember(i);
+
+//             if (member.array_length > 0) {
+//                 int esize = ast->getTypeSize(memdata.typeId);
+//                 _GLOG(log::out << "push " << member.name << "["<<member.array_length<<"] \n";)
+//                 for(int ei=member.array_length-1;ei>=0;ei--) {
+//                     generatePushFromValues(baseReg, baseOffset + memdata.offset + ei*esize, memdata.typeId);
+//                     *movingOffset += esize;
+//                 }
+//             } else {
+//                 _GLOG(log::out << "push " << member.name << "\n";)
+//                 generatePushFromValues(baseReg, baseOffset, memdata.typeId, movingOffset);
+//                 *movingOffset += size;
+//             }
+//         }
+//     }
+//     return SIGNAL_SUCCESS;
+// }
 SignalIO GenContext::generateArtificialPush(TypeId typeId) {
     using namespace engone;
     if(typeId == TYPE_VOID) {
@@ -444,8 +455,16 @@ SignalIO GenContext::generateArtificialPush(TypeId typeId) {
             auto& member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
             
-            _GLOG(log::out << "push " << member.name << "\n";)
-            generateArtificialPush(memdata.typeId);
+            if (member.array_length > 0) {
+                int esize = ast->getTypeSize(memdata.typeId);
+                _GLOG(log::out << "push " << member.name << "["<<member.array_length<<"] \n";)
+                for(int ei=member.array_length-1;ei>=0;ei--) {
+                    generateArtificialPush(memdata.typeId);
+                }
+            } else {
+                _GLOG(log::out << "push " << member.name << "\n";)
+                generateArtificialPush(memdata.typeId);
+            }
         }
     }
     return SIGNAL_SUCCESS;
@@ -475,8 +494,16 @@ SignalIO GenContext::generatePush(BCRegister baseReg, int offset, TypeId typeId)
             auto& member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
             
-            _GLOG(log::out << "push " << member.name << "\n";)
-            generatePush(baseReg, offset + memdata.offset, memdata.typeId);
+            if (member.array_length > 0) {
+                int esize = ast->getTypeSize(memdata.typeId);
+                _GLOG(log::out << "push " << member.name << "["<<member.array_length<<"] \n";)
+                for(int ei=member.array_length-1;ei>=0;ei--) {
+                    generatePush(baseReg, offset + memdata.offset + ei*esize, memdata.typeId);
+                }
+            } else {
+                _GLOG(log::out << "push " << member.name << "\n";)
+                generatePush(baseReg, offset + memdata.offset, memdata.typeId);
+            }
         }
     }
     return SIGNAL_SUCCESS;
@@ -514,8 +541,17 @@ SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
         for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
             auto &member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
-            _GLOG(log::out << "move return value member " << member.name << "\n";)
-            generatePop(baseReg, offset + memdata.offset, memdata.typeId);
+
+            if (member.array_length > 0) {
+                int esize = ast->getTypeSize(memdata.typeId);
+                _GLOG(log::out << "move return value member " << member.name << "["<<member.array_length<<"] \n";)
+                for(int ei=0;ei<member.array_length;ei++) {
+                    generatePop(baseReg, offset + memdata.offset + ei*esize, memdata.typeId);
+                }
+            } else {
+                _GLOG(log::out << "move return value member " << member.name << "\n";)
+                generatePop(baseReg, offset + memdata.offset, memdata.typeId);
+            }
         }
     }    
     return SIGNAL_SUCCESS;
@@ -543,9 +579,17 @@ SignalIO GenContext::generatePush_get_param (int offset, TypeId typeId) {
         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
             auto& member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
-            
-            _GLOG(log::out << "push " << member.name << "\n";)
-            generatePush_get_param(offset + memdata.offset, memdata.typeId);
+
+            if (member.array_length > 0) {
+                int esize = ast->getTypeSize(memdata.typeId);
+                _GLOG(log::out << "push " << member.name << "["<<member.array_length<<"] \n";)
+                for(int ei=member.array_length-1;ei>=0;ei--) {
+                    generatePush_get_param(offset + memdata.offset + ei*esize, memdata.typeId);
+                }
+            } else {
+                _GLOG(log::out << "push " << member.name << "\n";)
+                generatePush_get_param(offset + memdata.offset, memdata.typeId);
+            }
         }
     }
     return SIGNAL_SUCCESS;
@@ -570,8 +614,17 @@ SignalIO GenContext::generatePop_set_arg    (int offset, TypeId typeId) {
         for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
             auto &member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
-            _GLOG(log::out << "move return value member " << member.name << "\n";)
-            generatePop_set_arg(offset + memdata.offset, memdata.typeId);
+            
+            if (member.array_length > 0) {
+                int esize = ast->getTypeSize(memdata.typeId);
+                _GLOG(log::out << "move return value member " << member.name << "["<<member.array_length<<"] \n";)
+                for(int ei=0;ei<member.array_length;ei++) {
+                    generatePop_set_arg(offset + memdata.offset + ei*esize, memdata.typeId);
+                }
+            } else {
+                _GLOG(log::out << "move return value member " << member.name << "\n";)
+                generatePop_set_arg(offset + memdata.offset, memdata.typeId);
+            }
         }
     }    
     return SIGNAL_SUCCESS;
@@ -599,9 +652,17 @@ SignalIO GenContext::generatePush_get_val   (int offset, TypeId typeId) {
         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
             auto& member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
-            
-            _GLOG(log::out << "push " << member.name << "\n";)
-            generatePush_get_val(offset + memdata.offset, memdata.typeId);
+
+            if (member.array_length > 0) {
+                int esize = ast->getTypeSize(memdata.typeId);
+                _GLOG(log::out << "push " << member.name << "["<<member.array_length<<"] \n";)
+                for(int ei=member.array_length-1;ei>=0;ei--) {
+                    generatePush_get_val(offset + memdata.offset + ei*esize, memdata.typeId);
+                }
+            } else {
+                _GLOG(log::out << "push " << member.name << "\n";)
+                generatePush_get_val(offset + memdata.offset, memdata.typeId);
+            }
         }
     }
     return SIGNAL_SUCCESS;
@@ -626,8 +687,17 @@ SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
         for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
             auto &member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
-            _GLOG(log::out << "move return value member " << member.name << "\n";)
-            generatePop_set_ret(offset + memdata.offset, memdata.typeId);
+            
+            if (member.array_length > 0) {
+                int esize = ast->getTypeSize(memdata.typeId);
+                _GLOG(log::out << "move return value member " << member.name << "["<<member.array_length<<"] \n";)
+                for(int ei=0;ei<member.array_length;ei++) {
+                    generatePop_set_ret(offset + memdata.offset + ei*esize, memdata.typeId);
+                }
+            } else {
+                _GLOG(log::out << "move return value member " << member.name << "\n";)
+                generatePop_set_ret(offset + memdata.offset, memdata.typeId);
+            }
         }
     }    
     return SIGNAL_SUCCESS;
@@ -690,8 +760,9 @@ void GenContext::genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size) {
         builder.emit_memcpy(dst_reg, src_reg, BC_REG_T0);
     }
 }
-// baseReg as 0 will push default values to stack
-// non-zero as baseReg will mov default values to the pointer in baseReg
+// Function generates default values in two ways:
+// 1. Push default values onto stack.
+// 2. Directly set values to a register + offset.
 SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location, bool zeroInitialize) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue2);
@@ -718,30 +789,13 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
         for (int i = typeInfo->astStruct->members.size() - 1; i >= 0; i--) {
             auto &member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
-            // log::out << "GEN "<<typeInfo->astStruct->name<<"."<<member.name<<"\n";
-            // log::out << " alignedSize "<<info.ast->getTypeAlignedSize(memdata.typeId)<<"\n";
-            // if(i+1<(int)typeInfo->astStruct->members.size()){
-            //     // structs in structs will be aligned by their individual members
-            //     // instead of the alignment of the structs as a whole.
-            //     // This will make sure the structs are aligned.
-            //     auto prevMem = typeInfo->getMember(i+1);
-            //     u32 alignSize = info.ast->getTypeAlignedSize(prevMem.typeId);
-            //     // log::out << "Try align "<<alignSize<<"\n";
-            //     // info.addAlign(alignSize);
-            // }
             
-            if(member.array_length) {
-                if(baseReg != BC_REG_INVALID) {
-                    // builder.emit_li32(BC_REG_T1, offset + memdata.offset);
-                    // builder.emit_add(BC_REG_T1, baseReg, false, REGISTER_SIZE);
-                    int size = ast->getTypeSize(memdata.typeId);
-                    genMemzero(baseReg, BC_REG_T1, size * member.array_length, offset + memdata.offset);
-                } else {
-                    // default value of array is zero even if struct has defaults because going through each element in the array is expensive
-                    // SignalIO result = generateDefaultValue(baseReg, offset + memdata.offset, memdata.typeId, location, false);
+            if(member.array_length > 0) {
+                int esize = ast->getTypeSize(memdata.typeId);
+                for (int ei=member.array_length-1;ei>=0;ei--) {
+                    SignalIO result = generateDefaultValue(baseReg, offset + memdata.offset + ei*esize, memdata.typeId, location, false);
                 }
             } else if (member.defaultValue) {
-                // TypeId tempTypeId = {};
                 TEMP_ARRAY_N(TypeId, tempTypes, 5);
                 SignalIO result = generateExpression(member.defaultValue, &tempTypes);
                 
@@ -750,7 +804,7 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
                         // info.comp
                         ERRTYPE(member.location, member.defaultValue->location, tempTypes[0], memdata.typeId, "(default member)\n");
                     }
-                    if(baseReg!=0){
+                    if(baseReg != BC_REG_INVALID){
                         SignalIO result = generatePop(baseReg, offset + memdata.offset, memdata.typeId);
                     }
                 } else {
@@ -778,25 +832,18 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
                 }
             }
         }
-    } else {
+    } else if(baseReg == BC_REG_INVALID){
         Assert(size <= REGISTER_SIZE);
-        #ifndef DISABLE_ZERO_INITIALIZATION
         // only structs have default values, otherwise zero is the default
-        if(baseReg == 0){
-            builder.emit_bxor(BC_REG_A, BC_REG_A, REGISTER_SIZE);
+        if (AST::IsDecimal(typeId)) {
+            // for floats, we can't use bxor on xmm registers so we use li32. (haven't implemented it)
+            builder.emit_li32(BC_REG_A, 0);
+            builder.emit_add(BC_REG_A, BC_REG_A, 4, true, false); // TODO: x64_gen uses this float add to know that BC_REG_A should be an XMM registers. Super dumb, we need to fix this.
             builder.emit_push(BC_REG_A);
         } else {
-            // we generate memzero above which zero initializes
-            // builder.emit_bxor(BC_REG_A, BC_REG_A);
-            // BCRegister reg = BC_REG_A;
-            // builder.emit_mov_mr_disp(baseReg, reg, size, offset);
-        }
-        #else
-        // Not setting zero here is certainly a bad idea
-        if(baseReg == 0){
+            builder.emit_bxor(BC_REG_A, BC_REG_A, REGISTER_SIZE);
             builder.emit_push(BC_REG_A);
         }
-        #endif
     }
     return SIGNAL_SUCCESS;
 }
@@ -999,7 +1046,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false, true);
                     
                     auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
-                    if (mem.array_length) {
+                    if (mem.array_length > 0) {
                         arrayLength = mem.array_length;
                         // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
                         // bool printed = false;
@@ -3563,9 +3610,18 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                 TypeId exprId={};
                 if (!expr) {
                     exprId = base_typeInfo->getMember(index).typeId;
-                    SignalIO result = generateDefaultValue(BC_REG_INVALID, 0, exprId, nullptr);
-                    if (result != SIGNAL_SUCCESS)
-                        return result;
+                    auto& member = base_typeInfo->astStruct->members[index];
+                    if (member.array_length > 0) {
+                        for(int ei=member.array_length-1;ei>=0;ei--) {
+                            SignalIO result = generateDefaultValue(BC_REG_INVALID, 0, exprId, nullptr);
+                            if (result != SIGNAL_SUCCESS)
+                                return result;
+                        }
+                    } else {
+                        SignalIO result = generateDefaultValue(BC_REG_INVALID, 0, exprId, nullptr);
+                        if (result != SIGNAL_SUCCESS)
+                            return result;
+                    }
                     // ERR_SECTION(
                 // ERR_HEAD2(expression->location, "Missing argument for " << astruct->members[index].name << " (call to " << astruct->name << ").\n";
                     // )
@@ -5417,7 +5473,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                         builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false); // pointer
 
                         auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
-                        if (mem.array_length) {
+                        if (mem.array_length > 0) {
                             ERR_SECTION(
                                 ERR_HEAD2(statement->location)
                                 ERR_MSG("You cannot assing values to a struct member that is an array.")
