@@ -89,14 +89,9 @@ struct Socket {
             return SOCKET_SUCCESS
         #endif
     }
-    // #macro MSG_OOB         0x1      /* process out-of-band data */
-    // #macro MSG_PEEK        0x2      /* peek at incoming message */
-    // #macro MSG_DONTROUTE   0x4      /* send without using routing tables */
-    // #macro MSG_WAITALL     0x8      /* do not complete until packet is completely filled */
-    fn recv(buf: char*, len: i32, flags: i32 = 0 // MSG_OOB, MSG_PEEK, MSG_WAITALL
-    ) -> i32, SocketError {
+    fn recv(buf: char*, len: i32) -> i32, SocketError {
         #if OS_WINDOWS
-            err := win_recv(TO_INTERNAL(os_handle), buf, len, flags)
+            err := win_recv(TO_INTERNAL(os_handle), buf, len, 0)
             if err == SOCKET_ERROR
                 return -1, SOCKET_FAILURE
         #else
@@ -107,14 +102,13 @@ struct Socket {
         // log("socket.recv ",err)
         return err, SOCKET_SUCCESS
     }
-    fn send(buf: char*, len: i32, flags: i32 //  MSG_OOB, MSG_DONTROUTE
-    ) -> i32, SocketError {
+    fn send(buf: char*, len: i32) -> i32, SocketError {
         // log("socket.send ",len)
          #if OS_WINDOWS
-            err := win_send(TO_INTERNAL(os_handle), buf, len, flags)
-            if err == SOCKET_ERROR
-                return -1, SOCKET_FAILURE
-            return err, SOCKET_SUCCESS
+            res := win_send(TO_INTERNAL(os_handle), buf, len, 0)
+            if res == SOCKET_ERROR
+                return 0, SOCKET_FAILURE
+            return res, SOCKET_SUCCESS
         #else
             err := write(TO_INTERNAL(os_handle), buf, len)
             if err < 0

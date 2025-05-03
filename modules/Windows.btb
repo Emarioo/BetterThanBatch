@@ -769,6 +769,23 @@ fn @import(Winsock) freeaddrinfo(
   pAddrInfo: addrinfo*
 );
 
+FN_WINSOCK(select)(
+  nfds: i32,          // in
+  readfds: fd_set*,   // inout
+  writefds: fd_set*,  // inout
+  exceptfds: fd_set*, // inout
+  timeout: timeval*,  // in
+);
+#macro FD_SETSIZE 64
+struct fd_set {
+  fd_count: i32;
+  fd_array: SOCKET[FD_SETSIZE];
+}
+struct timeval {
+    tv_sec: u32;    /* seconds */
+    tv_usec: u32;   /* and microseconds */
+}
+
 #macro WSADESCRIPTION_LEN      257
 #macro WSASYS_STATUS_LEN       129
 

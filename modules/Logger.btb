@@ -25,6 +25,7 @@ fn std_print(str: char*){
     slice := Slice<char>{str, strlen(str)};
     prints(slice);
 }
+
 // IMPORTANT: This function does not print accurate
 //  floats. It has some precision issues.
 // max_decimals can be used to limit the amount of printed decimals, spamming the terminal is bad

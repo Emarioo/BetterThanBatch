@@ -28,8 +28,10 @@ struct ByteStream {
     fn write(ptr: void*, len: u64) -> bool {
         // Assert(ptr && size != 0);
         dst := write_late(len)
-        if !dst
-            return false
+
+        Assert(dst)
+        // if !dst
+        //     return false
         memcpy(dst, ptr, len)
         return true;
     }
@@ -105,9 +107,9 @@ struct ByteStream {
             seek_offset += all.written_bytes;
         }
         
-        // Assert(cur_written_bytes == size);
-        if(cur_written_bytes != size)
-            return false;
+        Assert(cur_written_bytes == size);
+        // if(cur_written_bytes != size)
+        //     return false;
         return true;
     }
     fn write_alignment(alignment: i32) {
@@ -122,8 +124,8 @@ struct ByteStream {
     //     return write(slice.ptr, slice.len)
     // }
     fn write_string8(str: Slice<char>) -> bool {
-        if str.len > 0xFF
-            return false
+        Assert(str.len <= 0xFF)
+            
         yes := write<u8>(str.len)
         if !yes  return false
         yes = write(str.ptr, str.len)
@@ -131,9 +133,18 @@ struct ByteStream {
         return true
     }
     fn write_string16(str: Slice<char>) -> bool {
-        if str.len > 0xFFFF
-            return false
+        Assert(str.len <= 0xFFFF)
+
         yes := write<u16>(str.len)
+        if !yes  return false
+        yes = write(str.ptr, str.len)
+        if !yes  return false
+        return true
+    }
+    fn write_string32(str: Slice<char>) -> bool {
+        Assert(str.len <= 0x0FFF_FFFFF)
+
+        yes := write<u32>(str.len)
         if !yes  return false
         yes = write(str.ptr, str.len)
         if !yes  return false
@@ -147,7 +158,8 @@ struct ByteStream {
             allocations[i].written_bytes = 0;
         }
     }
-    fn read(offset: i32*, ptr: void*, size: i32) -> bool {
+    // Returns characters read
+    fn read(offset: i32*, ptr: void*, size: i32) -> i32 {
         // Assert(size != 0);
         head: i32 = 0;
         size_left: i32 = size;
@@ -179,31 +191,43 @@ struct ByteStream {
         }
         if size_left == 0 {
             *offset += size
-            return true
+            return size
         }
-        return false
+        // clear rest of buffer so there isn't any garbage that programmer tries to use
+        memzero(ptr + size - size_left, size_left);
+        return size - size_left
     }
     fn read<T>(offset: i32*, ptr: T*) -> bool {
         return read(offset, ptr, sizeof T)
     }
     fn read_alignment(offset: i32*, alignment: i32) -> i32 {
-        mis := alignment - (offset % alignment)
-        if mis != 0 {
-            *offset += mis
-            return mis
-        }
+        mis := alignment - (offset % alignment);
+        *offset += mis
+        return mis
     }
     fn read_string8(offset: i32*, str: StringBuilder*) -> bool {
         l: u8
         read<u8>(offset, &l)
         str.resize(l)
-        return read(offset, str.ptr, str.len)
+        read_bytes := read(offset, str.ptr, str.len)
+        Assert(read_bytes == str.len)
+        return true
     }
     fn read_string16(offset: i32*, str: StringBuilder*) -> bool {
         l: u16
         read<u16>(offset, &l)
         str.resize(l)
-        return read(offset, str.ptr, str.len)
+        read_bytes := read(offset, str.ptr, str.len)
+        Assert(read_bytes == str.len)
+        return true
+    }
+    fn read_string32(offset: i32*, str: StringBuilder*) -> bool {
+        l: u32
+        read<u32>(offset, &l)
+        str.resize(l)
+        read_bytes := read(offset, str.ptr, str.len)
+        Assert(read_bytes == str.len)
+        return true
     }
 
     // Marked unsafe because the pointer in the returned slice
@@ -293,6 +317,13 @@ struct ByteStream {
     }
     fn create_iterator() -> ByteStream_Iterator {
         return {}
+    }
+    fn try_get_all_data() -> bool, char[] {
+        if allocations.len != 1
+            return false, {}
+        return true, Slice<char>{
+            allocations.ptr[0].ptr,
+            allocations.ptr[0].written_bytes }
     }
     // Iterates through all bytes of the stream.
     // Do not write to stream while iterating.

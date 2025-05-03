@@ -35,6 +35,27 @@ enum @specified FileOpenFlags {
     FILE_CLEAR_AND_WRITE    = 0x2,
     FILE_READ_AND_WRITE     = 0x4,
 }
+
+// Reads files and allocates a buffer using Allocate.
+// Use Free() when buffer isn't needed anymore.
+fn ReadWholeFile(path: char[]) -> char[], bool {
+    size: i64;
+    file := FileOpen(path, FILE_READ_ONLY, &size);
+    if !file
+        return {}, false;
+    
+    defer FileClose(file)
+    data := Allocate(size);
+    if !data
+        return {}, false;
+
+    yes := FileRead(file, data, size)
+    if !yes
+        return {}, false;
+
+    return { data, size }, true
+}
+
 // returns file handle and file size
 fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -> FileHandle {
     c_path: char* = path.ptr;
