@@ -6,6 +6,8 @@
 
 function update_download_link() {
     let link = document.getElementsByClassName("cto_download")[0]
+    if(link == undefined)
+        return;
     let os = navigator.platform.toLowerCase()
     let url = "https://github.com/Emarioo/BetterThanBatch/releases/download/v0.2.0"
     if (os.includes("win")) {

@@ -81,11 +81,11 @@ code {
 tiny_code {
     white-space: pre;
     font-family: monospace;
-    color:rgb(78, 40, 0);
-    background-color: #e4b77c3a;
+    color:rgb(188, 237, 252);
+    background-color: #464c6366;
     font-weight: bold;
     font-size: 1.1em;
-    padding: 0.15em;
+    padding: 0.3em 0.5em;
     border-radius: 0.4em;
 }
 

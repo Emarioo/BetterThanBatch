@@ -14,6 +14,7 @@ const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path_module = require('path');
+const { findPackageJSON } = require("module");
 
 
 class Statistics {
@@ -135,7 +136,7 @@ function requestListener(req, res) {
             const ext = path.substring(path.lastIndexOf(".")+1)
             
             // console.log("Read",path, "ext",ext)
-            let data = fs.readFileSync(path);
+            let data = fs.readFileSync(path, 'utf8');
             let type = "text/html"
             if(ext == "jpg")
                 type = "image/jpg"
@@ -146,6 +147,31 @@ function requestListener(req, res) {
            
             if(path == "public/guide.html") {
                 data = ModifyContent(data, options) // data is returned without modification if nothing changed
+            }
+            if(path == "public/index.html") {
+                let head = 0
+                const KEYWORD_BEG = "<code>"
+                const KEYWORD_END = "</code>"
+                while (head < data.length) {
+                    let subtext = data.substring(head)
+                    let start = subtext.search(KEYWORD_BEG)
+                    if (start == -1) {
+                        break
+                    }
+                    start += head + KEYWORD_BEG.length
+                    subtext = data.substring(start)
+                    let end = subtext.search(KEYWORD_END)
+                    if (end == -1) {
+                        break
+                    }
+                    end += start
+                    old_text = data.substring(start, end)
+                    new_text = ApplyHighlighting(old_text, LANG_COLOR_CPP)
+                    
+                    data = data.substring(0, start) + new_text + data.substring(end)
+
+                    head = end + KEYWORD_END.length + new_text.length - old_text.length
+                }
             }
 
             res.writeHead(200, {'Content-Type': type, 'Content-Length': data.length});
@@ -280,6 +306,7 @@ function ModifyContent(data, options) {
         md_title = files[0];
         title_was_set = true
     }
+    console.log(md_title, options)
 
     function fix() {
         const pre = string.substring(0, index_of_insert)
@@ -302,13 +329,13 @@ function ModifyContent(data, options) {
         fix()
     }
     if((index_of_insert = string.indexOf(keyword = "INSERT_MD_TITLE")) != -1) {
-        let tmp = md_title.replaceAll("%20"," ")
+        let tmp = md_title.replace(/%20/g," ")
         text += tmp
         fix()
     }
     if((index_of_insert = string.indexOf(keyword = "INSERT_MD_CONTENT")) != -1) {
         if(title_was_set) {
-            let tmp = md_title.replaceAll("%20"," ")
+            let tmp = md_title.replace(/%20/g," ")
             let path = md_dir + "/" + tmp
             // TODO: Sanitize path, otherwise user can access any file
             try {
@@ -538,7 +565,7 @@ function ApplyHighlighting(data, lang_type) {
 // takes in string, returns string
 // Converts markdown to html
 function ConvertMDToHTML(data) {
-    data = data.toString().replaceAll('\r','') // I actually hate return carriage characters, Windows is evil for using them. They are useful in CLI programs but they are little devils otherwise.
+    data = data.toString().replace(/\r/g,'') // I actually hate return carriage characters, Windows is evil for using them. They are useful in CLI programs but they are little devils otherwise.
     let text = "";
 
     let head = 0;

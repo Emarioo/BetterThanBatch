@@ -13,7 +13,8 @@
         <!-- <canvas id="particle-canvas"></canvas> -->
         <div class="nav">
             <div class="nav-links">
-                <a href="docs">Docs</a>
+                <!-- docs should point to btb-lang.org/docs when it's implemented -->
+                <a href="guide">Docs</a>
                 <a href="https://github.com/Emarioo/BetterThanBatch">Github</a>
             </div>
             <div class="work-in-progress">
@@ -33,7 +34,7 @@
                     </p>
                     <div>
                         <a target="_blank" href="https://github.com/Emarioo/BetterThanBatch/releases" class="cto_button cto_download"><b>Download BTB</b></a>
-                        <a href="https://github.com/Emarioo/BetterThanBatch" class="cto_button cto_guide"><b>Friendly guide</b></a>
+                        <a href="guide" class="cto_button cto_guide"><b>Friendly guide</b></a>
                     </div>
                     <p>Latest version: <a target="_blank" href="https://github.com/Emarioo/BetterThanBatch/releases/tag/v0.2.0"><b>0.2.0</b></a> (2024-10-14)</p>
                     <a href="https://github.com/Emarioo/BetterThanBatch/tree/main/CHANGELOG.md">Changelog</a>
@@ -60,9 +61,9 @@ for @ptr threads
 
 log("All ", threads.len, " threads finished")
 
-fn @oscall work(arg: void*) -> i32 {
+fn @oscall work(arg: void*) -&gt i32 {
     global print_mutex: Mutex
-    id := *cast<i32*>arg
+    id := *cast&lti32*&gtarg
     
     for 1..WORK_COUNT+1 {
         // keeping the access to global number outside
@@ -139,7 +140,7 @@ struct Box {
     x: float;
     str: char[];
     builder: StringBuilder;
-    arr: Array<i32>;
+    arr: Array&lti32&gt;
 }
 box: Box
 box.x = 5.8
@@ -239,7 +240,7 @@ struct Box&ltT&gt {
 
     fn set(index: i32, value: T) {
         items[index] = value
-        if index >= used_items
+        if index &gt= used_items
             used_items = index+1
     }
 }
