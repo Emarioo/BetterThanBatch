@@ -63,6 +63,11 @@ bool ARMBuilder::generate() {
     // emit_bytes((u8*)arr, sizeof(arr));
     // return true;
     
+    if(tinycode->asm_index != -1) {
+        Assert(false);
+        return true;
+    }
+    
     bool failed = false;
     for(auto ind : tinycode->required_asm_instances) {
         auto& inst = bytecode->asmInstances[ind];
@@ -106,7 +111,7 @@ bool ARMBuilder::generate() {
 
     bool is_blank = false;
     if(tinycode->debugFunction->funcAst) {
-        is_blank = tinycode->debugFunction->funcAst->blank_body; // TODO: We depend on debugFunction, change this
+        is_blank = tinycode->debugFunction->funcAst->assembly_body; // TODO: We depend on debugFunction, change this
     }
 
     if(!is_blank) {
@@ -223,8 +228,8 @@ bool ARMBuilder::generate() {
         // If the function only accesses arguments through inline assembly then the user must save the registers manually.
         // unless we provide a special get_arg instruction in the inline assembly?
         if(is_blank && accessed_params.size()) {
-            log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
-            log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
+            log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @asm!\n";
+            log::out << "  Don't use @asm or limit yourself to inline assembly.\n";
             compiler->compile_stats.errors++; // nocheckin, TODO: call some function instead
         }
         if (is_entry_point) {
@@ -1079,7 +1084,7 @@ bool ARMBuilder::generate() {
                 
                 virtual_stack_pointer += (inst->imm8_0 - inst->imm8_1) * 8; // inputs - outputs
                 
-                Bytecode::ASM& asmInstance = bytecode->asmInstances.get(inst->imm32);
+                BytecodeASM& asmInstance = bytecode->asmInstances.get(inst->imm32);
                 Assert(asmInstance.generated);
                 u32 len = asmInstance.iEnd - asmInstance.iStart;
                 if(len != 0) {
@@ -1770,7 +1775,7 @@ void ARMBuilder::emit_bx(ARMRegister rm) {
     emit4((u32)inst);
 }
 
-bool ARMBuilder::prepare_assembly(Bytecode::ASM& asmInst) {
+bool ARMBuilder::prepare_assembly(BytecodeASM& asmInst) {
     using namespace engone;
     
     #define SEND_ERROR() compiler->compile_stats.errors++;

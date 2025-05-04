@@ -11,6 +11,8 @@
 #import "Logger"
 #import "OS"
 
+#run { main() }
+
 fn main(){
     yes := glfwInit();
     if !yes {
@@ -133,7 +135,7 @@ fn main(){
     glBufferData(GL_ARRAY_BUFFER, VERTEX_COUNT * sizeof f32 , null, GL_DYNAMIC_DRAW);
     GLCHECK
 
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof f32, cast<void*>cast<u64>0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof f32, null);
     GLCHECK
     glEnableVertexAttribArray(0);
     GLCHECK
@@ -193,6 +195,6 @@ fn main(){
     glfwTerminate();
 }
 
-fn @stdcall MouseCallback2(window: void*, button: i32, action: i32, mods: i32) {
+fn @oscall MouseCallback2(window: void*, button: i32, action: i32, mods: i32) {
     log("click ",button," ", action)
 }

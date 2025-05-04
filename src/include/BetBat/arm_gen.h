@@ -114,7 +114,7 @@ struct ARMBuilder : public ProgramBuilder {
     ARMRegister find_register(BCRegister reg);
     void free_register(ARMRegister reg);
     
-    bool prepare_assembly(Bytecode::ASM& inst);
+    bool prepare_assembly(BytecodeASM& inst);
 };
 
 bool GenerateARM(Compiler* compiler, TinyBytecode* tinycode);

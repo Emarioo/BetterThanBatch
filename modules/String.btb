@@ -727,6 +727,62 @@ operator ==(a: Slice<char>, b: Slice<char>) -> bool {
 operator !=(a: Slice<char>, b: Slice<char>) -> bool {
     return !(a == b);
 }
+fn parse_space(head: i32*, text: char[]) {
+    while *head < text.len {
+        c := text[*head]
+        if c != ' ' && c != '\r' && c != '\t' 
+            break
+        (*head)++
+    }
+}
+fn parse_line(head: i32*, text: char[]) {
+    while *head < text.len {
+        c := text[*head]
+        (*head)++
+        if c == '\n'
+            break
+    }
+}
+fn parse_non_space(head: i32*, text: char[]) -> char[] {
+    start := *head
+    while *head < text.len {
+        c := text[*head]
+        if c == ' ' || c == '\r' || c == '\t' || c == '\n'
+            break
+        (*head)++
+    }
+    return { text.ptr + start, *head - start }
+}
+fn parse_i64(head: i32*, text: char[], valid_number: bool*) -> i64 {
+    // TODO: Parse negative number
+    // TODO: Provide parsing errors, non-digit character, digit has no trailing whitespace (a number would still be returned in case you don't care, but if you do care, there you go)
+    result: i64;
+    negative := false
+    new_head := *head
+    if text[new_head] == '-' {
+        negative = true 
+        new_head++
+    }
+    while new_head < text.len {
+        chr := text[new_head];
+        new_head++
+        if chr < '0' || chr > '9' {
+            if valid_number {
+                *valid_number = false
+            }
+            return 0
+        } else {
+            result = result * 10 + cast<i32>(chr - '0');
+        }
+    }
+    if valid_number {
+        *valid_number = true
+    }
+    *head = new_head
+    if negative
+        return -result
+    return result;
+}
 
 fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
     // TODO: Parse white space?

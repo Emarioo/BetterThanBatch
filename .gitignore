@@ -5,6 +5,7 @@
 
 # Ignore generated binaries
 bin
+releases
 *.exe
 *.exp
 *.def
@@ -28,6 +29,7 @@ bin
 
 # vscode extension package
 *.vsix
+*.code-workspace
 
 # Don't ignore files from libs
 !libs/**
@@ -64,3 +66,5 @@ secure
 deb.bat
 qem.bat
 
+# commited once to git repo, should never be modified by user, scripts modify it locally for release
+const_commit.cpp

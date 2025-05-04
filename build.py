@@ -28,6 +28,7 @@ def main():
     #####################
     #   CONFIGURATIONS
     #     Comment/uncomment the options you want
+    #     'build.py clean' if you change the options
     #####################
 
     config["bin_dir"] = "bin"
@@ -36,8 +37,8 @@ def main():
     else:
         config["output"] = "bin/btb"
 
-    # config["use_compiler"] = "gcc"
-    config["use_compiler"] = "msvc"
+    config["use_compiler"] = "gcc"
+    # config["use_compiler"] = "msvc"
     # config["use_compiler"] = "clang"
 
     config["use_debug"] = True
@@ -266,10 +267,6 @@ def compile(config):
 
         MSVC_COMPILE_OPTIONS += " /FI pch.h"
 
-        if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.obj"):
-            cmd("ml64 /nologo /Zd /Zi /Fo"+config["bin_dir"]+"/hacky_stdcall.obj /c src/BetBat/hacky_stdcall.asm > nul") # TODO: piping output to nul might not work with os.system
-        object_files.append(config["bin_dir"]+"/hacky_stdcall.obj")
-
         # Create sub directories in bin, this part must be single-threaded
         for f in modified_files:
             index = source_files.index(f)
@@ -293,8 +290,8 @@ def compile(config):
                     fd.write("#include \"" + os.path.abspath(file) + "\"\n")
                 fd.close()
 
-                err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" "+config["bin_dir"]+"/hacky_stdcall.obj /OUT:"+config["output"])
-                # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" bin/hacky_stdcall.obj /OUT:"+config["output"])
+                err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" /OUT:"+config["output"])
+                # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" /OUT:"+config["output"])
                 # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
 
                 compile_success = err == 0
@@ -397,15 +394,6 @@ def compile(config):
             
         # Code below compiles the necessary object files
       
-        if platform.system() == "Windows":
-            if not os.path.exists(config["bin_dir"]+"/hacky_stdcall.o"):
-                cmd("as -c -g src/BetBat/hacky_stdcall.s -o "+config["bin_dir"]+"/hacky_stdcall.o")
-            object_files.append(config["bin_dir"]+"/hacky_stdcall.o")
-        else:
-            if not os.path.exists(config["bin_dir"]+"/hacky_sysvcall.o"):
-                cmd("as -c -g src/BetBat/hacky_sysvcall.s -o "+config["bin_dir"]+"/hacky_sysvcall.o")
-            object_files.append(config["bin_dir"]+"/hacky_sysvcall.o")
-        
         # TODO: Add include directories to compute_modified_files? We assume that all includes come from "include/"
 
         # Find source files that were updated since last compilation, incremental build
@@ -557,12 +545,13 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
         if not os.path.exists(mingw_dll):
             cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ mingw_dll_defs + " " + src + " -o "+mingw_dll)
         
-        if not os.path.exists(vc_lib):
-            cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
-            cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
-        
-        if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
-            cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
+        if shutil.which("cl"): # only compile with cl if it's available
+            if not os.path.exists(vc_lib):
+                cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
+                cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
+            
+            if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
+                cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
         
     if platform.system() == "Linux":
         if not os.path.exists(ubuntu_path):

@@ -67,8 +67,6 @@ global @notstable lang_typeInfos: lang_TypeInfo[];
 global @notstable lang_members: lang_TypeMember[];
 global @notstable lang_strings: char[]; // string data
 
-fn @compiler init_preload()
-
 // These are not necessary because of nameof, sizeof
 // #macro LANG_TYPENAME(TYPE) lang_typename(typeid(TYPE))
 // #macro LANG_TYPESIZE(TYPE) lang_typesize(typeid(TYPE))

@@ -2,13 +2,15 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "GDB btb.exe",
+            "name": "GDB btb",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb",
-            "args": ["-dev"],
+            // "args": ["-dev"],
             // "args": ["examples/net/serverclient","-r","-d"],
             // "args": ["${workspaceFolder}/../EnderCompute/src/webserver"],
+            // "args": ["examples/graphics/quad","-d"],
+            "args": ["examples/dev"],
             // "args": ["--test"],
             // "args": ["--test"],
             // "args": ["examples/crawler/GameCore","-d","-o","bin/code.dll"],
@@ -31,23 +33,53 @@
                 //     "ignoreFailures": true
                 // }
             ]
+        },{
+            "name": "GDB btb test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/btb",
+            // "args": ["-dev"],
+            // "args": ["examples/net/serverclient","-r","-d"],
+            // "args": ["${workspaceFolder}/../EnderCompute/src/webserver"],
+            // "args": ["examples/graphics/quad","-d"],
+            "args": ["--test","*run_direct*"],
+            // "args": ["examples/crawler/GameCore","-d","-o","bin/code.dll"],
+            // "args": ["modules/Linux.btb","--preproc"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "setupCommands": [
+                // {
+                //     "description": "Enable pretty-printing for gdb",
+                //     "text": "-enable-pretty-printing",
+                //     "ignoreFailures": true
+                // },
+                // {
+                //     "description": "Set Disassembly Flavor to Intel",
+                //     "text": "-gdb-set disassembly-flavor intel",
+                //     "ignoreFailures": true
+                // }
+            ]
         },
         {
-            "name": "VS btb.exe",
+            "name": "VS btb",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
             // "args": ["examples/dev","-vm","-pvm"],
             // "args": ["--test"],
             // "args": ["--test","*macs*"],
-            // "args": ["examples/graphics/quad"],
+            "args": ["examples/graphics/quad","-d","-m","USE_DYNAMIC_LIBS"],
             // "args": ["examples/dev","-o","lib/math.lib"],
             // "args": "examples/dev -t arm -r -d -qd",
             // "args": ["-dev"],
             // "args": ["sandbox/main"],
             // "args": ["examples/setlib/math.btb","-o","math.lib"],
             // "args": ["./math.btb","-o","math.lib"],
-            "args": ["--test"],
+            // "args": ["--test"],
             // "args": ["examples/graphics/game"],
             // "args": ["-twe","*switch*"],
             // "args": ["${workspaceFolder}/../EnderCompute/src/webserver"],
@@ -71,7 +103,7 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "VS Test btb.exe",
+            "name": "VS btb test",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
@@ -95,7 +127,7 @@
             // "program": "${workspaceFolder}/test.exe",
             "program": "${workspaceFolder}/main.exe",
             // "args": ["README.md"],
-            "args": [],
+            "args": ["-i", ".cpp"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [{"name":"LD_LIBRARY_PATH","value":"."}],

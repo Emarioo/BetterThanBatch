@@ -25,6 +25,8 @@
 #include "BetBat/Parser.h"
 #include "BetBat/VirtualMachine.h"
 
+typedef void(*FnMakeshift)(engone::VoidFunction, void*);
+
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
 // The Unix way is the standard
@@ -125,6 +127,7 @@ struct CompilerTask {
     u32 import_id;
     ScopeId scopeId;
     bool no_change = false;
+    ASTStatement* stmt=nullptr;
 
     // used with TASK_TYPE_BODY
     ASTFunction* astFunc=nullptr;
@@ -267,6 +270,8 @@ struct Compiler {
 
     void addTask_type_body(ASTFunction* ast_func, FuncImpl* func_impl);
     void addTask_type_body(u32 import_id);
+    void addTask_type_body(ScopeId scope_id, u32 import_id);
+    void addTask_type_stmt(ASTStatement* stmt, u32 import_id);
     
     // DynamicArray<u32> queue_import_ids;
         
@@ -317,6 +322,11 @@ struct Compiler {
 
     engone::Mutex lock_imports;
 
+    struct GlobalDataPtrFixup {
+        int dst_data_offset; // example: offset to ptr field in slice struct
+        int src_data_offset; //          offset to array data in data section
+    };
+    DynamicArray<GlobalDataPtrFixup> runtime_global_data_fixups;
     
     const char* const TEMP_TINYCODE_NAME = "_comp_time_";
     TinyBytecode* temp_tinycode = nullptr;
@@ -327,7 +337,14 @@ struct Compiler {
         temp_tinycode->restore_to_empty();
         return temp_tinycode;
     }
-
+    
+    struct MakeshiftAssembly {
+        FnMakeshift func;
+        int size;
+    };
+    std::unordered_map<FunctionSignature*, MakeshiftAssembly> makeshift_map;
+    FnMakeshift get_makeshift(FunctionSignature* signature);
+    
     DynamicArray<TestLocation> testLocations;
     // returns index of the newly added test location
     TestLocation* getTestLocation(int index);

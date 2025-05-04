@@ -4,6 +4,7 @@
 
 // TODO: The location of GLFW library may change, if you compile with gcc or msvc
 //   then we would use different libraries. How to deal with that.
+#macro USE_DYNAMIC_LIBS #endmacro
 #if OS_WINDOWS
     #if LINK_MSVC
         #if USE_DYNAMIC_LIBS
@@ -13,9 +14,11 @@
         #endif
     #else
         #if USE_DYNAMIC_LIBS
-            #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.dll" as GLFW
+            // #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.dll" as GLFW
+            #load "libs/glfw-3.3.9/lib-mingw-w64-debug/glfw3.dll" as GLFW
         #else
-            #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib" as GLFW
+            #load "libs/glfw-3.3.9/lib-mingw-w64-debug/libglfw3.a" as GLFW
+            // #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib" as GLFW
         #endif
     #endif
     #load "user32.lib" // glfw3 requires these libraries
@@ -54,7 +57,7 @@ struct GLFWvidmode {
     greenBits:   i32; /* The bit depth of the green channel of the video mode. */
     blueBits:    i32; /* The bit depth of the blue channel of the video mode.  */
     refreshRate: i32; /* The refresh rate, in Hz, of the video mode.           */
-} GLFWvidmode;
+}
 
 fn GLFWAPI glfwTerminate();
 fn GLFWAPI glfwMakeContextCurrent(window: GLFWwindow*);

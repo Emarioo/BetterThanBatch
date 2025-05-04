@@ -79,3 +79,24 @@ a, b, c = many() // all return values
     n: u64 = 5;
     s.ptr[10] = n + '0'; // push and pop was messed up where a ptr was moved instead of n+'0' at one point
 }
+
+@TEST_CASE(global_arrays)
+
+// #import "Logger"
+
+global arr: i32[5]{2,7,4,5,6};
+
+#run {
+    // log("OLD: ", arr[1], ", ",arr[2])
+    arr[1] = 55
+    arr[2] = 56
+    // log("NEW: ", arr[1], ", ",arr[2])
+}
+
+_test 2;  arr[0]
+_test 55; arr[1]
+_test 56; arr[2]
+_test 5;  arr[3]
+_test 6;  arr[4]
+
+// log(arr[0], ", ", arr[1], ", ", arr[2], ", ", arr[3], ", ", arr[4])

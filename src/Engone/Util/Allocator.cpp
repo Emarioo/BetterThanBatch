@@ -15,8 +15,9 @@
 #include "Engone/Asserts.h"
 
 //#define FORCE_HEAP
+// #define LOG_TRACKER
 
-//#define DEBUG_GAME_MEMORY(x) x
+// #define DEBUG_GAME_MEMORY(x) x
 #define DEBUG_GAME_MEMORY(x)
 
 namespace engone {

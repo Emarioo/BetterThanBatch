@@ -473,7 +473,7 @@ struct Workspace {
         has_change := false
         
         tmp_slice := root_dir.sliced()
-        iterator := DirectoryIteratorCreate(&tmp_slice)
+        iterator := CreateDirIterator(tmp_slice)
 
         // If we ensure that files aren't marked then we don't need this loop
         // This is not the case right now though
@@ -481,15 +481,17 @@ struct Workspace {
             it.marked = false
         }
         
-        while iterator.next() {
-            if iterator.result.isDirectory {
-                if matchEnd(iterator.result.name, "/.cvc") {
+        while {
+            item := iterator.next()
+            if !item  break
+            if item.isDirectory {
+                if matchEnd(item.name, "/.cvc") {
                     iterator.skip()
                 }
                 continue
             }
             
-            relative_path := Slice<char>{iterator.result.name.ptr + tmp_slice.len + 1, iterator.result.name.len - tmp_slice.len - 1}
+            relative_path := Slice<char>{item.name.ptr + tmp_slice.len + 1, item.name.len - tmp_slice.len - 1}
             
             found := -1
             for @ptr files.sliced_unsafe() {
@@ -503,7 +505,7 @@ struct Workspace {
                 // creation
                 log("New ", relative_path)
                 has_change = true
-                track_file(relative_path, iterator.result.lastModified)
+                track_file(relative_path, item.last_write_time)
                 
                 new_snapshot.fileChanges.add(FileChange{})
                 change := new_snapshot.fileChanges.get_unsafe(new_snapshot.fileChanges.size() - 1)
@@ -513,10 +515,10 @@ struct Workspace {
             } else {
                 // modified
                 f := files.get_unsafe(found)
-                if iterator.result.lastModified > f.lastModified {
+                if item.last_write_time > f.last_write_time {
                     log("Modified ", relative_path)
                     has_change = true
-                    track_file(relative_path, iterator.result.lastModified, found)
+                    track_file(relative_path, item.last_write_time, found)
 
                     new_snapshot.fileChanges.add(FileChange{})
                     change := new_snapshot.fileChanges.get_unsafe(new_snapshot.fileChanges.size() - 1)
@@ -529,7 +531,7 @@ struct Workspace {
                 }
             }
             // log(relative_path)
-            // log(iterator.result.name)
+            // log(item.name)
         }        
         DirectoryIteratorDestroy(iterator)
         

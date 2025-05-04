@@ -12,19 +12,33 @@
 #include "BetBat/Reformatter.h"
 
 bool X64Builder::generate() {
+    using namespace engone;
     TRACE_FUNC()
 
     CALLBACK_ON_ASSERT(
         tinycode->print(0,-1, bytecode);
     )
 
-    using namespace engone;
+    if(tinycode->asm_index != -1) {
+        auto& asmInstance = bytecode->asmInstances[tinycode->asm_index];
+        Assert(asmInstance.generated);
+        u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
+        int len = asmInstance.iEnd - asmInstance.iStart;
+        int pc_start = 0;
+        emit_bytes(ptr, len);
+        for (int i = 0; i < asmInstance.relocations.size();i++) {
+            auto& it = asmInstance.relocations[i];
+            program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+        }
+        return true;
+    }
+    
 
     bool failed = false;
     for(auto ind : tinycode->required_asm_instances) {
         auto& inst = bytecode->asmInstances[ind];
         if(!inst.generated) {
-            bool yes = prepare_assembly(inst);
+            bool yes = prepare_assembly(compiler, tinycode, inst);
             if(yes) {
                inst.generated = true; 
             } else {
@@ -243,6 +257,7 @@ bool X64Builder::generate() {
 
         if(n->base->opcode == BC_POP) {
             auto base = (InstBase_op1*)n->base;
+            Assert(base->op0 >= 0 && base->op0 < BC_REG_MAX);
             auto& v = bc_register_map[base->op0];
             auto recipient = v.used_by;
             auto reg_nr = v.reg_nr;
@@ -623,7 +638,7 @@ bool X64Builder::generate() {
 
     bool is_blank = false;
     if(tinycode->debugFunction->funcAst) {
-        is_blank = tinycode->debugFunction->funcAst->blank_body; // TODO: We depend on debugFunction, change this
+        is_blank = tinycode->debugFunction->funcAst->assembly_body; // TODO: We depend on debugFunction, change this
     }
 
     bool pushed_base_pointer = false;
@@ -742,13 +757,10 @@ bool X64Builder::generate() {
         X64_REG_XMM1,
         X64_REG_XMM2,
         X64_REG_XMM3,
-        // Some instructions assume use temporary registers (xmm4-xmm7). If we want to 
-        // allow these instructions here then we may need to rewrite those instructions
-        // to save xmm7 before it is used as a temporary register.
-        // BC_REG_XMM4, 
-        // BC_REG_XMM5,
-        // BC_REG_XMM6,
-        // BC_REG_XMM7,
+        X64_REG_XMM4,
+        X64_REG_XMM5,
+        X64_REG_XMM6, // xmm6 and up are NON-VOLATILE on Windows x64 calling convention.
+        X64_REG_XMM7, // luckily they are all VOLATILE with System V ABI calling convention.
     };
 
     virtual_stack_pointer -= callee_saved_space; // if callee saved space is misaligned then we need to consider that when 16-byte alignment is required. (BC_ALLOC_ARGS)
@@ -804,8 +816,8 @@ bool X64Builder::generate() {
         // If the function only accesses arguments through inline assembly then the user must save the registers manually.
         // unless we provide a special get_arg instruction in the inline assembly?
         if(is_blank && accessed_params.size()) {
-            log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @blank!\n";
-            log::out << "  Don't use @blank or limit yourself to inline assembly.\n";
+            log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @asm!\n";
+            log::out << "  Don't use @asm or limit yourself to inline assembly.\n";
             compiler->compile_stats.errors++; // nocheckin, TODO: call some function instead
         }
         if (is_entry_point) {
@@ -877,15 +889,15 @@ bool X64Builder::generate() {
                 if(IS_CONTROL_FLOAT(control)) {
                     if(float_count < 8) {
                         // NOTE: Type checker provides a better error, this assert is here as a reminder to fix this code.
-                        Assert(("x64 generator can't handle more than 4 floats",float_count < 4));
                         reg = unixcall_float_regs[float_count];
                         emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
                     } else {
                         Assert(("x64 generator can't handle more than 8 floats",false));
-                        reg = X64_REG_XMM7; // is it safe to use xmm7 register?
+                        reg = X64_REG_A; // since we're just moving float values We can pass it in rax (no need to use xmm registers)
                         int src_off = FRAME_SIZE + stacked_count * 8;
-                        emit_mov_reg_mem(reg,reg_args,control,src_off);
-                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                        InstructionControl non_float_control = (InstructionControl)(control & ~CONTROL_FLOAT_OP);
+                        emit_mov_reg_mem(reg,reg_args,non_float_control,src_off);
+                        emit_mov_mem_reg(reg_args,reg,non_float_control,param.offset_from_rbp);
                         stacked_count++;
                     }
                     float_count++;
@@ -929,7 +941,7 @@ bool X64Builder::generate() {
             log::out << n->bc_index<< " "<< *n << "\n";
         }
         log::out << "Asserted on " << log::GRAY <<  cur_node->bc_index <<" " << *cur_node << "\n";
-        // tinycode->print(0,-1, code);
+        // tinycode->print(0,-1, bytecode);
     )
 
     #ifdef DEBUG_REGISTER_USAGE
@@ -1205,7 +1217,9 @@ bool X64Builder::generate() {
                 }
                 ret_offset -= imm;
                 virtual_stack_pointer += imm;
-                push_offsets.pop();
+                if(opcode == BC_FREE_ARGS) {
+                    push_offsets.pop();
+                }
             } break;
             case BC_SET_ARG: {
                 auto base = (InstBase_op1_ctrl_imm16*)n->base;
@@ -3411,7 +3425,7 @@ bool X64Builder::generate() {
                 
                 virtual_stack_pointer += (base->imm8_0 - base->imm8_1) * 8; // inputs - outputs
                 
-                Bytecode::ASM& asmInstance = bytecode->asmInstances.get(base->imm32);
+                BytecodeASM& asmInstance = bytecode->asmInstances.get(base->imm32);
                 Assert(asmInstance.generated);
                 u32 len = asmInstance.iEnd - asmInstance.iStart;
                 if(len != 0) {
@@ -3423,8 +3437,7 @@ bool X64Builder::generate() {
                       program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
                     }
                 } else {
-                    // TODO: Better error, or handle error somewhere else?
-                    log::out << log::RED << "BC_ASM at "<<n->bc_index<<" was incomplete\n";
+                    log::out << log::YELLOW << asmInstance.file <<":"<<asmInstance.lineStart<< ": "<<log::NO_COLOR <<" was incomplete or just empty?\n";
                 }
                 
             } break;
@@ -3873,8 +3886,23 @@ bool X64Builder::generate() {
 
     for(auto& v : fun->localVariables) {
         auto now = di->ast->getScope(v.scopeId);
-        now->asm_start = get_map_translation(now->bc_start);
-        now->asm_end = get_map_translation(now->bc_end);
+
+        // update scope instruction range for all parent scopes (in the function)
+        int limit = 100;
+        while(--limit) {
+            now->asm_start = get_map_translation(now->bc_start);
+            now->asm_end = get_map_translation(now->bc_end);
+            
+            if(now->is_function_scope)
+                break;
+
+            if (now->parent == SCOPE_PARENT_NONE)
+                break;
+
+            now = di->ast->getScope(now->parent);
+        }
+
+        Assert(limit > 0);
     }
     
     for(auto i : inst_list) {
@@ -3916,8 +3944,10 @@ engone::Logger& operator<<(engone::Logger& l, X64Inst& i) {
     return l;
 }
 
-bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
+bool prepare_assembly(Compiler* compiler, TinyBytecode* tinycode, BytecodeASM& asmInst) {
     using namespace engone;
+    
+    auto& bytecode = compiler->bytecode;
     
     #define SEND_ERROR() compiler->compile_stats.errors++;
     
@@ -4069,7 +4099,7 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
                 auto symbol = objfile->symbols[it->SymbolTableIndex];
                 std::string fn_name = objfile->getSymbolName(it->SymbolTableIndex);
 
-                Bytecode::ASM::ExternalNamedReloc rel{};
+                BytecodeASM::ExternalNamedReloc rel{};
                 rel.name = fn_name;
                 rel.textOffset = it->VirtualAddress;
                 asmInst.relocations.add(rel);
@@ -4119,6 +4149,7 @@ bool X64Builder::prepare_assembly(Bytecode::ASM& asmInst) {
         memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
         bytecode->rawInstructions.used += textSize;
         asmInst.iEnd = bytecode->rawInstructions.used;
+        asmInst.generated = true;
     }
     return true;
 }

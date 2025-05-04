@@ -151,8 +151,6 @@ struct X64Builder : public ProgramBuilder {
     static const X64Register RESERVED_REG1 = X64_REG_SI;
     static const X64Register RESERVED_REG2 = X64_REG_R11;
     
-    bool prepare_assembly(Bytecode::ASM& asmInst);
-
     DynamicArray<X64Inst*> inst_list;
     X64Inst* last_inst_call = nullptr;
     
@@ -283,5 +281,5 @@ struct X64Builder : public ProgramBuilder {
     }
 };
 
-
 bool GenerateX64(Compiler* compiler, TinyBytecode* tinycode);
+bool prepare_assembly(Compiler* compiler, TinyBytecode* tinycode, BytecodeASM& asmInst);

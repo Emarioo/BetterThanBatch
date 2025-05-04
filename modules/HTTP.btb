@@ -133,7 +133,7 @@ fn HTTP_handle_event(event: NetEvent*, user_data: void*) {
         for 0..event.bytes.len-3 {
             // TODO: We don't have to go through the whole buffer again, start from event.handler_byte_count which is how many bytes we read last time.
             //   (start from handler_byte_count - 3 since we may have read a part of \r\n\r\n last time)
-            bytes_as_string := Slice<char>{event.bytes.ptr + nr, 4}
+            bytes_as_string := Slice<char>{cast<void*>event.bytes.ptr + nr, 4}
             if bytes_as_string == "\r\n\r\n" {
                 found_end = nr + 4
                 break
@@ -156,7 +156,7 @@ fn HTTP_handle_event(event: NetEvent*, user_data: void*) {
         request.route = {}
         request.content = {}
         
-        msg := event.bytes
+        msg: char[] = { cast<void*>event.bytes.ptr, event.bytes.len }
         head := 0
         
         // log(msg)
@@ -260,7 +260,7 @@ fn HTTP_handle_event(event: NetEvent*, user_data: void*) {
     }
     
     if request.content.len > 0
-        request.content.ptr = event.bytes.ptr + extra_data.header_length;
+        request.content.ptr = cast<void*>event.bytes.ptr + extra_data.header_length;
     
     server.callback(request, event, server.user_data)
     event.handler_byte_count = event.bytes.len // consume all bytes

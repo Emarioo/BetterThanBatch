@@ -122,14 +122,13 @@ fn main(argc: i32, argv: char**) -> i32 {
     
     log(&options)
 
-    
-    options.verbose = true
+    // options.verbose = true
     tmp: StringBuilder
     
     #macro INCLUDE(S) tmp = {} tmp.append(S) options.include_patterns.add(tmp)
     #macro EXCLUDE(S) tmp = {} tmp.append(S) options.exclude_patterns.add(tmp)
-    INCLUDE(".cpp")
-    INCLUDE(".h")
+    // INCLUDE(".cpp")
+    // INCLUDE(".h")
     // INCLUDE(".btb")
     
     EXCLUDE("fuzzer_gen")
@@ -179,15 +178,18 @@ fn CalculateFiles(options: Options*) {
         total_bytes += FileSize(fil.sliced())
     }
     if options.exclude_patterns.size() > 0 || options.include_patterns.size() > 0 {
-        iterator := DirectoryIteratorCreate(options.rootPath);
-        defer { DirectoryIteratorDestroy(iterator); }
-        if !iterator {
+        iterator := CreateDirIterator(options.rootPath);
+        if !iterator.valid() {
             log("Could not create iterator")
             // error message
             return;
         }
-        result: DirIteratorItem*;
-        while DirectoryIteratorNext(iterator, &result) {
+        defer { iterator.cleanup() }
+
+        while {
+            result := iterator.next()
+            if !result
+                break
             // log(result.name)
             if result.is_directory {
                 excluded := false;
@@ -200,8 +202,8 @@ fn CalculateFiles(options: Options*) {
                     // log("haaha",it.sliced())
                 }
                 if excluded {
-                    DirectoryIteratorSkip(iterator)
-                    continue;   
+                    iterator.skip()
+                    continue;
                 }
                 continue;
             }
@@ -215,6 +217,21 @@ fn CalculateFiles(options: Options*) {
             }
             if !included
                 continue;
+
+            // We might have excluded ".h"
+            excluded := false;
+            for @ptr options.exclude_patterns.sliced_unsafe() {
+                // log(it.sliced())
+                if find(it.sliced(),result.name) != -1 {
+                    excluded = true;
+                    break;
+                }
+                // log("haaha",it.sliced())
+            }
+            if excluded {
+                continue;   
+            }
+
             // Optimize by using a bucket array of linear allocators for the file names.
             // Currently, each file name is allocated separately which isn't ideal.
             info := masterInfo.files.add(FileInfo{})

@@ -287,6 +287,8 @@ namespace engone {
 		// TODO: write to report
 
 		info.line_buffer_used = 0; // flush buffer
+
+		FileFlushBuffers(GetStandardOut());
 	}
 	u64 Logger::getMemoryUsage(){
 		u64 sum=0;

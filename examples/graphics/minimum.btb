@@ -7,6 +7,8 @@
 #import "Logger"
 #import "OS"
 
+#run main()
+
 fn main() {
     yes := glfwInit();
     if !yes {
@@ -19,7 +21,7 @@ fn main() {
 
     width := 800
     height := 600
-    title := "hey"
+    title := "heyss"
     glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
     if !glfw_window {
         log("window failed");
@@ -40,8 +42,7 @@ fn main() {
 
     while (!glfwWindowShouldClose(glfw_window)) {
         glViewport(0, 0, width, height)
-        
-        glClearColor(0.2, 0.2, 0.2, 1);
+        glClearColor(0.0, 0.0, 0.9, 0.2);
         glClear(GL_COLOR_BUFFER_BIT);
 
         // user may not always want this

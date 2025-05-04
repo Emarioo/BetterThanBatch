@@ -44,6 +44,12 @@ fn @import(Kernel) CreateProcessA(
   /* [in]                LPSTARTUPINFOA        */ lpStartupInfo: STARTUPINFOA*,
   /* [out]               LPPROCESS_INFORMATION */ lpProcessInformation: PROCESS_INFORMATION*
 ) -> u32;
+fn @import(Kernel) CreatePipe(
+  /* [out]          PHANDLE               */ hReadPipe: HANDLE*,
+  /* [out]          PHANDLE               */ hWritePipe: HANDLE*,
+  /* [in, optional] LPSECURITY_ATTRIBUTES */ lpPipeAttributes: SECURITY_ATTRIBUTES*,
+  /* [in]           DWORD                 */ nSize: i32
+) -> bool;
 fn @import(Kernel) GetProductInfo(
   /*[in]  DWORD  */ dwOSMajorVersion: u32,
   /*[in]  DWORD  */ dwOSMinorVersion: u32,
@@ -85,6 +91,18 @@ struct SECURITY_ATTRIBUTES {
   lpSecurityDescriptor: void*;
   bInheritHandle:       bool;
 }
+
+// Values for STARTUPINFOA.dwFlags
+#macro STARTF_USESHOWWINDOW       0x00000001
+#macro STARTF_USESIZE             0x00000002
+#macro STARTF_USEPOSITION         0x00000004
+#macro STARTF_USECOUNTCHARS       0x00000008
+#macro STARTF_USEFILLATTRIBUTE    0x00000010
+#macro STARTF_RUNFULLSCREEN       0x00000020  // ignored for non-x86 platforms
+#macro STARTF_FORCEONFEEDBACK     0x00000040
+#macro STARTF_FORCEOFFFEEDBACK    0x00000080
+#macro STARTF_USESTDHANDLES       0x00000100
+
 struct STARTUPINFOA {
   cb:               i32;
   lpReserved:       char*;
@@ -750,6 +768,23 @@ fn @import(Winsock) getaddrinfo(
 fn @import(Winsock) freeaddrinfo(
   pAddrInfo: addrinfo*
 );
+
+FN_WINSOCK(select)(
+  nfds: i32,          // in
+  readfds: fd_set*,   // inout
+  writefds: fd_set*,  // inout
+  exceptfds: fd_set*, // inout
+  timeout: timeval*,  // in
+);
+#macro FD_SETSIZE 64
+struct fd_set {
+  fd_count: i32;
+  fd_array: SOCKET[FD_SETSIZE];
+}
+struct timeval {
+    tv_sec: u32;    /* seconds */
+    tv_usec: u32;   /* and microseconds */
+}
 
 #macro WSADESCRIPTION_LEN      257
 #macro WSASYS_STATUS_LEN       129

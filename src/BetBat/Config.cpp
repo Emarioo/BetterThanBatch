@@ -5,6 +5,8 @@
    Make most edits here with global variables
 ############### */
 
+const char* COMPILER_VERSION = "0.2.1/comptime-2025-02-24";
+
 LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_ALL
 // | LOG_TASKS
@@ -27,6 +29,9 @@ LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_IMPORTS    
 // | LOG_INCLUDES   
 );
+
+bool VIRTUAL_MACHINE_LOGGING = false;
+// bool VIRTUAL_MACHINE_LOGGING = true;
 
 // static int s_activelogs=0;
 // void SetLog(int type, bool active){

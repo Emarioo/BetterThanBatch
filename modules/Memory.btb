@@ -61,7 +61,7 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
             // dont have stable globals memory ready yet, scuffed and complicated but it works
             if stable_global_memory
         #endif
-            // memory_tracker.add(new_ptr, size)
+            memory_tracker.add(new_ptr, size)
         // else
         //     memory_tracker.add(new_ptr, size, type)
     } else {
@@ -119,7 +119,7 @@ struct MemoryTracker_Item {
     count: i32;
     allocations: Map<void*, i32>;
 }
-fn hash(v: lang_TypeId) -> u32 {
+fn hash_type(v: lang_TypeId) -> u32 {
     // Assert(4 == sizeof lang_TypeId)
     return *cast<u32*>&v
 }
@@ -154,7 +154,7 @@ struct MemoryTracker {
         disabled = true
         defer disabled = false
 
-        hashed_type := hash(type)
+        hashed_type := hash_type(type)
         item := map_types.find(hashed_type)
         if !item {
             item = map_types.set(hashed_type, MemoryTracker_Item{})
@@ -206,7 +206,7 @@ struct MemoryTracker {
         disabled = true
         defer disabled = false
 
-        hashed_type := hash(type)
+        hashed_type := hash_type(type)
         item := map_types.find(hashed_type)
         if !item {
             item = map_types.set(hashed_type, MemoryTracker_Item{})
@@ -238,6 +238,10 @@ struct MemoryTracker {
     fn print_memory() {
         disabled = true
         defer disabled = false
+
+        if !initialized
+            log("MemoryTracker::print_memory - Not initialized with init()")
+
         {
             log("Allocations:")
             iter := allocations.create_iterator()

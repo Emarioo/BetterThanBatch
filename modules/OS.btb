@@ -524,6 +524,86 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
 #endif
 }
 
+
+// Returns exit code of process and text from stdout of that process
+fn ExecuteCommandWithOutput(cmd: char[], text: StringBuilder*, exit_code: i32*, pipe_size: i32 = 0x1000) -> bool {
+    // TODO: This function doesn't mix well with Windows and Linux. cmd can contain executable path
+    // and arguments on Windows but on Linux you must separate them where cmd has executable and 'args'
+    // has arguments.
+#if OS_WINDOWS
+    if(!cmd.ptr || cmd.len == 0){
+        return false;
+    }
+
+    res: i32;
+    sa: SECURITY_ATTRIBUTES;
+    memzero(&sa, sizeof(sa));
+    sa.bInheritHandle = true;
+    sa.nLength = sizeof(sa);
+    read_handle, write_handle: HANDLE;
+    res = CreatePipe(&read_handle, &write_handle, &sa, pipe_size);
+    if(!res) {
+        err := GetLastError();
+        log("ERROR: CreatePipe ", err);
+        return false;
+    }
+
+    si: STARTUPINFOA;
+    memzero(&si, sizeof(si));
+    si.cb = sizeof(STARTUPINFOA);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdOutput = write_handle;
+    si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+    temp: StringBuilder
+    defer temp.cleanup()
+    temp.append(cmd)
+
+    pi: PROCESS_INFORMATION;
+    res = CreateProcessA(null, temp.ptr, &sa, null, true, 0, null, null, &si, &pi);
+    if(!res) {
+        err := GetLastError();
+        log("CreateProcessA ", err);
+        return false;
+    }
+
+    CloseHandle(write_handle);
+
+    res = WaitForSingleObject(pi.hProcess, INFINITE);
+
+    buffer := cast<char*>Allocate(pipe_size);
+    defer Free(buffer, pipe_size)
+    memzero(buffer, pipe_size);
+    read_bytes: i32;
+    res = ReadFile(read_handle, buffer, pipe_size, cast<void*>&read_bytes, null);
+    if(!res) {
+        err := GetLastError();
+        log("ReadFile ", err);
+        return false;
+    }
+    CloseHandle(read_handle);
+
+    if text {
+        text.clear()
+        text.append(buffer, read_bytes)
+    }
+    if exit_code {
+        res = GetExitCodeProcess(pi.hProcess, exit_code)
+        if !res {
+            err := GetLastError();
+            log("GetExitCodeProcess ", err);
+            return false;
+        }
+    }
+    return true
+#elif OS_LINUX
+    log("ExecuteCommandWithOutput not implemented on Linux")
+    return false
+#endif
+    return false;
+}
+
 global enable_logging_dynamic_library: bool
 // A struct that refers to a dynamically linked library
 // TODO: Linux implementation

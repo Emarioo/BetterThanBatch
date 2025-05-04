@@ -286,6 +286,11 @@ u32 TestSuite(CompileOptions* options){
     
     tests.add("tests/macro/fn_inserts.btb");
     
+    tests.add("tests/comp_time/callbacks.btb");
+    tests.add("tests/comp_time/globals.btb");
+    tests.add("tests/comp_time/run_directive.btb");
+    tests.add("tests/comp_time/run_edge.btb");
+    
     return VerifyTests(options, tests);
 }
 
@@ -516,7 +521,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         } else {
             if(useInterp) {
                 bool good_to_go = true;
-                VirtualMachine vm{};
+                VirtualMachine vm{&compiler};
                 
                 auto tinycode = vm.fetch_tinycode(compiler.bytecode, compiler.entry_point);
                 

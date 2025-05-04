@@ -1,0 +1,20 @@
+@TEST_CASE(comptime_func_ptr_stubs)
+
+// TODO: Work in progress
+
+// #import "Logger"
+
+// TODO: Test passing function pointer to C code in DLL that calls a bytecode pointer (examples/callbacks does this)
+
+fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
+    return a+b+c+d+e
+}
+global glob_val: f32;
+#run {
+    f := some_func;
+    glob_val = f(1.1,2.2,3.3,4.4,5.5)
+}
+
+fn main() {
+    _test (1.1+2.2+3.3+4.4+5.5); glob_val;
+}

@@ -3816,8 +3816,8 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                 }
             } else if (view_fn_name == "intrinsic"){
                 function->callConvention = CallConvention::INTRINSIC;
-            } else if (view_fn_name == "blank"){
-                function->blank_body = true;
+            } else if (view_fn_name == "asm"){
+                function->assembly_body = true;
             } else if (view_fn_name == "entry"){
                 is_entry_point = true;
             } else if (view_fn_name == "builtin"){
@@ -4281,7 +4281,9 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             }
         }
     } else if(tok.type == '{'){
-        if(!function->needsBody()) {
+        // while assembly_body shouldn't have function->body, we do expect curly brace and 
+        // tokens for the instructions which we place in function->asm_range
+        if(!function->needsBody() && !function->assembly_body) {
             Assert(!is_operator);
             ERR_SECTION(
                 ERR_HEAD2(tok)
@@ -4290,13 +4292,48 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
             )
         }
         
-        info.functionScopes.add({});
-        info.functionScopes.last().function = function;
-        ASTScope* body = 0;
-        auto signal = parseBody(body, function->scopeId, ParseFlags::PARSE_FROM_FUNC);
-        function->body = body;
-        info.functionScopes.pop();
-        SIGNAL_SWITCH_LAZY()
+        if(function->assembly_body) {
+            info.advance(); //( 
+            function->asm_range.importId = info.import_id;
+            function->asm_range.token_index_start = info.gethead();
+            int depth = 1;
+            while(true){
+                auto token = info.getinfo();
+                if(token->type == lexer::TOKEN_EOF){
+                    auto tok = info.gettok();
+                    ERR_SUDDEN_EOF(tok, "Missing ending curly brace for inline assembly.", "asm block starts here")
+                    return SIGNAL_COMPLETE_FAILURE;
+                }
+                if(token->type == '{') {
+                    depth++;
+                    info.advance();
+                    continue;
+                }
+                if(token->type == '}') {
+                    depth--;
+                    if(depth==0) {
+                        function->asm_range.token_index_end = info.gethead(); // exclusive
+                        info.advance();
+                        break;
+                    }
+                }
+                // TODO: We want to search for instructions where variables are used like this
+                //   mov eax, [var] and change the instruction to one that gets the variable.
+                //   For this we need to:
+                //     - Parse the referenced variables
+                //     - Find out where they are and how to access them (rbp-24). (has to happen in bytecode generator)
+                //     - Replace the variable names with [rbp - 16] or whatever you use to access them. (has to happen in x64 gen)
+                info.advance();
+            }
+        } else {
+            info.functionScopes.add({});
+            info.functionScopes.last().function = function;
+            ASTScope* body = 0;
+            auto signal = parseBody(body, function->scopeId, ParseFlags::PARSE_FROM_FUNC);
+            function->body = body;
+            info.functionScopes.pop();
+            SIGNAL_SWITCH_LAZY()
+        }
 
     } else {
         if(is_operator) {
@@ -4706,6 +4743,7 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
 
     } else {
         bodyLoc = info.ast->createBody();
+        bodyLoc->location = info.getloc();
 
         if ((in_flags & PARSE_SKIP_ENTRY_BRACES) == 0) {
             auto token = info.getinfo();

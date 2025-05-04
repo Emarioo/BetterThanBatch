@@ -17,6 +17,8 @@ struct FuncImpl;
 struct ASTExpression;
 struct ASTScope;
 
+#define SCOPE_PARENT_NONE 0
+
 enum CallConvention : u8 {
     BETCALL, // The default. Native functions use this.
     STDCALL, // Currently default x64 calling convention.
@@ -240,14 +242,14 @@ private:
 };
 struct TypeId {
     TypeId() = default;
-    TypeId(PrimitiveType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
-    // TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
+    TypeId(PrimitiveType type) : union_primtive((PrimitiveType)type), _infoIndex1(0), _flags(VALID_MASK) {}
+    // TypeId(OperationType type) : union_primtive((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
     static TypeId Create(u32 id, int level = 0) {
         TypeId out={}; 
         // TODO: ENUM or STRUCT?
         // out._flags = VALID_MASK;
         out.valid = true;
-        out._infoIndex0 = id&0xFFFF;
+        out.union_primtive = (PrimitiveType)(id&0xFFFF);
         out._infoIndex1 = id>>16;
         out.pointer_level = level;
         return out; 
@@ -257,7 +259,7 @@ struct TypeId {
         // out._flags = VALID_MASK | STRING;
         out.valid = true;
         out.string = true;
-        out._infoIndex0 = index&0xFFFF;
+        out.union_primtive = (PrimitiveType)(index&0xFFFF);
         out._infoIndex1 = index>>16;
         return out;
     }
@@ -270,10 +272,10 @@ struct TypeId {
         POINTER_MASK = 0x8 | 0x10,
         POINTER_SHIFT = 3,
     };
-    union {
-        u16 _infoIndex0 = 0;
+    // union {
+        // u16 _infoIndex0 = 0;
         PrimitiveType union_primtive;
-    };
+    // };
     u8 _infoIndex1 = 0;
     union {
         u8 _flags = 0;
@@ -291,7 +293,7 @@ struct TypeId {
     }
     bool operator==(TypeId type) const {
         // Assert(!isVirtual() && !type.isVirtual());
-        return _flags == type._flags && _infoIndex0 == type._infoIndex0 && _infoIndex1 == type._infoIndex1;
+        return _flags == type._flags && union_primtive == type.union_primtive && _infoIndex1 == type._infoIndex1;
     }
     bool operator==(PrimitiveType primitiveType) const {
         return *this == TypeId(primitiveType);
@@ -323,7 +325,7 @@ struct TypeId {
         _flags = (_flags & ~POINTER_MASK) | ((level<<POINTER_SHIFT) & POINTER_MASK);
     }
     u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_SHIFT; }
-    u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
+    u32 getId() const { return (u32)union_primtive | ((u32)_infoIndex1<<8); }
     // returns true if valid, no string, and no pointer
     bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
     //  && !isVirtual(); }
@@ -481,6 +483,8 @@ struct IdentifierVariable : public Identifier {
 
     PolyVersions<int> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
+    
+    PolyVersions<int> versions_array_dataOffset{}; // only used with global arrays
 
     bool is_import_global = false;
 
@@ -512,7 +516,8 @@ struct ScopeInfo {
 
     ASTScope* astScope = nullptr; // may be null, some scopes don't belong to ASTScope
 
-    bool is_function_scope = false;
+    bool is_function_scope = false; // we need this to calculate instruction addresses for lexical scopes in debug info.
+                                    // also needed when iterating scopes
 
     // TODO: Move these elsewhere?
     u32 bc_start = 0; // we need tinycode id too
@@ -816,7 +821,7 @@ struct ASTStruct : ASTNode {
         lexer::SourceLocation location{};
         ASTExpression* defaultValue = nullptr;
         TypeId stringType{};
-        int array_length = 0;
+        int array_length = 0; // should never be negative
     };
     DynamicArray<Member> members{};
     struct PolyArg {
@@ -933,7 +938,7 @@ struct ASTFunction : ASTNode {
     QuickArray<IdentifierVariable*> memberIdentifiers; // only relevant with parent structs
 
     DynamicArray<PolyArg> polyArgs;
-    DynamicArray<Arg> arguments; // you could rename to parameters
+    DynamicArray<Arg> arguments; // you could rename to parameters, includes 'this' argument if it's a method
     DynamicArray<Ret> returnValues; // string type
     u32 nonDefaults=0; // used when matching overload, having it here avoids recalculations of it
 
@@ -978,15 +983,15 @@ struct ASTFunction : ASTNode {
     bool isPolymorphic(){
         return polyArgs.size()!=0;
     }
-    
-    bool blank_body = false; // tells the generator to create no instructions except a return.
+    bool assembly_body = false; // tells the generator to create no instructions except a return.
+    lexer::TokenRange asm_range{};
     LinkConvention linkConvention = LinkConvention::NONE;
     CallConvention callConvention = BETCALL;
     // A lot of places need to know whether a function has a body.
     // When function should have a body or not has changed a lot recently
     // and I have needed to rewrite a lot. Having the requirement abstracted in
     // a function will prevent some of the changes you would need to make.
-    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC && !is_compiler_func && !is_builtin; }
+    bool needsBody() { return linkConvention == LinkConvention::NONE && callConvention != INTRINSIC && !is_compiler_func && !is_builtin && !assembly_body; }
 
     void print(AST* ast, int depth);
 };
@@ -994,6 +999,7 @@ struct ASTScope : ASTNode {
     std::string name = ""; // namespace
     ScopeId scopeId=0;
     bool isNamespace = false;
+    lexer::SourceLocation location;
 
     QuickArray<ASTStruct*> structs{};
     void add(AST* ast, ASTStruct* astStruct);
@@ -1162,6 +1168,7 @@ struct AST {
     void initLinear(){
         Assert(!linearAllocation);
         linearAllocationMax = 0x1000'000; // tweak this
+        // linearAllocationMax = 0x100'000; // tweak this
         linearAllocationUsed = 0;
         linearAllocation = TRACK_ARRAY_ALLOC(char, linearAllocationMax);
          // (char*)engone::Allocate(linearAllocationMax);

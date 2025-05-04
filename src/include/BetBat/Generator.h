@@ -48,9 +48,9 @@ struct GenContext : public PhaseContext {
 
     void generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo);
 
-    void addExternalRelocation(const std::string& name, int lib_index, u32 codeAddress, ExternalRelocationType rel_type) {
+    void addExternalRelocation(const std::string& name, int lib_index, u32 codeAddress, ExternalRelocationType rel_type, FunctionSignature* signature) {
         if(!disableCodeGeneration)
-            bytecode->addExternalRelocation(name, lib_index, tinycode->index, codeAddress, rel_type);
+            bytecode->addExternalRelocation(name, lib_index, tinycode->index, codeAddress, rel_type, signature);
     }
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
@@ -125,7 +125,7 @@ struct GenContext : public PhaseContext {
     SignalIO generateArtificialPush(TypeId typeId);
     // Generate a push from pointer (baseReg) where a list of pushed values are stored. generatePush reads memory from a struct layout while this function "copies" pushed values from a pointer.
     SignalIO generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr);
-    SignalIO generatePushedLiterals(TypeId type, char* stack, ASTExpression* expression, TypeInfo* structImpl = nullptr, int memberIndex = 0);
+    SignalIO generatePushedLiterals(VirtualMachine* vm, TypeId type, char* stack, ASTExpression* expression, TypeInfo* structImpl = nullptr, int memberIndex = 0);
     void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, int offset);
     void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
     

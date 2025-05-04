@@ -35,6 +35,27 @@ enum @specified FileOpenFlags {
     FILE_CLEAR_AND_WRITE    = 0x2,
     FILE_READ_AND_WRITE     = 0x4,
 }
+
+// Reads files and allocates a buffer using Allocate.
+// Use Free() when buffer isn't needed anymore.
+fn ReadWholeFile(path: char[]) -> char[], bool {
+    size: i64;
+    file := FileOpen(path, FILE_READ_ONLY, &size);
+    if !file
+        return {}, false;
+    
+    defer FileClose(file)
+    data := Allocate(size);
+    if !data
+        return {}, false;
+
+    yes := FileRead(file, data, size)
+    if !yes
+        return {}, false;
+
+    return { data, size }, true
+}
+
 // returns file handle and file size
 fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -> FileHandle {
     c_path: char* = path.ptr;
@@ -240,15 +261,34 @@ fn FileSetHead(file: FileHandle, offset: i64, method: FileSetHeadMethod = FILE_S
 }
 fn DirectoryCreate(path: char[]) -> bool {
     #if OS_WINDOWS
-        success := CreateDirectoryA(path.ptr, null);
-		if(!success){
-			err := GetLastError();
-            if err == ERROR_ALREADY_EXISTS
-                return true // we want the directory to exist so the intention of the function succeded
 
-			log("[WinError ",err,"] CreateDirectoryA '",path,"'");
-            return false;
-		}
+        head := 0
+        while head < path.len {
+            c := path[head]
+            head++
+            if c == '/' || head == path.len {
+                end := head-1
+                if head == path.len
+                    end = head
+
+                dir := substring(path, 0, end)
+                prev := dir.ptr[dir.len]
+                dir.ptr[dir.len] = 0 // TODO: Don't write to memory beyond slice. This happens if you substring a slice. Substrings don't get zeros.
+                // log("try ", dir)
+                success := CreateDirectoryA(dir.ptr, null);
+                dir.ptr[dir.len] = prev
+                if !success {
+                	err := GetLastError();
+                    if err == ERROR_ALREADY_EXISTS
+                        continue
+
+                	// log("[WinError ",err,"] CreateDirectoryA '",path,"'");
+                	log("[WinError ",err,"] CreateDirectoryA '",dir,"'");
+                    return false;
+                }
+            }
+        }
+        
 		return true;
     #elif OS_LINUX
         err := mkdir(path.ptr,0o700)
@@ -403,11 +443,6 @@ struct DirIteratorItem {
     is_directory: bool;
 }
 
-// A handle to hide implementation details
-enum @enclosed DirIterator : i64 { INVALID }
-fn InternalToIterator(n: i32) -> DirIterator { return cast_unsafe<DirIterator>cast<i64>(n+1) }
-fn IteratorToInternal(n: DirIterator) -> i32 { return cast<i32>cast<i64>n-1 }
-
 // TODO: We depend on Array and StringBuilder for quick implementation of dir iterators
 //   but it would be nice to not depend on them.
 #import "Array"
@@ -422,6 +457,8 @@ struct DirIterator_impl {
     remaining_directories: Array<StringBuilder>;
     
     item: DirIteratorItem;
+    relative_path: bool;
+    index: i32; // index to _directory_iterators
     
     fn valid() -> bool { return root.ptr }
     
@@ -433,20 +470,273 @@ struct DirIterator_impl {
         item.name.cleanup()
     }
     #if OS_WINDOWS
-    handle: HANDLE;
+        handle: HANDLE;
     #elif OS_LINUX
-    fd_current_dir: i32;
-    head: i32;
-    bytes_in_buffer: i32;
-    buffer: char[1024];
+        fd_current_dir: i32;
+        head: i32;
+        bytes_in_buffer: i32;
+        buffer: char[1024];
     #endif
 }
 
 global _directory_iterators: Array<DirIterator_impl*>
 
-fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
+struct DirIterator {
+    m_iter: DirIterator_impl*;
+
+    fn valid() -> bool {
+        return m_iter != null
+    }
+    fn next() -> DirIteratorItem* {
+        if m_iter == null
+            return null
+        iter := _directory_iterators.get(m_iter.index)
+        m_iter = iter
+        
+        #if OS_WINDOWS
+            data: WIN32_FIND_DATAA
+            cFileNameLen: i32
+            while {
+                if(iter.handle==INVALID_HANDLE_VALUE){
+                    if(iter.remaining_directories.size()==0){
+                        return null;
+                    }
+                    iter.current_dir.clear();
+                    
+                    dir := iter.remaining_directories.pop_item(0); defer dir.cleanup()
+                    
+                    if(dir.size()!=0){
+                        iter.current_dir.append(dir.sliced());
+                    }
+                    
+                    temp: StringBuilder = iter.current_dir.copy();
+                    if(temp.size())
+                        temp.append("\\");
+                    
+                    temp.append("*");
+                    handle: HANDLE = INVALID_HANDLE_VALUE;
+                    handle = FindFirstFileA(temp.data(),&data);
+                    
+                    if(handle==INVALID_HANDLE_VALUE){
+                        log("find first file failed")
+                        // DWORD err = GetLastError();
+                        // PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
+                        continue;
+                    }
+                    iter.handle = handle;
+                }else{
+                    success := FindNextFileA(iter.handle,&data);
+                    if(!success){
+                        // TODO: Check GetLastError
+                        // DWORD err = GetLastError();
+                        // if(err == ERROR_NO_MORE_FILES){
+                        //     // PL_PRINTF("[WinError %u] No files '%lu'\n",err,(u64)iterator);
+                        // }else {
+                        //     PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
+                        // }
+                        success := FindClose(iter.handle);
+                        iter.handle = INVALID_HANDLE_VALUE;
+                        if(!success){
+                            log("find close failed")
+                            // TODO: Check GetLastError
+                            // err = GetLastError();
+                            // PL_PRINTF("[WinError %lu] FindClose '%llu'\n",err,(u64)iterator);
+                        }
+                        continue;
+                    }
+                }
+                // fprintf(stderr, "%p %p\n", iterator, result);
+                if(equal(data.cFileName.ptr,".") || equal(data.cFileName.ptr,"..")){
+                    continue;
+                }
+                cFileNameLen = strlen(data.cFileName.ptr)
+                if cFileNameLen == 0
+                    continue
+                break;
+            }
+            
+            iter.item.name.clear()
+            
+            if iter.current_dir.size() {
+                if iter.relative_path {
+                    iter.item.name.append(substring(iter.current_dir.sliced(), iter.root.size()+ 1)) // +1 to skip slash
+                } else {
+                    iter.item.name.append(iter.current_dir.sliced())
+                }
+                if iter.item.name.size() > 0
+                    iter.item.name.append("/")
+                iter.item.name.append(data.cFileName.ptr, cFileNameLen)
+            } else {
+                iter.item.name.append(data.cFileName.ptr, cFileNameLen)
+            }
+            #macro MAXDWORD 0xFFFF_FFFFu
+            iter.item.file_size = cast<u64>data.nFileSizeLow+cast<u64>data.nFileSizeHigh*(MAXDWORD+1u);
+            iter.item.last_write_time = cast<u64>data.ftLastWriteTime.dwLowDateTime+cast<u64>data.ftLastWriteTime.dwHighDateTime*(MAXDWORD+1u);
+            
+            iter.item.is_directory = data.dwFileAttributes&cast<i32>FILE_ATTRIBUTE_DIRECTORY;
+
+            for 0..iter.item.name.size() {
+                if iter.item.name.ptr[nr] == '\\'
+                    iter.item.name.data()[nr] = '/';
+            }
+        #elif OS_LINUX
+            file_name: char*;
+            file_name_len: i32;
+
+            entry: linux_dirent64*;
+
+            home_dir: char* = null
+
+            while {
+                if(iter.fd_current_dir < 0){
+                    if(iter.remaining_directories.size()==0){
+                        return null;
+                    }
+                    iter.current_dir.clear();
+                    
+                    dir := iter.remaining_directories.pop_item(0);
+                    defer dir.cleanup();
+                    
+                    Assert(dir.size() != 0)
+
+                    if equal_start("~/",dir.sliced())  {
+                        if !home_dir {
+                            home_dir = FindEnvironmentVar("HOME")
+                            iter.current_dir.append(home_dir)
+                            iter.current_dir.append("/")
+                        }
+                        iter.current_dir.append(substring(dir.sliced(), 2));
+                    } else {
+                        iter.current_dir.append(dir.sliced());
+                    }
+
+                    fd := open(iter.current_dir.data(), O_DIRECTORY)
+
+                    if(fd < 0){
+                        log("Error in 'DitectoryIteratorNext': open(\"",iter.current_dir,"\"), ", name_of_error(fd))
+                        continue;
+                    }
+                    iter.fd_current_dir = fd
+                }
+                
+                if iter.head >= iter.bytes_in_buffer {
+                    iter.bytes_in_buffer = getdents64(iter.fd_current_dir, iter.buffer.ptr, iter.buffer.len)
+                    iter.head = 0
+                    if iter.bytes_in_buffer <= 0 {
+                        if iter.bytes_in_buffer < 0 {
+                            log("getdents64 failed")
+                        }
+                        close(iter.fd_current_dir)
+                        iter.fd_current_dir = -1
+                        continue // end of directory
+                    }
+                }
+
+                entry = cast<linux_dirent64*>iter.buffer.ptr + iter.head
+                iter.head += entry.d_reclen
+
+                file_name = entry.d_name.ptr
+                file_name_len = strlen(entry.d_name.ptr)
+
+                
+                if equal(file_name, ".") || equal(file_name, "..")
+                    continue
+                if file_name_len == 0
+                    continue // impossible?
+
+                break;
+            }
+            
+            iter.item.name.clear()
+            
+            if iter.current_dir.size() {
+                if iter.relative_path {
+                    iter.item.name.append(substring(iter.current_dir.sliced(), iter.root.size() + 1)) // +1 to skip slash
+                } else {
+                    iter.item.name.append(iter.current_dir.sliced())
+                }
+                if iter.item.name.size() > 0
+                    iter.item.name.append("/")
+                iter.item.name.append(file_name, file_name_len)
+            } else {
+                iter.item.name.append(file_name, file_name_len)
+            }
+
+            // log(file_name)
+
+            file_info: stat;
+            res := stat(iter.item.name.sliced().ptr, &file_info)
+
+            // std_print_any(&file_info, true)
+
+            // safe_ptr: char* = cast<char*>&safe;
+            // for 0..32 {
+            //     log(cast<i32>safe_ptr[nr*4]," ",cast<i32>safe_ptr[nr*4+1]," ",cast<i32>safe_ptr[nr*4+2]," ",cast<i32>safe_ptr[nr*4+3])
+            // }
+
+            if res >= 0 {
+                iter.item.file_size = file_info.st_size
+                iter.item.last_write_time = file_info.st_mtime * 1000_000_000u + file_info.st_mtime_nsec
+            }
+            
+            iter.item.is_directory = (entry.d_type & cast<u8>DT_DIR) != 0
+        #else
+            incomplete
+        #endif
+        
+        if(iter.item.is_directory){
+            next_dir: StringBuilder
+            if iter.root.size() != 0 && iter.relative_path {
+                next_dir.append(iter.root)
+                next_dir.append("/")
+            }
+            next_dir.append(iter.item.name)
+            iter.remaining_directories.add(next_dir);
+        }
+
+        return &iter.item;
+    }
+    fn skip() {
+         if m_iter == null
+            return;
+        
+        if m_iter.remaining_directories.size()
+            m_iter.remaining_directories.pop()
+    }
+
+    fn cleanup() {
+        if m_iter == null
+            return;
+        
+        #if OS_WINDOWS
+            if m_iter.handle != INVALID_HANDLE_VALUE {
+                yes := FindClose(m_iter.handle)
+                if !yes {
+                    // TODO: Handle error
+                }
+            }
+        #elif OS_LINUX
+            if m_iter.fd_current_dir != -1 {
+                yes := close(m_iter.fd_current_dir)
+                if yes < 0 {
+                    // TODO: Handle error   
+                }
+            }
+        #else
+            incomplete
+        #endif
+        
+        m_iter.cleanup()
+
+        AllocateHeap(0, m_iter)
+        _directory_iterators.ptr[m_iter.index] = null
+        m_iter = null
+    }
+}
+
+fn CreateDirIterator(root_path: char[], relative_path: bool = true) -> DirIterator {
     if root_path.len == 0 
-        return DirIterator.INVALID // empty path not okay
+        return { null } // empty path not okay
     
     index: i32 = -1
     for 0.._directory_iterators.size() {
@@ -474,271 +764,21 @@ fn DirectoryIteratorCreate(root_path: char[]) -> DirIterator {
     }
     
     iter := _directory_iterators.get(index)
+    iter.index = index
+    iter.relative_path = relative_path
     
     iter.root.append(root_path)
     iter.remaining_directories.add(iter.root.copy())
     #if OS_WINDOWS
-    iter.handle = INVALID_HANDLE_VALUE
+        iter.handle = INVALID_HANDLE_VALUE
     #elif OS_LINUX
-    iter.fd_current_dir = -1
-    iter.head = 0
+        iter.fd_current_dir = -1
+        iter.head = 0
     #else
-    incomplete
+        incomplete
     #endif
     
-    return InternalToIterator(cast<i64>index)
-}
-fn DirectoryIteratorDestroy(iterator: DirIterator) {
-    if iterator == DirIterator.INVALID
-        return;
-    index := IteratorToInternal(iterator)
-    iter := _directory_iterators.get(index)
-    
-    #if OS_WINDOWS
-    if iter.handle != INVALID_HANDLE_VALUE {
-        yes := FindClose(iter.handle)
-        if !yes {
-            // TODO: Handle error
-        }
-    }
-    #elif OS_LINUX
-    if iter.fd_current_dir != -1 {
-        yes := close(iter.fd_current_dir)
-        if yes < 0 {
-            // TODO: Handle error   
-        }
-    }
-    #else
-    incomplete
-    #endif
-    
-    iter.cleanup()
-
-    AllocateHeap(0, iter)
-    _directory_iterators.ptr[index] = null
-}
-fn DirectoryIteratorNext(iterator: DirIterator, out_item: DirIteratorItem**, relative_path: bool = false) -> bool {
-    if iterator == DirIterator.INVALID
-        return false
-    index := IteratorToInternal(iterator)
-    iter := _directory_iterators.get(index)
-    
-    #if OS_WINDOWS
-    data: WIN32_FIND_DATAA
-    cFileNameLen: i32
-    while {
-        if(iter.handle==INVALID_HANDLE_VALUE){
-            if(iter.remaining_directories.size()==0){
-                return false;
-            }
-            iter.current_dir.clear();
-            
-            dir := iter.remaining_directories.pop_item(0); defer dir.cleanup()
-            
-            if(dir.size()!=0){
-                iter.current_dir.append(dir.sliced());
-            }
-            
-            temp: StringBuilder = iter.current_dir.copy();
-            if(temp.size())
-                temp.append("\\");
-            
-            temp.append("*");
-            handle: HANDLE = INVALID_HANDLE_VALUE;
-            handle = FindFirstFileA(temp.data(),&data);
-            
-            if(handle==INVALID_HANDLE_VALUE){
-                log("find first file failed")
-                // DWORD err = GetLastError();
-                // PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
-                continue;
-            }
-            iter.handle = handle;
-        }else{
-            success := FindNextFileA(iter.handle,&data);
-            if(!success){
-                // TODO: Check GetLastError
-                // DWORD err = GetLastError();
-                // if(err == ERROR_NO_MORE_FILES){
-                //     // PL_PRINTF("[WinError %u] No files '%lu'\n",err,(u64)iterator);
-                // }else {
-                //     PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
-                // }
-                success := FindClose(iter.handle);
-                iter.handle = INVALID_HANDLE_VALUE;
-                if(!success){
-                    log("find close failed")
-                    // TODO: Check GetLastError
-                    // err = GetLastError();
-                    // PL_PRINTF("[WinError %lu] FindClose '%llu'\n",err,(u64)iterator);
-                }
-                continue;
-            }
-        }
-        // fprintf(stderr, "%p %p\n", iterator, result);
-        if(equal(data.cFileName.ptr,".") || equal(data.cFileName.ptr,"..")){
-            continue;
-        }
-        cFileNameLen = strlen(data.cFileName.ptr)
-        if cFileNameLen == 0
-            continue
-        break;
-    }
-    
-    iter.item.name.clear()
-    
-    if iter.current_dir.size() {
-        if relative_path {
-            iter.item.name.append(substring(iter.current_dir.sliced(), iter.root.size()+ 1)) // +1 to skip slash
-        } else {
-            iter.item.name.append(iter.current_dir.sliced())
-        }
-        if iter.item.name.size() > 0
-            iter.item.name.append("/")
-        iter.item.name.append(data.cFileName.ptr, cFileNameLen)
-    } else {
-        iter.item.name.append(data.cFileName.ptr, cFileNameLen)
-    }
-    #macro MAXDWORD 0xFFFF_FFFFu
-    iter.item.file_size = cast<u64>data.nFileSizeLow+cast<u64>data.nFileSizeHigh*(MAXDWORD+1u);
-    iter.item.last_write_time = cast<u64>data.ftLastWriteTime.dwLowDateTime+cast<u64>data.ftLastWriteTime.dwHighDateTime*(MAXDWORD+1u);
-    
-    iter.item.is_directory = data.dwFileAttributes&cast<i32>FILE_ATTRIBUTE_DIRECTORY;
-
-    for 0..iter.item.name.size() {
-        if iter.item.name[nr] == '\\'
-            iter.item.name.data()[nr] = '/';
-    }
-    #elif OS_LINUX
-
-    file_name: char*;
-    file_name_len: i32;
-
-    entry: linux_dirent64*;
-
-    home_dir: char* = null
-
-    while {
-        if(iter.fd_current_dir < 0){
-            if(iter.remaining_directories.size()==0){
-                return false;
-            }
-            iter.current_dir.clear();
-            
-            dir := iter.remaining_directories.pop_item(0);
-            defer dir.cleanup();
-            
-            Assert(dir.size() != 0)
-
-            if equal_start("~/",dir.sliced())  {
-                if !home_dir {
-                    home_dir = FindEnvironmentVar("HOME")
-                    iter.current_dir.append(home_dir)
-                    iter.current_dir.append("/")
-                }
-                iter.current_dir.append(substring(dir.sliced(), 2));
-            } else {
-                iter.current_dir.append(dir.sliced());
-            }
-
-            fd := open(iter.current_dir.data(), O_DIRECTORY)
-
-            if(fd < 0){
-                log("Error in 'DitectoryIteratorNext': open(\"",iter.current_dir,"\"), ", name_of_error(fd))
-                continue;
-            }
-            iter.fd_current_dir = fd
-        }
-        
-        if iter.head >= iter.bytes_in_buffer {
-            iter.bytes_in_buffer = getdents64(iter.fd_current_dir, iter.buffer.ptr, iter.buffer.len)
-            iter.head = 0
-            if iter.bytes_in_buffer <= 0 {
-                if iter.bytes_in_buffer < 0 {
-                    log("getdents64 failed")
-                }
-                close(iter.fd_current_dir)
-                iter.fd_current_dir = -1
-                continue // end of directory
-            }
-        }
-
-        entry = cast<linux_dirent64*>iter.buffer.ptr + iter.head
-        iter.head += entry.d_reclen
-
-        file_name = entry.d_name.ptr
-        file_name_len = strlen(entry.d_name.ptr)
-
-        
-        if equal(file_name, ".") || equal(file_name, "..")
-            continue
-        if file_name_len == 0
-            continue // impossible?
-
-        break;
-    }
-    
-    iter.item.name.clear()
-    
-    if iter.current_dir.size() {
-        if relative_path {
-            iter.item.name.append(substring(iter.current_dir.sliced(), iter.root.size() + 1)) // +1 to skip slash
-        } else {
-            iter.item.name.append(iter.current_dir.sliced())
-        }
-        if iter.item.name.size() > 0
-            iter.item.name.append("/")
-        iter.item.name.append(file_name, file_name_len)
-    } else {
-        iter.item.name.append(file_name, file_name_len)
-    }
-
-    // log(file_name)
-
-    file_info: stat;
-    res := stat(iter.item.name.sliced().ptr, &file_info)
-
-    // std_print_any(&file_info, true)
-
-    // safe_ptr: char* = cast<char*>&safe;
-    // for 0..32 {
-    //     log(cast<i32>safe_ptr[nr*4]," ",cast<i32>safe_ptr[nr*4+1]," ",cast<i32>safe_ptr[nr*4+2]," ",cast<i32>safe_ptr[nr*4+3])
-    // }
-
-    if res >= 0 {
-        iter.item.file_size = file_info.st_size
-        iter.item.last_write_time = file_info.st_mtime * 1000_000_000u + file_info.st_mtime_nsec
-    }
-    
-    iter.item.is_directory = (entry.d_type & cast<u8>DT_DIR) != 0
-
-    #else
-    incomplete
-    #endif
-    
-    if(iter.item.is_directory){
-        next_dir: StringBuilder
-        if iter.root.size() != 0 && relative_path {
-            next_dir.append(iter.root)
-            next_dir.append("/")
-        }
-        next_dir.append(iter.item.name)
-        iter.remaining_directories.add(next_dir);
-    }
-
-    if out_item ;
-        *out_item = &iter.item
-
-    return true;
-}
-fn DirectoryIteratorSkip(iterator: DirIterator) {
-    if iterator == DirIterator.INVALID
-        return;
-    index := IteratorToInternal(iterator)
-    iter := _directory_iterators.get(index)
-    
-    if iter.remaining_directories.size()
-        iter.remaining_directories.pop()
+    return { iter }
 }
 fn GetWorkingDirectory() -> StringBuilder {
     #if OS_WINDODWS
@@ -949,13 +989,14 @@ fn FindFile(path: char[], search_env_path: bool = false, recursive: bool = false
 
     // log("root ",root, ", file ",file_name)
     for dirs.sliced_unsafe() {
-        iter := DirectoryIteratorCreate(it.sliced())
-        defer DirectoryIteratorDestroy(iter)
-        item: DirIteratorItem*;
-        while DirectoryIteratorNext(iter, &item) {
+        iter := CreateDirIterator(it.sliced())
+        defer iter.cleanup()
+        while {
+            item := iter.next()
+            if !item   break
             if item.is_directory {
                 if find("/.",item.name.sliced()) != -1 || !recursive
-                    DirectoryIteratorSkip(iter)
+                    iter.skip()
             }
             // log(item.name, " == ", file_name)
             yes := equal_end(file_name.sliced(), item.name.sliced())

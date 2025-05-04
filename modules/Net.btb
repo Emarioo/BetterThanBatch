@@ -46,7 +46,7 @@ enum NetHandlerResponse {
 struct NetEvent {
 	type: EventType;
 	who: ConnectionID; // only server
-	bytes: char[];
+	bytes: u8[];
     handler_response: NetHandlerResponse;
     handler_byte_count: i32; // used with NET_HANDLER_EXACT_MORE_BYTES to tell Server/Client that exactly this much data is needed
                              // if user specified NET_HANDLER_EXACT_MORE_BYTES or NET_HANDLER_SOME_MORE_BYTES then Server/Client
@@ -224,7 +224,7 @@ struct Server {
                         if protocol & NET_PROTO_MESSAGE {
                             header: MessageHeader
 
-                            bytes = connection.socket.recv(cast<void*>&header, sizeof header, 0)
+                            bytes = connection.socket.recv(cast<void*>&header, sizeof header)
 
                             if bytes == 0 {
                                 break // graceful shutdown
@@ -269,12 +269,13 @@ struct Server {
                             }
                             total_bytes := 0
                             while total_bytes != header.length {
-                                bytes = connection.socket.recv(connection.message_data + total_bytes, header.length - total_bytes, 0)
+                                bytes = connection.socket.recv(connection.message_data + total_bytes, header.length - total_bytes)
                                 if bytes <= 0
                                     break
                                 total_bytes += bytes
                                 server.m_received_bytes += bytes
                             }
+                            bytes = total_bytes
                         } else {
                             
                             // TODO: resize message buffer if message_max - byte_offset is to small. Like less than 25% of the original.
@@ -291,7 +292,7 @@ struct Server {
                                 size = connection.message_max - byte_offset
                             }
                             // log("recv..")
-                            bytes = connection.socket.recv(connection.message_data + byte_offset, size, 0)
+                            bytes = connection.socket.recv(connection.message_data + byte_offset, size)
 
                             if bytes > 0
                                 server.m_received_bytes += bytes
@@ -324,7 +325,8 @@ struct Server {
                         if connection.server.m_event_callback {
                             connection.event.type = EVENT_RECEIVE
                             connection.event.who = connection.conn_id
-                            connection.event.bytes = Slice<char>{connection.message_data, byte_offset + bytes}
+                            connection.event.bytes.ptr = cast<void*>connection.message_data
+                            connection.event.bytes.len = byte_offset + bytes
                             connection.event.handler_response = NET_HANDLER_ACCEPT
                             connection.event.handler_byte_count = byte_offset
                             
@@ -542,20 +544,20 @@ struct Server {
 
             header: MessageHeader
             header.length = bytes.len * sizeof (*bytes.ptr)
-            err := connection.socket.send(cast<void*>&header, sizeof header, 0)
+            err := connection.socket.send(cast<void*>&header, sizeof header)
             if err < 0 {
                 log("server send header failed")
                 return NET_FAILURE
             }
             m_sent_bytes += sizeof header
-            err = connection.socket.send(cast<void*>bytes.ptr, header.length, 0)
+            err = connection.socket.send(cast<void*>bytes.ptr, header.length)
             if err < 0 {
                 log("server send body failed")
                 return NET_FAILURE
             }
             m_sent_bytes += header.length
         } else {
-            err := connection.socket.send(cast<void*>bytes.ptr, size, 0)
+            err := connection.socket.send(cast<void*>bytes.ptr, size)
             if err < 0 {
                 log("server send stream failed")
                 return NET_FAILURE
@@ -639,11 +641,12 @@ struct Client {
         hints.ai_protocol  = IPPROTO_TCP
 
         string_port: StringBuilder
+        defer string_port.cleanup()
         string_port.append(port)
         
-        addr_err := getaddrinfo(ip.ptr, string_port.ptr, &hints, &result)
+        addr_err := getaddrinfo(m_ip.ptr, string_port.ptr, &hints, &result)
         if addr_err != 0 {
-            log("getaddrinfo failed")
+            log("getaddrinfo failed ip: ", ip.ptr," port:", string_port.ptr)
             return NET_BAD_IP
         }
         err := m_socket.connect(result.ai_addr, sizeof (*result.ai_addr))
@@ -681,7 +684,7 @@ struct Client {
                 if client.m_protocol & NET_PROTO_MESSAGE {
                     header: MessageHeader
 
-                    bytes := client.m_socket.recv(cast<void*>&header, sizeof header, 0)
+                    bytes := client.m_socket.recv(cast<void*>&header, sizeof header)
 
                     if bytes == 0 {
                         break // graceful shutdown
@@ -722,7 +725,7 @@ struct Client {
                     read_bytes = 0
                     while header.length != read_bytes {
                         // log("read ",read_bytes," len ",header.length)
-                        bytes = client.m_socket.recv(client.m_message_data + read_bytes, header.length - read_bytes, 0)
+                        bytes = client.m_socket.recv(client.m_message_data + read_bytes, header.length - read_bytes)
                         // log("bytes ",bytes, " read ", read_bytes," len ",header.length)
                         if bytes <= 0
                             break
@@ -734,7 +737,7 @@ struct Client {
                         // log("extra read again ", bytes, " read ",read_bytes, "len ",header.length)
                     }
                 } else {
-                    read_bytes = client.m_socket.recv(client.m_message_data, client.m_message_max, 0)
+                    read_bytes = client.m_socket.recv(client.m_message_data, client.m_message_max)
                     if read_bytes > 0
                         client.m_received_bytes += read_bytes
                 }
@@ -761,7 +764,8 @@ struct Client {
                     e: NetEvent
                     e.type = EVENT_RECEIVE
                     e.who = 0
-                    e.bytes = Slice<char>{client.m_message_data,read_bytes}
+                    e.bytes.ptr = cast<void*>client.m_message_data
+                    e.bytes.len = read_bytes
                     client.m_event_callback(&e, client.m_user_data)
                 }
                 // std_prints("[READ ", read_bytes,"]")
@@ -814,20 +818,20 @@ struct Client {
 
             header: MessageHeader
             header.length = size
-            err := m_socket.send(cast<void*>&header, sizeof header, 0)
+            err := m_socket.send(cast<void*>&header, sizeof header)
             if err < 0 {
                 // log("send header failed1")
                 return NET_FAILURE
             }
             m_sent_bytes += sizeof header
-            err = m_socket.send(cast<void*>bytes.ptr, header.length, 0)
+            err = m_socket.send(cast<void*>bytes.ptr, header.length)
             if err < 0 {
                 // log("send body failed2")
                 return NET_FAILURE
             }
             m_sent_bytes += header.length
         } else {
-            err := m_socket.send(cast<void*>bytes.ptr, size, 0)
+            err := m_socket.send(cast<void*>bytes.ptr, size)
             if err < 0 {
                 // log("send stream failed")
                 return NET_FAILURE

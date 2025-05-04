@@ -12,6 +12,9 @@
 #elif OS_LINUX
 #import "Linux"
 #endif
+#import "StackTrace"
+
+#macro PI 3.14159265358979
 
 fn @intrinsic sqrt(v: f32) -> f32;
 fn @intrinsic round(v: f32) -> f32;
@@ -40,8 +43,9 @@ fn ceil(v: f32) -> f32 { // TODO: Intrinsic
 #else
     #load "libc.so.6" as Dummy
 #endif
-fn @import(Dummy) sinf(v: f32) -> f32
-fn @import(Dummy) cosf(v: f32) -> f32
+fn @import(Dummy, alias="sinf") sin(v: f32) -> f32
+fn @import(Dummy, alias="cosf") cos(v: f32) -> f32
+fn @import(Dummy, alias="tanf") tan(v: f32) -> f32
 
 fn random64() -> u64 {
 #if OS_WINDOWS
@@ -153,7 +157,7 @@ fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
     h3: u32 = 0x10325476
     h4: u32 = 0xC3D2E1F0
 
-    ml: u64 = message.len * 8u // message length in bits
+    ml: u64 = message.len * 8 // message length in bits
 
     // ##########################################
     //  Pre-processing of chunk and data length
@@ -161,10 +165,10 @@ fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
     
     data_size := message.len
     data_size += 1 // wiki: "append the bit '1' to the message"
-    mod := data_size % 64u // wiki: "append 0 ≤ k < 512 bits '0', such that the resulting message length in bits is congruent to −64 ≡ 448 (mod 512)"
-    if mod < 56u {
+    mod := data_size % 64 // wiki: "append 0 ≤ k < 512 bits '0', such that the resulting message length in bits is congruent to −64 ≡ 448 (mod 512)"
+    if mod < 56 {
         data_size += 56 - mod
-    } else if mod > 56u {
+    } else if mod > 56 {
         data_size += 56 + 64 - mod
     }
     data_size += 8 // wiki: "append ml, the original message length in bits"
@@ -211,8 +215,8 @@ fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
     // ##################
     words: u32[80]; // words
     w := words.ptr
-    chunk_index: u32 = 0 // 512-bit chunk
-    while chunk_index < data_size / 64u { // data_size (bytes) / 64 (512 bits)
+    chunk_index: i32 = 0 // 512-bit chunk
+    while chunk_index < data_size / 64 { // data_size (bytes) / 64 (512 bits)
         defer chunk_index++
 
         // TODO: Optimize with SIMD, there is also an alternative
@@ -220,7 +224,7 @@ fn hash_sha1(message: Slice<char>, out_digest: Slice<u8>*) {
 
         // Load chunk data into words and switch endian?
         for 0..16 {
-            w[nr] = to_le(data[chunk_index * 16u + nr])
+            w[nr] = to_le(data[chunk_index * 16 + nr])
         }
         for 16..80 {
             i := nr
@@ -508,23 +512,12 @@ fn pow(x: i64, y: i64) -> i64 {
     return res
 }
 
+// ########################
+//    Vector operations
+// ########################
 struct vec2 {
     x: f32;
     y: f32;
-
-    // methods don't work on pushed values
-    // fn length() {}
-}
-struct vec3 {
-    x: f32;
-    y: f32;
-    z: f32;
-}
-struct vec4 {
-    x: f32;
-    y: f32;
-    z: f32;
-    w: f32;
 }
 operator +(a: vec2, b: vec2) -> vec2 {
     return vec2{a.x + b.x, a.y + b.y}
@@ -541,12 +534,224 @@ operator *(b: f32, a: vec2) -> vec2 {
 operator /(a: vec2, b: f32) -> vec2 {
     return vec2{a.x / b, a.y / b}
 }
-fn length(a: vec2) {
+
+struct vec3 {
+    x: f32;
+    y: f32;
+    z: f32;
+}
+
+operator +(a: vec3, b: vec3) -> vec3 {
+    return {a.x + b.x, a.y + b.y, a.z + b.z}
+}
+operator -(a: vec3, b: vec3) -> vec3 {
+    return {a.x - b.x, a.y - b.y, a.z - b.z}
+}
+operator *(a: vec3, b: f32) -> vec3 {
+    return {a.x * b, a.y * b, a.z * b}
+}
+operator *(b: f32, a: vec3) -> vec3 {
+    return {a.x * b, a.y * b, a.z * b}
+}
+operator /(a: vec3, b: f32) -> vec3 {
+    return {a.x / b, a.y / b, a.z / b}
+}
+
+struct vec4 {
+    x: f32;
+    y: f32;
+    z: f32;
+    w: f32;
+}
+
+operator +(a: vec4, b: vec4) -> vec4 {
+    return {a.x + b.x, a.y + b.y, a.z + b.z,  a.w + b.w}
+}
+operator -(a: vec4, b: vec4) -> vec4 {
+    return {a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w}
+}
+operator *(a: vec4, b: f32) -> vec4 {
+    return {a.x * b, a.y * b, a.z * b, a.w * b}
+}
+operator *(b: f32, a: vec4) -> vec4 {
+    return {a.x * b, a.y * b, a.z * b, a.w * b}
+}
+operator /(a: vec4, b: f32) -> vec4 {
+    return {a.x / b, a.y / b, a.z / b, a.w / b}
+}
+
+
+// #################
+//     3D MATH
+// ################
+
+struct mat4 {
+    v: f32[16];
+}
+
+operator *(a: mat4, b: mat4) -> mat4 {
+    t: mat4
+    for col : 0..4 {
+        for row : 0..4 {
+            t.v[col * 4 + row] = a.v[0*4 + row] * b.v[col * 4 + 0] +
+                a.v[1*4 + row] * b.v[col * 4 + 1] +
+                a.v[2*4 + row] * b.v[col * 4 + 2] +
+                a.v[3*4 + row] * b.v[col * 4 + 3]
+        }
+    }
+    return t
+}
+
+fn distance(a: vec2) -> f32 {
     return sqrt(a.x*a.x + a.y*a.y)
 }
-fn length2(a: vec2) {
+fn distance2(a: vec2) -> f32 {
     return a.x*a.x + a.y*a.y
 }
+fn dot(a: vec2, b: vec2) -> f32 {
+    return a.x * b.x + a.y * b.y
+}
+fn normalize(a: vec2) -> vec2 {
+    d := sqrt(a.x*a.x + a.y*a.y)
+    return { a.x / d, a.y / d }
+}
+
+fn distance(a: vec3) -> f32 {
+    return sqrt(a.x*a.x + a.y*a.y + a.z*a.z)
+}
+fn distance2(a: vec3) -> f32 {
+    return a.x*a.x + a.y*a.y + a.z*a.z
+}
+fn dot(a: vec3, b: vec3) -> f32 {
+    return a.x * b.x + a.y * b.y + a.z * b.z
+}
+fn normalize(a: vec3) -> vec3 {
+    d := sqrt(a.x*a.x + a.y*a.y + a.z*a.z)
+    return { a.x / d, a.y / d, a.z / d }
+}
+
+fn mat4_identity() -> mat4 {
+    m: mat4
+    m.v[0] = 1
+    m.v[5] = 1
+    m.v[10] = 1
+    m.v[15] = 1
+    return m
+}
+fn translate(m: mat4, v: vec3) -> mat4 {
+    t := mat4_identity()
+    t.v[12] = v.x
+    t.v[13] = v.y
+    t.v[14] = v.z
+    
+    m = m * t
+
+    return m
+}
+fn scale(m: mat4, v: vec3) -> mat4 {
+    t: mat4
+    t.v[0] = v.x
+    t.v[5] = v.y
+    t.v[10] = v.z
+    t.v[15] = 1
+
+    m = m * t
+
+    return t
+}
+// angle in radians
+fn rotate(axis: vec3, angle: f32) -> mat4 {
+    x := axis.x
+    y := axis.y
+    z := axis.z
+    c := cos(angle)
+    s := sin(angle)
+    m := mat4_identity()
+
+    m.v[0] = c + x*x*(1-c)
+    m.v[1] = y*x*(1-c) + z*s
+    m.v[2] = z*x*(1-c) - y*s
+
+    m.v[4] = x*y*(1-c) - z*s
+    m.v[5] = c + y*y*(1-c)
+    m.v[6] = z*y*(1-c) + x*s
+
+    m.v[8] = x*z*(1-c) + y*s
+    m.v[9] = y*z*(1-c) - x*s
+    m.v[10] = c + z*z*(1-c)
+
+    return m
+}
+
+fn inverse(m: mat4) -> mat4 {
+    b00 := m.v[0] * m.v[5] - m.v[1] * m.v[4]
+    b01 := m.v[0] *m.v[6] - m.v[2] * m.v[4]
+    b02 := m.v[0] * m.v[7] - m.v[3] * m.v[4]
+    b03 := m.v[1] *m.v[6] - m.v[2] * m.v[5]
+    b04 := m.v[1] * m.v[7] - m.v[3] * m.v[5]
+    b05 := m.v[2] * m.v[7] - m.v[3] *m.v[6]
+
+    b06 := m.v[8] * m.v[13] - m.v[9] * m.v[12]
+    b07 := m.v[8] * m.v[14] - m.v[10] * m.v[12]
+    b08 := m.v[8] * m.v[15] - m.v[11] * m.v[12]
+    b09 := m.v[9] * m.v[14] - m.v[10] * m.v[13]
+    b10 := m.v[9] * m.v[15] - m.v[11] * m.v[13]
+    b11 := m.v[10] * m.v[15] - m.v[11] * m.v[14]
+
+    det := b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06
+
+    if det == 0 {
+        return {} // Singular matrix, return identity or error
+    }
+    
+    invDet := 1.0 / det
+
+    mat: mat4
+    mat.v[0] = (m.v[5] * b11 -m.v[6] * b10 + m.v[7] * b09) * invDet
+    mat.v[1] = (-m.v[1] * b11 + m.v[2] * b10 - m.v[3] * b09) * invDet
+    mat.v[2] = (m.v[13] * b05 - m.v[14] * b04 + m.v[15] * b03) * invDet
+    mat.v[3] = (-m.v[9] * b05 + m.v[10] * b04 - m.v[11] * b03) * invDet
+
+    mat.v[4] = (-m.v[4] * b11 +m.v[6] * b08 - m.v[7] * b07) * invDet
+    mat.v[5] = (m.v[0] * b11 - m.v[2] * b08 + m.v[3] * b07) * invDet
+    mat.v[6] = (-m.v[12] * b05 + m.v[14] * b02 - m.v[15] * b01) * invDet
+    mat.v[7] = (m.v[8] * b05 - m.v[10] * b02 + m.v[11] * b01) * invDet
+
+    mat.v[8] = (m.v[4] * b10 - m.v[5] * b08 + m.v[7] * b06) * invDet
+    mat.v[9] = (-m.v[0] * b10 + m.v[1] * b08 - m.v[3] * b06) * invDet
+    mat.v[10] = (m.v[12] * b04 - m.v[13] * b02 + m.v[15] * b00) * invDet
+    mat.v[11] = (-m.v[8] * b04 + m.v[9] * b02 - m.v[11] * b00) * invDet
+
+    mat.v[12] = (-m.v[4] * b09 + m.v[5] * b07 -m.v[6] * b06) * invDet
+    mat.v[13] = (m.v[0] * b09 - m.v[1] * b07 + m.v[2] * b06) * invDet
+    mat.v[14] = (-m.v[12] * b03 + m.v[13] * b01 - m.v[14] * b00) * invDet
+    mat.v[15] = (m.v[8] * b03 - m.v[9] * b01 + m.v[10] * b00) * invDet
+    return mat
+}
+
+// fov in radians
+fn make_perspective(fov: f32, aspect: f32, near: f32, far: f32) -> mat4 {
+    f := 1 / tan(fov / 2)
+    m: mat4;
+    m.v[0] = aspect * f
+    m.v[5] = f
+    m.v[10] = (far + near) * (near - far)
+    m.v[11] = -1
+    m.v[14] = (2 * far * near) / (near - far)
+    return m
+}
+// yaw and pitch in radians
+// yaw (side to side), pitch (up and down)
+fn make_view_matrix(pos: vec3, yaw: f32, pitch: f32) -> mat4 {
+    return inverse(
+        translate(mat4_identity(), pos) *
+        rotate({0,1,0}, yaw) *
+        rotate({1,0,0}, pitch))
+}
+
+// ########################
+//     EXTRA FUNCTIONS
+// ########################
 
 // a box collides with b box (aabb collision detection)
 fn collides(pos_a: vec2, size_a: vec2, pos_b: vec2, size_b: vec2) -> bool {

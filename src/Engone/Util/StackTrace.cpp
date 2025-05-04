@@ -119,6 +119,12 @@ void PopLastCallback() {
     handler->traces.back().funcs.pop_back();
 #endif
 }
+void EnableAssertHandler(bool yes) {
+#ifdef ENABLE_ASSERT_HANDLER
+    DEF_HANDLER
+    handler->is_printing = !yes;
+#endif
+}
 void FireAssertHandler() {
 #ifdef ENABLE_ASSERT_HANDLER
     using namespace engone;

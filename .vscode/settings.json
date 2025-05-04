@@ -95,6 +95,7 @@
         "unistd.h": "c",
         "glfw3.h": "c",
         "xuartps.h": "c",
-        "coroutine": "cpp"
+        "coroutine": "cpp",
+        "stdio.h": "c"
     }
 }

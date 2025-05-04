@@ -235,7 +235,7 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
         // }
         
         implMem.offset = offset;
-        if(member.array_length)
+        if(member.array_length > 0)
             offset += size * member.array_length;
         else
             offset += size;
@@ -2384,7 +2384,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 
                 if(iden->type == Identifier::MEMBER_VARIABLE) {
                     auto& mem = currentAstFunc->parentStruct->members[iden->memberIndex];
-                    if (mem.array_length) {
+                    if (mem.array_length > 0) {
                         TypeId type = iden->versions_typeId[info.currentPolyVersion];
 
                         Assert(type.getPointerLevel() < 3);
@@ -2633,9 +2633,21 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             bool printedError = false;
             auto ti = checkType(scopeId, stmp->asmTypeString, expr->location, &printedError);
             if (ti.isValid()) {
-                if(outTypes)
-                    outTypes->add(ti);
-                stmp->versions_asmType.set(currentPolyVersion, ti);
+                TypeInfo* typeinfo = ast->getTypeInfo(ti);
+                if(typeinfo->astStruct) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("Inline assembly cannot return a struct, only primitive values. Go annoy the developer on discord to fix this (he was lazy and needs to pay for it).")
+                        ERR_LINE2(expr->location,"bad")
+                    )
+                    if(outTypes)
+                        outTypes->add(TYPE_VOID);
+                    return SIGNAL_FAILURE;
+                } else {
+                    if(outTypes)
+                        outTypes->add(ti);
+                    stmp->versions_asmType.set(currentPolyVersion, ti);
+                }
             } else {
                 if(!printedError){
                     ERR_SECTION(
@@ -3031,7 +3043,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 }
                 if(tempTypes.size()>0) {
                     rightType = tempTypes[0];
-                    operatorArgs.add(tempTypes[0]);
+                operatorArgs.add(tempTypes[0]);
                 }
             }
             // TODO: Optimize operator overload check. checkExpression executes in 250 ms where checking operator overloading is responsible for 100 ms. If we could optimize then we may run checkExpression in 150 + 20 ms instead. The key is a fast determination of whether expression is operator overloaded.
@@ -3195,7 +3207,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     auto outtype = lsize > rsize ? leftType : rightType;
                     if(AST::IsSigned(leftType) || AST::IsSigned(rightType)) {
                         if(!AST::IsSigned(outtype))
-                            outtype._infoIndex0 += 4;
+                            outtype.union_primtive = (PrimitiveType)(outtype.union_primtive+4);
                         Assert(AST::IsSigned(outtype) && AST::IsInteger(outtype));
                     }
                     outTypes->add(outtype);
@@ -3478,27 +3490,6 @@ SignalIO TyperContext::checkFunctionSignature(ASTFunction* func, FuncImpl* funcI
 
     if(outTypes && funcImpl->signature.returnTypes.size()==0){
         outTypes->add(TYPE_VOID);
-    }
-    
-    if (func->callConvention == UNIXCALL) {
-        int fcount = 0;
-        int ncount = 0;
-        for(int i = 0; i < funcImpl->signature.argumentTypes.size();i++) {
-            auto& arg = funcImpl->signature.argumentTypes[i];
-            if(AST::IsDecimal(arg.typeId)) {
-                fcount++;
-            } else {
-                ncount++;
-            }
-        }
-        if(fcount > 4) {
-            ERR_SECTION(
-                ERR_HEAD2(func->location)
-                ERR_MSG_COLORED("The compiler does not support "<<log::LIME << " 4 "<<log::NO_COLOR << " floats with @unixcall (Sys V ABI calling convention). Decrease amount of float arguments by putting them in a struct and passing a pointer or annoy the developer to fix this.")
-                ERR_LINE2(func->location, "too many floats for unixcall")
-            )
-            return SIGNAL_FAILURE;
-        }
     }
     
     return SIGNAL_SUCCESS;
@@ -4254,12 +4245,16 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             varinfo->declaration = now;
         }
         if (varname.arrayLength>0 && now->globalDeclaration){
-            ERR_SECTION(
-                ERR_HEAD2(now->location)
-                ERR_MSG("Global arrays have not been implemented.")
-                ERR_LINE2(now->location, "here")
-            )
-            return SIGNAL_FAILURE;
+            TypeInfo* arrTypeInfo = ast->getTypeInfo(now->varnames.last().versions_assignType[currentPolyVersion]);
+            int element_size = ast->getTypeSize(arrTypeInfo->getMember(1).typeId.baseType());
+            
+            int offset = info.ast->aquireGlobalSpace(varname.arrayLength * element_size);
+            varinfo->versions_array_dataOffset.set(currentPolyVersion, offset);
+            compiler->lock_miscellaneous.lock();
+            compiler->runtime_global_data_fixups.add({now->varnames.last().identifier->versions_dataOffset[currentPolyVersion],
+                now->varnames.last().identifier->versions_array_dataOffset[currentPolyVersion]});
+            compiler->lock_miscellaneous.unlock();
+            ast->globals_to_evaluate.add({now, scope->scopeId});
         }
         // Array initializer list
         if(now->arrayValues.size()!=0) {
@@ -4421,7 +4416,13 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
         if(now->type == ASTStatement::CONTINUE || now->type == ASTStatement::BREAK){
             // nothing
         } else if(now->type == ASTStatement::BODY || now->type == ASTStatement::DEFER){
+            bool prev = do_not_check_global_globals;
+            if (now->computeWhenPossible) {
+                // In a 
+                do_not_check_global_globals = false;
+            }
             SignalIO result = checkRest(now->firstBody);
+            do_not_check_global_globals = prev;
         } else if(now->type == ASTStatement::EXPRESSION){
             checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             // if(tempTypes.size()==0)
@@ -5191,10 +5192,8 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     defer {
         info.currentContentOrder.pop();
     };
-
     // Check global declarations
     for(int contentOrder=0;contentOrder<scope->content.size();contentOrder++){
-        
         if(scope->content[contentOrder].spotType!=ASTScope::STATEMENT)
             continue;
 
@@ -5205,7 +5204,23 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
             GlobalRunDirective rundir{};
             rundir.statement = now;
             rundir.scope = scope->scopeId;
+            // log::out << "Add run directive\n";
             compiler->global_run_directives.add(rundir);
+            if(!is_initial_import){
+                // We need to type check run directives after globals are evaluated
+                // Right now we type check the import scope elsewhere including run directives but
+                // in the future we might not and therefore need to type check them here again (i'm leaving addTask_type_body commented out for the future)
+                if(now->firstBody) {
+                    // compiler->addTask_type_body(now->firstBody->scopeId, -1);
+                } else {
+                    // compiler->addTask_type_stmt(now, -1);
+                    // ERR_SECTION(
+                    //     ERR_HEAD2(now->location)   
+                    //     ERR_MSG("Wrap expression in curly braces. Compile time execution at top level wants a scope which is made from curly braces.")
+                    //     ERR_LINE2(now->location, "here")
+                    // )
+                }
+            }
             continue;
         }
 
@@ -5244,13 +5259,16 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler, bool is_i
     info.compiler->compile_stats.errors += info.errors;
 }
 
-void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope) {
+void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_impl, ASTScope* import_scope, bool is_initial_scope) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     TyperContext info = {};
     info.init_context(compiler);
     
+    Assert(import_scope || ast_func);
+
     info.do_not_check_global_globals = true;
+    info.is_initial_import = is_initial_scope;
     
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 
@@ -5274,6 +5292,41 @@ void TypeCheckBody(Compiler* compiler, ASTFunction* ast_func, FuncImpl* func_imp
     info.compiler->compile_stats.errors += info.errors;
     // return info.errors;
 }
+
+// void TypeCheckBody(Compiler* compiler, ASTStatement* stmt) {
+//     using namespace engone;
+//     ZoneScopedC(tracy::Color::Purple4);
+//     TyperContext info = {};
+//     info.init_context(compiler);
+    
+//     info.do_not_check_global_globals = true;
+//     // info.is_initial_import = is_initial_scope;
+    
+//     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
+
+//     // log::out << "Check " << ast_func->name<<"\n";
+
+//     // Check rest will go through scopes and create polymorphic implementations if necessary.
+//     // This includes structs and functions.
+    
+//     info.checkRest
+//     if(import_scope) {
+//         auto result = info.checkRest(import_scope);
+//     }
+
+//     info.do_not_check_global_globals = false;
+
+//     if(ast_func && ast_func->body) {
+//         // 1. ast_func may be nullptr if no main function was specified, the global scope is the main function if so.
+//         // 2. Native, imported or intrinsic functions does not have bodies and we cannot and should not check them.
+//         // log::out << "check "<<ast_func->name<<"\n";
+//         auto result = info.checkFunctionScope(ast_func, func_impl);
+//     }
+
+//     info.compiler->compile_stats.errors += info.errors;
+//     // return info.errors;
+// }
+
 void TyperContext::init_context(Compiler* compiler) {
     this->compiler = compiler;
     ast = compiler->ast;

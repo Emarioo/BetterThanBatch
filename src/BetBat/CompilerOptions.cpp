@@ -39,7 +39,11 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
     for(int i=0;i<commands.size();i++){
         const std::string& arg = commands[i];
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
-        if(arg == "--help" || arg == "-help" || arg == "-?") {
+        if(arg == "-v" || arg == "--version") {
+            options->quit = true;
+            print_version();
+            return true;
+        } else if(arg == "--help" || arg == "-h" || arg == "-help" || arg == "-?") {
             options->quit = true;
             print_help();
             return true;
@@ -84,6 +88,8 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
             }
         } else if (arg == "--debug" || arg == "-d") {
             options->useDebugInformation = true;
+        } else if (arg == "--nodebug" || arg == "-nd") {
+            options->useDebugInformation = false;
         } else if (arg == "--qemu-gdb" || arg == "-qd") {
             options->debug_qemu_with_gdb = true;
             if(i+1 < commands.size() && commands[i+1][0] >= '0' && commands[i+1][0] <= '9') {
@@ -198,7 +204,7 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
             options->disable_preload = true;
         } else {
             if(arg[0] == '-') {
-                log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
+                log::out << log::RED << "Invalid argument '"<<arg<<"' (see --help)\n";
                 invalidArguments = true;
             } else {
                 // arg = argv[i];

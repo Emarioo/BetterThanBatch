@@ -342,12 +342,30 @@ struct ExternalRelocation {
     int library_index=-1;
     int tinycode_index=0;
     int pc=0;
+    FunctionSignature* signature{};
     
     ExternalRelocationType type = BC_REL_FUNCTION;
 };
 struct BytecodePrintCache {
     int prev_tinyindex = -1;
     int prev_line = -1;
+};
+struct BytecodeASM {
+    u32 start = 0; // points to raw inline assembly
+    u32 end = 0; // exclusive
+    u32 iStart = 0; // points to raw instructions
+    u32 iEnd = 0; // exclusive
+    bool generated = false;
+    
+    u32 lineStart = 0;
+    u32 lineEnd = 0;
+    std::string file;
+    
+    struct ExternalNamedReloc {
+        std::string name; // name of function/symbol
+        u32 textOffset; // where to modify
+    };
+    DynamicArray<ExternalNamedReloc> relocations{}; // comes from prepare_assembly
 };
 struct Bytecode;
 typedef u32 TinyBytecodeID;
@@ -369,6 +387,7 @@ struct TinyBytecode {
     FuncImpl* funcImpl = nullptr;
     DynamicArray<TryBlock> try_blocks{};
     DynamicArray<int> required_asm_instances; // x64 gen needs to know what inline assembly to generate
+    int asm_index=-1;
 
     // bool is_used_as_function_pointer = false; // used in x64 gen for enabling/disabling callee saved registers
 
@@ -404,6 +423,8 @@ struct TinyBytecode {
         try_blocks.resize(0);
         funcImpl = nullptr;
     }
+    
+    std::unordered_map<int, FunctionSignature*> pc_signature_map{};
 };
 struct BytecodeLocation {
     TinyBytecodeID id; // id-1 to get index
@@ -465,24 +486,8 @@ struct Bytecode {
 
     QuickArray<char> rawInlineAssembly;
     QuickArray<u8> rawInstructions; // modified when passed converter
-    struct ASM {
-        u32 start = 0; // points to raw inline assembly
-        u32 end = 0; // exclusive
-        u32 iStart = 0; // points to raw instructions
-        u32 iEnd = 0; // exclusive
-        bool generated = false;
-        
-        u32 lineStart = 0;
-        u32 lineEnd = 0;
-        std::string file;
-        
-        struct ExternalNamedReloc {
-            std::string name; // name of function/symbol
-            u32 textOffset; // where to modify
-        };
-        DynamicArray<ExternalNamedReloc> relocations{}; // comes from prepare_assembly
-    };
-    DynamicArray<ASM> asmInstances;
+    
+    DynamicArray<BytecodeASM> asmInstances;
     int add_assembly(const char* text, int len, const std::string& file, int line_start, int line_end);
 
     // usually a function like main
@@ -497,7 +502,7 @@ struct Bytecode {
     
     // Relocation for external functions
     DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type);
+    void addExternalRelocation(const std::string& name,int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type, FunctionSignature* signature);
 
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;

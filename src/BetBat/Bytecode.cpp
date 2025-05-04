@@ -46,13 +46,14 @@ bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index, 
     exportedFunctions.last().tinycode_index = tinycode_index;
     return true;
 }
-void Bytecode::addExternalRelocation(const std::string& name, int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type){
+void Bytecode::addExternalRelocation(const std::string& name, int library_index, int tinycode_index, int pc, ExternalRelocationType rel_type, FunctionSignature* signature){
     ExternalRelocation tmp{};
     tmp.name = name;
     tmp.library_index = library_index;
     tmp.tinycode_index = tinycode_index;
     tmp.pc = pc;
     tmp.type = rel_type;
+    tmp.signature = signature;
     externalRelocations.add(tmp);
 }
 void Bytecode::cleanup(){
@@ -1052,7 +1053,7 @@ const char* instruction_names[] {
     "ptr_to_params",
     "jmp", // BC_JMP
     "call", // BC_CALL
-    "call_reg", // BC_CALL
+    "call_reg", // BC_CALL_REG
     "ret", // BC_RET
     "jnz", // BC_JNZ
     "jz", // BC_JZ
@@ -1128,7 +1129,7 @@ BCInstructionInfo instruction_contents[256] {
 
     { 5, BASE_imm32 },                         // BC_JMP,
     { 7, BASE_link | BASE_call | BASE_imm32 }, // BC_CALL
-    { 4, BASE_op1 | BASE_link | BASE_call }, // BC_CALL
+    { 4, BASE_op1 | BASE_link | BASE_call }, // BC_CALL_REG TODO: There should be no link convention
     { 1, BASE_NONE },                          // BC_RET,
     { 6, BASE_op1 | BASE_imm32 },              // BC_JNZ,
     { 6, BASE_op1 | BASE_imm32 },              // BC_JZ,
@@ -1344,6 +1345,31 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         log::out << log::GRAY << " " << buf << log::PURPLE << " " << opcode;
         log::out << log::NO_COLOR;
         
+        if(instruction_contents[opcode].type & BASE_op1) {
+            op0 = (BCRegister)instructions[pc];
+            if(!(op0 >= 0 && op0 < BC_REG_MAX)) {
+                log::out << " BUGGED\n";
+                pc += instruction_contents[opcode].size;
+                continue;
+            }
+        }
+        if(instruction_contents[opcode].type & BASE_op2) {
+            op1 = (BCRegister)instructions[pc+1];
+            if(!(op1 >= 0 && op1 < BC_REG_MAX)) {
+                log::out << " BUGGED\n";
+                pc += instruction_contents[opcode].size;
+                continue;
+            }
+        }
+        if(instruction_contents[opcode].type & BASE_op3) {
+            op2 = (BCRegister)instructions[pc+2];
+            if(!(op2 >= 0 && op2 < BC_REG_MAX)) {
+                log::out << " BUGGED\n";
+                pc += instruction_contents[opcode].size;
+                continue;
+            }
+        }
+
         switch(opcode) {
         case BC_HALT: break;
         case BC_NOP: break;
@@ -1351,7 +1377,6 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_MOV_RR: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
-            
             log::out << " " << register_names[op0] << ", " << register_names[op1];
         } break;
         case BC_MOV_RM:
@@ -1562,6 +1587,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_LNOT: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             
             log::out << " "<<register_names[op0] <<", "<< register_names[op1];
         } break;

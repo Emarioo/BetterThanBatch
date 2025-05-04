@@ -217,4 +217,4 @@ while list.iterate(&iterator) {
 }
 ```
 
-**DISCLAIMER:** You cannot iterate in reverse (@rev) yet. I am not sure what is the best way to do it. Either an extra method `iterate_reverse` or an extra argument to iterate `iterate(iter: Iter*, reverse: bool = false)`. I don't want both because it means more work for mainting it. It may not be a lot of work but if all features have multiple ways of doings things then it will eventually become a lot of work. Keep it minimalistic while I can.
+**DISCLAIMER:** You cannot iterate in reverse (@rev) yet. I am not sure what is the best way to do it. Either an extra method `iterate_reverse` or an extra argument to iterate `iterate(iter: Iter*, reverse: bool = false)`. Having both is unnecessary, keepings minimalistic with fundamental features you can expand upon is important.

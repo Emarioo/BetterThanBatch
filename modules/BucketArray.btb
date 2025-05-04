@@ -47,8 +47,8 @@ struct BucketArray_Bucket {
 struct BucketArrayIterator<T> {
     index: i32 = -1;
 	started_at_index: i32 = -1;
-    ptr: T* = null;
-    fn reset() { index = -1; ptr = null; }
+    value: T* = null;
+    fn reset() { index = -1; value = null; }
 };
 struct BucketArray<T> {
     // constructor does nothing except remember the variable
@@ -95,7 +95,9 @@ struct BucketArray<T> {
 		}
 		m_valueCount = 0;
     }
-    
+    fn add(value: T) -> T*, i32 {
+		return add(&value)
+	}
     // @return Index where element is. -1 if something failed.
     // @param value A pointer to the value of the new element. Note that a memcpy occurs. Value can be null for zero initialized data.
     // @param outElement A pointer to the newly added element. Optional.
@@ -335,6 +337,7 @@ struct BucketArray<T> {
         return m_buckets_max * m_valuesPerBucket;
     }
 	
+    // fn create_iterator() -> BucketArrayIterator<T> {
     fn create_iterator(start_at_index: i32 = -1) -> BucketArrayIterator<T> {
 		iter: BucketArrayIterator<T>
 		iter.started_at_index = start_at_index
@@ -369,11 +372,11 @@ struct BucketArray<T> {
 			if (!yes)
 				continue;
 
-			iterator.ptr = cast<T*>bucket.getValue(valueIndex, sizeof T, m_valuesPerBucket);
+			iterator.value = cast<T*>bucket.getValue(valueIndex, sizeof T, m_valuesPerBucket);
 			return true;
 		}
 		iterator.index = -1;
-		iterator.ptr = null;
+		iterator.value = null;
 		return false;
 	}
 	fn iterate_reverse(iterator: BucketArrayIterator<T>*) -> bool {
@@ -408,11 +411,11 @@ struct BucketArray<T> {
 			if (!yes)
 				continue;
 
-			iterator.ptr = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+			iterator.value = cast<T*>bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
 			return true;
 		}
 		iterator.index = -1;
-		iterator.ptr = null;
+		iterator.value = null;
 		return false;
 	}
 

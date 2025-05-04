@@ -81,7 +81,7 @@ bin/inline_asm.asm:3: Error: no such instruction: `eae'
 bin/inline_asm.asm:5: Error: no such instruction: `hoiho eax,9'
 
 */
-void ReformatAssemblerError(LinkerChoice linker, Bytecode::ASM& asmInstance, QuickArray<char>& inBuffer, int line_offset) {
+void ReformatAssemblerError(LinkerChoice linker, BytecodeASM& asmInstance, QuickArray<char>& inBuffer, int line_offset) {
     using namespace engone;
     // Assert(!outBuffer); // not implemented
     

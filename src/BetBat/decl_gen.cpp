@@ -65,6 +65,11 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
     for(int i=0;i<upper_raw_name.size();i++)
         ((char*)upper_raw_name.data())[i] = upper_raw_name[i] & ~32;
     std::string decl_path_no_ext = lib_path.substr(0,dot) + "_decl";
+    if(decl_path_no_ext.size() > strlen("lib_decl") && decl_path_no_ext.substr(0,3) == "lib") {
+        // If we have "libsound.so" then we get "libsound_decl.h"
+        // hence we remove "lib"
+        decl_path_no_ext = decl_path_no_ext.substr(3);
+    }
     
     std::string text_btb{};
     std::string text_c{};

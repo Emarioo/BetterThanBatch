@@ -357,28 +357,24 @@
 // General macro for all syscalls
 #macro SYSCALL(NAME, RETURN_TYPE, ...)
 
-fn @unixcall @blank NAME( SYSCALL_args(...) ) -> RETURN_TYPE {
-    asm {
-        push rbp // 16-byte align, I assume syscalls require that
-        // sub rsp, 40
+fn @unixcall @asm NAME( SYSCALL_args(...) ) -> RETURN_TYPE {
+    push rbp // 16-byte align, I assume syscalls require that
+    // sub rsp, 40
 
-        // parameters and return values have already been set
-        mov r10, rcx // 4th argument is passed through r10, not rcx
-        mov eax, SYS_ ## NAME
-        syscall
+    // parameters and return values have already been set
+    mov r10, rcx // 4th argument is passed through r10, not rcx
+    mov eax, SYS_ ## NAME
+    syscall
 
-        pop rbp
-        // add rsp, 40
-        ret
-    }
+    pop rbp
+    // add rsp, 40
+    ret
 }
 #endmacro
 #macro SYSCALL_VOID(NAME, ...)
-fn @unixcall @blank NAME( SYSCALL_args(...) ) {
-    asm {
-        mov eax, SYS_ ## NAME
-        syscall
-    }
+fn @unixcall @asm NAME( SYSCALL_args(...) ) {
+    mov eax, SYS_ ## NAME
+    syscall
 }
 #endmacro
 #macro SYSCALL_args(X,...) X, SYSCALL_args(...)
@@ -513,7 +509,7 @@ fn @import(LibC) freeaddrinfo(res: addrinfo*);
 global @import(LibC) environ: char**;
 
 
-#load "pthread" as pthreads
+#load "libpthread.so.0" as pthreads
 
 // #macro pthread_t u64
 struct pthread_t {

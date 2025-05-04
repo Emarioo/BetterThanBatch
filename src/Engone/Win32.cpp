@@ -639,84 +639,6 @@ namespace engone {
 		}
 		return true;
 	}
-#define DEBUG_PLATFORM_ERROR(x) x
-	// #define DEBUG_PLATFORM_ERROR(x)
-    
-	static const int PLATFORM_ERROR_BUFFER = 3;
-	static PlatformError s_platformErrors[PLATFORM_ERROR_BUFFER];
-	static int s_errorIn = 0;
-	static int s_errorOut = 0;
-	static bool s_platformErrorEmpty = true;
-	bool PollError(PlatformError* out){
-		if(s_errorIn==s_errorOut){
-            // if(s_errorIn==(s_errorOut+1)%PLATFORM_ERROR_BUFFER){
-			DEBUG_PLATFORM_ERROR(printf("PlatformError: empty, in:%d out:%d\n",s_errorIn, s_errorOut);)
-                // empty
-                return false;
-		}
-		*out = s_platformErrors[s_errorOut];
-		s_errorOut = (s_errorOut+1)%PLATFORM_ERROR_BUFFER;
-		if(s_errorIn==s_errorOut)
-			s_platformErrorEmpty=true;
-		DEBUG_PLATFORM_ERROR(printf("PlatformError: poll %d, new out: %d\n",out->errorType,s_errorOut);)
-            return true;
-	}
-	bool PushError(PlatformError* error){
-		if(s_errorIn==s_errorOut){
-            // if(s_errorOut==(s_errorIn+1)%PLATFORM_ERROR_BUFFER){
-			DEBUG_PLATFORM_ERROR(printf("PlatformError: full, in:%d, out:%d\n",s_errorIn, s_errorOut);)
-                return false; // full
-		}
-		s_platformErrorEmpty=false;
-		s_platformErrors[s_errorIn] = *error;
-		s_errorIn = (s_errorIn+1)%PLATFORM_ERROR_BUFFER;
-		DEBUG_PLATFORM_ERROR(printf("PlatformError: push %d, new out: %d\n",error->errorType,s_errorIn);)
-            return false;
-	}
-	void ClearErrors(){
-		s_errorIn = 0;
-		s_errorOut = 0;
-	}
-    
-	void TestPlatformErrors(){
-		PlatformError e1 = {1,""};
-		PlatformError e2 = {2,""};
-		PlatformError e3 = {3,""};
-		PlatformError e4 = {4,""};
-		PlatformError tmp;
-        
-		// Note: Set MAX_PLATFORM_BUFFER to 4 when testing
-        
-		//-- Empty case
-		printf("--- Empty case ---\n");
-		PollError(&tmp);
-		PushError(&e1);
-		PollError(&tmp);
-		PollError(&tmp);
-        
-		ClearErrors();
-        
-		//-- Full case
-		printf("--- Full case ---\n");
-		PushError(&e1);
-		PushError(&e2);
-		PushError(&e3);
-		PushError(&e4);
-		PollError(&tmp);
-		PushError(&e3);
-        
-		ClearErrors();
-		
-		//-- Normal case
-		printf("--- Normal case ---\n");
-		PushError(&e1);
-		PollError(&tmp);
-		PushError(&e2);
-		PushError(&e3);
-		PollError(&tmp);
-        
-		ClearErrors();
-	}
     // struct AllocInfo {
 	// 	std::string name;
 	// 	int count;
@@ -765,8 +687,8 @@ namespace engone {
 	#define ptr_map (*my_ptr_map)
 	static engone::DepthMutex lock_ptr_map{};
 
-	#define ENABLE_PTR_MAP
-	#define ENABLE_PTR_MAP_LOCK
+	// #define ENABLE_PTR_MAP
+	// #define ENABLE_PTR_MAP_LOCK
 
 	#ifdef ENABLE_PTR_MAP_LOCK
 	#define LOCK_PTR_MAP lock_ptr_map.lock();
@@ -779,10 +701,10 @@ namespace engone {
 	// #define ENABLE_MEMORY_CORRUPTION_DETECTION
 
 	int VERIFICATION_SPACING = 0x100;
-	const int SAFE_MEMORY_MAX = 0x100'0000;
+	const int SAFE_MEMORY_MAX = 0x1000'0000;
 	const char VERIFICATION_CHAR = 0x11;
 	u64 VERIFICATION_CHAR64 = 0x1111'1111'1111'1111;
-	const int SAFE_ALLOCATIONS_MAX = 4000; // tweak this as you need
+	const int SAFE_ALLOCATIONS_MAX = 80000; // tweak this as you need
 
 	void* safe_memory = nullptr;
 	u64 safe_memory_max = SAFE_MEMORY_MAX;
@@ -803,6 +725,7 @@ namespace engone {
 		}
 		return -1;
 	}
+	// IMPORTANT: NOT THREAD SAFE!
 	bool VerifyAllocHeap() {
 		u8* ptr = (u8*)safe_memory;
 		ptr += VERIFICATION_SPACING;
@@ -811,18 +734,22 @@ namespace engone {
 			ptr += info->size_plus_align;
 			for(int j=0;j<VERIFICATION_SPACING/8;j++) {
 				if(*(u64*)ptr != VERIFICATION_CHAR64) {
-					Assert(false);
+					
+					EnableAssertHandler(false);
+					Assert(false); // buffer overflow or something bad in the code
 				}
 				ptr += 8;
 			}
 		}
 		return true;
 	}
+	// IMPORTANT: NOT THREAD SAFE!
 	void* AllocHeap(u64 new_bytes, void* ptr, u64 old_bytes) {
 		if(!init_safe_memory) {
 			init_safe_memory = true;
 			// TODO: Allocate pages so that we hopefully recieve an access violation if we write beyond the page.
 			safe_memory = malloc(safe_memory_max);
+			Assert(safe_memory);
 			safe_memory_used = 0;
 			memset(safe_memory, VERIFICATION_CHAR, VERIFICATION_SPACING);
 			safe_memory_used += VERIFICATION_SPACING;
@@ -884,9 +811,8 @@ namespace engone {
 
 		if(new_ptr) {
 			// create verification space
-			int space = 0x100;
-			memset((u8*)safe_memory + safe_memory_used, VERIFICATION_CHAR, space);
-			safe_memory_used += space;
+			memset((u8*)safe_memory + safe_memory_used, VERIFICATION_CHAR, VERIFICATION_SPACING);
+			safe_memory_used += VERIFICATION_SPACING;
 		}
 
 		return new_ptr;
@@ -916,6 +842,8 @@ namespace engone {
 
 		#ifdef ENABLE_PTR_MAP
 		LOCK_PTR_MAP
+		auto pair = ptr_map.find(ptr);
+		Assert(pair == ptr_map.end());
 		ptr_map[ptr] = bytes;
 		UNLOCK_PTR_MAP
 		#endif
@@ -1031,6 +959,24 @@ namespace engone {
 
 		// s_allocStatsMutex.unlock();
 	}
+	
+	
+	void* AllocateExec(int size) {
+		void* ptr = VirtualAlloc(NULL, size, MEM_COMMIT|MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+		if(!ptr) {
+			int err = GetLastError();
+			Assert(ptr);
+		}
+		return ptr;
+	}
+	void FreeExec(void* ptr, int size) {
+		int suc = VirtualFree(ptr, 0, MEM_RELEASE);
+		if(!suc) {
+			int err = GetLastError();
+			Assert(false);
+		}
+	}
+	
 	u64 GetTotalAllocatedBytes(){
 		return s_totalAllocatedBytes;
 	}

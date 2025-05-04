@@ -652,6 +652,31 @@ namespace engone {
 		Assert(s_numberAllocations>=0);
 		// s_allocStatsMutex.unlock();
 	}
+    void* AllocateExec(int size) {
+        int psize = getpagesize();
+        if((size % psize) != 0) {
+            size += psize - (size%psize);
+        }
+		void* ptr = mmap(nullptr, size, PROT_EXEC|PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        if(ptr == MAP_FAILED) {
+            printf("ERROR: %d\n", errno);
+            EnableAssertHandler(false);
+            Assert(("mmap failed",false));
+            return nullptr;
+        }
+		return ptr;
+	}
+	void FreeExec(void* ptr, int size) {
+        int psize = getpagesize();
+        if((size % psize) != 0) {
+            size += psize - (size%psize);
+        }
+		int suc = munmap(ptr, size);
+		if(suc < 0) {
+            printf("ERROR: %d\n", errno);
+			Assert(false);
+		}
+	}
 	u64 GetTotalAllocatedBytes() {
 		return s_totalAllocatedBytes;
 	}

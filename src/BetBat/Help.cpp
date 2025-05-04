@@ -9,6 +9,9 @@ void print_version(){
     CompilerVersion version = CompilerVersion::Current();
     version.serialize(buffer, sizeof(buffer),CompilerVersion::INCLUDE_AVAILABLE);
     log::out << "BTB Compiler, version: " << log::LIME<< buffer <<"\n";
+    if(strlen(GIT_COMMIT) > 0) {
+        log::out << log::GRAY << "git commit: " << GIT_COMMIT << "\n";
+    }
     // log::out << log::GRAY << "(major.minor.patch.revision/name-year.month.day)\n";
     // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)\n";
 }
@@ -113,6 +116,10 @@ void print_help(){
     USAGE("-d,--debug")
     DESC("Will compile with debug information (DWARF). Note that MSVC linker doesn't work with DWARF. You must use g++ or other linker. PDB for Windows is not implemented yet.\n")
     log::out << log::GRAY<<"TODO: -d=DWARF, -d=PDB\n";
+    END
+    
+    USAGE("-nd,--nodebug")
+    DESC("Disables debug info.\n")
     END
     
     USAGE("-qd,--qemu-gdb [port]")

@@ -2,11 +2,15 @@
 # Change Log
 All notable changes to this project will be documented in this file. Every version will not have a release on github but every version that does will be marked.
  
-Versioning for this project works like this: [Versioning](/docs/details/05-Versioning.md).
+Versioning for this project works like this: [Versioning](/docs/details/Versioning.md).
  
 ## v0.2.1 - ...
 
 ### Added
+- Finally implemented global arrays.
+- VM can execute inline assembly.
+- VM can now pass function pointers to C libraries, specificially callbacks for events from GLFW.
+- Support for shebang `#!/bin/btb` in .btb files
 - `set_library_path` to change the path of a library specified with `#load` directive.
 - `@compiler` annotation for functions that interact with the compiler.
 - `#run` directive for compile time execution. You can call operating system functions, read files, allocate memory from heap (temporarily), and calculating data at compile time resulting in a literal at runtime.
@@ -18,9 +22,13 @@ Versioning for this project works like this: [Versioning](/docs/details/05-Versi
 - Added *#function_insert*, see details in guide.
 - Added #fileabs which evaluates to absolute path, #file was changed to evaluate to relative path.
 
-## Bug fixes
+### Changes
+- Changed DirIterator functions in [File.btb](modules/File.btb).
+
+### Bug fixes
 - Graphics.btb module accidently swapped green and blue color values when rendering text (DrawText).
 - STB.btb always linked with dynamic library instead of static library.
+- Fixed bug with macro argument matching of variadic macros.
 
 ### Standard library additions and changes
 - Added std_print for colors (LogColor enum)

@@ -10,17 +10,14 @@
 // read := FileRead(file, mem.ptr, mem.len)
 // std_print(mem)
 
-
-
 #import "File"
 #import "Logger"
 
-iter := DirectoryIteratorCreate("src")
+iter := CreateDirIterator("src")
+defer iter.cleanup()
 
 // how do we test that this works?
 item: DirIteratorItem*
-while DirectoryIteratorNext(iter, &item) {
-    log(item.name.sliced())
+while item = iter.next() {
+    log(item.name)
 }
-
-DirectoryIteratorDestroy(iter)

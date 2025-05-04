@@ -25,6 +25,7 @@ fn std_print(str: char*){
     slice := Slice<char>{str, strlen(str)};
     prints(slice);
 }
+
 // IMPORTANT: This function does not print accurate
 //  floats. It has some precision issues.
 // max_decimals can be used to limit the amount of printed decimals, spamming the terminal is bad
@@ -57,8 +58,10 @@ fn std_print(t: bool){
 }
 fn std_print(t: char[]){
     prints(t);
-    if(t[t.len-1] == '\n')
-        std_print(LOG_NO_COLOR)
+    if t.len > 0 {
+        if t[t.len-1] == '\n'
+            std_print(LOG_NO_COLOR)
+    }
 }
 fn std_print(ptr: char*, len: u64){
     prints(Slice<char>{ptr, len});
@@ -159,9 +162,9 @@ enum LogColor : u8 {
 };
 
 fn std_print(value: LogColor) {
-    if(value == LOG_NO_COLOR)
-        value = LOG_SILVER
     #if OS_WINDOWS
+        if(value == LOG_NO_COLOR)
+            value = LOG_SILVER
         m_consoleHandle := GetStdHandle(STD_OUTPUT_HANDLE);
         // if (m_consoleHandle == NULL) {
 		// 	if (m_consoleHandle == NULL)
