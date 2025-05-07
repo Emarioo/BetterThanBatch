@@ -117,6 +117,8 @@ a:hover {
     box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.5);
     padding: 10px 20px;
     z-index: 1000;
+    height: 4rem;
+    gap: 10px;
 }
 .nav-links {
     display: flex;
@@ -132,19 +134,24 @@ a:hover {
 }
 
 .work-in-progress {
-    // position: absolute;
+    /* position: absolute; */
     top: 0;
     right: 0;
 
     background-color: #d38c12;
     color: white;
-    padding: 5px 15px;
+    padding: 3px 5px 3px 5px;
     font-size: 1rem;
     border-radius: 3px;
     z-index: 1001;
     opacity: 1;
     transition: opacity 1s ease-out;
     pointer-events: none;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3rem;
 }
 .hide-wip {
     opacity: 0;
@@ -175,14 +182,13 @@ a:hover {
 }
 /* Content Area */
 .content {
-    //margin-top: 60px; /* To avoid overlap with fixed navbar */
-    //padding: 20px;
+    margin-top: 4rem;
 }
 
 /* Home Panel */
 .home-panel {
     display: flex;
-    gap: 20px;
+    /* gap: 20px; */
     margin-bottom: 40px;
     padding: 5%;
 }
@@ -190,7 +196,10 @@ a:hover {
 .home-left {
     flex: 1;
 }
-
+.home-buttons {
+    display: flex;
+    gap: 0.5em;
+}
 .home-right {
     flex: 1;
     background: var(--code-background);
@@ -198,7 +207,7 @@ a:hover {
     //border-radius: 3px;
 }
 
-/* Buttons */
+/* Buttons, i don't remember why i'm callling them 'cto' */
 .cto_button {
     border: none;
     display: inline-block;
@@ -207,6 +216,7 @@ a:hover {
     border-radius: 5px;
     cursor: pointer;
     transition: background-color 0.2s;
+    text-align: center;
 }
 .cto_download {
     background-color: var(--download-background);
@@ -214,6 +224,12 @@ a:hover {
 
 }
 .cto_guide {
+    /* flex and center so that the text is centered when cto_download has extra
+      text under it (could not fetch release) height of download button will grow
+      in height and so will guide button so we need to center it */
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: var(--guide-background);
     color: var(--guide-text-color);
 }

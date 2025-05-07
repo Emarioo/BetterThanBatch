@@ -1,31 +1,7 @@
-/*
-    Useful code, may not be used.
-    Remove later if it's not.
-*/
-
-
-function update_download_link() {
-    let link = document.getElementsByClassName("cto_download")[0]
-    if(link == undefined)
-        return;
-    let os = navigator.platform.toLowerCase()
-    let url = "https://github.com/Emarioo/BetterThanBatch/releases/download/v0.2.0"
-    if (os.includes("win")) {
-        link.href = url + "/btb-0.2.0-win_x64.zip"
-        link.target = ""
-    }
-    if (os.includes("linux")) {
-        link.href = url + "/btb-0.2.0-linux_x64.tar.gz"
-        link.target = ""
-    }
-    if (os.includes("mac")) {
-        link.innerHTML = "Download BTB <br> (not available on macOS)"
-        link.style = "text-align: center"
-    }
-}
 
 window.onload = function() {
-    update_download_link()
+    // nocheckin Determine whether server gave us an updated release or not. (happens if latest release was cached)
+    insert_latest_release()
     
     // TODO: Temporary
     /*
@@ -55,3 +31,73 @@ function rand_rgb() {
     return rgbToHex(rand(min, max),rand(min, max),rand(min, max), rand(alpha_min,alpha_max));
 }
 
+async function insert_latest_release() {
+    let download = document.getElementsByClassName("cto_download")[0]
+
+    let failed_fetch_msg = "<b>Github Releases</b><br>(could not fetch latest release)"
+
+    let data = null
+    try {
+        let res = await fetch("/api/latest_release")
+        if (!res.ok) {
+            console.log(error)
+            download.innerHTML = failed_fetch_msg
+            return
+        }
+        data = await res.text()
+        data = JSON.parse(data)
+    } catch(error) {
+        console.log("ERROR: Could not fetch information for latest release", error)
+        download.innerHTML = failed_fetch_msg
+        return
+    }
+    // console.log(data)
+
+    if (data.version.length > 1 && data.version[0] == 'v' && parseInt(data.version[1]) != NaN)
+        data.version = data.version.substring(1)
+
+    let home_buttons = document.getElementsByClassName("home-buttons")[0]
+    let home_left = document.getElementsByClassName("home-left")[0]
+
+    let parser = new DOMParser()
+    let version = parser.parseFromString('<p>Latest version: <a target="_blank" href="'+data.url+'"><b>'+data.version+'</b></a> ('+data.date+')</p>', "text/html").body.firstChild
+
+    btb_downloads = []
+    for (let i=0;i<data.downloads.length;i++) {
+        // skip .vsix
+        if(data.downloads[i].includes("btb") && (data.downloads[i].includes(".zip") || data.downloads[i].includes(".tar.gz")))
+            btb_downloads.push(data.downloads[i])
+    }
+
+    function find_os_version(name) {
+        for (let i=0;i<btb_downloads.length;i++) {
+            if(btb_downloads[i].includes(name))
+                return btb_downloads[i] 
+        }
+        return null
+    }
+
+    let os = navigator.platform
+    let url = null
+    if (os.toLowerCase().includes("win")) {
+        url = find_os_version("win")
+    }
+    if (os.toLowerCase().includes("linux")) {
+        url = find_os_version("linux")
+    }
+    if (os.toLowerCase().includes("mac")) {
+        url = find_os_version("mac")
+    }
+    if (url) {
+        download.innerHTML = "<b>Download BTB</b>"
+        download.href = url
+        download.target = ""
+    } else {
+        download.innerHTML = "<b>Github Releases</b> <br> (not available on "+os+")"
+    }
+    // console.log(download)
+    // console.log(version)
+    // home_buttons.appendChild(download);
+    home_buttons.insertBefore(download, home_buttons.children[home_buttons.children.length-1]);
+    home_left.insertBefore(version, home_left.children[home_left.children.length-2]);
+}

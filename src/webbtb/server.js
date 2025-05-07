@@ -4,11 +4,13 @@
     Looks fine in VSCode or on GitHub could be converted to crazy stuff with whole sections italicized and invalid links.
 */
 
-const PORT = 8080;
+// const PORT = 8080;
+const PORT = 80;
 const PORT_HTTPS = 8081;
 const stats_path = "stats.json"
 
-const DISABLE_HTTPS = false;
+// const DISABLE_HTTPS = false;
+const DISABLE_HTTPS = true;
 
 const http = require("http");
 const https = require("https");
@@ -87,7 +89,9 @@ function is_path_sanitized(filename) {
     }
     return true;
 }
-function requestListener(req, res) {
+async function requestListener(req, res) {
+    // TODO: Rate limit
+
     var root = "public/";
     let url_split = req.url.split("?")
     let base_part = url_split[0];
@@ -101,7 +105,7 @@ function requestListener(req, res) {
         res.end()
         return;
     }
-    
+
     let options = {};
     if(url_split.length>1){
         // TODO: Error handling
@@ -116,9 +120,34 @@ function requestListener(req, res) {
         }
         // console.log("opts:",options)
     }
+
+    if(req.method != "GET") {
+        res.writeHead(404);
+        res.end()
+        return
+    }
+
+    if(base_part == "/api/latest_release") {
+        data = await getLatestRelease()
+        if (data == null) {
+            data = "";
+        }
+
+        const jsondata = JSON.stringify(data)
+        res.writeHead(200, {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(jsondata), // not using jsondata.length because Unicode?
+        })
+        res.end(jsondata)
+        return
+    }
     
     if(base_part == "/") {
         path += "index.html"
+        // nocheckin If latest release is cached and up to date then modify index.html with recent
+        // urls and then send to client. Client won't need ask for release then. If they have to
+        // then the download button will "flicker" for a moment because as soon as page loads, it fetches new info and updates UI.
+        // we could do a fade effect on client but why not keep things up to date ey.
     }
     if(base_part == "/guide") {
         path += ".html"
@@ -205,7 +234,7 @@ function requestListener(req, res) {
             ScheduleStatSave()
             return
         } catch (err) {
-            if (err.errno == -2) {
+            if (err.code == 'ENOENT') {
                 console.log("File '" + path + "' not found")
             } else {
                 console.error(err);
@@ -917,3 +946,127 @@ function ConvertMDToHTML(data) {
 // console.log(ConvertMDToHTML("no \n```\nyes\ndude!\n```\n haha"))
 // console.log(ConvertMDToHTML("okay *lier* bro"))
 // console.log(ConvertMDToHTML("yes\n# okay dude\nhey bro"))
+
+// returns null on failure
+async function fetchReleases() {
+    return JSON.parse(fs.readFileSync("test_release_data.json", {encoding:'utf8'})) // dummy data when testing
+
+    let url = "https://api.github.com/repos/Emarioo/BetterThanBatch/releases"
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.log("ERROR: When fetching '",url,"' HTTP status:", response.status)
+            return null
+        }
+        const data = await response.json()
+        console.log("DEBUG: Fetched ", data.length, " bytes of release data from Github API")
+        return data
+    } catch (error) {
+        console.log("ERROR: Fetching releases:", error)
+    }
+    return null
+}
+
+const local_cached_release_data_path = "cached_release_data.json"
+let cached_release_data = null
+const cached_release_data_refresh_time_ms = 30 * 60 * 1000
+let cached_release_data_fetch_time_ms = 0
+
+// May return null if could fetch data from Github API or if Github API release data fields changed.
+async function getLatestRelease() {
+    // nocheckin What about multiple connections trying to call us here?
+
+    if (cached_release_data == null) {
+        // No data at all -> read from file
+        if (fs.existsSync(local_cached_release_data_path)) {
+            try {
+                const cached_release_data_text = fs.readFileSync(local_cached_release_data_path, {encoding:'utf8'})
+                cached_release_data = JSON.parse(cached_release_data_text)
+            } catch (error) {
+                console.log("ERROR: Cannot read from '", local_cached_release_data_path, "' even though it exists! ",error)
+            }
+            if (cached_release_data != null) {
+                try {
+                    cached_release_data_fetch_time_ms = fs.statSync(local_cached_release_data_path).mtimeMs
+                } catch (error) {
+                    console.log("ERROR: Cannot statSync '", local_cached_release_data_path, "' even though it exists and we read file data! ", error)
+                    cached_release_data_fetch_time_ms = Date.now()
+                }
+            }
+        }
+    }
+    const cache_is_old = (Date.now() - cached_release_data_fetch_time_ms) > cached_release_data_refresh_time_ms
+    if (cached_release_data == null || cache_is_old) {
+        // No data in file or cached data too old -> actually fetch this time
+        let data = await fetchReleases()
+        if (data == null) {
+            // error already printed
+            return null // user gets not data :(
+        } else {
+            cached_release_data = data
+            cached_release_data_fetch_time_ms = Date.now()
+            // try {
+            //     fs.writeFileSync(local_cached_release_data_path, JSON.stringify(data), {encoding:'utf8'})
+            // } catch(error) {
+            //     console.log("ERROR: Cannot write '",local_cached_release_data_path,"'!", error)
+            // }
+        }
+    }
+
+    // success, we have up-to-date cached data at this point
+
+    // parse information we want
+    if(typeof(cached_release_data) == Array) {
+        console.log("ERROR: Cached data is not an array, ",typeof(cached_release_data))
+        return null
+    }
+    let latest_data = null;
+    /*{
+        version:      "v1.0.0",
+        url:       "https://github.com/Emarioo/BetterThanBatch/releases/tag/v0.2.0",
+        date:      "2025-05-07",
+        downloads: ["https://github.com/Emarioo/BetterThanBatch/releases/download/v0.2.0/btb-0.2.0-win_x64.zip"],
+    };*/
+
+    let latest_ms = 0
+    for(let i=0;i<cached_release_data.length;i++) {
+        let rel = cached_release_data[i]
+        if (!(rel["name"] && (rel["name"].toLowerCase().includes("btb") || rel["name"].toLowerCase().includes("compiler"))))
+            // not a compiler release (eg. script interpreter)
+            continue
+        if (!rel["published_at"]) 
+            continue
+        if (rel["draft"] || rel["prerelease"]) 
+            continue
+
+        let tim = new Date(rel["published_at"])
+        if (latest_ms > tim.getUTCMilliseconds())
+            continue
+
+        let data = {
+            version: null,
+            url: null,
+            date: null,
+            downloads: [],
+        }
+    
+        if(!rel["tag_name"] || !rel["html_url"])
+            continue
+        
+        data.version = rel["tag_name"]
+        data.url = rel["html_url"]
+        data.date = tim.getUTCFullYear() + "-" + (""+(tim.getUTCMonth()+1)).padStart(2, "0") + "-" + (""+tim.getUTCDate()).padStart(2, "0")
+        
+        if(rel["assets"]) {
+            for (let j=0;j<rel["assets"].length;j++) {
+                let asset = rel["assets"][j]
+                if (asset["browser_download_url"])
+                    data.downloads.push(asset["browser_download_url"])
+            }
+        }
+
+        latest_ms = tim.getUTCMilliseconds()
+        latest_data = data
+    }
+    return latest_data
+}
