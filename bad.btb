@@ -1,0 +1,517 @@
+
+#import "File"
+#import "Logger"
+#import "String"
+#import "Asserts"
+#import "Graphics"
+#import "Math"
+#import "OS"
+
+
+struct Renderer {
+    /*###################
+    #     FIELDS        #
+    ###################*/
+
+    base_shader: i32;
+    proj: mat4;
+    loc_transform: i32;
+    loc_proj: i32;
+
+    model: Model;
+
+    /*#####################
+    #     METHODS         #
+    #####################*/
+
+    // fn setup(assets_path: char[]) {
+    //     /* Load:
+    //             Shaders
+    //             Buffers
+    //             Assets
+    //     */
+
+    //     // TODO: DO NOT HARDCODE PATHS
+        
+    //     tmp: StringBuilder
+    //     defer tmp.cleanup()
+
+    //     // TODO: Experimenting with macros, should remove in the future
+    //     #macro concat(S,X,...) S.append(X) concat(S, ...)
+    //     #macro concat(S) #endmacro
+
+    //     {
+    //         concat(tmp, assets_path, "/shaders/base.glsl")
+    //         base_shader = LoadShader(tmp)
+    //     }
+
+    //     proj = make_perspective(100*3.145/180, 16/9.0, 0.1, 400)
+    //     loc_transform = glGetUniformLocation(base_shader, "uTransform".ptr)
+    //     loc_proj = glGetUniformLocation(base_shader, "uProj".ptr)
+
+    //     LoadCubeModel(&model)
+
+    //     tmp.cleanup()
+    // }
+
+    // fn render(state: GameState*) {
+    //     glUseProgram(base_shader);
+    //     view := make_view_matrix(state.camera_position, state.camera_position.y, state.camera_rotation.x)
+    //     model_matrix := proj * view
+
+    //     glUniformMatrix4fv(loc_proj, 1, false, &model_matrix)
+    //     for entity : state.entities {
+    //         mat := translate(mat4_identity(), entity.pos)
+    //         glUniformMatrix4fv(loc_transform, 1, false, &mat)
+
+    //         model.vao.draw(&model.ibo)
+    //     }
+
+    //     ProcessSleep(0.005)
+    // }
+}
+
+// fn LoadShader(path: char[]) -> i32 {
+//     filesize: i64
+//     file := FileOpen(path, FILE_READ_ONLY, &filesize)
+//     if !file {
+//         log("Could not open ", path)
+//         Assert(false)
+//     }
+//     defer FileClose(file)
+
+//     text: char[] = { cast<char*>Allocate(filesize), filesize }
+//     FileRead(file, text.ptr, text.len)
+
+//     vert_at := find("#shader vertex", text)
+//     Assert(vert_at != -1)
+//     frag_at := find("#shader fragment", substring(text, vert_at+14))
+//     Assert(frag_at != -1)
+//     frag_at += vert_at + 14
+
+
+//     vertex_text := substring(text, vert_at + 14, frag_at)
+//     vertex_text.ptr[vertex_text.len] = '\0'
+//     fragment_text := substring(text, frag_at + 16)
+//     fragment_text.ptr[fragment_text.len] = '\0'
+
+//     // log("#################")
+//     // log(vertex_text)
+//     // log("#################")
+//     // log(fragment_text)
+//     // log("#################")
+
+//     shader := CreateShaderProgram(vertex_text, fragment_text)
+//     return shader
+// }
+struct VertexBuffer {
+    id: u32;
+    size: i32;
+
+    // fn cleanup() {
+    //     if id != 0
+    //         glDeleteBuffers(1, &id)
+    // }
+    // fn initialized() -> bool { return id != 0 }
+    // fn bind() {
+    //     glBindBuffer(GL_ARRAY_BUFFER, id)
+    // }
+    // fn unbind() {
+    //     glBindBuffer(GL_ARRAY_BUFFER, 0)
+    // }
+
+    // fn setData(in_size: i32, data: void*, offset: i32 = 0) {
+    //     // if id == 0
+    //     //     glGenBuffers(1, &id)
+
+    //     bind()
+    //     if in_size > size {
+    //         // glBufferData(GL_ARRAY_BUFFER, in_size, data, GL_DYNAMIC_DRAW)
+    //         size = in_size
+    //     } else if in_size <= size {
+    //         // if data  glBufferSubData(GL_ARRAY_BUFFER, offset, in_size, data)
+    //     }
+    //     GLCHECK()
+    //     // unbind() // do we want to unbind?
+    // }
+    // fn getData(in_size: i32, data: void*, offset: i32 = 0) {
+    //     if in_size <= 0
+    //         return;
+    //     out_of_bounds := in_size > size
+    //     Assert(out_of_bounds)
+
+    //     bind()
+    //     glGetBufferSubData(GL_ARRAY_BUFFER, offset, in_size, data)
+    //     GLCHECK()
+    //     // unbind() // do we want to unbind
+    // }
+}
+struct IndexBuffer {
+    id: u32;
+    size: i32;
+
+    // fn cleanup() {
+    //     if id != 0
+    //         glDeleteBuffers(1, &id)
+    // }
+    // fn initialized() -> bool { return id != 0 }
+    // fn bind() {
+    //     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id)
+    // }
+    // fn unbind() {
+    //     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
+    // }
+
+    // fn setData(in_size: i32, data: void*, offset: i32 = 0) {
+    //     // if id == 0
+    //     //     glGenBuffers(1, &id)
+
+    //     bind()
+    //     if in_size > size {
+    //         // glBufferData(GL_ELEMENT_ARRAY_BUFFER, in_size, data, GL_DYNAMIC_DRAW)
+    //         size = in_size
+    //     } else if in_size <= size {
+    //         // if data  glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, offset, in_size, data)
+    //     }
+    //     GLCHECK()
+    //     // unbind() // do we want to unbind?
+    // }
+    // fn getData(in_size: i32, data: void*, offset: i32 = 0) {
+    //     if in_size <= 0
+    //         return;
+
+    //     out_of_bounds := in_size > size
+    //     Assert(out_of_bounds)
+
+    //     bind()
+    //     glGetBufferSubData(GL_ELEMENT_ARRAY_BUFFER, offset, in_size, data)
+    //     GLCHECK()
+    //     // unbind() // do we want to unbind
+    // }
+}
+#macro MAX_LOCATIONS 8
+#macro MAX_BUFFERS 2
+struct VertexArray {
+    // id: u32;
+    // totalLocation: i16;
+    // location: i16;
+    // bufferSection: i16;
+    locationSizes: i16[MAX_LOCATIONS]; // 2 * 8 16
+    // strides: i16[MAX_BUFFERS]; // 2*2 4
+    // startLocations: i16[MAX_BUFFERS];//  2*2 4
+
+    // fn cleanup() {
+    //     if id != 0 {
+    //         glDeleteBuffers(1, &id)
+    //     }
+    // }
+    // fn initialized() -> bool { return id != 0 }
+    // fn bind() {
+    //     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, id)
+    // }
+    // fn unbind() {
+    //     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0)
+    // }
+    // fn clear() {
+    //     while bufferSection > 0 {
+    //         bufferSection--
+    //         strides[bufferSection] = 0
+    //         while location > 0 {
+    //             location--
+    //             locationSizes[location] = 0
+    //             glDisableVertexAttribArray(location)
+    //         }
+    //     }
+    //     totalLocation = 0
+    // }
+
+    // fn addAttribute(floatCount: i32) {
+    //     addAtribute(floatCount, 0)
+    // }
+    // fn addAttribute(floatCount: i32, buffer: VertexBuffer*) {
+    //     addAttribute(floatCount, 0, buffer)
+    // }
+    // fn addAttribute(floatCount: i32, divisor: i32) {
+    //     if !id
+    //         glGenVertexArrays(1, &id)
+        
+    //     if location == 8 {
+    //         log("VertexArray::addAtribute limit of 8 locations")
+    //         return;
+    //     }
+    //     locationSizes[totalLocation++] = floatCount + (divisor << 4)
+    //     strides[bufferSection] += floatCount
+    // }
+    // fn addAttribute(floatCount: i32, divisor: i32, buffer: VertexBuffer*) {
+    //     // buffer may be null when using instancing
+    //     // buffer shall not have default value of zero because we want programmer
+    //     // to think about whether they need buffer or not. It's also because of collision when overloading
+
+    //     addAttribute(floatCount, divisor)
+    //     if location == 8
+    //         return; // error already handled
+        
+    //     if buffer   buffer.bind()
+    //     bind()
+
+    //     offset := 0
+    //     startLocations[bufferSection] = location
+    //     while location < totalLocation {
+    //         glEnableVertexAttribArray(location)
+
+    //         size := locationSizes[location] << 4;
+    //         size = size >> 4
+    //         div := locationSizes[location] >> 4
+
+    //         glVertexAttribPointer(location, size, GL_FLOAT, GL_FALSE, strides[bufferSection] * sizeof(f32), cast<void*>cast<i64>(offset * sizeof(f32)))
+    //         if div !=0
+    //             glVertexAttribDivisor(location, div)
+
+    //         offset += locationSizes[location]
+    //         location++
+    //     }
+    //     bufferSection++
+    //     GLCHECK()
+    //     if buffer    buffer.bind() // we should bind here (code in ProjectUnknown does it)
+    //     unbind()
+    // }
+
+    // fn selectBuffer(in_location: i32, buffer: VertexBuffer*) {
+    //     if !id {
+    //         log("VertexArray::selectBuffer - vertex array is NOT initialized")
+    //         return
+    //     }
+    //     if !buffer {
+    //         log("VertexArray::selectBuffer - buffer was null")
+    //         return
+    //     }
+
+    //     buffer.bind()
+    //     bind()
+    //     GLCHECK()
+    //     offset := 0
+    //     section := 0
+    //     while section < MAX_BUFFERS {
+    //         if startLocations[section] >= in_location
+    //             break
+    //         section++
+    //     }
+    //     index := startLocations[section]
+    //     while offset == strides[section] - locationSizes[startLocations[section]] {
+    //         offset += locationSizes[index]
+    //         index++
+    //     }
+    //     while offset < strides[section] {
+    //         size := locationSizes[in_location] << 4
+    //         size = size >> 4
+    //         div := locationSizes[in_location] >> 4
+
+    //         glVertexAttribPointer(in_location, size, GL_FLOAT, GL_FALSE, strides[section] * sizeof(f32), cast<void*>(offset * sizeof(f32)))
+    //         offset += size
+    //         in_location++
+    //     }
+    //     GLCHECK()
+    //     buffer.bind() // buffer is probably an instance buffer which needs to be bound before drawing. I did bind it a few lines up so may not need to bind again. (code from ProjectUnknown not sure what this comment means)
+    //     unbind()
+    // }
+
+    // fn drawPoints(count: i32) {
+    //     if !initialized() {
+	// 		log("VertexArray::drawLines - object is uninitialized!");
+	// 		return;
+	// 	}
+	// 	bind();
+
+	// 	if (bufferSection == 0) {
+	// 		log("VertexArray::drawPoints - You forgot VBO in addAttribute!")
+	// 	}
+	// 	//if (vertexBuffer != nullptr) {
+	// 	//	if (vertexBuffer->id != 0) {
+	// 	//		glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer->id);
+
+	// 	glDrawArrays(GL_POINTS, 0, count);
+	// 	//	}
+	// 	//}
+	// 	//else {
+	// 	//	log::out << log::RED << "VertexArray::drawPoints Must have vertexBuffer when drawing!\n";
+	// 	//}
+	// 	GLCHECK();
+	// 	unbind();
+    // }
+    // fn drawLines(indexBuffer: IndexBuffer*) {
+    //     if !id {
+    //         log("VertexArray::drawLines - array is NOT initialized!")
+    //         return;
+    //     }
+    //     bind()
+    //     if bufferSection == 0 {
+    //         log("VertexArray::drawLines - You forget VBO in addAttribute!\n")
+    //     }
+
+    //     if indexBuffer {
+    //         if indexBuffer.initialized() {
+    //             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer.m_id);
+
+    //             glDrawElements(GL_LINES, indexBuffer.size / sizeof(u32), GL_UNSIGNED_INT, null);
+    //         } else {
+    //             log("VertexArray::drawLines - buffer is uninitialized!")
+    //         }
+    //     } else {
+    //         log("VertexArray::drawLines - Must have indexBuffer when drawing!")
+    //     }
+    //     GLCHECK()
+    //     unbind()
+
+    // }
+    // fn draw(indexBuffer: IndexBuffer*) {
+    //     if (!initialized()) {
+	// 		log("VertexArray::draw - object is uninitialized!");
+	// 		return;
+	// 	}
+	// 	bind();
+
+	// 	if (bufferSection == 0) {
+	// 		log("VertexArray::draw You forgot VBO in addAttribute!");
+	// 	}
+
+	// 	if (indexBuffer != null) {
+	// 		if (indexBuffer.initialized()) {
+	// 			indexBuffer.bind();
+	// 			glDrawElements(GL_TRIANGLES, indexBuffer.size/sizeof(u32), GL_UNSIGNED_INT, null);
+	// 		} else {
+	// 			log("VertexArray::draw - buffer is uninitialized!");
+	// 		}
+	// 	} else {
+	// 		log("VertexArray::draw Must have indexBuffer when drawing!");
+	// 	}
+	// 	GLCHECK();
+	// 	unbind();
+    // }
+    // fn draw(indexBuffer: IndexBuffer*, instanceAmount: i32) {
+    //     if (!initialized()) {
+	// 		log("VertexArray::draw - object is uninitialized!");
+	// 		return;
+	// 	}
+	// 	bind();
+
+	// 	if (indexBuffer != null) {
+	// 		if (indexBuffer.initialized()) {
+	// 			indexBuffer.bind();
+	// 			glDrawElementsInstanced(GL_TRIANGLES, indexBuffer.size / sizeof(u32), GL_UNSIGNED_INT, null, instanceAmount);
+	// 		} else {
+	// 			log("VertexArray::draw - buffer is uninitialized!");
+	// 		}
+	// 	} else {
+	// 		log("VertexArray::draw indexBuffer required when drawing instances!");
+	// 	}
+	// 	GLCHECK();
+	// 	unbind();
+    // }
+
+    // fn drawTriangleArray(vertexCount: i32) {
+    //     if (!initialized()) {
+	// 		log("VertexArray::drawTriangleArray - object is uninitialized!");
+	// 		return;
+	// 	}
+	// 	bind();
+
+	// 	glDrawArrays(GL_TRIANGLES, 0, vertexCount);
+
+	// 	GLCHECK();
+	// 	unbind();
+    // }
+    // fn drawLineArray(vertexCount: i32) {
+    //     if (!initialized()) {
+	// 		log("VertexArray::drawLineArray - object is uninitialized!");
+	// 		return;
+	// 	}
+	// 	bind();
+
+	// 	glDrawArrays(GL_LINES, 0, vertexCount);
+
+	// 	// err := glGetError();
+	// 	// if(err) {
+	// 	// 	log("GLError: ", err, " ", cast<char*>glewGetErrorString(err));DebugBreak();
+	// 	// }
+
+	// 	GLCHECK();
+	// 	unbind();
+    // }
+}
+struct Model {
+    vao: VertexArray; // 12, 
+    // vbo: VertexBuffer; // 8
+    // ibo: IndexBuffer; // 8
+}
+
+fn LoadCubeModel(model: Model*) { @dumpbc
+    *model = {}
+
+    vert: f32[]{
+        // Front face
+        -0.5, -0.5,  0.5,
+        0.5, -0.5,  0.5,
+        0.5,  0.5,  0.5,
+        -0.5,  0.5,  0.5,
+
+        //  Back face
+        0.5, -0.5, -0.5,
+        -0.5, -0.5, -0.5,
+        -0.5,  0.5, -0.5,
+        0.5,  0.5, -0.5,
+
+        //  Left face
+        -0.5, -0.5, -0.5,
+        -0.5, -0.5,  0.5,
+        -0.5,  0.5,  0.5,
+        -0.5,  0.5, -0.5,
+
+        //  Right face
+        0.5, -0.5,  0.5,
+        0.5, -0.5, -0.5,
+        0.5,  0.5, -0.5,
+        0.5,  0.5,  0.5,
+
+        //  Top face
+        -0.5,  0.5,  0.5,
+        0.5,  0.5,  0.5,
+        0.5,  0.5, -0.5,
+        -0.5,  0.5, -0.5,
+
+        //  Bottom face
+        -0.5, -0.5, -0.5,
+        0.5, -0.5, -0.5,
+        0.5, -0.5,  0.5,
+        -0.5, -0.5,  0.5,
+    }
+
+    indices: i32[]{
+        0, 1, 2,  2, 3, 0,  // Front
+        4, 5, 6,  6, 7, 4,  // Back
+        8, 9, 10, 10,11,8,  // Left
+        12,13,14, 14,15,12, // Right
+        16,17,18, 18,19,16, // Top
+        20,21,22, 22,23,20, // Bottom
+    }
+    // temp: char[20]
+    log(vert.len, " ",indices.len)
+    // model.vbo.setData(sizeof(f32) * vert.len, &vert) 
+    log(indices.len)
+    // model.ibo.setData(sizeof(i32) * indices.len, &indices)
+
+    // model.vao.addAttribute(3, null)
+    // model.vao.addAttribute(3, &model.vbo)
+}
+
+fn main() -> i32 { @dumpbc
+    model: Model* = Allocate(sizeof(Model));
+    // model: Model;
+    // temp: Model;
+    // model = temp
+    // *model = {}
+
+    construct(model)
+    LoadCubeModel(model)
+    log("End?")
+    return 0
+}

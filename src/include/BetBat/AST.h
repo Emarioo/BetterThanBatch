@@ -396,11 +396,13 @@ struct TypeInfo {
     TypeId originalId={};
     int _size=0;
     // u32 _alignedSize=0;
-    int arrlen=0;
     ASTStruct* astStruct=nullptr;
     StructImpl* structImpl=nullptr; // nullptr means pure/base poly type 
     ASTEnum* astEnum=nullptr;
     FunctionSignature* funcType=nullptr;
+
+    TypeId element_type={};
+    int array_length=0; // zero or less means not an array type
 
     ScopeId scopeId = 0;
     // bool isVirtualType = false;

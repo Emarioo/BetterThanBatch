@@ -105,6 +105,18 @@ a.ok()
 
 // TODO: Test arrays in structs more thoroughly.
 
+@TEST_CASE(assignment_array_in_struct)
+
+struct Model {
+    x: i32;
+    y: i32[5];
+}
+
+model: Model;
+model = { 1 }
+
+return 0
+
 @TEST_CASE(indexing_slice)
 
 // move test case elsewhere

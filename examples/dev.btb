@@ -4,26 +4,37 @@
 // #import "examples/callbacks/main.btb"
 // #import "examples/diff.btb"
 
-
-/*
-    Todays quest:
-        String concatenation using +, gone are the days we have to use the append method on strings.
-*/
-
 // #import "String"
 // #import "Logger"
 
 // #import "D:/dev/wander/src/main.btb"
 
-#import "BucketArray"
+// #import "bad.btb"
 
-ar: BucketArray<i32>
-ar.init(100)
-ar.add(24)
-ar.add(124)
-for ar {
-    log(it)
+/*
+    Today's quest:
+        Fixed array type.
+*/
+
+local_arr: i32[5];
+
+global glob_arr: i32[5];
+
+struct Model {
+    x: i32;
+    y: i32[5];
 }
+
+model: Model;
+model = { }
+
+model = { 1, {2, 3} }
+
+
+/*
+    Todays quest:
+        String concatenation using +, gone are the days we have to use the append method on strings.
+*/
 
 // #macro concat(S,X,...) S.append(X) concat(S, ...)
 // #macro concat(X,...) S.append(X) concat(...)
