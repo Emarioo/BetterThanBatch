@@ -4,10 +4,11 @@
     Looks fine in VSCode or on GitHub could be converted to crazy stuff with whole sections italicized and invalid links.
 */
 
-// const PORT = 8080;
-const PORT = 80;
+const PORT = 8080;
+// const PORT = 80;
 const PORT_HTTPS = 8081;
 const stats_path = "stats.json"
+const USE_CACHED_FILE = false;
 
 // const DISABLE_HTTPS = false;
 const DISABLE_HTTPS = true;
@@ -91,7 +92,8 @@ function is_path_sanitized(filename) {
 }
 async function requestListener(req, res) {
     // TODO: Rate limit
-
+    // console.log(req)
+    // console.log("REQ ", req.url)
     var root = "public/";
     let url_split = req.url.split("?")
     let base_part = url_split[0];
@@ -128,6 +130,7 @@ async function requestListener(req, res) {
     }
 
     if(base_part == "/api/latest_release") {
+        // console.log("API CALL")
         data = await getLatestRelease()
         if (data == null) {
             data = "";
@@ -144,10 +147,6 @@ async function requestListener(req, res) {
     
     if(base_part == "/") {
         path += "index.html"
-        // nocheckin If latest release is cached and up to date then modify index.html with recent
-        // urls and then send to client. Client won't need ask for release then. If they have to
-        // then the download button will "flicker" for a moment because as soon as page loads, it fetches new info and updates UI.
-        // we could do a fade effect on client but why not keep things up to date ey.
     }
     if(base_part == "/guide") {
         path += ".html"
@@ -200,6 +199,76 @@ async function requestListener(req, res) {
                     data = data.substring(0, start) + new_text + data.substring(end)
 
                     head = end + KEYWORD_END.length + new_text.length - old_text.length
+                }
+
+                // Check if we need to add
+                let cached_data = await getLatestRelease(false)
+                if(!cached_data) {
+                    // No cached data which means that the client will ask for it later.
+                    // We can start fetching it from the Github API now and then it should
+                    // be ready when client asks for it.
+                    // Otherwise we do this which has longer latency.
+                    /* client ->
+                                   web server  -> 
+                                                   Github
+                                    web server  <-
+                        client  <-
+                    */
+                    // getLatestRelease()
+                } else if(cached_data) {
+                    const KEYWORD_DOWNLOAD = "DOWNLOAD_MARK"
+                    const KEYWORD_LATEST = "LATEST_MARK"
+                    let at = data.indexOf(KEYWORD_LATEST)
+                    if (at != -1) {
+                        let nl = data.indexOf("\n", at)
+                        if (cached_data.version.length > 1 && cached_data.version[0] == 'v' && parseInt(cached_data.version[1]) != NaN)
+                            cached_data.version = cached_data.version.substring(1)
+                        
+                        let text = '<p>Latest version: <a target="_blank" href="'+cached_data.url+'"><b>'+cached_data.version+'</b></a> ('+cached_data.date+')</p>'
+                        data = data.substring(0, nl) + text + data.substring(nl)
+                    }
+                    
+                    at = data.indexOf(KEYWORD_DOWNLOAD)
+                    if(at != -1) {
+                        link_at = data.indexOf("<", at) // start of link
+                        nl = data.indexOf("\n", at)
+                        
+                        let url = null;
+                        let msg = "<b>Github Releases</b>"
+                        let agent = req.headers["user-agent"]
+                        // console.log(agent)
+                        if (agent) {
+                            // console.log(cached_data.downloads)
+                            function find_os_version(name) {
+                                for (let i=0;i<cached_data.downloads.length;i++) {
+                                    if(cached_data.downloads[i].includes(name))
+                                        return cached_data.downloads[i] 
+                                }
+                                return null
+                            }
+                        
+                            agent = agent.toLowerCase()
+                            if (agent.includes("android") || agent.includes("iphone") || agent.includes("ipad") || agent.includes("mobile")) {
+
+                            } else if(agent.includes("windows")) {
+                                url = find_os_version("win")
+                            } else if(agent.includes("linux")) {
+                                // smartphones may include linux in user-agent which is why we must check for android, ippone, ipad, mobile first
+                                // it's not fool proof since phones have "Desktop site" checkbox which if checked won't send android in user-agent.
+                                url = find_os_version("linux")
+                            } else if(agent.includes("mac")) {
+                                url = find_os_version("mac")
+                            }
+                            if(!url) {
+                                url = "https://github.com/Emarioo/BetterThanBatch/releases"
+                            } else {
+                                msg = "<b>Download BTB</b>"
+                            }
+                            let text = '<a target="_blank" href="'+url+'" class="cto_button cto_download">'+msg+'</a>'
+                            // console.log(text)
+                            data = data.substring(0, link_at) + text + data.substring(nl)
+                        }
+                    }
                 }
             }
 
@@ -322,7 +391,7 @@ function ModifyContent(data, options) {
 
     // console.log(options)
 
-    // TODO: Sanitize options, you can do script injection thing otherwise
+    // TODO: Sanitize options? We're not storing the options on the server so no script injections but good to sanitize anyway?
 
     let md_title = "no title"
     let title_was_set = false;
@@ -366,7 +435,8 @@ function ModifyContent(data, options) {
         if(title_was_set) {
             let tmp = md_title.replace(/%20/g," ")
             let path = md_dir + "/" + tmp
-            // TODO: Sanitize path, otherwise user can access any file
+            if (!is_path_sanitized(path))
+                return string
             try {
                 let md_data = fs.readFileSync(path)
                 let html_data = ConvertMDToHTML(md_data)
@@ -949,7 +1019,10 @@ function ConvertMDToHTML(data) {
 
 // returns null on failure
 async function fetchReleases() {
-    return JSON.parse(fs.readFileSync("test_release_data.json", {encoding:'utf8'})) // dummy data when testing
+    // console.log("FETCHING")
+    // await new Promise(resolve => setTimeout(resolve, 3000)); // 50ms delay
+    // console.log("STOPPED FETCHING")
+    // return JSON.parse(fs.readFileSync("test_release_data.json", {encoding:'utf8'})) // dummy data when testing
 
     let url = "https://api.github.com/repos/Emarioo/BetterThanBatch/releases"
     try {
@@ -971,15 +1044,29 @@ const local_cached_release_data_path = "cached_release_data.json"
 let cached_release_data = null
 const cached_release_data_refresh_time_ms = 30 * 60 * 1000
 let cached_release_data_fetch_time_ms = 0
+let isFetching = false
 
 // May return null if could fetch data from Github API or if Github API release data fields changed.
-async function getLatestRelease() {
-    // nocheckin What about multiple connections trying to call us here?
+async function getLatestRelease(blocking = true) {
+    if (isFetching) {
+        if(!blocking)
+            return null
+        // If we're already fetching, wait for the current fetch to complete
+        console.log("WAITING")
+        while (isFetching) {
+            await new Promise(resolve => setTimeout(resolve, 50)); // 50ms delay
+        }
+        console.log("GO!")
+        // whoever was fetching failed so there is no point if we try to fetch too
+        if(!cached_release_data)
+            return null
+    }
 
-    if (cached_release_data == null) {
+    if (cached_release_data == null && USE_CACHED_FILE) {
         // No data at all -> read from file
         if (fs.existsSync(local_cached_release_data_path)) {
             try {
+                console.log("Read cache file")
                 const cached_release_data_text = fs.readFileSync(local_cached_release_data_path, {encoding:'utf8'})
                 cached_release_data = JSON.parse(cached_release_data_text)
             } catch (error) {
@@ -997,7 +1084,12 @@ async function getLatestRelease() {
     }
     const cache_is_old = (Date.now() - cached_release_data_fetch_time_ms) > cached_release_data_refresh_time_ms
     if (cached_release_data == null || cache_is_old) {
+        // console.log(cached_release_data, cache_is_old)
+        if(!blocking) {
+            return null
+        }
         // No data in file or cached data too old -> actually fetch this time
+        isFetching = true
         let data = await fetchReleases()
         if (data == null) {
             // error already printed
@@ -1005,11 +1097,13 @@ async function getLatestRelease() {
         } else {
             cached_release_data = data
             cached_release_data_fetch_time_ms = Date.now()
-            // try {
-            //     fs.writeFileSync(local_cached_release_data_path, JSON.stringify(data), {encoding:'utf8'})
-            // } catch(error) {
-            //     console.log("ERROR: Cannot write '",local_cached_release_data_path,"'!", error)
-            // }
+            try {
+                fs.writeFileSync(local_cached_release_data_path, JSON.stringify(data), {encoding:'utf8'})
+            } catch(error) {
+                console.log("ERROR: Cannot write '",local_cached_release_data_path,"'!", error)
+            } finally {
+                isFetching = false
+            }
         }
     }
 
@@ -1069,4 +1163,35 @@ async function getLatestRelease() {
         latest_data = data
     }
     return latest_data
+}
+
+class TokenBucket {
+    m_free_bytes = 0
+    m_capacity = 0
+    m_last_time = 0
+    m_bytes_per_second = 0
+    delta_seconds = 0
+
+    init(capacity, bytes_per_second) {
+        m_free_bytes = capacity
+        m_capacity = capacity
+        m_bytes_per_second = bytes_per_second
+    }
+
+    try_consume_bytes(bytes) {
+        now = Date.now()
+        this.delta_seconds = now - this.m_last_time
+        this.m_last_time = now
+
+        new_bytes = this.m_bytes_per_second * delta_seconds
+        console.log("    new_bytes ",new_bytes)
+        this.m_free_bytes += new_bytes
+        if (this.m_free_bytes > this.m_capacity)
+            this.m_free_bytes = this.m_capacity
+        
+        if (this.m_free_bytes < bytes)
+            return false
+        this.m_free_bytes -= bytes
+        return true
+    }
 }

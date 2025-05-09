@@ -1,6 +1,5 @@
 
 window.onload = function() {
-    // nocheckin Determine whether server gave us an updated release or not. (happens if latest release was cached)
     insert_latest_release()
     
     // TODO: Temporary
@@ -33,6 +32,11 @@ function rand_rgb() {
 
 async function insert_latest_release() {
     let download = document.getElementsByClassName("cto_download")[0]
+    if(!download.innerHTML.includes("Github")) {
+        // download button has Download BTB text which means it's ready.
+        return
+    }
+    console.log(download.innerHTML)
 
     let failed_fetch_msg = "<b>Github Releases</b><br>(could not fetch latest release)"
 
@@ -62,17 +66,10 @@ async function insert_latest_release() {
     let parser = new DOMParser()
     let version = parser.parseFromString('<p>Latest version: <a target="_blank" href="'+data.url+'"><b>'+data.version+'</b></a> ('+data.date+')</p>', "text/html").body.firstChild
 
-    btb_downloads = []
-    for (let i=0;i<data.downloads.length;i++) {
-        // skip .vsix
-        if(data.downloads[i].includes("btb") && (data.downloads[i].includes(".zip") || data.downloads[i].includes(".tar.gz")))
-            btb_downloads.push(data.downloads[i])
-    }
-
     function find_os_version(name) {
-        for (let i=0;i<btb_downloads.length;i++) {
-            if(btb_downloads[i].includes(name))
-                return btb_downloads[i] 
+        for (let i=0;i<data.downloads.length;i++) {
+            if(data.downloads[i].includes(name))
+                return data.downloads[i] 
         }
         return null
     }
@@ -89,9 +86,8 @@ async function insert_latest_release() {
         url = find_os_version("mac")
     }
     if (url) {
-        download.innerHTML = "<b>Download BTB</b>"
+        download.innerHTML = "<b>Download BTB</b>" + os
         download.href = url
-        download.target = ""
     } else {
         download.innerHTML = "<b>Github Releases</b> <br> (not available on "+os+")"
     }

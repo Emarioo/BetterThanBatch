@@ -45,5 +45,4 @@ Clicking on code snippets to copy. Small tiny code pieces like paths should be c
 
 Should parsed markdown code blocks scretch over the whole screen even if the code inside isn't that big? Probably not. width auto doesn't work, maybe it's caused by \<code\>?
 
-**TODO:** Syntax highlighting in code blocks.
 **TODO:** CSS for the website and markdown content. The current is garbage.

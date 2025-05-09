@@ -27,7 +27,7 @@
       "site_admin": false
     },
     "node_id": "RE_kwDOJKoYcc4KvAHm",
-    "tag_name": "v0.2.0",
+    "tag_name": "v0.2.1",
     "target_commitish": "main",
     "name": "BTB Compiler v0.2.0",
     "draft": false,
@@ -39,7 +39,7 @@
         "url": "https://api.github.com/repos/Emarioo/BetterThanBatch/releases/assets/207946979",
         "id": 207946979,
         "node_id": "RA_kwDOJKoYcc4MZQTj",
-        "name": "btb-0.2.0-linux_x64.tar.gz",
+        "name": "btb-0.2.1-linux_x64.tar.gz",
         "label": null,
         "uploader": {
           "login": "Emarioo",
