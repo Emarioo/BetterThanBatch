@@ -9,6 +9,8 @@
 
 // #import "D:/dev/wander/src/main.btb"
 
+// #import "examples/sound/proper_sound.btb"
+#import "examples/sound/sample_wasapi.btb"
 // #import "bad.btb"
 
 /*
@@ -16,19 +18,19 @@
         Fixed array type.
 */
 
-local_arr: i32[5];
+// local_arr: i32[5];
 
-global glob_arr: i32[5];
+// global glob_arr: i32[5];
 
-struct Model {
-    x: i32;
-    y: i32[5];
-}
+// struct Model {
+//     x: i32;
+//     y: i32[5];
+// }
 
-model: Model;
-model = { }
+// model: Model;
+// model = { }
 
-model = { 1, {2, 3} }
+// model = { 1, {2, 3} }
 
 
 /*

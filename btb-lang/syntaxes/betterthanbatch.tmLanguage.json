@@ -63,9 +63,14 @@
 			"end":"\n",
             "patterns": [
                 {
-                "name": "keyword.other",
-                "match": "TODO:|NOTE:"
-            }]
+					"name": "keyword.other",
+					"match": "TODO:|NOTE:"
+	            },
+				{
+					"name": "keyword.control",
+					"match": "@param\\s+(\\w|_|\\d)+"
+	            }
+			]
 		},
 		"commentblock": {
 			"name":"comment.block",
@@ -75,7 +80,11 @@
                 {
                     "name": "keyword.other",
                     "match": "TODO:|NOTE:"
-                }
+                },
+				{
+					"name": "keyword.control",
+					"match": "@param\\s+(\\w|_|\\d)+"
+	            }
             ]
 		},
         "func_assembly": {

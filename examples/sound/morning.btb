@@ -1,9 +1,26 @@
 
 #import "Sound"
 #import "File"
+#import "OS"
+#import "Windows"
 
 fn main() {
-    PlaySound("examples/sound/goodmorning.wav", true)
+    // Use Windows PlaySound API. Can only play one sound at a time.
+    PlaySound("examples/sound/goodmorning.wav", false)
+    ProcessSleep(1.0)
     PlaySound("examples/sound/goodmorning.wav", true)
 }
 
+fn PlaySound(file: char[], synchronous: bool = false) {
+    res: u32
+    if(synchronous)
+        res = win32_PlaySound(file.ptr, null, SND_FILENAME)
+    else
+        res = win32_PlaySound(file.ptr, null, SND_ASYNC | SND_FILENAME)
+    if !res {
+        log("ERROR: PlaySound, could not find ",file)
+    }
+}
+fn StopSound() {
+    win32_PlaySound(null, null, 0)
+}

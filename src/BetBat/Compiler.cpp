@@ -1323,6 +1323,8 @@ void Compiler::run(CompileOptions* options) {
         } else if(output_extension == ".exe") {
             output_type = OUTPUT_EXE;
         } else if(output_extension == ".bc"){
+            log::out << log::RED << ".bc is assumed to be a bytecode file by the compiler and is not supported\n";
+            return;
             Assert(false);
             output_type = OUTPUT_BC;
         } else if(output_extension == ".dll" || output_extension == ".so") {
@@ -1352,8 +1354,8 @@ void Compiler::run(CompileOptions* options) {
         log::out << "  .exe     - executable\n";
         log::out << "  .dll .so - dynamic library\n";
         log::out << "  .lib .a  - static library\n";
-        log::out << "  .bc      - bytecode\n";
-        log::out << "  .elf     - kernel image (mainly meant for qemu)\n";
+        // log::out << "  .bc      - bytecode\n"; // not supported yet (might never be)
+        log::out << "  .elf     - kernel image (mainly meant for qemu and ARM)\n";
         return;
     }
     if(output_type == OUTPUT_OBJ) {
@@ -1411,9 +1413,9 @@ void Compiler::run(CompileOptions* options) {
         "struct Slice<T> {\n"
         // "struct @hide Slice<T> {"
         "    ptr: T*;\n"
-        "    len: i64;\n"
+        "    len: iword;\n"
         "}\n"
-        "operator []<T>(slice: Slice<T>, index: i32) -> T {\n"
+        "operator []<T>(slice: Slice<T>, index: iword) -> T {\n"
         "    return slice.ptr[index];\n"
         "}\n"
         "fn @builtin init_preload();\n" // init global data and stuff

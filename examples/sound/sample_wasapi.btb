@@ -1,0 +1,177 @@
+#import "Sound"
+
+fn main() {
+    PlayAudio("examples/sound/goodmorning.wav")
+}
+
+#macro CHECK_HR if res != 0 { log("HR BAD ", cast_unsafe<WASAPI_Error*>&res); Assert(false) }
+
+fn PlayAudio(path: char[]) {
+    wav := ReadWAVFile(path, print = true)
+    Assert(wav)
+
+    log("WAVE file, ", path)
+    std_print(wav, pretty = true)
+
+    res: HRESULT
+
+    res = CoInitialize(null)
+    CHECK_HR
+    log("pass CoInitialize")
+    
+    enumerator: IMMDeviceEnumerator*
+    res = CoCreateInstance(&MMDeviceEnumerator_GUID, null, cast<u32>CLSCTX_ALL, &IMMDeviceEnumerator_GUID, &enumerator)
+    CHECK_HR
+    log("pass CoCreateInstance")
+
+    device: IMMDevice*
+    res = enumerator.vtable.GetDefaultAudioEndpoint(enumerator, eRender, eConsole, &device)
+    CHECK_HR
+    log("pass GetDefaultAudioEndpoint")
+
+    audioClient: IAudioClient*
+    res = device.vtable.Activate(device, &IAudioClient_GUID, CLSCTX_ALL, null, &audioClient)
+    CHECK_HR
+    log("pass device.Activate")
+
+
+    // Assert(wav.audio_format == 1) // PCM
+
+    // THIS IS GARBAGE
+    // waveFormat: WAVEFORMATEXTENSIBLE
+    // waveFormat.Format.wFormatTag = WAVE_FORMAT_PCM
+    // waveFormat.Format.nChannels = wav.channels
+    // waveFormat.Format.nSamplesPerSec = wav.sample_rate
+    // waveFormat.Format.wBitsPerSample = wav.bits_per_sample
+    // waveFormat.Format.nBlockAlign = wav.block_align
+    // waveFormat.Format.nAvgBytesPerSec = wav.sample_rate * wav.block_align
+
+
+    // default_period: i64
+    // min_period: i64
+    // res = audioClient.vtable.GetDevicePeriod(audioClient, &default_period, &min_period)
+    // CHECK_HR
+    // log("pass audioClient.GetDevicePeriod")
+    // log("period ", default_period)
+
+    expected_format: WAVEFORMATEXTENSIBLE*
+    res = audioClient.vtable.GetMixFormat(audioClient, cast<WAVEFORMATEX**>&expected_format)
+    CHECK_HR
+    log("pass audioClient.GetMixFormat")
+    log("Expected format:")
+    std_print(expected_format, pretty = true)
+
+    // waveFormat = *cast<WAVEFORMATEX*>expected_format
+    // waveFormat = *expected_format
+    // waveFormat.cbSize = 0
+    // waveFormat.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE
+
+    // closest_format: WAVEFORMATEXTENSIBLE*
+    // // res = audioClient.vtable.IsFormatSupported(audioClient, cast<u32>AUDCLNT_SHAREMODE_SHARED, cast<WAVEFORMATEX*>&waveFormat, cast<WAVEFORMATEX**>&closest_format)
+    // res = audioClient.vtable.IsFormatSupported(audioClient, cast<u32>AUDCLNT_SHAREMODE_SHARED, cast<WAVEFORMATEX*>expected_format, cast<WAVEFORMATEX**>&closest_format)
+    // // CHECK_HR
+    // log("audioClient.IsFormatSupported = ",cast<WASAPI_Error*>&res)
+
+    // log("Closest format:")
+    // std_print(closest_format, pretty = true)
+
+    // log("CURRENT FORMAT")
+    // std_print(&waveFormat, pretty = true)
+
+    res = audioClient.vtable.Initialize(audioClient, AUDCLNT_SHAREMODE_SHARED, 0, 10_000_0000, 0,  cast<WAVEFORMATEX*>expected_format, null)
+    // res = audioClient.vtable.Initialize(audioClient, AUDCLNT_SHAREMODE_EXCLUSIVE, 0, 1000_0000, default_period, &waveFormat, null)
+    CHECK_HR
+    log("pass audioClient.Initialize")
+
+    renderService: IAudioRenderClient*
+    res = audioClient.vtable.GetService(audioClient, &IAudioRenderClient_GUID, &renderService)
+    CHECK_HR
+    log("pass audioClient.GetService")
+
+    audioClient.vtable.Start(audioClient)
+    CHECK_HR
+    log("pass audioClient.Start")
+
+    // TODO: Extinsible format may have multiple channels, more than SPEAKER_FRONT_LEFT and SPEAKER_FRONT_RIGHT.
+    //   Those are the only channels we support so we should zero the other ones (if using float, if using 16-bit then set to 2^15).
+
+    // TODO: Handle 16-bit and 32-bit integer?
+    Assert(equal(cast<char*>&expected_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, 16))
+    // std_print_hex(cast<char*>&expected_format.SubFormat, 16)
+    // Assert(equal(cast<char*>&expected_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
+
+    renderBuffer: u8*
+
+    Assert(wav.channels == 1 && wav.bits_per_sample == 8)
+
+    Assert(wav.data_len % cast<i32>wav.block_align == 0)
+    frames := cast<u32>wav.data_len / wav.block_align
+    log(frames)
+
+    res = renderService.vtable.GetBuffer(renderService, frames, &renderBuffer)
+    CHECK_HR
+    log("pass renderService.GetBuffer")
+
+    renderBuffer_f := cast<f32*>renderBuffer
+    for 0..frames {
+        in_sample := wav.data[nr]
+        out_sample: f32 = (cast<i32>in_sample - 128) / 128.0 * 10
+
+        renderBuffer_f[2*nr] = out_sample
+        renderBuffer_f[2*nr + 1] = out_sample
+        // nr += 5
+    }
+
+    res = renderService.vtable.ReleaseBuffer(renderService, frames, 0)
+    CHECK_HR
+    log("pass renderService.ReleaseBuffer")
+
+    ProcessSleep(3)
+
+    // TODO: Read about GetBuffer and ReleaseBuffer and Initialize AudioClient for a correct implementation where
+    //   Errors are handled. For example we write to slowly to the buffer.
+
+    
+    head: i32
+    estimated_samples_left: i32
+    // // Stream sound
+    // last_time := StartMeasure()
+    // while {
+    //     if head >= wav.data_len {
+    //         break
+    //     }
+
+    //     now := StartMeasure()
+    //     elapsed_sec: f32 = DiffMeasure(now - last_time)
+    //     last_time = now
+
+    //     // TODO: We may be off by a couple of samples.
+    //     //   Use 64-bit float and some logic to deal with it.
+    //     estimated_samples_left = elapsed_sec * expected_format.
+
+    //     frames := 
+
+    //     if frames > 0 {
+    //         renderService.vtable.GetBuffer(frames, &renderBuffer)
+    //         CHECK_HR
+
+    //         memcpy(renderBuffer, )
+
+    //         renderService.vtable.ReleaseBuffer(frames, 0)
+
+    //         estimated_samples_left += frames
+    //     }
+    //     ProcessSleep(0.08)
+    // }
+    // ProcessSleep(2) // let audio finish
+
+    audioClient.vtable.Stop(audioClient)
+    CHECK_HR
+    log("pass audioClient.Stop")
+
+    renderService.vtable.Release(renderService)
+    audioClient.vtable.Release(audioClient)
+    device.vtable.Release(device)
+    enumerator.vtable.Release(enumerator)
+    CoUninitialize()
+}

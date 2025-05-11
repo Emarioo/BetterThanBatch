@@ -2806,8 +2806,12 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 if(hasAnyErrors()) {
                     return SIGNAL_FAILURE;
                 } else {
-                    log::out << log::RED << "WHY WAS TYPE VOID\n";
-                    Assert(false);
+                    // Can't assert here to catch certain bugs because
+                    //   res = FuncThatReturnsNothing()
+                    // will trigger this assert. We need to let control flow continue and then an error will be printed ruther down.
+                    
+                    // log::out << log::RED << "WHY WAS TYPE VOID\n";
+                    // Assert(false);
                 }
             }
 

@@ -1,0 +1,8 @@
+
+#import "Sound"
+
+fn main() {
+    InitSoundState()
+    ref, err := LoadSoundFromFile("text.wae")
+    log("Result: ", &err, &ref)
+}

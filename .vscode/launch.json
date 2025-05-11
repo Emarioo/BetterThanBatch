@@ -148,6 +148,31 @@
             ]
         },
         {
+            "name": "wa",
+            "type": "cppdbg",
+            "request": "launch",
+            // "program": "${workspaceFolder}/bin/temp.exe",
+            // "program": "${workspaceFolder}/test.exe",
+            "program": "${workspaceFolder}/wa.exe",
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "MIMode": "gdb",
+            "miDebuggerPath": "gdb",
+            "setupCommands": [
+                // {
+                //     "description": "Enable pretty-printing for gdb",
+                //     "text": "-enable-pretty-printing",
+                //     "ignoreFailures": true
+                // },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
             "name": "QEMU gdb",
             "type": "cppdbg",
             "request": "launch",

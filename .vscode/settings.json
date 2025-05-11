@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.log": "ansi",
         "*.cpp": "cpp",
         "utility": "cpp",
         "xhash": "cpp",
@@ -96,6 +97,8 @@
         "glfw3.h": "c",
         "xuartps.h": "c",
         "coroutine": "cpp",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "initguid.h": "c",
+        "guiddef.h": "c"
     }
 }

@@ -528,6 +528,12 @@ struct StringBuilder {
             members := lang_typemembers(type);
             enum_value: i64
             memcpy(&enum_value, data, typeinfo.size)
+            // sign extend
+            if *(cast<u8*>data + typeinfo.size-1) & cast<u8>0x80 {
+                for typeinfo.size..8 {
+                    *cast<u8*>(&enum_value+nr) = 0xFF
+                }
+            }
             printed := false
             for @ptr members {
                 // TODO: What about bit field?
@@ -830,6 +836,62 @@ fn parse_hex(text: Slice<char>, data: Slice<u8>*) {
         data.ptr[nr] = tmp
     }
 }
+// parses until non hexidecimal
+// returns 0, false if couldn't parse (first 2 char was not hexidecimal, non even hexidecimal, to big hexidecimal)
+// check head before and after to know how many bytes where parsed
+fn parse_hex(in_head: i32*, text: char[], flip: bool = false) -> u64, bool {
+    head := *in_head
+    acc: u64
+    // log("Start")
+    while head < text.len {
+        byte: u8 = 0
+        hex0 := text.ptr[head]
+        hex1 := text.ptr[head+1]
+        if hex0 >= '0' && hex0 <= '9' {
+            byte = hex0 - '0'
+        } else if hex0|cast<char>32 >= 'a' && hex0|cast<char>32 <= 'f' {
+            byte = (hex0|cast<char>32) - 'a' + 10
+        } else {
+            break
+        }
+        byte = byte << cast<u8>4
+        if hex1 >= '0' && hex1 <= '9' {
+            byte |= hex1 - '0'
+        } else if hex1|cast<char>32 >= 'a' && hex1|cast<char>32 <= 'f' {
+            byte |= (hex1|cast<char>32) - 'a' + 10
+        } else {
+            break
+        }
+        if head - *in_head >= 16 {
+            // log("to big ",head, " ",*in_head)
+            // can't return bigger than 64-bit integer
+            return 0, false
+        }
+        // log("BYTE ",hex0,hex1," ", cast<i64>cast<u8>byte, " ", acc)
+
+        head+=2
+        if (flip) {
+            acc = (acc << 8) | cast<i64>byte
+            // log("ACC ",acc, " ", cast<i64>byte)
+        } else {
+            acc = (acc >> 8) | (cast<i64>byte << 56)
+        }
+    }
+    if (head - *in_head) == 0 {
+        // uneven hexidecimal digits
+        return 0, false
+    }
+    if (head - *in_head) & 1 {
+        // uneven hexidecimal digits
+        return 0, false
+    }
+    if (!flip) {
+        acc = acc >> (64 - (head - *in_head)*4) // 4 because 8/2, div 2 because head is count of hex digits not bytes
+    }
+    // log("fin ",head, " ",*in_head, " ", acc)
+    *in_head = head
+    return acc, true
+}
 
 #import "Logger"
 
@@ -872,6 +934,13 @@ fn equal_end(pattern: char[], text: char[]) -> bool {
         return false
     for @rev pattern {
         if it != text.ptr[text.len + nr - pattern.len]
+            return false
+    }
+    return true
+}
+fn equal(a: char*, b: char*, len: i32) -> bool {
+    for 0..len {
+        if a[nr] != b[nr]
             return false
     }
     return true

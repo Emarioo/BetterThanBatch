@@ -1,0 +1,301 @@
+
+/*
+    WASAPI is awful, writing bindings for vtables suck.
+*/
+
+#load "ole32.lib" as OLE32
+
+#import "Windows"
+#import "Asserts"
+
+struct GUID {
+    data0: u32;
+    data1: u16;
+    data2: u16;
+    data3: u64;
+}
+fn PrepareGUID(guid: GUID*, text: char[]) {
+    ptr := cast<u8*>guid
+    head := 0
+    yes: bool
+    val: u64
+
+    // NOTE: The 3 first integers (seperated by dash) are stored in little endian while the last 2 are stored in big endian
+    val, yes = parse_hex(&head, text, true) // true to flip for little endian
+    guid.data0 = val
+    head++ // skip '-'
+    val, yes = parse_hex(&head, text, true)
+    guid.data1 = val
+    head++ // skip '-'
+    val, yes = parse_hex(&head, text, true)
+    guid.data2 = val
+    head++ // skip '-'
+
+    val, yes = parse_hex(&head, text, false) // false to not flip for big endian
+    head++ // skip '-'
+    guid.data3 = val
+    val, yes = parse_hex(&head, text, false)
+    head++ // skip '-'
+    guid.data3 |= val << 16
+
+    // log(guid)
+}
+
+global IMMDeviceEnumerator_GUID: GUID;
+#run PrepareGUID(&IMMDeviceEnumerator_GUID, "A95664D2-9614-4F35-A746-DE8DB63617E6")
+global MMDeviceEnumerator_GUID: GUID;
+#run PrepareGUID(&MMDeviceEnumerator_GUID, "BCDE0395-E52F-467C-8E3D-C4579291692E")
+global IAudioClient_GUID: GUID;
+#run PrepareGUID(&IAudioClient_GUID, "1CB9AD4C-DBFA-4c32-B178-C2F568A703B2")
+global IAudioRenderClient_GUID: GUID;
+#run PrepareGUID(&IAudioRenderClient_GUID, "F294ACFC-3146-4483-A7BF-ADDCA7C260E2")
+global IAudioCaptureClient_GUID: GUID;
+#run PrepareGUID(&IAudioCaptureClient_GUID, "C8ADBD64-E71E-48a0-A4DE-185C395CD317")
+
+global KSDATAFORMAT_SUBTYPE_PCM: GUID;
+#run PrepareGUID(&KSDATAFORMAT_SUBTYPE_PCM, "00000001-0000-0010-8000-00aa00389b71")
+global KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: GUID;
+#run PrepareGUID(&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, "00000003-0000-0010-8000-00aa00389b71")
+
+enum EDataFlow {
+    eRender  = 0,
+    eCapture = 1,
+    eAll     = 2,
+    EDataFlow_enum_count = 3,
+}
+
+enum ERole {
+    eConsole	     = 0,
+    eMultimedia	     = 1,
+    eCommunications	 = 2,
+    ERole_enum_count = 3,
+}
+
+enum tagCLSCTX : u32 {
+    CLSCTX_INPROC_SERVER	= 0x1,
+    CLSCTX_INPROC_HANDLER	= 0x2,
+    CLSCTX_LOCAL_SERVER	= 0x4,
+    CLSCTX_INPROC_SERVER16	= 0x8,
+    CLSCTX_REMOTE_SERVER	= 0x10,
+    CLSCTX_INPROC_HANDLER16	= 0x20,
+    CLSCTX_RESERVED1	= 0x40,
+    CLSCTX_RESERVED2	= 0x80,
+    CLSCTX_RESERVED3	= 0x100,
+    CLSCTX_RESERVED4	= 0x200,
+    CLSCTX_NO_CODE_DOWNLOAD	= 0x400,
+    CLSCTX_RESERVED5	= 0x800,
+    CLSCTX_NO_CUSTOM_MARSHAL	= 0x1000,
+    CLSCTX_ENABLE_CODE_DOWNLOAD	= 0x2000,
+    CLSCTX_NO_FAILURE_LOG	= 0x4000,
+    CLSCTX_DISABLE_AAA	= 0x8000,
+    CLSCTX_ENABLE_AAA	= 0x10000,
+    CLSCTX_FROM_DEFAULT_CONTEXT	= 0x20000,
+    CLSCTX_ACTIVATE_X86_SERVER	= 0x40000,
+    CLSCTX_ACTIVATE_32_BIT_SERVER	= 0x40000, // same as CLSCTX_ACTIVATE_X86_SERVER
+    CLSCTX_ACTIVATE_64_BIT_SERVER	= 0x80000,
+    CLSCTX_ENABLE_CLOAKING	= 0x100000,
+    CLSCTX_APPCONTAINER	= 0x400000,
+    CLSCTX_ACTIVATE_AAA_AS_IU	= 0x800000,
+    CLSCTX_RESERVED6	= 0x1000000,
+    CLSCTX_ACTIVATE_ARM32_SERVER	= 0x2000000,
+    CLSCTX_ALLOW_LOWER_TRUST_REGISTRATION	= 0x4000000,
+    CLSCTX_PS_DLL	= 0x80000000
+}
+#macro CLSCTX_ALL (CLSCTX_INPROC_SERVER|CLSCTX_INPROC_HANDLER|CLSCTX_LOCAL_SERVER|CLSCTX_REMOTE_SERVER)
+
+#macro IMMNotificationClient void
+#macro IMMDeviceCollection void
+#macro PROPVARIANT void
+#macro IPropertyStore void
+
+struct IMMDeviceEnumerator_vtable {
+    QueryInterface: fn @stdcall (
+            This: IMMDeviceEnumerator*,
+            riid: GUID*,
+            ppvObject: void**) -> HRESULT;
+    AddRef: fn @stdcall (This: IMMDeviceEnumerator*) -> u32;
+    Release: fn @stdcall (This: IMMDeviceEnumerator*) -> u32;
+    EnumAudioEndpoints: fn @stdcall (This: IMMDeviceEnumerator*, dataflow: EDataFlow, dwStateMask: u32, ppDevices: IMMDeviceCollection**) -> HRESULT;
+    GetDefaultAudioEndpoint: fn @stdcall (This: IMMDeviceEnumerator*, dataflow: EDataFlow, role: ERole, ppEndPoint: IMMDevice**) -> HRESULT;
+    GetDevice: fn @stdcall (This: IMMDeviceEnumerator*, pwstrId: u16*, ppDevice: IMMDevice**) -> HRESULT;
+    RegisterEndpointNotificationCallback: fn @stdcall (This: IMMDeviceEnumerator*, pClient: IMMNotificationClient*) -> HRESULT;
+    UnregisterEndpointNotificationCallback: fn @stdcall (This: IMMDeviceEnumerator*, pClient: IMMNotificationClient*) -> HRESULT;
+}
+struct IMMDeviceEnumerator {
+    vtable: IMMDeviceEnumerator_vtable*;
+}
+
+struct IMMDevice_vtable {
+    QueryInterface: fn @stdcall ( 
+        This: IMMDevice*,
+        riid: GUID*,
+        ppvObject: void**) -> HRESULT;
+    
+    AddRef: fn @stdcall (This: IMMDevice*) -> u32;
+    
+    Release: fn @stdcall (This: IMMDevice*) -> u32;
+    
+    Activate: fn @stdcall (
+        This: IMMDevice*,
+        iid: GUID*,
+        dwClsCtx: u32,
+        pActivationParams: PROPVARIANT*,
+        ppInterface: void**) -> HRESULT;
+    
+    OpenPropertyStore: fn @stdcall ( 
+        This: IMMDevice*,
+        stgmAccess: u32,
+        ppProperties: IPropertyStore**) -> HRESULT;
+    
+    GetId: fn @stdcall (
+        This: IMMDevice*,
+        ppstrId: u16**) -> HRESULT;
+    
+    GetState: fn @stdcall (
+        This: IMMDevice*,
+        pdwState: u32*) -> HRESULT;
+}
+struct IMMDevice {
+    vtable: IMMDevice_vtable*;
+}
+
+enum AUDCLNT_SHAREMODE {
+    AUDCLNT_SHAREMODE_SHARED, 
+    AUDCLNT_SHAREMODE_EXCLUSIVE 
+}
+#macro WAVE_FORMAT_PCM 1
+#macro WAVE_FORMAT_EXTENSIBLE 0xFFFE
+struct @no_padding WAVEFORMATEX {
+    wFormatTag: u16;
+    nChannels: u16;
+    nSamplesPerSec: u32;
+    nAvgBytesPerSec: u32;
+    nBlockAlign: u16;
+    wBitsPerSample: u16;
+    cbSize: u16;
+}
+struct @no_padding WAVEFORMATEXTENSIBLE {
+    Format: WAVEFORMATEX;
+    // language doesn't support unions
+    //   union {
+    //     WORD wValidBitsPerSample;
+    //     WORD wSamplesPerBlock;
+    //     WORD wReserved;
+    //   } Samples;
+    union_word: u16;
+    dwChannelMask: u32;
+    SubFormat: GUID;
+}
+
+struct IAudioClient_vtable {
+    // Generated by ChatGPT
+    QueryInterface: fn @stdcall (This: IAudioClient*, riid: GUID*, ppvObject: void**) -> HRESULT;
+    AddRef: fn @stdcall (This: IAudioClient*) -> u32;
+    Release: fn @stdcall (This: IAudioClient*) -> u32;
+    Initialize: fn @stdcall (This: IAudioClient*, ShareMode: u32, StreamFlags: u32, BufferDuration: i64, Periodicity: i64, pFormat: WAVEFORMATEX*, AudioSessionGuid: GUID*) -> HRESULT;
+    GetBufferSize: fn @stdcall (This: IAudioClient*, pNumBufferFrames: u32*) -> HRESULT;
+    GetStreamLatency: fn @stdcall (This: IAudioClient*, phnsLatency: i64*) -> HRESULT;
+    GetCurrentPadding: fn @stdcall (This: IAudioClient*, pNumPaddingFrames: u32*) -> HRESULT;
+    IsFormatSupported: fn @stdcall (This: IAudioClient*, ShareMode: u32, pFormat: WAVEFORMATEX*, ppClosestMatch: WAVEFORMATEX**) -> HRESULT;
+    GetMixFormat: fn @stdcall (This: IAudioClient*, ppDeviceFormat: WAVEFORMATEX**) -> HRESULT;
+    GetDevicePeriod: fn @stdcall (This: IAudioClient*, phnsDefaultDevicePeriod: i64*, phnsMinimumDevicePeriod: i64*) -> HRESULT;
+    Start: fn @stdcall (This: IAudioClient*) -> HRESULT;
+    Stop: fn @stdcall (This: IAudioClient*) -> HRESULT;
+    Reset: fn @stdcall (This: IAudioClient*) -> HRESULT;
+    SetEventHandle: fn @stdcall (This: IAudioClient*, eventHandle: HANDLE) -> HRESULT;
+    GetService: fn @stdcall (This: IAudioClient*, riid: GUID*, ppv: void**) -> HRESULT;
+}
+struct IAudioClient {
+    vtable: IAudioClient_vtable*;
+}
+
+struct IAudioRenderClient_vtable {
+    QueryInterface: fn @stdcall (This: IAudioRenderClient*, riid: GUID*, ppvObject: void**) -> HRESULT;
+    AddRef: fn @stdcall (This: IAudioRenderClient*) -> u32;
+    Release: fn @stdcall (This: IAudioRenderClient*) -> u32;
+    GetBuffer: fn @stdcall (This: IAudioRenderClient*, NumFramesRequested: u32, ppData: u8**) -> HRESULT;
+    ReleaseBuffer: fn @stdcall (This: IAudioRenderClient*, NumFramesWritten: u32, dwFlags: u32) -> HRESULT;
+}
+struct IAudioRenderClient {
+    vtable: IAudioRenderClient_vtable*;
+}
+
+struct IAudioCaptureClient_vtable {
+    QueryInterface: fn @stdcall (This: IAudioCaptureClient*, riid: GUID*, ppvObject: void**) -> HRESULT;
+    AddRef: fn @stdcall (This: IAudioCaptureClient*) -> u32;
+    Release: fn @stdcall (This: IAudioCaptureClient*) -> u32;
+    GetBuffer: fn @stdcall (This: IAudioCaptureClient*, ppData: u8**, pNumFramesToRead: u32*, pdwFlags: u32*, pu64DevicePosition: u64*, pu64QPCPosition: u64*) -> HRESULT;
+    ReleaseBuffer: fn @stdcall (This: IAudioCaptureClient*, NumFramesRead: u32) -> HRESULT;
+    GetNextPacketSize: fn @stdcall (This: IAudioCaptureClient*, pNumFramesInNextPacket: u32*) -> HRESULT;
+}
+struct IAudioCaptureClient {
+    vtable: IAudioCaptureClient_vtable*;
+}
+
+
+
+#macro REGDB_E_CLASSNOTREG 0x80040154
+#macro CLASS_E_NOAGGREGATION 0x80040110
+
+#macro HRESULT i32
+
+enum WASAPI_Error {
+    AUDCLNT_E_NOT_INITIALIZED              = 0x88890001,
+    AUDCLNT_E_ALREADY_INITIALIZED          = 0x88890002,
+    AUDCLNT_E_WRONG_ENDPOINT_TYPE          = 0x88890003,
+    AUDCLNT_E_DEVICE_INVALIDATED           = 0x88890004,
+    AUDCLNT_E_NOT_STOPPED                  = 0x88890005,
+    AUDCLNT_E_BUFFER_TOO_LARGE             = 0x88890006,
+    AUDCLNT_E_OUT_OF_ORDER                 = 0x88890007,
+    AUDCLNT_E_UNSUPPORTED_FORMAT           = 0x88890008,
+    AUDCLNT_E_INVALID_SIZE                 = 0x88890009,
+    AUDCLNT_E_DEVICE_IN_USE                = 0x8889000A,
+    AUDCLNT_E_BUFFER_OPERATION_PENDING     = 0x8889000B,
+    AUDCLNT_E_THREAD_NOT_REGISTERED        = 0x8889000C,
+    AUDCLNT_E_EXCLUSIVE_MODE_NOT_ALLOWED   = 0x8889000E,
+    AUDCLNT_E_ENDPOINT_CREATE_FAILED       = 0x8889000F,
+    AUDCLNT_E_SERVICE_NOT_RUNNING          = 0x88890010,
+    AUDCLNT_E_EVENTHANDLE_NOT_EXPECTED     = 0x88890011,
+    AUDCLNT_E_EXCLUSIVE_MODE_ONLY          = 0x88890012,
+    AUDCLNT_E_BUFDURATION_PERIOD_NOT_EQUAL = 0x88890013,
+    AUDCLNT_E_EVENTHANDLE_NOT_SET          = 0x88890014,
+    AUDCLNT_E_INCORRECT_BUFFER_SIZE        = 0x88890015,
+    AUDCLNT_E_BUFFER_SIZE_ERROR            = 0x88890016,
+    AUDCLNT_E_CPUUSAGE_EXCEEDED            = 0x88890017,
+    AUDCLNT_E_BUFFER_ERROR                 = 0x88890018,
+    AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED      = 0x88890019,
+    AUDCLNT_E_INVALID_DEVICE_PERIOD        = 0x88890020,
+    AUDCLNT_E_INVALID_STREAM_FLAG          = 0x88890021,
+    AUDCLNT_E_ENDPOINT_OFFLOAD_NOT_CAPABLE = 0x88890022,
+    AUDCLNT_E_OUT_OF_OFFLOAD_RESOURCES     = 0x88890023,
+    AUDCLNT_E_OFFLOAD_MODE_ONLY            = 0x88890024,
+    AUDCLNT_E_NONOFFLOAD_MODE_ONLY         = 0x88890025,
+    AUDCLNT_E_RESOURCES_INVALIDATED        = 0x88890026,
+    AUDCLNT_E_RAW_MODE_UNSUPPORTED         = 0x88890027,
+    AUDCLNT_E_ENGINE_PERIODICITY_LOCKED    = 0x88890028,
+    AUDCLNT_E_ENGINE_FORMAT_LOCKED         = 0x88890029,
+    AUDCLNT_E_HEADTRACKING_ENABLED         = 0x88890030,
+    AUDCLNT_E_HEADTRACKING_UNSUPPORTED     = 0x88890040,
+    AUDCLNT_E_EFFECT_NOT_AVAILABLE         = 0x88890041,
+    AUDCLNT_E_EFFECT_STATE_READ_ONLY       = 0x88890042,
+    AUDCLNT_S_BUFFER_EMPTY                 = 0x08890001, // these are "success", no severity meaning sign bit should be 0
+    AUDCLNT_S_THREAD_ALREADY_REGISTERED    = 0x08890002,
+    AUDCLNT_S_POSITION_STALLED             = 0x08890003,
+
+    E_NOINTERFACE = 0x80004002, 
+    E_POINTER     = 0x80004003,
+    E_INVALIDARG  = 0x80070057,
+    E_OUTOFMEMORY = 0x8007000E,
+};
+
+
+fn @import(OLE32) CoInitialize(pvReserved: void*) -> HRESULT;
+
+fn @import(OLE32) CoCreateInstance(
+    rclsid: GUID*,
+    pUnkOuter: void*, // LPUNKNOWN?
+    dwClsContext: u32,
+    riid: GUID*,
+    ppv: void**,
+) -> HRESULT;
+fn @import(OLE32) CoUninitialize();
