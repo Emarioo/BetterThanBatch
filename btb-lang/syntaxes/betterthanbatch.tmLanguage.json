@@ -69,6 +69,10 @@
 				{
 					"name": "keyword.control",
 					"match": "@param\\s+(\\w|_|\\d)+"
+	            },
+				{
+					"name": "keyword.control",
+					"match": "@return"
 	            }
 			]
 		},
@@ -84,6 +88,10 @@
 				{
 					"name": "keyword.control",
 					"match": "@param\\s+(\\w|_|\\d)+"
+	            },
+				{
+					"name": "keyword.control",
+					"match": "@return"
 	            }
             ]
 		},

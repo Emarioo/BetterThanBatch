@@ -1607,6 +1607,7 @@ void VirtualMachine::execute(){
         case BC_BAND:
         case BC_BOR:
         case BC_BXOR:
+        case BC_BNOT:
         case BC_BLSHIFT:
         case BC_BRSHIFT: {
             op0 = (BCRegister)instructions[pc++];
@@ -1628,6 +1629,7 @@ void VirtualMachine::execute(){
                 case BC_LAND: OP(&&)
                 case BC_LOR: OP(||)
                 case BC_LNOT: registers[op0] = !raw_value1; break;
+                case BC_BNOT: registers[op0] = ~raw_value1; break;
                 default: Assert(false);
                 #undef OP
             }

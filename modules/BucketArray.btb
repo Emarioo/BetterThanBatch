@@ -73,7 +73,7 @@ struct BucketArray<T> {
 			memory_tracker.remove(bucket.m_data, bucket.m_max, typeid u8)
 		}
         Free(m_buckets, m_buckets_max * sizeof(BucketArray_Bucket));
-		memory_tracker.remove(m_buckets, m_buckets_max, typeid BucketArray_Bucket)
+		memory_tracker.remove(m_buckets, m_buckets_max * sizeof(BucketArray_Bucket), typeid BucketArray_Bucket)
         m_buckets = null;
         m_buckets_max = 0;
 		m_valueCount = 0;
@@ -125,7 +125,8 @@ struct BucketArray<T> {
 		if (bucketIndex == -1) {
 			newMax: i32 = m_buckets_max * 1.5 + 1;
             newBuckets: BucketArray_Bucket* = Reallocate(newMax * sizeof(BucketArray_Bucket), m_buckets, m_buckets_max * sizeof(BucketArray_Bucket));
-			memory_tracker.remove(m_buckets, m_buckets_max * sizeof(BucketArray_Bucket), typeid BucketArray_Bucket)
+			if m_buckets
+				memory_tracker.remove(m_buckets, m_buckets_max * sizeof(BucketArray_Bucket), typeid BucketArray_Bucket)
 			memory_tracker.add(newBuckets, newMax * sizeof(BucketArray_Bucket), typeid BucketArray_Bucket)
 			if (!newBuckets) {
 				//engone::log::out >> engone::log::Disable;

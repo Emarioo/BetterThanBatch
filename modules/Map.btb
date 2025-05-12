@@ -135,7 +135,6 @@ struct Map<Key,Val> {
         x ^= x >> 14;
         return x % cast<u32>table.size();
     }
-    // TODO: Implement i64 hash
     fn hash(num: i32) -> i32 {
         if table.size() == 0
             return 0;
@@ -150,6 +149,10 @@ struct Map<Key,Val> {
         x ^= x >> 14;
         return x % cast<u32>table.size();
     }
+    // TODO: Can't add 64-bit to 32-bit hash because ambiguous overloading. Improve the error message
+    //   because it doesn't tell us the types of the map and such. Improve overloading for void* and i64. They collide.
+    // fn hash(num: i64) -> i32 { return 0 }
+
     // not named size() because memory isn't contiguous like an array
     fn getCount() -> i32 {
         return count;

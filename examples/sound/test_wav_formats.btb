@@ -1,0 +1,32 @@
+
+#import "Sound"
+#import "Logger"
+#import "OS"
+#import "Array"
+fn main() {
+    memory_tracker.init()
+    memory_tracker.disabled = false
+    InitSoundState()
+
+    sounds: Array<char[]>
+    sounds.add("examples/sound/mono-8bit.wav")
+    // DO NOT PLAY THESE, They are not supported and you will ruin your ears.
+    // sounds.add("examples/sound/mono-16bit.wav")
+    // sounds.add("examples/sound/mono-24bit.wav")
+    // sounds.add("examples/sound/mono-32bit.wav")
+    // sounds.add("examples/sound/stereo-16bit.wav")
+    // sounds.add("examples/sound/stereo-32bit-float.wav")
+    // sounds.add("examples/sound/stereo-16-bit-16khz.wav")
+
+    for sounds {
+        ref, err := LoadSoundFromFile(*it)
+        Assert(err == SOUND_SUCCESS)
+
+        inst := ref.createInstance()
+        log("Playing ", *it)
+        ProcessSoundForNSeconds(3.0)
+        inst.play()
+        ProcessSoundForNSeconds(3.0)
+    }
+    log("Finished")
+}

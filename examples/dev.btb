@@ -9,8 +9,8 @@
 
 // #import "D:/dev/wander/src/main.btb"
 
-// #import "examples/sound/proper_sound.btb"
-#import "examples/sound/sample_wasapi.btb"
+#import "examples/sound/proper_sound.btb"
+// #import "examples/sound/sample_wasapi.btb"
 // #import "bad.btb"
 
 /*

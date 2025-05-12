@@ -20,9 +20,21 @@
     if that is the case.
 
     At the bottom of this file you can find implementation decisions.
-
 */
-// TODO: Audio for Linux
+
+/*  TODO:
+        - Audio for Linux
+        - Metrics on sound mixing performance. How much time is spent mixing sound and how many more sounds could you theoretically handle. Also how much memory is being used for sounds.
+        - Audio processing. We can't mix sounds 1 second in advance because if you pick up an item then you will have
+          to wait in worst case 1 second for the play call to be queued up and sound mixed in the next second.
+          instead we mix sound every frame and fill up the buffer with 1 frame worth of audio data. The audio thread
+          might run at 60 Hz while the game runs at 120 Hz. Audio thread might even be fine at 30 Hz.
+        - Enumeration. At all times we'll store the strings and ids for the devices in sound_state. Every 0.5 seconds we'll
+          call the enumerate device function from the backend API. This allows us to keep the backend calls on a
+          seperate thread while from the developer's view they can just access the enumeration devices from sound_state as.
+          They don't get affected by how different backend API's work. Also, we may need to access backend API from one
+          thread only so keeping everything on the backend thread seems like a good idea.
+*/
 
 #import "Logger"
 #import "File"
@@ -34,6 +46,11 @@
 #import "Array"
 #import "BucketArray"
 
+
+/*#################################
+    PUBLIC USER LEVEL FUNCTIONS
+##################################*/
+
 enum SoundError {
     SOUND_SUCCESS,
     SOUND_FILE_NOT_FOUND,
@@ -41,37 +58,104 @@ enum SoundError {
     SOUND_CORRUPTED_FILE,
 }
 
+#macro SOUND_INVALID_HANDLE 0
+
 // A reference to a loaded sound.
 // This reference owns the data associated with the sound (data loaded from file unless file is streamed)
 struct SoundRef {
     handle: u64;
     fn valid() {
-        return handle != -1
+        return handle != SOUND_INVALID_HANDLE
     }
     fn cleanup() {
         // TODO: Destroy owned memory.
         // TODO: Destroy sound instances.
-        handle = -1
+        handle = SOUND_INVALID_HANDLE
+    }
+
+    fn createInstance() -> SoundInstance {
+        impl := sound_state.createSoundInstance({handle})
+        return { impl.handle }
     }
 }
 
 // An instance to sound
 struct SoundInstance {
-    hande: u64;
+    handle: u64;
     fn valid() {
-        return handle != -1
+        return handle != SOUND_INVALID_HANDLE
     }
     fn cleanup() {
         // TODO: Destroy instance.
-        handle = -1
+        handle = SOUND_INVALID_HANDLE
+    }
+
+    fn play() {
+        // log("Play ", handle)
+        instance := sound_state.getSoundInstance(handle)
+        instance.playing = true
+    }
+    fn stop() {
+        // log("Stop ", handle)
+        instance := sound_state.getSoundInstance(handle)
+        instance.playing = false
+    }
+    fn set_timestamp(timestamp: f64) {
+        // log("set timestamp ", timestamp)
+        instance := sound_state.getSoundInstance(handle)
+        sound := sound_state.getSoundRef(instance.sound_ref_handle)
+        instance.current_frame = timestamp * sound.wav.sample_rate
+    }
+    fn setVolume(volume: f32) {
+        // log("Set volume ", volume)
+    }
+    fn isPlaying() -> bool {
+        instance := sound_state.getSoundInstance(handle)
+        return instance.playing
     }
 }
 
+// This function is mainly meant for testing.
+fn ProcessSoundForNSeconds(time: f64) {
+    // Can't do ProcessSleep because sound is processed 1 frame at a time
+    global last_time: i64 = 0
+    if last_time == 0
+        last_time = StartMeasure()
+
+    while time > 0.0 {
+        now := StartMeasure()
+        delta := DiffMeasure(now - last_time)
+        last_time = now
+        // log(time," ", delta)
+        time -= delta
+
+        ProcessSound()
+        ProcessSleep(0.001)
+    }
+}
+
+/*###############################
+    IMPLEMENTATION SPECIFIC
+###############################*/
+
 struct SoundRef_impl {
+    handle: u64; // handle is 64-bit in case we ever want it to represent a pointer
     name: StringBuilder; // path to audio file or user defined name when using LoadSoundFromRawFileData
+    bucket_index: i32;
+
+    // TODO: Add stream data and fields for it
+    wav: WAVFile*;
+    total_frames: i32;
 }
 struct SoundInstance_impl {
-    x: i32;
+    handle: u64;
+    sound_ref_handle: u64;
+    bucket_index: i32;
+
+    playing: bool;
+    current_frame: i32; // number of frames written to audio device buffer (not that the sample may not have been played by audio backend yet)
+
+    // TODO: pos: vec3;
 }
 
 // Manager of all resources such as:
@@ -79,11 +163,67 @@ struct SoundInstance_impl {
 struct SoundState {
     refs: BucketArray<SoundRef_impl>;
     instances: BucketArray<SoundInstance_impl>;
+    m_next_handle: u64;
+    audio_device: AudioDevice;
+
+    last_time: i64;
+    global_volume: f32 = 1.0;
 
     fn init() {
         refs.init(64)
         instances.init(64)
+        m_next_handle = 1
     } 
+    fn cleanup() {
+        refs.cleanup()
+        instances.cleanup()
+        audio_device.cleanup()
+    }
+
+    // @return Always returns a valid pointer (asserts if something fails)
+    fn createSoundRef(name: char[]) -> SoundRef_impl* {
+        impl, index := refs.add(null)
+        Assert(impl)
+        impl.bucket_index = index
+        impl.handle = nextHandle()
+        impl.name.append(name)
+        return impl
+    }
+
+    fn getSoundRef(handle: u64) -> SoundRef_impl* {
+        for refs {
+            if it.handle == handle
+                return it
+        }
+        return null
+    }
+
+    // 0.0 - maxfloat?
+    fn setGlobalVolume(volume: f32) {
+        global_volume = volume
+    }
+
+    // @return Always returns a valid pointer (asserts if something fails)
+    fn createSoundInstance(ref: SoundRef) -> SoundInstance_impl* {
+        impl, index := instances.add(null)
+        Assert(impl)
+        impl.bucket_index = index
+        impl.handle = nextHandle()
+        impl.sound_ref_handle = ref.handle
+        return impl
+    }
+
+    fn getSoundInstance(handle: u64) -> SoundInstance_impl* {
+        for instances {
+            if it.handle == handle
+                return it
+        }
+        return null
+    }
+
+    fn nextHandle() -> u64 {
+        return m_next_handle++
+    }
 }
 global sound_state: SoundState*
 
@@ -93,17 +233,222 @@ fn InitSoundState() {
 
     sound_state = Allocate(sizeof(SoundState))
     construct(sound_state)
+
+    // TODO: We should not initialize default device by default.
+    //   An application may have a settings, config or cache file where the audio device used last time
+    //   the application was running is stored. If so they want to use that device instead of the default.
+    sound_state.audio_device.init_default_device()
 }
 fn DestroySoundState() {
     Assert(sound_state)
 
     sound_state.cleanup()
     Free(sound_state, sizeof(SoundState))
+    sound_state = null
 }
 
-enum AudioFileType {
-    AUDIO_FILE_UNKNOWN,
-    AUDIO_FILE_WAV,
+fn ProcessSound() {
+    Assert(sound_state)
+
+    // Check the state of the buffer. Do we need to fill it up.
+
+    /* Concerns:
+        If we have 5 sounds with 1-5 second durations then we can't fill up the buffer with all those sounds
+        because we might want to add new sounds the next frame. So we'll process the sound for this frame.
+    */
+
+    if sound_state.last_time == 0 {
+        // first time processing sound
+        sound_state.last_time = StartMeasure()
+    }
+    now := StartMeasure()
+    delta := DiffMeasure(now - sound_state.last_time)
+    sound_state.last_time = now
+
+
+    remaining_frames := sound_state.audio_device.remainingFrames()
+
+    // Generally speaking, through experiments. process_rate should be double the frequency at which we call ProcessSound.
+    // Holding two game frames worth of audio keeps us safe.
+    // process_rate: f64 = 0.020 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
+    process_rate: f64 = 2 * 0.016 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
+
+    wanted_frames_in_buffer: i32 = process_rate * sound_state.audio_device.wave_format.Format.nSamplesPerSec
+
+    frames_to_write := wanted_frames_in_buffer - remaining_frames
+
+    if(remaining_frames == 0) {
+        // Show delta information and so on...
+        // log("Sound process engine can't keep up!")
+    }
+    // log("delta ", delta, " ", frames_to_write)
+    log("delta", delta, " ", remaining_frames,"/",wanted_frames_in_buffer)
+    // log("delta", delta, " ", remaining_frames,"/",wanted_frames_in_buffer)
+
+    if frames_to_write == 0 {
+        // log("(nothing to write), delta ", delta)
+    }
+
+    // TODO: Measure audio processing time.
+
+    // NOTE: We expect the audio stream to be 32-bit float. We will handle others in the future.
+    buffer: f32* = cast<f32*>sound_state.audio_device.acquireBuffer(frames_to_write)
+    buffer_len := frames_to_write * 2 * 4 // channels * 32-bit float PCM
+    memzero(buffer,buffer_len)
+    
+    // TODO: Read about GetBuffer and ReleaseBuffer and Initialize AudioClient for a correct implementation where
+    //   Errors are handled. For example we write to slowly to the buffer.
+
+    // TODO: Parse WAV sound data
+
+    // log("####### DELTA ", delta)
+    // log("Remaining frames ", remaining_frames, " (",wanted_frames_in_buffer,")")
+    // log("volume ", sound_state.global_volume)
+    // log("frames_to_write ", frames_to_write)
+
+    // TODO: Check thread safety
+    for instance: sound_state.instances {
+        sound := sound_state.getSoundRef(instance.sound_ref_handle)
+
+        if !instance.playing
+            continue
+
+        wav := sound.wav
+        
+        current_frame := instance.current_frame // get local copy for thread safety (we don't want code calling seek and changing current frame while we're writing to buffer)
+
+        // buf16 = cast<i16*>wav.data
+
+
+
+        // TODO: SIMD, write in assembly?
+        for 0..frames_to_write {
+            if nr + instance.current_frame >= sound.total_frames {
+                instance.playing = false
+                break
+            }
+            // TODO: We assume 8-bit mono audio. Don't do that.
+            // TODO: Convert 44.1 kHz to 48 kHz and vice versa.
+            in_sample := wav.data[nr + instance.current_frame]
+            out_sample: f32 = (cast<i32>in_sample - 128) / 128.0 * sound_state.global_volume
+
+            // if out_sample > 0.1
+            //     out_sample = 0.1
+            // if out_sample < -0.1
+            //     out_sample = -0.1
+            // log(out_sample)
+            // out_sample *= 0.01
+
+            buffer[2*nr] += out_sample
+            buffer[2*nr + 1] += out_sample
+        }
+        instance.current_frame += frames_to_write
+    }
+
+    sound_state.audio_device.releaseBuffer(frames_to_write)
+}
+
+struct AudioDevice {
+    enumerator: IMMDeviceEnumerator*;
+    device: IMMDevice*;
+    audioClient: IAudioClient*;
+    wave_format: WAVEFORMATEXTENSIBLE*;
+    renderService: IAudioRenderClient*;
+
+    fn init_default_device() {
+        #macro CHECK_HR if res != 0 { log("HR BAD ", cast_unsafe<WASAPI_Error*>&res); Assert(false) }
+
+        // #macro WASLOG(...) log(...)
+        #macro WASLOG(...) #endmacro
+
+        buffer_duration_100ns := 80_000_00 // 80 ms
+
+        res: HRESULT
+
+        res = CoInitialize(null)
+        CHECK_HR
+        WASLOG("pass CoInitialize")
+        
+        
+        res = CoCreateInstance(&MMDeviceEnumerator_GUID, null, cast<u32>CLSCTX_ALL, &IMMDeviceEnumerator_GUID, &enumerator)
+        CHECK_HR
+        WASLOG("pass CoCreateInstance")
+
+        
+        res = enumerator.vtable.GetDefaultAudioEndpoint(enumerator, eRender, eConsole, &device)
+        CHECK_HR
+        WASLOG("pass GetDefaultAudioEndpoint")
+
+        res = device.vtable.Activate(device, &IAudioClient_GUID, CLSCTX_ALL, null, &audioClient)
+        CHECK_HR
+        WASLOG("pass device.Activate")
+
+        res = audioClient.vtable.GetMixFormat(audioClient, cast<WAVEFORMATEX**>&wave_format)
+        CHECK_HR
+        WASLOG("pass audioClient.GetMixFormat")
+        // log("WAVE format:")
+        // std_print(wave_format, pretty = true)
+
+        res = audioClient.vtable.Initialize(audioClient, AUDCLNT_SHAREMODE_SHARED, 0, buffer_duration_100ns, 0,  cast<WAVEFORMATEX*>wave_format, null)
+        CHECK_HR
+        WASLOG("pass audioClient.Initialize")
+
+        res = audioClient.vtable.GetService(audioClient, &IAudioRenderClient_GUID, &renderService)
+        CHECK_HR
+        WASLOG("pass audioClient.GetService")
+
+        audioClient.vtable.Start(audioClient)
+        CHECK_HR
+        WASLOG("pass audioClient.Start")
+
+        // TODO: Extinsible format may have multiple channels, more than SPEAKER_FRONT_LEFT and SPEAKER_FRONT_RIGHT.
+        //   Those are the only channels we support so we should zero the other ones (if using float, if using 16-bit then set to 2^15).
+
+        // TODO: Handle 16-bit and 32-bit integer?
+        Assert(equal(cast<char*>&wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, 16))
+        // std_print_hex(cast<char*>&expected_format.SubFormat, 16)
+        // Assert(equal(cast<char*>&expected_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
+    }
+    fn cleanup() {
+        res: i32
+
+        audioClient.vtable.Stop(audioClient)
+        CHECK_HR
+        WASLOG("pass audioClient.Stop")
+
+        renderService.vtable.Release(renderService)
+        audioClient.vtable.Release(audioClient)
+        device.vtable.Release(device)
+        enumerator.vtable.Release(enumerator)
+        CoUninitialize()
+    }
+    // frames that have not been consumed
+    fn remainingFrames() -> i32 {
+        res: i32
+        Assert(audioClient)
+        frames: i32
+        res = audioClient.vtable.GetCurrentPadding(audioClient, cast<u32*>&frames)
+        CHECK_HR
+        // log("pass audioClient.GetCurrentPadding")
+        return frames
+    }
+    fn acquireBuffer(frames: i32) -> u8* {
+        res: i32
+        Assert(renderService)
+        renderBuffer: u8*
+        res = renderService.vtable.GetBuffer(renderService, frames, &renderBuffer)
+        CHECK_HR
+        // log("pass renderService.GetBuffer")
+
+        return renderBuffer
+    }
+    fn releaseBuffer(written_frames: i32) {
+        res: i32
+        Assert(renderService)
+        res = renderService.vtable.ReleaseBuffer(renderService, written_frames, 0)
+        CHECK_HR
+        // log("pass renderService.ReleaseBuffer")
+    }
 }
 
 // @param path Only WAV audio files are supported (the file does not need .wav extension, format is determined with RIFF and WAVE magic numbers). The SoundRef will be named path.
@@ -115,6 +460,8 @@ enum AudioFileType {
 fn LoadSoundFromFile(path: char[], offset_into_file: i64 = 0, stream_file: bool = false) -> SoundRef, SoundError  {
     Assert(sound_state)
 
+    res: i32
+
     if stream_file {
         Assert(false);
         // TODO: Check valid WAV format
@@ -123,51 +470,51 @@ fn LoadSoundFromFile(path: char[], offset_into_file: i64 = 0, stream_file: bool 
         filesize: i64
         file := FileOpen(path, FILE_READ_ONLY, &filesize)
         if !file {
-            return {-1}, SOUND_FILE_NOT_FOUND
+            return { SOUND_INVALID_HANDLE }, SOUND_FILE_NOT_FOUND
         }
         defer FileClose(file)
 
         if filesize - offset_into_file < WAVFILE_HEADER_SIZE {
             // file too small
-            return {-1}, SOUND_CORRUPTED_FILE
+            return { SOUND_INVALID_HANDLE }, SOUND_CORRUPTED_FILE
         }
 
-        FileSetHead(file, offset_into_file, FILE_SET_BEG)
-        
+        res = FileSetHead(file, offset_into_file, FILE_SET_BEG)
+        Assert(res == offset_into_file) // TODO: Don't assert
+
         // NOTE: This is a little complicated since we don't want to read the whole file at once in case
         //   is a huge game asset pack. We first check and read the WAV header and then check and read the data.
         temp_max := 64
         temp := Allocate(temp_max)
         Assert(temp)
-        defer Free(temp, temp_max)
-        FileRead(file, temp, WAVFILE_HEADER_SIZE)
-        
-        wav, err := ParseWAVHeader({temp, WAVFILE_HEADER_SIZE}, path = path)
-        if !wav {
-            return {-1}, SOUND_CORRUPTED_FILE
-        }
-        success := false
-        defer if !success  Free(wav)
 
-        new_temp_max := wav.data_len
-        new_temp := Reallocate(new_temp_max, temp, temp_max)
+        res = FileRead(file, temp, WAVFILE_HEADER_SIZE)
+        Assert(res == WAVFILE_HEADER_SIZE)
+
+        wav, err := ParseWAVHeader({temp, WAVFILE_HEADER_SIZE}, path = path, print = true)
+        if !wav {
+            Free(temp, temp_max)
+            return { SOUND_INVALID_HANDLE }, SOUND_CORRUPTED_FILE
+        }
+
+        new_temp := Reallocate(wav.data_len, temp, temp_max)
         Assert(new_temp)
 
-        FileRead(file, new_temp, wav.data_len)
+        res = FileRead(file, new_temp, wav.data_len)
+        Assert(res == wav.data_len)
 
-        err = ParseWAVData({new_temp, wav.data_len}, wav)
-        if err != WAV_SUCCESS {
-            return {-1}, SOUND_CORRUPTED_FILE
-        }
+        // NOTE: We don't need to call ParseWAVData. It just allocates a buffer for WAV data but we already reallocated one.
+        wav.data = new_temp
 
-        success = true
-
-        // TODO: Create SoundRef
+        sound := sound_state.createSoundRef(path) // path is name of sound ref
+        sound.wav = wav
+        sound.total_frames = wav.data_len / cast<i32>wav.block_align
         
         ref: SoundRef
+        ref.handle = sound.handle
         return ref, SOUND_SUCCESS
     }
-    return {-1}, SOUND_UNSUPPORTED_FILE_FORMAT
+    return { SOUND_INVALID_HANDLE }, SOUND_UNSUPPORTED_FILE_FORMAT
 }
 // @param name SoundRef will get this name.
 // @param file_data Raw file data to parse (only .wav files are supported). Useful if you store assets in one large packed file. With LoadSoundFromFile you are limited to the OS file system.
@@ -184,7 +531,7 @@ fn LoadSoundFromRawFileData(name: char[], file_data: u8[], stream_file: bool = f
         Assert(false);
     }
     
-    return {-1}, SOUND_UNSUPPORTED_FILE_FORMAT
+    return { SOUND_INVALID_HANDLE }, SOUND_UNSUPPORTED_FILE_FORMAT
 }
 
 fn CreateSoundInstance(ref: SoundRef*) -> SoundInstance {
@@ -218,22 +565,6 @@ struct WAVFile {
     data_len: i32;
 }
 
-// returns true if correct RIFF and WAVE fields are found.
-fn CheckWAVHeader(file_data: u8[]) -> bool {
-    char_ptr := cast<char*>file_data.ptr
-
-    if data.len < WAVFILE_HEADER_SIZE // .wav files should be at least 44 in size
-        return false
-
-    if !equal(char_ptr + 0, "RIFF".ptr, 4)
-        return false
-
-    if !equal(char_ptr + 8, "WAVE".ptr, 4)
-        return false
-
-    return true
-}
-
 // TODO: Argument to pass in allocator
 // @param path only used when printing error
 fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> WAVFile*, WAVError {
@@ -242,13 +573,13 @@ fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> 
 
     if data.len < WAVFILE_HEADER_SIZE {
         if print
-            log("ParseWAVData: Size of data is too small for WAV header (was ",data.len, " needs to be at least 44), origin path = ",path)
+            log("ParseWAVHeader: Size of data is too small for WAV header (was ",data.len, " needs to be at least 44), origin path = ",path)
         return null, WAV_CORRUPT
     }
     
     if !equal(char_ptr + head, "RIFF".ptr, 4) {
         if print
-            log("ParseWAVData: 'RIFF' magic incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
+            log("ParseWAVHeader: 'RIFF' magic incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
         return null, WAV_CORRUPT
     }
     head += 4
@@ -256,15 +587,15 @@ fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> 
     almost_file_size := *cast<i32*>(data.ptr + head)
     head += 4
 
-    if data.len < almost_file_size + 8 {
-        if print
-            log("ParseWAVData: File size in header was ",almost_file_size," bytes which does not match size of passed in data of ",data.len,"-8 (-8 because RIFF and file size field are excluded), origin path = ",path)
-        return null, WAV_CORRUPT
-    }
+    // if data.len < almost_file_size + 8 {
+    //     if print
+    //         log("ParseWAVHeader: File size in header was ",almost_file_size," bytes which does not match size of passed in data of ",data.len,"-8 (-8 because RIFF and file size field are excluded), origin path = ",path)
+    //     return null, WAV_CORRUPT
+    // }
 
     if !equal(char_ptr + head, "WAVE".ptr, 4) {
         if print
-            log("ParseWAVData: 'WAVE' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
+            log("ParseWAVHeader: 'WAVE' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
         return null, WAV_CORRUPT
     }
     head += 4
@@ -273,7 +604,7 @@ fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> 
 
     if !equal(char_ptr + head, "fmt ".ptr, 4) {
         if print
-            log("ParseWAVData: 'fmt ' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
+            log("ParseWAVHeader: 'fmt ' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
         return null, WAV_CORRUPT
     }
     head += 4
@@ -283,7 +614,7 @@ fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> 
 
     if format_size != 16 { // always 16 for WAVE (i think)
         if print
-            log("ParseWAVData: Size of format was ",format_size," bytes but should be 16 (probably?), origin path = ",path)
+            log("ParseWAVHeader: Size of format was ",format_size," bytes but should be 16 (probably?), origin path = ",path)
         return null, WAV_CORRUPT
     }
 
@@ -302,7 +633,7 @@ fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> 
 
     if !equal(char_ptr + head, "data".ptr, 4) {
         if print
-            log("ParseWAVData: 'data' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
+            log("ParseWAVHeader: 'data' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
         return null, WAV_CORRUPT
     }
     head += 4
@@ -312,7 +643,7 @@ fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> 
 
     if(cast<u32>wav.data_len % wav.block_align != 0) {
         if print
-            log("ParseWAVData: Size of data should be divisible by block_align (",wav.data_len," % ",wav.block_align,"=",(cast<u32>wav.data_len%wav.block_align),"), origin path = ",path)
+            log("ParseWAVHeader: Size of data should be divisible by block_align (",wav.data_len," % ",wav.block_align,"=",(cast<u32>wav.data_len%wav.block_align),"), origin path = ",path)
         return null, WAV_CORRUPT
     }
 
@@ -390,7 +721,7 @@ With a pointer where allocate and free it you may call cleanup and forget to thr
 Audio files are complex and hard to implement and the documentation on them is somewhat lacking. Therefore you need to use a library for them. But also, I doubt we would be able to implement a better ogg or mp3 decoder than what popular libraries do 
 so you probably want to use a library anyway.
 
-# WHY IS 0 as SoundRef.handle VALID AND -1 IS INVALID?
+# WHY IS 0 as SoundRef.handle INVALID?
 
 Over the years I have made systems use 0 as handle which is problematic since it is a valid index.
 Either you have an array where the first element is unused or when accessing the array you do 'handle-1' and
@@ -398,6 +729,9 @@ when creating handles 'handle+1'. This is awful to keep track of so unused first
 to indicate invalid handle which is problematic because you can't reset structs, elements and arrays which contain handles
 to zero since that means a valid handle.
 
-This time I have chosen -1 as invalid handle.
+A minor or major issue with the language is x: u64 = -1 becomes 4294967295 not -1 which isn't great. It happens because literal integers are i32 by default.
+The type of literals are not inferred which they should be.
+
+This time I have chosen 0 as invalid handle and first element being unused if handle is an index into an array. (we may use a hashmap instead)
 
 */

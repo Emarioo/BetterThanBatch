@@ -41,11 +41,11 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
     heap := GetProcessHeap()
     if !size {
         if ptr {
-            HeapFree(heap, 0, ptr)
             // if type.index() == 0
                 memory_tracker.remove(ptr, old_size)
             // else
             //     memory_tracker.remove(ptr, old_size, type)
+            HeapFree(heap, 0, ptr)
         }
         return null
     }
@@ -65,10 +65,10 @@ fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
         // else
         //     memory_tracker.add(new_ptr, size, type)
     } else {
+        memory_tracker.remove(ptr, old_size) // we must remove first incase HeapReAlloc returns the same pointer
         new_ptr = HeapReAlloc(heap, 0, ptr, size)
         // if type.index() == 0 {
-            memory_tracker.remove(ptr, old_size) // we must remove first incase HeapReAlloc returns the same pointer
-            // memory_tracker.add(new_ptr, size)
+        memory_tracker.add(new_ptr, size)
         // } else {
         //     memory_tracker.remove(ptr, old_size, type)
         //     memory_tracker.add(new_ptr, size, type)
@@ -186,14 +186,17 @@ struct MemoryTracker {
         value_ptr := allocations.find(ptr)
         if !value_ptr {
             LOG_TRACKER("Cannot remove allocation ", ptr, ", it doesn't exist.")
+            Assert(false)
             return;
         }
         if *value_ptr == 0 {
-            LOG_TRACKER("Cannot remove allocation ", ptr, ", it existed at one point but not anymore.")
+            LOG_TRACKER("Double free on ", ptr, " (size to free: ",size,")")
+            Assert(false)
             return;
         }
         if size != 0 && *value_ptr != size {
-            LOG_TRACKER("When removing allocation ", ptr, ", expected size of allocation didn't match (",size,"!=",*value_ptr,").")
+            LOG_TRACKER("Potential double free on ", ptr, " (size to free: ",size,", tracked size: ",*value_ptr,")")
+            Assert(false)
         }
         allocations.set(ptr, 0) // we set to 0 instead of removing because it's useful to know if pointer existed at one point in time
         // allocations.remove(ptr)
@@ -221,14 +224,17 @@ struct MemoryTracker {
         value_ptr := item.allocations.find(ptr)
         if !value_ptr {
             LOG_TRACKER("Cannot remove allocation ", ptr, ", it doesn't exist.")
+            Assert(false)
             return;
         }
         if *value_ptr == 0 {
-            LOG_TRACKER("Cannot remove allocation ", ptr, ", it existed at one point but not anymore.")
+            LOG_TRACKER("Double free on ", ptr, " (size to free: ",size,")")
+            Assert(false)
             return;
         }
         if size != 0 && *value_ptr != size {
-            LOG_TRACKER("When removing allocation ", ptr, ", expected size of allocation didn't match (",size,"!=",*value_ptr,").")
+            LOG_TRACKER("Potential double free on ", ptr, " (size to free: ",size,", tracked size: ",*value_ptr,")")
+            Assert(false)
         }
         item.count -= size / cast<i32>lang_typesize(type)
         item.allocations.set(ptr, 0) // we set to 0 instead of removing because it's useful to know if pointer existed at one point in time

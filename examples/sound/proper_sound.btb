@@ -1,8 +1,35 @@
 
 #import "Sound"
+#import "Logger"
+#import "OS"
 
 fn main() {
+    memory_tracker.init()
+    memory_tracker.disabled = false
     InitSoundState()
-    ref, err := LoadSoundFromFile("text.wae")
-    log("Result: ", &err, &ref)
+    ref, err := LoadSoundFromFile("examples/sound/goodmorning.wav")
+    log("Result: ", &err, " ", &ref)
+
+    inst := ref.createInstance()
+    inst2 := ref.createInstance()
+
+    // See if we can keep up?
+    inst.play()
+    while inst.isPlaying() {
+        ProcessSound()
+        ProcessSleep(0.020)
+    }
+
+    // inst.play()
+    // ProcessSoundForNSeconds(0.5)
+    // inst2.play()
+    // inst.stop()
+    // ProcessSoundForNSeconds(0.3)
+    // inst.play()
+    // ProcessSoundForNSeconds(0.5)
+    // inst.set_timestamp(0.9)
+
+    // ProcessSoundForNSeconds(3.0)
+
+    DestroySoundState()
 }

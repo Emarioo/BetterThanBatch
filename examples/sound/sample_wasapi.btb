@@ -78,7 +78,7 @@ fn PlayAudio(path: char[]) {
     // log("CURRENT FORMAT")
     // std_print(&waveFormat, pretty = true)
 
-    res = audioClient.vtable.Initialize(audioClient, AUDCLNT_SHAREMODE_SHARED, 0, 10_000_0000, 0,  cast<WAVEFORMATEX*>expected_format, null)
+    res = audioClient.vtable.Initialize(audioClient, AUDCLNT_SHAREMODE_SHARED, 0, 1_000_000_00, 0,  cast<WAVEFORMATEX*>expected_format, null)
     // res = audioClient.vtable.Initialize(audioClient, AUDCLNT_SHAREMODE_EXCLUSIVE, 0, 1000_0000, default_period, &waveFormat, null)
     CHECK_HR
     log("pass audioClient.Initialize")
