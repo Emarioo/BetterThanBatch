@@ -1,0 +1,38 @@
+
+#import "Sound"
+#import "Logger"
+#import "OS"
+
+fn main() {
+    memory_tracker.init()
+    memory_tracker.disabled = false
+    InitSoundState()
+    ref, err := LoadSoundFromFile("examples/sound/stereo-16bit-16khz.wav")
+
+    inst: SoundInstance
+    for 0..20 {
+        inst = ref.createInstance()
+        inst.play()
+    }
+
+    while inst.isPlaying() {
+        ProcessSound()
+        ProcessSleep(0.016)
+    }
+
+    // This code assumes these variables are globals defined and calculated in Sound.btb.
+    tim := DiffMeasure(sound_cycles/sound_frames)
+    timmax := DiffMeasure(sound_cycles_max)
+    log("Avg. frame time  ", tim*1000, " ms")
+    log("Max frame time  ", timmax*1000, " ms")
+
+    // Measurements on my computer:
+    // AMD Ryzen 9 9950x CPU (with virtual box, fan control, multiple windows and tabs of duckduckgo in the background)
+    /* 
+        1 sound: avg: 0.027 ms
+        2 sounds: avg: 0.041 ms
+        20 sounds: avg: 0.436 ms, max: 0.881 ms
+    */
+
+    DestroySoundState()
+}

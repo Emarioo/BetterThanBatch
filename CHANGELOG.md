@@ -7,6 +7,7 @@ Versioning for this project works like this: [Versioning](/docs/details/Versioni
 ## v0.2.1 - ...
 
 ### Added
+- Added **Sound.btb**. Sound engine for playing multiple sounds at once (only .wav files and Windows support at the moment).
 - Finally implemented global arrays.
 - VM can execute inline assembly.
 - VM can now pass function pointers to C libraries, specificially callbacks for events from GLFW.

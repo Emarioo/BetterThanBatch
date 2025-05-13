@@ -10,13 +10,12 @@ fn main() {
 
     sounds: Array<char[]>
     sounds.add("examples/sound/mono-8bit.wav")
-    // DO NOT PLAY THESE, They are not supported and you will ruin your ears.
-    // sounds.add("examples/sound/mono-16bit.wav")
-    // sounds.add("examples/sound/mono-24bit.wav")
-    // sounds.add("examples/sound/mono-32bit.wav")
-    // sounds.add("examples/sound/stereo-16bit.wav")
-    // sounds.add("examples/sound/stereo-32bit-float.wav")
-    // sounds.add("examples/sound/stereo-16-bit-16khz.wav")
+    sounds.add("examples/sound/mono-16bit.wav")
+    // sounds.add("examples/sound/mono-24bit.wav") // We don't support 24-bit PCM
+    sounds.add("examples/sound/mono-32bit.wav")
+    sounds.add("examples/sound/stereo-16bit.wav")
+    sounds.add("examples/sound/stereo-32bit-float.wav")
+    sounds.add("examples/sound/stereo-16bit-16khz.wav")
 
     for sounds {
         ref, err := LoadSoundFromFile(*it)
@@ -24,9 +23,12 @@ fn main() {
 
         inst := ref.createInstance()
         log("Playing ", *it)
-        ProcessSoundForNSeconds(3.0)
+        
         inst.play()
-        ProcessSoundForNSeconds(3.0)
+        while inst.isPlaying() {
+            ProcessSound()
+            ProcessSleep(0.016)
+        }
     }
     log("Finished")
 }

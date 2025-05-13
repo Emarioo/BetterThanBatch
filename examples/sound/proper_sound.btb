@@ -7,29 +7,27 @@ fn main() {
     memory_tracker.init()
     memory_tracker.disabled = false
     InitSoundState()
-    ref, err := LoadSoundFromFile("examples/sound/goodmorning.wav")
+    // ref, err := LoadSoundFromFile("examples/sound/goodmorning.wav")
+    // ref, err := LoadSoundFromFile("examples/sound/mono-16bit.wav")
+    // ref, err := LoadSoundFromFile("examples/sound/mono-32bit.wav")
+    ref2, err2 := LoadSoundFromFile("examples/sound/stereo-32bit-float.wav")
+    // ref, err := LoadSoundFromFile("examples/sound/stereo-16bit.wav")
+    ref, err := LoadSoundFromFile("examples/sound/stereo-16bit-16khz.wav")
     log("Result: ", &err, " ", &ref)
 
     inst := ref.createInstance()
-    inst2 := ref.createInstance()
+    inst2 := ref2.createInstance()
+
+    sound := sound_state.getSoundRef(ref.handle)
+    log(sound.wav)
 
     // See if we can keep up?
     inst.play()
+    inst2.play()
     while inst.isPlaying() {
         ProcessSound()
-        ProcessSleep(0.020)
+        ProcessSleep(0.016)
     }
-
-    // inst.play()
-    // ProcessSoundForNSeconds(0.5)
-    // inst2.play()
-    // inst.stop()
-    // ProcessSoundForNSeconds(0.3)
-    // inst.play()
-    // ProcessSoundForNSeconds(0.5)
-    // inst.set_timestamp(0.9)
-
-    // ProcessSoundForNSeconds(3.0)
 
     DestroySoundState()
 }
