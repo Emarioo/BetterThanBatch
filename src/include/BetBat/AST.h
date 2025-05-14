@@ -404,6 +404,10 @@ struct TypeInfo {
     TypeId element_type={};
     int array_length=0; // zero or less means not an array type
 
+    bool isArray() const {
+        return array_length != 0;
+    }
+
     ScopeId scopeId = 0;
     // bool isVirtualType = false;
     // bool isVirtual() { return isVirtualType; }
@@ -737,7 +741,7 @@ struct ASTStatement : ASTNode {
     struct VarName {
         std::string name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
-        int arrayLength=-1;
+        // int arrayLength=-1;
         bool declaration = false; // multi var. assignment may not declare variables
         PolyVersions<TypeId> versions_assignType{}; // is inferred from expression in type checker
         // true if variable declares a new variable (it does if it has a type)
@@ -823,7 +827,6 @@ struct ASTStruct : ASTNode {
         lexer::SourceLocation location{};
         ASTExpression* defaultValue = nullptr;
         TypeId stringType{};
-        int array_length = 0; // should never be negative
     };
     DynamicArray<Member> members{};
     struct PolyArg {
@@ -1214,6 +1217,7 @@ struct AST {
     static void DecomposePolyTypes(StringView view, StringView* out_base, QuickArray<StringView>* outPolyTypes);
     static void DecomposeNamespace(StringView view, StringView* out_namespace, StringView* out_name);
     static void DecomposePointer(StringView view, StringView* out_name, u32* level);
+    static void DecomposeArray(StringView view, StringView* out_name, u32* length);
     // static StringView TrimPointer(StringView& view, u32* level = nullptr);
     static StringView TrimBaseType(StringView view, StringView* outNamespace, u32* level, QuickArray<StringView>* outPolyTypes, StringView* typeName);
     // true if id is one of u8-64, i8-64

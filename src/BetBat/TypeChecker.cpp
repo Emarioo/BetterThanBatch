@@ -235,10 +235,10 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
         // }
         
         implMem.offset = offset;
-        if(member.array_length > 0)
-            offset += size * member.array_length;
-        else
-            offset += size;
+        // if(member.array_length > 0)
+        //     offset += size * member.array_length;
+        // else
+        offset += size;
 
         /*
         Current push and pop works by aligning and then pushing.
@@ -320,10 +320,49 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
     // TODO: Log what type we thought it was
     TypeId typeId = {};
     u32 plevel=0;
+    u32 array_length = 0;
     TEMP_ARRAY(StringView, polyTokens)
     StringView baseType{};
+    StringView arrayFreeType{};
     std::string realTypeName{};
+    std::string realTypeNameNoarray{};
     TEMP_ARRAY(TypeId, polyArgs)
+
+    StringView typeName{};
+    AST::DecomposePointer(typeString, &typeName, &plevel);
+    AST::DecomposeArray(typeName, &arrayFreeType, &array_length);
+
+    if (array_length) {
+        typeId = info.ast->convertToTypeId(typeName, scopeId, true);
+        if (typeId.isValid()) {
+            typeId.setPointerLevel(plevel);
+            return typeId;
+        }
+
+        TypeId element_typeid;
+        if (!typeId.isValid()) {
+            bool in_printedError = false;
+            element_typeid = checkType(scopeId, arrayFreeType, err_location, &in_printedError); // transformVirtual is false because we don't handle it correctly
+            
+            if(!element_typeid.isValid()) {
+                // Assert(in_printedError);
+                *printedError = in_printedError;
+                return {};
+            }
+        }
+
+        TypeInfo* element_info = ast->getTypeInfo(element_typeid.baseType());
+        Assert(element_info);
+        TypeInfo* typeInfo = info.ast->createType(typeName, element_info->scopeId);
+        typeInfo->array_length = array_length;
+        typeInfo->element_type = element_typeid;
+        typeInfo->_size = array_length * element_info->getSize();
+
+        typeId = typeInfo->id;
+        typeId.setPointerLevel(plevel);
+        return typeId;
+    }
+
 
     std::string tmp = typeString;
     if (tmp.substr(0,3) == "fn(" || tmp.substr(0,3) == "fn@") {
@@ -462,57 +501,61 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
         if(!type)
             return TYPE_VOID;
         return type->id;
-    } else {
-        // TODO: namespace?
-        StringView typeName{};
-        AST::DecomposePointer(typeString, &typeName, &plevel);
-        AST::DecomposePolyTypes(typeName, &baseType, &polyTokens);
-        // Token typeName = AST::TrimNamespace(noPointers, &ns);
-
-        if(polyTokens.size() != 0) {
-            // We trim poly types and then put them back together to get the "official" names for the types
-            // Maybe you used some aliasing or namespaces.
-            realTypeName += baseType;
-            realTypeName += "<";
-            // TODO: Virtual poly arguments does not work with multithreading. Or you need mutexes at least.
-            for(int i=0;i<(int)polyTokens.size();i++){
-                // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTokens[i], scopeId);
-                // TypeId id = info.ast->convertToTypeId(polyTokens[i], scopeId);
-                bool printedError = false;
-                TypeId id = checkType(scopeId, polyTokens[i], err_location, &printedError);
-                if(i!=0)
-                    realTypeName += ",";
-                realTypeName += info.ast->typeToString(id);
-                polyArgs.add(id);
-                if(id.isValid()){
-
-                } else if(!printedError) {
-                //     // ERR_SECTION(
-                // ERR_HEAD2(err_location, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
-                    if(polyTokens[i] == "int") {
-                        ERR_SECTION(
-                            ERR_HEAD2(err_location)
-                            ERR_MSG("Type '"<<polyTokens[i]<<"' does not exist. Use i32.")
-                            ERR_LINE2(err_location,"here somewhere")
-                        )
-                        return {};
-                    } else {
-                        ERR_SECTION(
-                            ERR_HEAD2(err_location)
-                            ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
-                            ERR_LINE2(err_location,"here somewhere")
-                        )
-                        return {};
-                    }
-                }
-                // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
-            }
-            realTypeName += ">";
-            typeId = info.ast->convertToTypeId(realTypeName, scopeId, true);
-        } else {
-            typeId = info.ast->convertToTypeId(typeName, scopeId, true);
-        }
     }
+
+    // TODO: namespace?
+    // AST::DecomposePointer(typeString, &typeName, &plevel);
+    // AST::DecomposeArray(typeName, &arrayFreeType, &array_length);
+    AST::DecomposePolyTypes(arrayFreeType, &baseType, &polyTokens);
+    // Token typeName = AST::TrimNamespace(noPointers, &ns);
+
+    if(polyTokens.size() != 0) {
+        // We trim poly types and then put them back together to get the "official" names for the types
+        // Maybe you used some aliasing or namespaces.
+        realTypeName += baseType;
+        realTypeName += "<";
+        // TODO: Virtual poly arguments does not work with multithreading. Or you need mutexes at least.
+        for(int i=0;i<(int)polyTokens.size();i++){
+            // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTokens[i], scopeId);
+            // TypeId id = info.ast->convertToTypeId(polyTokens[i], scopeId);
+            bool printedError = false;
+            TypeId id = checkType(scopeId, polyTokens[i], err_location, &printedError);
+            if(i!=0)
+                realTypeName += ",";
+            realTypeName += info.ast->typeToString(id);
+            polyArgs.add(id);
+            if(id.isValid()){
+
+            } else if(!printedError) {
+            //     // ERR_SECTION(
+            // ERR_HEAD2(err_location, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
+                if(polyTokens[i] == "int") {
+                    ERR_SECTION(
+                        ERR_HEAD2(err_location)
+                        ERR_MSG("Type '"<<polyTokens[i]<<"' does not exist. Use i32.")
+                        ERR_LINE2(err_location,"here somewhere")
+                    )
+                    return {};
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(err_location)
+                        ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
+                        ERR_LINE2(err_location,"here somewhere")
+                    )
+                    return {};
+                }
+            }
+            // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
+        }
+        realTypeName += ">";
+        realTypeNameNoarray = realTypeName;
+        if(array_length)
+            realTypeName += "[" +std::to_string(array_length)+ "]";
+    } else {
+        realTypeNameNoarray = arrayFreeType;
+        realTypeName += typeName;
+    }
+    typeId = info.ast->convertToTypeId(realTypeName, scopeId, true);
 
     if(typeId.isValid()) {
         auto ti = info.ast->getTypeInfo(typeId.baseType());
@@ -545,7 +588,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
         return typeId;
     }
 
-    if(polyTokens.size() == 0) {
+    if(polyTokens.size() == 0 && array_length) {
         // Errors when mistaking types from C/C++.
         if(typeString == "int") {
             ERR_SECTION(
@@ -563,6 +606,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
             )
             return {};
         } 
+        
         // ERR_SECTION(
         // ERR_HEAD2(err_location) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // type isn't polymorphic and does just not exist
@@ -1951,14 +1995,19 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
             auto param_typeString = info.ast->getStringFromTypeString(stringType);
 
             u32 plevel=0;
+            u32 array_length=0;
             TEMP_ARRAY(StringView, param_polyTypes);
             
             StringView param_typeString_no_pointer;
             StringView param_typeString_base;
             // TODO: We need to decompose function pointers too.
             AST::DecomposePointer(param_typeString, &param_typeString_no_pointer, &plevel);
+            AST::DecomposeArray(param_typeString_no_pointer, &param_typeString_no_pointer, &array_length);
             AST::DecomposePolyTypes(param_typeString_no_pointer, &param_typeString_base, &param_polyTypes);
             // namespace?
+
+            // nocheckin TODO: Fix this
+            Assert(array_length == 0); // not handling array length here
 
             TypeInfo* param_baseTypeInfo = info.ast->convertToTypeInfo(param_typeString_base, argScope, false);
             TypeId param_baseType = param_baseTypeInfo->id;
@@ -2302,7 +2351,7 @@ ASTFunction* TyperContext::findPolymorphicFunction(OverloadGroup* fnOverloads, i
     }
     return nullptr;
 }
-SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, int* array_length){
+SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple);
     Assert(expr);
@@ -2382,24 +2431,24 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     return SIGNAL_FAILURE;
                 }
                 
-                if(iden->type == Identifier::MEMBER_VARIABLE) {
-                    auto& mem = currentAstFunc->parentStruct->members[iden->memberIndex];
-                    if (mem.array_length > 0) {
-                        TypeId type = iden->versions_typeId[info.currentPolyVersion];
+                // if(iden->type == Identifier::MEMBER_VARIABLE) {
+                //     auto& mem = currentAstFunc->parentStruct->members[iden->memberIndex];
+                //     if (mem.array_length > 0) {
+                //         TypeId type = iden->versions_typeId[info.currentPolyVersion];
 
-                        Assert(type.getPointerLevel() < 3);
-                        type.setPointerLevel(type.getPointerLevel() + 1);
-                        if(array_length)
-                            *array_length = mem.array_length;
+                //         Assert(type.getPointerLevel() < 3);
+                //         type.setPointerLevel(type.getPointerLevel() + 1);
+                //         if(array_length)
+                //             *array_length = mem.array_length;
 
-                        // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
-                        // bool printed = false;
-                        // TypeId type = checkType(scopeId, real_type, expr->location, &printed);
+                //         // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
+                //         // bool printed = false;
+                //         // TypeId type = checkType(scopeId, real_type, expr->location, &printed);
                         
-                        outTypes->add(type);
-                        return SIGNAL_SUCCESS;
-                    }
-                }
+                //         outTypes->add(type);
+                //         return SIGNAL_SUCCESS;
+                //     }
+                // }
                 
                 if(outTypes) {
                     // NOTE: NASTY FUTURE BUG! Accessing a global at the
@@ -2621,7 +2670,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         auto stmp = expr->as<ASTExpressionAssembly>();
         for(auto a : stmp->args) {
             QuickArray<TypeId> types{};
-            auto signal = checkExpression(scopeId, a, &types, false, nullptr);
+            auto signal = checkExpression(scopeId, a, &types, false);
         }
         
         if(!stmp->asmTypeString.isString()) {
@@ -2879,12 +2928,12 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 return SIGNAL_SUCCESS;
             }
         }
-        int expr_array_length = 0;
+        // int expr_array_length = 0;
         if(stmp->left) {
             // Operator overload checking does not run on AST_MEMBER since it can't be overloaded
             // leftType has therefore note been set and expression not checked.
             // We must check it here.
-            checkExpression(scopeId, stmp->left, &tempTypes, attempt, &expr_array_length);
+            checkExpression(scopeId, stmp->left, &tempTypes, attempt);
             if(tempTypes.size()>0)  
                 leftType = tempTypes.last();
         }
@@ -2902,17 +2951,17 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             // Assert(leftType.getPointerLevel()<2);
             return SIGNAL_FAILURE;
         }
-        if(expr_array_length) {
+        if(ti->isArray()) {
             if(stmp->name == "len") {
                 if(outTypes)
                     outTypes->add(TYPE_INT32);
             } else if(stmp->name == "ptr") {
                 if(outTypes)
-                    outTypes->add(leftType);
+                    outTypes->add(ti->element_type);
             } else {
                 ERR_SECTION(
                     ERR_HEAD2(stmp->location)
-                    ERR_MSG("'"<<info.ast->typeToString(leftType)<<"' is an array within a struct and does not have members. If the elements of the array are structs then index into the array first.")
+                    ERR_MSG("Array types, '"<<info.ast->typeToString(leftType)<<"', only have the members len and ptr. But what's this '"<<stmp->name<<"'. Stop that.")
                     ERR_LINE2(stmp->left->location, info.ast->typeToString(leftType).c_str())
                 )
                 return SIGNAL_FAILURE;
@@ -2920,41 +2969,41 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         } else if(ti && ti->astStruct){
             TypeInfo::MemberData memdata = ti->getMember(stmp->name);
             if(memdata.index!=-1){
-                auto& mem = ti->astStruct->members[memdata.index];
-                if(mem.array_length > 0) {
-                    // TODO: Possible bug here
-                    if(array_length) {
-                        TypeId id = memdata.typeId;
-                        id.setPointerLevel(id.getPointerLevel()+1);
-                        if(outTypes)
-                            outTypes->add(id);
-                        *array_length = mem.array_length;
-                    } else {
-                        TypeId id = memdata.typeId;
-                        id.setPointerLevel(id.getPointerLevel()+1);
-                        if(outTypes)
-                            outTypes->add(id);
+                // auto& mem = ti->astStruct->members[memdata.index];
+                // if(mem.array_length > 0) {
+                //     // TODO: Possible bug here
+                //     if(array_length) {
+                //         TypeId id = memdata.typeId;
+                //         id.setPointerLevel(id.getPointerLevel()+1);
+                //         if(outTypes)
+                //             outTypes->add(id);
+                //         *array_length = mem.array_length;
+                //     } else {
+                //         TypeId id = memdata.typeId;
+                //         id.setPointerLevel(id.getPointerLevel()+1);
+                //         if(outTypes)
+                //             outTypes->add(id);
 
-                        // NOTE: Previously, We returned slice type but now we return pointer instead. We do this because indexing pointer doesn't require operator overload and things work better.
-                        // std::string slice_name = "Slice<" + info.ast->typeToString(memdata.typeId) + ">";
-                        // TypeId id = checkType(scopeId, slice_name, expr->location, nullptr);
-                        // // if(!slice_info) {
-                        // //     ERR_SECTION(
-                        // //         ERR_HEAD2(expr->location)
-                        // //         ERR_MSG("Member '"<<expr->name<<"' was an array within a struct which evaluates to the type '"<<slice_name<<"' BUT it was not a valid type.")
-                        // //         ERR_LINE2(expr->location,"bad type?");
-                        // //     )
-                        // //     if(outTypes)
-                        // //         outTypes->add(TYPE_VOID);
-                        // //     return SIGNAL_FAILURE;
-                        // // }
-                        // if(outTypes)
-                        //     outTypes->add(id);
-                    }
-                } else {
-                    if(outTypes)
-                        outTypes->add(memdata.typeId);
-                }
+                //         // NOTE: Previously, We returned slice type but now we return pointer instead. We do this because indexing pointer doesn't require operator overload and things work better.
+                //         // std::string slice_name = "Slice<" + info.ast->typeToString(memdata.typeId) + ">";
+                //         // TypeId id = checkType(scopeId, slice_name, expr->location, nullptr);
+                //         // // if(!slice_info) {
+                //         // //     ERR_SECTION(
+                //         // //         ERR_HEAD2(expr->location)
+                //         // //         ERR_MSG("Member '"<<expr->name<<"' was an array within a struct which evaluates to the type '"<<slice_name<<"' BUT it was not a valid type.")
+                //         // //         ERR_LINE2(expr->location,"bad type?");
+                //         // //     )
+                //         // //     if(outTypes)
+                //         // //         outTypes->add(TYPE_VOID);
+                //         // //     return SIGNAL_FAILURE;
+                //         // // }
+                //         // if(outTypes)
+                //         //     outTypes->add(id);
+                //     }
+                // } else {
+                if(outTypes)
+                    outTypes->add(memdata.typeId);
+                // }
             } else {
                 std::string msgtype = "not member of "+info.ast->typeToString(leftType);
                 ERR_SECTION(
@@ -3164,7 +3213,12 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     outTypes->add(mem.typeId);
                     outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
                 }
-            } else  if(leftType.getPointerLevel()==0){
+            } else if(linfo && linfo->isArray()) {
+                if(outTypes){
+                    outTypes->add(linfo->element_type);
+                    // outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
+                } 
+             } else if(leftType.getPointerLevel()==0){
                 if(!attempt) {
                     ERR_SECTION(
                         ERR_HEAD2(expr->left->location)
@@ -4248,19 +4302,19 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             // should we not always set this?
             varinfo->declaration = now;
         }
-        if (varname.arrayLength>0 && now->globalDeclaration){
-            TypeInfo* arrTypeInfo = ast->getTypeInfo(now->varnames.last().versions_assignType[currentPolyVersion]);
-            int element_size = ast->getTypeSize(arrTypeInfo->getMember(1).typeId.baseType());
+        // if (varname.arrayLength>0 && now->globalDeclaration){
+        //     TypeInfo* arrTypeInfo = ast->getTypeInfo(now->varnames.last().versions_assignType[currentPolyVersion]);
+        //     int element_size = ast->getTypeSize(arrTypeInfo->getMember(1).typeId.baseType());
             
-            int offset = info.ast->aquireGlobalSpace(varname.arrayLength * element_size);
-            varinfo->versions_array_dataOffset.set(currentPolyVersion, offset);
-            compiler->lock_miscellaneous.lock();
-            compiler->runtime_global_data_fixups.add({now->varnames.last().identifier->versions_dataOffset[currentPolyVersion],
-                now->varnames.last().identifier->versions_array_dataOffset[currentPolyVersion]});
-            compiler->lock_miscellaneous.unlock();
-            ast->globals_to_evaluate.add({now, scope->scopeId});
-        }
-        // Array initializer list
+        //     int offset = info.ast->aquireGlobalSpace(varname.arrayLength * element_size);
+        //     varinfo->versions_array_dataOffset.set(currentPolyVersion, offset);
+        //     compiler->lock_miscellaneous.lock();
+        //     compiler->runtime_global_data_fixups.add({now->varnames.last().identifier->versions_dataOffset[currentPolyVersion],
+        //         now->varnames.last().identifier->versions_array_dataOffset[currentPolyVersion]});
+        //     compiler->lock_miscellaneous.unlock();
+        //     ast->globals_to_evaluate.add({now, scope->scopeId});
+        // }
+        // // Array initializer list
         if(now->arrayValues.size()!=0) {
             Assert(vi == 0); // we are not handling array initializers with multiple varnames.
             TypeInfo* arrTypeInfo = info.ast->getTypeInfo(now->varnames.last().versions_assignType[info.currentPolyVersion].baseType());
@@ -4401,7 +4455,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                 if (!ti.isValid() && !printedError) {
                     ERR_SECTION(
                         ERR_HEAD2(now->location)
-                        ERR_MSG("'"<<info.ast->getStringFromTypeString(varname.assignString)<<"' is not a type (statement).")
+                        ERR_MSG("'"<<info.ast->getStringFromTypeString(varname.assignString)<<"' is not a type (type error from checking statements).")
                         ERR_LINE2(now->location,"bad")
                     )
                 } else {

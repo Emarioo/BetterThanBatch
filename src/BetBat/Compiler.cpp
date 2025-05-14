@@ -2547,19 +2547,22 @@ FnMakeshift Compiler::get_makeshift(FunctionSignature* signature) {
                 memcpy(f+head, norm_movs + i*norm_mov_stride, norm_mov_stride);
                 head += norm_mov_stride;
             } else {
+                Assert(i*8 >= -128 && i*8 <= 127);
+                Assert(i*8 - stack_space >= -128 && i*8 - stack_space <= 127);
                 u8 mov[]{
-                    /* mov rax, [rsp+32] */ 0x48, 0x8B, 0x44, 0x24, i*8,
-                    /* mov [rsp-48], rax */ 0x48, 0x89, 0x44, 0x24, i*8 - stack_space,
+                    /* mov rax, [rsp+32] */ 0x48, 0x8B, 0x44, 0x24, (u8)(i*8),
+                    /* mov [rsp-48], rax */ 0x48, 0x89, 0x44, 0x24, (u8)(i*8 - stack_space),
                 };
                 memcpy(f+head, mov, sizeof(mov));
                 head += sizeof(mov);
             }
         }
         
+        Assert(stack_space >= -128 && stack_space <= 127);
         u8 MAIN_BODY[]{
-            /* sub rsp, 32 */ 0x48, 0x83, 0xEC, stack_space,
+            /* sub rsp, 32 */ 0x48, 0x83, 0xEC, (u8)stack_space,
             /* call r10    */ 0x41, 0xFF, 0xD2,
-            /* add rsp, 32 */ 0x48, 0x83, 0xC4, stack_space,
+            /* add rsp, 32 */ 0x48, 0x83, 0xC4, (u8)stack_space,
         };
         memcpy(f+head, MAIN_BODY, sizeof(MAIN_BODY));
         head += sizeof(MAIN_BODY);
@@ -2628,19 +2631,22 @@ FnMakeshift Compiler::get_makeshift(FunctionSignature* signature) {
                 emit_mov(arg, norm_nr, i*8);
                 norm_nr++;
             } else {
+                Assert(i*8 >= -128 && i*8 <= 127);
+                Assert(i*8 - stack_space >= -128 && i*8 - stack_space <= 127);
                 u8 mov[]{
-                    /* mov rax, [rsp+32] */ 0x48, 0x8B, 0x44, 0x24, i*8,
-                    /* mov [rsp-48], rax */ 0x48, 0x89, 0x44, 0x24, i*8 - stack_space,
+                    /* mov rax, [rsp+32] */ 0x48, 0x8B, 0x44, 0x24, (u8)(i*8),
+                    /* mov [rsp-48], rax */ 0x48, 0x89, 0x44, 0x24, (u8)(i*8 - stack_space),
                 };
                 memcpy(f+head, mov, sizeof(mov));
                 head += sizeof(mov);
             }
         }
         
+        Assert(stack_space >= -128 && stack_space <= 127);
         u8 MAIN_BODY[]{
-            /* sub rsp, 32 */ 0x48, 0x83, 0xEC, stack_space,
+            /* sub rsp, 32 */ 0x48, 0x83, 0xEC, (u8)stack_space,
             /* call r10    */ 0x41, 0xFF, 0xD2,
-            /* add rsp, 32 */ 0x48, 0x83, 0xC4, stack_space,
+            /* add rsp, 32 */ 0x48, 0x83, 0xC4, (u8)stack_space,
         };
         memcpy(f+head, MAIN_BODY, sizeof(MAIN_BODY));
         head += sizeof(MAIN_BODY);

@@ -391,13 +391,37 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             // or the end of a function (char[] as return value)
             // auto token2 = info.getinfo(2);
             // if(token->type == ']' && token2->type != '{') {
+            bool is_fixed_array = false;
+            int array_len = 0;
+            if (TOKEN_IS_LITERAL_NUMBER(token->type)) {
+                is_fixed_array = true;
+                // TODO: Handle hexidecimal in array?
+                if(token->type == lexer::TOKEN_LITERAL_HEXIDECIMAL) {
+                    array_len = lexer::ConvertHexadecimal(view);
+                } else if(token->type == lexer::TOKEN_LITERAL_INTEGER) {
+                    array_len = lexer::ConvertInteger(view);
+                } else {
+                    auto loc = getloc(1);
+                    ERR_SECTION(
+                        ERR_HEAD2(loc)
+                        ERR_MSG("nocheckin TODO: Parse binary/octal")
+                        ERR_LINE2(loc, "bad")
+                    )
+                }
+                token = info.getinfo(&view, 2);
+            }
             if(token->type == ']') {
                 if(envs.last().may_be_name) {
                     return SIGNAL_FAILURE;
                 }
-                info.advance(2);
-                std::string tmp = envs.last().buffer;
-                envs.last().buffer = "Slice<" + tmp + ">";
+                if(is_fixed_array) {
+                    info.advance(3);
+                    envs.last().buffer += "[" + std::to_string(array_len)+"]";
+                } else {
+                    info.advance(2);
+                    std::string tmp = envs.last().buffer;
+                    envs.last().buffer = "Slice<" + tmp + ">";
+                }
                 continue;
             } else {
                 break;
@@ -841,60 +865,60 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
             // }
 
             // typeEndToken = info.at()+1;
-            int arrayLength = -1;
-            auto tok0 = info.gettok(0);
-            StringView num_data = {};
-            auto tok1 = info.gettok(&num_data, 1);
-            auto tok2 = info.gettok(2);
-            if(tok0.type == '[' && tok2.type == ']') {
-                info.advance(3);
+            // int arrayLength = -1;
+            // auto tok0 = info.gettok(0);
+            // StringView num_data = {};
+            // auto tok1 = info.gettok(&num_data, 1);
+            // auto tok2 = info.gettok(2);
+            // if(tok0.type == '[' && tok2.type == ']') {
+            //     info.advance(3);
 
-                // info.advance();
-                // auto tok = info.gettok(&view);
-                // bool is_negative = false;
-                // if(tok.type == '-') {
-                //     is_negative = true;
-                //     info.advance();
-                //     tok = info.gettok(&view);
-                // }
-                // i64 value = 0;
-                // if(info.lexer->isIntegerLiteral(tok, &value)) {
-                //     info.advance();
-                //     if(is_negative)
-                //         nextValue = -value;
-                //     else
-                //         nextValue = value;
-                // } else {
-                //     ERR_SECTION(
-                //         ERR_HEAD2(tok)
-                //         ERR_MSG("Values for enum members can only be a integer literal. In the future, any constant expression will be allowed.")
-                //         ERR_LINE2(tok,"not an integer literal")
-                //     )
-                // }
-                // TODO: Handle hexidecimal use code above
-                if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
-                    // u64 num = 0;
-                    // memcpy(&num, num_data.ptr, num_data.len);
-                    arrayLength = lexer::ConvertInteger(num_data);
+            //     // info.advance();
+            //     // auto tok = info.gettok(&view);
+            //     // bool is_negative = false;
+            //     // if(tok.type == '-') {
+            //     //     is_negative = true;
+            //     //     info.advance();
+            //     //     tok = info.gettok(&view);
+            //     // }
+            //     // i64 value = 0;
+            //     // if(info.lexer->isIntegerLiteral(tok, &value)) {
+            //     //     info.advance();
+            //     //     if(is_negative)
+            //     //         nextValue = -value;
+            //     //     else
+            //     //         nextValue = value;
+            //     // } else {
+            //     //     ERR_SECTION(
+            //     //         ERR_HEAD2(tok)
+            //     //         ERR_MSG("Values for enum members can only be a integer literal. In the future, any constant expression will be allowed.")
+            //     //         ERR_LINE2(tok,"not an integer literal")
+            //     //     )
+            //     // }
+            //     // TODO: Handle hexidecimal use code above
+            //     if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
+            //         // u64 num = 0;
+            //         // memcpy(&num, num_data.ptr, num_data.len);
+            //         arrayLength = lexer::ConvertInteger(num_data);
                     
-                    if(arrayLength<=0){
-                        ERR_SECTION(
-                            ERR_HEAD2(tok1)
-                            ERR_MSG("Array cannot have negative or zero size.")
-                            ERR_LINE2(tok1,"<= 0")
-                        )
-                        arrayLength = 0;
-                    }
-                } else {
-                    ERR_SECTION(
-                        ERR_HEAD2(tok1)
-                        ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
-                        ERR_LINE2(tok1, "must be positive integer literal")
-                    )
-                }
-                // the member is not a slice, it's an actual array
-                // typeToken = "Slice<" + typeToken +">";
-            }
+            //         if(arrayLength<=0){
+            //             ERR_SECTION(
+            //                 ERR_HEAD2(tok1)
+            //                 ERR_MSG("Array cannot have negative or zero size.")
+            //                 ERR_LINE2(tok1,"<= 0")
+            //             )
+            //             arrayLength = 0;
+            //         }
+            //     } else {
+            //         ERR_SECTION(
+            //             ERR_HEAD2(tok1)
+            //             ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
+            //             ERR_LINE2(tok1, "must be positive integer literal")
+            //         )
+            //     }
+            //     // the member is not a slice, it's an actual array
+            //     // typeToken = "Slice<" + typeToken +">";
+            // }
             // Assert(arrayLength==-1); // arrays in structs not implemented yet
             // std::string temps = typeToken;
             
@@ -916,8 +940,8 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
                 mem.defaultValue = defaultValue;
                 mem.stringType = typeId;
                 mem.location = info.srcloc(name_tok);
-                if(arrayLength!=-1)
-                    mem.array_length = arrayLength;
+                // if(arrayLength!=-1)
+                //     mem.array_length = arrayLength;
                 
                 // auto l = info.lexer->getTokenSource_unsafe(mem.location);
                 // log::out << l->line << " " << l->column<<"\n";
@@ -4614,7 +4638,7 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
                 while(index>=0 && !statement->varnames[index].assignString.isString()){
                     statement->varnames[index].declaration = true;
                     statement->varnames[index].assignString = strId;
-                    statement->varnames[index].arrayLength = arrayLength;
+                    // statement->varnames[index].arrayLength = arrayLength;
                     index--;
                 }
 
@@ -4663,57 +4687,58 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
 
         SIGNAL_SWITCH_LAZY()
     // } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)) {
-    } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_NEWLINE)) {
-        // array initializer
-        info.advance(); // {
-
-        while(true){
-            auto tok = info.gettok();
-            if(tok.type == '}') {
-                info.advance(); // }
-                break;
-            }
-            ASTExpression* expr = nullptr;
-            auto signal = parseExpression(expr);
-            SIGNAL_SWITCH_LAZY()
-            
-            Assert(expr);
-            statement->arrayValues.add(expr);
-
-            tok = info.gettok();
-            if(tok.type == ',') {
-                info.advance(); // ,
-                // TODO: Error if you see consecutive commas
-                // Note that a trailing comma is allowed: { 1, 2, }
-                // It's convenient
-            } else if(tok.type == '}') {
-                info.advance(); // }
-                break;
-            } else {
-                info.advance(); // prevent infinite loop
-                ERR_SECTION(
-                    ERR_HEAD2(tok)
-                    ERR_MSG("Unexpected token '"<<info.lexer->tostring(tok)<<"' at end of array initializer. Use comma for another element or ending curly brace to end initializer.")
-                    ERR_LINE2(tok, "expected , or }")
-                )
-            }
-        }
-        if(dynamic_array_length){
-            // Set array length based on expressions
-            statement->varnames.last().arrayLength = statement->arrayValues.size();
-        }
-        if(statement->arrayValues.size() > statement->varnames.last().arrayLength) {
-            ERR_SECTION(
-                ERR_HEAD2(tok) // token should be {
-                ERR_MSG("You cannot have more expressions in the array initializer than the array length you specified.")
-                // TODO: Show which token defined the array length
-                ERR_LINE2(lengthTokenOfLastVar, "the maximum length")
-                // You could do a token range from the first expression to the last but that could spam the console
-                // with 100 expressions which would be annoying so maybe show 5 or 8 values and then do ...
-                ERR_LINE2(tok, ""<<statement->arrayValues.size()<<" expressions")
-            )
-        }
     }
+    //  else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_NEWLINE)) {
+    //     // array initializer
+    //     info.advance(); // {
+
+    //     while(true){
+    //         auto tok = info.gettok();
+    //         if(tok.type == '}') {
+    //             info.advance(); // }
+    //             break;
+    //         }
+    //         ASTExpression* expr = nullptr;
+    //         auto signal = parseExpression(expr);
+    //         SIGNAL_SWITCH_LAZY()
+            
+    //         Assert(expr);
+    //         statement->arrayValues.add(expr);
+
+    //         tok = info.gettok();
+    //         if(tok.type == ',') {
+    //             info.advance(); // ,
+    //             // TODO: Error if you see consecutive commas
+    //             // Note that a trailing comma is allowed: { 1, 2, }
+    //             // It's convenient
+    //         } else if(tok.type == '}') {
+    //             info.advance(); // }
+    //             break;
+    //         } else {
+    //             info.advance(); // prevent infinite loop
+    //             ERR_SECTION(
+    //                 ERR_HEAD2(tok)
+    //                 ERR_MSG("Unexpected token '"<<info.lexer->tostring(tok)<<"' at end of array initializer. Use comma for another element or ending curly brace to end initializer.")
+    //                 ERR_LINE2(tok, "expected , or }")
+    //             )
+    //         }
+    //     }
+    //     if(dynamic_array_length){
+    //         // Set array length based on expressions
+    //         statement->varnames.last().arrayLength = statement->arrayValues.size();
+    //     }
+    //     if(statement->arrayValues.size() > statement->varnames.last().arrayLength) {
+    //         ERR_SECTION(
+    //             ERR_HEAD2(tok) // token should be {
+    //             ERR_MSG("You cannot have more expressions in the array initializer than the array length you specified.")
+    //             // TODO: Show which token defined the array length
+    //             ERR_LINE2(lengthTokenOfLastVar, "the maximum length")
+    //             // You could do a token range from the first expression to the last but that could spam the console
+    //             // with 100 expressions which would be annoying so maybe show 5 or 8 values and then do ...
+    //             ERR_LINE2(tok, ""<<statement->arrayValues.size()<<" expressions")
+    //         )
+    //     }
+    // }
     tok = info.gettok();
     if(tok.type == ';'){
         info.advance(); // parse ';'. won't crash if at end

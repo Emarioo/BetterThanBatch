@@ -1,0 +1,17 @@
+@TEST_CASE(basic_fixed_array)
+
+
+arr1: i32[5];
+arr2: i32[0x10];
+arr3: i32[0b10];
+arr4: i32[0o10];
+
+_test 4*5; sizeof(arr1)
+_test 4*16; sizeof(arr2)
+_test 4*2; sizeof(arr3)
+_test 4*8; sizeof(arr4)
+
+
+arr4: i32*[10]*; // pointer to an array of i32 pointers
+
+@TEST_ERROR(ERROR_UNSPECIFIED) arr4: i32[0.5];

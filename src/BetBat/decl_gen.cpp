@@ -341,9 +341,9 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                     for(int j=0;j<max_name_len_btb - mem.name.size();j++)
                         text_btb += " ";
                     text_btb += ast->typeToString(mem_impl.typeId);
-                    if(mem.array_length > 0) {
-                        text_btb += "[" + std::to_string(mem.array_length) + "]";
-                    }
+                    // if(mem.array_length > 0) {
+                    //     text_btb += "[" + std::to_string(mem.array_length) + "]";
+                    // }
                     text_btb += ";\n";
                 }
                 if(file_type & DECL_C) {
@@ -356,9 +356,9 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                     for(int j=0;j<max_name_len_c - type_name.size();j++)
                         text_c += " ";
                     text_c += +" " + mem.name;
-                    if(mem.array_length > 0) {
-                        text_c += "[" + std::to_string(mem.array_length) + "]\n";
-                    }
+                    // if(mem.array_length > 0) {
+                    //     text_c += "[" + std::to_string(mem.array_length) + "]\n";
+                    // }
                     text_c += ";\n";
                 }
                 // TODO: Add default value

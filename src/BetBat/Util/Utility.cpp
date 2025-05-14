@@ -39,7 +39,7 @@ std::string NumberToHex(u64 number, bool withPrefix) {
 
     return out;
 }
-u64 ConvertHexadecimal_content(char* str, int length){
+u64 ConvertHexadecimal_content(const char* str, int length){
     Assert(str && length > 0);
     u64 hex = 0;
     for(int i=0;i<length;i++){

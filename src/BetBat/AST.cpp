@@ -1831,10 +1831,14 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
     }
     
     u32 pointerLevel = 0;
+    u32 array_length = 0;
     StringView namespacing = {};
     StringView typeName;
+    StringView typeNameWithArray;
     DecomposePointer(typeString, &typeName, &pointerLevel);
-    DecomposeNamespace(typeName, &namespacing, &typeName);
+    // DecomposeArray(typeNameWithArray, &typeName, &array_length);
+    // Here's the thing. Namespace is broken right now and we want to do a complete overhaul of it.
+    // DecomposeNamespace(typeName, &namespacing, &typeName);
     
     // Token baseType = TrimBaseType(typeString, &namespacing, &pointerLevel, &polyTypes, &typeName);
     // if(polyTypes.size()!=0)
@@ -2415,6 +2419,29 @@ void AST::DecomposePointer(StringView view, StringView* out_name, u32* outLevel)
             break;
         }
     }
+}
+void AST::DecomposeArray(StringView view, StringView* out_name, u32* length){
+    out_name->ptr = view.ptr;
+    out_name->len = view.len;
+    *length = 0;
+    
+    int head = view.len-1;
+    if(view.ptr[head] != ']')
+        return;
+    int end = head;
+    
+    while(head > 0) {
+        if(view.ptr[head-1] == '[')
+            break;
+        head--;
+    }
+    int start = head;
+
+    if(head < 0 || end-start == 0)
+        return;
+
+    *length = atoi(view.ptr + start);
+    out_name->len = start-1;
 }
 StringView AST::TrimBaseType(StringView typeString, StringView* outNamespace, 
     u32* level, QuickArray<StringView>* outPolyTypes, StringView* typeName)

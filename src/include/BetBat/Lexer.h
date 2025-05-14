@@ -34,8 +34,8 @@ namespace lexer {
         TOKEN_IDENTIFIER,
         TOKEN_ANNOTATION,
         TOKEN_LITERAL_STRING,
-        TOKEN_LITERAL_INTEGER,
         TOKEN_LITERAL_DECIMAL,
+        TOKEN_LITERAL_INTEGER,
         TOKEN_LITERAL_HEXIDECIMAL,
         TOKEN_LITERAL_BINARY,
         TOKEN_LITERAL_OCTAL,
@@ -78,6 +78,7 @@ namespace lexer {
     };
     #define TOK_KEYWORD_NAME(TYPE) ((TYPE) < lexer::TOKEN_KEYWORD_BEGIN ? nullptr : lexer::token_type_names[TYPE - lexer::TOKEN_KEYWORD_BEGIN])
     #define TOKEN_IS_KEYWORD(T) (T >= lexer::TOKEN_KEYWORD_BEGIN && T <= lexer::TOKEN_KEYWORD_END)
+    #define TOKEN_IS_LITERAL_NUMBER(T) (T >= lexer::TOKEN_LITERAL_INTEGER && T <= lexer::TOKEN_LITERAL_OCTAL)
     extern const char* token_type_names[];
     TokenType StringToTokenType(const char* str, int len);
 

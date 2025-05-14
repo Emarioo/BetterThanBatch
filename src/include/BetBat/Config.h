@@ -34,11 +34,14 @@ extern const char* COMPILER_VERSION;
 // #define DEV_FILE "tests/simple/garb.btb"
 #ifdef OS_WINDOWS
     #define CONFIG_DEFAULT_TARGET TARGET_WINDOWS_x64
+    // MSVC is not default because it doesn't support DWARF
     // #define CONFIG_DEFAULT_LINKER LINKER_MSVC
     #define CONFIG_DEFAULT_LINKER LINKER_GCC
+    #define CONFIG_DEFAULT_BACKEND BACKEND_CUSTOM
 #else
     #define CONFIG_DEFAULT_TARGET TARGET_LINUX_x64
     #define CONFIG_DEFAULT_LINKER LINKER_GCC
+    #define CONFIG_DEFAULT_LINKER BACKEND_CUSTOM
 #endif
 
 // #define RUN_TEST_SUITE

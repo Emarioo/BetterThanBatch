@@ -91,7 +91,7 @@ int main(int argc, const char** argv){
         // options.target = TARGET_ARM;
         options.executeOutput = true;
         // options.incremental_build = true;
-        // options.disable_preload = true;
+        options.disable_preload = true;
         // options.only_preprocess = true;
         options.useDebugInformation = true;
         // options.debug_qemu_with_gdb = true;
