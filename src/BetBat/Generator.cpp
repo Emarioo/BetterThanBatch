@@ -3877,11 +3877,15 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                 if(operatorImpl){
                     return generateFncall(expression, outTypeIds, true);
                 }
-                tempTypes.clear();
-                SignalIO err = generateExpression(expression->left, &tempTypes);
-                if(tempTypes.size()) ltype = tempTypes.last();
+                // SignalIO err = generateExpression(expression->left, &tempTypes);
+                bool wasNonReference = false;
+                SignalIO err = generateReference(expression->left, &ltype, -1, &wasNonReference);
                 if (err != SIGNAL_SUCCESS)
                     return SIGNAL_FAILURE;
+
+                if(!wasNonReference) {
+                    ltype.setPointerLevel(ltype.getPointerLevel()+1);
+                }
 
                 tempTypes.clear();
                 TypeId rtype;
