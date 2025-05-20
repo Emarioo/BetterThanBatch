@@ -19,7 +19,7 @@
 #import "Logger"
 #import "Array"
 #import "Memory" // we use memcpy
-#import "Threads"
+#import "Thread"
 
 enum @enclosed @specified lang_Primitive : u8 {
     NONE            = 0,

@@ -1,7 +1,7 @@
 #import "Sound"
 
 fn main() {
-    PlayAudio("examples/sound/goodmorning.wav")
+    PlayAudio("examples/sound/wav/goodmorning.wav")
 }
 
 #macro CHECK_HR if res != 0 { log("HR BAD ", cast_unsafe<WASAPI_Error*>&res); Assert(false) }

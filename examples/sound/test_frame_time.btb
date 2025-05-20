@@ -7,7 +7,7 @@ fn main() {
     memory_tracker.init()
     memory_tracker.disabled = false
     InitSoundState()
-    ref, err := LoadSoundFromFile("examples/sound/stereo-16bit-16khz.wav")
+    ref, err := LoadSoundFromFile("examples/sound/wav/stereo-16bit-16khz.wav")
 
     inst: SoundInstance
     for 0..20 {

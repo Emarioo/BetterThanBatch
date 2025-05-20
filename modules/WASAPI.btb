@@ -14,6 +14,10 @@ struct GUID {
     data2: u16;
     data3: u64;
 }
+struct PROPERTYKEY {
+    guid: GUID;
+    pid: u32;
+}
 fn PrepareGUID(guid: GUID*, text: char[]) {
     ptr := cast<u8*>guid
     head := 0
@@ -40,6 +44,10 @@ fn PrepareGUID(guid: GUID*, text: char[]) {
 
     // log(guid)
 }
+fn PreparePKEY(pkey: PROPERTYKEY*, text: char[], pid: u32) {
+    PrepareGUID(&pkey.guid, text)
+    pkey.pid = pid
+}
 
 global IMMDeviceEnumerator_GUID: GUID;
 #run PrepareGUID(&IMMDeviceEnumerator_GUID, "A95664D2-9614-4F35-A746-DE8DB63617E6")
@@ -56,6 +64,10 @@ global KSDATAFORMAT_SUBTYPE_PCM: GUID;
 #run PrepareGUID(&KSDATAFORMAT_SUBTYPE_PCM, "00000001-0000-0010-8000-00aa00389b71")
 global KSDATAFORMAT_SUBTYPE_IEEE_FLOAT: GUID;
 #run PrepareGUID(&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, "00000003-0000-0010-8000-00aa00389b71")
+
+// defined in devpkey.h
+global DEVPKEY_Device_FriendlyName: PROPERTYKEY;
+#run PreparePKEY(&DEVPKEY_Device_FriendlyName, "a45c254e-df1c-4efd-8020-67d146a850e0", 14); // VT_LPWSTR
 
 enum EDataFlow {
     eRender  = 0,
@@ -103,10 +115,18 @@ enum tagCLSCTX : u32 {
 }
 #macro CLSCTX_ALL (CLSCTX_INPROC_SERVER|CLSCTX_INPROC_HANDLER|CLSCTX_LOCAL_SERVER|CLSCTX_REMOTE_SERVER)
 
+#macro DEVICE_STATE_ACTIVE      0x00000001
+#macro DEVICE_STATE_DISABLED    0x00000002
+#macro DEVICE_STATE_NOTPRESENT  0x00000004
+#macro DEVICE_STATE_UNPLUGGED   0x00000008
+#macro DEVICE_STATEMASK_ALL     0x0000000F
+
+#macro STGM_READ                0x00000000
+#macro STGM_WRITE               0x00000001
+#macro STGM_READWRITE           0x00000002
+
 #macro IMMNotificationClient void
-#macro IMMDeviceCollection void
-#macro PROPVARIANT void
-#macro IPropertyStore void
+
 
 struct IMMDeviceEnumerator_vtable {
     QueryInterface: fn @stdcall (
@@ -123,6 +143,53 @@ struct IMMDeviceEnumerator_vtable {
 }
 struct IMMDeviceEnumerator {
     vtable: IMMDeviceEnumerator_vtable*;
+}
+enum VARTYPE : u16 {
+    VT_LPSTR	= 30,
+    VT_LPWSTR	= 31,
+}
+
+struct PROPVARIANT {
+    vt: VARTYPE;
+    wReserved1: u16;
+    wReserved2: u16;
+    wReserved3: u16;
+    union_data: u64; // BTB don't have unions right now
+}
+
+struct IPropertyStore_vtable {
+    QueryInterface: fn @stdcall (This: IPropertyStore*, riid: GUID*, ppvObject: void**) -> HRESULT;
+    AddRef: fn @stdcall (This: IPropertyStore*) -> u32;
+    Release: fn @stdcall (This: IPropertyStore*) -> u32;
+
+    GetCount: fn @stdcall (This: IPropertyStore*, cProps: u32*) -> HRESULT;
+    GetAt: fn @stdcall (This: IPropertyStore*, iProp: u32, pkey: PROPERTYKEY*) -> HRESULT;
+    GetValue: fn @stdcall (This: IPropertyStore*, key: PROPERTYKEY*, pv: PROPVARIANT*) -> HRESULT;
+    SetValue: fn @stdcall (This: IPropertyStore*, key: PROPERTYKEY*, propvar: PROPVARIANT*) -> HRESULT;
+    Commit: fn @stdcall (This: IPropertyStore*) -> HRESULT;
+}
+
+struct IPropertyStore {
+    vtable: IPropertyStore_vtable*;
+}
+fn ParseWideCharString(wstr: u16*, out: StringBuilder*) {
+    while *wstr {
+        out.append(cast<char>*wstr)
+        wstr += 2
+    }
+}
+
+struct IMMDeviceCollection_vtable {
+    QueryInterface: fn @stdcall (This: IMMDeviceCollection*, riid: GUID*, ppvObject: void**) -> HRESULT;
+    AddRef: fn @stdcall (This: IMMDeviceCollection*) -> u32;
+    Release: fn @stdcall (This: IMMDeviceCollection*) -> u32;
+
+    GetCount: fn @stdcall (This: IMMDeviceCollection*, pcDevices: u32*) -> HRESULT;
+    Item: fn @stdcall (This: IMMDeviceCollection*, nDevice: u32, ppDevice: IMMDevice**) -> HRESULT;
+}
+
+struct IMMDeviceCollection {
+    vtable: IMMDeviceCollection_vtable*;
 }
 
 struct IMMDevice_vtable {
@@ -286,6 +353,8 @@ enum WASAPI_Error {
     E_POINTER     = 0x80004003,
     E_INVALIDARG  = 0x80070057,
     E_OUTOFMEMORY = 0x8007000E,
+    E_NOTFOUND    = 0x80070490,
+    
 };
 
 

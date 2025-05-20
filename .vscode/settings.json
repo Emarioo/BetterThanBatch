@@ -99,6 +99,7 @@
         "coroutine": "cpp",
         "stdio.h": "c",
         "initguid.h": "c",
-        "guiddef.h": "c"
+        "guiddef.h": "c",
+        "devpkey.h": "c"
     }
 }

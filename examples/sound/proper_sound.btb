@@ -10,9 +10,9 @@ fn main() {
     // ref, err := LoadSoundFromFile("examples/sound/goodmorning.wav")
     // ref, err := LoadSoundFromFile("examples/sound/mono-16bit.wav")
     // ref, err := LoadSoundFromFile("examples/sound/mono-32bit.wav")
-    ref2, err2 := LoadSoundFromFile("examples/sound/stereo-32bit-float.wav")
+    ref2, err2 := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float.wav")
     // ref, err := LoadSoundFromFile("examples/sound/stereo-16bit.wav")
-    ref, err := LoadSoundFromFile("examples/sound/stereo-16bit-16khz.wav")
+    ref, err := LoadSoundFromFile("examples/sound/wav/stereo-16bit-16khz.wav")
     log("Result: ", &err, " ", &ref)
 
     inst := ref.createInstance()

@@ -6,9 +6,9 @@
 
 fn main() {
     // Use Windows PlaySound API. Can only play one sound at a time.
-    PlaySound("examples/sound/goodmorning.wav", false)
+    PlaySound("examples/sound/wav/goodmorning.wav", false)
     ProcessSleep(1.0)
-    PlaySound("examples/sound/goodmorning.wav", true)
+    PlaySound("examples/sound/wav&goodmorning.wav", true)
 }
 
 fn PlaySound(file: char[], synchronous: bool = false) {

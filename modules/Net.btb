@@ -19,8 +19,8 @@
 #import "Array"
 #import "Memory"
 #import "String"
-#import "Threads"
-#import "Sockets"
+#import "Thread"
+#import "Socket"
 #import "OS" // we need Assert from OS, altough Assert should be moved to somewhere else
 
 #if OS_WINDOWS
@@ -881,7 +881,7 @@ struct Client {
     CODE FOR TESTING
 ######################*/
 
-// #import "Threads"
+// #import "Thread"
 // #import "Logger"
 // #macro DEFAULT_IP 0x01_00_00_7F
 // #macro DEFAULT_PORT 4000

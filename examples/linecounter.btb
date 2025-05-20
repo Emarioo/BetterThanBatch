@@ -23,7 +23,7 @@
 #import "String"
 // #import "OS"
 #import "File"
-#import "Threads"
+#import "Thread"
 #import "Logger"
 
 // directory iterator

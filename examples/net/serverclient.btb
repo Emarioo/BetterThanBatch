@@ -1,6 +1,6 @@
 #import "Net"
 
-#import "Threads"
+#import "Thread"
 #import "Logger"
 #import "Lang"
 #import "OS"

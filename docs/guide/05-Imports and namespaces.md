@@ -67,7 +67,7 @@ TODO: Update these!
 #import "Array"
 #import "Map"
 #import "OS"      // File I/O, Sockets,...
-#import "Threads"
+#import "Thread"
 #import "Logger"
 #import "Math"
 #import "Lang"    // Type information

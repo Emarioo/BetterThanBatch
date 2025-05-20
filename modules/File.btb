@@ -9,7 +9,7 @@
 #import "String"
 #import "OS"
 #import "Lang" // temporary
-#import "Threads"
+#import "Thread"
 
 #if OS_WINDOWS
     #import "Windows"

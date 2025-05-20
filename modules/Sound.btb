@@ -3,6 +3,8 @@
     Sound Module - BTB Standard Library
 ############################################
 
+    This sound module is mostly meant for games which is shown its design. Such as you can only take input from one microphone at a time.
+
     A platform independent module for playing audio.
     These are the general features:
         - Play WAV audio files (use external library for MP3 or OGG, they are complex)
@@ -46,7 +48,7 @@
 #import "Array"
 #import "BucketArray"
 #import "Math"
-
+#import "Thread"
 
 /*#################################
     PUBLIC USER LEVEL FUNCTIONS
@@ -135,6 +137,84 @@ fn ProcessSoundForNSeconds(time: f64) {
     }
 }
 
+fn ListInputAudioDevices(list: Array<AudioDeviceInfo>*) {
+    Assert(sound_state)
+    list.clear()
+    // TODO: Implement input devices
+    Assert(false)
+}
+fn ListOutputAudioDevices(list: Array<AudioDeviceInfo>*) {
+    Assert(sound_state)
+
+    sound_state.audio_backend.listAudioDevices(list, exclude_input_devices=true)
+}
+fn ChangeOutputAudioDevice(id: u64) -> bool {
+    Assert(sound_state)
+
+    // "queue" the output device change action, handled when we process sound (potentially on another thread)
+    sound_state.selected_output_device_id = id;
+    return false
+}
+
+// @param format Format of internal buffer and the amount of samples it can hold. This how often you have to consume the buffer before it is filled up. Sample rate of 48 0000, 32-bit float, and stereo is recommended.
+// @param frame_count Number of frames (each frame has a number of samples equal to the number of channels)
+fn InitInputAudioBuffer(format: AudioFormat*, buffer_size: i32) {
+    Assert(sound_state)
+
+    Assert(buffer_size % format.frame_size() == 0)
+
+}
+
+// @return Bytes in internal input buffer. If bytes is equal to max audio buffer size then it is likely you lost samples because you weren't consuming the buffer fast enough.
+fn BytesInInputAudioBuffer() -> i32 {
+    Assert(sound_state)
+
+
+}
+
+// @param user_buffer Audio data is moved from internal buffer to user buffer. user_buffer.len specified the max bytes to consume.
+// @returns Consumed bytes.
+fn ConsumeInputAudioBuffer(user_buffer: u8*, max_size: i32) -> i32 {
+    Assert(sound_state)
+
+
+}
+
+enum AudioSampleFormat {
+    AUDIO_8BIT_PCM,
+    AUDIO_16BIT_PCM,
+    AUDIO_32BIT_PCM,
+    AUDIO_32BIT_FLOAT,
+}
+struct AudioFormat {
+    sample_rate: i32; // 48 0000 Hz
+    stereo: bool; // false - Mono, true - Stereo
+    sample_format: AudioSampleFormat; // AUDIO_32BIT_FLOAT
+
+    fn frames_from_duration(time: f32) -> i32 {
+        return sample_rate * time
+    }
+    fn byte_size_from_duration(time: f32) -> i32 {
+        // buffer size must be a multiple of frame size, we must cast float before multiplying frame size
+        return frame_size() * cast<i32>(sample_rate * time)
+    }
+    fn frame_size() -> i32 {
+        size := 0
+        switch sample_format {
+            case AUDIO_8BIT_PCM:
+                size = 1
+            case AUDIO_16BIT_PCM:
+                size = 2
+            case AUDIO_32BIT_PCM:
+            case AUDIO_32BIT_FLOAT:
+                size = 4
+        }
+        if stereo
+            size *= 2
+        return size
+    }
+}
+
 /*###############################
     IMPLEMENTATION SPECIFIC
 ###############################*/
@@ -147,6 +227,12 @@ struct SoundRef_impl {
     // TODO: Add stream data and fields for it
     wav: WAVFile*;
     total_frames: i32;
+
+    // stream buffer and format when streaming
+    format: AudioFormat;
+    buffer: u8[]; // circular buffer
+    buffer_head: i32;
+    buffer_tail: i32;
 }
 struct SoundInstance_impl {
     handle: u64;
@@ -165,10 +251,13 @@ struct SoundState {
     refs: BucketArray<SoundRef_impl>;
     instances: BucketArray<SoundInstance_impl>;
     m_next_handle: u64;
-    audio_device: AudioDevice;
+    audio_backend: AudioBackend;
 
     last_time: i64;
     global_volume: f32 = 1.0;
+
+    selected_output_device_id: u64;
+    current_output_device_id: u64;
 
     fn init() {
         refs.init(64)
@@ -178,7 +267,7 @@ struct SoundState {
     fn cleanup() {
         refs.cleanup()
         instances.cleanup()
-        audio_device.cleanup()
+        audio_backend.cleanup()
     }
 
     // @return Always returns a valid pointer (asserts if something fails)
@@ -226,6 +315,12 @@ struct SoundState {
         return m_next_handle++
     }
 }
+struct AudioDeviceInfo {
+    id: u64;
+    name: StringBuilder;
+    is_default: bool;
+    is_input_device: bool; // input means microphone
+}
 global sound_state: SoundState*
 
 // TODO: Flags on whether to create a thread or if user should call a function to do sound processing.
@@ -238,8 +333,9 @@ fn InitSoundState() {
     // TODO: We should not initialize default device by default.
     //   An application may have a settings, config or cache file where the audio device used last time
     //   the application was running is stored. If so they want to use that device instead of the default.
-    sound_state.audio_device.init_default_device()
+    sound_state.audio_backend.init_default_device()
 }
+
 fn DestroySoundState() {
     Assert(sound_state)
 
@@ -251,8 +347,15 @@ global sound_cycles: i64
 global sound_cycles_max: i64
 global sound_frames: i64
 
+
+
 fn ProcessSound() {
     Assert(sound_state)
+
+    if sound_state.selected_output_device_id != sound_state.current_output_device_id {
+        // next_device_id
+        sound_state.audio_backend.switchAudioDevice(sound_state.selected_output_device_id)
+    }
 
     start_time := StartMeasure()
 
@@ -273,14 +376,14 @@ fn ProcessSound() {
     sound_state.last_time = now
 
 
-    remaining_frames := sound_state.audio_device.remainingFrames()
+    remaining_frames := sound_state.audio_backend.remainingFrames()
 
     // Generally speaking, through experiments. process_rate should be double the frequency at which we call ProcessSound.
     // Holding two game frames worth of audio keeps us safe.
     // process_rate: f64 = 0.020 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
     process_rate: f64 = 4 * 0.016 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
 
-    wanted_frames_in_buffer: i32 = process_rate * sound_state.audio_device.wave_format.Format.nSamplesPerSec
+    wanted_frames_in_buffer: i32 = process_rate * sound_state.audio_backend.wave_format.Format.nSamplesPerSec
 
     frames_to_write := wanted_frames_in_buffer - remaining_frames
 
@@ -301,7 +404,7 @@ fn ProcessSound() {
     // TODO: If no audio is playing then don't acquire buffer.
 
     // NOTE: We expect the audio stream to be 32-bit float. We will handle others in the future.
-    buffer: f32* = cast<f32*>sound_state.audio_device.acquireBuffer(frames_to_write)
+    buffer: f32* = cast<f32*>sound_state.audio_backend.acquireBuffer(frames_to_write)
     buffer_len := frames_to_write * 2 * 4 // channels * 32-bit float PCM
     memzero(buffer,buffer_len)
     
@@ -343,7 +446,7 @@ fn ProcessSound() {
 
         // log(bits_per_sample, " ",channels, " ", wav.sample_rate)
 
-        sample_ratio: f32 = cast<f32>cast<i32>wav.sample_rate / cast<f32>cast<i32>sound_state.audio_device.wave_format.Format.nSamplesPerSec
+        sample_ratio: f32 = cast<f32>cast<i32>wav.sample_rate / cast<f32>cast<i32>sound_state.audio_backend.wave_format.Format.nSamplesPerSec
 
         src_sample_index0: i32
         for 0..frames_to_write {
@@ -401,7 +504,7 @@ fn ProcessSound() {
         instance.current_frame += src_sample_index0+1
     }
 
-    sound_state.audio_device.releaseBuffer(frames_to_write)
+    sound_state.audio_backend.releaseBuffer(frames_to_write)
 
     end_time := StartMeasure()
     sound_cycles+=end_time - start_time
@@ -409,15 +512,28 @@ fn ProcessSound() {
     if end_time - start_time > sound_cycles_max && sound_frames > 5 // throw away first few
         sound_cycles_max = end_time - start_time
     tim := DiffMeasure(end_time - start_time)
-    log("Frame time ", tim*1000, " ms")
+    // log("Frame time ", tim*1000, " ms")
 }
-
-struct AudioDevice {
+struct InternalAudioDevice {
+    id: u64;
+    backend_id: StringBuilder; // uuid on windows
+}
+struct AudioBackend {
     enumerator: IMMDeviceEnumerator*;
     device: IMMDevice*;
     audioClient: IAudioClient*;
     wave_format: WAVEFORMATEXTENSIBLE*;
     renderService: IAudioRenderClient*;
+
+    mutex: Mutex;
+    internalAudioDevices: Array<InternalAudioDevice>;
+    m_next_device_id: u64 = 1;
+
+    buffer_duration_100ns: i32 = 80_000_00; // 80 ms
+
+    fn next_device_id() -> u64 {
+        return m_next_device_id++
+    }
 
     fn init_default_device() {
         #macro CHECK_HR if res != 0 { log("HR BAD ", cast_unsafe<WASAPI_Error*>&res); Assert(false) }
@@ -425,7 +541,6 @@ struct AudioDevice {
         // #macro WASLOG(...) log(...)
         #macro WASLOG(...) #endmacro
 
-        buffer_duration_100ns := 80_000_00 // 80 ms
 
         res: HRESULT
 
@@ -438,10 +553,57 @@ struct AudioDevice {
         CHECK_HR
         WASLOG("pass CoCreateInstance")
 
-        
+        // collection: IMMDeviceCollection*
+
+        // res = enumerator.vtable.EnumAudioEndpoints(enumerator, eRender, DEVICE_STATE_ACTIVE, &collection)
+        // CHECK_HR
+        // log("pass EnumAudioEndpoints")
+
+        // count: u32
+        // res = collection.vtable.GetCount(collection, &count)
+        // CHECK_HR
+        // // log("pass GetCount")
+        // log(count)
+
+        // for 0..count {
+        //     endpoint: IMMDevice*
+        //     props: IPropertyStore*
+        //     res = collection.vtable.Item(collection, nr, &endpoint)
+        //     CHECK_HR
+        //     // log("pass Item ",nr)
+
+        //     res = endpoint.vtable.OpenPropertyStore(endpoint, STGM_READ, &props)
+        //     CHECK_HR
+        //     // log("pass OpenPropertyStore")
+
+
+        //     ch: char[50] // extra buffer in case PROPVARIANT is defined to small
+        //     prop_name: PROPVARIANT
+            
+
+        //     res = props.vtable.GetValue(props, &DEVPKEY_Device_FriendlyName, &prop_name)
+        //     CHECK_HR
+        //     // log("pass GetValue")
+
+        //     name: StringBuilder;
+        //     ParseWideCharString(cast<u16*>cast<void*>prop_name.union_data, &name)
+
+        //     log("Device ",nr, " : ", name)
+
+        //     props.vtable.Release(props)
+        //     endpoint.vtable.Release(endpoint)
+        // }
+
         res = enumerator.vtable.GetDefaultAudioEndpoint(enumerator, eRender, eConsole, &device)
         CHECK_HR
         WASLOG("pass GetDefaultAudioEndpoint")
+
+        // TODO: Do something if default audio device isn't available. We can't play sound in this case.
+
+        init_device()        
+    }
+    fn init_device() {
+        res: i32;
 
         res = device.vtable.Activate(device, &IAudioClient_GUID, CLSCTX_ALL, null, &audioClient)
         CHECK_HR
@@ -474,6 +636,83 @@ struct AudioDevice {
         Assert(wave_format.Format.wBitsPerSample == 32)
         // Assert(equal(cast<char*>&expected_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
     }
+
+    fn switchAudioDevice(id: u64) {
+        mutex.lock()
+        backend_id: StringBuilder
+        for internalAudioDevices {
+            if it.id == id {
+                backend_id.append(it.backend_id)
+                break
+            }
+        }
+        mutex.unlock()
+
+        if !backend_id.len {
+            // could not find id.
+            log("Audio: Could not find audio device ID: ", id)
+            sound_state.selected_output_device_id = sound_state.current_output_device_id
+            return
+        }
+
+        res: HRESULT
+        collection: IMMDeviceCollection*
+        res = enumerator.vtable.EnumAudioEndpoints(enumerator, eRender, DEVICE_STATE_ACTIVE, &collection)
+        CHECK_HR
+
+        count: u32
+        res = collection.vtable.GetCount(collection, &count)
+        CHECK_HR
+
+        endpoint: IMMDevice*
+        for 0..count {
+            props: IPropertyStore*
+            res = collection.vtable.Item(collection, nr, &endpoint)
+            CHECK_HR
+            // log("pass Item ",nr)
+
+            res = endpoint.vtable.OpenPropertyStore(endpoint, STGM_READ, &props)
+            CHECK_HR
+            // log("pass OpenPropertyStore")
+
+            device_id: u16*
+            res = endpoint.vtable.GetId(endpoint, &device_id)
+            CHECK_HR
+        
+            device_id_str: StringBuilder
+            ParseWideCharString(device_id, &device_id_str)
+            // log("Try switch device ",backend_id, " = ", device_id_str)
+
+            if backend_id == device_id_str {
+                // we found the one
+                props.vtable.Release(props)
+                break
+            }
+
+
+            props.vtable.Release(props)
+            endpoint.vtable.Release(endpoint)
+
+            endpoint = null
+        }
+
+        collection.vtable.Release(collection)
+
+        if endpoint {
+            // Release current device
+            renderService.vtable.Release(renderService)
+            audioClient.vtable.Release(audioClient)
+            device.vtable.Release(device)
+
+            // setup new device
+            device = endpoint
+            init_device()
+            sound_state.current_output_device_id = id
+        } else {
+            // keep using previous device
+        }
+    }
+    
     fn cleanup() {
         res: i32
 
@@ -513,6 +752,102 @@ struct AudioDevice {
         res = renderService.vtable.ReleaseBuffer(renderService, written_frames, 0)
         CHECK_HR
         // log("pass renderService.ReleaseBuffer")
+    }
+    
+    fn listAudioDevices(list: Array<AudioDeviceInfo>*, exclude_input_devices: bool = false, exclude_output_devices: bool = false) {
+        Assert(sound_state)
+
+        res: HRESULT
+
+        collection: IMMDeviceCollection*
+
+        res = enumerator.vtable.EnumAudioEndpoints(enumerator, eRender, DEVICE_STATE_ACTIVE, &collection)
+        CHECK_HR
+
+        count: u32
+        res = collection.vtable.GetCount(collection, &count)
+        CHECK_HR
+
+        default_device: IMMDevice*
+        res = enumerator.vtable.GetDefaultAudioEndpoint(enumerator, eRender, eConsole, &default_device)
+
+        default_id: u16*
+        if res == 0 {
+            res = default_device.vtable.GetId(default_device, &default_id)
+            CHECK_HR
+        } else if res != cast<i32>E_NOTFOUND {
+            CHECK_HR
+        }
+
+        for 0..count {
+            endpoint: IMMDevice*
+            props: IPropertyStore*
+            res = collection.vtable.Item(collection, nr, &endpoint)
+            CHECK_HR
+            // log("pass Item ",nr)
+
+            res = endpoint.vtable.OpenPropertyStore(endpoint, STGM_READ, &props)
+            CHECK_HR
+            // log("pass OpenPropertyStore")
+
+
+            ch: char[50] // extra buffer in case PROPVARIANT is defined to small
+            prop_name: PROPVARIANT
+            
+
+            res = props.vtable.GetValue(props, &DEVPKEY_Device_FriendlyName, &prop_name)
+            CHECK_HR
+            // log("pass GetValue")
+
+            info := list.add()
+            
+            ParseWideCharString(cast<u16*>cast<void*>prop_name.union_data, &info.name)
+
+
+            device_id: u16*
+            res = endpoint.vtable.GetId(endpoint, &device_id)
+            CHECK_HR
+        
+            fn equal(a: u16*, b: u16*) -> bool {
+                if !a || !b
+                    return false
+                while *a == *b {
+                    if *a == 0 {
+                        return true
+                    }
+                    a+=2
+                    b+=2
+                }
+                return false
+            }
+            info.is_default = equal(device_id, default_id)
+
+            device_id_str: StringBuilder
+            ParseWideCharString(device_id, &device_id_str)
+            // log(device_id_str)
+
+            found := false
+            for sound_state.audio_backend.internalAudioDevices {
+                if it.backend_id == device_id_str {
+                    found = true
+                    info.id = it.id
+                }
+            }
+            if !found {
+                internal_info := sound_state.audio_backend.internalAudioDevices.add()
+                internal_info.backend_id.append(device_id_str)
+                internal_info.id = sound_state.audio_backend.next_device_id()
+                info.id = internal_info.id
+            }
+
+            // log("Device ",nr, " : ", name)
+
+            props.vtable.Release(props)
+            endpoint.vtable.Release(endpoint)
+        }
+
+        collection.vtable.Release(collection)
+        default_device.vtable.Release(default_device)
     }
 }
 
@@ -581,6 +916,23 @@ fn LoadSoundFromFile(path: char[], offset_into_file: i64 = 0, stream_file: bool 
     }
     return { SOUND_INVALID_HANDLE }, SOUND_UNSUPPORTED_FILE_FORMAT
 }
+fn CreateSoundStream(name: char[], buffer_size: i32, format: AudioFormat*) {
+    Assert(sound_state)
+
+    // size must be a multiple of frame size. We can't have 57.23 samples in the buffer, it must be a whole number.
+    Assert(buffer_size % format.frame_size() == 0)
+
+    sound := sound_state.createSoundRef()
+
+    sound.format = *format
+    sound.buffer.ptr = Allocate(buffer_size)
+    sound.buffer.len = buffer_size
+    Assert(sound.buffer.ptr)
+
+    ref: SoundRef
+    ref.handle = sound.handle
+    return ref, SOUND_SUCCESS
+}
 // @param name SoundRef will get this name.
 // @param file_data Raw file data to parse (only .wav files are supported). Useful if you store assets in one large packed file. With LoadSoundFromFile you are limited to the OS file system.
 // @param stream_file TODO: Not sure if this should exist? It requires the file_data memory to continously exist.
@@ -597,12 +949,6 @@ fn LoadSoundFromRawFileData(name: char[], file_data: u8[], stream_file: bool = f
     }
     
     return { SOUND_INVALID_HANDLE }, SOUND_UNSUPPORTED_FILE_FORMAT
-}
-
-fn CreateSoundInstance(ref: SoundRef*) -> SoundInstance {
-    Assert(sound_state)
-
-
 }
 
 /*######################
@@ -789,8 +1135,18 @@ fn ReadWAVFile(path: char[], print: bool = false) -> WAVFile*, WAVError {
 
 
 /*###############################
-     Implementation Decisions
+     Implementation and design
 #################################
+
+The Sound module has two parts (not clearly seperated). The audio backend, which uses WASAPI for Windows and ALSA for Linux, and the audio system which provides a platform independent API for developers to play sounds, capture audio, stream music from a file, start and pause sounds, and play 3D sounds.
+
+Behind the scenes the audio system talks to the backend and provides it with audio data, enumerates devices, retrives microphone audio, reads audio from sound files in various WAVE formats, mixes multiple sounds based on volume, pitch, 3D location (if enabled for the particular sound), processes intense mixing in a seperate thread if you enable it or if you want to call the process sound function yourself.
+
+
+#########################
+        Questions?
+#########################
+
 
 # WHY SoundRef AND SoundInstance
 

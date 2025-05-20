@@ -1,0 +1,33 @@
+
+#import "Sound"
+#import "Logger"
+#import "OS"
+
+fn main() {
+    memory_tracker.init()
+    memory_tracker.disabled = false
+    InitSoundState()
+
+    array: Array<AudioDeviceInfo>
+    ListOutputAudioDevices(&array)
+
+    selected_index: i32
+    for array {
+        log("Audio Device Info: ",it)
+
+        yes := ChangeOutputAudioDevice(it.id)
+        play()
+    }
+}
+
+fn play() {
+    ref, err := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float.wav")
+    // log("Result: ", &err, " ", &ref)
+
+    inst := ref.createInstance()
+    inst.play()
+    while inst.isPlaying() {
+        ProcessSound()
+        ProcessSleep(0.016)
+    }
+}
