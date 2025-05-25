@@ -9,13 +9,14 @@ fn main() {
     InitSoundState()
 
     sounds: Array<char[]>
-    sounds.add("examples/sound/wav/mono-8bit.wav")
-    sounds.add("examples/sound/wav/mono-16bit.wav")
+    // sounds.add("examples/sound/wav/mono-8bit.wav")
+    // sounds.add("examples/sound/wav/mono-16bit.wav")
     // sounds.add("examples/sound/wav/mono-24bit.wav") // We don't support 24-bit PCM
-    sounds.add("examples/sound/wav/mono-32bit.wav")
-    sounds.add("examples/sound/wav/stereo-16bit.wav")
+    // sounds.add("examples/sound/wav/mono-32bit.wav")
+    // sounds.add("examples/sound/wav/stereo-16bit.wav")
     sounds.add("examples/sound/wav/stereo-32bit-float.wav")
     sounds.add("examples/sound/wav/stereo-16bit-16khz.wav")
+    // sounds.add("examples/sound/wav/stereo-32bit-float-48khz.wav")
 
     for sounds {
         ref, err := LoadSoundFromFile(*it)

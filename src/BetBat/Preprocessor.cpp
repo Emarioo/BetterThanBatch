@@ -1409,11 +1409,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             } else if(token.type == ')') {
                 layer->paren_depth--;
             }
-            if(token.type == '<') { // should arrows use the same depth as parenthesis?
-                layer->paren_depth++;
-            } else if(token.type == '>') {
-                layer->paren_depth--;
-            }
+            // arrows can be for polymoprhic args or comparison operators, we don't do depth for these.
+            // if(token.type == '<') { // should arrows use the same depth as parenthesis?
+            //     layer->paren_depth++;
+            // } else if(token.type == '>') {
+            //     layer->paren_depth--;
+            // }
             if(token.type == '[') { // should arrows use the same depth as parenthesis?
                 layer->paren_depth++;
             } else if(token.type == ']') {
@@ -1848,7 +1849,13 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                         } else {
                             // TODO: We can't pass custom text such as file name as input_argument.
                             //    We would need another array to store that information.
-                            Assert(("can't use directives like #line as arguments to macros",false));
+                            ERR_SECTION(
+                                ERR_HEAD2(macro_token)
+                                ERR_MSG("Preprocessor does not support #"<<directive_str<<" as arguments to macros.")
+                                ERR_LINE2(macro_token,"here")
+                            )
+                            return SIGNAL_COMPLETE_FAILURE;
+                            // Assert(("can't use directives like #line as arguments to macros",false));
                             if(layer->adjacent_callee->input_arguments.size() == 0)
                                 layer->adjacent_callee->add_input_arg(&scratch_allocator);
                                 // layer->adjacent_callee->input_arguments.add({});

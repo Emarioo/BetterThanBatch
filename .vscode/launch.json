@@ -11,7 +11,7 @@
             // "args": ["${workspaceFolder}/../EnderCompute/src/webserver"],
             // "args": ["examples/graphics/quad","-d"],
             // "args": ["examples/dev"],
-            "args": ["examples/dev", "-vm"],
+            "args": ["examples/sound/loop_mic"],
             // "args": ["--test"],
             // "args": ["--test"],
             // "args": ["examples/crawler/GameCore","-d","-o","bin/code.dll"],

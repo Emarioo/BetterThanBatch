@@ -1,0 +1,96 @@
+
+#import "Sound"
+#import "Logger"
+#import "OS"
+
+/*
+    This isn't loopback from mic to headphones.
+    This example captures audio for some seconds and then replays it.
+*/
+
+fn main() {
+    memory_tracker.init()
+    memory_tracker.disabled = false
+    InitSoundState()
+
+    log("Speak!")
+    
+    format: AudioFormat
+    InitInputAudioBuffer(0.1, &format)
+
+    buffer: u8[]
+    buffer.len = format.byte_size_from_duration(3)
+    buffer.ptr = Allocate(buffer.len)
+    CaptureAudio(buffer)
+
+    WriteWAVFile("yourtalk.wav", &format, buffer)
+
+    // Uncomment code if you want to test sound stream with a WAV file
+    // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float-48khz.wav")
+    // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float.wav")
+    // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-16bit-16khz.wav")
+    // wav_impl := sound_state.getSoundRef(wav_sound.handle)
+    // buffer.ptr = wav_impl.wav.data
+    // buffer.len = wav_impl.wav.data_len
+    // format = wav_impl.format
+
+    log("Replaying speech.")
+
+    log("Data in buffer ", buffer.len)
+
+    sound := CreateSoundStream("", format.byte_size_from_duration(0.1), &format)
+    
+    inst := sound.createInstance()
+    inst.play()
+
+    head := 0
+    while {
+        len := sound.free_bytes_in_buffer()
+        // log("Free in buffer ", len)
+        if head + len > buffer.len {
+            len = buffer.len - head
+        }
+        impl := sound_state.getSoundRef(sound.handle)
+        // log("USER check head ", impl.buffer_head, ", len ", len, " (tail ",impl.buffer_tail,")")
+        if len > 0 {
+            written := sound.write(buffer.ptr + head, len)
+            head += written
+        }
+
+        ProcessSound()
+
+        ProcessSleep(0.016)
+
+        if impl.available_bytes_in_buffer() == 0 {
+            break
+        }
+    }
+}
+
+fn CaptureAudio(buffer: u8[]) {
+    head := 0
+
+    start_time := StartMeasure()
+    while  {
+        ProcessSleep(0.016)
+
+        ProcessSound()
+
+        now := StartMeasure()
+        diff := DiffMeasure(now - start_time)
+
+        bytes := BytesInInputAudioBuffer()
+        if head + bytes > buffer.len {
+            bytes = buffer.len - head
+        }
+
+        written := ConsumeInputAudioBuffer(buffer.ptr + head, bytes)
+        head += written
+        // log("Consume ", written)
+
+        if head >= buffer.len {
+            // more than five seconds
+            break
+        }
+    }
+}

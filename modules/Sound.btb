@@ -80,6 +80,71 @@ struct SoundRef {
         impl := sound_state.createSoundInstance({handle})
         return { impl.handle }
     }
+
+    // Sound stream methods
+
+    fn write(data: u8*, max_bytes: i32) -> i32 {
+        sound := sound_state.getSoundRef(handle)
+        
+        // 5
+        // 99 0 100
+        if sound.buffer_head < sound.buffer_tail {
+            bytes := max_bytes
+            if max_bytes > sound.buffer_tail - sound.buffer_head {
+                bytes = sound.buffer_tail - sound.buffer_head
+            }
+            if bytes == 0
+                return bytes
+            memcpy(sound.buffer.ptr + sound.buffer_head, data, bytes)
+            sound.buffer_head = (sound.buffer_head + bytes) % sound.buffer.len
+            if sound.buffer_head == sound.buffer_tail 
+                sound.buffer_full = true
+            return bytes
+        }
+
+        bytes := max_bytes
+        if max_bytes > sound.buffer.len - sound.buffer_head {
+            bytes = sound.buffer.len - sound.buffer_head
+        }
+        if bytes == 0
+            return bytes
+        memcpy(sound.buffer.ptr + sound.buffer_head, data, bytes)
+        written := bytes
+        sound.buffer_head = (sound.buffer_head + bytes) % sound.buffer.len
+        if sound.buffer_head == sound.buffer_tail 
+            sound.buffer_full = true
+
+        if written == max_bytes
+            return written
+
+        bytes = max_bytes - written
+        if sound.buffer_tail < bytes {
+            bytes = sound.buffer_tail
+        }
+        if bytes == 0
+            return written
+        memcpy(sound.buffer.ptr, data + written, bytes)
+        written += bytes
+        sound.buffer_head = (sound.buffer_head + bytes) % sound.buffer.len
+        if sound.buffer_head == sound.buffer_tail 
+            sound.buffer_full = true
+        return written
+    }
+    fn free_bytes_in_buffer() -> i32 {
+        sound := sound_state.getSoundRef(handle)
+
+        if sound.buffer_full
+            return 0
+
+        if sound.buffer_head < sound.buffer_tail {
+            return sound.buffer_tail - sound.buffer_head
+        }
+        return sound.buffer_tail + sound.buffer.len - sound.buffer_head
+    }
+    fn max_bytes_in_buffer() -> i32 {
+        sound := sound_state.getSoundRef(handle)
+        return sound.buffer.len
+    }
 }
 
 // An instance to sound
@@ -158,26 +223,87 @@ fn ChangeOutputAudioDevice(id: u64) -> bool {
 
 // @param format Format of internal buffer and the amount of samples it can hold. This how often you have to consume the buffer before it is filled up. Sample rate of 48 0000, 32-bit float, and stereo is recommended.
 // @param frame_count Number of frames (each frame has a number of samples equal to the number of channels)
-fn InitInputAudioBuffer(format: AudioFormat*, buffer_size: i32) {
+fn InitInputAudioBuffer(size_of_buffer_in_seconds: f32, format: AudioFormat*) {
     Assert(sound_state)
 
-    Assert(buffer_size % format.frame_size() == 0)
+    // can't initialize audio buffer twice
+    Assert(!sound_state.input_buffer.ptr)
 
+    sound_state.audio_backend.init_default_input_device()
+
+    size := sound_state.audio_backend.input_format.byte_size_from_duration(size_of_buffer_in_seconds)
+
+    sound_state.capture_input_audio = true
+    sound_state.input_buffer.ptr = Allocate(size)
+    Assert(sound_state.input_buffer.ptr)
+    sound_state.input_buffer.len = size
+    sound_state.input_buffer_head = 0
+    sound_state.input_buffer_tail = 0;
+
+    *format = sound_state.audio_backend.input_format
 }
 
 // @return Bytes in internal input buffer. If bytes is equal to max audio buffer size then it is likely you lost samples because you weren't consuming the buffer fast enough.
 fn BytesInInputAudioBuffer() -> i32 {
     Assert(sound_state)
 
+    if !sound_state.capture_input_audio
+        return 0
 
+    if sound_state.input_buffer_head > sound_state.input_buffer_tail {
+        return sound_state.input_buffer_head - sound_state.input_buffer_tail
+    }
+    return sound_state.input_buffer_tail + sound_state.input_buffer.len - sound_state.input_buffer_head
 }
 
-// @param user_buffer Audio data is moved from internal buffer to user buffer. user_buffer.len specified the max bytes to consume.
-// @returns Consumed bytes.
+// @param user_buffer Audio data is moved from internal buffer to user buffer.
+// @param max_size Maximum bytes to consume. Must be divisible by frame size (sound_state.sound_state.audio_backend.get_frame_size())
+// @return Consumed bytes. Always divisible by frame size of input/capture audio format.
 fn ConsumeInputAudioBuffer(user_buffer: u8*, max_size: i32) -> i32 {
     Assert(sound_state)
+    Assert(max_size != 0)
+    Assert(0 == max_size % sound_state.audio_backend.input_format.get_frame_size())
 
+    if !sound_state.capture_input_audio
+        return 0
 
+    if !sound_state.input_buffer_full && sound_state.input_buffer_tail == sound_state.input_buffer_head
+        return 0
+
+    if sound_state.input_buffer_tail < sound_state.input_buffer_head {
+        bytes := max_size
+        if sound_state.input_buffer_head - sound_state.input_buffer_tail < max_size {
+            bytes = sound_state.input_buffer_head - sound_state.input_buffer_tail
+        }
+        memcpy(user_buffer, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, bytes)
+        sound_state.input_buffer_tail += bytes
+        Assert(0 == bytes % sound_state.audio_backend.input_format.get_frame_size())
+        return bytes
+    }
+    bytes := max_size
+    if sound_state.input_buffer.len - sound_state.input_buffer_tail < max_size {
+        bytes = sound_state.input_buffer.len - sound_state.input_buffer_tail
+    }
+    memcpy(user_buffer, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, bytes)
+    sound_state.input_buffer_tail = (sound_state.input_buffer_tail + bytes) % sound_state.input_buffer.len
+    sound_state.input_buffer_full = false
+    if bytes == max_size {
+        Assert(0 == bytes % sound_state.audio_backend.input_format.get_frame_size())
+        return bytes
+    }
+
+    read_bytes := bytes
+    bytes = max_size - read_bytes
+
+    if sound_state.input_buffer_head < bytes {
+        bytes = sound_state.input_buffer_head
+    }
+
+    memcpy(user_buffer + read_bytes, sound_state.input_buffer.ptr, bytes)
+    sound_state.input_buffer_tail = (sound_state.input_buffer_tail + bytes) % sound_state.input_buffer.len
+    read_bytes += bytes
+    Assert(0 == bytes % sound_state.audio_backend.input_format.get_frame_size())
+    return read_bytes
 }
 
 enum AudioSampleFormat {
@@ -191,27 +317,55 @@ struct AudioFormat {
     stereo: bool; // false - Mono, true - Stereo
     sample_format: AudioSampleFormat; // AUDIO_32BIT_FLOAT
 
+    fn init(_sample_rate: i32, channels: i32, bits_per_sample: i32, is_float: bool) {
+        sample_rate = _sample_rate
+        stereo = channels == 2
+        Assert(channels == 1 || channels == 2)
+        if !is_float {
+            if bits_per_sample == 32 {
+                sample_format = AUDIO_32BIT_PCM
+            } else if bits_per_sample == 16 {
+                sample_format = AUDIO_16BIT_PCM
+            }  else if bits_per_sample == 8 {
+                sample_format = AUDIO_8BIT_PCM
+            } else {
+                Assert(!is_float && (bits_per_sample == 8 || bits_per_sample == 16 || bits_per_sample == 32))
+            }
+        } else {
+            if bits_per_sample == 32 {
+                sample_format = AUDIO_32BIT_FLOAT
+            } else {
+                Assert(is_float && bits_per_sample == 32)
+            }
+        }
+    }
+
     fn frames_from_duration(time: f32) -> i32 {
         return sample_rate * time
     }
     fn byte_size_from_duration(time: f32) -> i32 {
         // buffer size must be a multiple of frame size, we must cast float before multiplying frame size
-        return frame_size() * cast<i32>(sample_rate * time)
+        return get_frame_size() * cast<i32>(sample_rate * time)
     }
-    fn frame_size() -> i32 {
-        size := 0
+    fn get_channels() -> i32 {
+        if stereo
+            return 2
+        return 1
+    }
+    fn get_bits_per_sample() -> i32 {
         switch sample_format {
             case AUDIO_8BIT_PCM:
-                size = 1
+                return 8
             case AUDIO_16BIT_PCM:
-                size = 2
+                return 16
             case AUDIO_32BIT_PCM:
             case AUDIO_32BIT_FLOAT:
-                size = 4
+                return 32
         }
-        if stereo
-            size *= 2
-        return size
+        return -1
+    }
+    fn get_frame_size() -> i32 {
+        return (get_bits_per_sample()/8) * get_channels()
     }
 }
 
@@ -233,6 +387,20 @@ struct SoundRef_impl {
     buffer: u8[]; // circular buffer
     buffer_head: i32;
     buffer_tail: i32;
+    buffer_full: bool;
+
+    fn available_bytes_in_buffer() -> i32 {
+        if buffer_full
+            return buffer.len
+
+        if buffer_tail <= buffer_head {
+            return buffer_head - buffer_tail
+        }
+        return buffer_head + buffer.len - buffer_tail
+    }
+    fn max_bytes_in_buffer() -> i32 {
+        return buffer.len
+    }
 }
 struct SoundInstance_impl {
     handle: u64;
@@ -258,6 +426,13 @@ struct SoundState {
 
     selected_output_device_id: u64;
     current_output_device_id: u64;
+
+    // circular input buffer, initialized by InitInputAudioBuffer
+    capture_input_audio: bool;
+    input_buffer: u8[];
+    input_buffer_head: i32;
+    input_buffer_tail: i32;
+    input_buffer_full: i32;
 
     fn init() {
         refs.init(64)
@@ -347,8 +522,6 @@ global sound_cycles: i64
 global sound_cycles_max: i64
 global sound_frames: i64
 
-
-
 fn ProcessSound() {
     Assert(sound_state)
 
@@ -425,86 +598,178 @@ fn ProcessSound() {
         if !instance.playing
             continue
 
-        wav := sound.wav
-
         // TODO: 24-bit support?
+        form := sound_state.audio_backend.output_format
+        
+        if sound.wav {
+            wav := sound.wav
+            
+            out_written, in_written := MixAudio(buffer, &form, wav.data + instance.current_frame * wav.format.get_frame_size(), &wav.format, frames_to_write, sound.total_frames - instance.current_frame , sound_state.global_volume)
+            instance.current_frame += in_written
 
-        Assert(wav.channels == 1 || wav.channels == 2)
-        Assert(wav.bits_per_sample == 8 || wav.bits_per_sample == 16 || wav.bits_per_sample == 32)
-        Assert(wav.audio_format == WAVFILE_AUDIO_FORMAT_PCM_INTEGER || wav.audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT)
-
-        bits_per_sample: i32 = wav.bits_per_sample
-        channels: i32 = wav.channels
-        audio_format: i32 = wav.audio_format
-
-        src_32f := cast<f32*>wav.data + instance.current_frame * cast<i32>wav.channels * sizeof(f32)
-        src_32  := cast<i32*>wav.data + instance.current_frame * cast<i32>wav.channels * sizeof(i32)
-        src_16  := cast<i16*>wav.data + instance.current_frame * cast<i32>wav.channels * sizeof(i16)
-        src_8   := cast<u8*>wav.data + instance.current_frame * cast<i32>wav.channels
-
-        // TODO: SIMD, write in assembly?
-
-        // log(bits_per_sample, " ",channels, " ", wav.sample_rate)
-
-        sample_ratio: f32 = cast<f32>cast<i32>wav.sample_rate / cast<f32>cast<i32>sound_state.audio_backend.wave_format.Format.nSamplesPerSec
-
-        src_sample_index0: i32
-        for 0..frames_to_write {
-            src_sample_index: f32 = nr * sample_ratio
-            src_sample_index0 = src_sample_index
-
-            fraction: f32 = src_sample_index - src_sample_index0
-
-            // log("d ", src_sample_index0, " ", fraction)
-
-            if src_sample_index0 + 1 >= sound.total_frames - instance.current_frame {
+            if instance.current_frame >= sound.total_frames {
                 instance.playing = false
-                break
             }
+        } else {
+            // Sound stream
+            // For now we only handle same sample rate
+            // Assert(sound.format.sample_rate == sound_state.audio_backend.wave_format.Format.nSamplesPerSec)
 
-            out_sample0: f32
-            out_sample1: f32
-            if bits_per_sample == 8 && channels == 1 {
-                out_sample0 = ((cast<i32>src_8[src_sample_index0] - 128) / 128.0) * (1.0 - fraction) + ((cast<i32>src_8[src_sample_index0 + 1] - 128) / 128.0) * fraction
-                out_sample1 = out_sample0
+            // log("frames to write ", frames_to_write, ", available ", sound.available_bytes_in_buffer())
+            
+            // We should not check if enough bytes is in the sound stream and if not don't play any off them.
+            // We should play whatever we havea in the buffer and if it's not enough then it's the users fault
+            // that they didn't provide enough data in the stream.
+            // if frames_to_write > sound.available_bytes_in_buffer() { // TODO: This comparison assumes the sample rates are the same.
+            //     log("Skippers ", frames_to_write, " ava ", sound.available_bytes_in_buffer())
+            //     // sound stream don't have enough data
+            //     continue
+            // }
+            state := sound_state
 
-            } else if bits_per_sample == 8 && channels == 2 {
-                out_sample0 := ((cast<i32>src_8[2*src_sample_index0    ] - 128) / 128.0) * (1.0 - fraction) + ((cast<i32>src_8[2*(src_sample_index0 + 1)    ] - 128) / 128.0) * fraction
-                out_sample1 := ((cast<i32>src_8[2*src_sample_index0 + 1] - 128) / 128.0) * (1.0 - fraction) + ((cast<i32>src_8[2*(src_sample_index0 + 1) + 1] - 128) / 128.0) * fraction
-            
-            } else if bits_per_sample == 16 && channels == 1 {
-                out_sample0 = ((cast<i32>src_16[src_sample_index0]) / 32768.0) * (1.0 - fraction) + ((cast<i32>src_16[src_sample_index0 + 1]) / 32768.0) * fraction
-                out_sample1 = out_sample0
-            
-            } else if bits_per_sample == 16 && channels == 2 {
-                out_sample0 = ((cast<i32>src_16[2*src_sample_index0    ]) / 32768.0) * (1.0 - fraction) + ((cast<i32>src_16[2*(src_sample_index0 + 1)    ]) / 32768.0) * fraction
-                out_sample1 = ((cast<i32>src_16[2*src_sample_index0 + 1]) / 32768.0) * (1.0 - fraction) + ((cast<i32>src_16[2*(src_sample_index0 + 1) + 1]) / 32768.0) * fraction
-           
-            } else if bits_per_sample == 32 && channels == 1 && audio_format == WAVFILE_AUDIO_FORMAT_PCM_INTEGER {
-                out_sample0 = ((cast<i32>src_32[src_sample_index0]) / 2147483648.0) * (1.0 - fraction) + ((cast<i32>src_32[src_sample_index0 + 1]) / 2147483648.0) * fraction
-                out_sample1 = out_sample0
-            
-            } else if bits_per_sample == 32 && channels == 2 && audio_format == WAVFILE_AUDIO_FORMAT_PCM_INTEGER {
-                out_sample0 = ((cast<i32>src_32[2*src_sample_index0    ]) / 2147483648.0) * (1.0 - fraction) + ((cast<i32>src_32[2*(src_sample_index0 + 1)    ]) / 2147483648.0) * fraction
-                out_sample1 = ((cast<i32>src_32[2*src_sample_index0 + 1]) / 2147483648.0) * (1.0 - fraction) + ((cast<i32>src_32[2*(src_sample_index0 + 1) + 1]) / 2147483648.0) * fraction
-            
-            } else if bits_per_sample == 32 && channels == 1 && audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT {
-                out_sample0 = src_32f[src_sample_index0] * (1.0 - fraction) + src_32f[src_sample_index0 + 1] * fraction
-                out_sample1 = out_sample0
-            
-            } else if bits_per_sample == 32 && channels == 2 && audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT {
-                out_sample0 = src_32f[2*src_sample_index0    ] * (1.0 - fraction) + src_32f[2*(src_sample_index0 + 1)    ] * fraction
-                out_sample1 = src_32f[2*src_sample_index0 + 1] * (1.0 - fraction) + src_32f[2*(src_sample_index0 + 1) + 1] * fraction
+            reverse_sample_ratio: f32 = cast<f32>sound_state.audio_backend.output_format.sample_rate / cast<f32>sound.format.sample_rate
+
+            my_frames_to_write: i32 = reverse_sample_ratio * (sound.available_bytes_in_buffer() / sound.format.get_frame_size())
+            // TODO: Assumes the same sample rate on the sound stream and out audio device
+            if my_frames_to_write > frames_to_write
+                my_frames_to_write = frames_to_write
+
+            // Assert(sound.format.sample_format == AUDIO_32BIT_FLOAT)
+
+            #macro CHECK_DIV(A,B) Assert(A/B*B == A)
+
+            // log("tail ", sound.buffer_tail, ", head ", sound.buffer_head)
+            if sound.buffer_tail < sound.buffer_head {
+                // nocheckin TODO: Threading issues when user writes and modifies the head. available_bytes_in_buffer is affected.
+                CHECK_DIV(sound.buffer_head - sound.buffer_tail, sound.format.get_frame_size())
+                MixAudio(buffer, &form, sound.buffer.ptr + sound.buffer_tail, &sound.format, my_frames_to_write, (sound.buffer_head - sound.buffer_tail) / sound.format.get_frame_size(), sound_state.global_volume)
+            } else {
+                // This code assumes sample rates are the same, you will need to multiple sample rate ratio to max_in_frames to support different sample rates.
+                CHECK_DIV(sound.buffer.len - sound.buffer_tail, sound.format.get_frame_size())
+                out_written, in_written := MixAudio(buffer, &form, sound.buffer.ptr + sound.buffer_tail, &sound.format, my_frames_to_write, (sound.buffer.len - sound.buffer_tail) / sound.format.get_frame_size(), sound_state.global_volume)
+
+                // log(" ", my_frames_to_write, " written ", out_written, " ", in_written)
+                
+                // We need two calls to MixAudio when going around the sound stream's circular buffer
+                if out_written != my_frames_to_write {
+                    // we shall write more frames
+                    CHECK_DIV(sound.buffer_head, sound.format.get_frame_size())
+                    MixAudio(buffer + out_written * form.get_frame_size(), &form, sound.buffer.ptr, &sound.format, my_frames_to_write - out_written, sound.buffer_head / sound.format.get_frame_size(), sound_state.global_volume)
+                }
             }
-
-            buffer[2*nr    ] += out_sample0 * sound_state.global_volume
-            buffer[2*nr + 1] += out_sample1 * sound_state.global_volume
         }
-        // log("fin frame ", instance.current_frame, "/",sound.total_frames)
-        instance.current_frame += src_sample_index0+1
     }
 
+    // Advance tail of all sound streams in one go. This should be done after instances have played from the 
+    // sound streams.
+    for sound: sound_state.refs {
+        if !sound.buffer.ptr
+            continue
+
+        sample_ratio: f32 = cast<f32>sound.format.sample_rate / cast<f32>sound_state.audio_backend.output_format.sample_rate
+        // sound frames, not output buffer frames because they may have different sample rates and
+        // we need to clearly differentiate them
+        my_sound_frames_to_write := sound.available_bytes_in_buffer() / sound.format.get_frame_size()
+        // TODO: Assumes the same sample rate on the sound stream and out audio device
+        if my_sound_frames_to_write > frames_to_write * sample_ratio
+            my_sound_frames_to_write = frames_to_write * sample_ratio
+        
+        // nocheckin TODO: we add frames_to_write which assumes sample rates are the same
+
+        // log("Move tail ", sound.buffer_tail, " + ", my_sound_frames_to_write, " = ",(sound.buffer_tail + my_sound_frames_to_write) % sound.buffer.len, ", avail bytes ",sound.available_bytes_in_buffer())
+        log("INFO ", sound.buffer_tail, " ", sound.buffer_head, " ", sound.buffer_full)
+        sound.buffer_tail = (sound.buffer_tail + my_sound_frames_to_write * sound.format.get_frame_size()) % sound.buffer.len
+        if sound.buffer_head != sound.buffer_tail 
+            sound.buffer_full = false
+     }
+
     sound_state.audio_backend.releaseBuffer(frames_to_write)
+
+    if sound_state.capture_input_audio {
+        // TODO: We assume stereo 32-bit float 48000 Hz
+        capture := sound_state.audio_backend.captureService
+        frames: u32
+        res: i32
+        while {
+            res = capture.vtable.GetNextPacketSize(capture, &frames)
+            CHECK_HR
+
+            if frames == 0
+                break
+
+            packet_bytes := cast<i32>frames * sound_state.audio_backend.input_format.get_frame_size()
+
+            // Our capture buffer is too small (size specified with InitInputBuffer).
+            // We have to read whole packets.
+            Assert(packet_bytes < sound_state.input_buffer.len)
+
+            free_bytes := 0
+            if sound_state.input_buffer_full {
+                // no free bytes
+            } else if sound_state.input_buffer_head < sound_state.input_buffer_tail {
+                free_bytes = sound_state.input_buffer_tail - sound_state.input_buffer_head
+            } else {
+                free_bytes = sound_state.input_buffer.len - sound_state.input_buffer_head + sound_state.input_buffer_tail
+            }
+            // log("INPUT BUFFER ", sound_state.input_buffer_head, " ", sound_state.input_buffer_tail, " ", sound_state.input_buffer.len)
+
+            // A thought about different kind of consumer/producer-cycle. Comment should exist elsewhere but here it is.
+            //   We may want a circular buffer but not
+            //   consumer/producer-style. We want to capture audio into the circular buffer continously writing
+            //   at and incrementing head while overwriting whatever data is there. Then user of the sound module reads
+            //   bytes from the tail at the same pace. If they read slower or faster then audio is messed up.
+            //   With this approach we need some sort of function to know how many bytes we should read.
+            //   With the consumer/producer style we had a function that told us how many free or used bytes we had.
+            //   could just consume all of those and transfer over network for voice chat.
+            //   
+            //  The reason we want this new approach is that the buffer never fills up. We always have fresh data.
+            //  With a bigger buffer we would have less fresh audio data but more room for inconsistent reads with
+            //  cost of higher latency.
+
+
+            // Whether we have free bytes in the buffer or not we will always consume bytes from
+            // the capture service. If the whole audio system is working correctly we should consume and
+            // mix or send voice audio to headphones or over the network at the same speed. We should
+            // always have free bytes available.
+
+            // TODO: With that said, we don't have to skip the whole packet. We could transfer some samples in the packet at least altough if we're already skipping parts of packets something is wrong so maybe it's best to skip whole packets so we notice issues in the sound more clearly?
+
+            data: u8*
+            flags: u32
+            res = capture.vtable.GetBuffer(capture, &data, &frames, &flags, null, null)
+            CHECK_HR
+            
+            if packet_bytes <= free_bytes {
+                if sound_state.input_buffer_head < sound_state.input_buffer_tail {
+                    memcpy(sound_state.input_buffer.ptr + sound_state.input_buffer_head, data, packet_bytes)
+                    sound_state.input_buffer_head = (sound_state.input_buffer_head + packet_bytes) % sound_state.input_buffer.len
+                    if sound_state.input_buffer_head == sound_state.input_buffer_tail
+                        sound_state.input_buffer_full = true
+                } else {
+                    bytes := packet_bytes
+                    if bytes > sound_state.input_buffer.len - sound_state.input_buffer_head {
+                        bytes = sound_state.input_buffer.len - sound_state.input_buffer_head
+                    }
+                    memcpy(sound_state.input_buffer.ptr + sound_state.input_buffer_head, data, bytes)
+                    sound_state.input_buffer_head = (sound_state.input_buffer_head + bytes) % sound_state.input_buffer.len
+
+                    written := bytes
+                    
+                    bytes = packet_bytes - written // rest of packet bytes will fit, we checked already no need to clamp
+                    memcpy(sound_state.input_buffer.ptr, data + written, bytes)
+                    sound_state.input_buffer_head = (sound_state.input_buffer_head + bytes) % sound_state.input_buffer.len
+
+                    if sound_state.input_buffer_head == sound_state.input_buffer_tail
+                        sound_state.input_buffer_full = true
+                }
+            } else {
+                // log("Skipping captured audio packet of ", packet_bytes, " bytes, input buffer has no space (",free_bytes," bytes)")
+            }
+
+            res = capture.vtable.ReleaseBuffer(capture, frames)
+            CHECK_HR
+        }
+    }
 
     end_time := StartMeasure()
     sound_cycles+=end_time - start_time
@@ -514,16 +779,114 @@ fn ProcessSound() {
     tim := DiffMeasure(end_time - start_time)
     // log("Frame time ", tim*1000, " ms")
 }
+
+// returns written source frames, if frames_to_write is more than max frames in the in buffer then written source frames
+// may be considerably less than what you might expect. This is fine, it means in buffer or the in sound stopped.
+// returned written source frames will not be the same as frames_to_write if the in and out buffer has different sample rates.
+fn MixAudio(out_buffer: f32*, out_format: AudioFormat*, in_buffer: u8*, in_format: AudioFormat*, frames_to_write: i32, in_max_frames: i32, volume: f32) -> i32, i32 {
+    Assert(out_format.sample_format == AUDIO_32BIT_FLOAT)
+    Assert(out_format.stereo)
+
+    sample_ratio: f32 = cast<f32>in_format.sample_rate / cast<f32>out_format.sample_rate
+    // bits_per_sample: i32 = in_format.get_bits_per_sample()
+    channels: i32 = in_format.get_channels()
+    audio_format: AudioSampleFormat = in_format.sample_format
+
+    src_32f: f32*
+    src_32 : i32*
+    src_16 : i16*
+    src_8  : u8* 
+
+    switch in_format.sample_format {
+        case AUDIO_32BIT_FLOAT:
+            src_32f = cast<f32*>in_buffer
+        case AUDIO_16BIT_PCM:
+            src_16  = cast<i16*>in_buffer
+        case AUDIO_32BIT_PCM:
+            src_32  = cast<i32*>in_buffer
+        case AUDIO_8BIT_PCM:
+            src_8   = cast<u8* >in_buffer
+    }
+
+    // nocheckin TODO: I think we're missing to write one sample here. If you listen closely to 16 khz audio there is a faint noise or stutter in the sound. It's probably due to a missing sample.
+
+    src_sample_index0: i32
+    nr: i32 = 0
+    while nr < frames_to_write {
+        src_sample_index: f32 = nr * sample_ratio
+        src_sample_index0 = src_sample_index
+        defer nr++
+
+        fraction: f32 = src_sample_index - src_sample_index0
+
+        // log("d ", src_sample_index0, " ", fraction)
+
+        if src_sample_index0 + 1 >= in_max_frames {
+            break
+        }
+
+        out_sample0: f32
+        out_sample1: f32
+        if audio_format == AUDIO_8BIT_PCM && channels == 1 {
+            out_sample0 = ((cast<i32>src_8[src_sample_index0] - 128) / 128.0) * (1.0 - fraction) + ((cast<i32>src_8[src_sample_index0 + 1] - 128) / 128.0) * fraction
+            out_sample1 = out_sample0
+
+        } else if audio_format == AUDIO_8BIT_PCM && channels == 2 {
+            out_sample0 := ((cast<i32>src_8[2*src_sample_index0    ] - 128) / 128.0) * (1.0 - fraction) + ((cast<i32>src_8[2*(src_sample_index0 + 1)    ] - 128) / 128.0) * fraction
+            out_sample1 := ((cast<i32>src_8[2*src_sample_index0 + 1] - 128) / 128.0) * (1.0 - fraction) + ((cast<i32>src_8[2*(src_sample_index0 + 1) + 1] - 128) / 128.0) * fraction
+        
+        } else if audio_format == AUDIO_16BIT_PCM && channels == 1 {
+            out_sample0 = ((cast<i32>src_16[src_sample_index0]) / 32768.0) * (1.0 - fraction) + ((cast<i32>src_16[src_sample_index0 + 1]) / 32768.0) * fraction
+            out_sample1 = out_sample0
+        
+        } else if audio_format == AUDIO_16BIT_PCM && channels == 2 {
+            out_sample0 = ((cast<i32>src_16[2*src_sample_index0    ]) / 32768.0) * (1.0 - fraction) + ((cast<i32>src_16[2*(src_sample_index0 + 1)    ]) / 32768.0) * fraction
+            out_sample1 = ((cast<i32>src_16[2*src_sample_index0 + 1]) / 32768.0) * (1.0 - fraction) + ((cast<i32>src_16[2*(src_sample_index0 + 1) + 1]) / 32768.0) * fraction
+        
+        } else if audio_format == AUDIO_32BIT_PCM && channels == 1 {
+            out_sample0 = ((cast<i32>src_32[src_sample_index0]) / 2147483648.0) * (1.0 - fraction) + ((cast<i32>src_32[src_sample_index0 + 1]) / 2147483648.0) * fraction
+            out_sample1 = out_sample0
+        
+        } else if audio_format == AUDIO_32BIT_PCM && channels == 2 {
+            out_sample0 = ((cast<i32>src_32[2*src_sample_index0    ]) / 2147483648.0) * (1.0 - fraction) + ((cast<i32>src_32[2*(src_sample_index0 + 1)    ]) / 2147483648.0) * fraction
+            out_sample1 = ((cast<i32>src_32[2*src_sample_index0 + 1]) / 2147483648.0) * (1.0 - fraction) + ((cast<i32>src_32[2*(src_sample_index0 + 1) + 1]) / 2147483648.0) * fraction
+        
+        } else if audio_format == AUDIO_32BIT_FLOAT && channels == 1 {
+            out_sample0 = src_32f[src_sample_index0] * (1.0 - fraction) + src_32f[src_sample_index0 + 1] * fraction
+            out_sample1 = out_sample0
+        
+        } else if audio_format == AUDIO_32BIT_FLOAT && channels == 2 {
+            out_sample0 = src_32f[2*src_sample_index0    ] * (1.0 - fraction) + src_32f[2*(src_sample_index0 + 1)    ] * fraction
+            out_sample1 = src_32f[2*src_sample_index0 + 1] * (1.0 - fraction) + src_32f[2*(src_sample_index0 + 1) + 1] * fraction
+        }
+
+        out_buffer[2*nr    ] += out_sample0 * volume
+        out_buffer[2*nr + 1] += out_sample1 * volume
+    }
+    return nr, src_sample_index0 + 1
+}
+
+
 struct InternalAudioDevice {
     id: u64;
     backend_id: StringBuilder; // uuid on windows
 }
 struct AudioBackend {
+    // platform-independent
+    output_format: AudioFormat;
+    input_format: AudioFormat;
+
+    // platform specific
     enumerator: IMMDeviceEnumerator*;
     device: IMMDevice*;
     audioClient: IAudioClient*;
     wave_format: WAVEFORMATEXTENSIBLE*;
     renderService: IAudioRenderClient*;
+
+    input_wave_format: WAVEFORMATEXTENSIBLE*;
+    input_device: IMMDevice*;
+    input_audioClient: IAudioClient*;
+    captureService: IAudioCaptureClient*;
 
     mutex: Mutex;
     internalAudioDevices: Array<InternalAudioDevice>;
@@ -630,10 +993,65 @@ struct AudioBackend {
         // TODO: Extinsible format may have multiple channels, more than SPEAKER_FRONT_LEFT and SPEAKER_FRONT_RIGHT.
         //   Those are the only channels we support so we should zero the other ones (if using float, if using 16-bit then set to 2^15).
 
+        Assert(wave_format.Format.nChannels == 1 || wave_format.Format.nChannels == 2)
+
+        is_float := equal(cast<char*>&wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, 16)
+        Assert(is_float || equal(cast<char*>&wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
+
+        output_format.init(wave_format.Format.nSamplesPerSec, wave_format.Format.nChannels, wave_format.Format.wBitsPerSample, is_float)
+
         // TODO: Handle 16-bit and 32-bit integer?
-        Assert(equal(cast<char*>&wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, 16))
-        Assert(wave_format.Format.nChannels == 2)
-        Assert(wave_format.Format.wBitsPerSample == 32)
+        // Assert(equal(cast<char*>&wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, 16))
+        // Assert(wave_format.Format.nChannels == 2)
+        // Assert(wave_format.Format.wBitsPerSample == 32)
+        // Assert(equal(cast<char*>&expected_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
+    }
+
+    fn init_default_input_device() {
+        res: i32
+        res = enumerator.vtable.GetDefaultAudioEndpoint(enumerator, eCapture, eConsole, &input_device)
+        CHECK_HR
+        WASLOG("pass GetDefaultAudioEndpoint")
+
+        // TODO: Do something if default audio device isn't available. We can't play sound in this case.
+
+        res = input_device.vtable.Activate(input_device, &IAudioClient_GUID, CLSCTX_ALL, null, &input_audioClient)
+        CHECK_HR
+        WASLOG("pass device.Activate")
+
+        res = input_audioClient.vtable.GetMixFormat(input_audioClient, cast<WAVEFORMATEX**>&input_wave_format)
+        CHECK_HR
+        WASLOG("pass audioClient.GetMixFormat")
+        // log("WAVE format:")
+        // std_print(input_wave_format, pretty = true)
+        // log(input_wave_format)
+
+        res = input_audioClient.vtable.Initialize(input_audioClient, AUDCLNT_SHAREMODE_SHARED, 0, buffer_duration_100ns, 0,  cast<WAVEFORMATEX*>input_wave_format, null)
+        CHECK_HR
+        WASLOG("pass audioClient.Initialize")
+
+        res = input_audioClient.vtable.GetService(input_audioClient, &IAudioCaptureClient_GUID, &captureService)
+        CHECK_HR
+        WASLOG("pass audioClient.GetService")
+
+        input_audioClient.vtable.Start(input_audioClient)
+        CHECK_HR
+        WASLOG("pass audioClient.Start")
+
+        Assert(input_wave_format.Format.nChannels == 1 || input_wave_format.Format.nChannels == 2)
+
+        is_float := equal(cast<char*>&input_wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, 16)
+        Assert(is_float || equal(cast<char*>&input_wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
+
+        input_format.init(input_wave_format.Format.nSamplesPerSec, input_wave_format.Format.nChannels, input_wave_format.Format.wBitsPerSample, is_float)
+
+        // TODO: Extinsible format may have multiple channels, more than SPEAKER_FRONT_LEFT and SPEAKER_FRONT_RIGHT.
+        //   Those are the only channels we support so we should zero the other ones (if using float, if using 16-bit then set to 2^15).
+
+        // TODO: Handle 16-bit and 32-bit integer?
+        // Assert(input_wave_format.Format.nChannels == 2)
+        // Assert(input_wave_format.Format.wBitsPerSample == 32)
+        // Assert(input_wave_format.Format.nSamplesPerSec == 48000)
         // Assert(equal(cast<char*>&expected_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
     }
 
@@ -747,6 +1165,32 @@ struct AudioBackend {
         return renderBuffer
     }
     fn releaseBuffer(written_frames: i32) {
+        res: i32
+        Assert(renderService)
+        res = renderService.vtable.ReleaseBuffer(renderService, written_frames, 0)
+        CHECK_HR
+        // log("pass renderService.ReleaseBuffer")
+    }
+    fn remainingInputFrames() -> i32 {
+        res: i32
+        Assert(audioClient)
+        frames: i32
+        res = audioClient.vtable.GetCurrentPadding(audioClient, cast<u32*>&frames)
+        CHECK_HR
+        // log("pass audioClient.GetCurrentPadding")
+        return frames
+    }
+    fn acquireInputBuffer(frames: i32) -> u8* {
+        res: i32
+        Assert(renderService)
+        renderBuffer: u8*
+        res = renderService.vtable.GetBuffer(renderService, frames, &renderBuffer)
+        CHECK_HR
+        // log("pass renderService.GetBuffer")
+
+        return renderBuffer
+    }
+    fn releaseInputBuffer(written_frames: i32) {
         res: i32
         Assert(renderService)
         res = renderService.vtable.ReleaseBuffer(renderService, written_frames, 0)
@@ -908,6 +1352,7 @@ fn LoadSoundFromFile(path: char[], offset_into_file: i64 = 0, stream_file: bool 
 
         sound := sound_state.createSoundRef(path) // path is name of sound ref
         sound.wav = wav
+        sound.format = wav.format
         sound.total_frames = wav.data_len / cast<i32>wav.block_align
         
         ref: SoundRef
@@ -916,13 +1361,13 @@ fn LoadSoundFromFile(path: char[], offset_into_file: i64 = 0, stream_file: bool 
     }
     return { SOUND_INVALID_HANDLE }, SOUND_UNSUPPORTED_FILE_FORMAT
 }
-fn CreateSoundStream(name: char[], buffer_size: i32, format: AudioFormat*) {
+fn CreateSoundStream(name: char[], buffer_size: i32, format: AudioFormat*) -> SoundRef, SoundError {
     Assert(sound_state)
 
     // size must be a multiple of frame size. We can't have 57.23 samples in the buffer, it must be a whole number.
-    Assert(buffer_size % format.frame_size() == 0)
+    Assert(buffer_size % format.get_frame_size() == 0)
 
-    sound := sound_state.createSoundRef()
+    sound := sound_state.createSoundRef(name)
 
     sound.format = *format
     sound.buffer.ptr = Allocate(buffer_size)
@@ -974,6 +1419,8 @@ struct WAVFile {
     byte_rate: u32;
     block_align: u16; // bits_per_sample * channels
     bits_per_sample: u16;
+
+    format: AudioFormat;
 
     size_of_chunks: i32; // size of the remaining chunks (size of whole file except for header)
 
@@ -1049,6 +1496,10 @@ fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> 
     wav.block_align     = *cast<u16*>(data.ptr + head + 12)
     wav.bits_per_sample = *cast<u16*>(data.ptr + head + 14)
     head += 16
+
+    wav.format.init(wav.sample_rate, wav.channels, wav.bits_per_sample, wav.audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT)
+
+    Assert(wav.audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT || wav.audio_format == WAVFILE_AUDIO_FORMAT_PCM_INTEGER)
 
     Assert(head == WAVFILE_HEADER_SIZE)
 
@@ -1133,6 +1584,47 @@ fn ReadWAVFile(path: char[], print: bool = false) -> WAVFile*, WAVError {
     return wav, err
 }
 
+fn WriteWAVFile(path: char[], format: AudioFormat*, audio_data: u8[]) -> bool {
+    file := FileOpen(path, FILE_CLEAR_AND_WRITE)
+    if !file
+        return false
+    defer FileClose(file)
+    
+    almost_file_size: i32 = WAVFILE_HEADER_SIZE - 8 + 8 + audio_data.len
+
+    FileWrite(file, "RIFF".ptr, 4)
+    FileWrite(file, &almost_file_size, 4)
+    FileWrite(file, "WAVE".ptr, 4)
+    FileWrite(file, "fmt ".ptr, 4)
+    tmp: i32 = 16
+    FileWrite(file, &tmp, 4)
+
+    form: WAVFile
+    if format.sample_format == AUDIO_32BIT_FLOAT
+        form.audio_format = WAVFILE_AUDIO_FORMAT_IEEE_FLOAT
+    else
+        form.audio_format = WAVFILE_AUDIO_FORMAT_PCM_INTEGER
+    form.channels = format.get_channels()
+    form.sample_rate = format.sample_rate
+    form.byte_rate = format.sample_rate * format.get_frame_size()
+    form.block_align = format.get_frame_size()
+    form.bits_per_sample = format.get_bits_per_sample()
+
+    FileWrite(file, &form.audio_format, 2)
+    FileWrite(file, &form.channels, 2)
+    FileWrite(file, &form.sample_rate, 4)
+    FileWrite(file, &form.byte_rate, 4)
+    FileWrite(file, &form.block_align, 2)
+    FileWrite(file, &form.bits_per_sample, 2)
+
+    FileWrite(file, "data".ptr, 4)
+    tmp = audio_data.len
+    FileWrite(file, &tmp, 4)
+
+    FileWrite(file, audio_data.ptr, audio_data.len)
+    return true
+}
+
 
 /*###############################
      Implementation and design
@@ -1187,3 +1679,135 @@ The type of literals are not inferred which they should be.
 This time I have chosen 0 as invalid handle and first element being unused if handle is an index into an array. (we may use a hashmap instead)
 
 */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// HERE BE GARBAGE CODE, maybe useful for refactor in the future?
+
+
+// struct CircularBuffer {
+//     buffer: u8[]
+//     head: i32;
+//     tail: i32;
+//     full: bool;
+
+//     fn free_bytes() -> i32 {
+//         if full
+//             return 0
+
+//         if head < tail {
+//             return tail - head
+//         }
+//         return buffer.len - head + tail 
+//     }
+//     fn available_bytes() -> i32 {
+//         if full
+//             return buffer.len
+
+//         if tail == head
+//             return 0
+
+//         if tail < head {
+//             return head - tail
+//         }
+//         return buffer.len - tail + head
+//     }
+//     fn write(data: u8*, size: i32) -> i32 {
+//         if full
+//             return 0
+
+//         if head < tail {
+//             bytes := free_bytes()
+//             if bytes > size
+//                 bytes = size
+
+//             memcpy(buffer.ptr + head, data, bytes)
+
+//             head = (head + bytes) % buffer.len
+//             if head == tail
+//                 full = true
+//             return bytes
+//         }
+
+//         written := 0
+//         bytes := free_bytes()
+//         if bytes > size
+//             bytes = size
+//         if bytes > buffer.len - head
+//             bytes = buffer.len - head
+
+//         memcpy(buffer.ptr + head, data, bytes)
+//         written += bytes
+//         head = (head + bytes) % buffer.len
+//         if head == tail
+//             full = true
+//             return written
+
+//         bytes = free_bytes()
+//         if bytes > size - written
+//             bytes = size - written
+
+//         memcpy(buffer.ptr + head, data + written, bytes)
+//         written += bytes
+//         head = (head + bytes) % buffer.len
+//         if head == tail
+//             full = true
+//         return written
+//     }
+//     // Reads without advancing tail.
+//     // Out params data1/2 are set to pointers to the internal buffer.
+//     // We need two in case we wrap around. data2 is null if we didn't wrap around.
+//     fn read_silent(max_size: i32, data1: u8**, size1: i32*, data2: u8**, size2: i32*) {
+//         *data1 = null
+//         *size1 = 0
+//         *data2 = null
+//         *size2 = 0
+
+//         bytes := available_bytes()
+//         if bytes == 0 {
+//             return
+//         }
+
+//         if tail < head {
+            
+//             return
+//         }
+
+        
+
+
+//     }
+//     fn advance_tail(max_size: i32) -> i32 {
+//         bytes := available_bytes()
+//         if bytes > max_size
+//             bytes = max_size
+
+//         if bytes != 0 {
+//             full = false
+//             tail = (tail + bytes) % buffer.len
+//         }
+//         return bytes
+//     }
+// }
