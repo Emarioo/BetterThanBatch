@@ -155,7 +155,7 @@ struct ByteStream {
         written_bytes = 0;
         last_allocation = 0;
         for i: 0..allocations.size() {
-            allocations[i].written_bytes = 0;
+            allocations.ptr[i].written_bytes = 0;
         }
     }
     // Returns characters read

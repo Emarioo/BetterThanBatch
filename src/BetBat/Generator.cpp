@@ -6235,8 +6235,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             // only add 'it' for Sliced loop (not ranged)
             if(debugFunction) {
                 debugFunction->addVar(varnameIt.name,
-                    iterator_offset,
-                    // varinfo_item->versions_dataOffset[info.currentPolyVersion],
+                    varinfo_item->versions_dataOffset[info.currentPolyVersion],
                     varinfo_item->versions_typeId[info.currentPolyVersion],
                     info.currentScopeDepth + 1, // +1 because variables exist within stmt->firstBody, not the current scope
                     varnameIt.identifier->scopeId);

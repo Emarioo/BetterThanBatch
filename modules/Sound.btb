@@ -244,25 +244,55 @@ fn InitInputAudioBuffer(size_of_buffer_in_seconds: f32, format: AudioFormat*) {
 }
 
 // @return Bytes in internal input buffer. If bytes is equal to max audio buffer size then it is likely you lost samples because you weren't consuming the buffer fast enough.
-fn BytesInInputAudioBuffer() -> i32 {
+fn BytesInInputAudioBuffer(format: AudioFormat* = null) -> i32 {
     Assert(sound_state)
-
+    
     if !sound_state.capture_input_audio
         return 0
 
-    if sound_state.input_buffer_head > sound_state.input_buffer_tail {
-        return sound_state.input_buffer_head - sound_state.input_buffer_tail
+    bytes := 0
+
+    if sound_state.input_buffer_full {
+        bytes = sound_state.input_buffer.len
+    } else if sound_state.input_buffer_head >= sound_state.input_buffer_tail {
+        bytes = sound_state.input_buffer_head - sound_state.input_buffer_tail
+    } else {
+        bytes = sound_state.input_buffer_head + sound_state.input_buffer.len - sound_state.input_buffer_tail
     }
-    return sound_state.input_buffer_tail + sound_state.input_buffer.len - sound_state.input_buffer_head
+
+    if format {
+        // log("Bef ", bytes)
+        // convert
+        frames := bytes / sound_state.audio_backend.input_format.get_frame_size()
+        sample_ratio: f32 =  cast<f32>format.sample_rate / sound_state.audio_backend.input_format.sample_rate
+        frames *= sample_ratio
+        bytes = frames * format.get_frame_size()
+        // log("Aft ", bytes)
+    }
+    
+    return bytes
 }
 
 // @param user_buffer Audio data is moved from internal buffer to user buffer.
 // @param max_size Maximum bytes to consume. Must be divisible by frame size (sound_state.sound_state.audio_backend.get_frame_size())
 // @return Consumed bytes. Always divisible by frame size of input/capture audio format.
-fn ConsumeInputAudioBuffer(user_buffer: u8*, max_size: i32) -> i32 {
+fn ConsumeInputAudioBuffer(user_buffer: u8*, in_max_size: i32, format: AudioFormat* = null) -> i32 {
     Assert(sound_state)
-    Assert(max_size != 0)
+    Assert(in_max_size != 0)
+
+    // log("max_size ",max_size)
+
+    max_size := in_max_size
+    if format {
+        Assert(0 == in_max_size % format.get_frame_size())
+        frames := in_max_size / format.get_frame_size()
+        sample_ratio: f32 = cast<f32>sound_state.audio_backend.input_format.sample_rate / format.sample_rate
+        frames *= sample_ratio
+        max_size = frames * sound_state.audio_backend.input_format.get_frame_size()
+    }
     Assert(0 == max_size % sound_state.audio_backend.input_format.get_frame_size())
+
+    written_bytes := 0
 
     if !sound_state.capture_input_audio
         return 0
@@ -275,21 +305,43 @@ fn ConsumeInputAudioBuffer(user_buffer: u8*, max_size: i32) -> i32 {
         if sound_state.input_buffer_head - sound_state.input_buffer_tail < max_size {
             bytes = sound_state.input_buffer_head - sound_state.input_buffer_tail
         }
-        memcpy(user_buffer, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, bytes)
+        // log("earl ", sound_state.input_buffer_head, " ", sound_state.input_buffer_tail, " ", bytes)
+        if format {
+            frames := in_max_size / format.get_frame_size()
+            max_frames := (sound_state.input_buffer_head - sound_state.input_buffer_tail) / sound_state.audio_backend.input_format.get_frame_size()
+            out_written, in_written := MixAudio(user_buffer, format, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, &sound_state.audio_backend.input_format, frames, max_frames, 1.0)
+            bytes = in_written * sound_state.audio_backend.input_format.get_frame_size()
+            written_bytes += out_written * format.get_frame_size()
+        } else {
+            memcpy(user_buffer, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, bytes)
+            written_bytes += bytes
+        }
         sound_state.input_buffer_tail += bytes
         Assert(0 == bytes % sound_state.audio_backend.input_format.get_frame_size())
-        return bytes
+        return written_bytes
     }
     bytes := max_size
     if sound_state.input_buffer.len - sound_state.input_buffer_tail < max_size {
         bytes = sound_state.input_buffer.len - sound_state.input_buffer_tail
     }
-    memcpy(user_buffer, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, bytes)
+    // log("earl2 ", sound_state.input_buffer_head, " ", sound_state.input_buffer_tail, " ", bytes)
+    if format {
+        log("Should ", bytes)
+        frames := in_max_size / format.get_frame_size()
+        max_frames := (sound_state.input_buffer.len - sound_state.input_buffer_tail) / format.get_frame_size()
+        out_written, in_written := MixAudio(user_buffer, format, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, &sound_state.audio_backend.input_format, frames, max_frames, 1.0)
+        bytes = in_written * sound_state.audio_backend.input_format.get_frame_size()
+        written_bytes += out_written * format.get_frame_size()
+        log("  actual ", written_bytes)
+    } else {
+        memcpy(user_buffer, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, bytes)
+        written_bytes += bytes
+    }
     sound_state.input_buffer_tail = (sound_state.input_buffer_tail + bytes) % sound_state.input_buffer.len
     sound_state.input_buffer_full = false
     if bytes == max_size {
         Assert(0 == bytes % sound_state.audio_backend.input_format.get_frame_size())
-        return bytes
+        return written_bytes
     }
 
     read_bytes := bytes
@@ -299,11 +351,24 @@ fn ConsumeInputAudioBuffer(user_buffer: u8*, max_size: i32) -> i32 {
         bytes = sound_state.input_buffer_head
     }
 
-    memcpy(user_buffer + read_bytes, sound_state.input_buffer.ptr, bytes)
+    // log("earl3 ", sound_state.input_buffer_head, " ", sound_state.input_buffer_tail, " ", bytes)
+    if format {
+        log("  should2 ", bytes)
+        frames := (in_max_size - written_bytes) / format.get_frame_size()
+        max_frames := (sound_state.input_buffer_head) / format.get_frame_size()
+        out_written, in_written := MixAudio(user_buffer + written_bytes, format, sound_state.input_buffer.ptr, &sound_state.audio_backend.input_format, frames, max_frames, 1.0)
+        bytes = in_written * sound_state.audio_backend.input_format.get_frame_size()
+        written_bytes += out_written * format.get_frame_size()
+        
+        log("  actual2 ", out_written * format.get_frame_size())
+    } else {
+        memcpy(user_buffer + written_bytes, sound_state.input_buffer.ptr, bytes)
+        written_bytes += bytes
+    }
     sound_state.input_buffer_tail = (sound_state.input_buffer_tail + bytes) % sound_state.input_buffer.len
     read_bytes += bytes
     Assert(0 == bytes % sound_state.audio_backend.input_format.get_frame_size())
-    return read_bytes
+    return written_bytes
 }
 
 enum AudioSampleFormat {
@@ -312,10 +377,13 @@ enum AudioSampleFormat {
     AUDIO_32BIT_PCM,
     AUDIO_32BIT_FLOAT,
 }
+// THIS STRUCT SHOULD NEVER CONTAIN ANY POINTERS
+// voice_chat example passed AudioFormat in TCP connection and other code
+// may do this too which is why we can't have pointers.
 struct AudioFormat {
+    sample_format: AudioSampleFormat; // AUDIO_32BIT_FLOAT
     sample_rate: i32; // 48 0000 Hz
     stereo: bool; // false - Mono, true - Stereo
-    sample_format: AudioSampleFormat; // AUDIO_32BIT_FLOAT
 
     fn init(_sample_rate: i32, channels: i32, bits_per_sample: i32, is_float: bool) {
         sample_rate = _sample_rate
@@ -345,6 +413,10 @@ struct AudioFormat {
     }
     fn byte_size_from_duration(time: f32) -> i32 {
         // buffer size must be a multiple of frame size, we must cast float before multiplying frame size
+        // TODO: We should probably ceil instead of truncating float. However the call needs to be careful
+        //   with passing in delta times since they may indicate 202.23 samples. That half sample will be lost.
+        //   or if we ceil we will send one more sample than we should and thus offset the audio streams timing by just a bit.
+        //   I don't know the effects of this or if it matters but it might and it is good to be aware of it.
         return get_frame_size() * cast<i32>(sample_rate * time)
     }
     fn get_channels() -> i32 {
@@ -522,7 +594,7 @@ global sound_cycles: i64
 global sound_cycles_max: i64
 global sound_frames: i64
 
-fn ProcessSound() {
+fn ProcessSound(duration_to_mix: f32) {
     Assert(sound_state)
 
     if sound_state.selected_output_device_id != sound_state.current_output_device_id {
@@ -554,11 +626,15 @@ fn ProcessSound() {
     // Generally speaking, through experiments. process_rate should be double the frequency at which we call ProcessSound.
     // Holding two game frames worth of audio keeps us safe.
     // process_rate: f64 = 0.020 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
-    process_rate: f64 = 4 * 0.016 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
-
-    wanted_frames_in_buffer: i32 = process_rate * sound_state.audio_backend.wave_format.Format.nSamplesPerSec
+    // process_rate: f64 = 4 * 0.016 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
+    // process_rate: f64 = 0.4 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
+    wanted_frames_in_buffer: i32 = duration_to_mix * sound_state.audio_backend.wave_format.Format.nSamplesPerSec
+    log("Remaining ", remaining_frames, ", wanted ", wanted_frames_in_buffer)
 
     frames_to_write := wanted_frames_in_buffer - remaining_frames
+
+    if frames_to_write < 0
+        frames_to_write = 0
 
     if(remaining_frames == 0) {
         // Show delta information and so on...
@@ -572,118 +648,120 @@ fn ProcessSound() {
         // log("(nothing to write), delta ", delta)
     }
 
-    // TODO: Measure audio processing time.
+    if frames_to_write != 0 {
+        // TODO: Measure audio processing time.
 
-    // TODO: If no audio is playing then don't acquire buffer.
+        // TODO: If no audio is playing then don't acquire buffer.
 
-    // NOTE: We expect the audio stream to be 32-bit float. We will handle others in the future.
-    buffer: f32* = cast<f32*>sound_state.audio_backend.acquireBuffer(frames_to_write)
-    buffer_len := frames_to_write * 2 * 4 // channels * 32-bit float PCM
-    memzero(buffer,buffer_len)
-    
-    // TODO: Read about GetBuffer and ReleaseBuffer and Initialize AudioClient for a correct implementation where
-    //   Errors are handled. For example we write to slowly to the buffer.
-
-    // TODO: Parse WAV sound data
-
-    // log("####### DELTA ", delta)
-    // log("Remaining frames ", remaining_frames, " (",wanted_frames_in_buffer,")")
-    // log("volume ", sound_state.global_volume)
-    // log("frames_to_write ", frames_to_write)
-
-    // TODO: Check thread safety
-    for instance: sound_state.instances {
-        sound := sound_state.getSoundRef(instance.sound_ref_handle)
-
-        if !instance.playing
-            continue
-
-        // TODO: 24-bit support?
-        form := sound_state.audio_backend.output_format
+        // NOTE: We expect the audio stream to be 32-bit float. We will handle others in the future.
+        buffer: u8* = sound_state.audio_backend.acquireBuffer(frames_to_write)
+        buffer_len := frames_to_write * 2 * 4 // channels * 32-bit float PCM
+        memzero(buffer,buffer_len)
         
-        if sound.wav {
-            wav := sound.wav
+        // TODO: Read about GetBuffer and ReleaseBuffer and Initialize AudioClient for a correct implementation where
+        //   Errors are handled. For example we write to slowly to the buffer.
+
+        // TODO: Parse WAV sound data
+
+        // log("####### DELTA ", delta)
+        // log("Remaining frames ", remaining_frames, " (",wanted_frames_in_buffer,")")
+        // log("volume ", sound_state.global_volume)
+        // log("frames_to_write ", frames_to_write)
+
+        // TODO: Check thread safety
+        for instance: sound_state.instances {
+            sound := sound_state.getSoundRef(instance.sound_ref_handle)
+
+            if !instance.playing
+                continue
+
+            // TODO: 24-bit support?
+            form := sound_state.audio_backend.output_format
             
-            out_written, in_written := MixAudio(buffer, &form, wav.data + instance.current_frame * wav.format.get_frame_size(), &wav.format, frames_to_write, sound.total_frames - instance.current_frame , sound_state.global_volume)
-            instance.current_frame += in_written
-
-            if instance.current_frame >= sound.total_frames {
-                instance.playing = false
-            }
-        } else {
-            // Sound stream
-            // For now we only handle same sample rate
-            // Assert(sound.format.sample_rate == sound_state.audio_backend.wave_format.Format.nSamplesPerSec)
-
-            // log("frames to write ", frames_to_write, ", available ", sound.available_bytes_in_buffer())
-            
-            // We should not check if enough bytes is in the sound stream and if not don't play any off them.
-            // We should play whatever we havea in the buffer and if it's not enough then it's the users fault
-            // that they didn't provide enough data in the stream.
-            // if frames_to_write > sound.available_bytes_in_buffer() { // TODO: This comparison assumes the sample rates are the same.
-            //     log("Skippers ", frames_to_write, " ava ", sound.available_bytes_in_buffer())
-            //     // sound stream don't have enough data
-            //     continue
-            // }
-            state := sound_state
-
-            reverse_sample_ratio: f32 = cast<f32>sound_state.audio_backend.output_format.sample_rate / cast<f32>sound.format.sample_rate
-
-            my_frames_to_write: i32 = reverse_sample_ratio * (sound.available_bytes_in_buffer() / sound.format.get_frame_size())
-            // TODO: Assumes the same sample rate on the sound stream and out audio device
-            if my_frames_to_write > frames_to_write
-                my_frames_to_write = frames_to_write
-
-            // Assert(sound.format.sample_format == AUDIO_32BIT_FLOAT)
-
-            #macro CHECK_DIV(A,B) Assert(A/B*B == A)
-
-            // log("tail ", sound.buffer_tail, ", head ", sound.buffer_head)
-            if sound.buffer_tail < sound.buffer_head {
-                // nocheckin TODO: Threading issues when user writes and modifies the head. available_bytes_in_buffer is affected.
-                CHECK_DIV(sound.buffer_head - sound.buffer_tail, sound.format.get_frame_size())
-                MixAudio(buffer, &form, sound.buffer.ptr + sound.buffer_tail, &sound.format, my_frames_to_write, (sound.buffer_head - sound.buffer_tail) / sound.format.get_frame_size(), sound_state.global_volume)
-            } else {
-                // This code assumes sample rates are the same, you will need to multiple sample rate ratio to max_in_frames to support different sample rates.
-                CHECK_DIV(sound.buffer.len - sound.buffer_tail, sound.format.get_frame_size())
-                out_written, in_written := MixAudio(buffer, &form, sound.buffer.ptr + sound.buffer_tail, &sound.format, my_frames_to_write, (sound.buffer.len - sound.buffer_tail) / sound.format.get_frame_size(), sound_state.global_volume)
-
-                // log(" ", my_frames_to_write, " written ", out_written, " ", in_written)
+            if sound.wav {
+                wav := sound.wav
                 
-                // We need two calls to MixAudio when going around the sound stream's circular buffer
-                if out_written != my_frames_to_write {
-                    // we shall write more frames
-                    CHECK_DIV(sound.buffer_head, sound.format.get_frame_size())
-                    MixAudio(buffer + out_written * form.get_frame_size(), &form, sound.buffer.ptr, &sound.format, my_frames_to_write - out_written, sound.buffer_head / sound.format.get_frame_size(), sound_state.global_volume)
+                out_written, in_written := MixAudio(buffer, &form, wav.data + instance.current_frame * wav.format.get_frame_size(), &wav.format, frames_to_write, sound.total_frames - instance.current_frame , sound_state.global_volume)
+                instance.current_frame += in_written
+
+                if instance.current_frame >= sound.total_frames {
+                    instance.playing = false
+                }
+            } else {
+                // Sound stream
+                // For now we only handle same sample rate
+                // Assert(sound.format.sample_rate == sound_state.audio_backend.wave_format.Format.nSamplesPerSec)
+
+                // log("frames to write ", frames_to_write, ", available ", sound.available_bytes_in_buffer())
+                
+                // We should not check if enough bytes is in the sound stream and if not don't play any off them.
+                // We should play whatever we havea in the buffer and if it's not enough then it's the users fault
+                // that they didn't provide enough data in the stream.
+                // if frames_to_write > sound.available_bytes_in_buffer() { // TODO: This comparison assumes the sample rates are the same.
+                //     log("Skippers ", frames_to_write, " ava ", sound.available_bytes_in_buffer())
+                //     // sound stream don't have enough data
+                //     continue
+                // }
+                state := sound_state
+
+                reverse_sample_ratio: f32 = cast<f32>sound_state.audio_backend.output_format.sample_rate / cast<f32>sound.format.sample_rate
+
+                my_frames_to_write: i32 = reverse_sample_ratio * (sound.available_bytes_in_buffer() / sound.format.get_frame_size())
+                // TODO: Assumes the same sample rate on the sound stream and out audio device
+                if my_frames_to_write > frames_to_write
+                    my_frames_to_write = frames_to_write
+
+                // Assert(sound.format.sample_format == AUDIO_32BIT_FLOAT)
+
+                #macro CHECK_DIV(A,B) Assert(A/B*B == A)
+
+                // log("tail ", sound.buffer_tail, ", head ", sound.buffer_head)
+                if sound.buffer_tail < sound.buffer_head {
+                    // nocheckin TODO: Threading issues when user writes and modifies the head. available_bytes_in_buffer is affected.
+                    CHECK_DIV(sound.buffer_head - sound.buffer_tail, sound.format.get_frame_size())
+                    MixAudio(buffer, &form, sound.buffer.ptr + sound.buffer_tail, &sound.format, my_frames_to_write, (sound.buffer_head - sound.buffer_tail) / sound.format.get_frame_size(), sound_state.global_volume)
+                } else {
+                    // This code assumes sample rates are the same, you will need to multiple sample rate ratio to max_in_frames to support different sample rates.
+                    CHECK_DIV(sound.buffer.len - sound.buffer_tail, sound.format.get_frame_size())
+                    out_written, in_written := MixAudio(buffer, &form, sound.buffer.ptr + sound.buffer_tail, &sound.format, my_frames_to_write, (sound.buffer.len - sound.buffer_tail) / sound.format.get_frame_size(), sound_state.global_volume)
+
+                    // log(" ", my_frames_to_write, " written ", out_written, " ", in_written)
+                    
+                    // We need two calls to MixAudio when going around the sound stream's circular buffer
+                    if out_written != my_frames_to_write {
+                        // we shall write more frames
+                        CHECK_DIV(sound.buffer_head, sound.format.get_frame_size())
+                        MixAudio(buffer + out_written * form.get_frame_size(), &form, sound.buffer.ptr, &sound.format, my_frames_to_write - out_written, sound.buffer_head / sound.format.get_frame_size(), sound_state.global_volume)
+                    }
                 }
             }
         }
+
+        // Advance tail of all sound streams in one go. This should be done after instances have played from the 
+        // sound streams.
+        for sound: sound_state.refs {
+            if !sound.buffer.ptr
+                continue
+
+            sample_ratio: f32 = cast<f32>sound.format.sample_rate / cast<f32>sound_state.audio_backend.output_format.sample_rate
+            // sound frames, not output buffer frames because they may have different sample rates and
+            // we need to clearly differentiate them
+            my_sound_frames_to_write := sound.available_bytes_in_buffer() / sound.format.get_frame_size()
+            // TODO: Assumes the same sample rate on the sound stream and out audio device
+            if my_sound_frames_to_write > frames_to_write * sample_ratio
+                my_sound_frames_to_write = frames_to_write * sample_ratio
+            
+            // nocheckin TODO: we add frames_to_write which assumes sample rates are the same
+
+            // log("Move tail ", sound.buffer_tail, " + ", my_sound_frames_to_write, " = ",(sound.buffer_tail + my_sound_frames_to_write) % sound.buffer.len, ", avail bytes ",sound.available_bytes_in_buffer())
+            // log("INFO ", sound.buffer_tail, " ", sound.buffer_head, " ", sound.buffer_full)
+            sound.buffer_tail = (sound.buffer_tail + my_sound_frames_to_write * sound.format.get_frame_size()) % sound.buffer.len
+            if sound.buffer_head != sound.buffer_tail 
+                sound.buffer_full = false
+        }
+
+        sound_state.audio_backend.releaseBuffer(frames_to_write)
     }
-
-    // Advance tail of all sound streams in one go. This should be done after instances have played from the 
-    // sound streams.
-    for sound: sound_state.refs {
-        if !sound.buffer.ptr
-            continue
-
-        sample_ratio: f32 = cast<f32>sound.format.sample_rate / cast<f32>sound_state.audio_backend.output_format.sample_rate
-        // sound frames, not output buffer frames because they may have different sample rates and
-        // we need to clearly differentiate them
-        my_sound_frames_to_write := sound.available_bytes_in_buffer() / sound.format.get_frame_size()
-        // TODO: Assumes the same sample rate on the sound stream and out audio device
-        if my_sound_frames_to_write > frames_to_write * sample_ratio
-            my_sound_frames_to_write = frames_to_write * sample_ratio
-        
-        // nocheckin TODO: we add frames_to_write which assumes sample rates are the same
-
-        // log("Move tail ", sound.buffer_tail, " + ", my_sound_frames_to_write, " = ",(sound.buffer_tail + my_sound_frames_to_write) % sound.buffer.len, ", avail bytes ",sound.available_bytes_in_buffer())
-        log("INFO ", sound.buffer_tail, " ", sound.buffer_head, " ", sound.buffer_full)
-        sound.buffer_tail = (sound.buffer_tail + my_sound_frames_to_write * sound.format.get_frame_size()) % sound.buffer.len
-        if sound.buffer_head != sound.buffer_tail 
-            sound.buffer_full = false
-     }
-
-    sound_state.audio_backend.releaseBuffer(frames_to_write)
 
     if sound_state.capture_input_audio {
         // TODO: We assume stereo 32-bit float 48000 Hz
@@ -783,19 +861,23 @@ fn ProcessSound() {
 // returns written source frames, if frames_to_write is more than max frames in the in buffer then written source frames
 // may be considerably less than what you might expect. This is fine, it means in buffer or the in sound stopped.
 // returned written source frames will not be the same as frames_to_write if the in and out buffer has different sample rates.
-fn MixAudio(out_buffer: f32*, out_format: AudioFormat*, in_buffer: u8*, in_format: AudioFormat*, frames_to_write: i32, in_max_frames: i32, volume: f32) -> i32, i32 {
-    Assert(out_format.sample_format == AUDIO_32BIT_FLOAT)
-    Assert(out_format.stereo)
+fn MixAudio(out_buffer: u8*, out_format: AudioFormat*, in_buffer: u8*, in_format: AudioFormat*, frames_to_write: i32, in_max_frames: i32, volume: f32) -> i32, i32 {
+    Assert(out_format.sample_format == AUDIO_32BIT_FLOAT || out_format.sample_format == AUDIO_16BIT_PCM)
 
     sample_ratio: f32 = cast<f32>in_format.sample_rate / cast<f32>out_format.sample_rate
     // bits_per_sample: i32 = in_format.get_bits_per_sample()
     channels: i32 = in_format.get_channels()
     audio_format: AudioSampleFormat = in_format.sample_format
+    out_audio_format: AudioSampleFormat = out_format.sample_format
+    out_stereo: bool = out_format.stereo
 
     src_32f: f32*
     src_32 : i32*
     src_16 : i16*
     src_8  : u8* 
+
+    dst_32f: f32*
+    dst_16: i16*
 
     switch in_format.sample_format {
         case AUDIO_32BIT_FLOAT:
@@ -806,6 +888,15 @@ fn MixAudio(out_buffer: f32*, out_format: AudioFormat*, in_buffer: u8*, in_forma
             src_32  = cast<i32*>in_buffer
         case AUDIO_8BIT_PCM:
             src_8   = cast<u8* >in_buffer
+    }
+    switch out_format.sample_format {
+        case AUDIO_32BIT_FLOAT:
+            dst_32f = cast<f32*>out_buffer
+        case AUDIO_16BIT_PCM:
+            dst_16  = cast<i16*>out_buffer
+        case:
+            log("MixAudio don't support OUT format: ", out_format)
+            Assert(false)
     }
 
     // nocheckin TODO: I think we're missing to write one sample here. If you listen closely to 16 khz audio there is a faint noise or stutter in the sound. It's probably due to a missing sample.
@@ -858,10 +949,31 @@ fn MixAudio(out_buffer: f32*, out_format: AudioFormat*, in_buffer: u8*, in_forma
         } else if audio_format == AUDIO_32BIT_FLOAT && channels == 2 {
             out_sample0 = src_32f[2*src_sample_index0    ] * (1.0 - fraction) + src_32f[2*(src_sample_index0 + 1)    ] * fraction
             out_sample1 = src_32f[2*src_sample_index0 + 1] * (1.0 - fraction) + src_32f[2*(src_sample_index0 + 1) + 1] * fraction
+        } else {
+            log("MixAudio does not support in format: ", in_format)
+            Assert(false)
         }
+        (cast<f32*>out_buffer)[2*nr    ] += out_sample0 * volume;
+        (cast<f32*>out_buffer)[2*nr + 1] += out_sample1 * volume
 
-        out_buffer[2*nr    ] += out_sample0 * volume
-        out_buffer[2*nr + 1] += out_sample1 * volume
+        // if out_audio_format == AUDIO_16BIT_PCM {
+        //     if out_stereo {
+        //         dst_16[2*nr    ] += cast<i16>cast<i32>(out_sample0 * volume * 32768.0)
+        //         dst_16[2*nr + 1] += cast<i16>cast<i32>(out_sample1 * volume * 32768.0)
+        //     } else {
+        //         dst_16[nr] += cast<i16>cast<i32>( (out_sample0 + out_sample1)/2.0 * volume * 32768.0 )
+        //     }
+        // } else if out_audio_format == AUDIO_32BIT_FLOAT {
+        //     if out_stereo {
+        //         dst_32f[2*nr    ] += out_sample0 * volume
+        //         dst_32f[2*nr + 1] += out_sample1 * volume
+        //     } else {
+        //         dst_32f[nr] += (out_sample0 + out_sample1)/2.0 * volume
+        //     }
+        // } else {
+        //     log("MixAudio does not support OUT format: ", out_format)
+        //     Assert(false)
+        // }
     }
     return nr, src_sample_index0 + 1
 }
@@ -892,7 +1004,7 @@ struct AudioBackend {
     internalAudioDevices: Array<InternalAudioDevice>;
     m_next_device_id: u64 = 1;
 
-    buffer_duration_100ns: i32 = 80_000_00; // 80 ms
+    buffer_duration_100ns: i32 = 500_000_0; // 80 ms
 
     fn next_device_id() -> u64 {
         return m_next_device_id++

@@ -149,6 +149,26 @@ Reads files and counts newlines using multiple threads: [Line counter](/examples
 
 <!-- (incomplete) Parses and read binary file formats: [Binary viewer](/examples/binary_viewer/main.btb) -->
 
+## Licensing
+
+This repository contains two separately licensed components:
+
+### Compiler program (in `/src`)
+The compiler source code is licensed under the GNU General Public License v3.0 (GPL-3.0).
+
+You are free to use, study, modify, and share the compiler.
+
+If you distribute the compiler or modified versions of it, you must also release the full source code under the same license (GPL-3.0).
+
+Commercial use is allowed, but proprietary forks or closed-source redistributions are not.
+
+See [LICENSE](./LICENSE) for the full terms of the GPL.
+
+### Standard Library (in `/modules`)
+The standard library is released under the [MIT License](./modules/LICENSE). You are free to use, modify, and include this library in **commercial and non-commercial projects**. Do whatever you want with it.
+
+Other folders like `/docs`, `/tests`, and `/btb-lang` (vscode syntax highlighting) are also free to use in any way you want.
+
 # A personal note on the present and the future
 The compiler is work in progress and bugs in the code generation do occur which are really hard to catch. If you do encounter strange behaviour and are about to pull out your hair then don't hesitate to ask for help on the discord. I (Emarioo) am happy to help.
 

@@ -1,0 +1,377 @@
+/*
+    Minimum code for voice chat.
+
+    Server:
+        btb examples/sound/voice_chat --server
+    Client:
+        btb examples/sound/voice_chat --address 192.168.0.60
+*/
+
+/*
+    What we need for voice chat
+        - TCP connection, server, client
+        - Audio capture
+        - Audio play and mix
+
+    Extra interesting stuff
+        - Calculate latency, byte throughput
+        - Frame time on the server, how much can it handle?
+        - Use UDP for audio data.
+        - Variable bit rate opus codec?
+        - Don't send data if voice is silent.
+*/
+
+#import "Net"
+#import "Sound"
+#import "String"
+#import "Stream"
+#import "Thread"
+#import "BucketArray"
+
+fn main(argc: i32, argv: char**) -> i32 {
+
+    port      := 41254
+    address   := "127.0.0.1"
+    is_server := false
+
+    argi := 1
+    while argi < argc {
+        arg: char[] = {argv[argi], strlen(argv[argi])}
+        argi++
+
+        if arg == "-h" || arg == "--help" {
+            log("Voice chat program.")
+            log("")
+            log("Flags:")
+            log("-a,--address <address> : Specify IP address of server to connect to.")
+            log("-s,--server            : Start server for voice chat.")
+        } else if arg == "-a" || arg == "--address" {
+            if argi >= argc {
+                log("Specify address after ", arg)
+                return 1
+            }
+            address = arg
+        } else if arg == "-s" || arg == "--server" {
+            is_server = true
+        } else {
+            log("Unknown argument ", arg)
+            return 1
+        }
+    }
+    app_state = Allocate(sizeof(AppState))
+    construct(app_state)
+
+    if is_server {
+        // start TCP server
+        // when received audio packet from client store it
+            app_state.server.set_callback(ServerCallback, null)
+            err := app_state.server.start(port, NET_TCP | NET_PROTO_MESSAGE)
+            if err != NET_SUCCESS {
+                log(&err)
+                return 1
+            }
+            ServerWork()
+    } else {
+        told := false
+        while {
+            app_state.client.set_callback(ClientCallback, null)
+            err := app_state.client.start(address, port, NET_TCP | NET_PROTO_MESSAGE)
+            if err != NET_SUCCESS {
+                if !told
+                    log("Waiting for server...")
+                ProcessSleep(4)
+                told = true
+                continue
+                // log(&err)
+                // log("Server is most likely down.")
+                // return 1
+            }
+            ClientWork()
+            log("Server shutdown.")
+            told = false
+        }
+    }
+    return 0
+}
+
+// state of the program
+struct AppState {
+    fn init() {
+        connections.init(10)
+    }
+
+    // Server only
+    server: Server;
+    connections: BucketArray<ConnectionInfo>;
+    server_mutex: Mutex;
+
+    fn find(conn_id: ConnectionID) -> ConnectionInfo* {
+        for connections {
+            if it.conn_id == conn_id
+                return it
+        }
+        return null
+    }
+
+    // Client only
+    client: Client;
+    audio_buffer: u8[];
+    audio_buffer_head: i32;
+    audio_mutex: Mutex;
+}
+global app_state: AppState*
+global transmission_audio_format: AudioFormat = { sample_rate = 441000, sample_format = AUDIO_16BIT_PCM, stereo = false }
+
+struct ConnectionInfo {
+    conn_id: ConnectionID; // i32, not a UUID. It is an index into list of connections in Server (that's how Net.btb implements it)
+    index: i32; // index of app_state.connections
+    audio_buffer: u8[];
+    audio_buffer_head: i32;
+    audio_mutex: Mutex;
+}
+
+fn ServerCallback(e: NetEvent*, user_data: void*) {
+
+    if e.type == EVENT_CONNECT {
+        app_state.server_mutex.lock()
+        info, index := app_state.connections.add(null)
+        info.conn_id = e.who
+        info.index = index
+        info.audio_buffer.len =  1.0 * transmission_audio_format.sample_rate * transmission_audio_format.get_frame_size()
+        info.audio_buffer.ptr = Allocate(info.audio_buffer.len)
+        Assert(info.audio_buffer.ptr)
+        app_state.server_mutex.unlock()
+        return
+    }
+    if e.type == EVENT_DISCONNECT {
+        app_state.server_mutex.lock()
+        info := app_state.find(e.who)
+        Free(info.audio_buffer.ptr, info.audio_buffer.len)
+        app_state.connections.removeAt(info.index)
+        app_state.server_mutex.unlock()
+        return
+    }
+
+    if e.type != EVENT_RECEIVE {
+        log(e)
+        return
+    }
+
+    header: VoiceChatMessageHeader* = cast<void*>e.bytes.ptr
+    if header.kind != VOICE_CHAT_MESSAGE_AUDIO_DATA {
+        log("Bad message header.")
+        log(header)
+        return
+    }
+    if header.audio_byte_size + sizeof(VoiceChatMessageHeader) != e.bytes.len {
+        log("Corrupt message, audio data size didn't match packet size (packet size: ", e.bytes.len)
+        log(header)
+        return
+    }
+    
+    log("RECV ", header.audio_byte_size)
+    // std_print(header, pretty = true)
+
+    audio_data: u8* = cast<void*>e.bytes.ptr + sizeof(VoiceChatMessageHeader)
+    
+    app_state.server_mutex.lock()
+    info := app_state.find(e.who)
+
+    bytes := header.audio_byte_size
+    if bytes > info.audio_buffer.len - info.audio_buffer_head {
+        bytes = info.audio_buffer.len - info.audio_buffer_head
+        log("WARNING: We skip audio data because buffer is too small. conn_id: ",e.who,", max: ", info.audio_buffer.len, ", current: ", info.audio_buffer_head, ", data we got: ", header.audio_byte_size)
+    }
+
+    memcpy(info.audio_buffer.ptr + info.audio_buffer_head, audio_data, bytes)
+    info.audio_buffer_head += bytes
+
+    app_state.server_mutex.unlock()
+}
+fn ClientCallback(e: NetEvent*, user_data: void*) {
+    if e.type != EVENT_RECEIVE {
+        log(e)
+        return
+    }
+
+    header: VoiceChatMessageHeader* = cast<void*>e.bytes.ptr
+    if header.kind != VOICE_CHAT_MESSAGE_AUDIO_DATA {
+        log("Bad message header.")
+        log(header)
+        return
+    }
+    if header.audio_byte_size + sizeof(VoiceChatMessageHeader) != e.bytes.len {
+        log("Corrupt message, audio data size didn't match packet size (packet size: ", e.bytes.len)
+        log(header)
+        return
+    }
+    
+    // std_print(header, pretty = true)
+
+    log("RECV ", header.audio_byte_size)
+
+    audio_data: u8* = cast<void*>e.bytes.ptr + sizeof(VoiceChatMessageHeader)
+
+    app_state.audio_mutex.lock()
+
+    bytes := header.audio_byte_size
+    if bytes > app_state.audio_buffer.len - app_state.audio_buffer_head {
+        bytes = app_state.audio_buffer.len - app_state.audio_buffer_head
+        log("WARNING: Buffer is full! To much data from server! max: ", app_state.audio_buffer.len, ", current: ", app_state.audio_buffer_head, ", data we got: ", header.audio_byte_size)
+    }
+
+    memcpy(app_state.audio_buffer.ptr + app_state.audio_buffer_head, audio_data, bytes)
+    app_state.audio_buffer_head += bytes
+
+    app_state.audio_mutex.unlock()
+}
+
+#macro FRAME_TIME 0.2
+
+fn ServerWork() {
+    state := app_state
+    format: AudioFormat
+    format = transmission_audio_format
+    // format.sample_rate = 44100
+    // format.sample_format = AUDIO_32BIT_FLOAT
+    // format.stereo = true
+
+    byte_stream: ByteStream
+    byte_stream.reserve(format.byte_size_from_duration(1))
+
+    last_time := StartMeasure()
+    while app_state.server.is_active() {
+        ProcessSleep(FRAME_TIME)
+
+        now := StartMeasure()
+        delta := DiffMeasure(now - last_time)
+        last_time = now
+
+        byte_stream.resetHead()
+
+        header: VoiceChatMessageHeader* = byte_stream.write_late(sizeof(VoiceChatMessageHeader))
+        header.kind = VOICE_CHAT_MESSAGE_AUDIO_DATA
+        // TODO: Mix audio into 16-bit 32 kHz mono audio to reduce bandwidth usage.
+        header.format = format
+        // header.audio_byte_size = format.byte_size_from_duration(delta)
+        header.audio_byte_size = 0
+        // TODO: delta may be a time span that gives us 2352.73 samples. If so we need to
+        //   add those 0.73 samples to the next frame instead of sending one less or one more sample than we should.
+
+        app_state.server_mutex.lock()
+
+        for info: app_state.connections {
+            // TODO: We assume out frame and in frame has the same sample rates in MixAudio.
+            //   We need to consider it here if they aren't.
+            if header.audio_byte_size == 0 || info.audio_buffer_head < header.audio_byte_size {
+                header.audio_byte_size = info.audio_buffer_head
+            }
+        }
+
+        buffer: u8* = byte_stream.write_late(header.audio_byte_size)
+        memzero(buffer, header.audio_byte_size)
+
+        for info: app_state.connections {
+            frames := header.audio_byte_size / format.get_frame_size()
+            max_frames := info.audio_buffer_head / format.get_frame_size()
+            Assert(format.stereo)
+            if max_frames != 0 {
+                out_written_frames, in_written_frames := MixAudio(buffer, &format, info.audio_buffer.ptr, &format, frames, max_frames, 1.0)
+
+                if out_written_frames != frames {
+                    // This should never happen. If we miss writing frames then that is audio we should have gotten from client which we haven't yet. We would need to incur some latency do the audio processing.
+                    log("Didn't write all frames, ", out_written_frames, " ", frames, " ", in_written_frames, " ", max_frames)
+                }
+
+                in_written_bytes := in_written_frames * format.get_frame_size()
+
+                // We use memcpy because we may not have consumed all bytes in audio buffer and if not then
+                // we need to reposition the audio data in the buffer since the first written bytes were consumed.
+                // We can implement circular buffer to avoid memcpy.
+                memcpy(info.audio_buffer.ptr, info.audio_buffer.ptr + in_written_bytes, info.audio_buffer_head - in_written_bytes)
+                info.audio_buffer_head -= in_written_bytes
+            }
+        }
+        
+        app_state.server_mutex.unlock()
+
+        message: u8[]
+        byte_stream.finalize(&message)
+
+        app_state.server.send(message)
+    }
+}
+
+fn ClientWork() {
+    // TODO: Warn if we don't have a connected microphone
+    InitSoundState()
+    mic_format: AudioFormat
+    InitInputAudioBuffer(1, &mic_format)
+
+    log("Microphone audio format")
+    std_print(&mic_format, pretty = true)
+    log("Headphone audio format")
+    std_print(&sound_state.audio_backend.output_format, pretty = true)
+
+    // We send message using this stream
+    byte_stream: ByteStream
+    byte_stream.reserve(transmission_audio_format.byte_size_from_duration(1))
+
+    app_state.audio_buffer.len = transmission_audio_format.byte_size_from_duration(1)
+    app_state.audio_buffer.ptr = Allocate(app_state.audio_buffer.len)
+    Assert(app_state.audio_buffer.ptr)
+
+    sound := CreateSoundStream("", transmission_audio_format.byte_size_from_duration(1), &transmission_audio_format)
+    
+    inst := sound.createInstance()
+    inst.play()
+
+    while app_state.client.is_active() {
+        ProcessSleep(FRAME_TIME)
+
+        // Play received audio
+        app_state.audio_mutex.lock()
+        
+        written := sound.write(app_state.audio_buffer.ptr, app_state.audio_buffer_head)
+        // We use memcpy because we may not have consumed all bytes in audio buffer and if not then
+        // we need to reposition the audio data in the buffer since the first written bytes were consumed.
+        // We can implement circular buffer to avoid memcpy.
+        memcpy(app_state.audio_buffer.ptr, app_state.audio_buffer.ptr + written, app_state.audio_buffer_head - written)
+        app_state.audio_buffer_head -= written
+        // app_state.audio_buffer_head = 0
+
+        app_state.audio_mutex.unlock()
+
+        // Capture audio
+        ProcessSound(FRAME_TIME*2)
+
+        byte_stream.resetHead()
+
+        header: VoiceChatMessageHeader* = byte_stream.write_late(sizeof(VoiceChatMessageHeader))
+        header.kind = VOICE_CHAT_MESSAGE_AUDIO_DATA
+        // TODO: Mix audio into 16-bit 32 kHz mono audio to reduce bandwidth usage.
+        header.format = transmission_audio_format
+        header.audio_byte_size = BytesInInputAudioBuffer(&transmission_audio_format)
+
+        buffer := byte_stream.write_late(header.audio_byte_size)
+        written = ConsumeInputAudioBuffer(buffer, header.audio_byte_size, &transmission_audio_format)
+        log("Send ", written)
+        Assert(written == header.audio_byte_size) // We should always be able to read as many bytes as there are in the buffer.
+
+        message: u8[]
+        byte_stream.finalize(&message)
+
+        app_state.client.send(message)
+    }
+}
+
+enum VoiceChatMessageKind : u32 {
+    VOICE_CHAT_MESSAGE_UNKNOWN,
+    VOICE_CHAT_MESSAGE_AUDIO_DATA,
+}
+struct VoiceChatMessageHeader {
+    kind: VoiceChatMessageKind;
+    format: AudioFormat;
+    audio_byte_size: i32;
+    // audio_data: u8[audio_byte_size];
+}

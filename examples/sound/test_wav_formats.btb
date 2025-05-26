@@ -27,8 +27,8 @@ fn main() {
         
         inst.play()
         while inst.isPlaying() {
-            ProcessSound()
-            ProcessSleep(0.016)
+            ProcessSound(0.03)
+            // ProcessSleep(0.016)
         }
     }
     log("Finished")

@@ -15,30 +15,40 @@ fn main() {
 
     log("Speak!")
     
-    format: AudioFormat
-    InitInputAudioBuffer(0.1, &format)
+    mic_format: AudioFormat
+    InitInputAudioBuffer(0.1, &mic_format)
+
+    log(&mic_format)
+
+    my_format: AudioFormat
+    my_format.sample_rate = 44100
+    // my_format.sample_format = AUDIO_16BIT_PCM
+    my_format.sample_format = AUDIO_32BIT_FLOAT
+    my_format.stereo = true
+    my_format = mic_format
 
     buffer: u8[]
-    buffer.len = format.byte_size_from_duration(3)
-    buffer.ptr = Allocate(buffer.len)
-    CaptureAudio(buffer)
+    // buffer.len = my_format.byte_size_from_duration(3)
+    // buffer.ptr = Allocate(buffer.len)
+    // // CaptureAudio(buffer, &my_format)
+    // CaptureAudio(buffer, null)
 
-    WriteWAVFile("yourtalk.wav", &format, buffer)
+    // WriteWAVFile("yourtalk.wav", &my_format, buffer)
 
     // Uncomment code if you want to test sound stream with a WAV file
     // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float-48khz.wav")
-    // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float.wav")
+    wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float.wav")
     // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-16bit-16khz.wav")
-    // wav_impl := sound_state.getSoundRef(wav_sound.handle)
-    // buffer.ptr = wav_impl.wav.data
-    // buffer.len = wav_impl.wav.data_len
-    // format = wav_impl.format
+    wav_impl := sound_state.getSoundRef(wav_sound.handle)
+    buffer.ptr = wav_impl.wav.data
+    buffer.len = wav_impl.wav.data_len
+    my_format = wav_impl.format
 
     log("Replaying speech.")
 
     log("Data in buffer ", buffer.len)
 
-    sound := CreateSoundStream("", format.byte_size_from_duration(0.1), &format)
+    sound := CreateSoundStream("", my_format.byte_size_from_duration(0.1), &my_format)
     
     inst := sound.createInstance()
     inst.play()
@@ -57,7 +67,7 @@ fn main() {
             head += written
         }
 
-        ProcessSound()
+        ProcessSound(0.064)
 
         ProcessSleep(0.016)
 
@@ -67,24 +77,24 @@ fn main() {
     }
 }
 
-fn CaptureAudio(buffer: u8[]) {
+fn CaptureAudio(buffer: u8[], format: AudioFormat*) {
     head := 0
 
     start_time := StartMeasure()
     while  {
         ProcessSleep(0.016)
 
-        ProcessSound()
+        ProcessSound(0.064)
 
         now := StartMeasure()
         diff := DiffMeasure(now - start_time)
 
-        bytes := BytesInInputAudioBuffer()
+        bytes := BytesInInputAudioBuffer(format)
         if head + bytes > buffer.len {
             bytes = buffer.len - head
         }
 
-        written := ConsumeInputAudioBuffer(buffer.ptr + head, bytes)
+        written := ConsumeInputAudioBuffer(buffer.ptr + head, bytes, format)
         head += written
         // log("Consume ", written)
 
