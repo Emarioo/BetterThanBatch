@@ -16,7 +16,7 @@ fn main() {
     // sounds.add("examples/sound/wav/stereo-16bit.wav")
     sounds.add("examples/sound/wav/stereo-32bit-float.wav")
     sounds.add("examples/sound/wav/stereo-16bit-16khz.wav")
-    // sounds.add("examples/sound/wav/stereo-32bit-float-48khz.wav")
+    sounds.add("examples/sound/wav/stereo-32bit-float-48khz.wav")
 
     for sounds {
         ref, err := LoadSoundFromFile(*it)
@@ -28,7 +28,7 @@ fn main() {
         inst.play()
         while inst.isPlaying() {
             ProcessSound(0.03)
-            // ProcessSleep(0.016)
+            ProcessSleep(0.016)
         }
     }
     log("Finished")

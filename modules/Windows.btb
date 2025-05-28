@@ -3,8 +3,8 @@
 
 #if OS_WINDOWS
 
-// #load "Kernel32.dll" as Kernel
 #load "Kernel32.lib" as Kernel
+#load "Winmm.lib" as Winmm
 
 #macro HANDLE void*
 #macro HINSTANCE void*
@@ -405,6 +405,20 @@ fn @import(Kernel) GetProcAddress(
 fn @import(Kernel,alias="Sleep") win32_Sleep(
   dwMilliseconds: u32
 );
+struct TIMECAPS {
+  wPeriodMin: u32;
+  wPeriodMax: u32;
+}
+fn @import(Winmm) timeGetDevCaps(
+  ptc: TIMECAPS*,
+  cbtc: u32
+) -> u32;
+fn @import(Winmm) timeBeginPeriod(
+  uPeriod: u32
+) -> u32;
+fn @import(Winmm) timeEndPeriod(
+  uPeriod: u32
+) -> u32;
 
 fn @import(Kernel) QueryPerformanceCounter(
   lpPerformanceCount: i64*
@@ -1059,10 +1073,6 @@ fn DecodeWindowsVersion(major: u32*, minor: u32*, build: u32*) {
 // ######################
 //     SOUND BINDINGS
 // ######################
-// TODO: Use Windows Audio Session API (WASAPI) because PlaySound is being deprecated.
-// 
-
-#load "Winmm.lib" as Winmm
 
 #macro SND_SYNC       0x0000     /* play synchronously (default) */
 #macro SND_ASYNC      0x0001     /* play asynchronously */

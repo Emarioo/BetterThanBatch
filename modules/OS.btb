@@ -103,14 +103,21 @@ fn DiffMeasure(endSubStart: i64) -> f64 {
 
 fn ProcessSleep(seconds: f32) {
     #if OS_WINDOWS
-    win32_Sleep(seconds * 1000)
+        global has_set_time_begin: bool
+        if !has_set_time_begin {
+            caps: TIMECAPS
+            timeGetDevCaps(&caps, sizeof(caps))
+            timeBeginPeriod(caps.wPeriodMin)
+            has_set_time_begin = true
+        }
+        win32_Sleep(seconds * 1000)
     #elif OS_LINUX
-    time: timespec
-    if seconds >= 1. {
-        time.tv_sec = cast<i64>seconds
-    }
-    time.tv_nsec = cast<i64>( 1000000000.0 * (seconds - cast<f32>cast<i64>seconds) )
-    nanosleep(&time,null)
+        time: timespec
+        if seconds >= 1. {
+            time.tv_sec = cast<i64>seconds
+        }
+        time.tv_nsec = cast<i64>( 1000000000.0 * (seconds - cast<f32>cast<i64>seconds) )
+        nanosleep(&time,null)
     #endif   
 }
 

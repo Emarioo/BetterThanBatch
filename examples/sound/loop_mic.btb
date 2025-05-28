@@ -22,27 +22,27 @@ fn main() {
 
     my_format: AudioFormat
     my_format.sample_rate = 44100
-    // my_format.sample_format = AUDIO_16BIT_PCM
-    my_format.sample_format = AUDIO_32BIT_FLOAT
+    my_format.sample_format = AUDIO_16BIT_PCM
+    // my_format.sample_format = AUDIO_32BIT_FLOAT
     my_format.stereo = true
-    my_format = mic_format
+    // my_format = mic_format
 
     buffer: u8[]
-    // buffer.len = my_format.byte_size_from_duration(3)
-    // buffer.ptr = Allocate(buffer.len)
-    // // CaptureAudio(buffer, &my_format)
+    buffer.len = my_format.byte_size_from_duration(3)
+    buffer.ptr = Allocate(buffer.len)
+    CaptureAudio(buffer, &my_format)
     // CaptureAudio(buffer, null)
 
-    // WriteWAVFile("yourtalk.wav", &my_format, buffer)
+    WriteWAVFile("yourtalk.wav", &my_format, buffer)
 
     // Uncomment code if you want to test sound stream with a WAV file
     // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float-48khz.wav")
-    wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float.wav")
+    // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float.wav")
     // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-16bit-16khz.wav")
-    wav_impl := sound_state.getSoundRef(wav_sound.handle)
-    buffer.ptr = wav_impl.wav.data
-    buffer.len = wav_impl.wav.data_len
-    my_format = wav_impl.format
+    // wav_impl := sound_state.getSoundRef(wav_sound.handle)
+    // buffer.ptr = wav_impl.wav.data
+    // buffer.len = wav_impl.wav.data_len
+    // my_format = wav_impl.format
 
     log("Replaying speech.")
 
@@ -67,7 +67,7 @@ fn main() {
             head += written
         }
 
-        ProcessSound(0.064)
+        ProcessSound(0.03)
 
         ProcessSleep(0.016)
 
