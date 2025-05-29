@@ -312,9 +312,16 @@ struct ByteStream {
         offset: i32 = 0;
         for i: 0..allocations.size() {
             a := allocations.get_unsafe(i);
-            Assert(a.written_bytes != 0 && a.ptr);
-            memcpy(ptr + offset, a.ptr, a.written_bytes);
-            offset += a.written_bytes;
+            if a.written_bytes {
+                memcpy(ptr + offset, a.ptr, a.written_bytes);
+                offset += a.written_bytes;
+            }
+            if a.ptr {
+                Free(a.ptr, a.max)
+                a.ptr = null
+                a.written_bytes = 0
+                a.max = 0
+            }
             
             // m_allocator->allocate(0, a.ptr, a.max);
             // Free(a.ptr)

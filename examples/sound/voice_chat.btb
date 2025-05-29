@@ -50,7 +50,8 @@ fn main(argc: i32, argv: char**) -> i32 {
                 log("Specify address after ", arg)
                 return 1
             }
-            address = arg
+            address = { argv[argi], strlen(argv[argi]) }
+            argi++
         } else if arg == "-s" || arg == "--server" {
             is_server = true
         } else {
@@ -361,7 +362,7 @@ fn ServerWork() {
                         }
                     }
                 }
-                log("MIX written ", in_written_bytes, " head ", info.audio_buffer_head, " audio bytes ", header.audio_byte_size, " frames ", frames)
+                // log("MIX written ", in_written_bytes, " head ", info.audio_buffer_head, " audio bytes ", header.audio_byte_size, " frames ", frames)
                 memmove(info.audio_buffer.ptr, info.audio_buffer.ptr + in_written_bytes, info.audio_buffer_head - in_written_bytes)
                 info.audio_buffer_head -= in_written_bytes
                 if info.audio_buffer_head < 0 {

@@ -99,7 +99,7 @@ fn CaptureAudio(buffer: u8[], format: AudioFormat*) {
         // head += bytes
         // sound_state.input_buffer_tail = sound_state.input_buffer_tail + bytes // assumes no wrap around
 
-        if head == 0 {
+        if head == 0 && written != 0 {
             // wrap around means stop
             break
         }
@@ -107,7 +107,8 @@ fn CaptureAudio(buffer: u8[], format: AudioFormat*) {
         // Other way to stop is counting
         now := StartMeasure()
         diff := DiffMeasure(now - start_time)
-        if diff > 2.5 {
+        if diff > 3.5 {
+            log("Capture went for 3.5s but we barely got any audio data from mic, data: ", head)
             break
         }
     }

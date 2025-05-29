@@ -943,7 +943,7 @@ fn ProcessSound(duration_to_mix: f32) {
                 // log("Skipping captured audio packet of ", packet_bytes, " bytes, input buffer has no space (",free_bytes," bytes)")
             }
             if sound_state.input_buffer_full {
-                log("how in hell we full ", sound_state.input_buffer_head, " ", sound_state.input_buffer_tail)
+                // log("how in hell we full ", sound_state.input_buffer_head, " ", sound_state.input_buffer_tail)
             }
 
             res = capture.vtable.ReleaseBuffer(capture, frames)
