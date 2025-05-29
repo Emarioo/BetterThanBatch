@@ -25,15 +25,14 @@ fn main() {
     my_format.sample_format = AUDIO_16BIT_PCM
     // my_format.sample_format = AUDIO_32BIT_FLOAT
     my_format.stereo = true
-    // my_format = mic_format
+    my_format = mic_format
 
     buffer: u8[]
     buffer.len = my_format.byte_size_from_duration(3)
     buffer.ptr = Allocate(buffer.len)
     CaptureAudio(buffer, &my_format)
-    // CaptureAudio(buffer, null)
 
-    WriteWAVFile("yourtalk.wav", &my_format, buffer)
+    // WriteWAVFile("yourtalk.wav", &my_format, buffer)
 
     // Uncomment code if you want to test sound stream with a WAV file
     // wav_sound := LoadSoundFromFile("examples/sound/wav/stereo-32bit-float-48khz.wav")
@@ -69,7 +68,7 @@ fn main() {
 
         ProcessSound(0.03)
 
-        ProcessSleep(0.016)
+        ProcessSleep(0.005)
 
         if impl.available_bytes_in_buffer() == 0 {
             break
@@ -86,21 +85,59 @@ fn CaptureAudio(buffer: u8[], format: AudioFormat*) {
 
         ProcessSound(0.064)
 
-        now := StartMeasure()
-        diff := DiffMeasure(now - start_time)
+        // bytes := BytesInInputAudioBuffer(format)
+        // log("bytes ", bytes)
 
-        bytes := BytesInInputAudioBuffer(format)
-        if head + bytes > buffer.len {
-            bytes = buffer.len - head
+        // if bytes + head > buffer.len
+        //     break
+
+        written := ConsumeInputAudioBuffer(format, buffer, &head, buffer.len)
+        // if written == 0 {
+        //     break
+        // }
+        // memcpy(buffer.ptr + head, sound_state.input_buffer.ptr + sound_state.input_buffer_tail, bytes)
+        // head += bytes
+        // sound_state.input_buffer_tail = sound_state.input_buffer_tail + bytes // assumes no wrap around
+
+        if head == 0 {
+            // wrap around means stop
+            break
         }
 
-        written := ConsumeInputAudioBuffer(buffer.ptr + head, bytes, format)
-        head += written
-        // log("Consume ", written)
-
-        if head >= buffer.len {
-            // more than five seconds
+        // Other way to stop is counting
+        now := StartMeasure()
+        diff := DiffMeasure(now - start_time)
+        if diff > 2.5 {
             break
         }
     }
+    // log("End ", head, " ", buffer.len)
+
+
+    // while {
+        
+
+    //     bytes = BytesInInputAudioBuffer(format)
+    //     if bytes == 0 {
+    //         break
+    //     }
+    // }
+    
+    // written := ConsumeInputAudioBuffer(format, buffer, &head, buffer.len)
+
+    // bytes := buffer.len
+    // if bytes > sound_state.input_buffer_head
+    //     bytes = sound_state.input_buffer_head
+    // memcpy(buffer.ptr, sound_state.input_buffer.ptr, bytes)
+    // log("START ", sound_state.input_buffer_tail, " ", sound_state.input_buffer_head, " buflen ", buffer.len)
+    // if bytes > 0 {
+    // written := ConsumeInputAudioBuffer(format, buffer, &head, buffer.len)
+    // while {
+        // log("stiuff ", written)
+    // }
+    // if head == 0 {
+    //     // head looped back around, it's the end
+    //     break
+    // }
+    // }
 }
