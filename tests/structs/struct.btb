@@ -105,6 +105,28 @@ a.ok()
 
 // TODO: Test arrays in structs more thoroughly.
 
+
+@TEST_CASE(array_in_struct_pushed)
+
+struct Block {
+    e: i32[4];
+}
+
+fn make() -> Block {
+    b: Block;
+    for 0..4 b.e[nr] = nr+1
+    return b
+}
+
+b := make()
+_test 1+2+3+4; b.e[0] + b.e[1] + b.e[2] + b.e[3]
+
+
+// TODO: Consider implementing this:
+// fn make() -> Block { 
+//     return { { 0,1,2,3 } }
+}
+
 @TEST_CASE(indexing_slice)
 
 // move test case elsewhere
@@ -177,3 +199,4 @@ struct Dup {
 
 fun_a()
 fun_b()
+

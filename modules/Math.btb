@@ -14,6 +14,8 @@
 #endif
 #import "StackTrace"
 
+#macro PI 3.14159265358979
+
 fn @intrinsic sqrt(v: f32) -> f32;
 fn @intrinsic round(v: f32) -> f32;
 fn floor(v: f32) -> f32 { // TODO: Intrinsic
@@ -41,9 +43,9 @@ fn ceil(v: f32) -> f32 { // TODO: Intrinsic
 #else
     #load "libc.so.6" as Dummy
 #endif
-fn @import(Dummy) sinf(v: f32) -> f32
-fn @import(Dummy) cosf(v: f32) -> f32
-fn @import(Dummy) tanf(v: f32) -> f32
+fn @import(Dummy, alias="sinf") sin(v: f32) -> f32
+fn @import(Dummy, alias="cosf") cos(v: f32) -> f32
+fn @import(Dummy, alias="tanf") tan(v: f32) -> f32
 
 fn random64() -> u64 {
 #if OS_WINDOWS
@@ -657,13 +659,79 @@ fn scale(m: mat4, v: vec3) -> mat4 {
 
     return t
 }
-// fn rotate(m: mat4, v: vec3) -> mat4 {
-//     t: mat4
-//     c := cos()
-// }
+// angle in radians
+fn rotate(axis: vec3, angle: f32) -> mat4 {
+    x := axis.x
+    y := axis.y
+    z := axis.z
+    c := cos(angle)
+    s := sin(angle)
+    m := mat4_identity()
+
+    m.v[0] = c + x*x*(1-c)
+    m.v[1] = y*x*(1-c) + z*s
+    m.v[2] = z*x*(1-c) - y*s
+
+    m.v[4] = x*y*(1-c) - z*s
+    m.v[5] = c + y*y*(1-c)
+    m.v[6] = z*y*(1-c) + x*s
+
+    m.v[8] = x*z*(1-c) + y*s
+    m.v[9] = y*z*(1-c) - x*s
+    m.v[10] = c + z*z*(1-c)
+
+    return m
+}
+
+fn inverse(m: mat4) -> mat4 {
+    b00 := m.v[0] * m.v[5] - m.v[1] * m.v[4]
+    b01 := m.v[0] *m.v[6] - m.v[2] * m.v[4]
+    b02 := m.v[0] * m.v[7] - m.v[3] * m.v[4]
+    b03 := m.v[1] *m.v[6] - m.v[2] * m.v[5]
+    b04 := m.v[1] * m.v[7] - m.v[3] * m.v[5]
+    b05 := m.v[2] * m.v[7] - m.v[3] *m.v[6]
+
+    b06 := m.v[8] * m.v[13] - m.v[9] * m.v[12]
+    b07 := m.v[8] * m.v[14] - m.v[10] * m.v[12]
+    b08 := m.v[8] * m.v[15] - m.v[11] * m.v[12]
+    b09 := m.v[9] * m.v[14] - m.v[10] * m.v[13]
+    b10 := m.v[9] * m.v[15] - m.v[11] * m.v[13]
+    b11 := m.v[10] * m.v[15] - m.v[11] * m.v[14]
+
+    det := b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06
+
+    if det == 0 {
+        return {} // Singular matrix, return identity or error
+    }
+    
+    invDet := 1.0 / det
+
+    mat: mat4
+    mat.v[0] = (m.v[5] * b11 -m.v[6] * b10 + m.v[7] * b09) * invDet
+    mat.v[1] = (-m.v[1] * b11 + m.v[2] * b10 - m.v[3] * b09) * invDet
+    mat.v[2] = (m.v[13] * b05 - m.v[14] * b04 + m.v[15] * b03) * invDet
+    mat.v[3] = (-m.v[9] * b05 + m.v[10] * b04 - m.v[11] * b03) * invDet
+
+    mat.v[4] = (-m.v[4] * b11 +m.v[6] * b08 - m.v[7] * b07) * invDet
+    mat.v[5] = (m.v[0] * b11 - m.v[2] * b08 + m.v[3] * b07) * invDet
+    mat.v[6] = (-m.v[12] * b05 + m.v[14] * b02 - m.v[15] * b01) * invDet
+    mat.v[7] = (m.v[8] * b05 - m.v[10] * b02 + m.v[11] * b01) * invDet
+
+    mat.v[8] = (m.v[4] * b10 - m.v[5] * b08 + m.v[7] * b06) * invDet
+    mat.v[9] = (-m.v[0] * b10 + m.v[1] * b08 - m.v[3] * b06) * invDet
+    mat.v[10] = (m.v[12] * b04 - m.v[13] * b02 + m.v[15] * b00) * invDet
+    mat.v[11] = (-m.v[8] * b04 + m.v[9] * b02 - m.v[11] * b00) * invDet
+
+    mat.v[12] = (-m.v[4] * b09 + m.v[5] * b07 -m.v[6] * b06) * invDet
+    mat.v[13] = (m.v[0] * b09 - m.v[1] * b07 + m.v[2] * b06) * invDet
+    mat.v[14] = (-m.v[12] * b03 + m.v[13] * b01 - m.v[14] * b00) * invDet
+    mat.v[15] = (m.v[8] * b03 - m.v[9] * b01 + m.v[10] * b00) * invDet
+    return mat
+}
+
 // fov in radians
-fn perspective(fov: f32, aspect: f32, near: f32, far: f32) -> mat4 {
-    f := 1 / tanf(fov / 2)
+fn make_perspective(fov: f32, aspect: f32, near: f32, far: f32) -> mat4 {
+    f := 1 / tan(fov / 2)
     m: mat4;
     m.v[0] = aspect * f
     m.v[5] = f
@@ -671,15 +739,15 @@ fn perspective(fov: f32, aspect: f32, near: f32, far: f32) -> mat4 {
     m.v[11] = -1
     m.v[14] = (2 * far * near) / (near - far)
     return m
-    // return {
-    //     aspect * f, 0, 0, 0,
-    //     0, f, 0, 0,
-    //     0, 0, (far + near) * (near - far), -1,
-    //     0, 0, (2 * far * near) / (near - far), 0,
-    // }
 }
-
-
+// yaw and pitch in radians
+// yaw (side to side), pitch (up and down)
+fn make_view_matrix(pos: vec3, yaw: f32, pitch: f32) -> mat4 {
+    return inverse(
+        translate(mat4_identity(), pos) *
+        rotate({0,1,0}, yaw) *
+        rotate({1,0,0}, pitch))
+}
 
 // ########################
 //     EXTRA FUNCTIONS
