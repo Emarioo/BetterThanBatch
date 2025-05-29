@@ -2470,11 +2470,11 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         expression->computeWhenPossible = false; // temporarily disable to preven infinite loop
         Assert(!inside_compile_time_execution);
         inside_compile_time_execution = true;
-        int prev_sp = builder.get_virtual_sp();
+        // int prev_sp = builder.get_virtual_sp();
         auto result = generateExpression(expression, &tempTypes, 0);
         inside_compile_time_execution = false;
         expression->computeWhenPossible = true;
-        int pushed_size = prev_sp - builder.get_virtual_sp();
+        // int pushed_size = prev_sp - builder.get_virtual_sp();
         
         builder.~BytecodeBuilder();
         builder = std::move(prev_builder);
@@ -2527,7 +2527,8 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         if(tempTypes.size() != 0 && tempTypes[0] != TYPE_VOID) {
         
             TypeId type = tempTypes[0];
-            char* cur_sp = (char*)vm.states.last().stack_pointer + pushed_size; // will be modified
+            char* cur_sp = (char*)vm.states.last().stack_pointer; // will be modified
+            // char* cur_sp = (char*)vm.states.last().stack_pointer + pushed_size; // will be modified
             SignalIO result = generatePushedLiterals(&vm, type, cur_sp, expression);
             return result;
         }

@@ -998,6 +998,7 @@ bool TinyBytecode::applyRelocations(Bytecode* code, bool assert_on_failure, Func
         // Assert may fire if function wasn't generated.
         // Perhaps no one declared usage of the function even
         // though we should have.
+        Assert(rel.funcImpl);
         if (!rel.funcImpl->tinycode_id) {
             if(rel.funcImpl->usages == 0) {
                 log::out << log::RED << "COMPILER BUG! "<<log::NO_COLOR<<"Function '"<<log::LIME<<rel.funcImpl->astFunction->name<<log::NO_COLOR<<"' had zero declared usages but generator emitted relocations.\n";
