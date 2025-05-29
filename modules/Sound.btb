@@ -1901,7 +1901,7 @@ fn ReadWAVFile(path: char[], print: bool = false) -> WAVFile*, WAVError {
     }
     wav, err := ParseWAVHeader(Slice<u8>{cast<u8*>data.ptr, data.len}, print, path)
     if wav {
-        err = ParseWAVData(Slice<u8>{cast<u8*>data.ptr + WAVFILE_HEADER_SIZE, data.len - WAVFILE_HEADER_SIZE}, wav, print, path)
+        err = ParseWAVChunks(Slice<u8>{cast<u8*>data.ptr + WAVFILE_HEADER_SIZE, data.len - WAVFILE_HEADER_SIZE}, wav, print = print, path = path)
         if err != WAV_SUCCESS {
             DestroyWAVFile(wav)
         }

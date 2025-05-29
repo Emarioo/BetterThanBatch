@@ -30,6 +30,7 @@ releases
 # vscode extension package
 *.vsix
 *.code-workspace
+.vscode/settings.json
 
 # Don't ignore files from libs
 !libs/**
