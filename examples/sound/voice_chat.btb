@@ -230,7 +230,7 @@ fn ClientCallback(e: NetEvent*, user_data: void*) {
 #macro FRAME_TIME 0.016
 
 fn ServerWork() {
-    InitSoundState()
+    // InitSoundState()
 
     // sound := CreateSoundStream("", transmission_audio_format.byte_size_from_duration(1), &transmission_audio_format)
     

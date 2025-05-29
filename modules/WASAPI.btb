@@ -3,6 +3,8 @@
     WASAPI is awful, writing bindings for vtables suck.
 */
 
+#if OS_WINDOWS
+
 #load "ole32.lib" as OLE32
 
 #import "Windows"
@@ -368,3 +370,6 @@ fn @import(OLE32) CoCreateInstance(
     ppv: void**,
 ) -> HRESULT;
 fn @import(OLE32) CoUninitialize();
+
+
+#endif // OS_WINDOWS

@@ -388,8 +388,10 @@ namespace engone {
 		return buffer.st_size;
 	}
 	bool FileFlushBuffers(APIFile file){
-		PL_PRINTF("FileFlushBuffers not implemented\n");
-		return false;
+		// No need to flush? We don't use fwrite or fflush. We use Linux syscall 'write'.
+		// flush(TO_HANDLE(file.internal));
+		// PL_PRINTF("FileFlushBuffers not implemented\n");
+		return true;
 	}
     bool FileExist(const std::string& path){
         struct stat buffer;  

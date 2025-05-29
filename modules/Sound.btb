@@ -43,12 +43,17 @@
 #if OS_WINDOWS
     #import "WASAPI"
     #import "Windows"
+#else
+    // TODO: Linux support
+    // #import "Linux"
+    // #import "ALSA"
 #endif
 #import "String"
 #import "Array"
 #import "BucketArray"
 #import "Math"
 #import "Thread"
+#import "Asserts"
 
 /*#################################
     PUBLIC USER LEVEL FUNCTIONS
@@ -680,7 +685,7 @@ fn ProcessSound(duration_to_mix: f32) {
     // process_rate: f64 = 0.020 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
     // process_rate: f64 = 4 * 0.016 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
     // process_rate: f64 = 0.4 // 20 ms (We expect to run ProcessSound at 60 Hz, 60 times per second, this would be 16.66 ms but we give it some leeway)
-    wanted_frames_in_buffer: i32 = duration_to_mix * sound_state.audio_backend.wave_format.Format.nSamplesPerSec
+    wanted_frames_in_buffer: i32 = duration_to_mix * sound_state.audio_backend.output_format.sample_rate
     // log("Remaining ", remaining_frames, ", wanted ", wanted_frames_in_buffer)
 
     frames_to_write := wanted_frames_in_buffer - remaining_frames
@@ -858,6 +863,7 @@ fn ProcessSound(duration_to_mix: f32) {
     }
 
     if sound_state.capture_input_audio {
+    #if OS_WINDOWS
         // TODO: We assume stereo 32-bit float 48000 Hz
         capture := sound_state.audio_backend.captureService
         frames: u32
@@ -950,6 +956,9 @@ fn ProcessSound(duration_to_mix: f32) {
             CHECK_HR
             // log("   ", sound_state.input_buffer_head, " ", sound_state.input_buffer_tail, " ", sound_state.input_buffer.len)
         }
+    #else
+        Assert(false)
+    #endif
     }
 
     end_time := StartMeasure()
@@ -1138,6 +1147,7 @@ struct AudioBackend {
     input_format: AudioFormat;
 
     // platform specific
+#if OS_WINDOWS
     enumerator: IMMDeviceEnumerator*;
     device: IMMDevice*;
     audioClient: IAudioClient*;
@@ -1148,6 +1158,9 @@ struct AudioBackend {
     input_device: IMMDevice*;
     input_audioClient: IAudioClient*;
     captureService: IAudioCaptureClient*;
+#else
+
+#endif
 
     mutex: Mutex;
     internalAudioDevices: Array<InternalAudioDevice>;
@@ -1160,6 +1173,7 @@ struct AudioBackend {
     }
 
     fn init_default_device() {
+    #if OS_WINDOWS
         #macro CHECK_HR if res != 0 { log("HR BAD ", cast_unsafe<WASAPI_Error*>&res); Assert(false) }
 
         // #macro WASLOG(...) log(...)
@@ -1224,9 +1238,13 @@ struct AudioBackend {
 
         // TODO: Do something if default audio device isn't available. We can't play sound in this case.
 
-        init_device()        
+        init_device()
+    #else
+        Assert(false)
+    #endif       
     }
     fn init_device() {
+    #if OS_WINDOWS
         res: i32;
 
         res = device.vtable.Activate(device, &IAudioClient_GUID, CLSCTX_ALL, null, &audioClient)
@@ -1266,9 +1284,13 @@ struct AudioBackend {
         // Assert(wave_format.Format.nChannels == 2)
         // Assert(wave_format.Format.wBitsPerSample == 32)
         // Assert(equal(cast<char*>&expected_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
+    #else
+        Assert(false)
+    #endif
     }
 
     fn init_default_input_device() {
+    #if OS_WINDOWS
         res: i32
         res = enumerator.vtable.GetDefaultAudioEndpoint(enumerator, eCapture, eConsole, &input_device)
         CHECK_HR
@@ -1314,9 +1336,13 @@ struct AudioBackend {
         // Assert(input_wave_format.Format.wBitsPerSample == 32)
         // Assert(input_wave_format.Format.nSamplesPerSec == 48000)
         // Assert(equal(cast<char*>&expected_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
+    #else
+        Assert(false)
+    #endif
     }
 
     fn switchAudioDevice(id: u64) {
+    #if OS_WINDOWS
         mutex.lock()
         backend_id: StringBuilder
         for internalAudioDevices {
@@ -1390,9 +1416,13 @@ struct AudioBackend {
         } else {
             // keep using previous device
         }
+    #else
+        Assert(false)
+    #endif
     }
     
     fn cleanup() {
+    #if OS_WINDOWS
         res: i32
 
         audioClient.vtable.Stop(audioClient)
@@ -1404,9 +1434,13 @@ struct AudioBackend {
         device.vtable.Release(device)
         enumerator.vtable.Release(enumerator)
         CoUninitialize()
+    #else
+        Assert(false)
+    #endif
     }
     // frames that have not been consumed
     fn remainingFrames() -> i32 {
+    #if OS_WINDOWS
         res: i32
         Assert(audioClient)
         frames: i32
@@ -1414,25 +1448,38 @@ struct AudioBackend {
         CHECK_HR
         // log("pass audioClient.GetCurrentPadding")
         return frames
+    #else
+        Assert(false)
+        return 0
+    #endif
     }
     fn acquireBuffer(frames: i32) -> u8* {
+    #if OS_WINDOWS
         res: i32
         Assert(renderService)
         renderBuffer: u8*
         res = renderService.vtable.GetBuffer(renderService, frames, &renderBuffer)
         CHECK_HR
         // log("pass renderService.GetBuffer")
-
         return renderBuffer
+    #else
+        Assert(false)
+        return null
+    #endif
     }
     fn releaseBuffer(written_frames: i32) {
+    #if OS_WINDOWS
         res: i32
         Assert(renderService)
         res = renderService.vtable.ReleaseBuffer(renderService, written_frames, 0)
         CHECK_HR
         // log("pass renderService.ReleaseBuffer")
+    #else
+        Assert(false)
+    #endif
     }
     fn remainingInputFrames() -> i32 {
+    #if OS_WINDOWS
         res: i32
         Assert(audioClient)
         frames: i32
@@ -1440,8 +1487,13 @@ struct AudioBackend {
         CHECK_HR
         // log("pass audioClient.GetCurrentPadding")
         return frames
+    #else
+        Assert(false)
+        return 0
+    #endif
     }
     fn acquireInputBuffer(frames: i32) -> u8* {
+    #if OS_WINDOWS
         res: i32
         Assert(renderService)
         renderBuffer: u8*
@@ -1450,16 +1502,25 @@ struct AudioBackend {
         // log("pass renderService.GetBuffer")
 
         return renderBuffer
+    #else
+        Assert(false)
+        return null
+    #endif
     }
     fn releaseInputBuffer(written_frames: i32) {
+    #if OS_WINDOWS
         res: i32
         Assert(renderService)
         res = renderService.vtable.ReleaseBuffer(renderService, written_frames, 0)
         CHECK_HR
         // log("pass renderService.ReleaseBuffer")
+    #else
+        Assert(false)
+    #endif
     }
     
     fn listAudioDevices(list: Array<AudioDeviceInfo>*, exclude_input_devices: bool = false, exclude_output_devices: bool = false) {
+    #if OS_WINDOWS
         Assert(sound_state)
 
         res: HRESULT
@@ -1553,6 +1614,9 @@ struct AudioBackend {
 
         collection.vtable.Release(collection)
         default_device.vtable.Release(default_device)
+    #else
+        Assert(false)
+    #endif
     }
 }
 
