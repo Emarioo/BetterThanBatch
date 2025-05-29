@@ -243,6 +243,27 @@ struct ByteStream {
     //     len = newLen;
     //     return true;
     // }
+    fn shrink(size: i32) {
+        if size <= 0
+            return;
+        if size > written_bytes
+            size = written_bytes
+
+        written_bytes -= size
+        for @rev i: 0..allocations.size() {
+            a := allocations.get_unsafe(i);
+
+            if size > a.written_bytes {
+                size -= a.written_bytes
+                // log("Shrink [", i,"] " , a.written_bytes, " new size ", size)
+                a.written_bytes = 0
+            } else {
+                // log("Shrink2 [", i,"] " , size)
+                a.written_bytes -= size
+                break
+            }
+        }
+    }
     fn reserve(newMax: u32) -> bool {
         suc: bool = allocations.add();
         if(!suc)

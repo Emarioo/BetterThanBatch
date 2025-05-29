@@ -120,7 +120,7 @@ struct AppState {
     audio_mutex: Mutex;
 }
 global app_state: AppState*
-global transmission_audio_format: AudioFormat = { sample_rate = 441000, sample_format = AUDIO_16BIT_PCM, stereo = false }
+global transmission_audio_format: AudioFormat = { sample_rate = 44100, sample_format = AUDIO_16BIT_PCM, stereo = false }
 
 struct ConnectionInfo {
     conn_id: ConnectionID; // i32, not a UUID. It is an index into list of connections in Server (that's how Net.btb implements it)
@@ -169,7 +169,7 @@ fn ServerCallback(e: NetEvent*, user_data: void*) {
         return
     }
     
-    log("RECV ", header.audio_byte_size)
+    // log("RECV #",header.number, " ", header.audio_byte_size)
     // std_print(header, pretty = true)
 
     audio_data: u8* = cast<void*>e.bytes.ptr + sizeof(VoiceChatMessageHeader)
@@ -208,7 +208,7 @@ fn ClientCallback(e: NetEvent*, user_data: void*) {
     
     // std_print(header, pretty = true)
 
-    log("RECV ", header.audio_byte_size)
+    // log("RECV #", header.number," ", header.audio_byte_size)
 
     audio_data: u8* = cast<void*>e.bytes.ptr + sizeof(VoiceChatMessageHeader)
 
@@ -226,9 +226,16 @@ fn ClientCallback(e: NetEvent*, user_data: void*) {
     app_state.audio_mutex.unlock()
 }
 
-#macro FRAME_TIME 0.2
+#macro FRAME_TIME 0.016
 
 fn ServerWork() {
+    InitSoundState()
+
+    // sound := CreateSoundStream("", transmission_audio_format.byte_size_from_duration(1), &transmission_audio_format)
+    
+    // inst := sound.createInstance()
+    // inst.play()
+
     state := app_state
     format: AudioFormat
     format = transmission_audio_format
@@ -239,9 +246,44 @@ fn ServerWork() {
     byte_stream: ByteStream
     byte_stream.reserve(format.byte_size_from_duration(1))
 
+    started := false
+
     last_time := StartMeasure()
     while app_state.server.is_active() {
         ProcessSleep(FRAME_TIME)
+
+        // if app_state.connections.getCount() > 0 { 
+        //     app_state.server_mutex.lock()
+
+        //     info := app_state.connections.get(0)
+
+        //     if sound.free_bytes_in_buffer() > sound.max_bytes_in_buffer() - 2*50 {
+        //         log("Sound stream is lacking audio data! Sound glitches be here!")
+        //     }
+
+        //     if !started {
+        //         // Add some delay to when we start playing. We want audio data from server to catch up
+        //         if info.audio_buffer_head > transmission_audio_format.byte_size_from_duration(0.7) {
+        //             started = true
+        //         }
+        //     }
+
+        //     if started {
+        //         // log("head ", info.audio_buffer_head)
+        //         if info.audio_buffer_head > 0 {
+        //             written := sound.write(info.audio_buffer.ptr, info.audio_buffer_head)
+        //             // We use memcpy because we may not have consumed all bytes in audio buffer and if not then
+        //             // we need to reposition the audio data in the buffer since the first written bytes were consumed.
+        //             // We can implement circular buffer to avoid memcpy.
+        //             memcpy(info.audio_buffer.ptr, info.audio_buffer.ptr + written, info.audio_buffer_head - written)
+        //             info.audio_buffer_head -= written
+        //             // app_state.audio_buffer_head = 0
+        //         }
+        //     }
+        //     app_state.server_mutex.unlock()
+        // }
+
+        // ProcessSound(FRAME_TIME * 2)
 
         now := StartMeasure()
         delta := DiffMeasure(now - last_time)
@@ -263,6 +305,7 @@ fn ServerWork() {
         for info: app_state.connections {
             // TODO: We assume out frame and in frame has the same sample rates in MixAudio.
             //   We need to consider it here if they aren't.
+            // TODO: If one connection stops sending data then whole communication will stop.
             if header.audio_byte_size == 0 || info.audio_buffer_head < header.audio_byte_size {
                 header.audio_byte_size = info.audio_buffer_head
             }
@@ -271,25 +314,60 @@ fn ServerWork() {
         buffer: u8* = byte_stream.write_late(header.audio_byte_size)
         memzero(buffer, header.audio_byte_size)
 
+        // TODO: One audio stream per client. They don't want to hear their own voice.
+
         for info: app_state.connections {
             frames := header.audio_byte_size / format.get_frame_size()
-            max_frames := info.audio_buffer_head / format.get_frame_size()
-            Assert(format.stereo)
-            if max_frames != 0 {
-                out_written_frames, in_written_frames := MixAudio(buffer, &format, info.audio_buffer.ptr, &format, frames, max_frames, 1.0)
-
-                if out_written_frames != frames {
-                    // This should never happen. If we miss writing frames then that is audio we should have gotten from client which we haven't yet. We would need to incur some latency do the audio processing.
-                    log("Didn't write all frames, ", out_written_frames, " ", frames, " ", in_written_frames, " ", max_frames)
+            end_pos := info.audio_buffer_head / format.get_frame_size()
+            // Assert(format.stereo)
+            if end_pos != 0 {
+                // TODO: Use float position in ClientInfo. Needed for different sample rates. We use the same though so it's fine?
+                
+                // Simple sample copy because formats are the same
+                dst: i16* = cast<i16*>buffer
+                src: i16* = cast<i16*>info.audio_buffer.ptr
+                for 0..frames {
+                    dst[nr] += src[nr]
                 }
+                in_written_frames := frames
+
+                // Proper MixAudio if audio formats are different. They shouldn't be.
+                // tmp_out_pos: i32 = 0
+                // tmp_in_pos: f64 = 0
+                // out_written_frames, in_written_frames := MixAudio(&format, &format, { buffer, header.audio_byte_size }, frames, { info.audio_buffer.ptr, info.audio_buffer.len }, end_pos, 1.0, &tmp_out_pos, &tmp_in_pos)
+
+                // log("POS ", tmp_in_pos)
+
+                // if out_written_frames != frames {
+                //     // This should never happen. If we miss writing frames then that is audio we should have gotten from client which we haven't yet. We would need to incur some latency do the audio processing.
+                //     log("Didn't write all frames, ", out_written_frames, " ", frames, " ", in_written_frames, " ", end_pos)
+                // }
 
                 in_written_bytes := in_written_frames * format.get_frame_size()
 
                 // We use memcpy because we may not have consumed all bytes in audio buffer and if not then
                 // we need to reposition the audio data in the buffer since the first written bytes were consumed.
                 // We can implement circular buffer to avoid memcpy.
-                memcpy(info.audio_buffer.ptr, info.audio_buffer.ptr + in_written_bytes, info.audio_buffer_head - in_written_bytes)
+                fn memmove(dst: void*, src: void*, size: i32) {
+                    // TODO: Optimize, make an assembly version in standard library
+                    //   We really should have a memmove in the language
+                    if cast<u64>dst < cast<u64>src {
+                        for 0..size {
+                            (cast<u8*>dst)[nr] = (cast<u8*>src)[nr]
+                        }
+                    } else {
+                        for @rev 0..size {
+                            (cast<u8*>dst)[nr] = (cast<u8*>src)[nr]
+                        }
+                    }
+                }
+                log("MIX written ", in_written_bytes, " head ", info.audio_buffer_head, " audio bytes ", header.audio_byte_size, " frames ", frames)
+                memmove(info.audio_buffer.ptr, info.audio_buffer.ptr + in_written_bytes, info.audio_buffer_head - in_written_bytes)
                 info.audio_buffer_head -= in_written_bytes
+                if info.audio_buffer_head < 0 {
+                    log("BAD ", info.audio_buffer_head, " ", in_written_bytes)
+                }
+                Assert(info.audio_buffer_head >= 0)
             }
         }
         
@@ -326,20 +404,42 @@ fn ClientWork() {
     inst := sound.createInstance()
     inst.play()
 
+    started := false
+
+    framest := 0
+
     while app_state.client.is_active() {
         ProcessSleep(FRAME_TIME)
 
         // Play received audio
         app_state.audio_mutex.lock()
-        
-        written := sound.write(app_state.audio_buffer.ptr, app_state.audio_buffer_head)
-        // We use memcpy because we may not have consumed all bytes in audio buffer and if not then
-        // we need to reposition the audio data in the buffer since the first written bytes were consumed.
-        // We can implement circular buffer to avoid memcpy.
-        memcpy(app_state.audio_buffer.ptr, app_state.audio_buffer.ptr + written, app_state.audio_buffer_head - written)
-        app_state.audio_buffer_head -= written
-        // app_state.audio_buffer_head = 0
 
+        // framest += 1
+
+        // if framest == 60 * 0.5 {
+        //      inst.play()
+        // }
+
+        if sound.free_bytes_in_buffer() > sound.max_bytes_in_buffer() - 2*50 {
+            log("Sound stream is lacking audio data! Sound glitches be here!")
+        }
+
+        if !started {
+            // Add some delay to when we start playing. We want audio data from server to catch up
+            if app_state.audio_buffer_head > transmission_audio_format.byte_size_from_duration(0.1) {
+                started = true
+            }
+        }
+
+        if started {
+            written := sound.write(app_state.audio_buffer.ptr, app_state.audio_buffer_head)
+            // We use memcpy because we may not have consumed all bytes in audio buffer and if not then
+            // we need to reposition the audio data in the buffer since the first written bytes were consumed.
+            // We can implement circular buffer to avoid memcpy.
+            memcpy(app_state.audio_buffer.ptr, app_state.audio_buffer.ptr + written, app_state.audio_buffer_head - written)
+            app_state.audio_buffer_head -= written
+            // app_state.audio_buffer_head = 0
+        }
         app_state.audio_mutex.unlock()
 
         // Capture audio
@@ -353,13 +453,24 @@ fn ClientWork() {
         header.format = transmission_audio_format
         header.audio_byte_size = BytesInInputAudioBuffer(&transmission_audio_format)
 
+        global number: i32
+        header.number = number++
+
         buffer := byte_stream.write_late(header.audio_byte_size)
-        written = ConsumeInputAudioBuffer(buffer, header.audio_byte_size, &transmission_audio_format)
-        log("Send ", written)
-        Assert(written == header.audio_byte_size) // We should always be able to read as many bytes as there are in the buffer.
+        // buffer := Allocate(header.audio_byte_size)
+        head := 0
+        written := ConsumeInputAudioBuffer(&transmission_audio_format, { buffer, header.audio_byte_size }, &head, header.audio_byte_size)
+
+        // written2 := sound.write(buffer, written)
+        // log("free ", sound.free_bytes_in_buffer(), " got ", written, " wrote ", written2)
+
+        byte_stream.shrink(header.audio_byte_size - written)
+        header.audio_byte_size = written
 
         message: u8[]
         byte_stream.finalize(&message)
+
+        // log("Send #",header.number," ", message.len, " written ", written, " + ", sizeof(VoiceChatMessageHeader) , " audio byte size ", header.audio_byte_size)
 
         app_state.client.send(message)
     }
@@ -372,6 +483,7 @@ enum VoiceChatMessageKind : u32 {
 struct VoiceChatMessageHeader {
     kind: VoiceChatMessageKind;
     format: AudioFormat;
+    number: i32;
     audio_byte_size: i32;
     // audio_data: u8[audio_byte_size];
 }

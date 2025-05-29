@@ -298,20 +298,30 @@ fn ConsumeInputAudioBuffer(format: AudioFormat*, user_buffer: u8[], position: i3
 
     // written_bytes := 0
 
-    if !sound_state.capture_input_audio
+    if !sound_state.capture_input_audio {
+        log("ConsumeInputAudioBuffer: Not capturing audio")
         return 0
+    }
 
-    if !sound_state.input_buffer_full && sound_state.input_buffer_tail == sound_state.input_buffer_head
+    if !sound_state.input_buffer_full && sound_state.input_buffer_tail == sound_state.input_buffer_head {
+        log("ConsumeInputAudioBuffer: No audio data")
         return 0
+    }
+
+    origin_end := end_position
 
     ;*position = (*position) % user_buffer.len
     end_position = end_position % user_buffer.len
 
     frames_to_write: i32 
-    if *position >= end_position
+    if *position >= end_position {
         frames_to_write = (end_position + user_buffer.len - *position) / format.get_frame_size()
-    else
+        memzero(user_buffer.ptr + *position, user_buffer.len - *position)
+        memzero(user_buffer.ptr, end_position)
+    } else {
         frames_to_write = (end_position - *position) / format.get_frame_size()
+        memzero(user_buffer.ptr + *position, end_position - *position )
+    }
 
     // log("Frames to write ", frames_to_write)
 
@@ -768,11 +778,19 @@ fn ProcessSound(duration_to_mix: f32) {
 
                 // log("tail ", sound.buffer_tail, ", head ", sound.buffer_head)
                 // log("Buffer ", sound.buffer.len / sound.format.get_frame_size(), " ", sound.buffer_head / sound.format.get_frame_size())
-                tmp_pos: f64 = instance.current_frame
-                tmp_out_pos: i32 = 0
-                out_written, in_written := MixAudio(&form, &sound.format, { buffer, buffer_len }, frames_to_write, { sound.buffer.ptr, sound.buffer.len }, sound.buffer_head / sound.format.get_frame_size(), sound_state.global_volume, &tmp_out_pos, &tmp_pos)
+                if sound.buffer_head == sound.buffer_tail && !sound.buffer_full {
+                    // do nothing if empty
+                } else {
+                    tmp_pos: f64 = instance.current_frame
+                    tmp_out_pos: i32 = 0
+                    out_written, in_written := MixAudio(&form, &sound.format, { buffer, buffer_len }, frames_to_write, { sound.buffer.ptr, sound.buffer.len }, sound.buffer_head / sound.format.get_frame_size(), sound_state.global_volume, &tmp_out_pos, &tmp_pos)
 
-                instance.current_frame = tmp_pos
+                    instance.current_frame = tmp_pos
+
+                    if out_written+2 < frames_to_write {
+                        log("Missing frames, written ", out_written, " wanted ", frames_to_write)
+                    }
+                }
 
                 // log("Proc ", out_written, " ", in_written)
 
@@ -1100,7 +1118,7 @@ fn MixAudio(out_format: AudioFormat*, in_format: AudioFormat*, out_buffer: u8[],
     start_frame: i32 = *in_position
     end_frame: i32 = src_sample_index1
     read_frames: i32
-    if end_frame > start_frame
+    if end_frame >= start_frame
         read_frames = end_frame - start_frame
     else
         read_frames = end_frame + in_buffer_frame_max - start_frame

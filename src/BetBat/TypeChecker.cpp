@@ -2774,6 +2774,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         TypeId leftType{};
         TypeId rightType{};
         // Keep compiling even if left or right is null to catch more errors.
+
+        // TODO: We need better type checking here for errors. Generator will assert on invalid types but we
+        //   Need to provide good error messages here.
+
         if(stmp->left) {
             tempTypes.resize(0);
             checkExpression(scopeId, stmp->left, &tempTypes, attempt);
@@ -2847,6 +2851,22 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                     operatorArgs.add(tempTypes[0]);
                 }
             }
+            if (leftType == TYPE_VOID) {
+                ERR_SECTION(
+                    ERR_HEAD2(stmp->left->location)
+                    ERR_MSG("Cannot assign to void type.")
+                    ERR_LINE2(stmp->left->location, "here")
+                )
+            }
+            // if(!info.ast->castable(rightType, leftType, true) && stmp->right->type != EXPR_NULL) {
+            //     ERR_SECTION(
+            //         ERR_HEAD2(stmp->right->location, ERROR_TYPE_MISMATCH)
+            //         ERR_MSG("Type mismatch " <<  info.ast->typeToString(leftType) << " - " << info.ast->typeToString(rightType) << ".")
+            //         // varinfo->versions_typeId[info.currentPolyVersion]
+            //         ERR_LINE2(stmp->left->location, info.ast->typeToString(leftType))
+            //         ERR_LINE2(stmp->right->location, info.ast->typeToString(rightType))
+            //     )
+            // }
         }
         
         if(outTypes) {
