@@ -653,6 +653,9 @@ namespace dwarf {
                 RBP_CONSTANT_OFFSET = 0;
             }
 
+            // const bool SKIP_LEXICAL_SCOPES = true; // for debugging
+            const bool SKIP_LEXICAL_SCOPES = false; // for debugging
+
             for(int i=0;i<debug->functions.size();i++) {
                 auto fun = debug->functions[i];
 
@@ -834,8 +837,9 @@ namespace dwarf {
                         // pop scopes until the variables distant (or close) parent
                         while(scopeStack.size()-1 != found_on_stack) {
                             scopeStack.pop();
-                            WRITE_LEB(0) // end lexical scope
-                            
+                            if(!SKIP_LEXICAL_SCOPES) {
+                                WRITE_LEB(0) // end lexical scope
+                            }
                             curLevel--;
                             indent(curLevel);
                             log::out << "end scope "<<(curLevel+1)<<"\n";
@@ -846,19 +850,25 @@ namespace dwarf {
                             scopeStack.add({scopes_to_generate[i]});
                             u32 proc_low = fun->asm_start + scope->asm_start;
                             u32 proc_high = fun->asm_start + scope->asm_end;
+
+                            // If local variables aren't showing up then it may be a problem with lexical scopes.
+                            // We have had a lot of mistakes with them. This assert may help debugging.
+                            // Assert(proc_low != proc_high);
                             
-                            WRITE_LEB(abbrev_lexical_block)
-                            relocs.add({ stream->getWriteHead() - offset_section, proc_low });
-                            if(REGISTER_SIZE == 4) {
-                                stream->write4(proc_low); // pc low
-                            } else {
-                                stream->write8(proc_low); // pc low
-                            }
-                            relocs.add({ stream->getWriteHead() - offset_section, proc_high });
-                            if(REGISTER_SIZE == 4) {
-                                stream->write4(proc_high); // pc high
-                            } else {
-                                stream->write8(proc_high); // pc high
+                            if(!SKIP_LEXICAL_SCOPES) {
+                                WRITE_LEB(abbrev_lexical_block)
+                                relocs.add({ stream->getWriteHead() - offset_section, proc_low });
+                                if(REGISTER_SIZE == 4) {
+                                    stream->write4(proc_low); // pc low
+                                } else {
+                                    stream->write8(proc_low); // pc low
+                                }
+                                relocs.add({ stream->getWriteHead() - offset_section, proc_high });
+                                if(REGISTER_SIZE == 4) {
+                                    stream->write4(proc_high); // pc high
+                                } else {
+                                    stream->write8(proc_high); // pc high
+                                }
                             }
                             indent(curLevel);
                             curLevel++;
@@ -920,7 +930,10 @@ namespace dwarf {
                     curLevel--;
                     indent(curLevel);
                     log::out << "end scope "<<(curLevel+1)<<"\n";
-                    WRITE_LEB(0) // end lexical scope
+                    
+                    if(!SKIP_LEXICAL_SCOPES) {
+                        WRITE_LEB(0) // end lexical scope
+                    }
                 }
                 log::out.enableConsole(true);
 

@@ -782,14 +782,17 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
         Assert(size <= REGISTER_SIZE);
         #ifndef DISABLE_ZERO_INITIALIZATION
         // only structs have default values, otherwise zero is the default
-        if(baseReg == 0){
-            builder.emit_bxor(BC_REG_A, BC_REG_A, REGISTER_SIZE);
-            builder.emit_push(BC_REG_A);
+        if (AST::IsDecimal(typeId)) {
+            if(baseReg == BC_REG_INVALID){
+                builder.emit_li32(BC_REG_A, 0);
+                builder.emit_add(BC_REG_A, BC_REG_A, 4, true, false); // TODO: x64_gen uses this float add to know that BC_REG_A should be an XMM registers. Super dumb, we need to fix this.
+                builder.emit_push(BC_REG_A);
+            } else { /* memzeroed earlier */}
         } else {
-            // we generate memzero above which zero initializes
-            // builder.emit_bxor(BC_REG_A, BC_REG_A);
-            // BCRegister reg = BC_REG_A;
-            // builder.emit_mov_mr_disp(baseReg, reg, size, offset);
+            if(baseReg == BC_REG_INVALID){
+                builder.emit_bxor(BC_REG_A, BC_REG_A, REGISTER_SIZE);
+                builder.emit_push(BC_REG_A);
+            } else { /* memzeroed earlier */}
         }
         #else
         // Not setting zero here is certainly a bad idea
@@ -2423,9 +2426,11 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         expression->computeWhenPossible = false; // temporarily disable to preven infinite loop
         Assert(!inside_compile_time_execution);
         inside_compile_time_execution = true;
+        int prev_sp = builder.get_virtual_sp();
         auto result = generateExpression(expression, &tempTypes, 0);
         inside_compile_time_execution = false;
         expression->computeWhenPossible = true;
+        int pushed_size = prev_sp - builder.get_virtual_sp();
         
         builder.~BytecodeBuilder();
         builder = std::move(prev_builder);
@@ -2467,7 +2472,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
             vm.add_memory_mapping(mem, (u64)ptr_to_global_data, mem_size);
         }
         // let VM evaluate expression and put into global data
-        vm.execute(bytecode, temp_tinycode->name, true);
+        vm.execute(bytecode, temp_tinycode->name, true, compiler->options);
         
         POP_LAST_CALLBACK()
         
@@ -2475,10 +2480,11 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
             printVMFailedMessage(vm, expression->location);
             return SIGNAL_FAILURE;
         }
-        
         if(tempTypes.size() != 0 && tempTypes[0] != TYPE_VOID) {
+        
             TypeId type = tempTypes[0];
-            SignalIO result = generatePushedLiterals(&vm, type, (char*)vm.states.last().stack_pointer, expression);
+            char* cur_sp = (char*)vm.states.last().stack_pointer + pushed_size; // will be modified
+            SignalIO result = generatePushedLiterals(&vm, type, cur_sp, expression);
             return result;
         }
         return SIGNAL_SUCCESS;
@@ -7377,7 +7383,7 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
         vm.add_memory_mapping(mem, (u64)ptr_to_global_data, mem_size);
     }
     // let VM evaluate expression and put into global data
-    vm.execute(bytecode, temp_tinycode->name, true);
+    vm.execute(bytecode, temp_tinycode->name, true, compiler->options);
 
     POP_LAST_CALLBACK()
     

@@ -39,7 +39,11 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
     for(int i=0;i<commands.size();i++){
         const std::string& arg = commands[i];
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
-        if(arg == "--help" || arg == "-help" || arg == "-?") {
+        if(arg == "-v" || arg == "--version") {
+            options->quit = true;
+            print_version();
+            return true;
+        } else if(arg == "--help" || arg == "-h") {
             options->quit = true;
             print_help();
             return true;
@@ -200,7 +204,7 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
             options->disable_preload = true;
         } else {
             if(arg[0] == '-') {
-                log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
+                log::out << log::RED << "Invalid argument '"<<arg<<"' (see --help)\n";
                 invalidArguments = true;
             } else {
                 // arg = argv[i];
