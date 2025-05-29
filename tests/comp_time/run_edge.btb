@@ -5,6 +5,8 @@
 
 @TEST_CASE(comptime_inline_assembly)
 
+#import "Logger"
+
 global glob: i32
 #run {
     glob = asm<i32>(5,9){
@@ -14,6 +16,7 @@ global glob: i32
         add rax, rcx
         push rax
     }
+    // log(glob)
 }
 
 _test 14; glob;

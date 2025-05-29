@@ -43,7 +43,7 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
             options->quit = true;
             print_version();
             return true;
-        } else if(arg == "--help" || arg == "-h" || arg == "-help" || arg == "-?") {
+        } else if(arg == "--help" || arg == "-h") {
             options->quit = true;
             print_help();
             return true;

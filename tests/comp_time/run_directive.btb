@@ -155,6 +155,25 @@ b := #run first()
 _test b.x; 4;
 _test 1; substring(b.str, 1) == "nnamed";
 
+@TEST_CASE(comp_time_struct2)
+struct Block {
+    y: Cube;
+    x: i32;
+}
+
+struct Cube {
+    a: i32;
+    b: i32;
+}
+
+fn first() -> Block {
+    return { { 1,3 }, 4 }
+}
+
+b := #run first()
+
+_test 8; b.x + b.y.a + b.y.b
+
 @TEST_CASE(comptime_func_ptr)
 
 // #import "Logger"
@@ -163,13 +182,15 @@ _test 1; substring(b.str, 1) == "nnamed";
 fn @oscall some_func(a: f32, b: f32, c: f32, d: f32, e: f32) -> f32 {
     return a+b+c+d+e
 }
+global res: f32;
 #run {
     // res := some_func(1.1,2.2,3.3,4.4,5.5)
     f := some_func
     
-    res := f(1.1,2.2,3.3,4.4,5.5)
+    res = f(1.1,2.2,3.3,4.4,5.5)
     // res := f(1,2,3,4,5)
     
-    _test (1.1 + 2.2 + 3.3 + 4.4 + 5.5); res
     // log(res)
 }
+
+_test (1.1 + 2.2 + 3.3 + 4.4 + 5.5); res

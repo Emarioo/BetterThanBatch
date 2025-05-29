@@ -38,11 +38,88 @@
         String concatenation using +, gone are the days we have to use the append method on strings.
 */
 
-// #macro concat(S,X,...) S.append(X) concat(S, ...)
-// #macro concat(X,...) S.append(X) concat(...)
-// #macro concat() #endmacro
+// #import "String"
+// #import "Logger"
 
-// concat(str, "hi", "derp")
+// #import "D:/dev/wander/src/main.btb"
+
+
+// #import "Logger"
+// #import "Math"
+
+// m := mat4_identity()
+
+struct VertexBuffer {
+    id: u32;
+    size: i32;
+}
+struct IndexBuffer {
+    id: u32;
+    size: i32;
+}
+#macro MAX_LOCATIONS 8
+#macro MAX_BUFFERS 2
+struct VertexArray {
+    id: u32;
+    totalLocation: i16;
+    location: i16;
+    bufferSection: i16;
+    locationSizes: i16[MAX_LOCATIONS];
+    strides: i16[MAX_BUFFERS];
+    startLocations: i16[MAX_BUFFERS];
+
+}
+struct Model {
+    vao: VertexArray;
+    vbo: VertexBuffer;
+    ibo: IndexBuffer;
+}
+fn LoadCubeModel(model: Model*) {
+    *model = {}
+}
+
+model: Model;
+LoadCubeModel(&model)
+
+// for 0..16 {
+//     log(nr," ", m.v[nr])
+// }
+
+// #run {
+// struct Block {
+//     e: i32[8];
+// }
+
+// fn make() -> Block {
+//     b: Block;
+//     for 0..b.e.len
+//         b.e[nr] = nr+1
+//     return b
+// }
+// { @dumpbc
+// b := make()
+
+// // for 0..4 {
+// //     log(nr, " ", b.e[nr])
+// // }
+// _test 1+2+3+4; b.e[0] + b.e[1] + b.e[2] + b.e[3]
+// }
+// }
+
+// global glob: i32
+// #run {
+//     glob = asm<i32>(5,9){
+//         pop rax
+//         pop rcx
+        
+//         add rax, rcx
+//         push rax
+//     }
+//     log(glob)
+// }
+
+// log(glob)
+
 
 // memory_tracker.init()
 // memory_tracker.disabled = false
