@@ -1,0 +1,1033 @@
+/*
+    Simple platform independent API for Audio
+    
+    I recommend SoundSystem.btb for most people unless
+    you want to mix multiple sounds yourself.
+*/
+
+#if OS_WINDOWS
+    #import "windows/WASAPI"
+    // #import "windows/Windows"
+    #macro CHECK_HR(S) if res != 0 { log("WASAPI Failed ", S, " err: " cast_unsafe<WASAPI_Error*>&res); Assert(false) }
+#elif OS_LINUX
+    #import "linux/ALSA"
+    // #import "linux/Linux"
+    #macro CHECK_ERR(S) if err < 0 { log("ALSA Error: ", S, " ", snd_strerror(err), " ", err) Assert(false) }
+    #macro CHECK_ERRN(N, S) if N < 0 { log("ALSA Error: ", S, " ", snd_strerror(N), " ", N) Assert(false) }
+#endif
+
+#import "BucketArray"
+#import "Logger"
+#import "String"
+#import "Array"
+#import "File"
+#import "Asserts"
+
+enum AudioSampleFormat {
+    AUDIO_8BIT_PCM,
+    AUDIO_16BIT_PCM,
+    AUDIO_32BIT_PCM,
+    AUDIO_32BIT_FLOAT,
+}
+
+struct AudioFormat {
+    sample_format: AudioSampleFormat; // AUDIO_32BIT_FLOAT
+    sample_rate: i32; // 48 0000 Hz
+    stereo: bool; // false - Mono, true - Stereo
+
+    fn init(_sample_rate: i32, channels: i32, bits_per_sample: i32, is_float: bool) {
+        sample_rate = _sample_rate
+        stereo = channels == 2
+        Assert(channels == 1 || channels == 2)
+        if !is_float {
+            if bits_per_sample == 32 {
+                sample_format = AUDIO_32BIT_PCM
+            } else if bits_per_sample == 16 {
+                sample_format = AUDIO_16BIT_PCM
+            }  else if bits_per_sample == 8 {
+                sample_format = AUDIO_8BIT_PCM
+            } else {
+                Assert(!is_float && (bits_per_sample == 8 || bits_per_sample == 16 || bits_per_sample == 32))
+            }
+        } else {
+            if bits_per_sample == 32 {
+                sample_format = AUDIO_32BIT_FLOAT
+            } else {
+                Assert(is_float && bits_per_sample == 32)
+            }
+        }
+    }
+
+    fn frames_from_duration(time: f32) -> i32 {
+        return sample_rate * time
+    }
+    fn byte_size_from_duration(time: f32) -> i32 {
+        // buffer size must be a multiple of frame size, we must cast float before multiplying frame size
+        // TODO: We should probably ceil instead of truncating float. However the call needs to be careful
+        //   with passing in delta times since they may indicate 202.23 samples. That half sample will be lost.
+        //   or if we ceil we will send one more sample than we should and thus offset the audio streams timing by just a bit.
+        //   I don't know the effects of this or if it matters but it might and it is good to be aware of it.
+        return get_frame_size() * cast<i32>(sample_rate * time)
+    }
+    fn get_channels() -> i32 {
+        if stereo
+            return 2
+        return 1
+    }
+    fn get_bits_per_sample() -> i32 {
+        switch sample_format {
+            case AUDIO_8BIT_PCM:
+                return 8
+            case AUDIO_16BIT_PCM:
+                return 16
+            case AUDIO_32BIT_PCM:
+            case AUDIO_32BIT_FLOAT:
+                return 32
+        }
+        return -1
+    }
+    fn get_frame_size() -> i32 {
+        return (get_bits_per_sample()/8) * get_channels()
+    }
+}
+
+operator ==(a: AudioFormat, b: AudioFormat) -> bool {
+    return a.sample_format == b.sample_format && a.sample_rate == b.sample_rate && a.stereo == b.stereo   
+}
+
+struct AudioDevice {
+    // PUBLIC
+    name: StringBuilder; // human readable name
+    format: AudioFormat;
+    id: i64; // same as device_index at the moment
+    is_input_device: bool; // true = mic, false = headphones
+    
+    fn queued_bytes() -> i32 {
+        Assert(!is_input_device)
+        Assert(is_open())
+        
+        #if OS_WINDOWS
+            Assert(audioClient)
+            res: HRESULT
+            
+            frames: i32
+            res = audioClient.vtable.GetCurrentPadding(audioClient, cast<u32*>&frames)
+            CHECK_HR("audioClient.GetCurrentPadding")
+            return frames * format.get_frame_size()
+        #elif OS_LINUX
+            Assert(pcm_device)
+            err: i32
+
+            state := snd_pcm_state(pcm_device)
+            if state != SND_PCM_STATE_RUNNING && state != SND_PCM_STATE_DRAINING {
+                return 0
+            }
+            
+            frames: snd_pcm_sframes_t
+            err = snd_pcm_delay(pcm_device, &frames)
+            if err < 0 {
+                return 0
+            }
+            
+            if frames < 0
+                frames = 0
+            
+            return frames * format.get_frame_size()
+        #else
+            Assert(false)
+        #endif
+    }
+    
+    fn free_bytes() -> i32 {
+        Assert(!is_input_device)
+        Assert(is_open())
+        
+        #if OS_WINDOWS
+            Assert(audioClient)
+            res: HRESULT
+            
+            padding_frames: i32
+            res = audioClient.vtable.GetCurrentPadding(audioClient, cast<u32*>&padding_frames)
+            CHECK_HR("audioClient.GetCurrentPadding")
+            
+            frames: i32
+            res = audioClient.vtable.GetBufferSize(audioClient, cast<u32*>&frames)
+            CHECK_HR("audioClient.GetBufferSize")
+            return (frames - padding_frames) * format.get_frame_size()
+        #elif OS_LINUX
+            Assert(pcm_device)
+            err: i32
+
+            state := snd_pcm_state(pcm_device)
+            // log(&state)
+            if state != SND_PCM_STATE_RUNNING && state != SND_PCM_STATE_DRAINING {
+                return max_bytes()
+            }
+
+            frames: snd_pcm_sframes_t
+            frames = snd_pcm_avail_update(pcm_device)
+            if frames < 0 {
+                return 
+            }
+            return frames * format.get_frame_size()
+        #else
+            Assert(false)
+        #endif
+    }
+    
+    fn max_bytes() -> i32 {
+        Assert(!is_input_device)
+        Assert(is_open())
+        
+        #if OS_WINDOWS
+            Assert(audioClient)
+            res: HRESULT
+            
+            frames: i32
+            res = audioClient.vtable.GetBufferSize(audioClient, cast<u32*>&frames)
+            CHECK_HR("audioClient.GetBufferSize")
+            return frames * format.get_frame_size()
+        #elif OS_LINUX
+            Assert(pcm_device)
+
+            return m_buffer_size
+        #else
+            Assert(false)
+        #endif
+    }
+    
+    // TODO: Add optional head parameter for circular buffer
+    // returns written bytes NOT FRAMES!
+    fn write(data: u8[]) -> i32 {
+        Assert(!is_input_device)
+        Assert(is_open())
+        
+        #if OS_WINDOWS
+            Assert(renderService)
+            
+            bytes = remaining_bytes()
+            
+            if data.len < bytes
+                bytes = data.len
+            
+            frames := bytes / format.get_format_size()
+            
+            res: HRESULT
+
+            renderBuffer: u8*
+            res = renderService.vtable.GetBuffer(renderService, frames, &renderBuffer)
+            CHECK_HR("renderService.GetBuffer")
+            
+            // TODO: Optimize
+            memcpy(renderBuffer, data.len, bytes)
+            
+            res = renderService.vtable.ReleaseBuffer(renderService, frames, 0)
+            CHECK_HR("renderService.ReleaseBuffer")
+            
+            return bytes
+        #elif OS_LINUX
+            frames := data.len / format.get_frame_size()
+            
+            written_frames: snd_pcm_sframes_t
+            if frames > 0 {
+                state := snd_pcm_state(pcm_device)
+                // log(&state)
+                if state != SND_PCM_STATE_RUNNING && state != SND_PCM_STATE_DRAINING {
+                    err := snd_pcm_prepare(pcm_device)
+                    CHECK_ERR("snd_pcm_prepare")
+                }
+                
+                written_frames = snd_pcm_writei(pcm_device, data.ptr, frames)
+                if written_frames < 0 {
+                    // Failed, probably broken pipe and underrun
+                    // Try prepare and write again.
+                    err := snd_pcm_prepare(pcm_device)
+                    CHECK_ERR("snd_pcm_prepare")
+                       
+                    written_frames = snd_pcm_writei(pcm_device, data.ptr, frames)
+                    CHECK_ERRN(written_frames, "snd_pcm_writei")
+                }
+            }
+            
+            return written_frames * format.get_frame_size()
+        #else
+            Assert(false)
+        #endif
+    }
+    
+    // returns read bytes NOT FRAMES!
+    fn read(data: u8[]) -> i32 {
+        Assert(is_input_device)
+        Assert(is_open())
+        
+        #if OS_WINDOWS
+            Assert(captureService)
+            
+            read_bytes: i32
+
+            frames: i32
+            res: HRESULT
+            while {
+                res = captureService.vtable.GetNextPacketSize(capture, &frames)
+                CHECK_HR("captureService.GetNextPacketSize")
+                
+                if frames == 0
+                    break
+                    
+                bytes := frames * format.get_frame_size()
+                
+                if bytes > data.len - read_bytes
+                    break
+
+                captureBuffer: u8*
+                flags: i32
+                res = captureService.vtable.GetBuffer(captureService, &captureBuffer, &frames, &flags, null, null)
+                CHECK_HR("captureService.GetBuffer")
+                
+                // TODO: Optimize
+                memcpy(data.ptr + read_bytes, captureBuffer, bytes)
+                
+                res = captureService.vtable.ReleaseBuffer(captureService, frames)
+                CHECK_HR("captureService.ReleaseBuffer")
+                
+                read_bytes += bytes
+            }
+            
+            return read_bytes
+        #elif OS_LINUX
+            frames := data.len / format.get_frame_size()
+            
+            if frames <= 0
+                return 0
+            
+            read_frames := snd_pcm_readi(pcm_device, data.ptr, frames)
+            
+            return read_frames * format.get_frame_size()
+        #else
+            Assert(false)
+        #endif
+    }
+    
+    fn is_open() -> bool {
+        return m_is_open
+    }
+    
+    fn open() {
+        Assert(!is_open())
+        
+        #if OS_WINDOWS
+            res: i32;
+
+            // we expect _update_info() to have been called
+            Assert(audioClient && wave_format)
+            
+            res = audioClient.vtable.Initialize(audioClient, AUDCLNT_SHAREMODE_SHARED, 0, audio_backend.buffer_duration_100ns, 0,  cast<WAVEFORMATEX*>wave_format, null)
+            CHECK_HR("audioClient.Initialize")
+            
+            if is_input_device {
+                res = audioClient.vtable.GetService(audioClient, &IAudioRenderClient_GUID, &renderService)
+                CHECK_HR("audioClient.GetService render")
+            } else {
+                res = audioClient.vtable.GetService(audioClient, &IAudioCaptureClient_GUID, &captureService)
+                CHECK_HR("audioClient.GetService capture")
+            }
+
+            audioClient.vtable.Start(audioClient)
+            CHECK_HR("audioClient.Start")
+
+        #elif OS_LINUX
+            Assert(pcm_device)
+
+            snd_pcm_prepare(pcm_device)
+        #else
+            Assert(false)
+        #endif
+        
+        m_is_open = true
+    }
+    fn close() {
+        Assert(is_open())
+
+        #if OS_WINDOWS
+            if audioClient
+                audioClient.vtable.Stop(audioClient)
+            if renderService
+                renderService.vtable.Release(renderService)
+            if captureService
+                captureService.vtable.Release(captureService)
+
+            audioClient = null
+            renderService = null
+            captureService = null
+        #elif OS_LINUX
+            Assert(pcm_device)
+            
+            snd_pcm_drop(pcm_device)
+        #else
+            Assert(false)
+        #endif
+        m_is_open = false
+    }
+    
+    // PRIVATE
+    platform_id: StringBuilder;
+    m_is_open: bool;
+    device_index: i32; // index into audio_backend.audio_devices
+    #if OS_WINDOWS
+        immDevice: IMMDevice*;
+        audioClient: IAudioClient*;
+        waveFormat: WAVEFORMATEXTENSIBLE*;
+        renderService: IAudioRenderClient*;
+        captureService: IAudioCaptureClient*;
+    #elif OS_LINUX
+        pcm_device: snd_pcm_t*;
+        m_buffer_size: i32;
+    #endif
+    
+    fn _update_info() {
+        #if OS_WINDOWS
+            Assert(immDevice)
+            
+            res: HRESULT
+            
+            if !audioClient {
+                res = device.vtable.Activate(device, &IAudioClient_GUID, CLSCTX_ALL, null, &audioClient)
+                CHECK_HR("Activate")
+            }
+            
+            res = audioClient.vtable.GetMixFormat(audioClient, cast<WAVEFORMATEX**>&waveFormat)
+            CHECK_HR("GetMixFormat")
+            
+            is_float := equal(cast<char*>&wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_IEEE_FLOAT, 16)
+            Assert(is_float || equal(cast<char*>&wave_format.SubFormat, cast<char*>&KSDATAFORMAT_SUBTYPE_PCM, 16))
+            format.init(nSamplesPerSec, wave_format.nChannels, wBitsPerSample, is_float)
+            
+            props: IPropertyStore*
+            res = immDevice.vtable.OpenPropertyStore(immDevice, STGM_READ, &props)
+            CHECK_HR("OpenPropertyStore")
+            
+            ch: char[50] // TODO: Remove buffer. It's here in case PROPVARIANT is bigger that what we have defined it to be
+            prop_name: PROPVARIANT
+            
+            res = props.vtable.GetValue(props, &DEVPKEY_Device_FriendlyName, &prop_name)
+            CHECK_HR
+
+            ParseWideCharString(cast<u16*>cast<void*>prop_name.union_data, &name)
+
+            device_id: u16*
+            res = immDevice.vtable.GetId(immDevice, &device_id)
+            CHECK_HR
+        
+            ParseWideCharString(device_id, &platform_id)
+
+            props.vtable.Release(props)
+            
+        #elif OS_LINUX
+            // nocheckin update human info
+        #endif
+    }
+    
+    // Should not be called by user
+    fn cleanup() {
+        #if OS_WINDOWS
+            if audioClient
+                audioClient.vtable.Stop(audioClient)
+            if renderService
+                renderService.vtable.Release(renderService)
+            if renderService
+                captureService.vtable.Release(renderService)
+            if audioClient
+                audioClient.vtable.Release(audioClient)
+            if immDevice
+                immDevice.vtable.Release(immDevice)
+
+            immDevice = null
+            audioClient = null
+            wave_format = null
+            renderService = null
+            captureService = null
+        #elif OS_LINUX
+            if pcm_device
+                snd_pcm_close(pcm_device)
+            pcm_device = null
+        #else
+            Assert(false)
+        #endif
+        name.cleanup()
+        platform_id.cleanup()
+        id = -1
+    }
+}
+
+global audio_backend: AudioBackend*
+
+struct AudioBackend {
+    
+    fn init() {
+        audio_devices.init(8)
+    }
+    fn cleanup() {
+        audio_devices.cleanup()
+        mutex.cleanup()
+    }
+    
+    fn create_device() -> AudioDevice* {
+        dev, index := audio_devices.add(null)
+        Assert(dev)
+        dev.device_index = index
+        dev.id = index
+        return dev
+    }
+    
+    audio_devices: BucketArray<AudioDevice>;
+    mutex: Mutex;
+    
+    #if OS_WINDOWS
+        buffer_duration_100ns: i32 = 500_000_0;
+        enumerator: IMMDeviceEnumerator*;
+    #elif OS_LINUX
+
+    #endif
+
+}
+
+// TODO: Do we just return false if we failed?
+fn InitAudioBackend() {
+    audio_backend = Allocate(sizeof(AudioBackend))
+    construct(audio_backend)
+    
+    #if OS_WINDOWS 
+        res: HRESULT
+
+        res = CoInitialize(null)
+        CHECK_HR("CoInitialize")
+        
+        res = CoCreateInstance(&MMDeviceEnumerator_GUID, null, cast<u32>CLSCTX_ALL, &IMMDeviceEnumerator_GUID, &audio_backend.enumerator)
+        CHECK_HR("CoCreateInstance")
+    #elif OS_LINUX
+        
+    #else
+        Assert(false)
+    #endif
+}
+fn CleanupAudioBackend() {
+    Assert(audio_backend)
+    for audio_backend.audio_devices {
+        it.cleanup()
+    }
+    
+    #if OS_WINDOWS
+        audio_backend.enumerator.vtable.Release(audio_backend.enumerator)
+        CoUninitialize()
+    #elif OS_LINUX
+        
+    #endif
+    
+    destruct(audio_backend)
+    Free(audio_backend, sizeof(AudioBackend))
+    audio_backend = null
+}
+
+fn OpenDefaultOutputAudioDevice() -> AudioDevice* {
+    Assert(audio_backend)
+    
+    #if OS_WINDOWS
+        res: HRESULT
+    
+        immDevice: IMMDevice*
+    
+        res = enumerator.vtable.GetDefaultAudioEndpoint(audio_backend.enumerator, eRender, eConsole, &immDevice)
+        CHECK_HR("GetDefaultAudioEndpoint")
+        // nocheckin Handle non existing device gracefully
+
+        device_id: u16*
+        res = immDevice.vtable.GetId(immDevice, &device_id)
+        CHECK_HR("GetId")
+        
+        platform_id: StringBuilder;
+        ParseWideCharString(device_id, &platform_id)
+        
+        // Check existing devices if any match
+        matched_device: AudioDevice*
+        for audio_backend.audio_devices {
+            if it.platform_id == platform_id {
+                matched_device = it
+                break
+            }
+        }
+        
+        if matched_device {
+            immDevice.vtable.Release(immDevice)
+            return matched_device
+        }
+        
+        device := audio_backend.create_device()
+        device.is_input_device = false
+        
+        device.immDevice = immDevice
+        device._update_info()
+        
+        device.open()
+        return device
+    #elif OS_LINUX
+        err: i32
+
+        // TODO: Check if we already added default device
+        Assert(audio_backend.audio_devices.getCount() == 0)
+        
+        device := audio_backend.create_device()
+        device.is_input_device = false
+
+        pcm_device: snd_pcm_t*
+        err = snd_pcm_open(&pcm_device, "default".ptr, SND_PCM_STREAM_PLAYBACK, 0)
+        CHECK_ERR("snd_pcm_open")
+        
+        device.pcm_device = pcm_device
+        
+        params: snd_pcm_hw_params_t*
+        err = snd_pcm_hw_params_malloc(&params)
+        CHECK_ERR("snd_pcm_hw_params_malloc")
+        
+        err = snd_pcm_hw_params_any(pcm_device, params);
+        CHECK_ERR("snd_pcm_hw_params_any")
+        
+        err = snd_pcm_hw_params_set_access(pcm_device, params, SND_PCM_ACCESS_RW_INTERLEAVED);
+        CHECK_ERR("snd_pcm_hw_params_set_access")
+        
+        device.format.sample_rate = 44100
+        device.format.sample_format = AUDIO_32BIT_FLOAT
+        device.format.stereo = true
+        
+        sample_format: snd_pcm_format_t = SND_PCM_FORMAT_FLOAT_LE
+        sample_rate: u32 = 44100
+        channels: u32 = 2
+        
+        err = snd_pcm_hw_params_set_format(pcm_device, params, sample_format)
+        CHECK_ERR("snd_pcm_hw_params_set_format")
+        
+        err = snd_pcm_hw_params_set_rate_near(pcm_device, params, &sample_rate, null)
+        CHECK_ERR("snd_pcm_hw_params_set_rate_near")
+        
+        err = snd_pcm_hw_params_set_channels(pcm_device, params, channels)
+        CHECK_ERR("snd_pcm_hw_params_set_channels")
+        
+        err = snd_pcm_hw_params(pcm_device, params);
+        CHECK_ERR("snd_pcm_hw_params")
+        
+        frames: snd_pcm_uframes_t
+        err = snd_pcm_hw_params_get_period_size(params, &frames, null);
+        CHECK_ERR("snd_pcm_hw_params_get_period_size")
+        
+        err = snd_pcm_hw_params_get_buffer_size(params, &frames);
+        CHECK_ERR("snd_pcm_hw_params_get_buffer_size")
+        
+        device.m_buffer_size = cast<i32>frames * device.format.get_frame_size()
+        
+        snd_pcm_hw_params_free(params)
+        
+        device.open()
+        return device
+    #else
+        Assert(false)
+    #endif
+}
+fn OpenDefaultInputAudioDevice() -> AudioDevice* {
+    Assert(audio_backend)
+    
+    #if OS_WINDOWS
+        res: HRESULT
+    
+        immDevice: IMMDevice*
+    
+        res = enumerator.vtable.GetDefaultAudioEndpoint(audio_backend.enumerator, eCapture, eConsole, &immDevice)
+        CHECK_HR("GetDefaultAudioEndpoint")
+        // nocheckin Handle non existing device gracefully
+
+        device_id: u16*
+        res = immDevice.vtable.GetId(immDevice, &device_id)
+        CHECK_HR("GetId")
+        
+        platform_id: StringBuilder;
+        ParseWideCharString(device_id, &platform_id)
+        
+        // Check existing devices if any match
+        matched_device: AudioDevice*
+        for audio_backend.audio_devices {
+            if it.platform_id == platform_id {
+                matched_device = it
+                break
+            }
+        }
+        
+        if matched_device {
+            immDevice.vtable.Release(immDevice)
+            return matched_device
+        }
+        
+        device := audio_backend.create_device()
+        device.is_input_device = true
+        
+        device.immDevice = immDevice
+        device._update_info()
+        
+        device.open()
+
+        return device
+    #elif OS_LINUX
+        // nocheckin
+        return null
+    #else
+        Assert(false)
+    #endif
+}
+
+// Do not rely on input and output devices being ordered
+fn ListAudioDevices(include_input: bool = true, include_output: bool = true) -> Array<AudioDevice*> {
+    Assert(audio_backend)
+    
+    #if OS_WINDOWS
+        res: HRESULT
+        
+        collection: IMMDeviceCollection*
+
+        res = enumerator.vtable.EnumAudioEndpoints(audio_backend.enumerator, eRender, DEVICE_STATE_ACTIVE, &collection)
+        CHECK_HR("EnumAudioEndpoints")
+
+        count: u32
+        res = collection.vtable.GetCount(collection, &count)
+        CHECK_HR("collection.GetCount")
+
+        for 0..count {
+            immDevice: IMMDevice*
+            res = collection.vtable.Item(collection, nr, &immDevice)
+            CHECK_HR("collection.Item")
+
+            device_id: u16*
+            res = immDevice.vtable.GetId(immDevice, &device_id)
+            CHECK_HR("immDevice.GetId")
+        
+            platform_id: StringBuilder
+            ParseWideCharString(device_id, &platform_id)
+
+            matched_device: AudioDevice*
+            for audio_backend.audio_devices {
+                if it.platform_id == platform_id {
+                    matched_device = it
+                    break
+                }
+            }
+
+            if matched_device {
+                immDevice.vtable.Release(immDevice)
+                continue
+            }
+            
+            device := audio_backend.create_device()
+            device.is_input_device = false
+            device.immDevice = immDevice
+            device._update_info()
+        }
+        collection.vtable.Release(collection)
+        
+        res = enumerator.vtable.EnumAudioEndpoints(audio_backend.enumerator, eCapture, DEVICE_STATE_ACTIVE, &collection)
+        CHECK_HR("EnumAudioEndpoints")
+
+        count: u32
+        res = collection.vtable.GetCount(collection, &count)
+        CHECK_HR("collection.GetCount")
+        for 0..count {
+            immDevice: IMMDevice*
+            res = collection.vtable.Item(collection, nr, &immDevice)
+            CHECK_HR("collection.Item")
+
+            device_id: u16*
+            res = immDevice.vtable.GetId(immDevice, &device_id)
+            CHECK_HR("immDevice.GetId")
+        
+            platform_id: StringBuilder
+            ParseWideCharString(device_id, &platform_id)
+
+            matched_device: AudioDevice*
+            for audio_backend.audio_devices {
+                if it.platform_id == platform_id {
+                    matched_device = it
+                    break
+                }
+            }
+
+            if matched_device {
+                immDevice.vtable.Release(immDevice)
+                continue
+            }
+            
+            device := audio_backend.create_device()
+            device.is_input_device = true
+            device.immDevice = immDevice
+            device._update_info()
+        }
+        collection.vtable.Release(collection)
+        
+    #elif OS_LINUX
+        Assert(false)
+        // nocheckin
+    #else
+        Assert(false)
+    #endif
+    
+    list: Array<AudioDevice*>
+    for audio_backend.audio_devices {
+        if (it.is_input_device && include_input) || (!it.is_input_device && include_output)
+            list.add(it)
+    }
+    return list
+}
+
+//########################################
+//       INTERNAL UTILITY FUNCTIONS
+//########################################
+
+
+//#######################
+//       WAV File
+//#######################
+
+enum WAVError {
+    WAV_SUCCESS,
+    WAV_CORRUPT,
+    WAV_FILE_NOT_FOUND,
+}
+
+#macro WAVFILE_HEADER_SIZE 36
+#macro WAVFILE_AUDIO_FORMAT_PCM_INTEGER 1
+#macro WAVFILE_AUDIO_FORMAT_IEEE_FLOAT 3
+
+struct WAVFile {
+    format: AudioFormat;
+
+    owner_of_data_allocation: bool; // if true then you need to free data
+    data: u8*;
+    data_len: i32;
+    
+    m_size_of_chunks: i32; // size of the remaining chunks (size of whole file except for header, used by ParseWAVChunks)
+}
+
+// Reads whole file and is therefore not recommended for long music
+// unless you want to use up a lot of memory.
+fn ReadWAVFile(path: char[], print: bool = false) -> WAVFile*, WAVError {
+    data, yes := ReadWholeFile(path)
+    if !yes {
+        if print
+            log("ReadWAVFile: Could not read ", path)
+        return null, WAV_FILE_NOT_FOUND
+    }
+    defer Free(data.ptr, data.len)
+    
+    wav, err := ParseWAVHeader(Slice<u8>{cast<u8*>data.ptr, data.len}, print = print, path = path)
+    if !wav {
+        return null, WAV_CORRUPT
+    }
+    
+    err = ParseWAVChunks(wav, Slice<u8>{cast<u8*>data.ptr + WAVFILE_HEADER_SIZE, data.len - WAVFILE_HEADER_SIZE}, print = print, path = path)
+    if err != WAV_SUCCESS {
+        DestroyWAVFile(wav)
+        return null, WAV_CORRUPT
+    }
+    
+    return wav, err
+}
+
+fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> WAVFile*, WAVError {
+    head := 0
+    char_ptr := cast<char*>data.ptr
+
+    if data.len < WAVFILE_HEADER_SIZE {
+        if print
+            log("ParseWAVHeader: Size of data is too small for WAV header (was ",data.len, " needs to be at least ",WAVFILE_HEADER_SIZE,"), origin path = ",path)
+        return null, WAV_CORRUPT
+    }
+    
+    if !equal(char_ptr + head, "RIFF".ptr, 4) {
+        if print
+            log("ParseWAVHeader: 'RIFF' magic incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
+        return null, WAV_CORRUPT
+    }
+    head += 4
+
+    almost_file_size := *cast<i32*>(data.ptr + head)
+    head += 4
+
+    if !equal(char_ptr + head, "WAVE".ptr, 4) {
+        if print
+            log("ParseWAVHeader: 'WAVE' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
+        return null, WAV_CORRUPT
+    }
+    head += 4
+
+    // TODO: Can WAV files have multiple format and data chunks? If so handle it?
+
+    if !equal(char_ptr + head, "fmt ".ptr, 4) {
+        if print
+            log("ParseWAVHeader: 'fmt ' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
+        return null, WAV_CORRUPT
+    }
+    head += 4
+
+    format_size := *cast<i32*>(data.ptr + head)
+    head += 4
+
+    if format_size != 16 { // always 16 for WAVE (i think)
+        if print
+            log("ParseWAVHeader: Size of format was ",format_size," bytes but should be 16 (probably?), origin path = ",path)
+        return null, WAV_CORRUPT
+    }
+
+    success := false
+    wav: WAVFile* = Allocate(sizeof(WAVFile))
+    construct(wav)
+    defer if !success DestroyWAVFile(wav)
+    
+    wav.m_size_of_chunks = almost_file_size - WAVFILE_HEADER_SIZE + 8
+
+    audio_format    := *cast<u16*>(data.ptr + head)
+    channels        := *cast<u16*>(data.ptr + head + 2)
+    sample_rate     := *cast<u32*>(data.ptr + head + 4)
+    byte_rate       := *cast<u32*>(data.ptr + head + 8)
+    block_align     := *cast<u16*>(data.ptr + head + 12)
+    bits_per_sample := *cast<u16*>(data.ptr + head + 14)
+    head += 16
+    
+    // Santiy/corruption checks
+    // There are more audio_formats but SoundSystem only supports pcm float and pcm integer.
+    // Someone else might use OpenAL or other third party sound system which supports more formats
+    // in which case they won't appreciate this limitation. Oh well.
+    Assert(byte_rate == sample_rate * bits_per_sample/8u * channels)
+    Assert(block_align == bits_per_sample/8u * channels)
+    Assert(audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT || audio_format == WAVFILE_AUDIO_FORMAT_PCM_INTEGER)
+    Assert(head == WAVFILE_HEADER_SIZE)
+    
+    wav.format.init(sample_rate, channels, bits_per_sample, audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT)
+
+    success = true // so we don't defer and destroy WAV file
+    return wav, WAV_SUCCESS
+}
+// If error is returned don't forget to destroy WAVFile returned by ParseWAVHeader
+// @param data should point to beginning of chunks after WAV header
+fn ParseWAVChunks(wav: WAVFile*, data: u8[], use_passed_data_memory: bool = false, print: bool = false, path: char[] = "unknown") -> WAVError {
+    head: u32 = 0
+    char_ptr := cast<char*>data.ptr
+    while head < cast<u32>data.len {
+        chunk_id := char_ptr + head
+        head += 4
+        chunk_len := *cast<u32*>(data.ptr + head)
+        head += 4
+
+        // log(Slice<char>{chunk_id,4}, " ", chunk_len)
+
+        if equal(chunk_id, "data".ptr, 4) {
+            if cast<u32>data.len - head < chunk_len {
+                if print
+                    log("ParseWAVChunks: Data chunk size was ",chunk_len," bytes which is to large, expected no less than ",data.len-head," bytes which is the remaining size of the file data, origin path = ",path)
+                return WAV_CORRUPT
+            }
+
+            wav.data_len = chunk_len
+
+            block_align := wav.format.get_frame_size()
+            if(wav.data_len % block_align != 0) {
+                if print
+                    log("ParseWAVChunks: Size of data should be divisible by block_align (",wav.data_len," % ",block_align,"=",(wav.data_len%block_align),"), origin path = ",path)
+                return WAV_CORRUPT
+            }
+
+            if use_passed_data_memory {
+                wav.data = data.ptr + head
+            } else {
+                wav.data = Allocate(chunk_len)
+                Assert(wav.data)
+                memcpy(wav.data, data.ptr + head, chunk_len)
+                wav.owner_of_data_allocation = true
+            }
+
+            head += chunk_len
+            
+            // No reason to continue reading unknown chunks.
+            // We don't handle multiple data chunks.
+            break
+        } else {
+            // skip unknown chunk
+            head += chunk_len
+        }
+    }
+
+    if !wav.data {
+        if print
+            log("ParseWAVChunks: 'data' chunk does not exist, origin path = ",path)
+        return WAV_CORRUPT
+    }
+
+    return WAV_SUCCESS
+}
+
+fn DestroyWAVFile(wav: WAVFile*) {
+    if wav.data && wav.owner_of_data_allocation
+        Free(wav.data, wav.data_len)
+    Free(wav, sizeof(WAVFile))
+}
+
+fn WriteWAVFile(path: char[], format: AudioFormat*, audio_data: u8[]) -> bool {
+    file := FileOpen(path, FILE_CLEAR_AND_WRITE)
+    if !file
+        return false
+    defer FileClose(file)
+    
+    almost_file_size: i32 = WAVFILE_HEADER_SIZE - 8 + 8 + audio_data.len
+
+    FileWrite(file, "RIFF".ptr, 4)
+    FileWrite(file, &almost_file_size, 4)
+    FileWrite(file, "WAVE".ptr, 4)
+    FileWrite(file, "fmt ".ptr, 4)
+    tmp: i32 = 16
+    FileWrite(file, &tmp, 4)
+
+    form: WAVFile
+    if format.sample_format == AUDIO_32BIT_FLOAT
+        form.audio_format = WAVFILE_AUDIO_FORMAT_IEEE_FLOAT
+    else
+        form.audio_format = WAVFILE_AUDIO_FORMAT_PCM_INTEGER
+    form.channels = format.get_channels()
+    form.sample_rate = format.sample_rate
+    form.byte_rate = format.sample_rate * format.get_frame_size()
+    form.block_align = format.get_frame_size()
+    form.bits_per_sample = format.get_bits_per_sample()
+
+    FileWrite(file, &form.audio_format, 2)
+    FileWrite(file, &form.channels, 2)
+    FileWrite(file, &form.sample_rate, 4)
+    FileWrite(file, &form.byte_rate, 4)
+    FileWrite(file, &form.block_align, 2)
+    FileWrite(file, &form.bits_per_sample, 2)
+
+    FileWrite(file, "data".ptr, 4)
+    tmp = audio_data.len
+    FileWrite(file, &tmp, 4)
+
+    FileWrite(file, audio_data.ptr, audio_data.len)
+    return true
+}
+
+
+//################################################################
+//    Some thoughts that may give some insight into the design
+//################################################################
+/*
+
+
+###### Suddenly switching default device #######
+
+We have audio device with information like name, id, format, is_input_device, is_default. You call OpenDefaultOutputAudioDevice you get a pointer to AudioDevice and you  call write method every 16ms and give it audio data.
+
+Now the user changes the default device in the operating system. What should happen? We probably want to keep writing to the default device so we'll switch. Now when we call write method it writes to the new default device. So our information in AudioDevice like name, id, format needs to update. When does it update? We'll thread safety. User may have computed and converted audio to be a format for the old device and then it swapped so now that audio data is incompatible but user will forget to check and write to the device anyway and BANG super loud messed up noise.
+
+So, AudioDevice does not have is_default field. An AudioDevice never changes which hardware device it refers too. Well which ALSA/WASAPI device it refers to. ALSA might automatically switch which so we can't do much about that. (we use snd_pcm_open("default"))
+
+*/

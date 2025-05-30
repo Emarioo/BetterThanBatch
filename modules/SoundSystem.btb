@@ -42,12 +42,13 @@
 #import "File"
 #if OS_WINDOWS
     #import "WASAPI"
-    #import "Windows"
+    #import "windows/Windows"
 #else
     // TODO: Linux support
-    // #import "Linux"
+    // #import "linux/Linux"
     // #import "ALSA"
 #endif
+#import "Audio" // platform independent audio device API
 #import "String"
 #import "Array"
 #import "BucketArray"
@@ -55,9 +56,9 @@
 #import "Thread"
 #import "Asserts"
 
-/*#################################
-    PUBLIC USER LEVEL FUNCTIONS
-##################################*/
+//####################################
+//    PUBLIC USER LEVEL FUNCTIONS
+//####################################
 
 enum SoundError {
     SOUND_SUCCESS,
@@ -423,76 +424,6 @@ fn ConsumeInputAudioBuffer(format: AudioFormat*, user_buffer: u8[], position: i3
     // read_bytes += bytes
     // Assert(0 == bytes % sound_state.audio_backend.input_format.get_frame_size())
     // return written_bytes
-}
-
-enum AudioSampleFormat {
-    AUDIO_8BIT_PCM,
-    AUDIO_16BIT_PCM,
-    AUDIO_32BIT_PCM,
-    AUDIO_32BIT_FLOAT,
-}
-// THIS STRUCT SHOULD NEVER CONTAIN ANY POINTERS
-// voice_chat example passed AudioFormat in TCP connection and other code
-// may do this too which is why we can't have pointers.
-struct AudioFormat {
-    sample_format: AudioSampleFormat; // AUDIO_32BIT_FLOAT
-    sample_rate: i32; // 48 0000 Hz
-    stereo: bool; // false - Mono, true - Stereo
-
-    fn init(_sample_rate: i32, channels: i32, bits_per_sample: i32, is_float: bool) {
-        sample_rate = _sample_rate
-        stereo = channels == 2
-        Assert(channels == 1 || channels == 2)
-        if !is_float {
-            if bits_per_sample == 32 {
-                sample_format = AUDIO_32BIT_PCM
-            } else if bits_per_sample == 16 {
-                sample_format = AUDIO_16BIT_PCM
-            }  else if bits_per_sample == 8 {
-                sample_format = AUDIO_8BIT_PCM
-            } else {
-                Assert(!is_float && (bits_per_sample == 8 || bits_per_sample == 16 || bits_per_sample == 32))
-            }
-        } else {
-            if bits_per_sample == 32 {
-                sample_format = AUDIO_32BIT_FLOAT
-            } else {
-                Assert(is_float && bits_per_sample == 32)
-            }
-        }
-    }
-
-    fn frames_from_duration(time: f32) -> i32 {
-        return sample_rate * time
-    }
-    fn byte_size_from_duration(time: f32) -> i32 {
-        // buffer size must be a multiple of frame size, we must cast float before multiplying frame size
-        // TODO: We should probably ceil instead of truncating float. However the call needs to be careful
-        //   with passing in delta times since they may indicate 202.23 samples. That half sample will be lost.
-        //   or if we ceil we will send one more sample than we should and thus offset the audio streams timing by just a bit.
-        //   I don't know the effects of this or if it matters but it might and it is good to be aware of it.
-        return get_frame_size() * cast<i32>(sample_rate * time)
-    }
-    fn get_channels() -> i32 {
-        if stereo
-            return 2
-        return 1
-    }
-    fn get_bits_per_sample() -> i32 {
-        switch sample_format {
-            case AUDIO_8BIT_PCM:
-                return 8
-            case AUDIO_16BIT_PCM:
-                return 16
-            case AUDIO_32BIT_PCM:
-            case AUDIO_32BIT_FLOAT:
-                return 32
-        }
-        return -1
-    }
-    fn get_frame_size() -> i32 {
-        return (get_bits_per_sample()/8) * get_channels()
-    }
 }
 
 /*###############################
@@ -1657,7 +1588,6 @@ fn LoadSoundFromFile(path: char[], offset_into_file: i64 = 0, stream_file: bool 
         temp := Allocate(temp_max)
         Assert(temp)
 
-
         res = FileRead(file, temp, WAVFILE_HEADER_SIZE)
         Assert(res == WAVFILE_HEADER_SIZE)
 
@@ -1673,12 +1603,12 @@ fn LoadSoundFromFile(path: char[], offset_into_file: i64 = 0, stream_file: bool 
         res = FileRead(file, new_temp, wav.size_of_chunks)
         Assert(res == wav.size_of_chunks)
 
-        ParseWAVChunks({new_temp, wav.size_of_chunks}, wav, use_passed_data_memory = true, path = path, print = true)
+        ParseWAVChunks(wav, {new_temp, wav.size_of_chunks}, use_passed_data_memory = true, path = path, print = true)
 
         sound := sound_state.createSoundRef(path) // path is name of sound ref
         sound.wav = wav
         sound.format = wav.format
-        sound.total_frames = wav.data_len / cast<i32>wav.block_align
+        sound.total_frames = wav.data_len / cast<i32>wav.format.get_frame_size()
         
         ref: SoundRef
         ref.handle = sound.handle
@@ -1720,236 +1650,6 @@ fn LoadSoundFromRawFileData(name: char[], file_data: u8[], stream_file: bool = f
     
     return { SOUND_INVALID_HANDLE }, SOUND_UNSUPPORTED_FILE_FORMAT
 }
-
-/*######################
-        WAV File
-#######################*/
-
-enum WAVError {
-    WAV_SUCCESS,
-    WAV_CORRUPT,
-    WAV_FILE_NOT_FOUND,
-}
-
-#macro WAVFILE_HEADER_SIZE 36
-
-#macro WAVFILE_AUDIO_FORMAT_PCM_INTEGER 1
-#macro WAVFILE_AUDIO_FORMAT_IEEE_FLOAT 3
-
-struct WAVFile {
-    // IMPORTANT: IF YOU CHANGE STUFF HERE YOU NEED TO CHANGE STUFF IN EXAMPLES. One of them is: sample_wasapi.btb 
-    audio_format: u16;
-    channels: u16;
-    sample_rate: u32;
-    byte_rate: u32;
-    block_align: u16; // bits_per_sample * channels
-    bits_per_sample: u16;
-
-    format: AudioFormat;
-
-    size_of_chunks: i32; // size of the remaining chunks (size of whole file except for header)
-
-    owner_of_data_allocation: bool; // if true then you need to free data
-    data: u8*;
-    data_len: i32;
-}
-
-// TODO: Argument to pass in allocator
-// @param path only used when printing error
-fn ParseWAVHeader(data: u8[], print: bool = false, path: char[] = "unknown") -> WAVFile*, WAVError {
-    head := 0
-    char_ptr := cast<char*>data.ptr
-
-    if data.len < WAVFILE_HEADER_SIZE {
-        if print
-            log("ParseWAVHeader: Size of data is too small for WAV header (was ",data.len, " needs to be at least ",WAVFILE_HEADER_SIZE,"), origin path = ",path)
-        return null, WAV_CORRUPT
-    }
-    
-    if !equal(char_ptr + head, "RIFF".ptr, 4) {
-        if print
-            log("ParseWAVHeader: 'RIFF' magic incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
-        return null, WAV_CORRUPT
-    }
-    head += 4
-
-    almost_file_size := *cast<i32*>(data.ptr + head)
-    head += 4
-
-    // if data.len < almost_file_size + 8 {
-    //     if print
-    //         log("ParseWAVHeader: File size in header was ",almost_file_size," bytes which does not match size of passed in data of ",data.len,"-8 (-8 because RIFF and file size field are excluded), origin path = ",path)
-    //     return null, WAV_CORRUPT
-    // }
-
-    if !equal(char_ptr + head, "WAVE".ptr, 4) {
-        if print
-            log("ParseWAVHeader: 'WAVE' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
-        return null, WAV_CORRUPT
-    }
-    head += 4
-
-    // TODO: Can WAV files have multiple format and data chunks? If so handle it.
-
-    if !equal(char_ptr + head, "fmt ".ptr, 4) {
-        if print
-            log("ParseWAVHeader: 'fmt ' marker incorrect (was ",Slice<char>{char_ptr+head,4},"), origin path = ",path)
-        return null, WAV_CORRUPT
-    }
-    head += 4
-
-    format_size := *cast<i32*>(data.ptr + head)
-    head += 4
-
-    if format_size != 16 { // always 16 for WAVE (i think)
-        if print
-            log("ParseWAVHeader: Size of format was ",format_size," bytes but should be 16 (probably?), origin path = ",path)
-        return null, WAV_CORRUPT
-    }
-
-    success := false
-    wav: WAVFile* = Allocate(sizeof(WAVFile))
-    construct(wav)
-    defer if !success DestroyWAVFile(wav)
-    
-    wav.size_of_chunks = almost_file_size - WAVFILE_HEADER_SIZE + 8
-
-    wav.audio_format    = *cast<u16*>(data.ptr + head)
-    wav.channels        = *cast<u16*>(data.ptr + head + 2)
-    wav.sample_rate     = *cast<u32*>(data.ptr + head + 4)
-    wav.byte_rate       = *cast<u32*>(data.ptr + head + 8)
-    wav.block_align     = *cast<u16*>(data.ptr + head + 12)
-    wav.bits_per_sample = *cast<u16*>(data.ptr + head + 14)
-    head += 16
-
-    wav.format.init(wav.sample_rate, wav.channels, wav.bits_per_sample, wav.audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT)
-
-    Assert(wav.audio_format == WAVFILE_AUDIO_FORMAT_IEEE_FLOAT || wav.audio_format == WAVFILE_AUDIO_FORMAT_PCM_INTEGER)
-
-    Assert(head == WAVFILE_HEADER_SIZE)
-
-    success = true // so we don't defer and destroy WAV file
-    return wav, WAV_SUCCESS
-}
-// If error is returned don't forget to destroy WAVFile returned by ParseWAVHeader
-// @param data slice should directly point at data section in WAV file (WAVFILE_HEADER_SIZE from start)
-fn ParseWAVChunks(data: u8[], wav: WAVFile*, use_passed_data_memory: bool = false, print: bool = false, path: char[] = "unknown") -> WAVError {
-    head: u32 = 0
-    char_ptr := cast<char*>data.ptr
-    while head < cast<u32>data.len {
-        chunk_id := char_ptr + head
-        head += 4
-        chunk_len := *cast<u32*>(data.ptr + head)
-        head += 4
-
-        // log(Slice<char>{chunk_id,4}, " ", chunk_len)
-
-        if equal(chunk_id, "data".ptr, 4) {
-            if cast<u32>data.len - head < chunk_len {
-                if print
-                    log("ParseWAVChunks: Data chunk size was ",chunk_len," bytes which is to large, expected no less than ",data.len-head," bytes which is the remaining size of the file data, origin path = ",path)
-                return WAV_CORRUPT
-            }
-
-            wav.data_len = chunk_len
-
-            if(cast<u32>wav.data_len % wav.block_align != 0) {
-                if print
-                    log("ParseWAVChunks: Size of data should be divisible by block_align (",wav.data_len," % ",wav.block_align,"=",(cast<u32>wav.data_len%wav.block_align),"), origin path = ",path)
-                return WAV_CORRUPT
-            }
-
-            if use_passed_data_memory {
-                wav.data = data.ptr + head
-            } else {
-                wav.data = Allocate(chunk_len)
-                Assert(wav.data)
-                memcpy(wav.data, data.ptr + head, chunk_len)
-                wav.owner_of_data_allocation = true
-            }
-
-            head += chunk_len
-        } else {
-            // skip unknown chunk
-            head += chunk_len
-        }
-    }
-
-    if !wav.data {
-        if print
-            log("ParseWAVChunks: 'data' chunk does not exist, origin path = ",path)
-        return WAV_CORRUPT
-    }
-
-    return WAV_SUCCESS
-}
-
-fn DestroyWAVFile(wav: WAVFile*) {
-    if wav.data
-        Free(wav.data, wav.data_len)
-    Free(wav, sizeof(WAVFile))
-}
-
-// IMPORTANT: DO NOT MODIFY THE SIGNATURE OR NAME OF THIS FUNCTION. It is used by examples (sample_wasapi.btb).
-//   You can change the internals as long as the function returns WAVFile with WAV data.
-fn ReadWAVFile(path: char[], print: bool = false) -> WAVFile*, WAVError {
-    data, yes := ReadWholeFile(path)
-    if !yes {
-        if print
-            log("ReadWAVFile: Could not read ", path)
-        return null, WAV_FILE_NOT_FOUND
-    }
-    wav, err := ParseWAVHeader(Slice<u8>{cast<u8*>data.ptr, data.len}, print, path)
-    if wav {
-        err = ParseWAVChunks(Slice<u8>{cast<u8*>data.ptr + WAVFILE_HEADER_SIZE, data.len - WAVFILE_HEADER_SIZE}, wav, print = print, path = path)
-        if err != WAV_SUCCESS {
-            DestroyWAVFile(wav)
-        }
-    }
-    return wav, err
-}
-
-fn WriteWAVFile(path: char[], format: AudioFormat*, audio_data: u8[]) -> bool {
-    file := FileOpen(path, FILE_CLEAR_AND_WRITE)
-    if !file
-        return false
-    defer FileClose(file)
-    
-    almost_file_size: i32 = WAVFILE_HEADER_SIZE - 8 + 8 + audio_data.len
-
-    FileWrite(file, "RIFF".ptr, 4)
-    FileWrite(file, &almost_file_size, 4)
-    FileWrite(file, "WAVE".ptr, 4)
-    FileWrite(file, "fmt ".ptr, 4)
-    tmp: i32 = 16
-    FileWrite(file, &tmp, 4)
-
-    form: WAVFile
-    if format.sample_format == AUDIO_32BIT_FLOAT
-        form.audio_format = WAVFILE_AUDIO_FORMAT_IEEE_FLOAT
-    else
-        form.audio_format = WAVFILE_AUDIO_FORMAT_PCM_INTEGER
-    form.channels = format.get_channels()
-    form.sample_rate = format.sample_rate
-    form.byte_rate = format.sample_rate * format.get_frame_size()
-    form.block_align = format.get_frame_size()
-    form.bits_per_sample = format.get_bits_per_sample()
-
-    FileWrite(file, &form.audio_format, 2)
-    FileWrite(file, &form.channels, 2)
-    FileWrite(file, &form.sample_rate, 4)
-    FileWrite(file, &form.byte_rate, 4)
-    FileWrite(file, &form.block_align, 2)
-    FileWrite(file, &form.bits_per_sample, 2)
-
-    FileWrite(file, "data".ptr, 4)
-    tmp = audio_data.len
-    FileWrite(file, &tmp, 4)
-
-    FileWrite(file, audio_data.ptr, audio_data.len)
-    return true
-}
-
 
 /*###############################
      Implementation and design

@@ -1,0 +1,52 @@
+/*
+    How to use simple Audio API
+*/
+
+#import "Audio"
+#import "OS"
+
+fn main() {
+    log("Started")
+
+    InitAudioBackend()
+    
+    device := OpenDefaultOutputAudioDevice()
+    
+    // err := snd_pcm_prepare(device.pcm_device)
+    // log("ERR ",err)
+    
+    wav := ReadWAVFile("examples/sound/wav/stereo-32bit-float.wav")
+    
+    log("Device format", &device.format)
+    log("Sound format", &wav.format)
+    
+    Assert(wav.format == device.format)
+    
+    head := 0
+    
+    frame_delta := device.format.byte_size_from_duration(0.020)
+
+    head += device.write({wav.data + head, device.format.byte_size_from_duration(0.2)})
+    
+    while {
+        tiny := wav.data_len - head
+        if tiny > frame_delta
+            tiny = frame_delta
+
+        duration := cast<f32>(device.queued_bytes() / device.format.get_frame_size()) / device.format.sample_rate
+        log(duration*1000, " ms (duration left)")
+        
+        written := device.write({wav.data + head, tiny})
+        head += written
+        
+        t := StartMeasure()
+        ProcessSleep(0.016) // 16 ms
+        log("  (zzz ", StopMeasure(t)*1000, " ms)")
+        
+        if device.queued_bytes() == 0 && wav.data_len == head
+            break
+    }
+    CleanupAudioBackend()
+    
+    log("Finished")
+}

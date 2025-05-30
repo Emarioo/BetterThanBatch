@@ -6,6 +6,8 @@
 #macro snd_pcm_hw_params_t void
 #macro snd_pcm_uframes_t u32
 #macro snd_pcm_sframes_t i32
+#macro snd_ctl_t void
+#macro snd_ctl_card_info_t void
 
 enum snd_pcm_stream_t {
 	/** Playback stream */
@@ -31,6 +33,31 @@ enum snd_pcm_access_t {
 	// SND_PCM_ACCESS_LAST = SND_PCM_ACCESS_RW_NONINTERLEAVED
 }
 
+enum snd_pcm_state_t {
+	/** Open */
+	SND_PCM_STATE_OPEN = 0,
+	/** Setup installed */ 
+	SND_PCM_STATE_SETUP,
+	/** Ready to start */
+	SND_PCM_STATE_PREPARED,
+	/** Running */
+	SND_PCM_STATE_RUNNING,
+	/** Stopped: underrun (playback) or overrun (capture) detected */
+	SND_PCM_STATE_XRUN,
+	/** Draining: running (playback) or stopped (capture) */
+	SND_PCM_STATE_DRAINING,
+	/** Paused */
+	SND_PCM_STATE_PAUSED,
+	/** Hardware is suspended */
+	SND_PCM_STATE_SUSPENDED,
+	/** Hardware is disconnected */
+	SND_PCM_STATE_DISCONNECTED,
+	// SND_PCM_STATE_LAST = SND_PCM_STATE_DISCONNECTED,
+	SND_PCM_STATE_LAST = 8,
+	/** Private - used internally in the library - do not use*/
+	SND_PCM_STATE_PRIVATE1 = 1024
+}
+
 
 fn @import(ALSA) snd_strerror(errnum: i32) -> char*; // WARNING, returns const char* but language doesn't have const.
 
@@ -39,14 +66,23 @@ fn @import(ALSA) snd_pcm_close(pcm: snd_pcm_t*)  -> i32;
 fn @import(ALSA) snd_pcm_name(pcm: snd_pcm_t*) -> char*; // WARNING, returns const char* but language doesn't have const.
 fn @import(ALSA) snd_pcm_prepare(pcm: snd_pcm_t*) -> i32;
 fn @import(ALSA) snd_pcm_drain(pcm: snd_pcm_t*) -> i32;
+fn @import(ALSA) snd_pcm_reset(pcm: snd_pcm_t*) -> i32;
+fn @import(ALSA) snd_pcm_start(pcm: snd_pcm_t*) -> i32;
+fn @import(ALSA) snd_pcm_drop(pcm: snd_pcm_t*) -> i32;
 
 fn @import(ALSA) snd_pcm_writei(pcm: snd_pcm_t*, buffer: void*, size: snd_pcm_uframes_t) -> snd_pcm_sframes_t;
 fn @import(ALSA) snd_pcm_readi(pcm: snd_pcm_t*, buffer: void*, size: snd_pcm_uframes_t) -> snd_pcm_sframes_t;
+
+fn @import(ALSA) snd_pcm_state(pcm: snd_pcm_t*) -> snd_pcm_state_t;
+fn @import(ALSA) snd_pcm_delay(pcm: snd_pcm_t*, delayp: snd_pcm_sframes_t*) -> i32;
+fn @import(ALSA) snd_pcm_avail(pcm: snd_pcm_t*) -> snd_pcm_sframes_t;
+fn @import(ALSA) snd_pcm_avail_update(pcm: snd_pcm_t*) -> snd_pcm_sframes_t;
 
 fn @import(ALSA) snd_pcm_hw_params_malloc(ptr: snd_pcm_hw_params_t**) -> i32;
 fn @import(ALSA) snd_pcm_hw_params_free(obj: snd_pcm_hw_params_t*) -> i32;
 fn @import(ALSA) snd_pcm_hw_params_copy(dst: snd_pcm_hw_params_t*, src: snd_pcm_hw_params_t*) -> i32;
 
+fn @import(ALSA) snd_pcm_hw_params_current(pcm: snd_pcm_t*, params: snd_pcm_hw_params_t*) -> i32;
 fn @import(ALSA) snd_pcm_hw_params_any(pcm: snd_pcm_t*, params: snd_pcm_hw_params_t*) -> i32;
 
 fn @import(ALSA) snd_pcm_hw_params_set_rate_resample(pcm: snd_pcm_t*, params: snd_pcm_hw_params_t*, val: u32) -> i32;
@@ -65,6 +101,28 @@ fn @import(ALSA) snd_pcm_hw_params_get_rate(params: snd_pcm_hw_params_t*, val: u
 fn @import(ALSA) snd_pcm_hw_params(pcm: snd_pcm_t*, params: snd_pcm_hw_params_t*) -> i32;
 
 fn @import(ALSA) snd_pcm_hw_params_get_buffer_size(params: snd_pcm_hw_params_t*, val: snd_pcm_uframes_t*) -> i32;
+
+fn @import(ALSA) snd_pcm_hw_params_get_period_size(params: snd_pcm_hw_params_t*, frames: snd_pcm_uframes_t*, dir: i32*) -> i32;
+
+
+fn @import(ALSA) snd_ctl_open(ctl: snd_ctl_t**, name: char*, mode: i32) -> i32;
+fn @import(ALSA) snd_ctl_close(ctl: snd_ctl_t*) -> i32;
+fn @import(ALSA) snd_ctl_card_info(ctl: snd_ctl_t*, info: snd_ctl_card_info_t*) -> i32;
+
+fn @import(ALSA) snd_card_next(card: i32*) -> i32;
+
+fn @import(ALSA) snd_ctl_card_info_malloc(ptr: snd_ctl_card_info_t**) -> i32;
+fn @import(ALSA) snd_ctl_card_info_free(obj: snd_ctl_card_info_t*);
+fn @import(ALSA) snd_ctl_card_info_clear(obj: snd_ctl_card_info_t*);
+fn @import(ALSA) snd_ctl_card_info_copy(dst: snd_ctl_card_info_t*, src: snd_ctl_card_info_t*);
+
+fn @import(ALSA) snd_ctl_card_info_get_id(obj: snd_ctl_card_info_t*) -> char*; // WARNING: return value is const char* but BTB doesn't have constant pointers
+fn @import(ALSA) snd_ctl_card_info_get_driver(obj: snd_ctl_card_info_t*) -> char*;
+fn @import(ALSA) snd_ctl_card_info_get_name(obj: snd_ctl_card_info_t*) -> char*;
+fn @import(ALSA) snd_ctl_card_info_get_longname(obj: snd_ctl_card_info_t*) -> char*;
+fn @import(ALSA) snd_ctl_card_info_get_mixername(obj: snd_ctl_card_info_t*) -> char*;
+fn @import(ALSA) snd_ctl_card_info_get_components(obj: snd_ctl_card_info_t*) -> char*;
+
 
 /** PCM sample format */
 enum snd_pcm_format_t {
