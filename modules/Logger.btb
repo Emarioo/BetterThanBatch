@@ -1,6 +1,6 @@
 #import "String"
 #if OS_WINDOWS
-    #import "Windows" // terminal colors
+    #import "windows/Windows" // terminal colors
 #endif
 
 #macro log(...) { log_inner(...) }

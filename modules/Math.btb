@@ -8,9 +8,9 @@
 // asin,acos,atan2?
 
 #if OS_WINDOWS
-#import "Windows"
+#import "windows/Windows"
 #elif OS_LINUX
-#import "Linux"
+#import "linux/Linux"
 #endif
 #import "StackTrace"
 

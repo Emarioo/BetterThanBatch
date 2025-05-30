@@ -15,9 +15,9 @@
 #import "Logger"
 
 #if OS_WINDOWS
-#import "Windows"
+#import "windows/Windows"
 #elif OS_LINUX
-#import "Linux"
+#import "linux/Linux"
 #endif
 
 
@@ -101,7 +101,7 @@ fn DiffMeasure(endSubStart: i64) -> f64 {
     #endif
 }
 
-fn ProcessSleep(seconds: f32) {
+fn ProcessSleep(seconds: f64) {
     #if OS_WINDOWS
         global has_set_time_begin: bool
         if !has_set_time_begin {
@@ -113,10 +113,8 @@ fn ProcessSleep(seconds: f32) {
         win32_Sleep(seconds * 1000)
     #elif OS_LINUX
         time: timespec
-        if seconds >= 1. {
-            time.tv_sec = cast<i64>seconds
-        }
-        time.tv_nsec = cast<i64>( 1000000000.0 * (seconds - cast<f32>cast<i64>seconds) )
+        time.tv_sec = cast<i64>seconds
+        time.tv_nsec =  cast<i64>(cast<f64>1000000000.0 * (cast<f64>seconds - cast<f64>cast<i64>seconds) )
         nanosleep(&time,null)
     #endif   
 }

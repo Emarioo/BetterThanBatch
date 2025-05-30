@@ -1,8 +1,8 @@
 
-#import "Sound"
+#import "SoundSystem"
 #import "File"
 #import "OS"
-#import "Windows"
+#import "windows/Windows"
 
 fn main() {
     // Use Windows PlaySound API. Can only play one sound at a time.

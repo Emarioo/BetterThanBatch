@@ -1,4 +1,4 @@
-#import "Sound"
+#import "SoundSystem"
 
 fn main() {
     PlayAudio("examples/sound/wav/goodmorning.wav")

@@ -7,7 +7,7 @@
 
 // TODO: import the right OS bindings
 #if OS_WINDOWS
-    #import "Windows"
+    #import "windows/Windows"
 #endif
 
 // temporary

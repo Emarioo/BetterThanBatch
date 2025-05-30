@@ -24,9 +24,9 @@
 #import "OS" // we need Assert from OS, altough Assert should be moved to somewhere else
 
 #if OS_WINDOWS
-    #import "Windows"
+    #import "windows/Windows"
 #elif OS_LINUX
-    #import "Linux"
+    #import "linux/Linux"
 #endif
 
 enum EventType {

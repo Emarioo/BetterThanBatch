@@ -22,7 +22,7 @@
 */
 
 #import "Net"
-#import "Sound"
+#import "SoundSystem"
 #import "String"
 #import "Stream"
 #import "Thread"

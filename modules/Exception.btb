@@ -26,7 +26,7 @@ struct ExceptionInfo {
 
 #if OS_WINDOWS
 
-#import "Windows"
+#import "windows/Windows"
 
 #if !DISABLE_DEFAULT_EXCEPTION_HANDLER
 // fn @export @oscall exception_handler(records: EXCEPTION_POINTERS*, establisherFrame: u64, context: CONTEXT*, dispatcherContext: DISPATCHER_CONTEXT*) -> EXCEPTION_DISPOSITION {

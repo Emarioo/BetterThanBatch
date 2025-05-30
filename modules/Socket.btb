@@ -7,9 +7,9 @@
 #import "Logger"
 
 #if OS_WINDOWS
-    #import "Windows"
+    #import "windows/Windows"
 #elif OS_LINUX
-    #import "Linux"
+    #import "linux/Linux"
 #endif
 
 #macro TO_INTERNAL(X) (X - 1)

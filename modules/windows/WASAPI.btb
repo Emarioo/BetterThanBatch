@@ -7,7 +7,7 @@
 
 #load "ole32.lib" as OLE32
 
-#import "Windows"
+#import "windows/Windows"
 #import "Asserts"
 
 struct GUID {

@@ -1,6 +1,6 @@
 
 #import "Logger"
-#import "Linux"
+#import "linux/Linux"
 
 /*
     Start program without arguments for server.

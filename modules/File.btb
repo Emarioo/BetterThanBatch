@@ -12,9 +12,9 @@
 #import "Thread"
 
 #if OS_WINDOWS
-    #import "Windows"
+    #import "windows/Windows"
 #elif OS_LINUX
-    #import "Linux"
+    #import "linux/Linux"
 #endif
 
 enum @enclosed FileHandle : i64 { INVALID }

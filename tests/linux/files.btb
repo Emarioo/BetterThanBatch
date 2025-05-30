@@ -2,7 +2,7 @@
 
 #if OS_LINUX
 
-#import "Linux"
+#import "linux/Linux"
 
 fd := open("LICENSE".ptr, 0, 0)
 if fd < 0
