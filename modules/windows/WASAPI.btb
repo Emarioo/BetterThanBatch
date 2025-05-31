@@ -10,6 +10,8 @@
 #import "windows/Windows"
 #import "Asserts"
 
+#macro HRESULT i32
+
 struct GUID {
     data0: u32;
     data1: u16;
@@ -128,7 +130,6 @@ enum tagCLSCTX : u32 {
 #macro STGM_READWRITE           0x00000002
 
 #macro IMMNotificationClient void
-
 
 struct IMMDeviceEnumerator_vtable {
     QueryInterface: fn @stdcall (
@@ -306,8 +307,6 @@ struct IAudioCaptureClient {
 #macro REGDB_E_CLASSNOTREG 0x80040154
 #macro CLASS_E_NOAGGREGATION 0x80040110
 
-#macro HRESULT i32
-
 enum WASAPI_Error {
     AUDCLNT_E_NOT_INITIALIZED              = 0x88890001,
     AUDCLNT_E_ALREADY_INITIALIZED          = 0x88890002,
@@ -356,9 +355,7 @@ enum WASAPI_Error {
     E_INVALIDARG  = 0x80070057,
     E_OUTOFMEMORY = 0x8007000E,
     E_NOTFOUND    = 0x80070490,
-    
-};
-
+}
 
 fn @import(OLE32) CoInitialize(pvReserved: void*) -> HRESULT;
 

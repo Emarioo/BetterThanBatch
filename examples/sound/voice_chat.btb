@@ -390,7 +390,7 @@ fn ClientWork() {
     log("Microphone audio format")
     std_print(&mic_format, pretty = true)
     log("Headphone audio format")
-    std_print(&sound_state.audio_backend.output_format, pretty = true)
+    std_print(&sound_state.output_device.format, pretty = true)
 
     // We send message using this stream
     byte_stream: ByteStream

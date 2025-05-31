@@ -15,12 +15,24 @@ fn main() {
     // err := snd_pcm_prepare(device.pcm_device)
     // log("ERR ",err)
     
-    wav := ReadWAVFile("examples/sound/wav/stereo-32bit-float.wav")
+
+    wav: WAVFile*
+    if device.format.sample_format == AUDIO_32BIT_FLOAT {
+        if device.format.sample_rate == 48000
+            wav = ReadWAVFile("examples/sound/wav/stereo-32bit-float-48khz.wav", print = true)
+        else
+            wav = ReadWAVFile("examples/sound/wav/stereo-32bit-float.wav", print = true)
+    } else if device.format.sample_format == AUDIO_16BIT_PCM {
+        wav = ReadWAVFile("examples/sound/wav/stereo-16bit.wav", print = true)
+    }
     
     log("Device format", &device.format)
     log("Sound format", &wav.format)
     
-    Assert(wav.format == device.format)
+    if wav.format != device.format {
+        log("Audio device and WAV file have different audio formats. Create your own WAV file that matches the format of your device.")
+        return
+    }
     
     head := 0
     

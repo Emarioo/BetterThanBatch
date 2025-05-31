@@ -25,9 +25,7 @@ fn main() {
     inst.play()
     inst2.play()
     while inst.isPlaying() {
-        ProcessSound()
+        ProcessSound(0.03)
         ProcessSleep(0.016)
     }
-
-    DestroySoundState()
 }
