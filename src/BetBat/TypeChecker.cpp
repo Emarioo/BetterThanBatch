@@ -4895,6 +4895,44 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     SignalIO result = checkRest(now->firstBody);
                     continue;
                 }
+            } else if (iterinfo && iterinfo->isArray()) {
+                now->forLoopType = ARRAY_FOR_LOOP;
+                
+                if(now->varnames[0].name.size() == 0)
+                    now->varnames[0].name = "it";
+                if(now->varnames[1].name.size() == 0)
+                    now->varnames[1].name = "nr";
+                auto& varnameIt = now->varnames[0];
+                auto& varnameNr = now->varnames[1];
+
+                auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameIt.name, CONTENT_ORDER_ZERO, &reused_item);
+                varnameIt.identifier = varinfo_item;
+                
+                bad_var(varinfo_item, varnameIt.name);
+                
+                auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameNr.name, CONTENT_ORDER_ZERO, &reused_index);
+                varnameNr.identifier = varinfo_index;
+        
+                bad_var(varinfo_index, varnameNr.name);
+                
+                // Identifier* nrId = nullptr;
+                varinfo_index->versions_typeId.set(currentPolyVersion, TYPE_INT64);
+                varnameNr.versions_assignType.set(info.currentPolyVersion, TYPE_INT64);
+                
+                auto element_type = iterinfo->element_type;
+                varnameIt.versions_assignType.set(currentPolyVersion, element_type); // We keep actual element type in versions_assignType
+
+                if(now->isPointer()){
+                    element_type.setPointerLevel(element_type.getPointerLevel()+1);
+                }
+                varinfo_item->versions_typeId.set(currentPolyVersion, element_type); // The variable here holds the type we keep in the variable which may be pointer of element type when using @ptr
+                
+                QuickArray<TypeId> tmp{};
+                tmp.add(iterinfo->id);
+                now->versions_expressionTypes.steal_element_from(currentPolyVersion, tmp);
+
+                SignalIO result = checkRest(now->firstBody);
+                continue;
             }
         method_fail:
             std::string strtype = info.ast->typeToString(tempTypes.last());
@@ -5057,9 +5095,9 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     varinfo->versions_typeId.set(currentPolyVersion, var_type);
                 }
                 
-                // TODO: steal_element_into is thread safe (mutex behind the scenes)
-                //    and we need it here when modifying types of AST from threads.
-                //   BUT it would be nice if we could fix it up a little.
+                // TODO: For some reason i thought steal_element_into would be a good idea.
+                //   Yes i think it's thread safe but it's annoying to use. We need to rethink this and multithreading in general.
+
                 QuickArray<TypeId> tmp{};
                 now->versions_expressionTypes.steal_element_into(currentPolyVersion, tmp);
                 tmp.add(tempTypes.last());

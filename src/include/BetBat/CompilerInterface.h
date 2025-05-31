@@ -29,6 +29,7 @@ enum Primitive : u8 {
     CHAR            = 6,
     BOOL            = 7,
     FUNCTION        = 8,
+    ARRAY           = 9,
 };
 struct Range {
     i32 beg;

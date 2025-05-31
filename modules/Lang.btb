@@ -31,6 +31,7 @@ enum @enclosed @specified lang_Primitive : u8 {
     CHAR            = 6,
     BOOL            = 7,
     FUNCTION        = 8, // function pointer
+    ARRAY           = 9,
 }
 struct lang_TypeId {
     index0: u16;

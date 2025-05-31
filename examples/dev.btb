@@ -20,11 +20,35 @@
 
 // #import "Logger"
 
-// local_arr: i32[5];
-local_arr: i32[10];
+// struct Block {
+//     x: i32;
+//     data: i32[5];
+//     y: i32;
+// }
 
-local_arr[1]
-//  = 23
+// // str: char[];
+
+// b: Block;
+// b.x = 0x2222_2222
+// b.y = 0x1111_1111
+
+// for b.data {
+//     b.data[nr] = nr * 2
+// }
+
+// ints := cast_unsafe<i32*>&b
+// for 0..7 {
+//     log(ints[nr])
+// }
+
+fn fun(s: char[]) {
+
+}
+
+s: char[23]
+
+fun(s)
+
 
 // return local_arr
 

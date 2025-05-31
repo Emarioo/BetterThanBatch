@@ -710,6 +710,7 @@ struct ASTExpressionBuiltin : public ASTExpression {
 #define CAST_EXPR(V,T) (V->as<ASTExpression##T>())
 enum ForLoopType : u8 {
     SLICED_FOR_LOOP,
+    ARRAY_FOR_LOOP,
     RANGED_FOR_LOOP,
     CUSTOM_FOR_LOOP, // user defined with create_iterator, iterate
 };

@@ -111,7 +111,7 @@ struct StringBuilder {
         while value > 0 && used > 0 {
             num := value % 10;
             value = value / 10;
-            str.ptr[used] = num + '0';
+            str[used] = num + '0';
             used--;
         }
         // LN
@@ -495,8 +495,8 @@ struct StringBuilder {
 
         typeinfo := lang_typeInfos.ptr[type_id]
 
-        a := lang_Primitive.STRUCT
-        b := lang_Primitive.ENUM
+        // a := lang_Primitive.STRUCT
+        // b := lang_Primitive.ENUM
 
         if typeinfo.type == lang_Primitive.STRUCT {
             append("{")
@@ -546,6 +546,27 @@ struct StringBuilder {
             }
             if !printed {
                 append(*cast<i64*>data) // print raw value
+            }
+        } else if typeinfo.type == lang_Primitive.ARRAY {
+            members := lang_typemembers(type);
+            
+            element_size := 0
+            if members[0].type.ptr_level > 0
+                element_size = sizef(uword) // uword has same size as pointers
+            else
+                 element_size = lang_typeInfos.ptr[members[0].index()].size
+
+            array_length := typeinfo.size / element_size
+
+            for 0..array_length {
+                if nr != 0 {
+                    append(", ");
+                    if pretty  append('\n')
+                }
+
+                if pretty  indent(depth)
+
+                append(data + nr * element_size, members[0].type, pretty, depth + 1)
             }
         } else if typeinfo.type == lang_Primitive.FUNCTION {
             append(*cast<void**>data) // print raw value
