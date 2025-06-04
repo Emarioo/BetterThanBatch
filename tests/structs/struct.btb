@@ -90,6 +90,7 @@ struct A {
 
     fn ok() {
         n := x
+        n = 5
         a := x[2]
         _test 3; *n;
 

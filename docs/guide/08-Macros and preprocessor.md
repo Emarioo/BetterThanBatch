@@ -291,13 +291,13 @@ f"*test*", f"*example*" // will match all functions in the files that contain 't
 The final component in pattern matching for function inserts is `not`. It is used like this:
 ```c++
 not "*get*" // will match all functions that do NOT contain 'get'
-not ("*test*", "*example*") // will match all functions that do not exist in file paths containing 'test' or 'example'.
+not (f"*test*", f"*example*") // will match all functions that do not exist in file paths containing 'test' or 'example'.
 
 not "hi" and f"*test*" // this matches all functions not named 'hi' in file paths containing 'test'
-not ("hi" and f"*test*") // this will match all functions that aren't named 'hi' inside file paths containing 'test'
+not ("hi" and f"*test*") // this will match all functions that aren't named 'hi' inside file paths that do not contain 'test'
 // a function named 'hi' in 'main.btb' would match
 // 'get' in 'test.btb' would match
-// 'hi' in 'test.btb' would NOT match
+// 'hi' in 'src/test.btb' would NOT match
 ```
 
 ## Ordered function inserts

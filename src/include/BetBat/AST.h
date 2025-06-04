@@ -269,7 +269,7 @@ struct TypeId {
         STRING = 0x2,
         POISON = 0x4,
         TYPE_MASK = 0x2 | 0x4,
-        POINTER_MASK = 0x8 | 0x10,
+        POINTER_MASK = 0x8 | 0x10 | 0x20,
         POINTER_SHIFT = 3,
     };
     // union {
@@ -283,8 +283,8 @@ struct TypeId {
             bool valid : 1;
             bool string : 1;
             bool poison : 1;
-            u8 pointer_level : 2;
-    // u8 _bits_reserved : 3;
+            u8 pointer_level : 3;
+            // u8 _bits_reserved : 2;
         };
     };
 

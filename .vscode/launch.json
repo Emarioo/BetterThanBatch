@@ -128,7 +128,7 @@
             // "program": "${workspaceFolder}/test.exe",
             "program": "${workspaceFolder}/main.exe",
             // "args": ["README.md"],
-            "args": ["-i", ".cpp"],
+            // "args": ["-i", ".cpp"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [{"name":"LD_LIBRARY_PATH","value":"."}],

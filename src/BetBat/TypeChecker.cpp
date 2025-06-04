@@ -2956,8 +2956,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 if(outTypes)
                     outTypes->add(TYPE_INT32);
             } else if(stmp->name == "ptr") {
+                TypeId t = ti->element_type;
+                t.setPointerLevel(t.getPointerLevel() + 1);
                 if(outTypes)
-                    outTypes->add(ti->element_type);
+                    outTypes->add(t);
             } else {
                 ERR_SECTION(
                     ERR_HEAD2(stmp->location)

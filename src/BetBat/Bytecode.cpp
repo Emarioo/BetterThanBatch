@@ -627,6 +627,7 @@ void BytecodeBuilder::emit_mov_mr_disp(BCRegister to, BCRegister from, int size,
 }
 
 void BytecodeBuilder::emit_add(BCRegister to, BCRegister from, int size, bool is_float, bool is_signed) {
+    Assert(to != BC_REG_INVALID && from != BC_REG_INVALID);
     emit_opcode(BC_ADD);
     emit_operand(to);
     emit_operand(from);
@@ -990,6 +991,7 @@ bool TinyBytecode::applyRelocations(Bytecode* code, bool assert_on_failure, Func
             }
         }
     )
+    defer { POP_LAST_CALLBACK(); };
 
     bool suc = true;
 

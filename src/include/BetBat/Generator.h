@@ -113,9 +113,19 @@ struct GenContext : public PhaseContext {
     DynamicArray<ResolveCall> callsToResolve;
     void addCallToResolve(int bcIndex, FuncImpl* funcImpl);
 
-    SignalIO framePush(TypeId typeId, i32* outFrameOffset, bool genDefault, bool staticData);
+    SignalIO framePush(TypeId typeId, i32* outFrameOffset, bool genDefault);
     SignalIO generatePush(BCRegister baseReg, int offset, TypeId typeId);
     SignalIO generatePop(BCRegister baseReg, int offset, TypeId typeId);
+    
+    enum PushPopKind {
+        GEN_PUSH_REG       = 0x10,
+        GEN_PUSH_GET_PARAM = 0x11,
+        GEN_PUSH_GET_VAL   = 0x12,
+        GEN_POP_REG        = 0x20,
+        GEN_POP_SET_ARG    = 0x21,
+        GEN_POP_SET_RET    = 0x22,
+    };
+    SignalIO generatePushPop_base(PushPopKind kind, BCRegister baseReg, int offset, TypeId typeId);
 
     SignalIO generatePush_get_param (int offset, TypeId typeId);
     SignalIO generatePop_set_arg    (int offset, TypeId typeId);
@@ -128,6 +138,8 @@ struct GenContext : public PhaseContext {
     SignalIO generatePushedLiterals(VirtualMachine* vm, TypeId type, char* stack, ASTExpression* expression, TypeInfo* structImpl = nullptr, int memberIndex = 0);
     void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, int offset);
     void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
+    
+    SignalIO generateAssignedInitializing(BCRegister baseReg, int offset, TypeId typeId, ASTExpressionInitializer* expression, ScopeId scopeId = -1);
     
     SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);
     SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr);

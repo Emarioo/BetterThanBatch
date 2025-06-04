@@ -165,8 +165,6 @@ enum InstructionOpcode : u8 {
     BC_EXTEND2 = 254, // extend opcode by 2 bytes
     BC_RESERVED = 255,
 };
-#define ASM_ENCODE_INDEX(ind) (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)
-#define ASM_DECODE_INDEX(op0,op1,op2) (u32)(op0 | (op1<<8) | (op2<<16))
 engone::Logger& operator<<(engone::Logger&, InstructionOpcode);
 enum BCRegister : u8 {
     BC_REG_INVALID = 0,

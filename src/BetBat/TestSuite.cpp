@@ -276,6 +276,7 @@ u32 TestSuite(CompileOptions* options){
         
     tests.add("tests/structs/basic.btb");
     tests.add("tests/structs/struct.btb");
+    tests.add("tests/array/basic.btb");
     tests.add("tests/lang/typeinfo.btb");
     tests.add("tests/modules/test_maps.btb");
 

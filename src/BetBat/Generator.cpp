@@ -322,7 +322,7 @@ void GenContext::emit_abstract_dataptr(BCRegister reg, int offset, IdentifierVar
         builder.emit_dataptr(reg, varinfo->versions_dataOffset[version]);
         builder.emit_mov_rm(reg, reg, REGISTER_SIZE);
         // calcualte the offset to data object we want
-        builder.emit_li32(reg_tmp, offset);
+        builder.emit_li64(reg_tmp, offset);
         builder.emit_add(reg, reg_tmp, REGISTER_SIZE, false);
     } else {
         builder.emit_dataptr(reg, offset);
@@ -464,9 +464,10 @@ SignalIO GenContext::generateArtificialPush(TypeId typeId) {
     } else if(typeInfo->isArray()) {
         int esize = ast->getTypeSize(typeInfo->element_type);
         _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-        for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
-            generateArtificialPush(typeInfo->element_type);
-        }
+        builder.emit_fake_push();
+        // for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
+        //     generateArtificialPush(typeInfo->element_type);
+        // }
     } else {
         Assert(typeInfo->astStruct);
         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
@@ -482,44 +483,240 @@ SignalIO GenContext::generateArtificialPush(TypeId typeId) {
 // push of structs
 SignalIO GenContext::generatePush(BCRegister baseReg, int offset, TypeId typeId){
     using namespace engone;
-    if(typeId == TYPE_VOID) {
-        return SIGNAL_FAILURE;
-    }
+    return generatePushPop_base(GEN_PUSH_REG, baseReg, offset, typeId);
+    // if(typeId == TYPE_VOID) {
+    //     return SIGNAL_FAILURE;
+    // }
     
-    TypeInfo *typeInfo = 0;
-    if(typeId.isNormalType())
-        typeInfo = ast->getTypeInfo(typeId);
-    u32 size = ast->getTypeSize(typeId);
-    if(size == 0) {
-        Assert(hasForeignErrors());
-        return SIGNAL_FAILURE;
-    }
+    // TypeInfo *typeInfo = 0;
+    // if(typeId.isNormalType())
+    //     typeInfo = ast->getTypeInfo(typeId);
+    // u32 size = ast->getTypeSize(typeId);
+    // if(size == 0) {
+    //     Assert(hasForeignErrors());
+    //     return SIGNAL_FAILURE;
+    // }
 
-    if(typeInfo && typeInfo->isArray()) {
-        int esize = ast->getTypeSize(typeInfo->element_type);
-        _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-        builder.emit_push(baseReg);
+    // if(typeInfo && typeInfo->isArray()) {
+    //     int esize = ast->getTypeSize(typeInfo->element_type);
+    //     _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
+    //     builder.emit_push(baseReg);
 
-        // for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
-        //     generatePush(baseReg, offset + ei*esize, typeInfo->element_type);
-        // }
-    } else if(typeInfo && typeInfo->astStruct) {
-        for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
-            auto& member = typeInfo->astStruct->members[i];
-            auto memdata = typeInfo->getMember(i);
+    //     // for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
+    //     //     generatePush(baseReg, offset + ei*esize, typeInfo->element_type);
+    //     // }
+    // } else if(typeInfo && typeInfo->astStruct) {
+    //     for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
+    //         auto& member = typeInfo->astStruct->members[i];
+    //         auto memdata = typeInfo->getMember(i);
             
-            _GLOG(log::out << "push " << member.name << "\n";)
-            generatePush(baseReg, offset + memdata.offset, memdata.typeId);
-        }
-    } else {
-        BCRegister reg = BC_REG_T0;
-        builder.emit_mov_rm_disp(reg, baseReg, size, offset);
-        builder.emit_push(reg);
-    }
-    return SIGNAL_SUCCESS;
+    //         _GLOG(log::out << "push " << member.name << "\n";)
+    //         generatePush(baseReg, offset + memdata.offset, memdata.typeId);
+    //     }
+    // } else {
+    //     BCRegister reg = BC_REG_T0;
+    //     builder.emit_mov_rm_disp(reg, baseReg, size, offset);
+    //     builder.emit_push(reg);
+    // }
+    // return SIGNAL_SUCCESS;
 }
 // pop of structs
 SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
+    using namespace engone;
+    return generatePushPop_base(GEN_POP_REG, baseReg, offset, typeId);
+    // Assert(baseReg!=BC_REG_RCX);
+    // TypeInfo *typeInfo = 0;
+    // if(typeId.isNormalType())
+    //     typeInfo = ast->getTypeInfo(typeId);
+    // int size = ast->getTypeSize(typeId);
+    // if(size == 0) {
+    //     Assert(hasAnyErrors());
+    //     return SIGNAL_FAILURE;
+    // }
+    // if (!typeInfo || (!typeInfo->astStruct && !typeInfo->isArray())) {
+    //     _GLOG(log::out << "move return value\n";)
+    //     BCRegister reg = BC_REG_T0;
+    //     builder.emit_pop(reg);
+    //     if(baseReg==BC_REG_INVALID) {
+    //         // throw away value
+    //     } else {
+    //         if(offset == 0){
+    //             // The x64 architecture has a special meaning when using fp.
+    //             // The converter asserts about using addModRM_disp32 instead. Instead of changing
+    //             // it to allow this instruction we always use disp32 to avoid the complaint.
+    //             // This instruction fires the assert: BC_MOV_RM rax, fp 
+    //             builder.emit_mov_mr(baseReg, reg, size);
+    //         }else{
+    //             builder.emit_mov_mr_disp(baseReg, reg, size, offset);
+    //         }
+    //     }
+    // } else if(typeInfo->isArray()) {
+    //     int esize = ast->getTypeSize(typeInfo->element_type);
+    //     _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
+    //     BCRegister reg = BC_REG_T0;
+    //     BCRegister reg1 = BC_REG_T1;
+    //     BCRegister reg2 = BC_REG_F;
+    //     builder.emit_pop(reg1);
+    //     builder.emit_li32(reg2, typeInfo->array_length);
+    //     builder.emit_li32(reg, offset);
+    //     builder.emit_add(reg, baseReg, 4, false);
+    //     builder.emit_memcpy(reg, reg1, reg2);
+    // } else {
+    //     for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
+    //         auto &member = typeInfo->astStruct->members[i];
+    //         auto memdata = typeInfo->getMember(i);
+
+    //         _GLOG(log::out << "move return value member " << member.name << "\n";)
+    //         generatePop(baseReg, offset + memdata.offset, memdata.typeId);
+    //     }
+    // }    
+    // return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::generatePush_get_param (int offset, TypeId typeId) {
+    using namespace engone;
+    return generatePushPop_base(GEN_PUSH_GET_PARAM, BC_REG_INVALID, offset, typeId);
+    // if(typeId == TYPE_VOID) {
+    //     return SIGNAL_FAILURE;
+    // }
+    
+    // TypeInfo *typeInfo = 0;
+    // if(typeId.isNormalType())
+    //     typeInfo = ast->getTypeInfo(typeId);
+    // u32 size = ast->getTypeSize(typeId);
+    // if(size == 0) {
+    //     Assert(hasForeignErrors());
+    //     return SIGNAL_FAILURE;
+    // }
+
+    // if(!typeInfo || !typeInfo->astStruct) {
+    //     BCRegister reg = BC_REG_T0;
+    //     builder.emit_get_param(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+    //     builder.emit_push(reg);
+    // } else if(typeInfo->isArray()) {
+    //     int esize = ast->getTypeSize(typeInfo->element_type);
+    //     _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
+    //     for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
+    //         generatePush_get_param(offset + ei*esize, typeInfo->element_type);
+    //     }
+    // } else {
+    //     for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
+    //         auto& member = typeInfo->astStruct->members[i];
+    //         auto memdata = typeInfo->getMember(i);
+
+    //         _GLOG(log::out << "push " << member.name << "\n";)
+    //         generatePush_get_param(offset + memdata.offset, memdata.typeId);
+    //     }
+    // }
+    // return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::generatePop_set_arg    (int offset, TypeId typeId) {
+    using namespace engone;
+    return generatePushPop_base(GEN_POP_SET_ARG, BC_REG_INVALID, offset, typeId);
+    // Assert(baseReg!=BC_REG_RCX);
+    // TypeInfo *typeInfo = 0;
+    // if(typeId.isNormalType())
+    //     typeInfo = ast->getTypeInfo(typeId);
+    // int size = ast->getTypeSize(typeId);
+    // if(size == 0) {
+    //     Assert(hasForeignErrors());
+    //     return SIGNAL_FAILURE;
+    // }
+    // if (!typeInfo || !typeInfo->astStruct) {
+    //     _GLOG(log::out << "move return value\n";)
+    //     BCRegister reg = BC_REG_T0;
+    //     builder.emit_pop(reg);
+    //     builder.emit_set_arg(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+
+    // } else if(typeInfo->isArray()) {
+    //     int esize = ast->getTypeSize(typeInfo->element_type);
+    //     _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
+    //     for(int ei=0;ei<typeInfo->array_length;ei++) {
+    //         generatePop_set_arg(offset + ei*esize, typeInfo->element_type);
+    //     }
+    // } else {
+    //     for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
+    //         auto &member = typeInfo->astStruct->members[i];
+    //         auto memdata = typeInfo->getMember(i);
+            
+    //         _GLOG(log::out << "move return value member " << member.name << "\n";)
+    //         generatePop_set_arg(offset + memdata.offset, memdata.typeId);
+    //     }
+    // }    
+    // return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::generatePush_get_val   (int offset, TypeId typeId) {
+    using namespace engone;
+    return generatePushPop_base(GEN_PUSH_GET_VAL, BC_REG_INVALID, offset, typeId);
+    // if(typeId == TYPE_VOID) {
+    //     return SIGNAL_FAILURE;
+    // }
+    
+    // TypeInfo *typeInfo = nullptr;
+    // if(typeId.isNormalType())
+    //     typeInfo = ast->getTypeInfo(typeId);
+    // u32 size = ast->getTypeSize(typeId);
+    // if(size == 0) {
+    //     Assert(hasForeignErrors());
+    //     return SIGNAL_FAILURE;
+    // }
+
+    // if(!typeInfo || !typeInfo->astStruct) {
+    //     BCRegister reg = BC_REG_T0;
+    //     builder.emit_get_val(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+    //     builder.emit_push(reg);
+    // } else if(typeInfo->isArray()) {
+    //     int esize = ast->getTypeSize(typeInfo->element_type);
+    //     _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
+    //     for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
+    //         generatePush_get_val(offset + ei*esize, typeInfo->element_type);
+    //     }
+    // } else {
+    //     for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
+    //         auto& member = typeInfo->astStruct->members[i];
+    //         auto memdata = typeInfo->getMember(i);
+
+    //         _GLOG(log::out << "push " << member.name << "\n";)
+    //         generatePush_get_val(offset + memdata.offset, memdata.typeId);
+    //     }
+    // }
+    // return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
+    using namespace engone;
+    return generatePushPop_base(GEN_POP_SET_RET, BC_REG_INVALID, offset, typeId);
+    // // Assert(baseReg!=BC_REG_RCX);
+    // TypeInfo *typeInfo = 0;
+    // if(typeId.isNormalType())
+    //     typeInfo = ast->getTypeInfo(typeId);
+    // int size = ast->getTypeSize(typeId);
+    // if(size == 0) {
+    //     Assert(hasForeignErrors());
+    //     return SIGNAL_FAILURE;
+    // }
+    // if (!typeInfo || !typeInfo->astStruct) {
+    //     _GLOG(log::out << "move return value\n";)
+    //     BCRegister reg = BC_REG_T0;
+    //     builder.emit_pop(reg);
+    //     builder.emit_set_ret(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+    // } else if(typeInfo->isArray()) {
+    //     int esize = ast->getTypeSize(typeInfo->element_type);
+    //     _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
+    //     for(int ei=0;ei<typeInfo->array_length;ei++) {
+    //         generatePop_set_ret(offset + ei*esize, typeInfo->element_type);
+    //     }
+    // } else {
+    //     for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
+    //         auto &member = typeInfo->astStruct->members[i];
+    //         auto memdata = typeInfo->getMember(i);
+            
+    //         _GLOG(log::out << "move return value member " << member.name << "\n";)
+    //         generatePop_set_ret(offset + memdata.offset, memdata.typeId);
+    //     }
+    // }    
+    // return SIGNAL_SUCCESS;
+}
+
+SignalIO GenContext::generatePushPop_base(PushPopKind kind, BCRegister baseReg, int offset, TypeId typeId) {
     using namespace engone;
     // Assert(baseReg!=BC_REG_RCX);
     TypeInfo *typeInfo = 0;
@@ -527,179 +724,83 @@ SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
         typeInfo = ast->getTypeInfo(typeId);
     int size = ast->getTypeSize(typeId);
     if(size == 0) {
-        Assert(hasAnyErrors());
+        Assert(hasForeignErrors());
         return SIGNAL_FAILURE;
     }
     if (!typeInfo || (!typeInfo->astStruct && !typeInfo->isArray())) {
         _GLOG(log::out << "move return value\n";)
         BCRegister reg = BC_REG_T0;
-        builder.emit_pop(reg);
-        if(baseReg==BC_REG_INVALID) {
-            // throw away value
-        } else {
-            if(offset == 0){
-                // The x64 architecture has a special meaning when using fp.
-                // The converter asserts about using addModRM_disp32 instead. Instead of changing
-                // it to allow this instruction we always use disp32 to avoid the complaint.
-                // This instruction fires the assert: BC_MOV_RM rax, fp 
-                builder.emit_mov_mr(baseReg, reg, size);
-            }else{
-                builder.emit_mov_mr_disp(baseReg, reg, size, offset);
+        if (kind & GEN_POP_REG) {
+            builder.emit_pop(reg);
+            if (kind == GEN_POP_REG) {
+                if(baseReg==BC_REG_INVALID) {
+                    // throw away value
+                } else {
+                    if(offset == 0){
+                        // The x64 architecture has a special meaning when using fp.
+                        // The converter asserts about using addModRM_disp32 instead. Instead of changing
+                        // it to allow this instruction we always use disp32 to avoid the complaint.
+                        // This instruction fires the assert: BC_MOV_RM rax, fp 
+                        builder.emit_mov_mr(baseReg, reg, size);
+                    }else{
+                        builder.emit_mov_mr_disp(baseReg, reg, size, offset);
+                    }
+                }
+            } else if (kind == GEN_POP_SET_RET)
+                builder.emit_set_ret(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+            else if(kind == GEN_POP_SET_ARG)
+                builder.emit_set_arg(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+            else Assert(false);
+        } else if (kind & GEN_PUSH_REG) {
+            if(kind == GEN_PUSH_REG) {
+                builder.emit_mov_rm_disp(reg, baseReg, size, offset);
+            } else if (kind == GEN_PUSH_GET_VAL)
+                builder.emit_get_val(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+            else if(kind == GEN_PUSH_GET_PARAM)
+                builder.emit_get_param(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+            else Assert(false);
+
+            builder.emit_push(reg);
+        } else Assert(false);
+
+    } else if(typeInfo->isArray()) {
+        int esize = ast->getTypeSize(typeInfo->element_type);
+        _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
+
+        if (kind == GEN_POP_REG) {
+            BCRegister reg = BC_REG_T0;
+            BCRegister reg1 = BC_REG_T1;
+            BCRegister reg2 = BC_REG_F;
+            builder.emit_pop(reg1);
+            if(baseReg == BC_REG_INVALID) {
+                // throw away value
+            } else {
+                builder.emit_li32(reg2, typeInfo->array_length);
+                builder.emit_li64(reg, offset);
+                builder.emit_add(reg, baseReg, 8, false);
+                builder.emit_memcpy(reg, reg1, reg2);
             }
-        }
-    } else if(typeInfo->isArray()) {
-        int esize = ast->getTypeSize(typeInfo->element_type);
-        _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-        Assert(false);
-        for(int ei=0;ei<typeInfo->array_length;ei++) {
-            generatePop(baseReg, offset + ei*esize, typeInfo->element_type);
-        }
-    } else {
-        for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
-            auto &member = typeInfo->astStruct->members[i];
-            auto memdata = typeInfo->getMember(i);
-
-            _GLOG(log::out << "move return value member " << member.name << "\n";)
-            generatePop(baseReg, offset + memdata.offset, memdata.typeId);
-        }
-    }    
-    return SIGNAL_SUCCESS;
-}
-SignalIO GenContext::generatePush_get_param (int offset, TypeId typeId) {
-    using namespace engone;
-    if(typeId == TYPE_VOID) {
-        return SIGNAL_FAILURE;
-    }
-    
-    TypeInfo *typeInfo = 0;
-    if(typeId.isNormalType())
-        typeInfo = ast->getTypeInfo(typeId);
-    u32 size = ast->getTypeSize(typeId);
-    if(size == 0) {
-        Assert(hasForeignErrors());
-        return SIGNAL_FAILURE;
-    }
-
-    if(!typeInfo || !typeInfo->astStruct) {
-        BCRegister reg = BC_REG_T0;
-        builder.emit_get_param(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
-        builder.emit_push(reg);
-    } else if(typeInfo->isArray()) {
-        int esize = ast->getTypeSize(typeInfo->element_type);
-        _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-        for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
-            generatePush_get_param(offset + ei*esize, typeInfo->element_type);
-        }
-    } else {
-        for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
-            auto& member = typeInfo->astStruct->members[i];
-            auto memdata = typeInfo->getMember(i);
-
-            _GLOG(log::out << "push " << member.name << "\n";)
-            generatePush_get_param(offset + memdata.offset, memdata.typeId);
-        }
-    }
-    return SIGNAL_SUCCESS;
-}
-SignalIO GenContext::generatePop_set_arg    (int offset, TypeId typeId) {
-    using namespace engone;
-    // Assert(baseReg!=BC_REG_RCX);
-    TypeInfo *typeInfo = 0;
-    if(typeId.isNormalType())
-        typeInfo = ast->getTypeInfo(typeId);
-    int size = ast->getTypeSize(typeId);
-    if(size == 0) {
-        Assert(hasForeignErrors());
-        return SIGNAL_FAILURE;
-    }
-    if (!typeInfo || !typeInfo->astStruct) {
-        _GLOG(log::out << "move return value\n";)
-        BCRegister reg = BC_REG_T0;
-        builder.emit_pop(reg);
-        builder.emit_set_arg(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
-
-    } else if(typeInfo->isArray()) {
-        int esize = ast->getTypeSize(typeInfo->element_type);
-        _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-        for(int ei=0;ei<typeInfo->array_length;ei++) {
-            generatePop_set_arg(offset + ei*esize, typeInfo->element_type);
-        }
+        } else if(kind == GEN_PUSH_REG) {
+            BCRegister reg = BC_REG_T0;
+            builder.emit_li64(reg, offset);
+            builder.emit_add(reg, baseReg, 8, false);
+            builder.emit_push(reg);
+        } else if(kind == GEN_POP_SET_ARG) {
+            Assert(false);
+        } else if(kind == GEN_POP_SET_RET) {
+            Assert(false);
+        } else if(kind == GEN_PUSH_GET_PARAM) {
+            Assert(false);
+        } else if(kind == GEN_PUSH_GET_VAL) {
+            Assert(false);
+        } else Assert(false);
     } else {
         for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
             auto &member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
             
             _GLOG(log::out << "move return value member " << member.name << "\n";)
-            generatePop_set_arg(offset + memdata.offset, memdata.typeId);
-        }
-    }    
-    return SIGNAL_SUCCESS;
-}
-SignalIO GenContext::generatePush_get_val   (int offset, TypeId typeId) {
-    using namespace engone;
-    if(typeId == TYPE_VOID) {
-        return SIGNAL_FAILURE;
-    }
-    
-    TypeInfo *typeInfo = nullptr;
-    if(typeId.isNormalType())
-        typeInfo = ast->getTypeInfo(typeId);
-    u32 size = ast->getTypeSize(typeId);
-    if(size == 0) {
-        Assert(hasForeignErrors());
-        return SIGNAL_FAILURE;
-    }
-
-    if(!typeInfo || !typeInfo->astStruct) {
-        BCRegister reg = BC_REG_T0;
-        builder.emit_get_val(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
-        builder.emit_push(reg);
-    } else if(typeInfo->isArray()) {
-        int esize = ast->getTypeSize(typeInfo->element_type);
-        _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-        for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
-            generatePush_get_val(offset + ei*esize, typeInfo->element_type);
-        }
-    } else {
-        for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
-            auto& member = typeInfo->astStruct->members[i];
-            auto memdata = typeInfo->getMember(i);
-
-            _GLOG(log::out << "push " << member.name << "\n";)
-            generatePush_get_val(offset + memdata.offset, memdata.typeId);
-        }
-    }
-    return SIGNAL_SUCCESS;
-}
-SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
-    using namespace engone;
-    // Assert(baseReg!=BC_REG_RCX);
-    TypeInfo *typeInfo = 0;
-    if(typeId.isNormalType())
-        typeInfo = ast->getTypeInfo(typeId);
-    int size = ast->getTypeSize(typeId);
-    if(size == 0) {
-        Assert(hasForeignErrors());
-        return SIGNAL_FAILURE;
-    }
-    if (!typeInfo || !typeInfo->astStruct) {
-        _GLOG(log::out << "move return value\n";)
-        BCRegister reg = BC_REG_T0;
-        builder.emit_pop(reg);
-        builder.emit_set_ret(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
-    } else if(typeInfo->isArray()) {
-        int esize = ast->getTypeSize(typeInfo->element_type);
-        _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-        for(int ei=0;ei<typeInfo->array_length;ei++) {
-            generatePop_set_ret(offset + ei*esize, typeInfo->element_type);
-        }
-    } else {
-        for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
-            auto &member = typeInfo->astStruct->members[i];
-            auto memdata = typeInfo->getMember(i);
-            
-            _GLOG(log::out << "move return value member " << member.name << "\n";)
-            generatePop_set_ret(offset + memdata.offset, memdata.typeId);
+            generatePushPop_base(kind, baseReg, offset + memdata.offset, memdata.typeId);
         }
     }    
     return SIGNAL_SUCCESS;
@@ -734,17 +835,17 @@ void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, i
         // don't allow BC_REG_LOCALS as a register (well, we do but we swap it out for another register below)
         BCRegister reg = ptr_reg;
         if(ptr_reg == BC_REG_LOCALS) {
-            // @TODO: This code is strange? reg = ptr_reg so we modify BC_REG_LOCALS except that only if offset is negative?
+            Assert(BC_REG_T0 != size_reg);
             reg = BC_REG_T0;
-            if(offset > 0){
-                builder.emit_mov_rr(reg, ptr_reg);
-            } else {
-                builder.emit_add_imm32(reg, ptr_reg, offset, 8);
-            }
+            builder.emit_ptr_to_locals(reg, offset);
+        } else if(offset != 0) {
+            reg = BC_REG_T0;
+            builder.emit_add_imm32(reg, ptr_reg, offset, 8);
         }
         builder.emit_memzero(reg, size_reg, batch);
     }
 }
+
 void GenContext::genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size) {
     if(size <= 8) {
         Assert(size == 1 || size == 2 || size == 4 || size == 8);
@@ -788,6 +889,16 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
         #endif
     }
     if (typeInfo && typeInfo->isArray()) {
+        if(baseReg == BC_REG_INVALID) {
+            Assert(location || baseReg != BC_REG_INVALID);
+            ERR_SECTION(
+                ERR_HEAD2(*location)
+                ERR_MSG("Cannot generate default values for array type. There is no data/memory/variable to initialize. (arrays can't easily be passed in expressions)")
+                ERR_LINE2(*location, "here")
+            )
+            return SIGNAL_FAILURE;
+        }
+        Assert(baseReg != BC_REG_INVALID);
         int esize = ast->getTypeSize(typeInfo->element_type);
         for (int ei=typeInfo->array_length-1;ei>=0;ei--) {
             SignalIO result = generateDefaultValue(baseReg, offset + ei*esize, typeInfo->element_type, location, false);
@@ -849,65 +960,37 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
     }
     return SIGNAL_SUCCESS;
 }
-SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefault, bool staticData){
+SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefault){
     Assert(outFrameOffset);
-    Assert(!staticData); // This is unsafe if functions use the static data before FramePush makes space for it.
-    // This usually result static offsets always pointing at the start of the data segment. Then when FramePush
-    // runs those offsets would be valid but it's already to late.
-    // I am leaveing the comment here in case you decide to use FramePush to handle static data in the future WHICH YOU REALLY SHOULDN'T!
-
-    // Also, when we generateData before generating bytecode for functions we need all data to be reserved.
-    // otherwise some global data would not have been generated. So staticData really doesn't work.
-    // I had one idea though with compile time execution which might create new functions to be checked and generated
-    // but to execute it we need to have generate bytecode and globals, but then we get into trouble since the
-    // bytecode may create new functions to check and generate which is problematic if they have globals in them.
-    // Either we disallow global data in those functions, or we change the global data system to be more incremental.
-
-    // IMPORTANT: This code has been copied to array assignment. Change that code
-    //  when changing code here.
+    
     i32 size = info.ast->getTypeSize(typeId);
     i32 asize = info.ast->getTypeAlignedSize(typeId);
     if(asize==0)
         return SIGNAL_FAILURE;
     
-    if(staticData) {
-        bytecode->ensureAlignmentInData(asize);
-        int offset = bytecode->appendData(nullptr,size);
-        
-        Assert(false); // This is broken due to stable_global_data
-        info.builder.emit_dataptr(BC_REG_D, offset);
-
-        *outFrameOffset = offset;
-        if(genDefault){
-            SignalIO result = info.generateDefaultValue(BC_REG_D, 0, typeId);
-            if(result!=SIGNAL_SUCCESS)
-                return SIGNAL_FAILURE;
-        }
-    } else {
-        int sizeDiff = size % REGISTER_SIZE;
-        if(sizeDiff != 0){
-            size += REGISTER_SIZE - sizeDiff;
-        }
-        asize = REGISTER_SIZE;
-        int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-        if (diff != asize) {
-            info.currentFrameOffset -= diff; // align
-            // builder.emit_alloc_local(BC_REG_INVALID, diff);
-            currentFuncImpl->alloc_frame_space(diff);
-        
-        }
-        info.currentFrameOffset -= size;
-        *outFrameOffset = info.currentFrameOffset;
-        
-        // builder.emit_alloc_local(reg, size);
-        currentFuncImpl->alloc_frame_space(size);
-        BCRegister reg = genDefault ? BC_REG_F : BC_REG_INVALID; // TODO: Is F register in use?
-        
-        if(genDefault){
-            SignalIO result = generateDefaultValue(BC_REG_LOCALS, info.currentFrameOffset, typeId);
-            if(result!=SIGNAL_SUCCESS)
-                return SIGNAL_FAILURE;
-        }
+    int sizeDiff = size % REGISTER_SIZE;
+    if(sizeDiff != 0){
+        size += REGISTER_SIZE - sizeDiff;
+    }
+    asize = REGISTER_SIZE;
+    int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+    if (diff != asize) {
+        info.currentFrameOffset -= diff; // align
+        // builder.emit_alloc_local(BC_REG_INVALID, diff);
+        currentFuncImpl->alloc_frame_space(diff);
+    
+    }
+    info.currentFrameOffset -= size;
+    *outFrameOffset = info.currentFrameOffset;
+    
+    // builder.emit_alloc_local(reg, size);
+    currentFuncImpl->alloc_frame_space(size);
+    BCRegister reg = genDefault ? BC_REG_F : BC_REG_INVALID; // TODO: Is F register in use?
+    
+    if(genDefault){
+        SignalIO result = generateDefaultValue(BC_REG_LOCALS, info.currentFrameOffset, typeId);
+        if(result!=SIGNAL_SUCCESS)
+            return SIGNAL_FAILURE;
     }
     return SIGNAL_SUCCESS;
 }
@@ -916,22 +999,6 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
     Generation functions below
 ##################################
 */
-// SignalIO GenerateExpression(GenContext &info, ASTExpression *expression, TypeId *outTypeId, ScopeId idScope){
-//     DynamicArray<TypeId> types{};
-//     SignalIO result = GenerateExpression(info,expression,&types,idScope);
-//     *outTypeId = TYPE_VOID;
-//     if(types.size()>1){
-//         ERR_SECTION(
-//             ERR_HEAD2(expression->location)
-//             ERR_MSG("Returns multiple values but the way you use the expression only supports one (or none).")
-//             ERR_LINE2(expression->location,"returns "<<types.size() << " values")
-//         )
-//     } else {
-//         if(types.size()==1)
-//             *outTypeId = types[0];
-//     }
-//     return result;
-// }
 // outTypeId will represent the type (integer, struct...) but the value pushed on the stack will always
 // be a pointer. EVEN when the outType isn't a pointer. It is an implicit extra level of indirection commonly
 // used for assignment.
@@ -1047,23 +1114,23 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     // Assert(info.currentFunction->callConvention == BETCALL);
                     builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false, true);
                     
-                    auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
-                    auto memtype = ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
-                    if (memtype->isArray()) {
-                        // arrayLength = mem.array_length;
-                        // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
-                        // bool printed = false;
-                        // typeId = ast->convertToTypeId(real_type, currentScopeId, true);
+                    // auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                    // auto memtype = ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
+                    // if (memtype->isArray()) {
+                    //     // arrayLength = mem.array_length;
+                    //     // std::string real_type = "Slice<"+ast->typeToString(mem.stringType)+">";
+                    //     // bool printed = false;
+                    //     // typeId = ast->convertToTypeId(real_type, currentScopeId, true);
 
-                        // typeId.setPointerLevel(typeId.getPointerLevel() + 1);
+                    //     // typeId.setPointerLevel(typeId.getPointerLevel() + 1);
                         
-                        builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                        builder.emit_add(BC_REG_B, BC_REG_A, REGISTER_SIZE, false, true);
-                        // pointerType = true;
-                    } else {
-                        builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                        builder.emit_add(BC_REG_B, BC_REG_A, REGISTER_SIZE, false, true);
-                    }
+                    //     builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    //     builder.emit_add(BC_REG_B, BC_REG_A, REGISTER_SIZE, false, true);
+                    //     // pointerType = true;
+                    // } else {
+                    builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    builder.emit_add(BC_REG_B, BC_REG_A, REGISTER_SIZE, false, true);
+                    // }
                 } break;
                 case Identifier::ARGUMENT_VARIABLE: {
                     builder.emit_ptr_to_params(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
@@ -1388,7 +1455,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     //   function with two inputs and one output. Since the output is a discrete value,
                     //   generateReference doesn't work since you can't take a pointer to a value that 
                     //   that is being pushed and popped on the stack.
-                } else if(linfo->isArray()) {
+                } else if(linfo && linfo->isArray()) {
 
                 } else if(!endType.isPointer()){
                     if(!info.hasForeignErrors()){
@@ -1485,7 +1552,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     builder.emit_add(BC_REG_C, reg, REGISTER_SIZE, false);
 
                     builder.emit_push(BC_REG_C);
-                } else if (linfo->isArray()) {
+                } else if (linfo && linfo->isArray()) {
                     TypeId element_type = linfo->element_type;
                     u32 element_size = info.ast->getTypeSize(element_type);
                     BCRegister reg = BC_REG_D;
@@ -2402,7 +2469,7 @@ SignalIO GenContext::generatePushedLiterals(VirtualMachine* vm, TypeId type, cha
                 return SIGNAL_FAILURE;
         }
     } else {
-        generateDefaultValue(BC_REG_INVALID, 0, type, &expression->location);
+        generateDefaultValue(BC_REG_B, 0, type, &expression->location);
         ERR_SECTION(
             ERR_HEAD2(expression->location)
             ERR_MSG_COLORED("Local run directive can only return primitive types and structs. '"<<log::LIME << ast->typeToString(type) <<log::NO_COLOR<<"' is not allowed.")
@@ -2412,12 +2479,252 @@ SignalIO GenContext::generatePushedLiterals(VirtualMachine* vm, TypeId type, cha
     }
     return SIGNAL_SUCCESS;
 };
+
 SignalIO GenContext::generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope) {
     *outTypeIds = TYPE_VOID;
     TEMP_ARRAY_N(TypeId, tempTypes, 5)
     auto signal = generateExpression(expression, &tempTypes, idScope);
     if(tempTypes.size()) *outTypeIds = tempTypes.last();
     return signal;
+}
+SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset, TypeId typeId, ASTExpressionInitializer* expression, ScopeId scopeId) {
+    using namespace engone;
+    SignalIO result = SIGNAL_COMPLETE_FAILURE;
+    Assert(expression);
+    TRACE_FUNC()
+    
+    ZoneScopedC(tracy::Color::Blue2);
+    
+    if(scopeId==(ScopeId)-1)
+        scopeId = currentScopeId;
+
+    _GLOG(FUNC_ENTER)
+    
+    MAKE_NODE_SCOPE(expression);
+
+    SCOPED_ALLOCATOR_MOMENT(scratch_allocator)
+
+    TEMP_ARRAY_N(TypeId, tempTypes, 5)
+
+    SOURCE_TRACE(expression->location)
+
+    SINGLE_CALLBACK_ON_ASSERT(
+        ERR_SECTION(
+            ERR_HEAD2(expression->location)
+            ERR_MSG("Compiler bug")
+            ERR_LINE2(expression->location, "here")
+        )
+    )
+
+    builder.emit_mov_rr(BC_REG_P, baseReg);
+    baseReg = BC_REG_P;
+
+    TypeInfo* first_typeinfo = ast->getTypeInfo(typeId);
+    if(!first_typeinfo || (!first_typeinfo->isArray() && !first_typeinfo->astStruct)) {
+        TypeId outtype = TYPE_VOID;
+        // builder.emit_push(baseReg);
+        result = generateExpression(expression, &outtype);
+        // builder.emit_pop(baseReg);
+        if(result != SIGNAL_SUCCESS) return result;
+
+        if(!performSafeCast(outtype, typeId)) {
+            // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
+            ERRTYPE1(expression->location, outtype, typeId, "(initializer of '"<<log::LIME<<ast->typeToString(typeId)<<log::NO_COLOR<<"')");
+            return SIGNAL_FAILURE;
+        }
+
+        result = generatePop(baseReg, offset, typeId);
+        if(result != SIGNAL_SUCCESS) return result;
+        return SIGNAL_SUCCESS;
+    }
+
+    struct Env {
+        ASTExpressionInitializer* expr;
+        TypeInfo* typeinfo;
+        TypeInfo* element_typeinfo;
+        int element_size;
+        int offset = 0;
+        int expr_index = 0;
+        int member_index = 0;
+        ASTExpression** generated_members;
+    };
+    DynamicArray<Env> envs{};
+    envs.add({});
+    envs.last().expr = expression;
+    envs.last().typeinfo = first_typeinfo;
+    envs.last().offset = offset;
+    if (first_typeinfo->isArray()) {
+        envs.last().element_size = ast->getTypeSize(first_typeinfo->element_type);
+        envs.last().element_typeinfo = ast->getTypeInfo(first_typeinfo->element_type);
+    }
+    while (envs.size()) {
+        Env& env = envs.last();
+
+        if(env.typeinfo->isArray()) {
+            if (env.expr->args.size() > env.typeinfo->array_length) {
+                auto last_expr = env.expr->args.last();
+                ERR_SECTION(
+                    ERR_HEAD2(last_expr->location)
+                    ERR_MSG("Initializer has "<<env.expr->args.size()<<" values which is more than elements in the array " << ast->typeToString(env.typeinfo->id)<<".")
+                    ERR_LINE2(last_expr->location, "here")
+                )
+                return SIGNAL_FAILURE;
+            }
+
+            if(env.expr_index >= env.typeinfo->array_length) {
+                envs.pop();
+                continue;
+            }
+            if(env.expr_index >= env.expr->args.size()) {
+                result = generateDefaultValue(baseReg, env.offset + env.expr_index * env.element_size, env.typeinfo->element_type);
+                if(result != SIGNAL_SUCCESS) return result;
+                env.expr_index++;
+                continue;
+            }
+    
+            auto expr = env.expr->args[env.expr_index];
+
+            if (expr->namedValue.len) {
+                ERR_SECTION(
+                    ERR_HEAD2(expr->location)
+                    ERR_MSG("Arrays does not support named or indexed values. It's on the TODO list.")
+                    ERR_LINE2(expr->location, "here")
+                )
+                return SIGNAL_FAILURE;
+            }
+
+            if(expr->type != EXPR_INITIALIZER || !env.element_typeinfo || (!env.element_typeinfo->isArray() && !env.element_typeinfo->astStruct)) {
+                TypeId outtype = TYPE_VOID;
+                result = generateExpression(expr, &outtype);
+                if(result != SIGNAL_SUCCESS) return result;
+                
+                if(!performSafeCast(outtype, env.typeinfo->element_type)) {
+                    // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
+                    ERRTYPE1(expr->location, outtype, env.typeinfo->element_type, "(initializer of '"<<log::LIME<<ast->typeToString(env.typeinfo->id)<<log::NO_COLOR<<"')");
+                    return SIGNAL_FAILURE;
+                }
+                
+                result = generatePop(baseReg, env.offset + env.expr_index * env.element_size, env.typeinfo->element_type);
+                if(result != SIGNAL_SUCCESS) return result;
+                env.expr_index++;
+                continue;
+            }
+            
+            Env new_env{};
+            new_env.expr = expr->as<ASTExpressionInitializer>();
+            new_env.typeinfo = env.element_typeinfo;
+            new_env.offset = env.offset + env.expr_index * env.element_size;
+            if (env.element_typeinfo->isArray()) {
+                new_env.element_size = ast->getTypeSize(env.element_typeinfo->element_type);
+                new_env.element_typeinfo = ast->getTypeInfo(env.element_typeinfo->element_type);
+            }
+            env.expr_index++;
+            envs.add(new_env);
+            // IMPORTANT: You cannot access env here. It may be invalidated by the add
+        } else {
+            Assert(env.typeinfo->astStruct);
+            if (env.expr->args.size() > env.typeinfo->astStruct->members.size()) {
+                auto last_expr = env.expr->args.last();
+                ERR_SECTION(
+                    ERR_HEAD2(last_expr->location)
+                    ERR_MSG("Initializer has "<<env.expr->args.size()<<" values which is more than members in the struct " << ast->typeToString(env.typeinfo->id) << " (" << env.typeinfo->astStruct->members.size()<<" members)")
+                    ERR_LINE2(last_expr->location, "here")
+                )
+                if(env.generated_members)
+                    Free(env.generated_members, env.typeinfo->astStruct->members.size() * sizeof(ASTExpression*));
+                return SIGNAL_FAILURE;
+            }
+
+            if(env.member_index >= env.typeinfo->structImpl->members.size()) {
+                if(env.generated_members)
+                    Free(env.generated_members, env.typeinfo->astStruct->members.size() * sizeof(ASTExpression*));
+                envs.pop();
+                continue;
+            }
+            
+            if(env.expr_index >= env.expr->args.size()) {
+                if (env.generated_members && env.generated_members[env.member_index]) {
+                    // already generated from named initializer value
+                } else {
+                    result = generateDefaultValue(baseReg, env.offset + env.typeinfo->structImpl->members[env.member_index].offset, env.typeinfo->structImpl->members[env.member_index].typeId);
+                    if(result != SIGNAL_SUCCESS) return result;
+                }
+                env.member_index++;
+                continue;
+            }
+            
+            int member_index = env.member_index;
+            auto expr = env.expr->args[env.expr_index];
+            env.expr_index++;
+            if (expr->namedValue.len) {
+                if(!env.generated_members) {
+                    env.generated_members = (ASTExpression**)Allocate(env.typeinfo->astStruct->members.size() * sizeof(ASTExpression*));
+                    Assert(env.generated_members);
+                    memset(env.generated_members, 0, env.typeinfo->astStruct->members.size() * sizeof(ASTExpression*));
+                }
+                member_index = -1;
+                for (int i = 0; i < (int)env.typeinfo->astStruct->members.size(); i++) {
+                    if (env.typeinfo->astStruct->members[i].name == expr->namedValue) {
+                        member_index = i;
+                        break;
+                    }
+                }
+                if (member_index == -1) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location)
+                        ERR_MSG("'"<<expr->namedValue << "' is not an member in " << env.typeinfo->astStruct->name << ".")
+                    )
+                    continue;
+                    // return SIGNAL_FAILURE;
+                } else {
+                    if (env.generated_members[member_index]) {
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("Initializer value for " << env.typeinfo->astStruct->members[member_index].name << " is already specified.")
+                            ERR_LINE2(env.generated_members[member_index]->location, "here")
+                        )
+                        continue;
+                    } else {
+                        env.generated_members[member_index] = expr;
+                    }
+                }
+            }
+
+            TypeInfo* member_typeinfo = ast->getTypeInfo(env.typeinfo->structImpl->members[member_index].typeId);
+    
+            if(expr->type != EXPR_INITIALIZER || (!member_typeinfo->isArray() && !member_typeinfo->astStruct)) {
+                TypeId outtype = TYPE_VOID;
+                result = generateExpression(expr, &outtype);
+                if(result != SIGNAL_SUCCESS) return result;
+                
+                if(!performSafeCast(outtype, env.typeinfo->structImpl->members[member_index].typeId)) {
+                    // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
+                    ERRTYPE1(expr->location, outtype, env.typeinfo->structImpl->members[member_index].typeId, "(initializer of '"<<log::LIME<<ast->typeToString(env.typeinfo->id)<<log::NO_COLOR<<"')");
+                    continue;
+                }
+    
+                result = generatePop(baseReg, env.offset + env.typeinfo->structImpl->members[member_index].offset, env.typeinfo->structImpl->members[member_index].typeId);
+                if(result != SIGNAL_SUCCESS) return result;
+                if(env.expr_index-1 == env.member_index)
+                    env.member_index++;
+                continue;
+            }
+            
+            Env new_env{};
+            new_env.expr = expr->as<ASTExpressionInitializer>();
+            new_env.typeinfo = member_typeinfo;
+            new_env.offset = env.offset + env.typeinfo->structImpl->members[member_index].offset;
+            if (member_typeinfo->isArray()) {
+                new_env.element_size = ast->getTypeSize(member_typeinfo->element_type);
+                new_env.element_typeinfo = ast->getTypeInfo(member_typeinfo->element_type);
+            }
+            if(env.expr_index-1 == env.member_index)
+                env.member_index++;
+            envs.add(new_env);
+            // IMPORTANT: You cannot access env here. It may be invalidated by the add
+        }
+    }
+    return SIGNAL_SUCCESS;
 }
 SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArray<TypeId> *outTypeIds, ScopeId idScope) {
     using namespace engone;
@@ -2436,6 +2743,14 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
     TEMP_ARRAY_N(TypeId, tempTypes, 5)
 
     SOURCE_TRACE(base_expression->location)
+
+    SINGLE_CALLBACK_ON_ASSERT(
+        ERR_SECTION(
+            ERR_HEAD2(base_expression->location)
+            ERR_MSG("Compiler bug")
+            ERR_LINE2(base_expression->location, "here")
+        )
+    )
     
     // IMPORTANT: This DOES NOT work duudeeee. you must use poly versions
     // TypeId castType = expression->castType;
@@ -2693,18 +3008,18 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                         // type = varinfo->versions_typeId[info.currentPolyVersion];
                         builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false); // pointer
                         if(currentFunction->parentStruct) {
-                            auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
-                            auto& memtype = varinfo->versions_typeId[info.currentPolyVersion];
-                            auto mtype = ast->getTypeInfo(memtype);
-                            if (mtype->isArray()) {
-                                type.setPointerLevel(type.getPointerLevel()+1);
-                                builder.emit_li32(BC_REG_T0, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                                builder.emit_add(BC_REG_B, BC_REG_T0, REGISTER_SIZE, false);
-                                builder.emit_push(BC_REG_B);
-                            } else {
-                                generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
+                            // auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
+                            // auto& memtype = varinfo->versions_typeId[info.currentPolyVersion];
+                            // auto mtype = ast->getTypeInfo(memtype);
+                            // if (mtype->isArray()) {
+                            //     type.setPointerLevel(type.getPointerLevel()+1);
+                            //     builder.emit_li32(BC_REG_T0, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            //     builder.emit_add(BC_REG_B, BC_REG_T0, REGISTER_SIZE, false);
+                            //     builder.emit_push(BC_REG_B);
+                            // } else {
+                            generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
                                 type);
-                            }
+                            // }
                         } else {
                             // This happend because of @TEST_ERROR in tests/funcs/stuff.btb at one point.
                         }
@@ -3311,15 +3626,22 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         SignalIO result = SIGNAL_NO_MATCH;
         
         bool nonReference = false;
-        // int array_length = 0;
         result = generateReference(expression->left, &exprId, idScope, &nonReference);
         if(result != SIGNAL_SUCCESS) {
+            return SIGNAL_FAILURE;
+        }
+
+        if(exprId.getPointerLevel() > 1){ // one level of pointer is okay.
+            ERR_SECTION(
+                ERR_HEAD2(expression->location)
+                ERR_MSG("'"<<info.ast->typeToString(exprId)<<"' is not a struct, cannot access members. A pointer level of one will be implicitly dereferenced. However, the pointer level was "<<exprId.pointer_level<<".")
+                ERR_LINE2(expression->left->location, info.ast->typeToString(exprId).c_str())
+            )
             return SIGNAL_FAILURE;
         }
         
         auto typeInfo = info.ast->getTypeInfo(exprId.baseType());
         if(typeInfo->isArray()) {
-            Assert(nonReference); // we expect a pure pointer out
             if(expression->name == "len") {
                 builder.emit_pop(BC_REG_T0); // pop pointer
                 builder.emit_li64(BC_REG_T0, typeInfo->array_length);
@@ -3327,29 +3649,22 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                 if(outTypeIds)
                     outTypeIds->add(TYPE_INT32);
             } else if(expression->name == "ptr") {
-                TypeId elemtype = typeInfo->element_type;
-                elemtype.setPointerLevel(elemtype.getPointerLevel() + 1);
+                Assert(!nonReference); // we expect a pure pointer out
+                TypeId ptr_type = typeInfo->element_type;
+                ptr_type.setPointerLevel(ptr_type.getPointerLevel() + 1);
                 if(outTypeIds)
-                    outTypeIds->add(elemtype);
+                    outTypeIds->add(ptr_type);
             } else {
                 // Assert(hasForeignErrors());
                 // type checker handles this
                 ERR_SECTION(
                     ERR_HEAD2(expression->location)
-                    ERR_MSG("'"<<info.ast->typeToString(exprId)<<"' is an array within a struct and does not have members. If the elements of the array are structs then index into the array first.")
+                    ERR_MSG("'"<<info.ast->typeToString(exprId)<<"' is an array and does not have the field '"<<engone::log::GREEN<<expression->name<<engone::log::NO_COLOR<<"'which only have len and ptr members.")
                     ERR_LINE2(expression->left->location, info.ast->typeToString(exprId).c_str())
                 )
                 return SIGNAL_FAILURE;
             }
         } else {
-            if(exprId.getPointerLevel() > 1){ // one level of pointer is okay.
-                ERR_SECTION(
-                    ERR_HEAD2(expression->location)
-                    ERR_MSG("'"<<info.ast->typeToString(exprId)<<"' is not a struct, cannot access members. A pointer level of one will be implicitly dereferenced. However, the pointer level was "<<exprId.pointer_level<<"had a level.")
-                    ERR_LINE2(expression->left->location, info.ast->typeToString(exprId).c_str())
-                )
-                return SIGNAL_FAILURE;
-            }
             // auto typeInfo = info.ast->getTypeInfo(exprId.baseType());
             if(!typeInfo || !typeInfo->astStruct){
                 ERR_SECTION(
@@ -3647,7 +3962,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                     //             return result;
                     //     }
                     // } else {
-                    SignalIO result = generateDefaultValue(BC_REG_INVALID, 0, exprId, nullptr);
+                    SignalIO result = generateDefaultValue(BC_REG_INVALID, 0, exprId, &base_expression->location);
                     if (result != SIGNAL_SUCCESS)
                         return result;
                     // }
@@ -3691,7 +4006,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                     return SIGNAL_FAILURE;
                 }
             } else {
-                SignalIO result = generateDefaultValue(BC_REG_INVALID, 0, castType, nullptr);
+                SignalIO result = generateDefaultValue(BC_REG_INVALID, 0, castType, &base_expression->location);
                 if (result != SIGNAL_SUCCESS)
                     return result;
             }
@@ -3894,16 +4209,17 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                 if(operatorImpl){
                     return generateFncall(expression, outTypeIds, true);
                 }
-                // SignalIO err = generateExpression(expression->left, &tempTypes);
-                bool wasNonReference = false;
-                SignalIO err = generateReference(expression->left, &ltype, -1, &wasNonReference);
+                SignalIO err = generateExpression(expression->left, &tempTypes);
+                if(tempTypes.size()) ltype = tempTypes.last();
+                // bool wasNonReference = false;
+                // SignalIO err = generateReference(expression->left, &ltype, -1, &wasNonReference);
                 if (err != SIGNAL_SUCCESS)
                     return SIGNAL_FAILURE;
 
                 TypeId orig_ltype = ltype;
-                if(!wasNonReference) {
-                    ltype.setPointerLevel(ltype.getPointerLevel()+1);
-                }
+                // if(!wasNonReference) {
+                //     ltype.setPointerLevel(ltype.getPointerLevel()+1);
+                // }
 
                 tempTypes.clear();
                 TypeId rtype;
@@ -3980,7 +4296,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                     SignalIO result = generatePush(BC_REG_B, 0, out_type);
 
                     outTypeIds->add(out_type);
-                } else if(orig_linfo->isArray()) {
+                } else if(orig_linfo && orig_linfo->isArray()) {
                     u32 lsize = info.ast->getTypeSize(orig_linfo->element_type);
                     // u32 rsize = info.ast->getTypeSize(rtype);
                     BCRegister reg = BC_REG_D;
@@ -4127,55 +4443,73 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                 //     WARN_LINE(expression->right->location,"generated first");
                 //     WARN_LINE(expression->left->location,"then this");
                 // )
-                tempTypes.clear();
-                TypeId rtype{};
-                SignalIO result = generateExpression(expression->right, &tempTypes, idScope);
-                if(tempTypes.size())
-                    rtype = tempTypes[0];
-
-                for(int i=tempTypes.size()-1; i >= 1;i--) {
-                    generatePop(BC_REG_INVALID, 0, tempTypes[i]);
-                }
-
-                if(result!=SIGNAL_SUCCESS)
-                    return SIGNAL_FAILURE;
-
-                TypeId assignType={};
-                result = generateReference(expression->left,&assignType,idScope);
-                if(result!=SIGNAL_SUCCESS)
-                    return SIGNAL_FAILURE;
-
-                builder.emit_pop(BC_REG_B);
-
-                if (!performSafeCast(rtype, assignType)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
-                    // std::string leftstr = info.ast->typeToString(assignType);
-                    // std::string rightstr = info.ast->typeToString(rtype);
-                    ERRTYPE1(expression->location, rtype,assignType, ""
-                        // ERR_LINE2(expression->left->location, leftstr.c_str());
-                        // ERR_LINE2(expression->right->location,rightstr.c_str());
-                    )
-                    return SIGNAL_FAILURE;
-                }
-                // if(assignType != rtype){
-                //     if(info.errors != 0 || info.compileInfo->typeErrors !=0){
-                //         return SIGNAL_FAILURE;
-                //     }
-                //     log::out << info.ast->typeToString(assignType)<<" = "<<info.ast->typeToString(rtype)<<"\n";
-                //     // TODO: Try to cast, you may need to rearragne some things and also add some poly_versions type stuff.
-                //     //  You'll figure it out.
-                //     Assert(assignType == rtype);
-                // }
-
-                 // note that right expression should be popped first
-
-                // TODO: This code can be improved.
-                //  Don't push if value is ignored.
-                //  Don't pop, just copy if you need the pushed values.
-                //  perhaps implement a function called GenerateCopy? nah, come up with a better name, rename GeneratePop/Push too.
-                result = generatePop(BC_REG_B, 0, assignType);
-                result = generatePush(BC_REG_B, 0, assignType);
                 
-                outTypeIds->add(rtype);
+                if(expression->right->type == EXPR_INITIALIZER) {
+                    SignalIO result;
+                    TypeId assignType={};
+                    result = generateReference(expression->left, &assignType, idScope);
+                    if(result!=SIGNAL_SUCCESS)  return SIGNAL_FAILURE;
+                    builder.emit_pop(BC_REG_B);
+
+                    result = generateAssignedInitializing(BC_REG_B, 0, assignType, expression->right->as<ASTExpressionInitializer>());
+                    if(result!=SIGNAL_SUCCESS)  return SIGNAL_FAILURE;
+
+                    result = generatePush(BC_REG_B, 0, assignType);
+                    if(result!=SIGNAL_SUCCESS)  return SIGNAL_FAILURE;
+                    
+                    outTypeIds->add(assignType);
+                } else {
+                    tempTypes.clear();
+                    TypeId rtype{};
+                    SignalIO result = generateExpression(expression->right, &tempTypes, idScope);
+                    if(tempTypes.size())
+                        rtype = tempTypes[0];
+
+                    // Throw away all values but one.
+                    for(int i=tempTypes.size()-1; i >= 1;i--) {
+                        generatePop(BC_REG_INVALID, 0, tempTypes[i]);
+                    }
+
+                    if(result!=SIGNAL_SUCCESS)
+                        return SIGNAL_FAILURE;
+
+                    TypeId assignType={};
+                    result = generateReference(expression->left,&assignType,idScope);
+                    if(result!=SIGNAL_SUCCESS)
+                        return SIGNAL_FAILURE;
+
+                    builder.emit_pop(BC_REG_B);
+
+                    if (!performSafeCast(rtype, assignType)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
+                        // std::string leftstr = info.ast->typeToString(assignType);
+                        // std::string rightstr = info.ast->typeToString(rtype);
+                        ERRTYPE1(expression->location, rtype,assignType, ""
+                            // ERR_LINE2(expression->left->location, leftstr.c_str());
+                            // ERR_LINE2(expression->right->location,rightstr.c_str());
+                        )
+                        return SIGNAL_FAILURE;
+                    }
+                    // if(assignType != rtype){
+                    //     if(info.errors != 0 || info.compileInfo->typeErrors !=0){
+                    //         return SIGNAL_FAILURE;
+                    //     }
+                    //     log::out << info.ast->typeToString(assignType)<<" = "<<info.ast->typeToString(rtype)<<"\n";
+                    //     // TODO: Try to cast, you may need to rearragne some things and also add some poly_versions type stuff.
+                    //     //  You'll figure it out.
+                    //     Assert(assignType == rtype);
+                    // }
+
+                    // note that right expression should be popped first
+
+                    // TODO: This code can be improved.
+                    //  Don't push if value is ignored.
+                    //  Don't pop, just copy if you need the pushed values.
+                    //  perhaps implement a function called GenerateCopy? nah, come up with a better name, rename GeneratePop/Push too.
+                    result = generatePop(BC_REG_B, 0, assignType);
+                    result = generatePush(BC_REG_B, 0, assignType);
+                    
+                    outTypeIds->add(rtype);
+                }
             } else {
                     
                 // basic operations
@@ -5356,8 +5690,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             if(varname.declaration) {
                 if(!varinfo->isGlobal()) {
                     // address of global variables is managed in type checker
-                    SignalIO result = framePush(varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
-                        !statement->firstExpression, false);
+                    SignalIO result = framePush(varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion], !statement->firstExpression);
                     // log::out << "decl " << varname.name << " " << varinfo->versions_dataOffset[info.currentPolyVersion] << " "<<currentFuncImpl->_max_size_of_locals << " "<<currentFuncImpl->_size_of_locals<<"\n";
                     if(debugFunction)
                         debugFunction->addVar(varname.name,
@@ -5439,7 +5772,31 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
         //         }
         //     }
         // }
-        if(statement->firstExpression){
+
+        if(statement->firstExpression && statement->firstExpression->type == EXPR_INITIALIZER) {
+            Assert(statement->varnames.size() == 1);
+            auto& varname = statement->varnames[0];
+            auto varinfo = varname.identifier;
+            BCRegister ref_reg = BC_REG_B;
+            int offset = 0;
+            switch(varinfo->type) {
+                case Identifier::LOCAL_VARIABLE: {
+                    ref_reg = BC_REG_LOCALS;
+                    offset = varinfo->versions_dataOffset[currentPolyVersion];
+                } break;
+                case Identifier::MEMBER_VARIABLE: {
+                    Assert(currentFunction && currentFunction->parentStruct);
+                    auto type = varinfo->versions_typeId[currentPolyVersion];
+                    Assert(type.getPointerLevel() > 0);
+                    builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false);
+                    offset = varinfo->versions_dataOffset[currentPolyVersion];
+                } break;
+                default: Assert(false);
+            }
+
+            SignalIO result = generateAssignedInitializing(ref_reg, offset, varinfo->versions_typeId[currentPolyVersion], statement->firstExpression->as<ASTExpressionInitializer>());
+            if (result != SIGNAL_SUCCESS)  return SIGNAL_FAILURE;
+        } else if(statement->firstExpression){
             SignalIO result = generateExpression(statement->firstExpression, &rightTypes);
             if (result != SIGNAL_SUCCESS) {
                 // assign fails and variable will not be declared potentially causing
@@ -5628,7 +5985,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
         }
 
         i32 switchValueOffset = 0; // frame offset
-        framePush(exprType, &switchValueOffset,false, false);
+        framePush(exprType, &switchValueOffset, false);
         
         TypeId dtype = {};
         TEMP_ARRAY_N(TypeId, tempTypes, 5);
@@ -5886,7 +6243,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             auto varinfo_index = varnameNr.identifier;
             {
                 TypeId typeId = TYPE_INT32; // you may want to use the type in varname, the reason i don't is because
-                framePush(typeId, &varinfo_index->versions_dataOffset[info.currentPolyVersion],false, false);
+                framePush(typeId, &varinfo_index->versions_dataOffset[info.currentPolyVersion],false);
 
                 TypeId dtype = {};
                 // Type should be checked in type checker and further down
@@ -5976,7 +6333,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             auto varinfo_index = varnameNr.identifier;
 
             {
-                SignalIO result = framePush(varinfo_index->versions_typeId[info.currentPolyVersion], &varinfo_index->versions_dataOffset[info.currentPolyVersion], false, false);
+                SignalIO result = framePush(varinfo_index->versions_typeId[info.currentPolyVersion], &varinfo_index->versions_dataOffset[info.currentPolyVersion], false);
 
                 if(statement->isReverse()){
                     TypeId dtype = {};
@@ -6008,7 +6365,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                 if(asize==0)
                     return SIGNAL_FAILURE;
 
-                SignalIO result = framePush(varinfo_item->versions_typeId[info.currentPolyVersion], &varinfo_item->versions_dataOffset[info.currentPolyVersion], true, false);
+                SignalIO result = framePush(varinfo_item->versions_typeId[info.currentPolyVersion], &varinfo_item->versions_dataOffset[info.currentPolyVersion], true);
             }
 
             _GLOG(log::out << "push loop\n");
@@ -6129,7 +6486,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             Assert(array_typeinfo);
 
             {
-                SignalIO result = framePush(varinfo_index->versions_typeId[info.currentPolyVersion], &varinfo_index->versions_dataOffset[info.currentPolyVersion], false, false);
+                SignalIO result = framePush(varinfo_index->versions_typeId[info.currentPolyVersion], &varinfo_index->versions_dataOffset[info.currentPolyVersion], false);
 
                 if(statement->isReverse()){
                     // TypeId dtype = {};
@@ -6163,7 +6520,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                 if(asize==0)
                     return SIGNAL_FAILURE;
 
-                SignalIO result = framePush(varinfo_item->versions_typeId[info.currentPolyVersion], &varinfo_item->versions_dataOffset[info.currentPolyVersion], true, false);
+                SignalIO result = framePush(varinfo_item->versions_typeId[info.currentPolyVersion], &varinfo_item->versions_dataOffset[info.currentPolyVersion], true);
             }
 
             _GLOG(log::out << "push loop\n");
@@ -6306,7 +6663,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             
             int iterator_offset = 0;
             { // create_iterator
-                result = framePush(iterator_type, &iterator_offset, false, false);
+                result = framePush(iterator_type, &iterator_offset, false);
                 
                 auto signature = &create_overload.funcImpl->signature;
                 int allocated_stack_space = signature->argSize;
@@ -6757,7 +7114,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             }
         }
         if(vartype.isValid()) {
-            SignalIO result = framePush(vartype, &data_offset, false, false);
+            SignalIO result = framePush(vartype, &data_offset, false);
             Assert(result == SIGNAL_SUCCESS || hasAnyErrors());
 
             for(int i=0;i<statement->switchCases.size();i++) {

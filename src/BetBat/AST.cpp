@@ -2691,12 +2691,10 @@ int AST::getTypeAlignedSize(TypeId typeId) {
     // if(ti == typeInfos.end())
     //     return 0;
     // return ti->second->size();
-    if (ti->astStruct) {
-        if(ti->structImpl)
-            return ti->structImpl->alignedSize;
-        else
-            return 0;
-    }
+    if (ti->structImpl)
+        return ti->structImpl->alignedSize;
+    else if(ti->isArray())
+        return getTypeAlignedSize(ti->element_type);
     return ti->_size > REGISTER_SIZE ? REGISTER_SIZE : ti->_size;
 }
 void ASTExpression::printArgTypes(AST* ast, QuickArray<TypeId>& argTypes){

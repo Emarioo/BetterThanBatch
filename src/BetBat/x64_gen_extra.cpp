@@ -232,8 +232,9 @@ bool X64Builder::generate() {
     X64Inst* original_recipient = nullptr;
     int original_recipient_regnr = 0;
 
+    // tinycode->print(n->bc_index - 32, n->bc_index+8, bytecode);
     #define PRINT_BYTECODE(MSG) \
-        tinycode->print(n->bc_index - 32, n->bc_index+8, bytecode); \
+        tinycode->print(n->bc_index, n->bc_index+8, bytecode); \
         log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR<< MSG; \
         log::out.flush();
 
@@ -993,9 +994,14 @@ bool X64Builder::generate() {
                 // emit1(OPCODE_NOP);
             } break;
             case BC_MOV_RR: {
+                auto base = (InstBase_op2*)n->base;
                 FIX_PRE_IN_OPERAND(1)
                 FIX_PRE_OUT_OPERAND(0)
-                emit_mov_reg_reg(reg0->reg, reg1->reg);
+                if(base->op1 == BC_REG_LOCALS) {
+                    emit_lea(reg0->reg, X64_REG_BP, -callee_saved_space);
+                } else {
+                    emit_mov_reg_reg(reg0->reg, reg1->reg);
+                }
                 FIX_POST_OUT_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
             } break;
@@ -1353,17 +1359,19 @@ bool X64Builder::generate() {
                 auto base = (InstBase_op1_imm16*)n->base;
                 FIX_PRE_OUT_OPERAND(0);
 
-                X64Register reg_local = X64_REG_BP;
-                int off = base->imm16 - callee_saved_space;
-                emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
-                emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
-                emit4((u32)off);
+                emit_lea(reg0->reg, X64_REG_BP, base->imm16 - callee_saved_space);
+
+                // X64Register reg_local = X64_REG_BP;
+                // int off = base->imm16 - callee_saved_space;
+                // emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
+                // emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                // emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
+                // emit4((u32)off);
 
 
-                emit_prefix(PREFIX_REXW, reg0->reg, reg_local);
-                emit1(OPCODE_ADD_REG_RM);
-                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), reg_local);
+                // emit_prefix(PREFIX_REXW, reg0->reg, reg_local);
+                // emit1(OPCODE_ADD_REG_RM);
+                // emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), reg_local);
 
                 FIX_POST_OUT_OPERAND(0);
             } break;

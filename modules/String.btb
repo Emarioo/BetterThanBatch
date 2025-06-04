@@ -107,16 +107,18 @@ struct StringBuilder {
         }
         
         str: char[21];
+        str_ptr := str.ptr
+        str_len := str.len
         used := 20;
         while value > 0 && used > 0 {
             num := value % 10;
             value = value / 10;
-            str[used] = num + '0';
+            str_ptr[used] = num + '0';
             used--;
         }
         // LN
-        str.ptr += used + 1;
-        str.len -= used + 1;
+        str_ptr += used + 1;
+        str_len -= used + 1;
 
         append(str)
 

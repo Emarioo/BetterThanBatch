@@ -41,13 +41,60 @@
 //     log(ints[nr])
 // }
 
-fn fun(s: char[]) {
+// struct Model {
+//     x: i32;
+//     y: i32[5];
+// }
+// model: Model;
+// { @dumpbc
+//     model = { 1, { 5 } }
+//     return model.x + model.y[0]
+// }
 
+
+{@dumpbc
+    x: i32[5]
+    x[0] = 2
+    x[1] = 6
+    // x[2] = 9
+
+    n := x
+    _test n[0]; 2
+    _test n[1]; 6
+    // _test n[2]; 9
 }
 
-s: char[23]
+// #import "OS"
 
-fun(s)
+// global num: i32;
+// main();
+// fn main() -> i32{
+//     // Bug 0: The address of global variables must be set before they are used in
+//     //  functions. Functions were evaluated before everything including globals which cause the issue.
+//     return num;
+// }
+
+// global str: char*;
+// str = Allocate(16);
+// *str; // This caused a crash at some point in time
+
+// TODO: Test that you can access globals from another file.
+
+
+// fn @intrinsic memcpy(dst: void*, src: void*, len: i64);
+
+// fn fun(s: char[]) -> char {
+//     return s.ptr[1]
+// }
+
+// { @dumpbc
+//     nom: i32;
+//     s: char[23]
+
+//     memcpy(s.ptr, "Helso".ptr, 5)
+
+//     return fun(s)
+// }
 
 
 // return local_arr
