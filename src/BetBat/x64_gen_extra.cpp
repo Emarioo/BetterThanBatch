@@ -55,14 +55,19 @@ bool X64Builder::generate() {
     for(int i=0;i<bytecode->externalRelocations.size();i++) {
         auto& rel = bytecode->externalRelocations[i];
         if(tinycode->index == rel.tinycode_index) {
-            auto& lib = bytecode->libraries->get(rel.library_index);
-            LinkConvention link = DetermineLinkConvention(lib.path);
-
-            if(link != LinkConvention::STATIC_IMPORT && link != LinkConvention::DYNAMIC_IMPORT) {
-                // TODO: Print the location of the directive that wasn't resolved.
-                //   Track modifications made by run directives?
-                log::out << log::RED << "ERROR: "<<log::NO_COLOR<<"The path to '"<<log::LIME<<lib.name<<log::NO_COLOR<<"' (\""<<lib.path<<"\") is not a dynamic or static library.\n";
-                return false;
+            LinkConvention link;
+            if (rel.library_index == -1) {
+                // nocheckin DON'T ASSUME STATIC IMPORT
+                link = LinkConvention::STATIC_IMPORT;
+            } else {
+                auto& lib = bytecode->libraries->get(rel.library_index);
+                link = DetermineLinkConvention(lib.path);
+                if(link != LinkConvention::STATIC_IMPORT && link != LinkConvention::DYNAMIC_IMPORT) {
+                    // TODO: Print the location of the directive that wasn't resolved.
+                    //   Track modifications made by run directives?
+                    log::out << log::RED << "ERROR: "<<log::NO_COLOR<<"The path to '"<<log::LIME<<lib.name<<log::NO_COLOR<<"' (\""<<lib.path<<"\") is not a dynamic or static library.\n";
+                    return false;
+                }
             }
 
             u8 opcode0 = tinycode->instructionSegment[rel.pc-3];
@@ -3830,19 +3835,23 @@ bool X64Builder::generate() {
         auto& rel = bytecode->externalRelocations[i];
         if(tinycode->index == rel.tinycode_index) {
             int off = get_map_translation(rel.pc);
-            auto& lib = bytecode->libraries->get(rel.library_index);
-            LinkConvention link = DetermineLinkConvention(lib.path);
             std::string alias = rel.name;
-            if(link == LinkConvention::DYNAMIC_IMPORT) {
-                if(compiler->options->target == TARGET_WINDOWS_x64) {
-                    // Windows has an import table of pointers and we
-                    // prefix with __imp_ to refer to that table.
-                    // Linux does not.
-                    alias = "__imp_" + alias;
+            std::string lib_path = "";
+            if (rel.library_index != -1) {
+                auto& lib = bytecode->libraries->get(rel.library_index);
+                LinkConvention link = DetermineLinkConvention(lib.path);
+                if(link == LinkConvention::DYNAMIC_IMPORT) {
+                    if(compiler->options->target == TARGET_WINDOWS_x64) {
+                        // Windows has an import table of pointers and we
+                        // prefix with __imp_ to refer to that table.
+                        // Linux does not.
+                        alias = "__imp_" + alias;
+                    }
                 }
+                lib_path = lib.path;
             }
 
-            program->addNamedUndefinedRelocation(alias, off, rel.tinycode_index, lib.path, rel.type == BC_REL_GLOBAL_VAR);
+            program->addNamedUndefinedRelocation(alias, off, rel.tinycode_index, lib_path, rel.type == BC_REL_GLOBAL_VAR);
             // found = true;
             // break;
         }

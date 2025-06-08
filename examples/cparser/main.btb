@@ -1,0 +1,17 @@
+
+#import "Logger"
+
+// #import "stdlib.h"
+// text := "-255"
+// x: i32 = atoi(text.ptr)
+// log(x)
+
+
+// #load "./util.lib"
+#load "./util.dll"
+#import "./util.h"
+// fn @import(clib) calculate(x: i32, y: i32) -> i32;
+x: i32 = calculate(1, 5)
+log(x)
+
+

@@ -1,0 +1,1474 @@
+# 0 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+# 0 "<built-in>"
+# 0 "<command-line>"
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+# 9 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 1 3
+# 10 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 1 3
+# 10 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 3
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw_mac.h" 1 3
+# 98 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw_mac.h" 3
+             
+# 107 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw_mac.h" 3
+             
+# 306 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw_mac.h" 3
+       
+# 384 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw_mac.h" 3
+       
+# 11 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 2 3
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw_secapi.h" 1 3
+# 12 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 2 3
+# 282 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 3
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/vadefs.h" 1 3
+# 9 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/vadefs.h" 3
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 1 3
+# 661 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 3
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/sdks/_mingw_ddk.h" 1 3
+# 662 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 2 3
+# 10 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/vadefs.h" 2 3
+
+
+
+
+#pragma pack(push,_CRT_PACKING)
+# 24 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/vadefs.h" 3
+  
+# 24 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/vadefs.h" 3
+ typedef __builtin_va_list __gnuc_va_list;
+
+
+
+
+
+
+  typedef __gnuc_va_list va_list;
+# 103 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/vadefs.h" 3
+#pragma pack(pop)
+# 283 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 2 3
+# 580 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 3
+void __attribute__((__cdecl__)) __debugbreak(void);
+extern __inline__ __attribute__((__always_inline__,__gnu_inline__)) void __attribute__((__cdecl__)) __debugbreak(void)
+{
+
+  __asm__ __volatile__("int {$}3":);
+
+
+
+
+
+
+
+}
+# 601 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 3
+void __attribute__((__cdecl__)) __attribute__ ((__noreturn__)) __fastfail(unsigned int code);
+extern __inline__ __attribute__((__always_inline__,__gnu_inline__)) void __attribute__((__cdecl__)) __attribute__ ((__noreturn__)) __fastfail(unsigned int code)
+{
+
+  __asm__ __volatile__("int {$}0x29"::"c"(code));
+# 615 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 3
+  __builtin_unreachable();
+}
+# 641 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/_mingw.h" 3
+const char *__mingw_get_crt_info (void);
+# 11 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 2 3
+
+
+
+
+#pragma pack(push,_CRT_PACKING)
+# 35 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+__extension__ typedef unsigned long long size_t;
+# 45 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+__extension__ typedef long long ssize_t;
+
+
+
+
+
+
+typedef size_t rsize_t;
+# 62 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+__extension__ typedef long long intptr_t;
+# 75 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+__extension__ typedef unsigned long long uintptr_t;
+# 88 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+__extension__ typedef long long ptrdiff_t;
+# 98 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+typedef unsigned short wchar_t;
+
+
+
+
+
+
+
+typedef unsigned short wint_t;
+typedef unsigned short wctype_t;
+
+
+
+
+
+typedef int errno_t;
+
+
+
+
+typedef long __time32_t;
+
+
+
+
+__extension__ typedef long long __time64_t;
+# 138 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+typedef __time64_t time_t;
+# 430 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+struct threadlocaleinfostruct;
+struct threadmbcinfostruct;
+typedef struct threadlocaleinfostruct *pthreadlocinfo;
+typedef struct threadmbcinfostruct *pthreadmbcinfo;
+struct __lc_time_data;
+
+typedef struct localeinfo_struct {
+  pthreadlocinfo locinfo;
+  pthreadmbcinfo mbcinfo;
+} _locale_tstruct,*_locale_t;
+
+
+
+typedef struct tagLC_ID {
+  unsigned short wLanguage;
+  unsigned short wCountry;
+  unsigned short wCodePage;
+} LC_ID,*LPLC_ID;
+
+
+
+
+typedef struct threadlocaleinfostruct {
+
+
+
+
+
+  int refcount;
+  unsigned int lc_codepage;
+  unsigned int lc_collate_cp;
+  unsigned long lc_handle[6];
+  LC_ID lc_id[6];
+  struct {
+    char *locale;
+    wchar_t *wlocale;
+    int *refcount;
+    int *wrefcount;
+  } lc_category[6];
+  int lc_clike;
+  int mb_cur_max;
+  int *lconv_intl_refcount;
+  int *lconv_num_refcount;
+  int *lconv_mon_refcount;
+  struct lconv *lconv;
+  int *ctype1_refcount;
+  unsigned short *ctype1;
+  const unsigned short *pctype;
+  const unsigned char *pclmap;
+  const unsigned char *pcumap;
+  struct __lc_time_data *lc_time_curr;
+
+} threadlocinfo;
+# 501 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt.h" 3
+#pragma pack(pop)
+# 10 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 2
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt_wstdlib.h" 1 3
+# 15 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/corecrt_wstdlib.h" 3
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _itow_s (int _Val,wchar_t *_DstBuf,size_t _SizeInWords,int _Radix);
+ 
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _ltow_s (long _Val,wchar_t *_DstBuf,size_t _SizeInWords,int _Radix);
+ 
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _ultow_s (unsigned long _Val,wchar_t *_DstBuf,size_t _SizeInWords,int _Radix);
+ 
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _wgetenv_s(size_t *_ReturnSize,wchar_t *_DstBuf,size_t _DstSizeInWords,const wchar_t *_VarName);
+ 
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _wdupenv_s(wchar_t **_Buffer,size_t *_BufferSizeInWords,const wchar_t *_VarName);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _i64tow_s(long long _Val,wchar_t *_DstBuf,size_t _SizeInWords,int _Radix);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _ui64tow_s(unsigned long long _Val,wchar_t *_DstBuf,size_t _SizeInWords,int _Radix);
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _wmakepath_s(wchar_t *_PathResult,size_t _SizeInWords,const wchar_t *_Drive,const wchar_t *_Dir,const wchar_t *_Filename,const wchar_t *_Ext);
+ 
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _wputenv_s(const wchar_t *_Name,const wchar_t *_Value);
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _wsearchenv_s(const wchar_t *_Filename,const wchar_t *_EnvVar,wchar_t *_ResultPath,size_t _SizeInWords);
+ 
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _wsplitpath_s(const wchar_t *_FullPath,wchar_t *_Drive,size_t _DriveSizeInWords,wchar_t *_Dir,size_t _DirSizeInWords,wchar_t *_Filename,size_t _FilenameSizeInWords,wchar_t *_Ext,size_t _ExtSizeInWords);
+ 
+# 11 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 2
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/limits.h" 1 3 4
+# 34 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/limits.h" 3 4
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/syslimits.h" 1 3 4
+
+
+
+
+
+
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/limits.h" 1 3 4
+# 205 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/limits.h" 3 4
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/limits.h" 1 3 4
+
+
+
+
+
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/crtdefs.h" 1 3 4
+# 7 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/limits.h" 2 3 4
+# 206 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/limits.h" 2 3 4
+# 8 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/syslimits.h" 2 3 4
+# 35 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/limits.h" 2 3 4
+# 12 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 2
+# 26 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+#pragma pack(push,_CRT_PACKING)
+# 50 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  
+# 50 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+ typedef int (__attribute__((__cdecl__)) *_onexit_t)(void);
+# 60 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  typedef struct _div_t {
+    int quot;
+    int rem;
+  } div_t;
+
+  typedef struct _ldiv_t {
+    long quot;
+    long rem;
+  } ldiv_t;
+
+
+
+
+
+#pragma pack(4)
+  typedef struct {
+    unsigned char ld[10];
+  } _LDOUBLE;
+#pragma pack()
+
+
+
+  typedef struct {
+    double x;
+  } _CRT_DOUBLE;
+
+  typedef struct {
+    float f;
+  } _CRT_FLOAT;
+
+       
+
+
+  typedef struct {
+    long double x;
+  } _LONGDOUBLE;
+
+       
+
+#pragma pack(4)
+  typedef struct {
+    unsigned char ld12[12];
+  } _LDBL12;
+#pragma pack()
+# 116 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  extern int * 
+# 116 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+              __imp___mb_cur_max
+# 116 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                              ;
+
+
+
+
+
+# 121 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+__attribute__ ((__dllimport__)) 
+# 121 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+       int __attribute__((__cdecl__)) ___mb_cur_max_func(void);
+# 143 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  typedef void (__attribute__((__cdecl__)) *_purecall_handler)(void);
+
+  
+# 145 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 145 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         _purecall_handler __attribute__((__cdecl__)) _set_purecall_handler(_purecall_handler _Handler);
+  
+# 146 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 146 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         _purecall_handler __attribute__((__cdecl__)) _get_purecall_handler(void);
+
+  typedef void (__attribute__((__cdecl__)) *_invalid_parameter_handler)(const wchar_t *,const wchar_t *,const wchar_t *,unsigned int,uintptr_t);
+  
+# 149 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 149 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         _invalid_parameter_handler __attribute__((__cdecl__)) _set_invalid_parameter_handler(_invalid_parameter_handler _Handler);
+  
+# 150 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 150 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         _invalid_parameter_handler __attribute__((__cdecl__)) _get_invalid_parameter_handler(void);
+
+
+
+  
+# 154 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 154 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         extern int *__attribute__((__cdecl__)) _errno(void);
+
+  errno_t __attribute__((__cdecl__)) _set_errno(int _Value);
+  errno_t __attribute__((__cdecl__)) _get_errno(int *_Value);
+
+  
+# 159 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 159 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         unsigned long *__attribute__((__cdecl__)) __doserrno(void);
+
+  errno_t __attribute__((__cdecl__)) _set_doserrno(unsigned long _Value);
+  errno_t __attribute__((__cdecl__)) _get_doserrno(unsigned long *_Value);
+# 173 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  extern __attribute__((dllimport)) char *_sys_errlist[1];
+  extern __attribute__((dllimport)) int _sys_nerr;
+
+
+
+
+
+  
+# 180 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 180 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         char ***__attribute__((__cdecl__)) __p___argv(void);
+  
+# 181 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 181 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int *__attribute__((__cdecl__)) __p__fmode(void);
+# 191 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  errno_t __attribute__((__cdecl__)) _get_pgmptr(char **_Value);
+  errno_t __attribute__((__cdecl__)) _get_wpgmptr(wchar_t **_Value);
+  
+# 193 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 193 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         errno_t __attribute__((__cdecl__)) _set_fmode(int _Mode);
+  
+# 194 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 194 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         errno_t __attribute__((__cdecl__)) _get_fmode(int *_PMode);
+# 282 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  extern int * 
+# 282 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+              __imp___argc
+# 282 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                        ;
+
+
+
+  extern char *** 
+# 286 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                 __imp___argv
+# 286 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                           ;
+
+
+
+  extern wchar_t *** 
+# 290 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                    __imp___wargv
+# 290 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                               ;
+# 322 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  extern char *** 
+# 322 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                 __imp__environ
+# 322 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                             ;
+
+
+
+
+  extern wchar_t *** 
+# 327 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                    __imp__wenviron
+# 327 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                 ;
+
+
+
+
+
+
+  extern char ** 
+# 334 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                __imp__pgmptr
+# 334 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                           ;
+
+
+
+
+  extern wchar_t ** 
+# 339 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                   __imp__wpgmptr
+# 339 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                               ;
+
+
+
+
+  extern unsigned int * 
+# 344 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                       __imp__osplatform
+# 344 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                      ;
+
+
+
+
+  extern unsigned int * 
+# 349 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                       __imp__osver
+# 349 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                 ;
+
+
+
+
+  extern unsigned int * 
+# 354 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                       __imp__winver
+# 354 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                  ;
+
+
+
+
+  extern unsigned int * 
+# 359 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                       __imp__winmajor
+# 359 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                    ;
+
+
+
+
+  extern unsigned int * 
+# 364 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                       __imp__winminor
+# 364 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                    ;
+
+
+
+
+
+  errno_t __attribute__((__cdecl__)) _get_osplatform(unsigned int *_Value);
+  errno_t __attribute__((__cdecl__)) _get_osver(unsigned int *_Value);
+  errno_t __attribute__((__cdecl__)) _get_winver(unsigned int *_Value);
+  errno_t __attribute__((__cdecl__)) _get_winmajor(unsigned int *_Value);
+  errno_t __attribute__((__cdecl__)) _get_winminor(unsigned int *_Value);
+# 388 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  void __attribute__((__cdecl__)) 
+# 388 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+              __attribute__ ((__nothrow__)) 
+# 388 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                              exit(int _Code) 
+# 388 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                              __attribute__ ((__noreturn__))
+# 388 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                     ;
+  void __attribute__((__cdecl__)) 
+# 389 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+              __attribute__ ((__nothrow__)) 
+# 389 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                              _exit(int _Code) 
+# 389 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                               __attribute__ ((__noreturn__))
+# 389 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                      ;
+
+
+
+
+
+
+  void __attribute__((__cdecl__)) _Exit(int) 
+# 396 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                         __attribute__ ((__noreturn__))
+# 396 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                ;
+
+
+
+
+
+
+       
+
+  void __attribute__((__cdecl__)) 
+# 405 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+              __attribute__ ((__noreturn__)) 
+# 405 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                      abort(void);
+       
+
+
+
+  
+# 410 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 410 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         unsigned int __attribute__((__cdecl__)) _set_abort_behavior(unsigned int _Flags,unsigned int _Mask);
+
+
+
+  int __attribute__((__cdecl__)) abs(int _X);
+  long __attribute__((__cdecl__)) labs(long _X);
+
+
+  
+# 418 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ long long __attribute__((__cdecl__)) _abs64(
+# 418 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                          long long
+# 418 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                 );
+
+  
+# 420 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ extern __inline__ __attribute__((__always_inline__,__gnu_inline__)) long long __attribute__((__cdecl__)) _abs64(
+# 420 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                              long long 
+# 420 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                      x) {
+    return __builtin_llabs(x);
+  }
+
+
+  int __attribute__((__cdecl__)) atexit(void (__attribute__((__cdecl__)) *)(void));
+
+
+
+
+
+  double __attribute__((__cdecl__)) atof(const char *_String);
+  double __attribute__((__cdecl__)) _atof_l(const char *_String,_locale_t _Locale);
+
+  int __attribute__((__cdecl__)) atoi(const char *_Str);
+  
+# 435 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 435 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _atoi_l(const char *_Str,_locale_t _Locale);
+  long __attribute__((__cdecl__)) atol(const char *_Str);
+  
+# 437 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 437 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         long __attribute__((__cdecl__)) _atol_l(const char *_Str,_locale_t _Locale);
+
+
+  void *__attribute__((__cdecl__)) bsearch(const void *_Key,const void *_Base,size_t _NumOfElements,size_t _SizeOfElements,int (__attribute__((__cdecl__)) *_PtFuncCompare)(const void *,const void *));
+  void __attribute__((__cdecl__)) qsort(void *_Base,size_t _NumOfElements,size_t _SizeOfElements,int (__attribute__((__cdecl__)) *_PtFuncCompare)(const void *,const void *));
+
+  unsigned short __attribute__((__cdecl__)) _byteswap_ushort(unsigned short _Short);
+  unsigned long __attribute__((__cdecl__)) _byteswap_ulong (unsigned long _Long);
+  
+# 445 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 445 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   unsigned 
+# 445 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                            long long __attribute__((__cdecl__)) _byteswap_uint64(unsigned 
+# 445 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                                      long long 
+# 445 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                              _Int64);
+  div_t __attribute__((__cdecl__)) div(int _Numerator,int _Denominator);
+  char *__attribute__((__cdecl__)) getenv(const char *_VarName) ;
+  
+# 448 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 448 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         char *__attribute__((__cdecl__)) _itoa(int _Value,char *_Dest,int _Radix);
+  
+# 449 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) 
+# 449 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                           char *__attribute__((__cdecl__)) _i64toa(
+# 449 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                 long long 
+# 449 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                         _Val,char *_DstBuf,int _Radix) ;
+  
+# 450 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) 
+# 450 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                           char *__attribute__((__cdecl__)) _ui64toa(unsigned 
+# 450 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                           long long 
+# 450 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                   _Val,char *_DstBuf,int _Radix) ;
+  
+# 451 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) long long __attribute__((__cdecl__)) _atoi64(const char *_String);
+  
+# 452 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) long long __attribute__((__cdecl__)) _atoi64_l(const char *_String,_locale_t _Locale);
+  
+# 453 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) long long __attribute__((__cdecl__)) _strtoi64(const char *_String,char **_EndPtr,int _Radix);
+  
+# 454 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) long long __attribute__((__cdecl__)) _strtoi64_l(const char *_String,char **_EndPtr,int _Radix,_locale_t _Locale);
+  
+# 455 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) 
+# 455 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                           unsigned 
+# 455 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                    long long __attribute__((__cdecl__)) _strtoui64(const char *_String,char **_EndPtr,int _Radix);
+  
+# 456 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) 
+# 456 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                           unsigned 
+# 456 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                    long long __attribute__((__cdecl__)) _strtoui64_l(const char *_String,char **_EndPtr,int _Radix,_locale_t _Locale);
+  ldiv_t __attribute__((__cdecl__)) ldiv(long _Numerator,long _Denominator);
+  
+# 458 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 458 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         char *__attribute__((__cdecl__)) _ltoa(long _Value,char *_Dest,int _Radix) ;
+  int __attribute__((__cdecl__)) mblen(const char *_Ch,size_t _MaxCount);
+  
+# 460 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 460 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _mblen_l(const char *_Ch,size_t _MaxCount,_locale_t _Locale);
+  
+# 461 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 461 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         size_t __attribute__((__cdecl__)) _mbstrlen(const char *_Str);
+  
+# 462 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 462 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         size_t __attribute__((__cdecl__)) _mbstrlen_l(const char *_Str,_locale_t _Locale);
+  
+# 463 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 463 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         size_t __attribute__((__cdecl__)) _mbstrnlen(const char *_Str,size_t _MaxCount);
+  
+# 464 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 464 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         size_t __attribute__((__cdecl__)) _mbstrnlen_l(const char *_Str,size_t _MaxCount,_locale_t _Locale);
+  int __attribute__((__cdecl__)) mbtowc(wchar_t * __restrict__ _DstCh,const char * __restrict__ _SrcCh,size_t _SrcSizeInBytes);
+  
+# 466 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 466 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _mbtowc_l(wchar_t * __restrict__ _DstCh,const char * __restrict__ _SrcCh,size_t _SrcSizeInBytes,_locale_t _Locale);
+  size_t __attribute__((__cdecl__)) mbstowcs(wchar_t * __restrict__ _Dest,const char * __restrict__ _Source,size_t _MaxCount);
+  
+# 468 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 468 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         size_t __attribute__((__cdecl__)) _mbstowcs_l(wchar_t * __restrict__ _Dest,const char * __restrict__ _Source,size_t _MaxCount,_locale_t _Locale);
+  int __attribute__((__cdecl__)) mkstemp(char *template_name);
+  int __attribute__((__cdecl__)) rand(void);
+  
+# 471 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 471 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _set_error_mode(int _Mode);
+  void __attribute__((__cdecl__)) srand(unsigned int _Seed);
+# 483 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+
+# 483 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+static __attribute__ ((__unused__)) __inline__ __attribute__((__cdecl__))
+
+# 484 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+double __attribute__((__cdecl__)) 
+# 484 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+              __attribute__ ((__nothrow__)) 
+# 484 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                              strtod(const char * __restrict__ _Str,char ** __restrict__ _EndPtr)
+{
+  double __attribute__((__cdecl__)) __mingw_strtod (const char * __restrict__, char ** __restrict__);
+  return __mingw_strtod( _Str, _EndPtr);
+}
+
+
+# 490 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+static __attribute__ ((__unused__)) __inline__ __attribute__((__cdecl__))
+
+# 491 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+float __attribute__((__cdecl__)) 
+# 491 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+             __attribute__ ((__nothrow__)) 
+# 491 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                             strtof(const char * __restrict__ _Str,char ** __restrict__ _EndPtr)
+{
+  float __attribute__((__cdecl__)) __mingw_strtof (const char * __restrict__, char ** __restrict__);
+  return __mingw_strtof( _Str, _EndPtr);
+}
+
+
+
+
+
+
+  long double __attribute__((__cdecl__)) 
+# 502 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                     __attribute__ ((__nothrow__)) 
+# 502 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                     strtold(const char * __restrict__ , char ** __restrict__ );
+
+
+  extern double __attribute__((__cdecl__)) 
+# 505 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                       __attribute__ ((__nothrow__))
+  
+# 506 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+ __strtod (const char * __restrict__ , char ** __restrict__);
+
+
+
+
+
+
+
+  float __attribute__((__cdecl__)) __mingw_strtof (const char * __restrict__, char ** __restrict__);
+  double __attribute__((__cdecl__)) __mingw_strtod (const char * __restrict__, char ** __restrict__);
+  long double __attribute__((__cdecl__)) __mingw_strtold(const char * __restrict__, char ** __restrict__);
+
+  
+# 518 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 518 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         float __attribute__((__cdecl__)) _strtof_l(const char * __restrict__ _Str,char ** __restrict__ _EndPtr,_locale_t _Locale);
+  
+# 519 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 519 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         double __attribute__((__cdecl__)) _strtod_l(const char * __restrict__ _Str,char ** __restrict__ _EndPtr,_locale_t _Locale);
+  long __attribute__((__cdecl__)) strtol(const char * __restrict__ _Str,char ** __restrict__ _EndPtr,int _Radix);
+  
+# 521 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 521 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         long __attribute__((__cdecl__)) _strtol_l(const char * __restrict__ _Str,char ** __restrict__ _EndPtr,int _Radix,_locale_t _Locale);
+  unsigned long __attribute__((__cdecl__)) strtoul(const char * __restrict__ _Str,char ** __restrict__ _EndPtr,int _Radix);
+  
+# 523 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 523 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         unsigned long __attribute__((__cdecl__)) _strtoul_l(const char * __restrict__ _Str,char ** __restrict__ _EndPtr,int _Radix,_locale_t _Locale);
+
+
+  int __attribute__((__cdecl__)) system(const char *_Command);
+
+  
+# 528 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 528 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         char *__attribute__((__cdecl__)) _ultoa(unsigned long _Value,char *_Dest,int _Radix) ;
+  int __attribute__((__cdecl__)) wctomb(char *_MbCh,wchar_t _WCh) ;
+  
+# 530 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 530 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _wctomb_l(char *_MbCh,wchar_t _WCh,_locale_t _Locale) ;
+  size_t __attribute__((__cdecl__)) wcstombs(char * __restrict__ _Dest,const wchar_t * __restrict__ _Source,size_t _MaxCount) ;
+  
+# 532 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 532 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         size_t __attribute__((__cdecl__)) _wcstombs_l(char * __restrict__ _Dest,const wchar_t * __restrict__ _Source,size_t _MaxCount,_locale_t _Locale) ;
+
+
+
+  void *__attribute__((__cdecl__)) calloc(size_t _NumOfElements,size_t _SizeOfElements);
+  void __attribute__((__cdecl__)) free(void *_Memory);
+  void *__attribute__((__cdecl__)) malloc(size_t _Size);
+  void *__attribute__((__cdecl__)) realloc(void *_Memory,size_t _NewSize);
+  
+# 540 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 540 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _aligned_free(void *_Memory);
+  
+# 541 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 541 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void *__attribute__((__cdecl__)) _aligned_malloc(size_t _Size,size_t _Alignment);
+  
+# 542 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 542 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void *__attribute__((__cdecl__)) _aligned_offset_malloc(size_t _Size,size_t _Alignment,size_t _Offset);
+  
+# 543 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 543 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void *__attribute__((__cdecl__)) _aligned_realloc(void *_Memory,size_t _Size,size_t _Alignment);
+  
+# 544 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 544 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void *__attribute__((__cdecl__)) _aligned_offset_realloc(void *_Memory,size_t _Size,size_t _Alignment,size_t _Offset);
+# 556 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  
+# 556 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 556 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         wchar_t *__attribute__((__cdecl__)) _itow(int _Value,wchar_t *_Dest,int _Radix) ;
+  
+# 557 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 557 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         wchar_t *__attribute__((__cdecl__)) _ltow(long _Value,wchar_t *_Dest,int _Radix) ;
+  
+# 558 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 558 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         wchar_t *__attribute__((__cdecl__)) _ultow(unsigned long _Value,wchar_t *_Dest,int _Radix) ;
+
+  double __attribute__((__cdecl__)) __mingw_wcstod(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr);
+  float __attribute__((__cdecl__)) __mingw_wcstof(const wchar_t * __restrict__ nptr, wchar_t ** __restrict__ endptr);
+  long double __attribute__((__cdecl__)) __mingw_wcstold(const wchar_t * __restrict__, wchar_t ** __restrict__);
+
+
+  
+# 565 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ static __attribute__ ((__unused__)) __inline__ __attribute__((__cdecl__))
+  
+# 566 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+ double __attribute__((__cdecl__)) wcstod(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr){
+    return __mingw_wcstod(_Str,_EndPtr);
+  }
+  
+# 569 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ static __attribute__ ((__unused__)) __inline__ __attribute__((__cdecl__))
+  
+# 570 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+ float __attribute__((__cdecl__)) wcstof(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr){
+    return __mingw_wcstof(_Str,_EndPtr);
+  }
+
+
+
+
+
+
+  long double __attribute__((__cdecl__)) wcstold(const wchar_t * __restrict__, wchar_t ** __restrict__);
+
+  
+# 581 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 581 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         double __attribute__((__cdecl__)) _wcstod_l(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr,_locale_t _Locale);
+  
+# 582 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 582 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         float __attribute__((__cdecl__)) _wcstof_l(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr,_locale_t _Locale);
+  long __attribute__((__cdecl__)) wcstol(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr,int _Radix);
+  
+# 584 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 584 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         long __attribute__((__cdecl__)) _wcstol_l(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr,int _Radix,_locale_t _Locale);
+  unsigned long __attribute__((__cdecl__)) wcstoul(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr,int _Radix);
+  
+# 586 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 586 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         unsigned long __attribute__((__cdecl__)) _wcstoul_l(const wchar_t * __restrict__ _Str,wchar_t ** __restrict__ _EndPtr,int _Radix,_locale_t _Locale);
+  
+# 587 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 587 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         wchar_t *__attribute__((__cdecl__)) _wgetenv(const wchar_t *_VarName) ;
+
+
+  
+# 590 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 590 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _wsystem(const wchar_t *_Command);
+
+  
+# 592 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 592 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         double __attribute__((__cdecl__)) _wtof(const wchar_t *_Str);
+  
+# 593 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 593 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         double __attribute__((__cdecl__)) _wtof_l(const wchar_t *_Str,_locale_t _Locale);
+  
+# 594 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 594 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _wtoi(const wchar_t *_Str);
+  
+# 595 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 595 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _wtoi_l(const wchar_t *_Str,_locale_t _Locale);
+  
+# 596 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 596 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         long __attribute__((__cdecl__)) _wtol(const wchar_t *_Str);
+  
+# 597 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 597 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         long __attribute__((__cdecl__)) _wtol_l(const wchar_t *_Str,_locale_t _Locale);
+
+  
+# 599 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) 
+# 599 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                           wchar_t *__attribute__((__cdecl__)) _i64tow(
+# 599 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                    long long 
+# 599 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                            _Val,wchar_t *_DstBuf,int _Radix) ;
+  
+# 600 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) 
+# 600 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                           wchar_t *__attribute__((__cdecl__)) _ui64tow(unsigned 
+# 600 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                              long long 
+# 600 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                      _Val,wchar_t *_DstBuf,int _Radix) ;
+  
+# 601 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) long long __attribute__((__cdecl__)) _wtoi64(const wchar_t *_Str);
+  
+# 602 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) long long __attribute__((__cdecl__)) _wtoi64_l(const wchar_t *_Str,_locale_t _Locale);
+  
+# 603 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) long long __attribute__((__cdecl__)) _wcstoi64(const wchar_t *_Str,wchar_t **_EndPtr,int _Radix);
+  
+# 604 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) long long __attribute__((__cdecl__)) _wcstoi64_l(const wchar_t *_Str,wchar_t **_EndPtr,int _Radix,_locale_t _Locale);
+  
+# 605 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) 
+# 605 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                           unsigned 
+# 605 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                    long long __attribute__((__cdecl__)) _wcstoui64(const wchar_t *_Str,wchar_t **_EndPtr,int _Radix);
+  
+# 606 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ __attribute__ ((__dllimport__)) 
+# 606 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                           unsigned 
+# 606 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                    long long __attribute__((__cdecl__)) _wcstoui64_l(const wchar_t *_Str ,wchar_t **_EndPtr,int _Radix,_locale_t _Locale);
+
+
+  
+# 609 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 609 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _putenv(const char *_EnvString);
+  
+# 610 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 610 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _wputenv(const wchar_t *_EnvString);
+
+
+
+  
+# 614 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 614 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         char *__attribute__((__cdecl__)) _fullpath(char *_FullPath,const char *_Path,size_t _SizeInBytes);
+  
+# 615 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 615 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         char *__attribute__((__cdecl__)) _ecvt(double _Val,int _NumOfDigits,int *_PtDec,int *_PtSign) ;
+  
+# 616 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 616 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         char *__attribute__((__cdecl__)) _fcvt(double _Val,int _NumOfDec,int *_PtDec,int *_PtSign) ;
+  
+# 617 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 617 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         char *__attribute__((__cdecl__)) _gcvt(double _Val,int _NumOfDigits,char *_DstBuf) ;
+  
+# 618 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 618 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _atodbl(_CRT_DOUBLE *_Result,char *_Str);
+  
+# 619 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 619 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _atoldbl(_LDOUBLE *_Result,char *_Str);
+  
+# 620 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 620 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _atoflt(_CRT_FLOAT *_Result,char *_Str);
+  
+# 621 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 621 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _atodbl_l(_CRT_DOUBLE *_Result,char *_Str,_locale_t _Locale);
+  
+# 622 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 622 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _atoldbl_l(_LDOUBLE *_Result,char *_Str,_locale_t _Locale);
+  
+# 623 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 623 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         int __attribute__((__cdecl__)) _atoflt_l(_CRT_FLOAT *_Result,char *_Str,_locale_t _Locale);
+# 639 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+unsigned long __attribute__((__cdecl__)) _lrotl(unsigned long,int);
+unsigned long __attribute__((__cdecl__)) _lrotr(unsigned long,int);
+
+
+
+
+
+  
+# 646 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 646 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _makepath(char *_Path,const char *_Drive,const char *_Dir,const char *_Filename,const char *_Ext);
+  _onexit_t __attribute__((__cdecl__)) _onexit(_onexit_t _Func);
+
+
+
+  void __attribute__((__cdecl__)) perror(const char *_ErrMsg);
+
+       
+       
+
+
+  
+# 657 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 657 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   unsigned 
+# 657 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                            long long __attribute__((__cdecl__)) _rotl64(unsigned 
+# 657 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                             long long 
+# 657 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                     _Val,int _Shift);
+  
+# 658 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 658 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   unsigned 
+# 658 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                            long long __attribute__((__cdecl__)) _rotr64(unsigned 
+# 658 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                             long long 
+# 658 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                     Value,int Shift);
+       
+       
+       
+       
+
+
+  unsigned int __attribute__((__cdecl__)) _rotr(unsigned int _Val,int _Shift);
+  unsigned int __attribute__((__cdecl__)) _rotl(unsigned int _Val,int _Shift);
+       
+       
+  
+# 669 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 669 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   unsigned 
+# 669 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                            long long __attribute__((__cdecl__)) _rotr64(unsigned 
+# 669 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                             long long 
+# 669 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                     _Val,int _Shift);
+  
+# 670 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 670 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _searchenv(const char *_Filename,const char *_EnvVar,char *_ResultPath) ;
+  
+# 671 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 671 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _splitpath(const char *_FullPath,char *_Drive,char *_Dir,char *_Filename,char *_Ext) ;
+  
+# 672 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 672 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _swab(char *_Buf1,char *_Buf2,int _SizeInBytes);
+
+
+
+  
+# 676 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 676 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         wchar_t *__attribute__((__cdecl__)) _wfullpath(wchar_t *_FullPath,const wchar_t *_Path,size_t _SizeInWords);
+  
+# 677 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 677 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _wmakepath(wchar_t *_ResultPath,const wchar_t *_Drive,const wchar_t *_Dir,const wchar_t *_Filename,const wchar_t *_Ext);
+
+
+  
+# 680 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 680 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _wperror(const wchar_t *_ErrMsg);
+
+  
+# 682 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 682 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _wsearchenv(const wchar_t *_Filename,const wchar_t *_EnvVar,wchar_t *_ResultPath) ;
+  
+# 683 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 683 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _wsplitpath(const wchar_t *_FullPath,wchar_t *_Drive,wchar_t *_Dir,wchar_t *_Filename,wchar_t *_Ext) ;
+
+
+  
+# 686 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 686 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _beep(unsigned _Frequency,unsigned _Duration) 
+# 686 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                                    __attribute__ ((__deprecated__))
+# 686 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                                             ;
+
+  
+# 688 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 688 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _seterrormode(int _Mode) 
+# 688 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                               __attribute__ ((__deprecated__))
+# 688 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                        ;
+  
+# 689 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __attribute__ ((__dllimport__)) 
+# 689 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+         void __attribute__((__cdecl__)) _sleep(unsigned long _Duration) 
+# 689 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                                                      __attribute__ ((__deprecated__))
+# 689 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                                                               ;
+# 710 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+  char *__attribute__((__cdecl__)) ecvt(double _Val,int _NumOfDigits,int *_PtDec,int *_PtSign) ;
+  char *__attribute__((__cdecl__)) fcvt(double _Val,int _NumOfDec,int *_PtDec,int *_PtSign) ;
+  char *__attribute__((__cdecl__)) gcvt(double _Val,int _NumOfDigits,char *_DstBuf) ;
+  char *__attribute__((__cdecl__)) itoa(int _Val,char *_DstBuf,int _Radix) ;
+  char *__attribute__((__cdecl__)) ltoa(long _Val,char *_DstBuf,int _Radix) ;
+  int __attribute__((__cdecl__)) putenv(const char *_EnvString) ;
+
+
+
+  void __attribute__((__cdecl__)) swab(char *_Buf1,char *_Buf2,int _SizeInBytes) ;
+
+
+  char *__attribute__((__cdecl__)) ultoa(unsigned long _Val,char *_Dstbuf,int _Radix) ;
+  _onexit_t __attribute__((__cdecl__)) onexit(_onexit_t _Func);
+
+
+
+
+
+  typedef struct { 
+# 729 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+                  __extension__ 
+# 729 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                                    long long quot, rem; } lldiv_t;
+
+  
+# 731 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 731 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   lldiv_t __attribute__((__cdecl__)) lldiv(long long, long long);
+
+  
+# 733 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 733 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   long long __attribute__((__cdecl__)) llabs(long long);
+
+
+
+
+  
+# 738 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 738 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   long long __attribute__((__cdecl__)) strtoll(const char * __restrict__, char ** __restrict, int);
+  
+# 739 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 739 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   unsigned long long __attribute__((__cdecl__)) strtoull(const char * __restrict__, char ** __restrict__, int);
+
+
+  
+# 742 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 742 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   long long __attribute__((__cdecl__)) atoll (const char *);
+
+
+  
+# 745 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 745 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   long long __attribute__((__cdecl__)) wtoll (const wchar_t *);
+  
+# 746 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 746 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   char *__attribute__((__cdecl__)) lltoa (long long, char *, int);
+  
+# 747 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 747 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   char *__attribute__((__cdecl__)) ulltoa (unsigned long long , char *, int);
+  
+# 748 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 748 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   wchar_t *__attribute__((__cdecl__)) lltow (long long, wchar_t *, int);
+  
+# 749 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 3
+ __extension__ 
+# 749 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+                   wchar_t *__attribute__((__cdecl__)) ulltow (unsigned long long, wchar_t *, int);
+# 767 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h"
+#pragma pack(pop)
+
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/sec_api/stdlib_s.h" 1 3
+# 9 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/sec_api/stdlib_s.h" 3
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 1 3
+# 10 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/sec_api/stdlib_s.h" 2 3
+
+
+
+
+
+  
+# 15 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/sec_api/stdlib_s.h" 3
+ __attribute__ ((__dllimport__)) void * __attribute__((__cdecl__)) bsearch_s(const void *_Key,const void *_Base,rsize_t _NumOfElements,rsize_t _SizeOfElements,int (__attribute__((__cdecl__)) * _PtFuncCompare)(void *, const void *, const void *), void *_Context);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _dupenv_s(char **_PBuffer,size_t *_PBufferSizeInBytes,const char *_VarName);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) getenv_s(size_t *_ReturnSize,char *_DstBuf,rsize_t _DstSize,const char *_VarName);
+ 
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _itoa_s(int _Value,char *_DstBuf,size_t _Size,int _Radix);
+ 
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _i64toa_s(long long _Val,char *_DstBuf,size_t _Size,int _Radix);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _ui64toa_s(unsigned long long _Val,char *_DstBuf,size_t _Size,int _Radix);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _ltoa_s(long _Val,char *_DstBuf,size_t _Size,int _Radix);
+ 
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) mbstowcs_s(size_t *_PtNumOfCharConverted,wchar_t *_DstBuf,size_t _SizeInWords,const char *_SrcBuf,size_t _MaxCount);
+ 
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _mbstowcs_s_l(size_t *_PtNumOfCharConverted,wchar_t *_DstBuf,size_t _SizeInWords,const char *_SrcBuf,size_t _MaxCount,_locale_t _Locale);
+ 
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _ultoa_s(unsigned long _Val,char *_DstBuf,size_t _Size,int _Radix);
+ 
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) wctomb_s(int *_SizeConverted,char *_MbCh,rsize_t _SizeInBytes,wchar_t _WCh);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _wctomb_s_l(int *_SizeConverted,char *_MbCh,size_t _SizeInBytes,wchar_t _WCh,_locale_t _Locale);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) wcstombs_s(size_t *_PtNumOfCharConverted,char *_Dst,size_t _DstSizeInBytes,const wchar_t *_Src,size_t _MaxCountInBytes);
+ 
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _wcstombs_s_l(size_t *_PtNumOfCharConverted,char *_Dst,size_t _DstSizeInBytes,const wchar_t *_Src,size_t _MaxCountInBytes,_locale_t _Locale);
+ 
+
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _ecvt_s(char *_DstBuf,size_t _Size,double _Val,int _NumOfDights,int *_PtDec,int *_PtSign);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _fcvt_s(char *_DstBuf,size_t _Size,double _Val,int _NumOfDec,int *_PtDec,int *_PtSign);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _gcvt_s(char *_DstBuf,size_t _Size,double _Val,int _NumOfDigits);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _makepath_s(char *_PathResult,size_t _Size,const char *_Drive,const char *_Dir,const char *_Filename,const char *_Ext);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _putenv_s(const char *_Name,const char *_Value);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _searchenv_s(const char *_Filename,const char *_EnvVar,char *_ResultPath,size_t _SizeInBytes);
+
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _splitpath_s(const char *_FullPath,char *_Drive,size_t _DriveSize,char *_Dir,size_t _DirSize,char *_Filename,size_t _FilenameSize,char *_Ext,size_t _ExtSize);
+ 
+
+
+
+  __attribute__ ((__dllimport__)) void __attribute__((__cdecl__)) qsort_s(void *_Base,size_t _NumOfElements,size_t _SizeOfElements,int (__attribute__((__cdecl__)) *_PtFuncCompare)(void *,const void *,const void *),void *_Context);
+# 770 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 2
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/malloc.h" 1 3
+# 11 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/malloc.h" 3
+#pragma pack(push,_CRT_PACKING)
+# 46 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/malloc.h" 3
+  typedef struct _heapinfo {
+    int *_pentry;
+    size_t _size;
+    int _useflag;
+  } _HEAPINFO;
+
+
+  extern unsigned int _amblksiz;
+# 77 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/malloc.h" 3
+void * __mingw_aligned_malloc (size_t _Size, size_t _Alignment);
+void __mingw_aligned_free (void *_Memory);
+void * __mingw_aligned_offset_realloc (void *_Memory, size_t _Size, size_t _Alignment, size_t _Offset);
+void * __mingw_aligned_realloc (void *_Memory, size_t _Size, size_t _Offset);
+
+
+
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/mm_malloc.h" 1 3 4
+# 29 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/mm_malloc.h" 3 4
+# 1 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/errno.h" 1 3 4
+# 30 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/mm_malloc.h" 2 3 4
+
+
+static __inline__ void *
+_mm_malloc (size_t __size, size_t __align)
+{
+  void * __malloc_ptr;
+  void * __aligned_ptr;
+
+
+  if (__align & (__align - 1))
+    {
+
+      
+# 42 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/mm_malloc.h"
+     (*_errno()) 
+# 42 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/lib/gcc/x86_64-w64-mingw32/13.2.0/include/mm_malloc.h" 3 4
+           = 22;
+
+      return ((void *) 0);
+    }
+
+  if (__size == 0)
+    return ((void *) 0);
+
+
+
+
+
+    if (__align < 2 * sizeof (void *))
+      __align = 2 * sizeof (void *);
+
+  __malloc_ptr = malloc (__size + __align);
+  if (!__malloc_ptr)
+    return ((void *) 0);
+
+
+  __aligned_ptr = (void *) (((size_t) __malloc_ptr + __align)
+       & ~((size_t) (__align) - 1));
+
+
+  ((void **) __aligned_ptr)[-1] = __malloc_ptr;
+
+  return __aligned_ptr;
+}
+
+static __inline__ void
+_mm_free (void *__aligned_ptr)
+{
+  if (__aligned_ptr)
+    free (((void **) __aligned_ptr)[-1]);
+}
+# 85 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/malloc.h" 2 3
+
+
+
+
+
+  __attribute__ ((__dllimport__)) int __attribute__((__cdecl__)) _resetstkoflw (void);
+
+  __attribute__ ((__dllimport__)) unsigned long __attribute__((__cdecl__)) _set_malloc_crt_max_wait(unsigned long _NewValue);
+
+  __attribute__ ((__dllimport__)) void *__attribute__((__cdecl__)) _expand(void *_Memory,size_t _NewSize);
+  __attribute__ ((__dllimport__)) size_t __attribute__((__cdecl__)) _msize(void *_Memory);
+
+
+
+
+
+
+  __attribute__ ((__dllimport__)) size_t __attribute__((__cdecl__)) _get_sbh_threshold(void);
+  __attribute__ ((__dllimport__)) int __attribute__((__cdecl__)) _set_sbh_threshold(size_t _NewValue);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _set_amblksiz(size_t _Value);
+  __attribute__ ((__dllimport__)) errno_t __attribute__((__cdecl__)) _get_amblksiz(size_t *_Value);
+  __attribute__ ((__dllimport__)) int __attribute__((__cdecl__)) _heapadd(void *_Memory,size_t _Size);
+  __attribute__ ((__dllimport__)) int __attribute__((__cdecl__)) _heapchk(void);
+  __attribute__ ((__dllimport__)) int __attribute__((__cdecl__)) _heapmin(void);
+  __attribute__ ((__dllimport__)) int __attribute__((__cdecl__)) _heapset(unsigned int _Fill);
+  __attribute__ ((__dllimport__)) int __attribute__((__cdecl__)) _heapwalk(_HEAPINFO *_EntryInfo);
+  __attribute__ ((__dllimport__)) size_t __attribute__((__cdecl__)) _heapused(size_t *_Used,size_t *_Commit);
+  __attribute__ ((__dllimport__)) intptr_t __attribute__((__cdecl__)) _get_heap_handle(void);
+# 125 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/malloc.h" 3
+  static __inline void *_MarkAllocaS(void *_Ptr,unsigned int _Marker) {
+    if(_Ptr) {
+      *((unsigned int*)_Ptr) = _Marker;
+      _Ptr = (char*)_Ptr + 16;
+    }
+    return _Ptr;
+  }
+# 144 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/malloc.h" 3
+  static __inline void __attribute__((__cdecl__)) _freea(void *_Memory) {
+    unsigned int _Marker;
+    if(_Memory) {
+      _Memory = (char*)_Memory - 16;
+      _Marker = *(unsigned int *)_Memory;
+      if(_Marker==0xDDDD) {
+ free(_Memory);
+      }
+
+
+
+
+
+    }
+  }
+# 190 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/malloc.h" 3
+#pragma pack(pop)
+# 771 "C:/Program Files/mingw-w64/x86_64-13.2.0-release-posix-seh-msvcrt-rt_v11-rev1/x86_64-w64-mingw32/include/stdlib.h" 2

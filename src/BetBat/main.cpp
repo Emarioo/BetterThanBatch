@@ -7,10 +7,12 @@
 
 #include "tracy/Tracy.hpp"
 
-#include <math.h>
+#include "math.h"
 
 #include "BetBat/Fuzzer.h"
 #include "BetBat/Lexer.h"
+
+#include "BetBat/CParser.h"
 
 #undef FILE_READ_ONLY // bye bye Windows defined flag
 #undef IMAGE_REL_AMD64_REL32
@@ -46,10 +48,10 @@ int main(int argc, const char** argv){
     // arguments.add("decode");
     // arguments.add("wa.o");
 
-    bool dev_cmd_success = CheckDeveloperCommand(arguments);
-    if(!dev_cmd_success) {
-        // error message should have been printed
-        return 1;
+    bool was_dev_cmd = CheckDeveloperCommand(arguments);
+    if(was_dev_cmd) {
+        // TODO: Dev command may have failed, we should return 1 in that case.
+        return 0;
     }
 
     // NOTE: I have not moved InterpretCommands and compiler option parsing to it's own file
@@ -221,31 +223,36 @@ int main(int argc, const char** argv){
 }
 bool CheckDeveloperCommand(const BaseArray<std::string>& args) {
     using namespace engone;
-    auto contains = [&](const BaseArray<std::string>& arr, const std::string& str) {
-        int index = -1;
-        for(int i=0;i<arr.size();i++) {
-            if(arr[i] == str) {
-                index = i;
-                break;
-            }
-        }
-        return index;
-    };
     
     // TODO: Should developer commands be described in help messages?
-    int index = contains(args, "decode");
-    if(index != -1) {
-        if(args.size() > index + 1) {
-            std::string path = args[index + 1];
+    if(args[0] == "decode") {
+        if(1 < args.size()) {
+            std::string path = args[1];
             FileCOFF::Destroy(FileCOFF::DeconstructFile(path, false));
-            return false;
+            return true;
         } else {
             log::out << log::RED << "You forgot an argument after 'decode'. If this message comes as a suprise, 'decode' is a special command for developers which deconstructs and prints the content of COFF files. \n";
-            return false;
+            return true;
         }
+    }
+    if(args[0] == "conv") {
+        if(2 < args.size()) {
+            log::out << log::YELLOW << "Usage of 'btb conv': btb conv <h_file> <out_btb_file>. \n";
+            log::out << "  conv will convert a C header to a BTB file. Same process as when importing C header in the language: '"<<log::GREEN<<"#import \"stdlib.h\""<<log::NO_COLOR<<"'\n";
+            return true;
+        }
+        std::string in_path = args[1];
+        std::string out_path = args[2];
+        std::string text = TranspileCFileToBTB(in_path);
+        
+        auto file = FileOpen(out_path,FILE_CLEAR_AND_WRITE);
+        FileWrite(file, text.c_str(), text.size());
+        FileClose(file);
+        log::out << "Transpiled " << in_path << " to "<<out_path<<"\n";
+
+        return true;
     }
 
     // args do not contain a developer command
-
-    return true;
+    return false;
 }

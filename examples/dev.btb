@@ -120,6 +120,41 @@ LoadCubeModel(&model)
 
 // log(glob)
 
+// #run {
+// struct Block {
+//     e: i32[8];
+// }
+
+// fn make() -> Block {
+//     b: Block;
+//     for 0..b.e.len
+//         b.e[nr] = nr+1
+//     return b
+// }
+// { @dumpbc
+// b := make()
+
+// // for 0..4 {
+// //     log(nr, " ", b.e[nr])
+// // }
+// _test 1+2+3+4; b.e[0] + b.e[1] + b.e[2] + b.e[3]
+// }
+// }
+
+// global glob: i32
+// #run {
+//     glob = asm<i32>(5,9){
+//         pop rax
+//         pop rcx
+        
+//         add rax, rcx
+//         push rax
+//     }
+//     log(glob)
+// }
+
+// log(glob)
+
 
 // memory_tracker.init()
 // memory_tracker.disabled = false

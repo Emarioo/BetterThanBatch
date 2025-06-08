@@ -358,8 +358,8 @@ namespace engone {
 		}
 		
 		DWORD creation = OPEN_EXISTING;
-		// if(flags&FILE_CAN_CREATE)
-		// 	creation = OPEN_ALWAYS;
+		if(flags&FILE_READ_AND_WRITE)
+			creation = OPEN_ALWAYS;
 		if(flags&FILE_CLEAR_AND_WRITE)
 			creation = CREATE_ALWAYS;
 		
@@ -1902,10 +1902,11 @@ namespace engone {
 			}
 		}else{
 			// TODO: what happens with return value when we don't wait for the process?	
+			printf("NO RETURN VALUE\n");
 		}
 		
-		CloseHandle(pi.hProcess);
-		CloseHandle(pi.hThread);
+		// CloseHandle(pi.hProcess);
+		// CloseHandle(pi.hThread);
 		
 		return true;
 	}

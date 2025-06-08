@@ -324,22 +324,34 @@ SignalIO PreprocContext::parseLoad(){
     if(evaluateTokens) {
         std::string real_path = path;
         DynamicArray<std::string> paths;
-        paths.add(path);
-        const std::string& exedir = compiler->compiler_executable_dir;
-        paths.add(JoinPaths(exedir, path));
-        if(exedir.size() > 5 && exedir.substr(exedir.size()-5) == "/bin/") {
-            paths.add(JoinPaths(exedir.substr(0,exedir.size()-4), path));
-        }
-        if (exedir.size() > 4 && exedir.substr(exedir.size()-4) == "/bin") {
-            paths.add(JoinPaths(exedir.substr(0,exedir.size()-3), path));
-        }
-        for(auto& dir : compiler->options->importDirectories) {
-            paths.add(JoinPaths(dir, path));
+        if(real_path.substr(0,2) == "./") {
+            int at = lexer_import->path.find_last_of("/");
+            if (at != -1) {
+                paths.add(JoinPaths(lexer_import->path.substr(0,at), real_path.substr(1)));
+            }
+        } else {
+            // TODO: We need to rethink which paths to add.
+            //   We don't want to rely on current working directory to find libraries.
+            //   The compiler should not depend on in which directory you compile the project.
+            paths.add(path);
+            const std::string& exedir = compiler->compiler_executable_dir;
+            paths.add(JoinPaths(exedir, path));
+            if(exedir.size() > 5 && exedir.substr(exedir.size()-5) == "/bin/") {
+                paths.add(JoinPaths(exedir.substr(0,exedir.size()-4), path));
+            }
+            if (exedir.size() > 4 && exedir.substr(exedir.size()-4) == "/bin") {
+                paths.add(JoinPaths(exedir.substr(0,exedir.size()-3), path));
+            }
+            for(auto& dir : compiler->options->importDirectories) {
+                paths.add(JoinPaths(dir, path));
+            }
         }
         LOG_CODE(LOG_LIBS,
             log::out << log::PURPLE << "Finding lib: "<<path<<"\n";
         )
+        // log::out << "Origin " << real_path<<"\n";
         for(auto& tmp : paths) {
+            // log::out << " " << tmp << "\n";
             bool yes = FileExist(tmp);
             if (yes) {
                 LOG_CODE(LOG_LIBS,
@@ -360,6 +372,7 @@ SignalIO PreprocContext::parseLoad(){
             compiler->addLibrary(import_id, real_path, name);
         if(name.size() == 0 || do_force) {
             Assert(compiler->program);
+            Assert(real_path.size() > 0);
             compiler->program->addForcedLibrary(real_path);
         }
     }
@@ -1102,7 +1115,7 @@ SignalIO PreprocContext::parseImport() {
         bool disabled = !evaluateTokens && inside_conditional;
 
         if(dep_id == 0) {
-            if(assumed_path.size()) {
+            if(assumed_path.size() && std::string(path).substr(0,2) == "./") {
                 ERR_SECTION(
                     ERR_HEAD2(str_token)   
                     ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. It was assumed to exist here '"<<log::GREEN<<assumed_path<<log::NO_COLOR<<"' due to the './' which indicates a relative directory to the current import ('"<<log::GREEN<<lexer_import->path<<log::NO_COLOR<<"' in this case). Skip './' if you want relative directory to current working directory.")

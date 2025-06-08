@@ -1,17 +1,19 @@
 
 #include "BetBat/Lexer.h"
 #include "BetBat/Util/Perf.h"
+#include "BetBat/CParser.h"
 
 namespace lexer {
 u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
+    using namespace engone;
     u64 size = 0;
     char* buffer = nullptr;
     
     VirtualFile* vfile = findVirtualFile(path);
     
     if(vfile) {
-        size = vfile->builder.size();
-        buffer = vfile->builder.data();
+        size = vfile->text.size();
+        buffer = vfile->text.data();
     } else {
         auto file = engone::FileOpen(path, engone::FILE_READ_ONLY, &size);
         if(!file) return 0;
@@ -31,8 +33,28 @@ u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
         engone::FileClose(file); // close file as soon as possible so that other code can read or write to it if they want
         file = {};
     }
+    std::string actual_path = path;
+    // std::string new_text;
+    // if(path.substr(path.size()-2) == ".h") {
+    //     // TODO: We can use TranspileCFileToBTB if file isn't virtual.
+    //     new_text = TranspileCToBTB(std::string(buffer, size));
+    //     if(!vfile && buffer) {
+    //         TRACK_ARRAY_FREE(buffer, char, size);
+    //     }
+    //     buffer = (char*)new_text.data();
+    //     size = new_text.size();
+
+    //     int at = path.find_last_of("/");
+    //     std::string tmp_path = "bin" + path.substr(at)+".btb";
+    //     auto file = FileOpen(tmp_path, FILE_CLEAR_AND_WRITE);
+    //     if(file) {
+    //         FileWrite(file, buffer, size);
+    //         FileClose(file);
+    //         actual_path = tmp_path;
+    //     }
+    // }
         
-    u32 file_id = tokenize(buffer,size,path, existing_import_id);
+    u32 file_id = tokenize(buffer, size, actual_path, existing_import_id);
 
     if(!vfile && buffer) {
         TRACK_ARRAY_FREE(buffer, char, size);
@@ -958,12 +980,20 @@ u32 Lexer::tokenize(const char* text, u64 length, const std::string& path_name, 
     
     if(inQuotes){
         // TODO: Improve error message for tokens
-        log::out<<log::RED<<"TokenError: Missing end quote at "<<path_name <<":"<< last_token->line<<":"<<last_token->column<<"\n";
+        if(last_token) {
+        log::out<<log::RED<<"TokenError: Missing end quote in "<<path_name <<":"<< last_token->line<<":"<<last_token->column<<"\n";
+        } else {
+            log::out<<log::RED<<"TokenError: Missing end quote in "<<path_name <<"\n";
+        }
         // outStream->tokens.used--; // last token is corrupted and should be removed
         goto Tokenize_END;
     }
     if(inComment){
-        log::out<<log::RED<<"TokenError: Missing end comment for "<<last_token->line<<":"<<last_token->column<<"\n";
+        if(last_token) {
+            log::out<<log::RED<<"TokenError:"<<log::NO_COLOR<<" Missing end comment in "<<path_name<<":"<<last_token->line<<":"<<last_token->column<<"\n";
+        } else {
+            log::out<<log::RED<<"TokenError:"<<log::NO_COLOR<<" Missing end comment in " << path_name << "\n";
+        }
         // outStream->tokens.used--; // last token is corrupted and should be removed
         goto Tokenize_END;
     }
@@ -2038,11 +2068,11 @@ std::string Lexer::getline(SourceLocation location) {
     return yeet;
 }
 
-bool Lexer::createVirtualFile(const std::string& virtual_path, StringBuilder* builder) {
+bool Lexer::createVirtualFile(const std::string& virtual_path, StringBuilder* text) {
     auto vfile = TRACK_ALLOC(VirtualFile);
     new(vfile) VirtualFile();
     vfile->virtual_path = virtual_path;
-    vfile->builder.steal(builder);
+    vfile->text.steal(text);
     virtual_files.add(vfile);
     return true;
 }
@@ -2202,7 +2232,7 @@ bool Lexer::get_source_information(SourceLocation loc, std::string* path, int* l
 
     if(path) {
         if (imp->path.size() >= cwd.size() && imp->path.substr(0, cwd.size()) == cwd)
-            *path = "./" + imp->path.substr(cwd.size());
+            *path = "." + imp->path.substr(cwd.size());
         else
             *path = imp->path;
     }

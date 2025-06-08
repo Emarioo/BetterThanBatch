@@ -2180,7 +2180,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
         //     link_convention = DetermineLinkConvention(lib_path);
         // }
         // log::out << "Try " << lib_path << " -> " << link_convention<<"\n";
-        if (lib_index == -1) {
+        if (lib_index == -1 && astFunc->linked_library != "__c_import__") {
             if(astFunc->linked_library.size() != 0) {
                 // TODO: If many functions complain about GLAD then only display the first 5 or so.
                 int errs = reporter->get_lib_errors(astFunc->linked_library);
@@ -2195,6 +2195,9 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
                         ERR_LINE2(base_expression->location, "this call")
 
                         log::out << "These are the available libraries: ";
+                        if (func_imp->libraries.size() == 0) {
+                            log::out << "none";
+                        }
                         for(int i=0;i<func_imp->libraries.size();i++){
                             if(i!=0) log::out << ", ";
                             log::out << log::LIME << compiler->libraries[func_imp->libraries[i]].name << log::NO_COLOR;

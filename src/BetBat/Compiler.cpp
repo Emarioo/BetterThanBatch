@@ -1,5 +1,6 @@
 #include "BetBat/Compiler.h"
 #include "BetBat/CompilerInterface.h"
+#include "BetBat/CParser.h"
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
@@ -1216,7 +1217,111 @@ void Compiler::run(CompileOptions* options) {
                 log::out << log::GRAY << "MSVC toolchain configured automatically.\n";
             }
         }
+
+        std::string include_dirs = GetEnvVar("INCLUDE");
+        int head=0;
+        while(head < include_dirs.size()) {
+            int at = include_dirs.find(";", head);
+            if (at == -1)
+                break;
+            importDirectories.add(include_dirs.substr(head, at - head));
+            head = at+1;
+        }
+        if (include_dirs.size() - head > 0)
+            importDirectories.add(include_dirs.substr(head));
+    } else if(options->linker == LINKER_GCC || options->linker == LINKER_CLANG) {
+        // Sorry. I can't deal with windows anonymous pipe, named pipe, threading, process and handle closing bullshit.
+        // I'm being impatient i know but SCREW YOU WINDOWS.
+        // We can't use anonymous pipe because the pipe breaks if we close write handle and the process's pipe write handle closes.
+        // if we don't close the write handle then ReadFile blocks indefinitely. 
+        // Maybe we can make another thread and cancelSyncronous IO or some bullshit
+        // but we should probably use named pipe. NAH, i'm done with Windows garbage.
+        // We just write stdout to a file becauses it is stable on Linux and Windows
+        // because OH MY GOODNESS making a platform layer for Windows and Linux pipes
+        // is not what I want to do with my life.
+        //
+        // I know this isn't a big deal but I just did some WASAPI stuff and made
+        // bindings for some COM interfaces with vtables and shit and came to the
+        // conclusion: Microsoft has some crazy developers working there.
+        // I know I shouldn't leave rants in the code, I know Microsoft developers
+        // are more experienced than me and that the COM stuff probably
+        // solves some problem they had. This rant is still deserved.
+        // - Emarioo, 2025-06-06
+
+        int exitcode = 0;
+        std::string cmd;
+        if (options->linker == LINKER_GCC) {
+            cmd = "gcc -E -x c nil -v";
+        } else if (options->linker == LINKER_CLANG) {
+            cmd = "clang -E -x c nil -v";
+        }
+        const char* temp_path = "bin/gcc_includes.txt";
+        auto file = FileOpen(temp_path, FILE_READ_AND_WRITE);
+        if(!file) {
+            log::out << log::YELLOW << "WARNING: Compiler couldn't create "<<temp_path<<" to write gcc include directories too. This means you can't import C standard headers (stdlib.h).\n";
+        } else {
+            bool yes = StartProgram(cmd.data(), PROGRAM_WAIT, &exitcode, nullptr, {}, file, file);
+
+            int size = FileGetSize(file);
+            std::string text;
+            text.resize(size);
+            FileSetHead(file, 0);
+            FileRead(file, (char*)text.data(), size);
+            FileClose(file);
+
+            int prev_dirs = importDirectories.size();
+
+            // Filter out paths to include headers from gcc/clang output.
+            int head = 0;
+            const char* KEYWORD_START = "search starts here:";
+            int KEYWORD_START_LEN = strlen(KEYWORD_START);
+            while(head < text.size()) {
+                int at = text.find(KEYWORD_START, head);
+                if(at == -1) {
+                    break;
+                }
+                at += KEYWORD_START_LEN;
+
+                // Skip to next line. We may have \r so we skip that to.
+                // or if we for some reason have stuff after :
+                while(at < text.size()) {
+                    if (text[at] == '\n') {
+                        at++;
+                        break;
+                    }
+                    at++;
+                }
+
+                if(at >= text.size())
+                    break;
+                
+                while (at < text.size()) {
+                    if(text[at] != ' ')
+                        break;
+
+                    int nl = text.find("\n", at);
+                    if (nl == -1)
+                        break;
+                    
+                    if(text[nl-1] == '\r') {
+                        // isn't carriage return fun
+                        importDirectories.add(text.substr(at+1, nl-1 - (at+1)));
+                    } else {
+                        importDirectories.add(text.substr(at+1, nl - (at+1)));
+                    }
+                    at = nl + 1;
+                }
+                head = at;
+            }
+
+            if(prev_dirs == importDirectories.size()) {
+                log::out << log::YELLOW << "WARNING: Compiler couldn't filter out C include paths from gcc output. You can ignore this if you aren't importing C standard headers (stdlib.h).\n";
+            }
+        }
     }
+    // for (auto& s : importDirectories) {
+    //     log::out << "IMPORTDIR " << s<<"\n";
+    // }
     
     if(options->target == TARGET_ARM) {
         log::out << log::YELLOW << "ARM support is experimental and does not fully work.\n";
@@ -1377,6 +1482,9 @@ void Compiler::run(CompileOptions* options) {
     }
 
     importDirectories.add(options->modulesDirectory);
+    for(auto& s : options->importDirectories) {
+        importDirectories.add(s);
+    }
     
     preprocessor.init(&lexer, this);
     ast = AST::Create(this);
@@ -2178,6 +2286,7 @@ JUMP_TO_EXEC:
         log::out << log::GRAY << "not executing program\n";
 }
 u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs) {
+    using namespace engone;
     Path abs_path{};
     if (from_cwd_ignore_import_dirs) {
         std::string modifiedpath = path;
@@ -2197,18 +2306,56 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     if(abs_path.text.empty()) {
         return 0; // file does not exist? caller should throw error
     }
+
+    std::string actual_path = abs_path.text;
+
+    if(abs_path.text.substr(abs_path.text.size()-2) == ".h") {
+        int at = abs_path.text.find_last_of("/");
+        std::string tmp_path = "bin" + abs_path.text.substr(at)+".btb";
+        actual_path = tmp_path;
+    }
+
     CompilerImport imp{};
     lock_imports.lock();
     BucketArray<CompilerImport>::Iterator iter{};
     while(imports.iterate(iter)) {
-        if(iter.ptr->path == abs_path.text) {
+        if(iter.ptr->path == actual_path) {
             u32 id = iter.ptr->import_id;
             lock_imports.unlock();
             return id;
         }
     }
+
+    if(abs_path.text.substr(abs_path.text.size()-2) == ".h") {
+        u64 size;
+        auto file = FileOpen(abs_path.text, FILE_READ_ONLY, &size);
+        if(!file) {
+            log::out << log::RED << "ERROR:"<<log::NO_COLOR<<" Could not open and convert C header '"<<log::GREEN<<actual_path<<log::NO_COLOR<<"'\n";
+            this->compile_stats.errors++;
+        } else {
+            std::string text;
+            text.resize(size);
+
+            u64 readBytes = FileRead(file, (char*)text.data(), size);
+            Assert(readBytes != -1); // TODO: Handle this better
+            Assert(readBytes == size);
+
+            FileClose(file); // close file as soon as possible so that other code can read or write to it if they want
+
+            std::string new_text;
+            new_text = TranspileCToBTB(text);
+            auto file = FileOpen(actual_path, FILE_CLEAR_AND_WRITE);
+            if(!file) {
+                log::out << log::RED << "ERROR:"<<log::NO_COLOR<<" Could not save temporary converted C file '"<<log::GREEN<<actual_path<<log::NO_COLOR<<"'\n";
+                this->compile_stats.errors++;
+            } else {
+                FileWrite(file, new_text.data(), new_text.size());
+                FileClose(file);
+            }
+        }
+    }
     
-    imp.path = abs_path.text;
+    imp.path = actual_path;
     lexer::Import* intern_imp;
     imp.import_id = lexer.createImport(imp.path, &intern_imp);
     Assert(imp.import_id!=0);
@@ -2385,7 +2532,8 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     Path temp{};
     for(int i=0;i<(int)importDirectories.size();i++){
         const Path& dir = importDirectories[i];
-        Assert(dir.isDir() && dir.isAbsolute());
+        // Assert(dir.isDir() && dir.isAbsolute());
+        Assert(dir.isAbsolute());
         if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
             temp = dir.text + fullPath.text;
         else

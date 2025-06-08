@@ -332,9 +332,9 @@ namespace lexer {
         
         struct VirtualFile {
             std::string virtual_path;
-            StringBuilder builder;
+            StringBuilder text;
         };
-        bool createVirtualFile(const std::string& virtual_path, StringBuilder* builder);
+        bool createVirtualFile(const std::string& virtual_path, StringBuilder* text);
         VirtualFile* findVirtualFile(const std::string& virtual_path);
         
         // handy functions, the implementation details of tokens per chunk, chunk index and token index may change in the future
