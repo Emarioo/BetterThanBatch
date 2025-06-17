@@ -1,0 +1,5 @@
+#import "Logger"
+
+fn hello() {
+    log("hello")
+}

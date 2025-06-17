@@ -27,7 +27,26 @@
 #include <string>
 #include "Engone/Util/Array.h"
 
+struct CMacro {
+    std::string name;
+    DynamicArray<std::string> parameters;
+    std::string content;
+    bool no_params;
+};
+struct TranspileOptions {
+    DynamicArray<std::string> include_dirs;
+};
+struct CPreprocContext {
+    // const std::string& text;
+    // std::string output;
+    TranspileOptions* options;
+    std::unordered_map<std::string, CMacro> macros;
+    DynamicArray<std::string> included_files; // for pragma once
+};
+
 namespace clexer {
+    
+
     struct Token {
         std::string data;
         int line;
@@ -159,6 +178,8 @@ namespace clexer {
     };
 }
 
-std::string TranspileCToBTB(const std::string& in_text);
+std::string TranspileCToBTB(const std::string& in_text, TranspileOptions* options, const std::string& path);
 
-std::string TranspileCFileToBTB(const std::string& filepath);
+std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options);
+
+std::string PreprocessText(CPreprocContext* context, const std::string& text, const std::string& origin_path);

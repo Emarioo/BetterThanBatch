@@ -7,8 +7,8 @@
 #include <string>
 
 
-struct Token;
-struct TokenRange;
+// struct Token;
+// struct TokenRange;
 
 struct StringView {
     StringView() {  }

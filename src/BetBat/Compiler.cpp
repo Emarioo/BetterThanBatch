@@ -2327,6 +2327,7 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     }
 
     if(abs_path.text.substr(abs_path.text.size()-2) == ".h") {
+        log::out << "Found " << abs_path.text << "\n";
         u64 size;
         auto file = FileOpen(abs_path.text, FILE_READ_ONLY, &size);
         if(!file) {
@@ -2343,7 +2344,10 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
             FileClose(file); // close file as soon as possible so that other code can read or write to it if they want
 
             std::string new_text;
-            new_text = TranspileCToBTB(text);
+            TranspileOptions options{};
+            for (const auto& p : importDirectories)
+                options.include_dirs.add(p.text);
+            new_text = TranspileCToBTB(text, &options, abs_path.text);
             auto file = FileOpen(actual_path, FILE_CLEAR_AND_WRITE);
             if(!file) {
                 log::out << log::RED << "ERROR:"<<log::NO_COLOR<<" Could not save temporary converted C file '"<<log::GREEN<<actual_path<<log::NO_COLOR<<"'\n";

@@ -39,3 +39,31 @@ The goal is to support headers from most libraries: GLFW, GLAD, STB image, OpenX
 - You cannot import defines
 
 Some of these problems will be fixed in due time but it may take many years depending on how important they are compared to everything else in the compiler.
+
+# Implementation and details
+
+Convert function declarations, structs, enums, typedefs in C to BTB.
+
+## Problems to solve
+
+1. We must expand macros because we can't possibly parse a C header and it's declarations if they are obfuscated by macros. Macros usually expand to declspec(dllimport) and attribute.
+
+2. C headers have includes. Do we treat includes as their own import or expand all includes? Either way we need to get the macros from them and preprocess.
+
+### Example problem
+What if you have import two different headers that include the same base header with declarations. If we expand all includes the two imports would have the same declarations. If we import both of them in the same BTB file we would get
+duplicate declarations. We can do `#import "stdio.h" as STDIO` and then `STDIO.fopen()` but you shouldn't have too.
+
+If we treat includes as an import then we won't get the macros from it. Unless C macros carry over into the BTB language. BTB and C macros behave slightly differently but C macros should be compatible with BTB (not the other way).
+
+An include could carry over the macros only and then we also treat it as an import? We'll need extra work and code to purely gather the macros from that file though.
+
+
+## How we parse C headers
+It begins with `#import "stdio.h"`.
+
+We first fully preprocess the file. Macros and includes recursively.
+
+Then we parse the flattened C header and ignore anything that isn't typedef, struct, enum or function. We parse it into a temporary AST.
+
+We then write out a BTB file based on the AST. typedefs become macros, and struct, enum, function become the BTB equivalent.

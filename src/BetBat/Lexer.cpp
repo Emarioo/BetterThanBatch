@@ -34,25 +34,6 @@ u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
         file = {};
     }
     std::string actual_path = path;
-    // std::string new_text;
-    // if(path.substr(path.size()-2) == ".h") {
-    //     // TODO: We can use TranspileCFileToBTB if file isn't virtual.
-    //     new_text = TranspileCToBTB(std::string(buffer, size));
-    //     if(!vfile && buffer) {
-    //         TRACK_ARRAY_FREE(buffer, char, size);
-    //     }
-    //     buffer = (char*)new_text.data();
-    //     size = new_text.size();
-
-    //     int at = path.find_last_of("/");
-    //     std::string tmp_path = "bin" + path.substr(at)+".btb";
-    //     auto file = FileOpen(tmp_path, FILE_CLEAR_AND_WRITE);
-    //     if(file) {
-    //         FileWrite(file, buffer, size);
-    //         FileClose(file);
-    //         actual_path = tmp_path;
-    //     }
-    // }
         
     u32 file_id = tokenize(buffer, size, actual_path, existing_import_id);
 
