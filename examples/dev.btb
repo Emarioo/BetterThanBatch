@@ -13,6 +13,19 @@
 // #import "examples/sound/sample_wasapi.btb"
 // #import "bad.btb"
 
+#import "Date"
+
+date: DateTime
+DateUTCNow(&date)
+log("UTC time: ",&date)
+DateLocalNow(&date)
+log("Local time: ",&date)
+
+test_date()
+// test_range_days()
+// test_range_days(true)
+
+
 /*
     Today's quest:
         Fixed array type.
@@ -49,37 +62,37 @@
 
 // m := mat4_identity()
 
-struct VertexBuffer {
-    id: u32;
-    size: i32;
-}
-struct IndexBuffer {
-    id: u32;
-    size: i32;
-}
-#macro MAX_LOCATIONS 8
-#macro MAX_BUFFERS 2
-struct VertexArray {
-    id: u32;
-    totalLocation: i16;
-    location: i16;
-    bufferSection: i16;
-    locationSizes: i16[MAX_LOCATIONS];
-    strides: i16[MAX_BUFFERS];
-    startLocations: i16[MAX_BUFFERS];
+// struct VertexBuffer {
+//     id: u32;
+//     size: i32;
+// }
+// struct IndexBuffer {
+//     id: u32;
+//     size: i32;
+// }
+// #macro MAX_LOCATIONS 8
+// #macro MAX_BUFFERS 2
+// struct VertexArray {
+//     id: u32;
+//     totalLocation: i16;
+//     location: i16;
+//     bufferSection: i16;
+//     locationSizes: i16[MAX_LOCATIONS];
+//     strides: i16[MAX_BUFFERS];
+//     startLocations: i16[MAX_BUFFERS];
 
-}
-struct Model {
-    vao: VertexArray;
-    vbo: VertexBuffer;
-    ibo: IndexBuffer;
-}
-fn LoadCubeModel(model: Model*) {
-    *model = {}
-}
+// }
+// struct Model {
+//     vao: VertexArray;
+//     vbo: VertexBuffer;
+//     ibo: IndexBuffer;
+// }
+// fn LoadCubeModel(model: Model*) {
+//     *model = {}
+// }
 
-model: Model;
-LoadCubeModel(&model)
+// model: Model;
+// LoadCubeModel(&model)
 
 // for 0..16 {
 //     log(nr," ", m.v[nr])

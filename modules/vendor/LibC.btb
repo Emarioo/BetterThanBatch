@@ -1,0 +1,53 @@
+/*
+    Work in progress
+*/
+
+#load "libc.so.6" as libc
+fn @import(libc) malloc(size: i32) -> void*;
+fn @import(libc) free(ptr: void*);
+
+struct time_t {
+    data: u64;
+}
+struct tm {
+    tm_sec: i32;			/* Seconds.	[0-60] (1 leap second) */
+    tm_min: i32;			/* Minutes.	[0-59] */
+    tm_hour: i32;			/* Hours.	[0-23] */
+    tm_mday: i32;			/* Day.		[1-31] */
+    tm_mon: i32;			/* Month.	[0-11] */
+    tm_year: i32;			/* Year	- 1900.  */
+    tm_wday: i32;			/* Day of week.	[0-6] */
+    tm_yday: i32;			/* Days in year.[0-365]	*/
+    tm_isdst: i32;			/* DST.		[-1/0/1]*/
+
+    tm_gmtoff: i64;		/* Seconds east of UTC.  */
+    tm_zone: char*; // should be const but BTB doesn't have const		/* Timezone abbreviation.  */
+}
+
+fn @import(libc) time(__timer: time_t*) -> time_t;
+fn @import(libc) localtime(__timer: time_t*) -> tm*;
+fn @import(libc) localtime_r(__timer: time_t*, __tp: tm*) -> tm*;
+
+// fn @import(libc) exit(st: i32);
+// fn @import(libc) fork() -> i32;
+// fn @import(libc) waitpid(pid: i32, st: i32*, options: i32) -> i32;
+
+/* TODO: Test addrinfo
+
+struct addrinfo {
+    ai_flags: i32;
+    ai_family: i32;
+    ai_socktype: i32;
+    ai_protocol: i32;
+    ai_addrlen: i32;
+    ai_addr: sockaddr*; // TODO: define sockaddr, reuse from Linux.btb?
+    ai_canonname: char*;
+    ai_next: addrinfo*;
+};
+
+fn @import(libc) getaddrinfo(node: char*, service: char*, hints: addrinfo*, res: addrinfo**) -> i32;
+fn @import(libc) freeaddrinfo(res: addrinfo*);
+
+// TODO: Add errors for getaddrinfo
+
+*/

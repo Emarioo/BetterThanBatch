@@ -7,6 +7,7 @@ Versioning for this project works like this: [Versioning](/docs/details/Versioni
 ## v0.2.1 - ...
 
 ### Added
+- Added **Date.btb**. Provides `DateLocalNow()`, `DayOfWeek`, `WeekNumber()`, and `EpochSecondsToDateTime()`.
 - Added **Sound.btb**. Sound engine for playing multiple sounds at once (only .wav files and Windows support at the moment).
 - Finally implemented global arrays.
 - VM can execute inline assembly.

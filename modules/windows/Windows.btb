@@ -85,6 +85,19 @@ struct SYSTEM_INFO {
   wProcessorLevel:             u16;
   wProcessorRevision:          u16;
 }
+struct SYSTEMTIME {
+  wYear: u16;
+  wMonth: u16;
+  wDayOfWeek: u16;
+  wDay: u16;
+  wHour: u16;
+  wMinute: u16;
+  wSecond: u16;
+  wMilliseconds: u16;
+}
+
+fn @import(Kernel) GetSystemTimePreciseAsFileTime(lpSystemTimeAsFileTime: FILETIME*);
+fn @import(Kernel) GetLocalTime(lpSystemTime: SYSTEMTIME*);
 
 struct SECURITY_ATTRIBUTES {
   nLength:              i32;

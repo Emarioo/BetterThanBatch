@@ -1,7 +1,7 @@
 # Ignore Linux executables in root (they rarely have a file extensions)
-/*
-!*.*
-!*/
+# /*
+# !*.*
+# !*/
 
 # Ignore generated binaries
 bin
