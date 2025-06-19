@@ -2,7 +2,7 @@
 
 #include "Engone/PlatformLayer.h"
 #include "Engone/Logger.h"
-#include "BetBat/util/StringBuilder.h"
+#include "BetBat/Util/StringBuilder.h"
 
 std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options) {
     using namespace engone;

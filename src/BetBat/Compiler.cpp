@@ -2327,7 +2327,7 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     }
 
     if(abs_path.text.substr(abs_path.text.size()-2) == ".h") {
-        log::out << "Found " << abs_path.text << "\n";
+        // log::out << "Found " << abs_path.text << "\n"; // nocheckin
         u64 size;
         auto file = FileOpen(abs_path.text, FILE_READ_ONLY, &size);
         if(!file) {
