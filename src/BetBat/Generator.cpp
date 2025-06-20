@@ -4136,6 +4136,15 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                 BCRegister reg = BC_REG_A;
                 // u8 reg2 = RegBySize(BC_BX, size);
 
+                if(!ast->castable(ltype, TYPE_BOOL)) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->location)
+                        ERR_MSG("Expression cannot be casted to a boolean.")
+                        ERR_LINE2(expression->left->location, info.ast->typeToString(ltype))
+                    )
+                    return SIGNAL_FAILURE;
+                }
+
                 builder.emit_pop(reg);
                 builder.emit_lnot(reg, reg, size);
                 builder.emit_push(reg);
@@ -4657,6 +4666,18 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                         outSize = ast->getTypeSize(outType);
                         operand_size = outSize;
                     }
+                } else if(((ltype.isPointer() || left_info->funcType) && (rtype.isPointer() || right_info->funcType))) {
+                    if(!is_equality) {
+                        ERR_SECTION(
+                            ERR_HEAD2(base_expression->location)
+                            ERR_MSG("Function pointers are limited to equality operations.")
+                            ERR_LINE2(base_expression->location, "here")
+                        )
+                        return SIGNAL_FAILURE;
+                    }
+                    outSize = 1;
+                    outType = TYPE_BOOL;
+                    operand_size = REGISTER_SIZE;
                 } else if ((AST::IsInteger(ltype) || left_info->astEnum) && (AST::IsInteger(rtype) || right_info->astEnum)){
                     // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
                     int lsize = info.ast->getTypeSize(ltype);
@@ -4873,7 +4894,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                     }
                 } else if((ltype.isPointer() || ltype == TYPE_BOOL) && (rtype == TYPE_BOOL || rtype.isPointer())) {
                     outSize = 1;
-                    operand_size = 1;
+                    operand_size = REGISTER_SIZE;
                 } else {
                     ERR_SECTION(
                         ERR_HEAD2(base_expression->location)
@@ -5502,6 +5523,16 @@ SignalIO GenContext::generateFunctions(ASTScope* body){
 
 SignalIO GenContext::generateStatement(ASTStatement *statement) {
     using namespace engone;
+    TRACE_FUNC()
+    
+    SINGLE_CALLBACK_ON_ASSERT(
+        ERR_SECTION(
+            ERR_HEAD2(statement->location)
+            ERR_MSG("Compiler bug")
+            ERR_LINE2(statement->location, "here")
+        )
+    )
+
     if (statement->type == ASTStatement::DECLARATION) {
         _GLOG(SCOPE_LOG("ASSIGN"))            
 

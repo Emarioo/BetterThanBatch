@@ -30,10 +30,21 @@ fn main(argc: i32, argv: char**) -> i32 {
     // we reload game code, their global data will be reset otherwise.
     // Ideally, we would have a list of all libraries the game relies on
     // but. I have hardcoded them for the time being.
-    lib0 := LoadDynamicLibrary("glad.dll")
-    lib1 := LoadDynamicLibrary("glfw3.dll")
-    lib2 := LoadDynamicLibrary("stb_image.dll")
-
+    lib0 := LoadDynamicLibrary("glad.dll", log_error = false)
+    if lib0.valid() {
+        log(LOG_YELLOW, "WARNING:",LOG_NO_COLOR," Could not load glad.dll, copy dll to local directory from libs/glad/lib-mingw-w64/glad.dll, or libs/glad/lib-ubuntu/glad.dll if you are on Linux (probably works on other distros than Ubuntu).")
+        log("  If dll is missing from libs then run build.py. It will compile vendor libraries.")
+    }
+    lib1 := LoadDynamicLibrary("glfw3.dll", log_error = false)
+    if lib1.valid() {
+        log(LOG_YELLOW,"WARNING:",LOG_NO_COLOR," Could not load glfw3.dll, copy dll to local directory from libs/glfw3/lib-mingw-w64/glfw3.dll, or libs/glfw3/lib-ubuntu/glfw3.dll if you are on Linux (probably works on other distros than Ubuntu).")
+        log("  If dll is missing from libs then run build.py. It will compile vendor libraries.")
+    }
+    lib2 := LoadDynamicLibrary("stb_image.dll", log_error = false)
+    if lib2.valid() {
+        log(LOG_YELLOW,"WARNING:",LOG_NO_COLOR," Could not load stb_image.dll, copy dll to local directory from libs/stb_image/lib-mingw-w64/stb_image.dll, or libs/stb_image/lib-ubuntu/stb_image.dll if you are on Linux (probably works on other distros than Ubuntu).")
+        log("  If dll is missing from libs then run build.py. It will compile vendor libraries.")
+    }
     yes := StartInfiniteLoop(app)
 
     if !yes

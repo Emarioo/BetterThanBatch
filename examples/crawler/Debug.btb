@@ -63,7 +63,7 @@ struct DebugModule {
 
         iter := world.entities.create_iterator()
         while world.entities.iterate(&iter) {
-            frame.entities.add(*iter.ptr)
+            frame.entities.add(*iter.value)
             // TODO: do memcpy and manually increment frame.entities.len instead of calling add()
             // memcpy(frame.changes.ptr, entities.ptr, entities.size() * sizeof Entity)
 

@@ -1668,9 +1668,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, Qu
         OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, implicitPoly, false, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
-            
-            checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
-            
+            if(!operatorOverloadAttempt) {
+                checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
+            }
             FIX_SPECIAL_ACTIONS
 
             FNCALL_SUCCESS
@@ -1680,9 +1680,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, Qu
         overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, implicitPoly, true, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
-            
-            checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
-
+            if(!operatorOverloadAttempt) {
+                checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
+            }
             FIX_SPECIAL_ACTIONS
 
             FNCALL_SUCCESS
@@ -1822,9 +1822,9 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, Qu
             FNCALL_FAIL
             return SIGNAL_FAILURE;
         }
-        
-        checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
-
+        if(!operatorOverloadAttempt) {
+            checkDefaultArguments(overload->astFunc, overload->funcImpl, base_expr->as<ASTExpressionCall>(), ent.set_implicit_this, scopeId);
+        }
         FIX_SPECIAL_ACTIONS
 
         FNCALL_SUCCESS

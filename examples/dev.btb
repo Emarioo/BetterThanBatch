@@ -1,66 +1,19 @@
 #!/home/emarioo/BetterThanBatch/bin/btb
 
+/*
+    This file contains the latest stuff i'm working on and
+    some examples you can just uncomment and import.
+*/
 // #import "examples/graphics/quad.btb"
-// #import "examples/callbacks/main.btb"
-// #import "examples/diff.btb"
-
-// #import "String"
-// #import "Logger"
-
 // #import "D:/dev/wander/src/main.btb"
-
 // #import "examples/sound/proper_sound.btb"
 // #import "examples/sound/sample_wasapi.btb"
-// #import "bad.btb"
+#import "examples/crawler/main.btb"
 
+// ############################
+//       LATEST STUFF
+// ############################
 
-#import "OS"
-
-global num: i32;
-main();
-fn main() -> i32{
-    // Bug 0: The address of global variables must be set before they are used in
-    //  functions. Functions were evaluated before everything including globals which cause the issue.
-    return num;
-}
-
-global str: char*;
-str = Allocate(16);
-*str; // This caused a crash at some point in time
-
-// TODO: Test that you can access globals from another file.
-
-
-
-// fn @intrinsic memcpy(dst: void*, src: void*, len: i64);
-
-// fn fun(s: char[]) -> char {
-//     return s.ptr[1]
-// }
-
-// { @dumpbc
-//     nom: i32;
-//     s: char[23]
-
-//     memcpy(s.ptr, "Helso".ptr, 5)
-
-//     return fun(s)
-// }
-
-
-// return local_arr
-
-// global glob_arr: i32[5];
-
-// struct Model {
-//     used: i32;
-//     y: i32[5];
-// }
-
-// model: Model;
-// model = { }
-
-// model = { 1, {2} }
 
 
 /*
@@ -109,45 +62,4 @@ str = Allocate(16);
 //     return tmp
 // }
 
-// #import "Logger"
 
-// struct Item {
-//     x: i32;
-//     y: i32;
-// }
-
-// global data: Item[];
-
-// fn prepare_data(){
-//     data.len = 5
-//     data.ptr = Allocate(sizeof(Item*) * data.len)
-    
-//     data[0] = {4, 5}
-//     data[1] = {13, 4}
-//     data[2] = {6, 1}
-// }
-
-// #run prepare_data()
-
-// fn main() {
-//     for @ptr data {
-//         log(it)
-//     }
-// }
-
-// // NOTE: Code below does not work. We don't handle pushed struct elements from inline assembly. This somehow worked fine in x64_gen but crashes in VM because VM modifies the stack by 8 bytes when it should do 16. Probably not a problem in x64_gen because we still generate the two pop instructions required for the Pack struct. Since VM messes with the stackpointer it crashes even before it tries to do the pop instructions.
-// // #run 
-// // { @dumpbc
-// //     struct Pack {
-// //         x: i32;
-// //         y: char;
-// //     }
-// //     b := asm<Pack> {
-// //         mov eax, 'A'
-// //         push rax
-// //         mov eax, 5
-// //         push rax
-// //     }
-    
-// //     // return b.x + b.y
-// // }

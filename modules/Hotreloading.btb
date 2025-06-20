@@ -61,7 +61,8 @@ fn StartInfiniteLoop(app: AppInstance) -> bool {
     exit_code: i32
     last_process: Process
     // t := StartMeasure()
-    ExecuteCommand(app.rebuild_cmd.sliced(), &exit_code)
+    // log(app.rebuild_cmd)
+    ExecuteCommand(app.rebuild_cmd, &exit_code)
     // log("Comp time: ", StopMeasure(t))
     if exit_code != 0
         return false;

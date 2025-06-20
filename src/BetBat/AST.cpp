@@ -695,6 +695,9 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
         if(to_size >= from_typeInfo->getSize())
             return true;
     }
+    if(from_typeInfo && from_typeInfo->astEnum && to == TYPE_BOOL) {
+        return true;
+    }
     if (from_typeInfo && to_typeInfo && from_typeInfo->isArray() && to_typeInfo->astStruct && to_typeInfo->astStruct->name == "Slice") {
         auto slice_item = to_typeInfo->getMember(0).typeId;
         slice_item.setPointerLevel(slice_item.getPointerLevel() - 1);

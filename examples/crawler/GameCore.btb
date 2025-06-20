@@ -568,7 +568,7 @@ struct GameCore {
                 step = 0
                 iter := world.entities.create_iterator()
                 while world.entities.iterate(&iter) {
-                    ent := iter.ptr
+                    ent := iter.value
                     if ent.flags & ENTITY_FLAG_ONLINE
                         continue
 
@@ -765,7 +765,7 @@ struct GameCore {
         {
             iter := world.chunks.create_iterator()
             while world.chunks.iterate(&iter) {
-                chunk := iter.ptr
+                chunk := iter.value
                 // log(chunk.x," ",chunk.y)
 
                 for 0..world.chunk_size*world.chunk_size {
@@ -799,7 +799,7 @@ struct GameCore {
         // ############
         iter := world.entities.create_iterator()
         while world.entities.iterate(&iter) {
-            it := iter.ptr
+            it := iter.value
 
             info := entity_infos.get_unsafe(it.entity_info)
             if info.texture {
@@ -811,7 +811,7 @@ struct GameCore {
         if enable_entity_info {
             iter := world.entities.create_iterator()
             while world.entities.iterate(&iter) {
-                it := iter.ptr
+                it := iter.value
 
                 info := entity_infos.get_unsafe(it.entity_info)
 
