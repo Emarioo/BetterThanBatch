@@ -1,0 +1,19 @@
+@TEST_CASE(match_problems)
+
+
+struct App {
+    n: i32;
+    fn fun(x: char[]) {
+    }
+    fn fun(x: void*) {
+    }
+    fn fun(x: char*) {
+    }
+}
+
+a: App;
+s: char[21]
+
+// Which method should we match?
+// I HAVE NO IDEA!?
+a.fun(s)

@@ -1,0 +1,28 @@
+@TEST_CASE(struct_no_padding)
+
+struct @no_padding Data {
+    x: u8;
+    y: u32;
+}
+
+dat := Data{ 1, 2}
+_test 2; *(cast_unsafe<u8*>&dat+1) // Assumes little endian
+_test 0; *(cast_unsafe<u8*>&dat+4) // Assumes little endian
+
+// TODO: More tests for no_padding
+
+@TEST_CASE(struct_no_pointers)
+
+@TEST_ERROR(ERROR_STRUCT_NO_POINTERS) struct @no_pointers Data {
+    core: i32;
+    ptr: i32*;
+}
+
+@TEST_ERROR(ERROR_STRUCT_NO_POINTERS) struct @no_pointers More {
+    smooth: i32[];
+}
+
+@TEST_ERROR(ERROR_STRUCT_NO_POINTERS) struct @no_pointers AnotherOne {
+    small: i32[2];
+    pang: Data[24];
+}

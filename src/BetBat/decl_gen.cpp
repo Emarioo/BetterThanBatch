@@ -311,6 +311,9 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                 if(typeinfo->astStruct->no_padding) {
                     text_btb += "@no_padding ";
                 }
+                if(typeinfo->astStruct->no_pointers) {
+                    text_btb += "@no_pointers ";
+                }
                 // TODO: annotations
                 text_btb += typeinfo->astStruct->name;
                 if(typeinfo->astStruct->polyArgs.size()) {
@@ -328,6 +331,9 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
             if(file_type & DECL_C) {
                 if(typeinfo->astStruct->no_padding)
                     text_c += "#pragma pack(push, 1)\n";
+                if(typeinfo->astStruct->no_pointers) {
+                    // No C equivalent but that is fine since this is a library header that won't be modified (shouldn't be)
+                }
                 text_c += "typedef struct {\n";
                 // TODO: annotations
             }

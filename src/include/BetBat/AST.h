@@ -841,6 +841,7 @@ struct ASTStruct : ASTNode {
     State state=TYPE_EMPTY;
 
     bool no_padding = false;
+    bool no_pointers = false;
 
     StructImpl* nonPolyStruct = nullptr;
 
@@ -1043,6 +1044,12 @@ struct ASTScope : ASTNode {
 
     void print(AST* ast, int depth);
 };
+
+struct OverloadResult {
+    OverloadGroup::Overload* best_match;
+    OverloadGroup::Overload* matches[2];
+};
+
 struct Compiler;
 struct AST {
     AST(Compiler* compiler) : compiler(compiler) {}
@@ -1294,7 +1301,7 @@ struct AST {
 
     
     // NOTE: These functions are methods of the AST instead of OverloadGroup because it's easier to synchronize with multi-threading. (we would need individual mutex for each group or a global variable, it's better to have mutex in the AST)
-    OverloadGroup::Overload* getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    OverloadGroup::Overload* getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr, OverloadResult* result = nullptr);
     // Note that this function becomes complex if parentStruct is polymorphic. It only checks computed polymorphic functions
     OverloadGroup::Overload* getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
     

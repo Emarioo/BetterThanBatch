@@ -7,6 +7,8 @@ Versioning for this project works like this: [Versioning](/docs/details/Versioni
 ## v0.2.1 - ...
 
 ### Added
+- Added `@no_pointers` annotation on structs. Useful if you want to ensure a struct is serializable.
+- Added array type `i32[21]`. We had a flawed implementation of them that required special handling in structs and variables compared to all other types.
 - Added **Sound.btb**. Sound engine for playing multiple sounds at once (only .wav files and Windows support at the moment).
 - Finally implemented global arrays.
 - VM can execute inline assembly.

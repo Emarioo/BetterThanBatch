@@ -73,6 +73,7 @@ const char* primitive_type_names[]{
                
 };
 const char* operation_names[] {
+    "none",
      "+",                   // AST_ADD, AST_PRIMITIVE_COUNT
      "-",                   // AST_SUB
      "*",                   // AST_MUL
@@ -99,8 +100,10 @@ const char* operation_names[] {
 
      "..",                  // AST_RANGE
      "[]",                  // AST_INDEX
-     "++",                  // AST_INCREMENT
-     "--",                  // AST_DECREMENT
+     "++",                  // AST_PRE_INCREMENT
+     "--",                  // AST_PRE_DECREMENT
+     "++",                  // AST_POST_INCREMENT
+     "--",                  // AST_POST_DECREMENT
      
      "cast",                // AST_CAST
      "member",              // AST_MEMBER
@@ -698,6 +701,12 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
         if (from_typeInfo->element_type == slice_item)
             return true;
     }
+    if (from_typeInfo && from_typeInfo->isArray() && to.getPointerLevel()>0) {
+        TypeId ip = to;
+        ip.setPointerLevel(to.getPointerLevel()-1);
+        if (from_typeInfo->element_type == ip || (to.baseType() == TYPE_VOID && to.getPointerLevel() == from_typeInfo->element_type.getPointerLevel()+1))
+            return true;
+    }
     auto voidp = TypeId::Create(TYPE_VOID, 1);
     if (from == voidp && to_typeInfo && to_typeInfo->funcType) {
         return true;
@@ -711,8 +720,7 @@ bool AST::castable(TypeId from, TypeId to, bool less_strict){
     return false;
 
 }
-// OverloadGroup::Overload* OverloadGroup::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, const BaseArray<bool>* inferred_args){
+OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast, const BaseArray<bool>* inferred_args, OverloadResult* overload_result){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -743,16 +751,19 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
     OverloadGroup::Overload* intOverload = nullptr;
     OverloadGroup::Overload* uintOverload = nullptr;
     OverloadGroup::Overload* sintOverload = nullptr;
+    OverloadGroup::Overload* arrayToSliceOverload = nullptr;
     int validOverloads = 0;
     int intOverloads = 0;
     int uintOverloads = 0;
     int sintOverloads = 0;
+    int arrayToSliceOverloads = 0;
     for(int i=0;i<(int)group->overloads.size();i++){
         auto& overload = group->overloads[i];
         bool found = true;
         bool found_int = true; // any signedness
         bool found_sint = true; // signed
         bool found_uint = true; // unsigned
+        bool found_arrayToSlice = true;
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
         //   unnecessary.
@@ -770,9 +781,6 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
             continue;
             
         if(canCast){
-            found_int = false;
-            found_sint = false; // we don't use int
-            found_uint = false;
             for(int j=0;j<(int)non_named_args;j++){
                 if(inferred_args && inferred_args->get(j))
                     continue; // NOTE: Because argument is inferred, the argument expression has not been checked and so the type 'argTypes[i]' will be invalid. But we don't care about the type because inferred types, presumably initializers, will always match.
@@ -817,23 +825,42 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
                             found_uint = false;
                         }
                     }
+                    if(!argTypes[j].isNormalType()) {
+                        found_arrayToSlice = false;
+                    } else {
+                        auto arg_info = getTypeInfo(argTypes[j]);
+                        if(arg_info && arg_info->isArray() && implArgType.isNormalType()) {
+                            auto param_info = getTypeInfo(implArgType);
+                            if(param_info->astStruct && param_info->astStruct->name == "Slice") {
+                                TypeId ptr_type = param_info->structImpl->members[0].typeId;
+                                ptr_type.setPointerLevel(ptr_type.getPointerLevel()-1);
+                                if(arg_info->element_type == ptr_type) {
+                                    // okay array conversion!
+                                } else found_arrayToSlice = false; 
+                            } else found_arrayToSlice = false;
+                        } else found_arrayToSlice = false;
+                    }
                     // break; // We can't break when using foundInt
                 }
                 // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
+            if(found_int) {
+                intOverload = &overload;
+                intOverloads++;
+            }
+            if(found_sint) {
+                sintOverload = &overload;
+                sintOverloads++;
+            } 
+            if(found_uint) {
+                uintOverload = &overload;
+                uintOverloads++;
+            }
+            if(found_arrayToSlice) {
+                arrayToSliceOverload = &overload;
+                arrayToSliceOverloads++;
+            } 
         }
-        if(found_int) {
-            intOverload = &overload;
-            intOverloads++;
-        }
-        if(found_sint) {
-            sintOverload = &overload;
-            sintOverloads++;
-        } 
-        if(found_uint) {
-            uintOverload = &overload;
-            uintOverloads++;
-        } 
         if(!found)
             continue;
 
@@ -842,6 +869,11 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
         // a bug in the compiler. An optimised build would not do this.
         if(validOverloads > 0) {
             if(canCast) {
+                if(overload_result) {
+                    overload_result->matches[0] = lastOverload;
+                    overload_result->matches[1] = &overload;
+                    overload_result->best_match = nullptr;
+                }
                 return nullptr;
             }
             // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
@@ -851,15 +883,23 @@ OverloadGroup::Overload* AST::getOverload(OverloadGroup* group, ScopeId scopeOfF
         lastOverload = &overload;
         validOverloads++;
     }
-    if(lastOverload)
-        return lastOverload;
-    if(uintOverloads == 1)
-        return uintOverload;
-    if(sintOverloads == 1)
-        return sintOverload;
-    if(intOverloads == 1)
-        return intOverload;
-    return nullptr;
+    if(!lastOverload) {
+        if(intOverloads == 1) {
+            lastOverload = intOverload;
+        } else if(sintOverloads == 1) {
+            lastOverload = sintOverload;
+        } else if(uintOverloads == 1) {
+            lastOverload = uintOverload;
+        } else if(arrayToSliceOverloads == 1) {
+            lastOverload = arrayToSliceOverload;
+        }
+    }
+    if(overload_result) {
+        overload_result->matches[0] = nullptr;
+        overload_result->matches[1] = nullptr;
+        overload_result->best_match = lastOverload;
+    }
+    return lastOverload;
 }
 void AST::declareUsageOfOverload(OverloadGroup::Overload* overload) {
     if(overload->astFunc->body && overload->funcImpl->usages == 0){

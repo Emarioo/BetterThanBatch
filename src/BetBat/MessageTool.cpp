@@ -334,6 +334,8 @@ CompileError ToCompileError(const char* str){
     CASE(ERROR_BAD_TOKEN_IN_SWITCH)
     CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
     CASE(ERROR_OVERLOAD_MISMATCH)
+
+    CASE(ERROR_STRUCT_NO_POINTERS)
     #undef CASE
     
     Assert(false);
@@ -366,6 +368,8 @@ std::string ToCompileErrorString(temp_compile_error stuff) {
         CASE(ERROR_BAD_TOKEN_IN_SWITCH)
         CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
         CASE(ERROR_OVERLOAD_MISMATCH)
+
+        CASE(ERROR_STRUCT_NO_POINTERS)
         
         CASE(ERROR_UNKNOWN)
         #undef CASE

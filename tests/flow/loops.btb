@@ -23,7 +23,7 @@ for @rev (-2)..N {
 }
 _test 7; i;
 @TEST_CASE(for_ptr)
-arr: i32[] {
+arr: i32[.] = {
     0,1,2,3,4
 }
 for @ptr arr {
@@ -76,7 +76,7 @@ list.data[len++] = 23
 list.data[len++] = 72
 list.data[len++] = 0
 
-facit: i32[]{
+facit: i32[.] = {
     8,0,
     3,1,
     23,2,
@@ -125,7 +125,7 @@ list.data[len++] = 23
 list.data[len++] = 72
 list.data[len++] = 0
 
-facit: i32[]{
+facit: i32[.] = {
     8,0,
     3,1,
     23,2,

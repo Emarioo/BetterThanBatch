@@ -554,9 +554,9 @@ struct StringBuilder {
             
             element_size := 0
             if members[0].type.ptr_level > 0
-                element_size = sizef(uword) // uword has same size as pointers
+                element_size = sizeof uword // uword has same size as pointers
             else
-                 element_size = lang_typeInfos.ptr[members[0].index()].size
+                 element_size = lang_typeInfos.ptr[members[0].type.index()].size
 
             array_length := typeinfo.size / element_size
 

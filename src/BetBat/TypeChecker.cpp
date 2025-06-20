@@ -267,6 +267,61 @@ SignalIO TyperContext::checkStructImpl(ASTStruct* astStruct, TypeInfo* structInf
             }
         }
         structImpl->size = offset;
+
+        if (astStruct->no_pointers) {
+            struct Env {
+                StructImpl* impl;
+                ASTStruct* ast_struct;
+                std::string field_chain;
+            };
+
+            DynamicArray<Env> envs{};
+            envs.add({structImpl, astStruct, ""});
+            while (envs.size()>0) {
+                auto env = envs.last();
+                envs.pop();
+
+                for(int i=0; i<env.impl->members.size();i++) {
+                    auto& ast_mem = env.ast_struct->members[i];
+                    auto& mem = env.impl->members[i];
+                    TypeInfo* mem_info = nullptr;
+                    if (mem.typeId.isNormalType())
+                        mem_info = ast->getTypeInfo(mem.typeId);
+                    std::string field_chain=env.field_chain;
+                    if(field_chain.size() > 0)
+                        field_chain+=".";
+                    field_chain += ast_mem.name;
+
+                    TypeId typeId = mem.typeId;
+                    TypeInfo* typeInfo = mem_info;
+                    while(typeInfo && typeInfo->isArray()) {
+                        typeId = typeInfo->element_type;
+                        if(typeInfo->element_type.isNormalType())
+                            typeInfo = ast->getTypeInfo(typeInfo->element_type);
+                        else
+                            typeInfo = nullptr;
+                        if(field_chain.size() > 0)
+                            field_chain+="[0]";
+                    }
+                    if(typeId.getPointerLevel() > 0) {
+                        ERR_SECTION(
+                            ERR_HEAD2(astStruct->location, ERROR_STRUCT_NO_POINTERS)
+                            ERR_MSG_COLORED("Struct "<<log::LIME<<structInfo->name<<log::NO_COLOR<<" is marked "<<log::YELLOW<<"@no_pointers"<<log::NO_COLOR<<" and should NOT contain any pointers. A pointer was found in this field chain '"<<log::LIME << field_chain<<log::NO_COLOR<<"'.")
+                            ERR_LINE2(ast_mem.location, "pointer field")
+                        )
+                        success = false;
+                        envs.clear();
+                        break;
+                    }
+                    if(typeId.isNormalType()) {
+                        if(typeInfo->structImpl) {
+                            envs.add({typeInfo->structImpl, typeInfo->astStruct, field_chain});
+                        }
+                        Assert(!typeInfo->isArray());
+                    }
+                }
+            }
+        }
     }
     _VLOG(
         std::string polys = "";
@@ -1540,10 +1595,10 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, Qu
         auto fnOverloads = ent.fn_overloads;
         if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
             // match args with normal impls
-            
-            OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, base_expr, fnOverloads->overloads.size()==1, &inferred_args);
+            OverloadResult overload_result{};
+            OverloadGroup::Overload* overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, base_expr, fnOverloads->overloads.size()==1, &inferred_args, &overload_result);
             if(!overload)
-                overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, base_expr, true, &inferred_args);
+                overload = ast->getOverload(fnOverloads, scopeId, argTypes, ent.set_implicit_this, base_expr, true, &inferred_args, &overload_result);
             
             if(operatorOverloadAttempt && !overload) {
                 // FIX_NO_SPECIAL_ACTIONS
@@ -1610,7 +1665,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, Qu
         bool implicitPoly = (fnPolyArgs.size()==0);
         // TODO: Optimize by checking what in the overloads didn't match. If all parent structs are a bad match then
         //  we don't have we don't need to getOverload the second time with canCast=true
-        OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, implicitPoly, &inferred_args);
+        OverloadGroup::Overload* overload = ast->getPolyOverload(fnOverloads, argTypes, fnPolyArgs, parentStructImpl, ent.set_implicit_this, base_expr, implicitPoly, false, &inferred_args);
         if(overload){
             overload->funcImpl->usages++;
             
@@ -1799,7 +1854,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, Qu
     ERR_SECTION(
         ERR_HEAD2(base_expr->location, ERROR_OVERLOAD_MISMATCH)
         // custom code for error message
-        log::out << "Arguments for '"<<baseName <<"' does not match an overload. (note, named arguments is only allowed on default arguments)\n";
+        log::out << "Arguments for '"<<baseName <<"' does not match an overload or is matching to many overloads. (note, named arguments is only allowed on default arguments)\n";
         ERR_LINE2(base_expr->location, "bad");
         log::out << "These were the arguments: ";
         if(argTypes.size()==0){
@@ -4524,6 +4579,8 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
             SignalIO result = checkRest(now->firstBody);
         } else if(now->type == ASTStatement::FOR){
             // DynamicArray<TypeId> temp{};
+            // if(now->nodeId == 1509)
+            //     __debugbreak();
             SignalIO result1 = checkExpression(scope->scopeId, now->firstExpression, &tempTypes, false);
             SignalIO result=SIGNAL_FAILURE;
 

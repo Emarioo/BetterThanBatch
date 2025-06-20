@@ -29,7 +29,7 @@ while i < 5 {
 
 
 ## For-loop
-The *for* loop is used to iterate through an array or range of values, or more recently user-defined iterators (covered further down). The for-loop has an expression which should result in a **Slice** or **Range** type.
+The *for* loop is used to iterate through an array or range of values, or more recently user-defined iterators (covered further down). The for-loop has an expression which should result in a **Slice** or **Range** type. The **Range** type consists of two integers *start* and *end* (exclusive).
 
 **NOTE:** The language does *NOT* support C-like for loops `for(int i=0;i<5;i++)`. Use while-loops for more control. For loops are meant to iterator over a list or range of things.
 

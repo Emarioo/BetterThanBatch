@@ -31,41 +31,28 @@ struct NotAParadox {
 }
 ```
 
-
-## Arrays in structs
-Structs can have arrays which are declared similarily to arrays on the stack. The size of the struct is exactly that which you specified. With arrays on the stack, both a slice (16 bytes) and the elements are put on the stack. The slice being additional memory. This is not the case in the struct.
-
-```c++
-#import "Logger"
-
-struct Name {
-    str: char[20]
-}
-
-name: Name // zero initialized
-
-s := "okay"
-memcpy(name.str, s.ptr, s.len + 1)
-
-log(name.str)
-
-for 0..name.str.len-1 {
-    name.str[nr] = 'a' + nr
-}
-
-log(name.str)
-```
-
 ## Special annotations
 
+### @no_padding
+This will disable alignment calculations and padding on fields. Useful if you are working with file formats that
+are based on C structs that have `#pragma pack(push,1)`.
 ```c++
-// @no_padding will disable alignment calculations
 struct @no_padding Data {
     a: i16
     // 2 bytes would normally be reserved here to align
     // the following 32-bit integer. The no_padding stops that.
     b: i32
 } // sizeof Data == 6 (not 8 as we would expect with alignment and padding)
+```
+
+### @no_pointers
+This will cause compiler error if struct contains a pointer (we check fields of fields of structs recursively). It is useful when you want to ensure a struct is serializable.
+Otherwise you may forget that you are serializing this struct in your code and add a pointer field to support a new feature. This prevents that.
+```c++
+struct @no_pointers Data {
+    fine: i32;
+    data_ptr: i32*; // ERROR
+}
 ```
 
 # Incomplete features

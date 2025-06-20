@@ -258,6 +258,13 @@ bool GenContext::performSafeCast(TypeId from, TypeId to, bool less_strict) {
             return true;
         }
     }
+    if (from_typeInfo && from_typeInfo->isArray() && to.getPointerLevel()>0) {
+        TypeId ip = to;
+        ip.setPointerLevel(to.getPointerLevel()-1);
+        if (from_typeInfo->element_type == ip) {
+            return true;
+        }
+    }
     auto voidp = TypeId::Create(TYPE_VOID, 1);
     if (from == voidp && to_typeInfo && to_typeInfo->funcType) {
         return true;
@@ -795,12 +802,22 @@ SignalIO GenContext::generatePushPop_base(PushPopKind kind, BCRegister baseReg, 
             Assert(false);
         } else Assert(false);
     } else {
-        for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
-            auto &member = typeInfo->astStruct->members[i];
-            auto memdata = typeInfo->getMember(i);
-            
-            _GLOG(log::out << "move return value member " << member.name << "\n";)
-            generatePushPop_base(kind, baseReg, offset + memdata.offset, memdata.typeId);
+        if(kind & GEN_PUSH_REG) {
+            for (int i = (int)typeInfo->astStruct->members.size()-1; i >= 0; i--) {
+                auto &member = typeInfo->astStruct->members[i];
+                auto memdata = typeInfo->getMember(i);
+                
+                _GLOG(log::out << "move return value member " << member.name << "\n";)
+                generatePushPop_base(kind, baseReg, offset + memdata.offset, memdata.typeId);
+            }
+        } else {
+            for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
+                auto &member = typeInfo->astStruct->members[i];
+                auto memdata = typeInfo->getMember(i);
+                
+                _GLOG(log::out << "move return value member " << member.name << "\n";)
+                generatePushPop_base(kind, baseReg, offset + memdata.offset, memdata.typeId);
+            }
         }
     }    
     return SIGNAL_SUCCESS;
@@ -1247,23 +1264,11 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
         
         if(base_now->type == EXPR_MEMBER){
             auto now = base_now->as<ASTExpressionMember>();
-            // if(arrayLength) {
-            //     if(now->name == "len") {
-            //         Assert(false);
-            //         // What do we do here. We can't exactly push a constant since generateReference
-            //         // is for actual references and pointers.
-            //         builder.emit_li32(BC_REG_T0, arrayLength);
-            //         builder.emit_push(BC_REG_T0);
-            //     } else if(now->name == "ptr") {
-            //         Assert(false);
-            //     }
-            //     arrayLength = 0;
-            // }
-
+       
             TypeInfo* typeInfo = nullptr;
             typeInfo = info.ast->getTypeInfo(endType.baseType());
 
-            if(!typeInfo || !typeInfo->astStruct){
+            if(!typeInfo || (!typeInfo->astStruct && !typeInfo->isArray())){
                 ERR_SECTION(
                     ERR_HEAD2(now->location)
                     ERR_MSG("'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.")
@@ -1297,61 +1302,25 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 )
                 return SIGNAL_FAILURE;
             }
-            // TypeInfo* typeInfo = nullptr;
-            // typeInfo = info.ast->getTypeInfo(endType.baseType());
-            // if(!typeInfo || !typeInfo->astStruct){
-            //     ERR_SECTION(
-            //         ERR_HEAD2(now->location)
-            //         ERR_MSG("'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.")
-            //         ERR_LINE2(now->left->location, info.ast->typeToString(endType).c_str())
-            //     )
-            //     return SIGNAL_FAILURE;
-            // }
-
-            auto memberData = typeInfo->getMember(now->name);
-            if(memberData.index==-1){
-                Assert(info.hasForeignErrors());
-                return SIGNAL_FAILURE;
-            }
-            auto& mem = typeInfo->astStruct->members[memberData.index];
-            // if(mem.array_length > 0) {
-            if(false) {
-                // pointerType = true;
-                // arrayLength = mem.array_length;
-                
-                // bool popped = false;
-                // BCRegister reg = BC_REG_B;
-                // if(endType.getPointerLevel()>0){
-                //     if(!popped)
-                //         builder.emit_pop(reg);
-                //     popped = true;
-                //     builder.emit_mov_rm(BC_REG_C, reg, REGISTER_SIZE);
-                //     reg = BC_REG_C;
-                // }
-                // if(memberData.offset!=0){
-                //     if(!popped)
-                //         builder.emit_pop(reg);
-                //     popped = true;
-                    
-                //     builder.emit_li32(BC_REG_A, memberData.offset);
-                //     builder.emit_add(reg, BC_REG_A, REGISTER_SIZE, false, true);
-                // }
-                // if(popped)
-                //     builder.emit_push(reg);
-
-                // endType = memberData.typeId;
-                // endType.setPointerLevel(endType.getPointerLevel()+1);
-                // // // TODO: Improve error message, the message is bad partly because I don't know
-                // // //   what should happen or how referencing should work so figure that out.
-                // // ERR_SECTION(
-                // //     ERR_HEAD2(now->location)
-                // //     ERR_MSG("You cannot take a reference to an array inside a struct. Consider taking a poiner.")
-                // //     ERR_LINE2(now->location, "")
-                // //     ERR_LINE2(mem.location, "this is an array")
-                // // )
-                // // return SIGNAL_FAILURE;
-                
+            if (typeInfo->isArray()) {
+                if(now->name != "ptr") {
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location)
+                        ERR_MSG("Arrays only have two fields (ptr,len) and this expression takes a reference which only allows the ptr field.")
+                        ERR_LINE2(now->location, "not allowed, did you mean ptr")
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                endType = typeInfo->element_type;
+                endType.setPointerLevel(endType.getPointerLevel()+1);
+                pointerType = true;
             } else {
+                auto memberData = typeInfo->getMember(now->name);
+                if(memberData.index==-1){
+                    Assert(info.hasForeignErrors());
+                    return SIGNAL_FAILURE;
+                }
+                auto& mem = typeInfo->astStruct->members[memberData.index];
                 // TODO: You can do more optimisations here as long as you don't
                 //  need to dereference or use MOV_MR. You can have the RBX popped
                 //  and just use ADDI on it to get the correct members offset and keep
@@ -1495,7 +1464,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
 
                         builder.emit_push(BC_REG_B);
                         continue;
-                    } else if (linfo->isArray()) {
+                    } else if (linfo && linfo->isArray()) {
                         Assert(false);
                     } else {
                         if(!endType.isPointer()) {
@@ -1788,6 +1757,15 @@ SignalIO GenContext::generateSpecialFncall(ASTExpressionCall* expression){
 // }
 SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<TypeId>* outTypeIds, bool isOperator){
     using namespace engone;
+    TRACE_FUNC()
+
+    SINGLE_CALLBACK_ON_ASSERT(
+        ERR_SECTION(
+            ERR_HEAD2(base_expression->location)
+            ERR_MSG("Compiler bug")
+            ERR_LINE2(base_expression->location, "here")
+        )
+    )
 
     if(base_expression->type == EXPR_CALL && (base_expression->as<ASTExpressionCall>()->name == "construct" || base_expression->as<ASTExpressionCall>()->name == "destruct")) {
         return generateSpecialFncall(base_expression->as<ASTExpressionCall>());
@@ -2006,12 +1984,18 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
                     bool wasSafelyCasted = performSafeCast(argType, signature->argumentTypes[i].typeId);
                     if(!wasSafelyCasted && i < astFunc->nonDefaults) {
                         // cast operator isn't supported with non named arguments at the moment
-                        Assert(base_expression->uses_cast_operator);
+                        if(!base_expression->uses_cast_operator) {
+                            ERR_SECTION(
+                                ERR_HEAD2(base_expression->location)
+                                ERR_MSG("COMPILER BUG, uses_cast_operator was false, could not cast " << ast->typeToString(argType) << " -> "<<ast->typeToString(signature->argumentTypes[i].typeId))
+                                ERR_LINE2(base_expression->location, "here")
+                            )
+                            Assert(base_expression->uses_cast_operator);
+                        }
                         OverloadGroup::Overload cast_overload;
                         wasSafelyCasted = ast->findCastOperator(currentScopeId, argType, signature->argumentTypes[i].typeId, &cast_overload);
                         Assert(cast_overload.astFunc && cast_overload.funcImpl);
 
-                        int signature=0; // prevent mistakes
                         auto cast_sig = &cast_overload.funcImpl->signature;
 
                         int arg_space = cast_overload.funcImpl->signature.argSize;
@@ -2519,7 +2503,9 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
     builder.emit_mov_rr(BC_REG_P, baseReg);
     baseReg = BC_REG_P;
 
-    TypeInfo* first_typeinfo = ast->getTypeInfo(typeId);
+    TypeInfo* first_typeinfo=nullptr;
+    if(typeId.isNormalType())
+     first_typeinfo = ast->getTypeInfo(typeId);
     if(!first_typeinfo || (!first_typeinfo->isArray() && !first_typeinfo->astStruct)) {
         TypeId outtype = TYPE_VOID;
         // builder.emit_push(baseReg);
@@ -2555,7 +2541,8 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
     envs.last().offset = offset;
     if (first_typeinfo->isArray()) {
         envs.last().element_size = ast->getTypeSize(first_typeinfo->element_type);
-        envs.last().element_typeinfo = ast->getTypeInfo(first_typeinfo->element_type);
+        if(first_typeinfo->element_type.isNormalType())
+            envs.last().element_typeinfo = ast->getTypeInfo(first_typeinfo->element_type);
     }
     while (envs.size()) {
         Env& env = envs.last();
@@ -2616,7 +2603,8 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
             new_env.offset = env.offset + env.expr_index * env.element_size;
             if (env.element_typeinfo->isArray()) {
                 new_env.element_size = ast->getTypeSize(env.element_typeinfo->element_type);
-                new_env.element_typeinfo = ast->getTypeInfo(env.element_typeinfo->element_type);
+                if(env.element_typeinfo->element_type.isNormalType())
+                    new_env.element_typeinfo = ast->getTypeInfo(env.element_typeinfo->element_type);
             }
             env.expr_index++;
             envs.add(new_env);
@@ -2646,8 +2634,27 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
                 if (env.generated_members && env.generated_members[env.member_index]) {
                     // already generated from named initializer value
                 } else {
-                    result = generateDefaultValue(baseReg, env.offset + env.typeinfo->structImpl->members[env.member_index].offset, env.typeinfo->structImpl->members[env.member_index].typeId);
-                    if(result != SIGNAL_SUCCESS) return result;
+                    auto& ast_mem = env.typeinfo->astStruct->members[env.member_index];
+                    auto& mem = env.typeinfo->structImpl->members[env.member_index];
+                    if(ast_mem.defaultValue) {
+                        TEMP_ARRAY(TypeId, tempTypes)
+                        result = generateExpression(ast_mem.defaultValue, &tempTypes);
+                        if(result != SIGNAL_SUCCESS) return result;
+
+                        TypeId ret_type = TYPE_VOID;
+                        if(tempTypes.size())
+                            ret_type = tempTypes[0];
+
+                        if (!performSafeCast(ret_type, mem.typeId)) {
+                            ERRTYPE(ast_mem.location, ast_mem.defaultValue->location, ret_type, mem.typeId, "(default member)\n");
+                        }
+
+                        result = generatePop(baseReg, env.offset + mem.offset, mem.typeId);
+                        if(result != SIGNAL_SUCCESS) return result;
+                    } else {
+                        result = generateDefaultValue(baseReg, env.offset + mem.offset, mem.typeId);
+                        if(result != SIGNAL_SUCCESS) return result;
+                    }
                 }
                 env.member_index++;
                 continue;
@@ -2690,9 +2697,12 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
                 }
             }
 
-            TypeInfo* member_typeinfo = ast->getTypeInfo(env.typeinfo->structImpl->members[member_index].typeId);
-    
-            if(expr->type != EXPR_INITIALIZER || (!member_typeinfo->isArray() && !member_typeinfo->astStruct)) {
+            TypeId member_typeid = env.typeinfo->structImpl->members[member_index].typeId;
+            TypeInfo* member_typeinfo = nullptr;
+            if(member_typeid.isNormalType())
+                member_typeinfo = ast->getTypeInfo(member_typeid);
+
+            if(expr->type != EXPR_INITIALIZER || !member_typeinfo || (!member_typeinfo->isArray() && !member_typeinfo->astStruct)) {
                 TypeId outtype = TYPE_VOID;
                 result = generateExpression(expr, &outtype);
                 if(result != SIGNAL_SUCCESS) return result;
@@ -2716,7 +2726,8 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
             new_env.offset = env.offset + env.typeinfo->structImpl->members[member_index].offset;
             if (member_typeinfo->isArray()) {
                 new_env.element_size = ast->getTypeSize(member_typeinfo->element_type);
-                new_env.element_typeinfo = ast->getTypeInfo(member_typeinfo->element_type);
+                if (member_typeinfo->element_type.isNormalType())
+                    new_env.element_typeinfo = ast->getTypeInfo(member_typeinfo->element_type);
             }
             if(env.expr_index-1 == env.member_index)
                 env.member_index++;
@@ -4508,7 +4519,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                     result = generatePop(BC_REG_B, 0, assignType);
                     result = generatePush(BC_REG_B, 0, assignType);
                     
-                    outTypeIds->add(rtype);
+                    outTypeIds->add(assignType);
                 }
             } else {
                     
@@ -7784,6 +7795,10 @@ SignalIO GenContext::generateGlobalData() {
         // } else {
         // TODO: If we have an array and default values for the element results in zeros then don't run VM, just zero the memory with memset.
         //   Easy for integers. For structs we need to check if all fields are zero by default.
+
+        // TODO: Double check that the generate expression's type matches the global variable's type
+
+        SignalIO result;
         if(!stmt->firstExpression) {
             type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
 
@@ -7795,12 +7810,32 @@ SignalIO GenContext::generateGlobalData() {
             if(!info || !info->astStruct) {
                 continue;
             }
-            generateDefaultValue(BC_REG_INVALID, 0, type, &stmt->location);
+            // get pointer to global data from stack
+            builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
+            result = generateDefaultValue(data_ptr, 0, type, &stmt->location);
+            
+            Assert(result == SIGNAL_SUCCESS);
+        } else if(stmt->firstExpression->type == EXPR_INITIALIZER) {
+            type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
+            builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
+
+            result = generateAssignedInitializing(BC_REG_B, 0, type, stmt->firstExpression->as<ASTExpressionInitializer>());
+            if (result != SIGNAL_SUCCESS) {
+                if (!info.hasForeignErrors()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(stmt->location)
+                        ERR_MSG("Cannot evaluate expression for global variable at compile time. TODO: Provide better error message.")
+                        ERR_LINE2(stmt->location, "here")
+                    )
+                }
+                continue;
+            }
         } else {
             TEMP_ARRAY_N(TypeId, tempTypes, 5)
             inside_compile_time_execution = true;
             inside_global = true;
-            auto result = generateExpression(stmt->firstExpression, &tempTypes, 0);
+            // nocheckin
+            result = generateExpression(stmt->firstExpression, &tempTypes, 0);
             inside_global = false;
             inside_compile_time_execution = false;
             // TODO: We generate expression with from global scope so that we can't access local variables but what about constant functions? There may be more issues?
@@ -7825,20 +7860,17 @@ SignalIO GenContext::generateGlobalData() {
                 continue;
             }
             type = tempTypes[0];
+
+            // get pointer to global data from stack
+            builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
+
+            result = generatePop(data_ptr, 0, type);
+            Assert(result == SIGNAL_SUCCESS);
         }
-        
         
         compiler->compile_stats.errors += errors;
 
-        // TODO: Check that the generated type fits in the allocate global data. Does type match the one in the statement?
-
-        // get pointer to global data from stack
-        builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
-
-        auto result = generatePop(data_ptr, 0, type);
-        Assert(result == SIGNAL_SUCCESS);
-        // }
-
+        
         // log::out << log::GOLD <<"global: " <<stmt->varnames[0].name << "\n";
         // tinycode->print(0,-1,bytecode);
 

@@ -1812,7 +1812,12 @@ void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
     // If you crash and are accesing a pointer from global data at compile time
     // then perhaps it wasn't initialized. Runtime type information for example.
     // suspicious pointer
-    Assert(((i64)virtual_pointer >= 0x10000 && (i64)virtual_pointer < 0x0010'0000'0000'0000) || (i64)virtual_pointer == 0);
+    if(((i64)virtual_pointer >= 0x10000 && (i64)virtual_pointer < 0x0010'0000'0000'0000) || (i64)virtual_pointer == 0) {
+        // ok
+    } else{
+        log::out << log::RED << "ERROR:"<<log::NO_COLOR<<" VM Access violation, ptr = " << (void*)virtual_pointer << "\n";
+        Assert(false);
+    }
     return (void*)virtual_pointer;
 }
 void VirtualMachine::push_state(int index, i64 sp) {

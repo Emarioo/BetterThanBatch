@@ -84,7 +84,7 @@ a, b, c = many() // all return values
 
 // #import "Logger"
 
-global arr: i32[5]{2,7,4,5,6};
+global arr: i32[5] = {2,7,4,5,6};
 
 #run {
     // log("OLD: ", arr[1], ", ",arr[2])

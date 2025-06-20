@@ -112,6 +112,9 @@ enum CompileError : u32 {
     ERROR_AMBIGUOUS_IF_ELSE = 2106, 
     
     ERROR_OVERLOAD_MISMATCH = 3001,
+
+    // Annotation related
+    ERROR_STRUCT_NO_POINTERS = 4001,
     
     ERROR_UNKNOWN = 99999,
 };

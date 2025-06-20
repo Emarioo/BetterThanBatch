@@ -1411,18 +1411,16 @@ void Compiler::run(CompileOptions* options) {
         StringBuilder preload{};
         preload +=
         "struct Slice<T> {\n"
-        // "struct @hide Slice<T> {"
         "    ptr: T*;\n"
         "    len: iword;\n"
         "}\n"
-        "operator []<T>(slice: Slice<T>, index: iword) -> T {\n"
-        "    return slice.ptr[index];\n"
-        "}\n"
+        // "operator []<T>(slice: Slice<T>, index: iword) -> T {\n"
+        // "    return slice.ptr[index];\n"
+        // "}\n"
         "fn @builtin init_preload();\n" // init global data and stuff
-        "fn @builtin global_slice() -> Slice<char>;\n" // retrieves a slice of global data
+        "fn @builtin global_slice() -> char[];\n" // retrieves a slice of global data
 
         "struct Range {\n"
-        // "struct @hide Range {" 
         "    beg: i32;\n"
         "    end: i32;\n"
         "}\n"
