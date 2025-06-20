@@ -13,59 +13,25 @@
 // #import "examples/sound/sample_wasapi.btb"
 // #import "bad.btb"
 
-/*
-    Today's quest:
-        Fixed array type.
-*/
 
+#import "OS"
 
-
-#import "Logger"
-#import "Memory"
-
-struct ListIterator {
-    value: i32* = null;
-    index: i32 = -1;
-}
-struct List {
-    data: i32*;
-    fn create_iterator() -> ListIterator {
-        return {}
-    }
-    fn iterate(iterator: ListIterator*) -> bool {
-        iterator.index++
-        if !data[iterator.index] {
-            iterator.value = null
-            return false
-        }
-        iterator.value = &data[iterator.index]
-        return true
-    }
+global num: i32;
+main();
+fn main() -> i32{
+    // Bug 0: The address of global variables must be set before they are used in
+    //  functions. Functions were evaluated before everything including globals which cause the issue.
+    return num;
 }
 
-list: List
-list.data = Allocate(8 * 4)
-len := 0
-list.data[len++] = 8
-list.data[len++] = 3
-list.data[len++] = 23
-list.data[len++] = 72
-list.data[len++] = 0
+global str: char*;
+str = Allocate(16);
+*str; // This caused a crash at some point in time
 
-facit: i32[.] = {
-    8,0,
-    3,1,
-    23,2,
-    72,3,
-}
+// TODO: Test that you can access globals from another file.
 
-count := 0
-for list {
-    // log(it,"=",facit[2*count])
-    _test *it; facit[2*count]
-    _test nr; facit[2*count+1]
-    count++
-}
+
+
 // fn @intrinsic memcpy(dst: void*, src: void*, len: i64);
 
 // fn fun(s: char[]) -> char {

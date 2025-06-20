@@ -77,7 +77,7 @@ fn map(arr: i32[], callback: fn(i32)) {
     for arr
         callback(it)
 }
-arr: i32[10]{45,6,2,49,24,2}
+arr: i32[10] = {45,6,2,49,24,2}
 
 fn hi(x: i32) {
     log("Hi: ",x)

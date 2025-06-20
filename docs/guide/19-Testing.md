@@ -33,7 +33,7 @@ Here is an example with two test cases.
 ```c++
 @TEST_CASE(test_func)
 
-expectations: i32[] { 2, 7, 12, 17 }
+expectations: i32[] = { 2, 7, 12, 17 }
 for expectations {
     expected := it
     actual := func(nr)
@@ -44,7 +44,7 @@ fn func(x: i32) -> i32 { return x * 5 + 2 }
 
 @TEST_CASE(test_diamond)
 
-expectations: i32[] { 2, 7, 12, 17 }
+expectations: i32[] = { 2, 7, 12, 17 }
 for expectations {
     expected := it
     actual := func(nr)

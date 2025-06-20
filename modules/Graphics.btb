@@ -594,7 +594,7 @@ fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color
     
     CAM_VALUES
     
-    vertices: f32[] {
+    vertices: f32[.] = {
         // x ,y, uv.x, uv.y, color.rgba, texture
         (bx) *      zoom + ox, (by) *       zoom + oy, 0, 0, color.r, color.g, color.b, color.a, -1,
         (bx) *      zoom + ox, (by + h) *   zoom + oy, 0, 1, color.r, color.g, color.b, color.a, -1,
@@ -648,7 +648,7 @@ fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: 
      
     CAM_VALUES
     
-    vertices: f32[] {
+    vertices: f32[.] = {
         // x ,y, uv.x, uv.y, color.rgba, texture
         (bx) *     zoom + ox, (by) *     zoom + oy, 0, 0, color.r, color.g, color.b, color.a, texture.id,
         (bx) *     zoom + ox, (by + h) * zoom + oy, 0, 1, color.r, color.g, color.b, color.a, texture.id,
@@ -794,7 +794,7 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], color:
         // log(it," ", off," ", w, " ", font.char_width)
         // log(it," ",u," ",v," ",uw," ",vh)
         
-        vertices: f32[] {
+        vertices: f32[.] = {
             // x ,y, uv.x, uv.y, color.rgba, texture
             (bx + off_x) *     zoom + ox, (by + off_y) *     zoom + oy,  u,  v, color.r, color.g, color.b, color.a, font.id,
             (bx + off_x) *     zoom + ox, (by + off_y + h) * zoom + oy,  u, vh, color.r, color.g, color.b, color.a, font.id,

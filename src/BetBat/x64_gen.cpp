@@ -732,7 +732,8 @@ void X64Builder::emit_lea(X64Register reg, X64Register rm, int disp) {
     emit1(OPCODE_LEA_REG_M);
 
     u8 mode = MODE_DEREF_DISP32;
-    if (disp == 0) {
+    // MODE_DEREF and BP is not allowed, we must have some displacement.
+    if (disp == 0 && rm != X64_REG_BP) {
         mode = MODE_DEREF;
     } else if (disp >= -0x80 && disp < 0x7F) {
         mode = MODE_DEREF_DISP8;

@@ -471,7 +471,7 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
             real_path.cleanup();
         }
         // log(real_path)
-        temp_args: char*[]{
+        temp_args: char*[.] = {
             cmd.ptr,
             null
         }

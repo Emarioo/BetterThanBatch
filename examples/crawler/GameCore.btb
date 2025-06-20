@@ -352,7 +352,7 @@ struct GameCore {
                 OPTION_QUIT,
             }
             a := OPTION_OPTIONS
-            options: char[][3] {
+            options: char[][3] = {
                 "Play",
                 "Options",
                 "Quit"

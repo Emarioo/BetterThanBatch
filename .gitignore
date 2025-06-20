@@ -21,6 +21,7 @@ releases
 # exported functions from btb.exe when compiling library 
 *_decl.btb
 *_decl.h
+btb
 
 # vscode extension package
 *.vsix

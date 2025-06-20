@@ -177,7 +177,7 @@ for list {
 // list.data[len++] = 72
 // list.data[len++] = 0
 
-// facit: i32[]{
+// facit: i32[.] = {
 //     8,0,
 //     3,1,
 //     23,2,

@@ -388,7 +388,7 @@ namespace engone {
 		return buffer.st_size;
 	}
 	bool FileFlushBuffers(APIFile file){
-		PL_PRINTF("FileFlushBuffers not implemented\n");
+		// PL_PRINTF("FileFlushBuffers not implemented\n");
 		return false;
 	}
     bool FileExist(const std::string& path){

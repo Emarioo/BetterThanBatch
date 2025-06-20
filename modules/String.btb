@@ -106,19 +106,18 @@ struct StringBuilder {
             append('-')
         }
         
-        str: char[21];
-        str_ptr := str.ptr
-        str_len := str.len
+        _str: char[21];
+        str: char[] = _str
         used := 20;
         while value > 0 && used > 0 {
             num := value % 10;
             value = value / 10;
-            str_ptr[used] = num + '0';
+            str.ptr[used] = num + '0';
             used--;
         }
         // LN
-        str_ptr += used + 1;
-        str_len -= used + 1;
+        str.ptr += used + 1;
+        str.len -= used + 1;
 
         append(str)
 
@@ -134,7 +133,8 @@ struct StringBuilder {
             append('0')
             return len - start;
         }
-        str: char[21];
+        _str: char[21];
+        str: char[] = _str
         used := 20;
         while value > 0u && used >= 0 {
             num := value % 10u;
@@ -197,7 +197,8 @@ struct StringBuilder {
             if intPart == 0 {
                 append('0')
             } else {
-                str: char[53];
+                _str: char[53];
+                str: char[] = _str;
                 used := str.len-1;
                 while intPart > 0u && used > 0 {
                     digit: u8 = intPart % 10u;
@@ -229,7 +230,8 @@ struct StringBuilder {
 
             // TODO: A small exponent with a small value won't fit in 'acc' (64-bit integer). If we manually print zeros then we could fit "useful" values in acc instead.
 
-            decimals: char[53];
+            _decimals: char[53];
+            decimals: char[] = _decimals;
 
             acc: u64 = 0;
             mul: u64 = 1;
@@ -304,7 +306,8 @@ struct StringBuilder {
             } else {
                 // we don't use swrite_unsafe because it uses
                 // i64 but we need u64 for the extra large integers.
-                str: char[23];
+                _str: char[23];
+                str: char[] = _str
                 used := 22;
                 while intPart > 0u && used > 0 {
                     digit: u8 = intPart % 10u;
@@ -335,7 +338,8 @@ struct StringBuilder {
         
             append('.')
 
-            decimals: char[24];
+            _decimals: char[24];
+            decimals: char[] = _decimals
 
             acc: u64 = 0;
             mul: u64 = 1;

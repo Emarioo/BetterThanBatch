@@ -802,7 +802,7 @@ fn RenderBackground() {
     // color := Color{1,0,0}
     // DrawSquare(window, screen_x, screen_y, screen_width, screen_height, color)
 
-    scalings: f32[] {
+    scalings: f32[.] = {
         0.5,
         0.2,
     }
