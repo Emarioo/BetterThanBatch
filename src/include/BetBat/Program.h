@@ -61,6 +61,7 @@ struct Program {
         std::string library_path;
 
         bool is_global_var = false;
+        bool is_global_var_function = false;
     };
     // exported functions
     struct ExportedSymbol {
@@ -108,8 +109,8 @@ struct Program {
     void addDataRelocation(u32 dataOffset, u32 textOffset, i32 tinyprog_index) {
         dataRelocations.add({dataOffset, textOffset, tinyprog_index});
     }
-    void addNamedUndefinedRelocation(const std::string& name, u32 textOffset, i32 tinyprog_index, const std::string& library_path = "", bool is_var = false) {
-        namedUndefinedRelocations.add({name, textOffset, tinyprog_index, library_path, is_var});
+    void addNamedUndefinedRelocation(const std::string& name, u32 textOffset, i32 tinyprog_index, const std::string& library_path, bool is_var, bool is_function_var) {
+        namedUndefinedRelocations.add({name, textOffset, tinyprog_index, library_path, is_var, is_function_var});
     }
     void addExportedSymbol(const std::string& name, i32 tinyprog_index) {
         exportedSymbols.add({name, tinyprog_index});

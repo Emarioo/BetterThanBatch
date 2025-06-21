@@ -348,8 +348,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 continue;
             } else if (token->type == lexer::TOKEN_IDENTIFIER && envs.last().may_be_name) {
                 info.advance();
+                if(view == "uword" || view == "iword") {
+                    envs.last().buffer += view.ptr[0]+std::to_string(compiler->arch.REGISTER_SIZE * 8);
+                } else {
+                    envs.last().buffer += view;
+                }
                 
-                envs.last().buffer += view;
                 envs.last().may_be_name = false;
                 continue;
             } else if (token->type == lexer::TOKEN_NAMESPACE_DELIM) {
@@ -489,9 +493,6 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
     outTypeId = "";
     for(int i=0;i<envs.size();i++) {
         outTypeId += envs[i].buffer;
-    }
-    if(outTypeId == "uword" || outTypeId == "iword") {
-        outTypeId = outTypeId[0]+std::to_string(compiler->arch.REGISTER_SIZE * 8);
     }
     if(tokensParsed)
         *tokensParsed = info.gethead() - startToken;

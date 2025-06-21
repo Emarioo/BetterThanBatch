@@ -507,21 +507,42 @@ struct StringBuilder {
         if typeinfo.type == lang_Primitive.STRUCT {
             append("{")
             if pretty  append('\n')
+            struct_name := lang_name_from_range(typeinfo.name)
             members := lang_typemembers(type);
-            if members.len > 0 {
-                for @ptr members {
+            if equal_start("Slice<",struct_name) {
+                element_type := members[0].type
+                element_type.ptr_level--
+                
+                element_size := sizeof(void*)
+                if element_type.ptr_level == 0
+                    element_size = lang_typeInfos.ptr[element_type.index()].size
+                
+                ptr := *cast<void**>data
+                length := *(cast<iword*>data + sizeof iword)
+                for 0..length {
                     if nr != 0 {
                         append(", ");
                         if pretty  append('\n')
                     }
-                    
                     if pretty  indent(depth)
-                    
-                    name := lang_name_from_range(it.name);
-                    append(name)
-                    append(": ")
-                    
-                    append(data + it.offset, it.type, pretty, depth + 1)
+                    append(ptr + nr * element_size, element_type, pretty, depth + 1)
+                }
+            } else {
+                if members.len > 0 {
+                    for @ptr members {
+                        if nr != 0 {
+                            append(", ");
+                            if pretty  append('\n')
+                        }
+                        
+                        if pretty  indent(depth)
+                        
+                        name := lang_name_from_range(it.name);
+                        append(name)
+                        append(": ")
+                        
+                        append(data + it.offset, it.type, pretty, depth + 1)
+                    }
                 }
             }
             if pretty {

@@ -4,25 +4,28 @@
     stb_image.h
     stb_image_write.h
         
-    You must compile stb into a static library.
+    You must compile stb into a static/dynamic library.
+    It comes with the BTB compiler in libs.
+    You can also run build.py in the BetterThanBatch repo which
+    will make static and dynamic libraries.
 */
 
 #if OS_WINDOWS
     #if LINK_MSVC
-        #if USE_DYNAMIC_LIBS
+        #if BUILD_DLL
             #load "libs/stb/lib-vc2022/stb_image.dll" as STB_IMAGE
         #else
             #load "libs/stb/lib-vc2022/stb_image.lib" as STB_IMAGE
         #endif
     #else
-        #if USE_DYNAMIC_LIBS
+        #if BUILD_DLL
             #load "libs/stb/lib-mingw-w64/stb_image.dll" as STB_IMAGE
         #else
             #load "libs/stb/lib-mingw-w64/stb_image.lib" as STB_IMAGE
         #endif
     #endif
 #else
-    #if USE_DYNAMIC_LIBS
+    #if BUILD_DLL
         #load "libs/stb/lib-ubuntu/libstb_image.so" as STB_IMAGE
     #else
         #load "libs/stb/lib-ubuntu/libstb_image.a" as STB_IMAGE

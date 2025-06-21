@@ -151,7 +151,7 @@ fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: i64* = null) -
     if flags & FILE_CLEAR_AND_WRITE {
         open_flags = O_CREAT | O_TRUNC | O_RDWR;
         // open_flags = O_CREAT | O_RDWR;
-        mode = S_IRUSR | S_IWUSR;
+        mode = 0o644;
     }
     // log(c_path)
     fd := open(c_path, open_flags, mode)
@@ -320,21 +320,27 @@ fn FileCopy(src: char[], dst: char[]) -> bool {
 		}
 		return true;
     #elif OS_LINUX
-    open_flags, mode: i32
-    
-    if flags & FILE_READ_ONLY
-        open_flags = O_RDONLY
-    if flags & FILE_READ_AND_WRITE
-        open_flags = O_RDWR
-    if flags & FILE_CLEAR_AND_WRITE {
-        fileFlags = O_CREAT | O_TRUNC | O_RDWR;
-        mode = S_IRUSR | S_IWUSR;
-    }
         in := open(src.ptr, O_RDONLY, S_IRUSR);
+        if in < 0 {
+            // log("bad open in")
+            return false
+        }
+        defer close(in)
         info: stat
-        fstat(in, &info);
-        int out = open(dst.ptr, O_WRONLY | O_TRUNC, S_IWUSR);
-        sendfile(in, out, null, info.st_size);
+        res := fstat(in, &info);
+        // log("fstat ", res)
+        out := open(dst.ptr, O_WRONLY | O_TRUNC | O_CREAT, info.st_mode);
+        if out < 0 {
+            // log("bad open out")
+            return false
+        }
+        defer close(out)
+        // log("size ", info.st_size)
+        sent := sendfile(out, in, null, info.st_size);
+        // log("sendfile ", sent)
+        return sent >= 0
+    #else
+        incomplete
     #endif
 }
 fn FileMove(src: char[], dst: char[]) -> bool {
@@ -349,6 +355,8 @@ fn FileMove(src: char[], dst: char[]) -> bool {
     #elif OS_LINUX
         err := rename(src.ptr,dst.ptr)
         return err == 0
+    #else
+        incomplete
     #endif
 }
 fn FileDelete(path: char[]) -> bool {
@@ -366,6 +374,8 @@ fn FileDelete(path: char[]) -> bool {
     #elif OS_LINUX
         err := unlink(path.ptr)
         return err == 0
+    #else
+        incomplete
     #endif
 }
 
@@ -405,7 +415,7 @@ fn DirectoryCopy(src: char[], dst: char[]) {
 
         // TODO: redirect stdout to nul
         ExecuteCommand(cmd.sliced(), null, true)
-    #else
+    #elif OS_LINUX
         cmd: StringBuilder
         // r = recursive copy
         // u = only copy new files
@@ -433,6 +443,8 @@ fn DirectoryCopy(src: char[], dst: char[]) {
 
         // TODO: redirect stdout to nul
         ExecuteCommand(cmd.sliced(), null, false)
+    #else
+        incomplete
     #endif
 }
 
@@ -837,7 +849,9 @@ fn FileModifiedTime(path: char[]) -> i64 {
         err := stat(path.ptr, &buf);
         if err != 0
             return -1 // file not found or something
-        return buf.st_mtime * cast<u64>1_000_000_000 + st_mtime_nsec
+        return buf.st_mtime * cast<u64>1_000_000_000 + buf.st_mtime_nsec
+    #else
+        incomplete
     #endif
 }
 #macro FILE_TIME_TO_SECONDS(X) (cast<f64>cast<i64>(X) / cast<f64>cast<i64>1_000_000_000)
@@ -905,110 +919,112 @@ fn FindFile(path: char[], search_env_path: bool = false, recursive: bool = false
     incomplete
     #elif OS_LINUX
     result: StringBuilder
-    if access(path.ptr, F_OK) == 0 {
-        result.append(path)
-        return result
-    }
-
-    dirs: Array<StringBuilder>
-    defer {
-        dirs.cleanup()
-    }
-    if search_env_path {
-        env_path := FindEnvironmentVar("PATH")
-
-        if env_path {
-            extra_paths := split(":",env_path)
-            for extra_paths.sliced_unsafe() {
-                // log(it)
-                s: StringBuilder
-                s.append(AbsolutePath(it))
-                dirs.add(s)
-            }
-        }
-    }
-
-    cwd := Slice<char> {Allocate(256), 256}
-    defer Free(cwd.ptr)
-    cwd_err := cast<i64>getcwd(cwd.ptr, cwd.len-1)
-    if cwd_err < 0 {
-        log("Error in 'FindFile': getcwd, ",name_of_error(cwd_err))
-        return result
-    }
-    cwd.len = strlen(cwd.ptr)
-
-    root: StringBuilder
-    defer { root.cleanup() }
-    slash_pos := find("/", path, reverse = true)
-    // log("pos ",slash_pos)
-    file_name: StringBuilder
-    if(slash_pos != -1) {
-        file_name.append(substring(path, slash_pos))
-    } else {
-        file_name.append("/")
-        file_name.append(path)
-    }
-
-    root.append(cwd)
-    if slash_pos != -1 {
-        root.append("/")
-        root.append(substring(path, 0, slash_pos))
-    }
-
-    // remove duplicates, TODO: the way we check duplicates is a little flawed, look into it
-    root_exists := false
-    for dirs.sliced() {
-        // log(it, " == ", root)
-        if !recursive {
-            if it == root {
-                root_exists = true
-                break
-            }
-        } else {
-            if equal_start(it.sliced(), root.sliced()) {
-                root_exists = true
-                break
-            } else if equal_start(root.sliced(), it.sliced()) && recursive {
-                // swap
-                dirs.ptr[nr].cleanup()
-                dirs.ptr[nr] = root
-                root.cleanup(false)
-                root_exists = true
-                break
-            }
-        }
-    }
-    if !root_exists {
-        dirs.add(root)
-        root.cleanup(false)
-    }
-
-    // for dirs.sliced() {
-    //     log(it)
+    // if access(path.ptr, F_OK) == 0 {
+    //     result.append(path)
+    //     return result
     // }
 
-    // log("root ",root, ", file ",file_name)
-    for dirs.sliced_unsafe() {
-        iter := CreateDirIterator(it.sliced())
-        defer iter.cleanup()
-        while {
-            item := iter.next()
-            if !item   break
-            if item.is_directory {
-                if find("/.",item.name.sliced()) != -1 || !recursive
-                    iter.skip()
-            }
-            // log(item.name, " == ", file_name)
-            yes := equal_end(file_name.sliced(), item.name.sliced())
-            if yes {
-                // log("found ",item.name)
-                result.append(item.name)
-                return result
-            }
-        }
-    }
+    // dirs: Array<StringBuilder>
+    // defer {
+    //     dirs.cleanup()
+    // }
+    // if search_env_path {
+    //     env_path := FindEnvironmentVar("PATH")
+
+    //     if env_path {
+    //         extra_paths := split(":",env_path)
+    //         for extra_paths.sliced_unsafe() {
+    //             // log(it)
+    //             s: StringBuilder
+    //             s.append(AbsolutePath(it))
+    //             dirs.add(s)
+    //         }
+    //     }
+    // }
+
+    cwd := Slice<char>{Allocate(256), 256}
+    // defer Free(cwd.ptr)
+    // cwd_err := cast<i64>getcwd(cwd.ptr, cwd.len-1)
+    // if cwd_err < 0 {
+    //     log("Error in 'FindFile': getcwd, ",name_of_error(cwd_err))
+    //     return result
+    // }
+    // cwd.len = strlen(cwd.ptr)
+
+    // root: StringBuilder
+    // defer { root.cleanup() }
+    // slash_pos := find("/", path, reverse = true)
+    // // log("pos ",slash_pos)
+    // file_name: StringBuilder
+    // if(slash_pos != -1) {
+    //     file_name.append(substring(path, slash_pos))
+    // } else {
+    //     file_name.append("/")
+    //     file_name.append(path)
+    // }
+
+    // root.append(cwd)
+    // if slash_pos != -1 {
+    //     root.append("/")
+    //     root.append(substring(path, 0, slash_pos))
+    // }
+
+    // // remove duplicates, TODO: the way we check duplicates is a little flawed, look into it
+    // root_exists := false
+    // for dirs.sliced() {
+    //     // log(it, " == ", root)
+    //     if !recursive {
+    //         if it == root {
+    //             root_exists = true
+    //             break
+    //         }
+    //     } else {
+    //         if equal_start(it.sliced(), root.sliced()) {
+    //             root_exists = true
+    //             break
+    //         } else if equal_start(root.sliced(), it.sliced()) && recursive {
+    //             // swap
+    //             dirs.ptr[nr].cleanup()
+    //             dirs.ptr[nr] = root
+    //             root.cleanup(false)
+    //             root_exists = true
+    //             break
+    //         }
+    //     }
+    // }
+    // if !root_exists {
+    //     dirs.add(root)
+    //     root.cleanup(false)
+    // }
+
+    // // for dirs.sliced() {
+    // //     log(it)
+    // // }
+
+    // // log("root ",root, ", file ",file_name)
+    // for dirs.sliced_unsafe() {
+    //     iter := CreateDirIterator(it.sliced())
+    //     defer iter.cleanup()
+    //     while {
+    //         item := iter.next()
+    //         if !item   break
+    //         if item.is_directory {
+    //             if find("/.",item.name.sliced()) != -1 || !recursive
+    //                 iter.skip()
+    //         }
+    //         // log(item.name, " == ", file_name)
+    //         yes := equal_end(file_name.sliced(), item.name.sliced())
+    //         if yes {
+    //             // log("found ",item.name)
+    //             result.append(item.name)
+    //             return result
+    //         }
+    //     }
+    // }
 
     return result
+    #else
+        incomplete
     #endif
 }
 

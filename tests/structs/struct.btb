@@ -9,6 +9,21 @@ _test 23; a.x
 a = {}
 _test 23; a.x
 
+@TEST_CASE(initializer_with_fncall)
+fn non() -> void* { return null }
+
+cwd := Slice<char>{ non() } // triggered assert in x64_gen, Register allocation failed?
+
+struct Core {
+    x: i32[4];
+    fn in() {
+        x = {1,2,cast_unsafe<i64>non(),4}
+    }
+}
+
+c: Core
+c.in()
+
 @TEST_CASE(access)
 struct Base {
     mem: i32;

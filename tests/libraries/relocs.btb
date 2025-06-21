@@ -1,0 +1,31 @@
+
+@TEST_CASE(reloc_environ)
+
+#import "Logger"
+
+#load "libc.so" as libc
+
+global @import(libc) environ: char**
+
+fn @export fun() {
+    log(*environ)
+    // glViewport(0,0,0,0)
+}
+
+fun()
+
+@TEST_CASE(reloc_environ)
+
+// NOTE: Compile as shared library and call exported function
+#import "Logger"
+
+#load "libc.so" as libc
+
+global @import(libc) environ: char**
+
+fn @export fun() {
+    log(*environ)
+    // glViewport(0,0,0,0)
+}
+
+fun()

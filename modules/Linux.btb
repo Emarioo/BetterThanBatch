@@ -15,6 +15,7 @@
 #if OS_LINUX // wraps everything in this file
 
 #load "libc.so.6" as LibC
+#load "libdl.so" as LibDL
 
 #macro STDIN_FILENO  0
 #macro STDOUT_FILENO 1
@@ -333,6 +334,8 @@
 #macro SYS_execve   59
 #macro SYS_exit     60
 
+#macro SYS_kill     62
+
 
 // #macro SYS_getdents 78
 #macro SYS_getcwd     79
@@ -359,22 +362,27 @@
 
 fn @unixcall @asm NAME( SYSCALL_args(...) ) -> RETURN_TYPE {
     push rbp // 16-byte align, I assume syscalls require that
-    // sub rsp, 40
 
-    // parameters and return values have already been set
+    // parameters have already been set
     mov r10, rcx // 4th argument is passed through r10, not rcx
     mov eax, SYS_ ## NAME
     syscall
 
     pop rbp
-    // add rsp, 40
     ret
 }
 #endmacro
 #macro SYSCALL_VOID(NAME, ...)
 fn @unixcall @asm NAME( SYSCALL_args(...) ) {
+    push rbp // 16-byte align, I assume syscalls require that
+    
+    // parameters have already been set
+    mov r10, rcx // 4th argument is passed through r10, not rcx
     mov eax, SYS_ ## NAME
     syscall
+    
+    pop rbp
+    ret
 }
 #endmacro
 #macro SYSCALL_args(X,...) X, SYSCALL_args(...)
@@ -416,9 +424,23 @@ SYSCALL_VOID(rt_sigreturn)
 // }
 
 //  NOTE: I don't know how to use rt_sigaction without Glibc so in the meantime we can use these.
-fn @import(LibC) @oscall sigaction(signum: i32, act: sigaction_t*, old_act: sigaction_t*) -> i32
-fn @import(LibC) @oscall signal(n: i32, f: fn@oscall(i32)) -> i32
+fn @import(LibC) sigaction(signum: i32, act: sigaction_t*, old_act: sigaction_t*) -> i32
+fn @import(LibC) signal(n: i32, f: fn@oscall(i32)) -> i32
 
+// flags to dlopen
+#macro RTLD_LAZY          0x00001
+#macro RTLD_NOW           0x00002
+#macro RTLD_BINDING_MASK  0x3
+#macro RTLD_NOLOAD        0x00004
+#macro RTLD_DEEPBIND      0x00008
+#macro RTLD_GLOBAL        0x00100
+#macro RTLD_LOCAL         0
+#macro RTLD_NODELETE      0x01000
+
+fn @import(LibDL) dlopen(filename: char*, flags: i32) -> void*;
+fn @import(LibDL) dlclose(handle: void*) -> i32;
+fn @import(LibDL) dlsym(handle: void*, symbol: char*) -> void*;
+fn @import(LibDL) dlerror() -> char*;
 
 SYSCALL(access,  i32, path: char*, mode: i32)
 SYSCALL(pipe,  i32, fildes: i32*)
@@ -450,7 +472,9 @@ SYSCALL(fork,   i32)
 SYSCALL(vfork,  i32)
 // environment variables can be be acquired from the envp argument in main(argc: i32, argv: char**, envp: char**)
 SYSCALL(execve, i32, pathname: char*, argv: char**, envp: char**)
-SYSCALL_VOID(exit,   status: i32)
+SYSCALL_VOID(exit, status: i32)
+
+SYSCALL(kill, i32, pid: i32, sig: i32)
 
 SYSCALL(getcwd, char*, buf: char*, size: i32)
 

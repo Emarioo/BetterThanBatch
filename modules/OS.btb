@@ -44,6 +44,9 @@ struct Process {
         #if OS_WINDOWS
             CloseHandle(API_TO_OS_HANDLE(os_handle))
             os_handle = 0
+        #elif OS_LINUX
+            kill(cast<i64>API_TO_OS_HANDLE(os_handle), SIGKILL)
+            os_handle = 0
         #else
             incomplete
         #endif
@@ -54,9 +57,17 @@ struct Process {
             return false
         #if OS_WINDOWS
             exit_code: i32
-            yes := GetExitCodeProcess(os_handle, &exit_code)
+            yes := GetExitCodeProcess(API_TO_OS_HANDLE(os_handle), &exit_code)
             // return exit code as a second return value or through argument when inactive?
             return exit_code == STILL_ACTIVE
+        #elif OS_LINUX
+            info: siginfo_t
+            res := waitid(P_PID, cast<i64>API_TO_OS_HANDLE(os_handle), &info, WEXITED|WNOHANG)
+            if res < 0 {
+                // error
+                return false
+            }
+            return info.pid != 0
         #else
             incomplete
         #endif
@@ -458,10 +469,11 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
         // child process
         
         if !global_environment {
-
             global_environment = environ
+            // global_environment = null
             // log("Warning in 'ExecuteCommand': global_environment is null, see SetEnvironment.")
         }
+        // log("wac",global_environment[0], "ha")
         // log("find ",cmd)
         real_path := FindFile(cmd, true)
         // real_path: StringBuilder
@@ -478,26 +490,25 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
         real_args: char** = args
         if !real_args {
             // temp_args[0] = real_path.ptr
-            real_args = temp_args.ptr
+            real_args = temp_args.ptr + sizeof(char*) // skip first arg which is the command
         }
 
-        // log("rp ",real_path.ptr)
-        // ptr := Allocate(2423)
+        // t := Slice<char*>{args,0}
+        // while args[t.len++] { }
+        // log(&t)
 
         if real_path.ptr {
-        // if false {
-            // log("cmd: ", real_path)
             res := execve(real_path.ptr, real_args, global_environment)
             if res < 0 {
-                log("Error in 'ExecuteCommand': execve, ", name_of_error(res), " cmd: '",cmd,"'")
+                log("Error in 'ExecuteCommand': execve, ", name_of_error(res), " cmd: '",cmd.ptr, " ",real_path,"'")
             }
         } else {
             res := execve(cmd.ptr, real_args, global_environment)
+            // res := execve(cmd.ptr, real_args, cast<void**>null)
             if res < 0 {
-                log("Error in 'ExecuteCommand': execve, ", name_of_error(res), " cmd: '",cmd,"'")
+                log("Error in 'ExecuteCommand': execve, ", name_of_error(res), " cmd: '",cmd.ptr,"' ", real_args)
             }
         }
-        // log("OHH NOOOO THIS SHOULD BE UNREACHABLE!!")
         exit(0)
     }
     // parent process
@@ -518,6 +529,9 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
         if exit_code {
             *exit_code = info.status
         }
+    } else if process {
+        *process = Process{}
+        process.os_handle = OS_TO_API_HANDLE(cast<i64>pid)
     }
 
     return true
@@ -605,8 +619,8 @@ fn ExecuteCommandWithOutput(cmd: char[], text: StringBuilder*, exit_code: i32*, 
 }
 
 global enable_logging_dynamic_library: bool
+
 // A struct that refers to a dynamically linked library
-// TODO: Linux implementation
 struct DynamicLibrary {
     handle: void*;
     path: StringBuilder;
@@ -614,36 +628,48 @@ struct DynamicLibrary {
     fn valid() -> bool { return handle }
 
     fn cleanup() {
-        yes := FreeLibrary(handle);
-        if enable_logging_dynamic_library
-            log("Unload ", path)
-        handle = null
-        path.cleanup()
-		if (!yes) {
-			err := GetLastError();
-			log("[WinError ",err,"] UnloadDynamicLibrary");
-            return
-        }
-    }
-    // You may need to cast the function pointer to the appropriate function.
-    // Also used for global variables.
-    // IMPORTANT: MAKE SURE TO CAST TO THE RIGHT CALLING CONVENTION!
-    //   Exported and imported functions use @oscall by default (stdcall, sys v abi).
-    fn get_pointer(name: char[]) -> fn() {
-        // TODO: Check null termination
-        proc := GetProcAddress(handle, name.ptr);
-		if (proc == null) {
-			err := GetLastError();
-			if(err==ERROR_PROC_NOT_FOUND){
-				log("[WinError ",err,"] GetFunctionPointer, could not find '",name,"'");
-			}else {
-                log("[WinError ",err,"] GetFunctionPointer ",name);
+        #if OS_WINDOWS
+            if handle {
+                yes := FreeLibrary(handle);
+                if enable_logging_dynamic_library
+                    log("Unload ", path)
+                handle = null
+                path.cleanup()
+                if !yes {
+                    err := GetLastError();
+                    log("[WinError ",err,"] FreeLibrary");
+                    return
+                }
             }
-		}
-		return cast_unsafe<fn()>proc;
+        #elif OS_LINUX
+            if handle {
+                res := dlclose(handle)
+                handle = null
+                if enable_logging_dynamic_library
+                    log("Unload ", path)
+                path.cleanup()
+                if res != 0 {
+                    log("[LinuxError] dlclose: ", dlerror())
+                }
+            }
+        #else
+            incomplete
+        #endif
+    }
+    fn get_pointer(name: char[]) -> fn @oscall () {
+        // TODO: Check null termination
+        #if OS_WINDOWS
+            proc := GetProcAddress(handle, name.ptr);
+            return cast_unsafe<fn @oscall ()>proc;
+        #elif OS_LINUX
+            proc := dlsym(handle, name.ptr)
+            return cast_unsafe<fn @oscall ()>proc;
+        #else
+            incomplete
+        #endif
     }
 }
-// return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 
+// Call valid() method on returned value to know if function succeeded.
 fn LoadDynamicLibrary(path: char[], log_error: bool = true) -> DynamicLibrary {
     // TODO: Check null termination
     #if OS_WINDOWS
@@ -660,6 +686,19 @@ fn LoadDynamicLibrary(path: char[], log_error: bool = true) -> DynamicLibrary {
         str: StringBuilder
         str.append(path)
         return DynamicLibrary{module, str};
+    #elif OS_LINUX
+        handle := dlopen(path.ptr, RTLD_NOW)
+        if !handle {
+            if log_error {
+                log("[LinuxError] dlopen: ", dlerror())
+            }
+            return {}
+        }
+        if enable_logging_dynamic_library
+            log("Load ", path)
+        str: StringBuilder
+        str.append(path)
+        return {handle, str}
     #else
         incomplete
     #endif

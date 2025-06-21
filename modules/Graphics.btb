@@ -302,7 +302,7 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
         return null;
     }
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Borderless fullscreen
@@ -317,7 +317,7 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
 
     glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
     if !glfw_window {
-        log("window failed");
+        log("window failed, is OpenGL core profile version 4.1 not supported?");
         glfwTerminate();
         return null
     }

@@ -87,6 +87,10 @@ fn StartInfiniteLoop(app: AppInstance) -> bool {
         if acc >= app.reload_rate_seconds {
             acc = 0.0
             time := FileModifiedTime(app.dynamic_library_path)
+            if(time == -1) {
+                log("Invalid path ", app.dynamic_library_path)
+                return false   
+            }
             if app.rebuild_cmd.size() {
                 // skip first rebuild since we already compiled the game at the start of the function.
                 if skipped_rebuild_once {
@@ -132,6 +136,7 @@ fn StartInfiniteLoop(app: AppInstance) -> bool {
                         //   the compiler can take 2.3 seconds. Get your priorities straight!
                         // 
                         //   Inter-process communication on Windows: https://learn.microsoft.com/en-us/windows/win32/memory/sharing-files-and-memory
+                        // log("exec")
                         ExecuteCommand(app.rebuild_cmd.sliced(), &exit_code, asynchronous = true, process = &last_process)
                     }
                 }

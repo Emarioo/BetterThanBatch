@@ -14,6 +14,8 @@
 bool X64Builder::generate() {
     using namespace engone;
     TRACE_FUNC()
+    
+    // tinycode->print(0,-1, bytecode);
 
     CALLBACK_ON_ASSERT(
         tinycode->print(0,-1, bytecode);
@@ -28,7 +30,7 @@ bool X64Builder::generate() {
         emit_bytes(ptr, len);
         for (int i = 0; i < asmInstance.relocations.size();i++) {
             auto& it = asmInstance.relocations[i];
-            program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+            program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index, "", false, false);
         }
         return true;
     }
@@ -1052,7 +1054,7 @@ bool X64Builder::generate() {
                 FIX_PRE_IN_OPERAND(1)
                 FIX_PRE_IN_OPERAND(0)
                 if(reg0->reg == X64_REG_INVALID|| reg1->reg == X64_REG_INVALID || (reg0->reg == X64_REG_BP && imm == 0)) {
-                    PRINT_BYTECODE("Register allocation failed?\n")
+                    PRINT_BYTECODE("Register allocation failed? Did we allocate a register, call a function and then use the register?\n")
                 }
                 emit_mov_mem_reg(reg0->reg, reg1->reg, base->control, imm);
                 FIX_POST_IN_OPERAND(0)
@@ -3442,7 +3444,7 @@ bool X64Builder::generate() {
                     emit_bytes(ptr, len);
                     for (int i = 0; i < asmInstance.relocations.size();i++) {
                       auto& it = asmInstance.relocations[i];
-                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index, "", false, false);
                     }
                 } else {
                     log::out << log::YELLOW << asmInstance.file <<":"<<asmInstance.lineStart<< ": "<<log::NO_COLOR <<" was incomplete or just empty?\n";
@@ -3487,9 +3489,9 @@ bool X64Builder::generate() {
                     emit_bytes(arr,sizeof(arr));
 
                     // C creates these symbol names in it's object file
-                    program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_funcprog_index);
+                    program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_funcprog_index, "", false, false);
                     // prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
-                    program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_funcprog_index);
+                    program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_funcprog_index, "", false, false);
                     // prog->namedUndefinedRelocations.add(reloc0);
                     // prog->namedUndefinedRelocations.add(reloc1);
                 } else if(bytecode->target == TARGET_LINUX_x64) {
@@ -3569,8 +3571,8 @@ bool X64Builder::generate() {
                     emit_bytes(arr,sizeof(arr));
 
                     // C creates these symbol names in it's object file
-                    program->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_funcprog_index);
-                    program->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_funcprog_index);
+                    program->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_funcprog_index, "", false, false);
+                    program->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_funcprog_index, "", false, false);
                     
                     
                 } else if(bytecode->target == TARGET_LINUX_x64) {
@@ -3717,8 +3719,8 @@ bool X64Builder::generate() {
                 set_imm8(start_addr + 0xf, (imm>>8)&0xFF);
                 set_imm8(start_addr + 0x10, (imm>>16)&0xFF);
 
-                program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_funcprog_index);
-                program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_funcprog_index);
+                program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_funcprog_index, "", false, false);
+                program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_funcprog_index, "", false, false);
                 #else
                 
                 /*
@@ -3850,7 +3852,7 @@ bool X64Builder::generate() {
                 }
             }
 
-            program->addNamedUndefinedRelocation(alias, off, rel.tinycode_index, lib.path, rel.type == BC_REL_GLOBAL_VAR);
+            program->addNamedUndefinedRelocation(alias, off, rel.tinycode_index, lib.path, rel.type == BC_REL_GLOBAL_VAR || rel.type == BC_REL_GLOBAL_VAR_FUNCTION, rel.type == BC_REL_GLOBAL_VAR_FUNCTION);
             // found = true;
             // break;
         }

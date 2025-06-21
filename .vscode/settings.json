@@ -1,7 +1,7 @@
 {
     "files.associations": {
-        "*.log": "ansi",
         "*.cpp": "cpp",
+        "*.log": "ansi",
         "utility": "cpp",
         "xhash": "cpp",
         "xstring": "cpp",
@@ -99,6 +99,7 @@
         "coroutine": "cpp",
         "stdio.h": "c",
         "initguid.h": "c",
-        "guiddef.h": "c"
+        "guiddef.h": "c",
+        "dlfcn.h": "c"
     }
 }

@@ -47,6 +47,7 @@ struct GenContext : public PhaseContext {
     void emit_abstract_dataptr(BCRegister reg, int offset, IdentifierVariable* global_ident);
 
     void generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo);
+    // void generate_dataptr(BCRegister reg, int offset);
 
     void addExternalRelocation(const std::string& name, int lib_index, u32 codeAddress, ExternalRelocationType rel_type, FunctionSignature* signature) {
         if(!disableCodeGeneration)
@@ -59,6 +60,8 @@ struct GenContext : public PhaseContext {
     FuncImpl* currentFuncImpl=nullptr;
     ScopeId currentScopeId = 0;
     ScopeId fromScopeId = 0; // AST_FROM_NAMESPACE
+
+    int frame_offset_of_assigned_initializer_pointer = -1; // -1 means not allocated on stack, it is reset per function generation
 
     u32 currentPolyVersion=0;
     int currentScopeDepth = 0; // necessary for scoped variables in debug information

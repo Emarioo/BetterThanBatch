@@ -177,7 +177,7 @@ void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode, Compiler* com
     ret_offset = 0;
     has_return_values = false;
     virtual_stack_pointer = 0;
-    
+    m_has_emitted_call = false;
 }
 
 void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 test_location) {
@@ -488,6 +488,7 @@ void BytecodeBuilder::emit_call(LinkConvention l, CallConvention c, i32* index_o
     has_return_values = true;
     ret_offset = pushed_offset;
     pushed_offset_max = pushed_offset;
+    m_has_emitted_call = true;
 }
 void BytecodeBuilder::emit_call_reg(BCRegister reg, LinkConvention l, CallConvention c) {
     if(disable_code_gen) return;
@@ -500,6 +501,7 @@ void BytecodeBuilder::emit_call_reg(BCRegister reg, LinkConvention l, CallConven
     has_return_values = true;
     ret_offset = pushed_offset;
     pushed_offset_max = pushed_offset;
+    m_has_emitted_call = true;
 }
 void BytecodeBuilder::emit_ptr_to_locals(BCRegister reg, int imm16) {
     emit_opcode(BC_PTR_TO_LOCALS);

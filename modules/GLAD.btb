@@ -4,20 +4,20 @@
 #if OS_WINDOWS
     #load "OpenGL32.lib"
     #if LINK_MSVC
-        #if USE_DYNAMIC_LIBS
+        #if BUILD_DLL
             #load "libs/glad/lib-vc2022/glad.dll" as GLAD
         #else
             #load "libs/glad/lib-vc2022/glad.lib" as GLAD
         #endif
     #else
-        #if USE_DYNAMIC_LIBS
+        #if BUILD_DLL
             #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
         #else
             #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
         #endif
     #endif
 #else
-    #if USE_DYNAMIC_LIBS
+    #if BUILD_DLL
         #load "libs/glad/lib-ubuntu/libglad.so" as GLAD
     #else
         #load "libs/glad/lib-ubuntu/libglad.a" as GLAD

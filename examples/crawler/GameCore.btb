@@ -59,6 +59,7 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
         graphics_data: void*;
         world_data: void*;
     }
+    // log(&event)
     // if !app.extra_user_data {
     //     app.extra_user_data = Allocate(sizeof ExtraData)
     //     construct(cast<ExtraData*>app.extra_user_data)
@@ -92,7 +93,7 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
                     log("Enabled stable globals")
                     app.stable_globals.len = global_data.len
                     // stable globals should be freed when we stop the app
-                    app.stable_globals.ptr = Allocate(global_data.len)
+                    app.stable_globals.ptr = PureAllocateHeap(global_data.len)
                     memcpy(app.stable_globals.ptr, global_data.ptr, global_data.len)
                 }
                 if (global_data.len != app.stable_globals.len) {
@@ -189,11 +190,11 @@ struct GameCore {
     fn start_game(app: AppInstance*) {
         // window = CreateWindow(1400,600)
         window = CreateWindow(800,600)
-        InitEntityInfos()
+        InitEntityInfos() //
 
         // client.set_callback(net_callback, this)
         // server.set_callback(net_callback, this)
-
+        log("Started game?")
 
         window.camera_zoom = 20
 

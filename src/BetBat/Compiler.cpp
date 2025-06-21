@@ -1277,16 +1277,8 @@ void Compiler::run(CompileOptions* options) {
         dot_index = output_path.size();
     }
 
-    enum OutputType {
-        OUTPUT_INVALID,
-        OUTPUT_OBJ,
-        OUTPUT_EXE,
-        OUTPUT_ELF,
-        OUTPUT_LIB,
-        OUTPUT_DLL,
-        OUTPUT_BC,
-    };
-    OutputType output_type = OUTPUT_INVALID;
+    
+    output_type = OUTPUT_INVALID;
 
     bool obj_write_success = false;
 

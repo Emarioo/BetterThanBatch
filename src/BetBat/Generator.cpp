@@ -399,13 +399,26 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         //     alias = "__imp_" + alias;
         // }
         if(varinfo->is_var()) {
-            addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR, {});
+            TypeId typeId = varinfo->cast_var()->versions_typeId[currentPolyVersion];
+            if(typeId.isNormalType() && ast->getTypeInfo(typeId)->funcType) {
+                addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR_FUNCTION, {});
+            } else {
+                addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR, {});
+            }
         } else {
             TypeInfo* typeinfo = ast->getTypeInfo(varinfo->versions_typeId[currentPolyVersion]);
             addExternalRelocation(alias, lib_index, reloc, BC_REL_FUNCTION, typeinfo->funcType);
         }
     // }
 }
+// Linux requires relocations for global variables in a shared library.
+// Do not use emit_dataptr directly because this functions adds in the appropriate relocation!
+// void GenContext::generate_dataptr(BCRegister reg, int offset) {
+//     using namespace engone;
+//     int reloc = builder.get_pc() + 2;
+//     builder.emit_dataptr(reg, offset);
+//     addExternalRelocation(".data", -1, reloc, BC_REL_GLOBAL_VAR, {});
+// }
 // IMPORTANT: This function is commented out because it's not used. It may also be flawed because movingOffset doesn't
 //   isn't adjusted based on padding, just the size of the types.
 // SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
@@ -2386,7 +2399,7 @@ SignalIO GenContext::generatePushedLiterals(VirtualMachine* vm, TypeId type, cha
         } else if(value >= data_start && value < data_end) {
             // if pointer points to a data block
             int data_offset = value - (i64)bytecode->dataSegment.data();
-            builder.emit_dataptr(BC_REG_A, data_offset);
+            generate_dataptr(BC_REG_A, data_offset);
             builder.emit_push(BC_REG_A);
         } else {
             if(structType) {
@@ -2500,8 +2513,34 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
         )
     )
 
-    builder.emit_mov_rr(BC_REG_P, baseReg);
-    baseReg = BC_REG_P;
+    // since we may be evaluating an expression that calls a function
+    // we can't maintain registers between calls, they are cleared.
+    // We must store the pointer in local variable.
+    // If baseReg is BC_REG_LOCALS, eg. base pointer, we can skip this.
+    /*
+        This code will fail without this logic, it triggers an assert in x64_gen. (Register allocation failed)
+            fn non() -> void* { return null }
+            cwd := Slice<char>{ non() }
+    */
+    if(frame_offset_of_assigned_initializer_pointer == -1) {
+        auto result = framePush(TypeId::Create(TYPE_VOID, 1), &frame_offset_of_assigned_initializer_pointer, false);
+        Assert(result == SIGNAL_SUCCESS);
+        // framePush can only fail if default expression has an error.
+        // Our type is pointer and we don't generate default value so this will never happen.
+    }
+
+    if (baseReg != BC_REG_LOCALS) {
+        builder.emit_mov_mr_disp(BC_REG_LOCALS, baseReg, REGISTER_SIZE, frame_offset_of_assigned_initializer_pointer);
+    }
+    auto setup_baseReg=[&](){
+        if (baseReg != BC_REG_LOCALS && builder.has_emitted_call(true)) {
+            builder.emit_mov_rm_disp(baseReg, BC_REG_LOCALS, REGISTER_SIZE, frame_offset_of_assigned_initializer_pointer);
+        }
+    };
+    
+    // TODO: Optimize, we currently get baseReg on each element/expression but we only need to do this if
+    //   a function call got in the way.
+    // TODO: We can let the backend deal with the complexities. prefer non-volatile registers but anyway.
 
     TypeInfo* first_typeinfo=nullptr;
     if(typeId.isNormalType())
@@ -2518,7 +2557,7 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
             ERRTYPE1(expression->location, outtype, typeId, "(initializer of '"<<log::LIME<<ast->typeToString(typeId)<<log::NO_COLOR<<"')");
             return SIGNAL_FAILURE;
         }
-
+        setup_baseReg();
         result = generatePop(baseReg, offset, typeId);
         if(result != SIGNAL_SUCCESS) return result;
         return SIGNAL_SUCCESS;
@@ -2563,6 +2602,7 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
                 continue;
             }
             if(env.expr_index >= env.expr->args.size()) {
+                setup_baseReg();
                 result = generateDefaultValue(baseReg, env.offset + env.expr_index * env.element_size, env.typeinfo->element_type);
                 if(result != SIGNAL_SUCCESS) return result;
                 env.expr_index++;
@@ -2590,7 +2630,7 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
                     ERRTYPE1(expr->location, outtype, env.typeinfo->element_type, "(initializer of '"<<log::LIME<<ast->typeToString(env.typeinfo->id)<<log::NO_COLOR<<"')");
                     return SIGNAL_FAILURE;
                 }
-                
+                setup_baseReg();
                 result = generatePop(baseReg, env.offset + env.expr_index * env.element_size, env.typeinfo->element_type);
                 if(result != SIGNAL_SUCCESS) return result;
                 env.expr_index++;
@@ -2648,10 +2688,11 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
                         if (!performSafeCast(ret_type, mem.typeId)) {
                             ERRTYPE(ast_mem.location, ast_mem.defaultValue->location, ret_type, mem.typeId, "(default member)\n");
                         }
-
+                        setup_baseReg();
                         result = generatePop(baseReg, env.offset + mem.offset, mem.typeId);
                         if(result != SIGNAL_SUCCESS) return result;
                     } else {
+                        setup_baseReg();
                         result = generateDefaultValue(baseReg, env.offset + mem.offset, mem.typeId);
                         if(result != SIGNAL_SUCCESS) return result;
                     }
@@ -2712,7 +2753,7 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
                     ERRTYPE1(expr->location, outtype, env.typeinfo->structImpl->members[member_index].typeId, "(initializer of '"<<log::LIME<<ast->typeToString(env.typeinfo->id)<<log::NO_COLOR<<"')");
                     continue;
                 }
-    
+                setup_baseReg();
                 result = generatePop(baseReg, env.offset + env.typeinfo->structImpl->members[member_index].offset, env.typeinfo->structImpl->members[member_index].typeId);
                 if(result != SIGNAL_SUCCESS) return result;
                 if(env.expr_index-1 == env.member_index)
@@ -2807,6 +2848,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         auto prev_currentFrameOffset = currentFrameOffset;
         auto prev_currentScopeDepth = currentScopeDepth;
         auto prev_currentPolyVersion = currentPolyVersion;
+        auto prevframe_offset_of_assigned_initializer_pointer = frame_offset_of_assigned_initializer_pointer;
         tinycode = temp_tinycode;
         new(&builder)BytecodeBuilder();
         builder.init(bytecode, tinycode, compiler);
@@ -2815,6 +2857,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         currentFrameOffset = 0;
         currentScopeDepth = -1;
         currentPolyVersion = 0; // @TODO Should we reset poly version? Shouldn't we keep using the curreny one?
+        frame_offset_of_assigned_initializer_pointer = -1;
 
         TEMP_ARRAY_N(TypeId, tempTypes, 5)
         expression->computeWhenPossible = false; // temporarily disable to preven infinite loop
@@ -2832,6 +2875,7 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         currentFrameOffset = prev_currentFrameOffset;
         currentScopeDepth = prev_currentScopeDepth;
         currentPolyVersion = prev_currentPolyVersion;
+        frame_offset_of_assigned_initializer_pointer = prevframe_offset_of_assigned_initializer_pointer;
         
         if(outTypeIds && tempTypes.size())
             outTypeIds->add(tempTypes[0]);
@@ -5228,12 +5272,15 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         auto prevFunc = info.currentFunction;
         auto prevFuncImpl = info.currentFuncImpl;
         auto prevScopeId = info.currentScopeId;
+        auto prevframe_offset_of_assigned_initializer_pointer = frame_offset_of_assigned_initializer_pointer;
+        frame_offset_of_assigned_initializer_pointer = -1;
         info.currentFunction = function;
         info.currentFuncImpl = funcImpl;
         info.currentScopeId = function->scopeId;
         defer { info.currentFunction = prevFunc;
             info.currentFuncImpl = prevFuncImpl;
-            info.currentScopeId = prevScopeId; };
+            info.currentScopeId = prevScopeId;
+            frame_offset_of_assigned_initializer_pointer = prevframe_offset_of_assigned_initializer_pointer; };
 
         // reset frame offset at beginning of function
         currentFrameOffset = 0;
@@ -7749,6 +7796,7 @@ SignalIO GenContext::generateGlobalData() {
         currentFrameOffset = 0;
         currentScopeDepth = -1;
         currentPolyVersion = 0;
+        frame_offset_of_assigned_initializer_pointer = -1;
 
         BCRegister data_ptr = BC_REG_B;
 
@@ -7850,7 +7898,7 @@ SignalIO GenContext::generateGlobalData() {
             type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
             builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
 
-            result = generateAssignedInitializing(BC_REG_B, 0, type, stmt->firstExpression->as<ASTExpressionInitializer>());
+            result = generateAssignedInitializing(data_ptr, 0, type, stmt->firstExpression->as<ASTExpressionInitializer>());
             if (result != SIGNAL_SUCCESS) {
                 if (!info.hasForeignErrors()) {
                     ERR_SECTION(
@@ -8018,6 +8066,7 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
         currentFrameOffset = 0;
         currentScopeDepth = -1;
         currentPolyVersion = 0;
+        frame_offset_of_assigned_initializer_pointer = -1;
 
         // auto di = bytecode->debugInformation;
         // auto dfun = di->addFunction(nullptr, tinycode, "<comp-time-path>", 1);
@@ -8157,6 +8206,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 context.currentFrameOffset = 0;
                 context.currentScopeDepth = -1;
                 context.currentPolyVersion = 0;
+                context.frame_offset_of_assigned_initializer_pointer = -1;
 
                 out_codes->add(tb_main);
 
