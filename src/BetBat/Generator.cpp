@@ -402,6 +402,12 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
             TypeId typeId = varinfo->cast_var()->versions_typeId[currentPolyVersion];
             if(typeId.isNormalType() && ast->getTypeInfo(typeId)->funcType) {
                 addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR_FUNCTION, {});
+                if(compiler->options->target == TARGET_LINUX_x64 && compiler->output_type == OUTPUT_DLL) {
+                    // We need extra dereference when in a shared library and we get an external function pointer.
+                    // It has to do with R_X86_64_REX_GOTPCRELX relocation and PLT, GOT and stuff.
+                    // I'm not really sure, just replicating what C does.
+                    builder.emit_mov_rm(reg, reg, REGISTER_SIZE);
+                }
             } else {
                 addExternalRelocation(alias, lib_index, reloc, BC_REL_GLOBAL_VAR, {});
             }
@@ -411,14 +417,6 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
         }
     // }
 }
-// Linux requires relocations for global variables in a shared library.
-// Do not use emit_dataptr directly because this functions adds in the appropriate relocation!
-// void GenContext::generate_dataptr(BCRegister reg, int offset) {
-//     using namespace engone;
-//     int reloc = builder.get_pc() + 2;
-//     builder.emit_dataptr(reg, offset);
-//     addExternalRelocation(".data", -1, reloc, BC_REL_GLOBAL_VAR, {});
-// }
 // IMPORTANT: This function is commented out because it's not used. It may also be flawed because movingOffset doesn't
 //   isn't adjusted based on padding, just the size of the types.
 // SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
@@ -2399,7 +2397,7 @@ SignalIO GenContext::generatePushedLiterals(VirtualMachine* vm, TypeId type, cha
         } else if(value >= data_start && value < data_end) {
             // if pointer points to a data block
             int data_offset = value - (i64)bytecode->dataSegment.data();
-            generate_dataptr(BC_REG_A, data_offset);
+            builder.emit_dataptr(BC_REG_A, data_offset);
             builder.emit_push(BC_REG_A);
         } else {
             if(structType) {

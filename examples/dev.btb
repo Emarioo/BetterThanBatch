@@ -14,56 +14,6 @@
 //       LATEST STUFF
 // ############################
 
-// #import "Logger"
-// #import "OS"
-
-// #import "Memory"
-
-// memory_tracker.add(null, 5)
-
-// global blab: i32 = 0x4004;
-
-// fn main() -> i32 {
-//     lib := LoadDynamicLibrary("dev.so")   
-//     p := lib.get_pointer("fun")
-//     log("main")
-//     log(cast<void*>p)
-//     p()
-//     log("End")
-//     return 0;
-// }
-
-// fn @export fun() -> i32 {
-//     // blab = 0x1001;
-//     log("Hello")
-//     log(blab)
-//     return blab
-// }
-
-// #import "Logger"
-// #import "Linux"
-
-// src := "bin/code.so"
-// dst := "bin/0temp_code.so"
-
-// in := open(src.ptr, O_RDONLY, S_IRUSR);
-// if in < 0 {
-//     log("bad open in")
-//     return 0
-// }
-// // defer close(in)
-// info: stat
-// err := fstat(in, &info);
-// log("fstat ", err)
-// out := open(dst.ptr, O_RDWR | O_TRUNC | O_CREAT, 0o644);
-// if out < 0 {
-//     log("bad open out")
-//     return 0
-// }
-// // defer close(out)
-// log("size ", info.st_size)
-// sent := sendfile(out, in, null, info.st_size);
-// log("sendfile ", sent)
 
 
 /*
