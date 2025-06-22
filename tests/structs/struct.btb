@@ -1,3 +1,29 @@
+@TEST_CASE(struct_direct_initializer)
+
+struct App {
+    x: i32 = 23;
+}
+
+a: App;
+_test 23; a.x
+a = {}
+_test 23; a.x
+
+@TEST_CASE(initializer_with_fncall)
+fn non() -> void* { return null }
+
+cwd := Slice<char>{ non() } // triggered assert in x64_gen, Register allocation failed?
+
+struct Core {
+    x: i32[4];
+    fn in() {
+        x = {1,2,cast_unsafe<i64>non(),4}
+    }
+}
+
+c: Core
+c.in()
+
 @TEST_CASE(access)
 struct Base {
     mem: i32;
@@ -80,7 +106,7 @@ box.items[9] = 3
 _test 3; box.items[9]
 _test 3; *(box.items.ptr + 9 * sizeof i32)
 
-_test 8; sizeof (box.items) // items is evaluated to a pointer, not a slice
+_test 80; sizeof (box.items) // items is evaluated to a pointer, not a slice
 _test 20; box.items.len // even though items is a evaluated to a pointer, since it's an array of a struct and we know the size, .len is allowed
 _test 80; sizeof box
 
@@ -89,9 +115,9 @@ struct A {
     x: i32[5];
 
     fn ok() {
-        n := x
+        n: i32[] = x
         a := x[2]
-        _test 3; *n;
+        _test 3; n[0];
 
 
         _test 9; a;

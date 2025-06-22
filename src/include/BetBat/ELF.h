@@ -244,11 +244,12 @@ namespace elf {
         Elf32_Half	st_shndx;		/* Section index */
     } Elf32_Sym;
     
-    #define R_X86_64_PC64 24 // field: dword, calc: S + A - P
-    #define R_X86_64_PC32 2 // field: dword, calc: S + A - P
-    #define R_X86_64_PLT32 4 // field: dword, calc: L + A - P
-    #define R_X86_64_32 10 // field: dword, calc: S + A
-    #define R_X86_64_64 1 // field: qword, calc: S + A
+    #define R_X86_64_64       1  // field: qword, calc: S + A
+    #define R_X86_64_PC32     2  // field: dword, calc: S + A - P
+    #define R_X86_64_PLT32    4  // field: dword, calc: L + A - P
+    #define R_X86_64_GOTPCREL 9  // field: dword, calc: G + GOT + A - P
+    #define R_X86_64_32       10 // field: dword, calc: S + A
+    #define R_X86_64_PC64     24 // field: dword, calc: S + A - P
 
     #define ELF32_R_SYM(i)	((i)>>8)
 	#define ELF32_R_TYPE(i)   ((unsigned char)(i))

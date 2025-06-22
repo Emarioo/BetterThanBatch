@@ -302,7 +302,7 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
         return null;
     }
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // Borderless fullscreen
@@ -317,7 +317,7 @@ fn CreateWindow(width: i32, height: i32, title: char[] = "The beginning of somet
 
     glfw_window := glfwCreateWindow(width, height, title.ptr, null, null);
     if !glfw_window {
-        log("window failed");
+        log("window failed, is OpenGL core profile version 4.1 not supported?");
         glfwTerminate();
         return null
     }
@@ -594,7 +594,7 @@ fn FillRect(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, color: Color
     
     CAM_VALUES
     
-    vertices: f32[] {
+    vertices: f32[.] = {
         // x ,y, uv.x, uv.y, color.rgba, texture
         (bx) *      zoom + ox, (by) *       zoom + oy, 0, 0, color.r, color.g, color.b, color.a, -1,
         (bx) *      zoom + ox, (by + h) *   zoom + oy, 0, 1, color.r, color.g, color.b, color.a, -1,
@@ -648,7 +648,7 @@ fn DrawTexture(window: WindowContext*, x: f32, y: f32, w: f32, h: f32, texture: 
      
     CAM_VALUES
     
-    vertices: f32[] {
+    vertices: f32[.] = {
         // x ,y, uv.x, uv.y, color.rgba, texture
         (bx) *     zoom + ox, (by) *     zoom + oy, 0, 0, color.r, color.g, color.b, color.a, texture.id,
         (bx) *     zoom + ox, (by + h) * zoom + oy, 0, 1, color.r, color.g, color.b, color.a, texture.id,
@@ -794,7 +794,7 @@ fn DrawText(window: WindowContext*, x: f32, y: f32, h: f32, text: char[], color:
         // log(it," ", off," ", w, " ", font.char_width)
         // log(it," ",u," ",v," ",uw," ",vh)
         
-        vertices: f32[] {
+        vertices: f32[.] = {
             // x ,y, uv.x, uv.y, color.rgba, texture
             (bx + off_x) *     zoom + ox, (by + off_y) *     zoom + oy,  u,  v, color.r, color.g, color.b, color.a, font.id,
             (bx + off_x) *     zoom + ox, (by + off_y + h) * zoom + oy,  u, vh, color.r, color.g, color.b, color.a, font.id,

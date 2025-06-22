@@ -531,11 +531,8 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
         ubuntu_dll_defs += "-D"+v + " "
 
     if platform.system() == "Windows":
-        if not os.path.exists(mingw_path):
-            os.mkdir(mingw_path)
-        if not os.path.exists(vc_path):
-            os.mkdir(vc_path)
-            
+        os.makedirs(mingw_path, exist_ok=True)
+        os.makedirs(vc_path, exist_ok=True)
 
         if not os.path.exists(mingw_lib):
             cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ mingw_obj)
@@ -552,8 +549,7 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
                 cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
         
     if platform.system() == "Linux":
-        if not os.path.exists(ubuntu_path):
-            os.mkdir(ubuntu_path)
+        os.makedirs(ubuntu_path, exist_ok=True)
             
         if not os.path.exists(ubuntu_lib):
             # Use clang if available? if it's faster?

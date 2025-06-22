@@ -174,6 +174,15 @@ struct GlobalRunDirective {
 //     std::string name;
 //     std::string path; // can be changed in compile time execution
 // };
+enum OutputType {
+    OUTPUT_INVALID,
+    OUTPUT_OBJ,
+    OUTPUT_EXE,
+    OUTPUT_ELF,
+    OUTPUT_LIB,
+    OUTPUT_DLL,
+    OUTPUT_BC,
+};
 struct Compiler {
     ~Compiler() {
         cleanup();   
@@ -227,6 +236,7 @@ struct Compiler {
     bool has_generated_entry_point = false;
     bool force_default_entry_point = false; // libc requires it's own entry point
     bool aligned_16_byte_on_entry_point = false;
+    OutputType output_type;
 
     u32 initial_import_id = 0;
     u32 preload_import_id = 0;

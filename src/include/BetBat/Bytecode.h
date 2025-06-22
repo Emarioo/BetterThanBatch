@@ -165,8 +165,6 @@ enum InstructionOpcode : u8 {
     BC_EXTEND2 = 254, // extend opcode by 2 bytes
     BC_RESERVED = 255,
 };
-#define ASM_ENCODE_INDEX(ind) (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)
-#define ASM_DECODE_INDEX(op0,op1,op2) (u32)(op0 | (op1<<8) | (op2<<16))
 engone::Logger& operator<<(engone::Logger&, InstructionOpcode);
 enum BCRegister : u8 {
     BC_REG_INVALID = 0,
@@ -336,12 +334,14 @@ struct BCRelocation {
 enum ExternalRelocationType : u8{
     BC_REL_FUNCTION,
     BC_REL_GLOBAL_VAR,
+    BC_REL_GLOBAL_VAR_FUNCTION,
 };
 struct ExternalRelocation {
     std::string name;
     int library_index=-1;
     int tinycode_index=0;
     int pc=0;
+    int offset=0;
     FunctionSignature* signature{};
     
     ExternalRelocationType type = BC_REL_FUNCTION;
@@ -657,6 +657,13 @@ struct BytecodeBuilder {
     void push_line(int line, const std::string& text) {
         tinycode->lines.add({line, text});
     }
+    
+    bool has_emitted_call(bool reset) {
+        bool prev = m_has_emitted_call;
+        if (reset)
+            m_has_emitted_call = false;
+        return prev;
+    }
 
     // returns whether enabled previously
     bool disable_builder(bool yes) { bool tmp = disable_code_gen; disable_code_gen = yes; return tmp; }
@@ -674,6 +681,7 @@ struct BytecodeBuilder {
     void emit_imm32(i32 imm);
     void emit_imm64(i64 imm);
 private:
+    bool m_has_emitted_call = false;
     
     // call the functions, don't access the fields directly
     static const int PREVIOUS_INSTRUCTIONS_MAX = 5;

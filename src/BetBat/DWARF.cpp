@@ -76,6 +76,8 @@ namespace dwarf {
         int abbrev_enum = 0;
         int abbrev_enum_member_64 = 0;
         int abbrev_enum_member_32 = 0;
+        int abbrev_array = 0;
+        int abbrev_subrange = 0;
         int abbrev_lexical_block = 0;
 
         stream = objectFile->getStreamFromSection(section_abbrev);
@@ -220,6 +222,36 @@ namespace dwarf {
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
             
+            abbrev_array = nextAbbrevCode++;
+            WRITE_LEB(abbrev_array) // code
+            WRITE_LEB(DW_TAG_array_type) // tag
+            stream->write1(DW_CHILDREN_yes);
+
+            WRITE_FORM(DW_AT_name,          DW_FORM_string)
+            // WRITE_FORM(DW_AT_byte_size,     DW_FORM_data1)
+            WRITE_FORM(DW_AT_type,          DW_FORM_ref4)
+            // WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            WRITE_FORM(DW_AT_sibling,  DW_FORM_ref4)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+            
+            abbrev_subrange = nextAbbrevCode++;
+            WRITE_LEB(abbrev_subrange) // code
+            WRITE_LEB(DW_TAG_subrange_type) // tag
+            stream->write1(DW_CHILDREN_no);
+
+            // WRITE_FORM(DW_AT_name,          DW_FORM_string)
+            // WRITE_FORM(DW_AT_byte_size,     DW_FORM_data1)
+            WRITE_FORM(DW_AT_count,          DW_FORM_data4)
+            // WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            // WRITE_FORM(DW_AT_sibling,  DW_FORM_ref4)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+
             abbrev_enum = nextAbbrevCode++;
             WRITE_LEB(abbrev_enum) // code
             WRITE_LEB(DW_TAG_enumeration_type) // tag
@@ -233,8 +265,8 @@ namespace dwarf {
             // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             WRITE_FORM(DW_AT_sibling,  DW_FORM_ref4)
             WRITE_LEB(0) // value
-            WRITE_LEB(0) // end attributes for abbreviation
-            
+            WRITE_LEB(0) // end attributes for abbreviation 
+
             abbrev_enum_member_64 = nextAbbrevCode++;
             WRITE_LEB(abbrev_enum_member_64) // code
             WRITE_LEB(DW_TAG_enumerator) // tag
@@ -260,7 +292,7 @@ namespace dwarf {
             // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
-            
+
             abbrev_lexical_block = nextAbbrevCode++;
             WRITE_LEB(abbrev_lexical_block) // code
             WRITE_LEB(DW_TAG_lexical_block) // tag
@@ -546,6 +578,36 @@ namespace dwarf {
                     //     stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
                     //     stream->write1(8); // size
                     //     stream->write1(DW_ATE_unsigned);
+                    } else if(typeInfo->isArray()) {
+                        log::out << " array\n";
+
+                        allType.reference[0] = stream->getWriteHead() - offset_section;
+                        WRITE_LEB(abbrev_array)
+                        
+                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        // stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
+                        // Assert(typeInfo->getSize() < 256); // size should fit in one byte
+                        // stream->write1(typeInfo->getSize()); // size
+                        
+                        int typeRef = getTypeRef(typeInfo->element_type);
+                        if (typeRef == 0) {
+                            addType(typeInfo->element_type);
+                            lateTypeRefs.add({stream->getWriteHead() - offset_section, typeInfo->element_type });
+                            stream->write4(DEBUG_VAL32); // not known yet
+                        } else {
+                            stream->write4(typeRef);
+                        }
+                        
+                        u32* sibling_ref4 = nullptr;
+                        stream->write_late((void**)&sibling_ref4, sizeof(u32));
+
+                        
+                        WRITE_LEB(abbrev_subrange)
+                        stream->write4(typeInfo->array_length);
+                        
+                        WRITE_LEB(0); // end of members in array
+                        
+                        *sibling_ref4 = stream->getWriteHead() - offset_section;
                     } else {
                         Assert(queuedType.getId() < TYPE_PRIMITIVE_COUNT);
                         // other type

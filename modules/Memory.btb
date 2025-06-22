@@ -32,83 +32,71 @@ fn Free(ptr: void*, old_size: i64 = 0) {
 //    free - AllocateHeap(0, ptr, old_size = 64)
 // realloc - AllocateHeap(128, ptr, old_size = 64)
 fn AllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
-#if OS_WINDOWS
-    // global mut: Mutex;
-    // mut.lock()
-    // defer mut.unlock()
-    // std_print("enter heap\n")
-    // defer std_print("leave heap\n")
-    heap := GetProcessHeap()
-    if !size {
-        if ptr {
-            // if type.index() == 0
-                memory_tracker.remove(ptr, old_size)
-            // else
-            //     memory_tracker.remove(ptr, old_size, type)
-            HeapFree(heap, 0, ptr)
-        }
-        return null
-    }
-    new_ptr: void*
-    if !ptr {
-        new_ptr = HeapAlloc(heap, 0, size)
-        // if type.index() == 0
-        #if ENABLED_STABLE_GLOBALS
-            // hotreloading + stable globals requires allocation for stable globals
-            // but to track stuff we require global data
-            // so it's an infinite loop
-            // this disables tracking if we use stable globals and if we 
-            // dont have stable globals memory ready yet, scuffed and complicated but it works
-            if stable_global_memory
-        #endif
-            memory_tracker.add(new_ptr, size)
-        // else
-        //     memory_tracker.add(new_ptr, size, type)
-    } else {
-        memory_tracker.remove(ptr, old_size) // we must remove first incase HeapReAlloc returns the same pointer
-        new_ptr = HeapReAlloc(heap, 0, ptr, size)
-        // if type.index() == 0 {
-        memory_tracker.add(new_ptr, size)
-        // } else {
-        //     memory_tracker.remove(ptr, old_size, type)
-        //     memory_tracker.add(new_ptr, size, type)
-        // }
-    }
-    if !new_ptr || new_ptr == STATUS_NO_MEMORY || new_ptr == STATUS_ACCESS_VIOLATION {
-        return null
-    }
-    return new_ptr
-#elif OS_LINUX
-
-    // TODO: We might implement a custom heap allocator for Linux, or maybe not but
-    //   we shall use libc's heap for now.
-
-    #load "libc.so.6" as libc
-    fn @import(libc) malloc(size: i32) -> void*;
-    fn @import(libc) realloc(ptr: void*, size: i32) -> void*;
-    fn @import(libc) free(ptr: void*);
-
-    if !size {
-        if ptr {
-            free(ptr)
-            memory_tracker.remove(ptr, old_size)
-        }
-        return null
-    }
-    new_ptr: void*
-    if !ptr {
-        // malloc may crash if sp isn't aligned, bug in x64_gen if so
-        new_ptr = malloc(size)
-        memory_tracker.add(new_ptr, size)
-    } else {
-        new_ptr = realloc(ptr, size)
+    new_ptr := PureAllocateHeap(size, ptr, old_size)
+    if size == 0 {
+        memory_tracker.remove(ptr, old_size)
+    } else if ptr {
         memory_tracker.remove(ptr, old_size)
         memory_tracker.add(new_ptr, size)
+    } else {
+        memory_tracker.add(new_ptr, size)
     }
     return new_ptr
-#endif
 }
 
+// Does no extra fluff. Like tracking memory to catch memory leaks.
+fn PureAllocateHeap(size: i64, ptr: void* = null, old_size: i64 = 0) -> void* {
+    #if OS_WINDOWS
+        // global mut: Mutex;
+        // mut.lock()
+        // defer mut.unlock()
+        // std_print("enter heap\n")
+        // defer std_print("leave heap\n")
+        heap := GetProcessHeap()
+        if !size {
+            if ptr {
+                HeapFree(heap, 0, ptr)
+            }
+            return null
+        }
+        new_ptr: void*
+        if !ptr {
+            new_ptr = HeapAlloc(heap, 0, size)
+        } else {
+            new_ptr = HeapReAlloc(heap, 0, ptr, size)
+        }
+        if !new_ptr || new_ptr == STATUS_NO_MEMORY || new_ptr == STATUS_ACCESS_VIOLATION {
+            return null
+        }
+        return new_ptr
+    #elif OS_LINUX
+
+        // TODO: We might implement a custom heap allocator to avoid libc on Linux
+        //   it's not essential so we just use malloc.
+
+        #load "libc.so.6" as libc
+        fn @import(libc) malloc(size: i32) -> void*;
+        fn @import(libc) realloc(ptr: void*, size: i32) -> void*;
+        fn @import(libc) free(ptr: void*);
+
+        if !size {
+            if ptr {
+                free(ptr)
+            }
+            return null
+        }
+        new_ptr: void*
+        if !ptr {
+            // malloc may crash if sp isn't aligned, bug in x64_gen if so
+            new_ptr = malloc(size)
+        } else {
+            new_ptr = realloc(ptr, size)
+        }
+        return new_ptr
+    #else
+        incomplete
+    #endif
+}
 
 #macro LOG_TRACKER(...) log("Tracker: ",...)
 // #macro LOG_TRACKER(...) #endmacro

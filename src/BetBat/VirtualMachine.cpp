@@ -1357,18 +1357,20 @@ void VirtualMachine::execute(){
                 // }
                 {
                 #ifdef OS_WINDOWS
+                    Assert(inputs*8 >= -128 && inputs*8 <= 127);
                     u8 code[] {
                         /* push rbp     */ 0x55,
                         /* push rcx     */ 0x51,
                         /* mov rbp, rdx */ 0x48, 0x89, 0xd5,
-                        /* sub rsp, 16  */ 0x48, 0x83, 0xEC, inputs*8, // TODO: 16-byte alignment
+                        /* sub rsp, 16  */ 0x48, 0x83, 0xEC, (u8)(inputs*8), // TODO: 16-byte alignment
                     };
                 #elif OS_LINUX
+                    Assert(inputs*8 >= -128 && inputs*8 <= 127);
                     u8 code[] {
                         /* push rbp     */ 0x55,
                         /* push rdi     */ 0x57,
                         /* mov rbp, rsi */ 0x48, 0x89, 0xF5,
-                        /* sub rsp, 16  */ 0x48, 0x83, 0xEC, inputs*8, // TODO: 16-byte alignment
+                        /* sub rsp, 16  */ 0x48, 0x83, 0xEC, (u8)(inputs*8), // TODO: 16-byte alignment
                     };
                     
                 #else
@@ -1380,14 +1382,16 @@ void VirtualMachine::execute(){
                 
                 for(int i=0;i<inputs;i++) {
                     #ifdef OS_WINDOWS
+                    Assert(i*8 >= -128 && i*8 <= 127);
                     u8 code[] {
-                        /* mov rax, [rcx + 0] */ 0x48, 0x8B, 0x41, i*8,
-                        /* mov [rsp+0], rax   */ 0x48, 0x89, 0x44, 0x24, i*8,
+                        /* mov rax, [rcx + 0] */ 0x48, 0x8B, 0x41, (u8)(i*8),
+                        /* mov [rsp+0], rax   */ 0x48, 0x89, 0x44, 0x24, (u8)(i*8),
                     };
                     #elif OS_LINUX
+                    Assert(i*8 >= -128 && i*8 <= 127);
                     u8 code[] {
-                        /* mov rax, [rdi + 0] */ 0x48, 0x8B, 0x47, i*8,
-                        /* mov [rsp+0], rax   */ 0x48, 0x89, 0x44, 0x24, i*8,
+                        /* mov rax, [rdi + 0] */ 0x48, 0x8B, 0x47, (u8)(i*8),
+                        /* mov [rsp+0], rax   */ 0x48, 0x89, 0x44, 0x24, (u8)(i*8),
                     };
                     #else
                     Assert(false);
@@ -1401,29 +1405,35 @@ void VirtualMachine::execute(){
                 
                 {
                 #ifdef OS_WINDOWS
+                    Assert(outputs*8 >= -128 && outputs*8 <= 127);
                     u8 code[] {
-                        /* add rsp */ 0x48, 0x83, 0xC4, outputs*8,
+                        /* add rsp */ 0x48, 0x83, 0xC4, (u8)(outputs*8),
                         /* pop rcx */ 0x59,
                     };
-                #elif OS_LINUX
+                    #elif OS_LINUX
+                    Assert(outputs*8 >= -128 && outputs*8 < 127);
                     u8 code[] {
-                        /* add rsp */ 0x48, 0x83, 0xC4, outputs*8,
+                        /* add rsp */ 0x48, 0x83, 0xC4, (u8)(outputs*8),
                         /* pop rdi */ 0x5F,
                     };
-                #else
+                    #else
                     Assert(false);
-                #endif
+                    #endif
                     memcpy(f+head, code, sizeof(code));
                     head += sizeof(code);
                 }
                 
                 for(int i=0;i<outputs;i++) {
-                #ifdef OS_WINDOWS
+                    #ifdef OS_WINDOWS
+                    Assert(-i*8-16 >= -128 && -i*8-16 <= 127);
+                    Assert(inputs*8-i*8-8 >= -128 && inputs*8-i*8-8 <= 127);
                     u8 code[] {
-                        /* mov rax, [rsp - 24] */ 0x48, 0x8B, 0x44, 0x24, (i8)(-i*8-16),
-                        /* mov [rcx - 8], rax  */ 0x48, 0x89, 0x41, (i8)(inputs*8-i*8-8),
+                        /* mov rax, [rsp - 24] */ 0x48, 0x8B, 0x44, 0x24, (u8)(-i*8-16),
+                        /* mov [rcx - 8], rax  */ 0x48, 0x89, 0x41, (u8)(inputs*8-i*8-8),
                     };
                 #elif OS_LINUX
+                    Assert(-i*8-16 >= -128 && -i*8-16 <= 127);
+                    Assert(inputs*8-i*8-8 >= -128 && inputs*8-i*8-8 <= 127);
                     u8 code[] {
                         /* mov rax, [rsp - 24] */ 0x48, 0x8B, 0x44, 0x24, (i8)(-i*8-16),
                         /* mov [rdi - 8], rax  */ 0x48, 0x89, 0x47, (i8)(inputs*8-i*8-8),
@@ -1802,7 +1812,12 @@ void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
     // If you crash and are accesing a pointer from global data at compile time
     // then perhaps it wasn't initialized. Runtime type information for example.
     // suspicious pointer
-    Assert(((i64)virtual_pointer >= 0x10000 && (i64)virtual_pointer < 0x0010'0000'0000'0000) || (i64)virtual_pointer == 0);
+    if(((i64)virtual_pointer >= 0x10000 && (i64)virtual_pointer < 0x0010'0000'0000'0000) || (i64)virtual_pointer == 0) {
+        // ok
+    } else{
+        log::out << log::RED << "ERROR:"<<log::NO_COLOR<<" VM Access violation, ptr = " << (void*)virtual_pointer << "\n";
+        Assert(false);
+    }
     return (void*)virtual_pointer;
 }
 void VirtualMachine::push_state(int index, i64 sp) {
@@ -1993,8 +2008,9 @@ engone::VoidFunction VirtualMachine::get_bytecode_pointer(int index) {
             } else {
                 // mov rax, [rsp+0x8]
                 // mov [rbx+0x8], rax
-                u8 mova[] { 0x48, 0x8B, 0x44, 0x24, 16 + i*8, };
-                u8 movb[] { 0x48, 0x89, 0x43, 16 + i*8, };
+                Assert(16 + i*8 >= -128 && 16 + i*8 <= 127);
+                u8 mova[] { 0x48, 0x8B, 0x44, 0x24, (u8)(16 + i*8), };
+                u8 movb[] { 0x48, 0x89, 0x43, (u8)(16 + i*8), };
                 memcpy(f+head, mova, sizeof(mova));
                 head+=sizeof(mova);
                 memcpy(f+head, movb, sizeof(movb));

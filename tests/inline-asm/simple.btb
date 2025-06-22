@@ -5,6 +5,7 @@ a := asm<i32> {
 }
 _test 23; a;
 
+// TODO: This does not work. We don't handle struct from inline assembly.
 struct Pack {
     x: i32;
     y: char;
@@ -18,6 +19,25 @@ b := asm<Pack> {
 
 _test 5; b.x;
 _test 'A'; b.y;
+
+@TEST_CASE(run_directive_inline_asm_stack)
+// TODO: Code does not work. We don't handle pushed struct elements from inline assembly. This somehow worked fine in x64_gen but crashes in VM because VM modifies the stack by 8 bytes when it should do 16. Probably not a problem in x64_gen because we still generate the two pop instructions required for the Pack struct. Since VM messes with the stackpointer it crashes even before it tries to do the pop instructions.
+
+#run {
+    struct Pack {
+        x: i32;
+        y: char;
+    }
+    b := asm<Pack> {
+        mov eax, 'A'
+        push rax
+        mov eax, 5
+        push rax
+    }
+    
+    // return b.x + b.y
+}
+
 
 @TEST_CASE(inline_asm_labels)
 

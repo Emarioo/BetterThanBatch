@@ -15,8 +15,17 @@ enum TargetPlatform : u32 {
     TARGET_ARM,
     TARGET_AARCH64,
 
-    TARGET_END, // start/end if you want iterate targets
+    TARGET_END,
     TARGET_START = TARGET_UNKNOWN + 1,
+};
+enum BackendChoice : u32 {
+    BACKEND_UNKNOWN = 0,
+    BACKEND_CUSTOM, // our own
+    // BACKEND_LLVM, // TODO: LLVM backend
+    // BACKEND_C, // TODO: C backend
+
+    BACKEND_END,
+    BACKEND_START = TARGET_UNKNOWN + 1,
 };
 struct ArchitectureInfo {
     int FRAME_SIZE=-1;
@@ -58,6 +67,7 @@ struct CompileOptions {
     std::string output_file;
     TargetPlatform target = CONFIG_DEFAULT_TARGET;
     LinkerChoice linker = CONFIG_DEFAULT_LINKER;
+    BackendChoice backend = CONFIG_DEFAULT_BACKEND;
     // std::string linker_cmd = "";
     TextBuffer source_buffer; // pure text instead of a path to some file
 

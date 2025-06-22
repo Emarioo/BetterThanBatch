@@ -348,8 +348,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 continue;
             } else if (token->type == lexer::TOKEN_IDENTIFIER && envs.last().may_be_name) {
                 info.advance();
+                if(view == "uword" || view == "iword") {
+                    envs.last().buffer += view.ptr[0]+std::to_string(compiler->arch.REGISTER_SIZE * 8);
+                } else {
+                    envs.last().buffer += view;
+                }
                 
-                envs.last().buffer += view;
                 envs.last().may_be_name = false;
                 continue;
             } else if (token->type == lexer::TOKEN_NAMESPACE_DELIM) {
@@ -386,18 +390,45 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             envs.last().buffer += "*";
             envs.last().only_pointer = true;
         } else if (token->type == '[') {
+            auto tok = info.gettok(&view, 1);
             auto token = info.getinfo(&view, 1);
             // char[] { 1, 3 }  could be an array on stack
             // or the end of a function (char[] as return value)
             // auto token2 = info.getinfo(2);
             // if(token->type == ']' && token2->type != '{') {
+            bool is_fixed_array = false;
+            int array_len = 0;
+            if (TOKEN_IS_LITERAL_NUMBER(token->type)) {
+                is_fixed_array = true;
+                // TODO: Handle hexidecimal in array?
+
+                i64 num;
+                bool yes = lexer->isIntegerLiteral(tok, &num);
+
+                if(yes) {
+                    array_len = num;
+                } else {
+                    auto loc = getloc(1);
+                    ERR_SECTION(
+                        ERR_HEAD2(loc)
+                        ERR_MSG("Not a valid literal integer. We do not support math expressions (yet).")
+                        ERR_LINE2(loc, "bad")
+                    )
+                }
+                token = info.getinfo(&view, 2);
+            }
             if(token->type == ']') {
                 if(envs.last().may_be_name) {
                     return SIGNAL_FAILURE;
                 }
-                info.advance(2);
-                std::string tmp = envs.last().buffer;
-                envs.last().buffer = "Slice<" + tmp + ">";
+                if(is_fixed_array) {
+                    info.advance(3);
+                    envs.last().buffer += "[" + std::to_string(array_len)+"]";
+                } else {
+                    info.advance(2);
+                    std::string tmp = envs.last().buffer;
+                    envs.last().buffer = "Slice<" + tmp + ">";
+                }
                 continue;
             } else {
                 break;
@@ -462,9 +493,6 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
     outTypeId = "";
     for(int i=0;i<envs.size();i++) {
         outTypeId += envs[i].buffer;
-    }
-    if(outTypeId == "uword" || outTypeId == "iword") {
-        outTypeId = outTypeId[0]+std::to_string(compiler->arch.REGISTER_SIZE * 8);
     }
     if(tokensParsed)
         *tokensParsed = info.gethead() - startToken;
@@ -592,6 +620,7 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
     bool hideAnnotation = false;
 
     bool no_padding = false;
+    bool no_pointers = false;
 
     while (name_token->type == lexer::TOKEN_ANNOTATION){
         info.advance();
@@ -600,6 +629,8 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
             hideAnnotation=true;
         } else if(name_view == "no_padding"){
             no_padding=true;
+        } else if(name_view == "no_pointers"){
+            no_pointers=true;
         } else {
             ERR_SECTION(
                 ERR_HEAD2(name_tok)
@@ -633,6 +664,7 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
     astStruct->name = name_view;
     astStruct->setHidden(hideAnnotation);
     astStruct->no_padding = no_padding;
+    astStruct->no_pointers = no_pointers;
     StringView view{};
     auto token = info.getinfo(&view);
     if(token->type == '<'){
@@ -841,60 +873,60 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
             // }
 
             // typeEndToken = info.at()+1;
-            int arrayLength = -1;
-            auto tok0 = info.gettok(0);
-            StringView num_data = {};
-            auto tok1 = info.gettok(&num_data, 1);
-            auto tok2 = info.gettok(2);
-            if(tok0.type == '[' && tok2.type == ']') {
-                info.advance(3);
+            // int arrayLength = -1;
+            // auto tok0 = info.gettok(0);
+            // StringView num_data = {};
+            // auto tok1 = info.gettok(&num_data, 1);
+            // auto tok2 = info.gettok(2);
+            // if(tok0.type == '[' && tok2.type == ']') {
+            //     info.advance(3);
 
-                // info.advance();
-                // auto tok = info.gettok(&view);
-                // bool is_negative = false;
-                // if(tok.type == '-') {
-                //     is_negative = true;
-                //     info.advance();
-                //     tok = info.gettok(&view);
-                // }
-                // i64 value = 0;
-                // if(info.lexer->isIntegerLiteral(tok, &value)) {
-                //     info.advance();
-                //     if(is_negative)
-                //         nextValue = -value;
-                //     else
-                //         nextValue = value;
-                // } else {
-                //     ERR_SECTION(
-                //         ERR_HEAD2(tok)
-                //         ERR_MSG("Values for enum members can only be a integer literal. In the future, any constant expression will be allowed.")
-                //         ERR_LINE2(tok,"not an integer literal")
-                //     )
-                // }
-                // TODO: Handle hexidecimal use code above
-                if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
-                    // u64 num = 0;
-                    // memcpy(&num, num_data.ptr, num_data.len);
-                    arrayLength = lexer::ConvertInteger(num_data);
+            //     // info.advance();
+            //     // auto tok = info.gettok(&view);
+            //     // bool is_negative = false;
+            //     // if(tok.type == '-') {
+            //     //     is_negative = true;
+            //     //     info.advance();
+            //     //     tok = info.gettok(&view);
+            //     // }
+            //     // i64 value = 0;
+            //     // if(info.lexer->isIntegerLiteral(tok, &value)) {
+            //     //     info.advance();
+            //     //     if(is_negative)
+            //     //         nextValue = -value;
+            //     //     else
+            //     //         nextValue = value;
+            //     // } else {
+            //     //     ERR_SECTION(
+            //     //         ERR_HEAD2(tok)
+            //     //         ERR_MSG("Values for enum members can only be a integer literal. In the future, any constant expression will be allowed.")
+            //     //         ERR_LINE2(tok,"not an integer literal")
+            //     //     )
+            //     // }
+            //     // TODO: Handle hexidecimal use code above
+            //     if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
+            //         // u64 num = 0;
+            //         // memcpy(&num, num_data.ptr, num_data.len);
+            //         arrayLength = lexer::ConvertInteger(num_data);
                     
-                    if(arrayLength<=0){
-                        ERR_SECTION(
-                            ERR_HEAD2(tok1)
-                            ERR_MSG("Array cannot have negative or zero size.")
-                            ERR_LINE2(tok1,"<= 0")
-                        )
-                        arrayLength = 0;
-                    }
-                } else {
-                    ERR_SECTION(
-                        ERR_HEAD2(tok1)
-                        ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
-                        ERR_LINE2(tok1, "must be positive integer literal")
-                    )
-                }
-                // the member is not a slice, it's an actual array
-                // typeToken = "Slice<" + typeToken +">";
-            }
+            //         if(arrayLength<=0){
+            //             ERR_SECTION(
+            //                 ERR_HEAD2(tok1)
+            //                 ERR_MSG("Array cannot have negative or zero size.")
+            //                 ERR_LINE2(tok1,"<= 0")
+            //             )
+            //             arrayLength = 0;
+            //         }
+            //     } else {
+            //         ERR_SECTION(
+            //             ERR_HEAD2(tok1)
+            //             ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
+            //             ERR_LINE2(tok1, "must be positive integer literal")
+            //         )
+            //     }
+            //     // the member is not a slice, it's an actual array
+            //     // typeToken = "Slice<" + typeToken +">";
+            // }
             // Assert(arrayLength==-1); // arrays in structs not implemented yet
             // std::string temps = typeToken;
             
@@ -916,8 +948,8 @@ SignalIO ParseContext::parseStruct(ASTStruct*& astStruct){
                 mem.defaultValue = defaultValue;
                 mem.stringType = typeId;
                 mem.location = info.srcloc(name_tok);
-                if(arrayLength!=-1)
-                    mem.array_length = arrayLength;
+                // if(arrayLength!=-1)
+                //     mem.array_length = arrayLength;
                 
                 // auto l = info.lexer->getTokenSource_unsafe(mem.location);
                 // log::out << l->line << " " << l->column<<"\n";
@@ -1682,8 +1714,6 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 ops.add(AST_ASSIGN);
                 assignOps.add((OperationType)0);
 
-                // allow_inferred_initializers = true;
-
                 _PLOG(log::out << "Operator "<<token<<"\n";)
             } else if((opType = IsAssignOp(token)) && token1->type  == '=') {
                 saved_locations.add(info.getloc());
@@ -1816,13 +1846,6 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 }
             }
         } else {
-            bool try_inferred_initializer = false;
-            // if(allow_inferred_initializers && token->type == '{') {
-            //     try_inferred_initializer = true;
-            //     allow_inferred_initializers = false;
-            // }
-            try_inferred_initializer = true; // always try this, we handle error in type checker?
-
             bool cstring = false;
             if(token->type == lexer::TOKEN_ANNOTATION) {
                 if(view == "cstr") {
@@ -2489,7 +2512,7 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     info.advance();
                 }
                 values.add(tmp);
-            } else if(try_inferred_initializer && token->type == '{') {
+            } else if(token->type == '{') {
                 // nocheckin, FIGURE THIS OUT
                 // NOTE: Code is copied from the other AST_INITIALIZER of the form 'Struct{}'
                 //   You should refactor this, duplicated code is bad.
@@ -4511,10 +4534,9 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
     lexer::Token lengthTokenOfLastVar{};
 
     bool dynamic_array_length = false;
+    std::string array_element_Type{};
 
     //-- Evaluate variables on the left side
-    // int startIndex = info.at()+1;
-    // DynamicArray<ASTStatement::VarName> varnames{};
     while(true){
         StringView view{};
         auto token = info.getinfo(&view);
@@ -4557,14 +4579,12 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
                 SIGNAL_INVALID_DATATYPE(typeToken)
 
                 // Assert(result==SIGNAL_SUCCESS);
-                int arrayLength = -1;
                 StringView view_int{};
                 auto tok0 = info.gettok();
                 auto tok1 = info.gettok(&view_int,1);
                 auto tok2 = info.gettok(2);
-                if(tok0.type == '[' && tok2.type == ']') {
+                if(tok0.type == '[' && tok1.type == '.' && tok2.type == ']') {
                     info.advance(3);
-
                     if(statement->varnames.size() > 1) {
                         // TODO: We could allow this if the array is declared last. We don't
                         //   since the type checker and generator doesn't handle it. Look into it?
@@ -4572,61 +4592,37 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
                             ERR_HEAD2(tok0)
                             ERR_MSG("Array declarations must be standalone. You can specify multiple variables in a declaration.")
                             ERR_LINE2(tok1, "remove array declaration or remove variable declarations")
-                            ERR_EXAMPLE(1, "a, b: i32[4] // NOT OKAY")
-                            ERR_EXAMPLE(2, "a: i32, b: i32[4] // NOT OKAY")
-                            ERR_EXAMPLE(3, "b: i32[4] // Very good!")
+                            ERR_EXAMPLE(1, "a, b: i32[.] // NOT OKAY")
+                            ERR_EXAMPLE(2, "a: i32, b: i32[.] // NOT OKAY")
+                            ERR_EXAMPLE(3, "b: i32[.] // Very good!")
                         )
                         return SIGNAL_COMPLETE_FAILURE;
                     }
-                    // TODO: Handle hexidecimal
-                    if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
-                        lengthTokenOfLastVar = tok1;
-                        arrayLength = lexer::ConvertInteger(view_int);
-                        if(arrayLength<0){
-                            ERR_SECTION(
-                                ERR_HEAD2(tok1)
-                                ERR_MSG("Array cannot have negative size.")
-                                ERR_LINE2(tok1,"< 0")
-                            )
-                            arrayLength = 0;
-                        }
-                    } else if(tok1.type == '.') {
-                        lengthTokenOfLastVar = tok1;
-                        arrayLength = 0;
-                        dynamic_array_length = true;
-                    } else {
-                        ERR_SECTION(
-                            ERR_HEAD2(tok1)
-                            ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
-                            ERR_LINE2(tok1, "must be positive integer literal")
-                        )
-                    }
-                    typeToken = "Slice<" + typeToken + ">";
-                } else if(typeToken.substr(0,6) == "Slice<" && tok0.type == '{') {
-                    // info.advance(); DO NOT ADVANCE '{'
-                    arrayLength = 0;
+                    lengthTokenOfLastVar = tok1;
                     dynamic_array_length = true;
                 }
+                
+                if(!dynamic_array_length) {
+                    TypeId strId = info.ast->getTypeString(typeToken);
+                    
+                    int index = statement->varnames.size()-1;
+                    while(index>=0 && !statement->varnames[index].assignString.isString()){
+                        statement->varnames[index].declaration = true;
+                        statement->varnames[index].assignString = strId;
+                        index--;
+                    }
+                } else {
+                    statement->varnames[0].declaration = true;
+                    array_element_Type = typeToken;
 
-                TypeId strId = info.ast->getTypeString(typeToken);
-
-                int index = statement->varnames.size()-1;
-                while(index>=0 && !statement->varnames[index].assignString.isString()){
-                    statement->varnames[index].declaration = true;
-                    statement->varnames[index].assignString = strId;
-                    statement->varnames[index].arrayLength = arrayLength;
-                    index--;
-                }
-
-                if(arrayLength != -1) {
                     tok = info.gettok();
                     if(tok.type == ','){
                         ERR_SECTION(
                             ERR_HEAD2(tok)
-                            ERR_MSG("Multiple declarations is not allowed with an array declaration. The comma indicates more variable declarations (or assignments) which isn't supported.")
+                            ERR_MSG("Multiple declarations is not allowed with a dynamic array length declaration. The comma indicates more variable declarations (or assignments) which isn't supported.")
                             ERR_LINE2(tok, "bad comma!")
-                            ERR_EXAMPLE(2, "b: i32[4], c: i32 // NOT OKAY")
-                            ERR_EXAMPLE(3, "b: i32[4] // Very good!")
+                            ERR_EXAMPLE(2, "b: i32[.], c: i32 // NOT OKAY")
+                            ERR_EXAMPLE(3, "b: i32[.] // Very good!")
                         )
                         return SIGNAL_COMPLETE_FAILURE;
                     }
@@ -4656,64 +4652,31 @@ SignalIO ParseContext::parseDeclaration(ASTStatement*& statement){
     if(tok.type == '=') {
         info.advance(); // =
 
-        // Assert(!allow_inferred_initializers);
-        // allow_inferred_initializers = true;
         auto signal = parseExpression(statement->firstExpression);
-        // allow_inferred_initializers = false;
 
         SIGNAL_SWITCH_LAZY()
-    // } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)) {
-    } else if(tok.type == '{' && 0 == (prev_tok.flags & lexer::TOKEN_FLAG_NEWLINE)) {
-        // array initializer
-        info.advance(); // {
 
-        while(true){
-            auto tok = info.gettok();
-            if(tok.type == '}') {
-                info.advance(); // }
-                break;
-            }
-            ASTExpression* expr = nullptr;
-            auto signal = parseExpression(expr);
-            SIGNAL_SWITCH_LAZY()
-            
-            Assert(expr);
-            statement->arrayValues.add(expr);
-
-            tok = info.gettok();
-            if(tok.type == ',') {
-                info.advance(); // ,
-                // TODO: Error if you see consecutive commas
-                // Note that a trailing comma is allowed: { 1, 2, }
-                // It's convenient
-            } else if(tok.type == '}') {
-                info.advance(); // }
-                break;
-            } else {
-                info.advance(); // prevent infinite loop
+        if(dynamic_array_length) {
+            if(statement->firstExpression->type != EXPR_INITIALIZER) {
                 ERR_SECTION(
-                    ERR_HEAD2(tok)
-                    ERR_MSG("Unexpected token '"<<info.lexer->tostring(tok)<<"' at end of array initializer. Use comma for another element or ending curly brace to end initializer.")
-                    ERR_LINE2(tok, "expected , or }")
+                    ERR_HEAD2(statement->location)
+                    ERR_MSG("Declarations has dynamic array length and requires an initializer expression to infer the length.")
+                    ERR_LINE2(statement->firstExpression->location, "here")
                 )
+                return SIGNAL_COMPLETE_FAILURE;
             }
+            TypeId strId = info.ast->getTypeString(array_element_Type + "["+std::to_string(statement->firstExpression->as<ASTExpressionInitializer>()->args.size())+"]");
+            statement->varnames[0].assignString = strId;
         }
-        if(dynamic_array_length){
-            // Set array length based on expressions
-            statement->varnames.last().arrayLength = statement->arrayValues.size();
-        }
-        if(statement->arrayValues.size() > statement->varnames.last().arrayLength) {
-            ERR_SECTION(
-                ERR_HEAD2(tok) // token should be {
-                ERR_MSG("You cannot have more expressions in the array initializer than the array length you specified.")
-                // TODO: Show which token defined the array length
-                ERR_LINE2(lengthTokenOfLastVar, "the maximum length")
-                // You could do a token range from the first expression to the last but that could spam the console
-                // with 100 expressions which would be annoying so maybe show 5 or 8 values and then do ...
-                ERR_LINE2(tok, ""<<statement->arrayValues.size()<<" expressions")
-            )
-        }
+    } else if(dynamic_array_length) {
+        ERR_SECTION(
+            ERR_HEAD2(statement->location)
+            ERR_MSG("Variable was defined with dynamic array length. This requires an initializer expression but there was none.")
+            ERR_LINE2(statement->location, "here")
+        )
+        return SIGNAL_COMPLETE_FAILURE;
     }
+    
     tok = info.gettok();
     if(tok.type == ';'){
         info.advance(); // parse ';'. won't crash if at end

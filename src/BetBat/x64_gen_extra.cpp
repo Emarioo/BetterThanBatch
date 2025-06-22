@@ -14,6 +14,8 @@
 bool X64Builder::generate() {
     using namespace engone;
     TRACE_FUNC()
+    
+    // tinycode->print(0,-1, bytecode);
 
     CALLBACK_ON_ASSERT(
         tinycode->print(0,-1, bytecode);
@@ -28,7 +30,7 @@ bool X64Builder::generate() {
         emit_bytes(ptr, len);
         for (int i = 0; i < asmInstance.relocations.size();i++) {
             auto& it = asmInstance.relocations[i];
-            program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+            program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index, "", false, false);
         }
         return true;
     }
@@ -237,8 +239,9 @@ bool X64Builder::generate() {
     X64Inst* original_recipient = nullptr;
     int original_recipient_regnr = 0;
 
+    // tinycode->print(n->bc_index - 32, n->bc_index+8, bytecode);
     #define PRINT_BYTECODE(MSG) \
-        tinycode->print(n->bc_index - 32, n->bc_index+8, bytecode); \
+        tinycode->print(n->bc_index, n->bc_index+8, bytecode); \
         log::out << log::RED << "COMPILER BUG: "<<log::NO_COLOR<< MSG; \
         log::out.flush();
 
@@ -998,9 +1001,14 @@ bool X64Builder::generate() {
                 // emit1(OPCODE_NOP);
             } break;
             case BC_MOV_RR: {
+                auto base = (InstBase_op2*)n->base;
                 FIX_PRE_IN_OPERAND(1)
                 FIX_PRE_OUT_OPERAND(0)
-                emit_mov_reg_reg(reg0->reg, reg1->reg);
+                if(base->op1 == BC_REG_LOCALS) {
+                    emit_lea(reg0->reg, X64_REG_BP, -callee_saved_space);
+                } else {
+                    emit_mov_reg_reg(reg0->reg, reg1->reg);
+                }
                 FIX_POST_OUT_OPERAND(0)
                 FIX_POST_IN_OPERAND(1)
             } break;
@@ -1051,7 +1059,7 @@ bool X64Builder::generate() {
                 FIX_PRE_IN_OPERAND(1)
                 FIX_PRE_IN_OPERAND(0)
                 if(reg0->reg == X64_REG_INVALID|| reg1->reg == X64_REG_INVALID || (reg0->reg == X64_REG_BP && imm == 0)) {
-                    PRINT_BYTECODE("Register allocation failed?\n")
+                    PRINT_BYTECODE("Register allocation failed? Did we allocate a register, call a function and then use the register?\n")
                 }
                 emit_mov_mem_reg(reg0->reg, reg1->reg, base->control, imm);
                 FIX_POST_IN_OPERAND(0)
@@ -1358,17 +1366,19 @@ bool X64Builder::generate() {
                 auto base = (InstBase_op1_imm16*)n->base;
                 FIX_PRE_OUT_OPERAND(0);
 
-                X64Register reg_local = X64_REG_BP;
-                int off = base->imm16 - callee_saved_space;
-                emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
-                emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
-                emit4((u32)off);
+                emit_lea(reg0->reg, X64_REG_BP, base->imm16 - callee_saved_space);
+
+                // X64Register reg_local = X64_REG_BP;
+                // int off = base->imm16 - callee_saved_space;
+                // emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
+                // emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                // emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
+                // emit4((u32)off);
 
 
-                emit_prefix(PREFIX_REXW, reg0->reg, reg_local);
-                emit1(OPCODE_ADD_REG_RM);
-                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), reg_local);
+                // emit_prefix(PREFIX_REXW, reg0->reg, reg_local);
+                // emit1(OPCODE_ADD_REG_RM);
+                // emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), reg_local);
 
                 FIX_POST_OUT_OPERAND(0);
             } break;
@@ -3439,7 +3449,7 @@ bool X64Builder::generate() {
                     emit_bytes(ptr, len);
                     for (int i = 0; i < asmInstance.relocations.size();i++) {
                       auto& it = asmInstance.relocations[i];
-                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index, "", false, false);
                     }
                 } else {
                     log::out << log::YELLOW << asmInstance.file <<":"<<asmInstance.lineStart<< ": "<<log::NO_COLOR <<" was incomplete or just empty?\n";
@@ -3484,9 +3494,9 @@ bool X64Builder::generate() {
                     emit_bytes(arr,sizeof(arr));
 
                     // C creates these symbol names in it's object file
-                    program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_funcprog_index);
+                    program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_funcprog_index, "", false, false);
                     // prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
-                    program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_funcprog_index);
+                    program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_funcprog_index, "", false, false);
                     // prog->namedUndefinedRelocations.add(reloc0);
                     // prog->namedUndefinedRelocations.add(reloc1);
                 } else if(bytecode->target == TARGET_LINUX_x64) {
@@ -3566,8 +3576,8 @@ bool X64Builder::generate() {
                     emit_bytes(arr,sizeof(arr));
 
                     // C creates these symbol names in it's object file
-                    program->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_funcprog_index);
-                    program->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_funcprog_index);
+                    program->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_funcprog_index, "", false, false);
+                    program->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_funcprog_index, "", false, false);
                     
                     
                 } else if(bytecode->target == TARGET_LINUX_x64) {
@@ -3714,8 +3724,8 @@ bool X64Builder::generate() {
                 set_imm8(start_addr + 0xf, (imm>>8)&0xFF);
                 set_imm8(start_addr + 0x10, (imm>>16)&0xFF);
 
-                program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_funcprog_index);
-                program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_funcprog_index);
+                program->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_funcprog_index, "", false, false);
+                program->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_funcprog_index, "", false, false);
                 #else
                 
                 /*
@@ -3851,7 +3861,7 @@ bool X64Builder::generate() {
                 lib_path = lib.path;
             }
 
-            program->addNamedUndefinedRelocation(alias, off, rel.tinycode_index, lib_path, rel.type == BC_REL_GLOBAL_VAR);
+            program->addNamedUndefinedRelocation(alias, off, rel.tinycode_index, lib_path, rel.type == BC_REL_GLOBAL_VAR || rel.type == BC_REL_GLOBAL_VAR_FUNCTION, rel.type == BC_REL_GLOBAL_VAR_FUNCTION);
             // found = true;
             // break;
         }

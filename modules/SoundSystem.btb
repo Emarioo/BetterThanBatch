@@ -167,13 +167,15 @@ struct SoundInstance {
         instance := sound_state.getSoundInstance(handle)
         instance.playing = false
     }
-    fn set_timestamp(timestamp: f64) {
+    fn setTimestamp(timestamp: f64) {
         // log("set timestamp ", timestamp)
         instance := sound_state.getSoundInstance(handle)
         sound := sound_state.getSoundRef(instance.sound_ref_handle)
         instance.current_frame = timestamp * sound.wav.sample_rate
     }
     fn setVolume(volume: f32) {
+        instance := sound_state.getSoundInstance(handle)
+        instance.volume = volume
         // log("Set volume ", volume)
     }
     fn isPlaying() -> bool {

@@ -150,7 +150,7 @@ fn start_gui(workspace: Workspace*) {
     // glEnableVertexAttribArray(0);
     // GLCHECK
 
-    // vertices: f32[9] {
+    // vertices: f32[9] = {
     //     -0.5,
     //     0, // set in loop
     //     0.0,

@@ -47,6 +47,7 @@ struct GenContext : public PhaseContext {
     void emit_abstract_dataptr(BCRegister reg, int offset, IdentifierVariable* global_ident);
 
     void generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinfo);
+    // void generate_dataptr(BCRegister reg, int offset);
 
     void addExternalRelocation(const std::string& name, int lib_index, u32 codeAddress, ExternalRelocationType rel_type, FunctionSignature* signature) {
         if(!disableCodeGeneration)
@@ -59,6 +60,8 @@ struct GenContext : public PhaseContext {
     FuncImpl* currentFuncImpl=nullptr;
     ScopeId currentScopeId = 0;
     ScopeId fromScopeId = 0; // AST_FROM_NAMESPACE
+
+    int frame_offset_of_assigned_initializer_pointer = -1; // -1 means not allocated on stack, it is reset per function generation
 
     u32 currentPolyVersion=0;
     int currentScopeDepth = 0; // necessary for scoped variables in debug information
@@ -113,9 +116,19 @@ struct GenContext : public PhaseContext {
     DynamicArray<ResolveCall> callsToResolve;
     void addCallToResolve(int bcIndex, FuncImpl* funcImpl);
 
-    SignalIO framePush(TypeId typeId, i32* outFrameOffset, bool genDefault, bool staticData);
+    SignalIO framePush(TypeId typeId, i32* outFrameOffset, bool genDefault);
     SignalIO generatePush(BCRegister baseReg, int offset, TypeId typeId);
     SignalIO generatePop(BCRegister baseReg, int offset, TypeId typeId);
+    
+    enum PushPopKind {
+        GEN_PUSH_REG       = 0x10,
+        GEN_PUSH_GET_PARAM = 0x11,
+        GEN_PUSH_GET_VAL   = 0x12,
+        GEN_POP_REG        = 0x20,
+        GEN_POP_SET_ARG    = 0x21,
+        GEN_POP_SET_RET    = 0x22,
+    };
+    SignalIO generatePushPop_base(PushPopKind kind, BCRegister baseReg, int offset, TypeId typeId);
 
     SignalIO generatePush_get_param (int offset, TypeId typeId);
     SignalIO generatePop_set_arg    (int offset, TypeId typeId);
@@ -129,8 +142,10 @@ struct GenContext : public PhaseContext {
     void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size, int offset);
     void genMemcpy(BCRegister dst_reg, BCRegister src_reg, int size);
     
+    SignalIO generateAssignedInitializing(BCRegister baseReg, int offset, TypeId typeId, ASTExpressionInitializer* expression, ScopeId scopeId = -1);
+    
     SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);
-    SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr, int* array_length = nullptr);
+    SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr);
     SignalIO generateFncall(ASTExpression* expression, QuickArray<TypeId>* outTypeIds, bool isOperator);
     SignalIO generateSpecialFncall(ASTExpressionCall* expression);
     SignalIO generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope = -1);

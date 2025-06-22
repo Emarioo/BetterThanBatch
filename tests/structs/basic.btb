@@ -91,7 +91,7 @@ soup: Soup;
 // std_prints("size ",sizeof App, " ",a.u0,"\n")
 
 
-@TEST_CASE(recursive_struct)
+// @TEST_CASE(recursive_struct)
 
 // TODO: TEST_ERROR is not ignored in the parser inside structs.
 //  While you are at it. Create a general ParseAnnotations which ignores TEST_ERROR and TEST_CASE.

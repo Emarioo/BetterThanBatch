@@ -29,7 +29,7 @@ while i < 5 {
 
 
 ## For-loop
-The *for* loop is used to iterate through an array or range of values, or more recently user-defined iterators (covered further down). The for-loop has an expression which should result in a **Slice** or **Range** type.
+The *for* loop is used to iterate through an array or range of values, or more recently user-defined iterators (covered further down). The for-loop has an expression which should result in a **Slice** or **Range** type. The **Range** type consists of two integers *start* and *end* (exclusive).
 
 **NOTE:** The language does *NOT* support C-like for loops `for(int i=0;i<5;i++)`. Use while-loops for more control. For loops are meant to iterator over a list or range of things.
 
@@ -60,7 +60,7 @@ This is how you iterate through a *Slice*.
 ```c++
 #import "Logger"
 
-array: i32[4] { 5, 9, 2, 4 };
+array: i32[.] = { 5, 9, 2, 4 };
 
 // Iterating through slices gives you the two variables 'it' and 'nr'.
 for array {
@@ -85,7 +85,7 @@ for @rev 0..5
 
 log("----")
 // loop in reverse printing 4, 3, 2, 1, 0
-array: i32[10] { 2, 4, 8, 100};
+array: i32[.] = { 2, 4, 8, 100};
 
 for @rev array
     log(it," at ", nr)
@@ -96,7 +96,7 @@ For-loops also have `@pointer` or `@ptr` which causes the 'it' variable to be a 
 ```c++
 #import "Logger"
 
-array: i32[4]{4,7,9}
+array: i32[4] = {4,7,9}
 
 // Not very useful for integers
 for @ptr array {
@@ -105,7 +105,7 @@ for @ptr array {
 
 log("----")
 
-range_array: Range[4] { {0,3}, {10,13}, {100,130} }
+range_array: Range[4] = { {0,3}, {10,13}, {100,130} }
 
 // Useful for structures, better performance because of no unnecessary copies.
 for @ptr range_array {

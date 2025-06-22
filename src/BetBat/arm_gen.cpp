@@ -1093,7 +1093,7 @@ bool ARMBuilder::generate() {
                     emit_bytes(ptr, len);
                     for (int i = 0; i < asmInstance.relocations.size();i++) {
                       auto& it = asmInstance.relocations[i];
-                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index);
+                      program->addNamedUndefinedRelocation(it.name, pc_start + it.textOffset, tinycode->index, "", false, false);
                     }
                 } else {
                     // TODO: Better error, or handle error somewhere else?

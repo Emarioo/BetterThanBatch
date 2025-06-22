@@ -269,7 +269,7 @@ struct TypeId {
         STRING = 0x2,
         POISON = 0x4,
         TYPE_MASK = 0x2 | 0x4,
-        POINTER_MASK = 0x8 | 0x10,
+        POINTER_MASK = 0x8 | 0x10 | 0x20,
         POINTER_SHIFT = 3,
     };
     // union {
@@ -283,8 +283,8 @@ struct TypeId {
             bool valid : 1;
             bool string : 1;
             bool poison : 1;
-            u8 pointer_level : 2;
-    // u8 _bits_reserved : 3;
+            u8 pointer_level : 3;
+            // u8 _bits_reserved : 2;
         };
     };
 
@@ -403,6 +403,10 @@ struct TypeInfo {
 
     TypeId element_type={};
     int array_length=0; // zero or less means not an array type
+
+    bool isArray() const {
+        return array_length != 0;
+    }
 
     ScopeId scopeId = 0;
     // bool isVirtualType = false;
@@ -706,6 +710,7 @@ struct ASTExpressionBuiltin : public ASTExpression {
 #define CAST_EXPR(V,T) (V->as<ASTExpression##T>())
 enum ForLoopType : u8 {
     SLICED_FOR_LOOP,
+    ARRAY_FOR_LOOP,
     RANGED_FOR_LOOP,
     CUSTOM_FOR_LOOP, // user defined with create_iterator, iterate
 };
@@ -737,7 +742,7 @@ struct ASTStatement : ASTNode {
     struct VarName {
         std::string name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
-        int arrayLength=-1;
+        // int arrayLength=-1;
         bool declaration = false; // multi var. assignment may not declare variables
         PolyVersions<TypeId> versions_assignType{}; // is inferred from expression in type checker
         // true if variable declares a new variable (it does if it has a type)
@@ -823,7 +828,6 @@ struct ASTStruct : ASTNode {
         lexer::SourceLocation location{};
         ASTExpression* defaultValue = nullptr;
         TypeId stringType{};
-        int array_length = 0; // should never be negative
     };
     DynamicArray<Member> members{};
     struct PolyArg {
@@ -837,6 +841,7 @@ struct ASTStruct : ASTNode {
     State state=TYPE_EMPTY;
 
     bool no_padding = false;
+    bool no_pointers = false;
 
     StructImpl* nonPolyStruct = nullptr;
 
@@ -1039,6 +1044,12 @@ struct ASTScope : ASTNode {
 
     void print(AST* ast, int depth);
 };
+
+struct OverloadResult {
+    OverloadGroup::Overload* best_match;
+    OverloadGroup::Overload* matches[2];
+};
+
 struct Compiler;
 struct AST {
     AST(Compiler* compiler) : compiler(compiler) {}
@@ -1214,6 +1225,7 @@ struct AST {
     static void DecomposePolyTypes(StringView view, StringView* out_base, QuickArray<StringView>* outPolyTypes);
     static void DecomposeNamespace(StringView view, StringView* out_namespace, StringView* out_name);
     static void DecomposePointer(StringView view, StringView* out_name, u32* level);
+    static void DecomposeArray(StringView view, StringView* out_name, u32* length);
     // static StringView TrimPointer(StringView& view, u32* level = nullptr);
     static StringView TrimBaseType(StringView view, StringView* outNamespace, u32* level, QuickArray<StringView>* outPolyTypes, StringView* typeName);
     // true if id is one of u8-64, i8-64
@@ -1289,7 +1301,7 @@ struct AST {
 
     
     // NOTE: These functions are methods of the AST instead of OverloadGroup because it's easier to synchronize with multi-threading. (we would need individual mutex for each group or a global variable, it's better to have mutex in the AST)
-    OverloadGroup::Overload* getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
+    OverloadGroup::Overload* getOverload(OverloadGroup* group, ScopeId scopeOfFncall, const BaseArray<TypeId>& argTypes, bool implicit_this, ASTExpression* fncall, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr, OverloadResult* result = nullptr);
     // Note that this function becomes complex if parentStruct is polymorphic. It only checks computed polymorphic functions
     OverloadGroup::Overload* getPolyOverload(OverloadGroup* group, const BaseArray<TypeId>& argTypes, const BaseArray<TypeId>& polyArgs, StructImpl* parentStruct, bool implicit_this, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false, const BaseArray<bool>* inferred_args = nullptr);
     

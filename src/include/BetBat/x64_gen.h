@@ -140,6 +140,8 @@ struct X64Builder : public ProgramBuilder {
     // REXW prefixed
     void emit_sub_imm32(X64Register reg, i32 imm32);
 
+    void emit_lea(X64Register reg, X64Register rm, int disp);
+
     // don't assume all opcodes will work
     void emit_operation(u8 opcode, X64Register reg, X64Register rm, InstructionControl control);
 

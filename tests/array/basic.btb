@@ -1,0 +1,62 @@
+@TEST_CASE(basic_fixed_array)
+
+
+arr1: i32[5];
+arr2: i32[0x10];
+arr3: i32[0b10];
+arr4: i32[0o10];
+
+_test 4*5; sizeof(arr1)
+_test 4*16; sizeof(arr2)
+_test 4*2; sizeof(arr3)
+_test 4*8; sizeof(arr4)
+
+
+arr5: i32*[10]*; // pointer to an array of i32 pointers
+
+@TEST_ERROR(ERROR_UNSPECIFIED) arr6: i32[0.5];
+
+@TEST_CASE(basic_array_initializer)
+
+struct Model {
+    x: i32;
+    y: i32[5];
+}
+model: Model;
+model = { 1, { 5 } }
+_test 6; model.x + model.y[0]
+
+@TEST_CASE(direct_assign_initializer)
+
+// This test is here to catch compiler bugs.
+// Assert(id.isNormalType()) when calling ast->getTypeInfo
+
+struct Core {
+    y: i32[2];
+    x: i32*[2];
+}
+na := Core{{5,5},{null,null}}
+nas: void* = {null}
+
+@TEST_CASE(to_many_value_in_direct_initializer)
+
+struct Core {
+    y: i32[2];
+    x: i32*[2];
+}
+@TEST_ERROR(ERROR_UNSPECIFIED) nda := Core{{2,3,4}}
+
+
+@TEST_CASE(array_to_slice)
+
+local_hits: i32[2]
+
+new_hits: i32[] = local_hits
+
+old_hits: i32[]
+old_hits = local_hits
+
+@TEST_CASE(array_ptr_member)
+
+str: char[20];
+str.ptr[0] = 5

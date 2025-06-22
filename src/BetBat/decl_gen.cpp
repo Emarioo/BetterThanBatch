@@ -311,6 +311,9 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                 if(typeinfo->astStruct->no_padding) {
                     text_btb += "@no_padding ";
                 }
+                if(typeinfo->astStruct->no_pointers) {
+                    text_btb += "@no_pointers ";
+                }
                 // TODO: annotations
                 text_btb += typeinfo->astStruct->name;
                 if(typeinfo->astStruct->polyArgs.size()) {
@@ -328,6 +331,9 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
             if(file_type & DECL_C) {
                 if(typeinfo->astStruct->no_padding)
                     text_c += "#pragma pack(push, 1)\n";
+                if(typeinfo->astStruct->no_pointers) {
+                    // No C equivalent but that is fine since this is a library header that won't be modified (shouldn't be)
+                }
                 text_c += "typedef struct {\n";
                 // TODO: annotations
             }
@@ -341,9 +347,9 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                     for(int j=0;j<max_name_len_btb - mem.name.size();j++)
                         text_btb += " ";
                     text_btb += ast->typeToString(mem_impl.typeId);
-                    if(mem.array_length > 0) {
-                        text_btb += "[" + std::to_string(mem.array_length) + "]";
-                    }
+                    // if(mem.array_length > 0) {
+                    //     text_btb += "[" + std::to_string(mem.array_length) + "]";
+                    // }
                     text_btb += ";\n";
                 }
                 if(file_type & DECL_C) {
@@ -356,9 +362,9 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                     for(int j=0;j<max_name_len_c - type_name.size();j++)
                         text_c += " ";
                     text_c += +" " + mem.name;
-                    if(mem.array_length > 0) {
-                        text_c += "[" + std::to_string(mem.array_length) + "]\n";
-                    }
+                    // if(mem.array_length > 0) {
+                    //     text_c += "[" + std::to_string(mem.array_length) + "]\n";
+                    // }
                     text_c += ";\n";
                 }
                 // TODO: Add default value

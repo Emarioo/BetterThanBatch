@@ -49,6 +49,7 @@ struct ObjectFile {
         RELOCA_32 = RELOCA_SECREL,
         RELOCA_PLT32 = RELOCA_REL32, // used when refering to external functions
         RELOCA_PC32, // used when refering to data (in .data or .rodata)
+        RELOCA_GOTREL, // used for global variables when compiling a shared library
         
         // ARM
         RELOC_ARM_V4BX = RELOC_MASK,
