@@ -55,16 +55,6 @@ fn main(argc: i32, argv: char**) -> i32 {
 fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
     core: GameCore* = app.user_data
 
-    struct ExtraData {
-        graphics_data: void*;
-        world_data: void*;
-    }
-    // log(&event)
-    // if !app.extra_user_data {
-    //     app.extra_user_data = Allocate(sizeof ExtraData)
-    //     construct(cast<ExtraData*>app.extra_user_data)
-    // }
-
     switch event {
         case APP_START:
             core = Allocate(sizeof GameCore)
@@ -104,15 +94,7 @@ fn @export HOTRELOAD_FN_EVENT (app: AppInstance*, event: AppEvent) {
                 stable_global_memory = app.stable_globals.ptr
             #endif
 
-            // extra: ExtraData* = app.extra_user_data
-            // if extra.graphics_data
-            //     RestoreGraphicsGlobals(extra.graphics_data)
-            // if extra.world_data
-            //     RestoreWorldGlobals(extra.world_data)
         case APP_CODE_UNLOAD:
-            // extra: ExtraData* = app.extra_user_data
-            // extra.graphics_data = SaveGraphicsGlobals()
-            // extra.world_data = SaveWorldGlobals()
     }
 
     // log("nash")

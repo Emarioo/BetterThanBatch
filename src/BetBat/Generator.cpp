@@ -2523,7 +2523,7 @@ SignalIO GenContext::generateAssignedInitializing(BCRegister baseReg, int offset
             fn non() -> void* { return null }
             cwd := Slice<char>{ non() }
     */
-    if(frame_offset_of_assigned_initializer_pointer == -1) {
+    if(baseReg != BC_REG_LOCALS && frame_offset_of_assigned_initializer_pointer == -1) {
         auto result = framePush(TypeId::Create(TYPE_VOID, 1), &frame_offset_of_assigned_initializer_pointer, false);
         Assert(result == SIGNAL_SUCCESS);
         // framePush can only fail if default expression has an error.
@@ -7901,7 +7901,7 @@ SignalIO GenContext::generateGlobalData() {
         } else if(stmt->firstExpression->type == EXPR_INITIALIZER) {
             type = stmt->varnames[0].identifier->versions_typeId[currentPolyVersion];
             builder.emit_mov_rm_disp(data_ptr, BC_REG_LOCALS, REGISTER_SIZE, -REGISTER_SIZE);
-
+            frame_offset_of_assigned_initializer_pointer = -REGISTER_SIZE;
             result = generateAssignedInitializing(data_ptr, 0, type, stmt->firstExpression->as<ASTExpressionInitializer>());
             if (result != SIGNAL_SUCCESS) {
                 if (!info.hasForeignErrors()) {

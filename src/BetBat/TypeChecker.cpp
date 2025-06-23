@@ -411,7 +411,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
         TypeInfo* typeInfo = info.ast->createType(typeName, element_info->scopeId);
         typeInfo->array_length = array_length;
         typeInfo->element_type = element_typeid;
-        typeInfo->_size = array_length * element_info->getSize();
+        typeInfo->_size = array_length *ast->getTypeSize(element_typeid);
 
         typeId = typeInfo->id;
         typeId.setPointerLevel(plevel);

@@ -513,11 +513,8 @@ fn RefreshWindow(window: WindowContext*) {
     window.resetPollChar()
     
     glfwSwapBuffers(window.glfw_window);
-    
-    // temporary sleep to avoid overuse of CPU resources
-    if window.delta < 0.001
-        ProcessSleep(0.001)
-    
+    if window.delta < 0.005
+        ProcessSleep(0.005)
     glfwPollEvents();
 
     window.running = !glfwWindowShouldClose(window.glfw_window) && !window.schedule_close

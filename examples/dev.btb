@@ -10,15 +10,30 @@
 // #import "examples/sound/sample_wasapi.btb"
 // #import "bad.btb"
 
-#import "Date"
 
-date: DateTime
-DateUTCNow(&date)
-log("UTC time: ",&date)
-DateLocalNow(&date)
-log("Local time: ",&date)
 
-test_date()
+// #import "Logger"
+// This test is here to catch compiler bugs.
+// Assert(id.isNormalType()) when calling ast->getTypeInfo
+
+struct Core {
+    y: i32[2];
+    x: i32*[2];
+}
+na := Core{{5,5},{null,null}}
+nas: void* = {null}
+
+// log(arr[0], ", ", arr[1], ", ", arr[2], ", ", arr[3], ", ", arr[4])
+
+// #import "Date"
+
+// date: DateTime
+// DateUTCNow(&date)
+// log("UTC time: ",&date)
+// DateLocalNow(&date)
+// log("Local time: ",&date)
+
+// test_date()
 // test_range_days()
 // test_range_days(true)
 

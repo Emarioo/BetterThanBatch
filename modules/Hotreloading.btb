@@ -23,9 +23,9 @@
 enum AppEvent {
     APP_CODE_LOAD,   // code is loaded before APP_START (this is where you set up global data and such)
     APP_CODE_UNLOAD, // here you can unload things if you need, allocated memory in global variables for example
-    APP_START, // called once at start of app
-    APP_TICK, // continous event (while loop)
-    APP_STOP, // called at end of app, this is called before the final APP_CODE_UNLOAD
+    APP_START,       // called once at start of app
+    APP_TICK,        // continous event (while loop), you have to implement delta time and game loop.
+    APP_STOP,        // called at end of app, this is called before the final APP_CODE_UNLOAD
 }
 
 struct AppInstance {
@@ -35,7 +35,6 @@ struct AppInstance {
     rebuild_cmd: StringBuilder;
     dynamic_library_path: char[];
     user_data: void*; // data from the dynamic library
-    extra_user_data: void*; // could be used to save and restore global data of dll
     stable_globals: Slice<void>;
 
     argc: i32;
