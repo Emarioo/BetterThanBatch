@@ -3,6 +3,11 @@ The compiler generates very inefficient code. Partly because of the BTB calling 
 This operator overload is expensive to call. The floats in the mat4 structs are pushed to the stack. Then we allocate space for arguments. Then we pop floats into the argument space.
 Then we call the function. When we return we put the value on the stack in the called function stack space. Then the caller pushed the values in the return space to the stack.
 Then pop it into the variable. We severely need to improve this.
+The compiler generates very inefficient code. Partly because of the BTB calling convention and partly because we push and pop when generating expressions.
+
+This operator overload is expensive to call. The floats in the mat4 structs are pushed to the stack. Then we allocate space for arguments. Then we pop floats into the argument space.
+Then we call the function. When we return we put the value on the stack in the called function stack space. Then the caller pushed the values in the return space to the stack.
+Then pop it into the variable. We severely need to improve this.
 
 ```
 struct mat4 { v: f32[16]; }

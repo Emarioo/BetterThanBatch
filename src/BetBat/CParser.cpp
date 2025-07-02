@@ -3,8 +3,14 @@
 #include "Engone/PlatformLayer.h"
 #include "Engone/Logger.h"
 #include "BetBat/Util/StringBuilder.h"
+#include "BetBat/CompilerOptions.h"
 
-std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options) {
+#define CPARSER_VERBOSE(X) 
+// #define CPARSER_VERBOSE(X) X
+
+std::string annihilate_forsaken_space_in_program_files(const std::string& path);
+
+std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options, CompileOptions* compile_options) {
     using namespace engone;
     u64 filesize = 0;
     auto file = FileOpen(filepath, FILE_READ_ONLY, &filesize);
@@ -20,20 +26,62 @@ std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* o
         return "";
     }
     FileClose(file);
-    return TranspileCToBTB(text, options, filepath);
+    return TranspileCToBTB(text, options, annihilate_forsaken_space_in_program_files(filepath), compile_options);
 }
 
-std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, const std::string& path) {
+std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, const std::string& path, CompileOptions* compile_options) {
     using namespace clexer;
     using namespace engone;
     {
         CPreprocContext context{};
+
+        /*
+            Predefined macros
+        */
+        context.macros["__STDC__"] = {"1"};
+        context.macros["__STDC_VERSION__"] = {"201112"};
+        // TODO: Don't assume gnu? we may link with clang or msvc
+        context.macros["__GNUC__"] = {"14"};
+        context.macros["_DLL"] = {};
+        
+        // GCC behaviour defining declspec and cdecl and stuff
+        auto& macro_declspec = context.macros["__declspec"] = {"__attribute__((X))"};
+            macro_declspec.has_params = true;
+            macro_declspec.parameters.add("X");
+        context.macros["__cdecl"] = {"__attribute__((__cdecl__))"};
+        context.macros["__stdcall"] = {"__attribute__((__stdcall__))"};
+        context.macros["__fastcall"] = {"__attribute__((__fastcall__))"};
+
+        switch(compile_options->target) {
+            // https://github.com/cpredef/predef/blob/master/Architectures.md
+            case TARGET_WINDOWS_x64: {
+                context.macros["_WIN32"] = {"1"};
+                context.macros["_WIN64"] = {"1"};
+                context.macros["__x86_64__"] = {""};
+            } break;
+            case TARGET_LINUX_x64: {
+                context.macros["__linux__"] = {};
+                // TODO: Which macros on Linux?
+            } break;
+            case TARGET_AARCH64: {
+                context.macros["__aarch64__"] = {};
+            } break;
+            case TARGET_ARM: {
+                context.macros["__arm__"] = {};
+            } break;
+            default: {
+                // TODO: Print the line where we imported the C header.
+                log::out << log::YELLOW << "No predefined macros when importing C header on target '"<<compile_options->target<<"'.\n";
+            }
+        }
+
         context.options = options;
-        std::string stoff = PreprocessText(&context, text, path);
+        std::string stoff = PreprocessText(&context, text, annihilate_forsaken_space_in_program_files(path));
         auto f = FileOpen("temp.h", FILE_CLEAR_AND_WRITE);
         Assert(f);
         FileWrite(f, stoff.c_str(), stoff.size());
         FileClose(f);
+        // log::out << stoff << "\n";
     }
 
     return "";
@@ -230,8 +278,9 @@ int parse_space(StringView text, int* head) {
     }
     return *head - start;
 }
-int parse_name(StringView text, int* head) {
+int parse_name(StringView text, int* head, std::string* name) {
     Assert(head);
+    Assert(name);
     int start = *head;
     while(*head < text.len) {
         char c = text.ptr[*head];
@@ -244,21 +293,125 @@ int parse_name(StringView text, int* head) {
         }
         *head += 1;
     }
+    *name = std::string(text.ptr + start, *head - start);
     return *head - start;
+}
+int parse_string(StringView text, int* head, std::string* name) {
+    Assert(head);
+    Assert(name);
+
+    if(text.ptr[*head] != '"') {
+        return 0;
+    }
+    *head += 1;
+
+    int start = *head;
+    while(*head < text.len) {
+        char c = text.ptr[*head];
+        if(c == '"') {
+            *head += 1;
+            break;
+        }
+        *head += 1;
+    }
+    *name = std::string(text.ptr + start, *head - start);
+    return *head - start;
+}
+// DOES NOT RETURN PARSED INTEGER, check 'value' instead
+int parse_int(StringView text, int* head, int* value) {
+    Assert(head);
+    Assert(value);
+
+    int start = *head;
+    // while(*head < text.len) {
+    //     char c = text.ptr[*head];
+    //     if (c >= '0' && c <= '9') {
+    //         *head += 1;
+    //         continue;
+    //     }
+    //     break;
+    // }
+    // // *value = atoi(text.ptr + start);
+    char* end_ptr;
+    *value = strtol(text.ptr + *head, &end_ptr, 0);
+    *head = (u64)end_ptr - (u64)text.ptr;
+
+    while(*head < text.len) {
+        char c = text.ptr[*head];
+        if((c|32) == 'l' || (c|32) == 'u') {
+            *head += 1;
+            continue;
+        }
+        break;
+    }
+    return *head - start;
+}
+// comment includes slash and newlines
+// comment may be null
+int parse_comment(StringView text, int* head, std::string* comment) {
+    if(comment)
+        *comment = {};
+    
+    int start = *head;
+
+    if(*head + 1 >= text.size())
+        return 0;
+
+    if(text.ptr[*head] == '/' && text.ptr[*head+1] == '/') {
+        *head += 2;
+        while(*head < text.len) {
+            char c = text.ptr[*head];
+            if (c == '\n') {
+                break;
+            }
+            *head += 1;
+        }
+        *comment = std::string(text.ptr + start, *head - start);
+        return *head - start;
+    } else if(text.ptr[*head] == '/' && *head + 1 < text.size() && text.ptr[*head+1] == '*') {
+        *head += 2;
+        while(*head + 1 < text.len) {
+            char c = text.ptr[*head];
+            if (c == '*' && text.ptr[*head + 1] == '/') {
+                *head += 2;
+                break;
+            }
+            *head += 1;
+        }
+        *comment = std::string(text.ptr + start, *head - start);
+        return *head - start;
+    }
+    return 0;
+}
+
+std::string annihilate_forsaken_space_in_program_files(const std::string& path) {
+    int at = path.find("C:/Program Files/");
+    if (at == -1)
+        return path;
+    return path.substr(0, at) + "C:/PROGRA~1/" + path.substr(at + strlen("C:/Program Files/"));
 }
 
 void report_error(const std::string& text, int pos, const std::string& path, const std::string& msg) {
     using namespace engone;
+    u64 filesize;
+    auto f = FileOpen(path, FILE_READ_ONLY, &filesize);
+    Assert(f);
+    std::string data;
+    data.resize(filesize);
+    FileRead(f, (char*)data.data(), filesize);
+    FileClose(f);
+    
     int head = 0, line = 1, column = 1;
     while(head < pos) {
-        if (text[head] == '\n') {
+        if (data[head] == '\n') {
             line++;
             column=0;
         }
         column++;
         head++;
     }
-    log::out << log::RED << path << ":"<<line<<":"<<column<<": "<< log::NO_COLOR << msg << "\n";
+
+    log::out << log::RED << annihilate_forsaken_space_in_program_files(path) << ":"<<line<<":"<<column<<": "<< log::NO_COLOR << msg << "\n";
 }
 
 std::string calc_location(const std::string& text, int pos, const std::string& path) {
@@ -274,7 +427,144 @@ std::string calc_location(const std::string& text, int pos, const std::string& p
     return path + ":" + std::to_string(line) + ":" + std::to_string(column);
 }
 
-int eval_expression(CPreprocContext* context, const std::string& text, int* head, const std::string& origin_path) {
+void expand_macros(CPreprocContext* context, std::string& text, const std::string& origin_path, CMacro* parent = nullptr, DynamicArray<std::string>* parent_args = nullptr, DynamicArray<std::string>* parent_raw_args = nullptr) {
+    int head = 0;
+    while(head < text.size()) {
+        if(text[head] == '#' && head+1 < text.size() && text[head+1] == '#') {
+            int non_space_end = head;
+            head+=2;
+            while(non_space_end-1 > 0) {
+                if(text[non_space_end-1] == ' ' || text[non_space_end-1] == '\t' || text[non_space_end-1] == '\n' || text[non_space_end-1] == '\r') {
+                    non_space_end--;
+                    continue;
+                }
+                break;
+            }
+            parse_space(text, &head);
+            int prev_len = text.size();
+            text = text.substr(0, non_space_end) + text.substr(head);
+            head = non_space_end;
+            continue;
+        } else if(text[head] == '#') {
+            int macro_start = head;
+            head++;
+            parse_space(text, &head);
+            std::string macro_name;
+            int parsed = parse_name(text, &head, &macro_name);
+            int macro_end = head;
+            
+            if(parsed && parent) {
+                int argi = 0;
+                for(;argi < parent->parameters.size(); argi++) {
+                    if (macro_name == parent->parameters.get(argi)) {
+                        break;
+                    }
+                }
+                if (argi < parent_raw_args->size()) {
+                    // TODO: Escape newline, tabs, hex codes
+                    int prev_len = text.size();
+                    text = text.substr(0, macro_start) + "\"" + parent_raw_args->get(argi) + "\"" + text.substr(macro_end);
+                    head = macro_start + 2 + parent_raw_args->get(argi).size();
+                    continue;
+                }
+            }
+            continue;
+        }
+
+        std::string macro_name;
+        int macro_start = head;
+        int parsed = parse_name(text, &head, &macro_name);
+        int macro_end = head;
+        CMacro* macro = nullptr;
+        if (parsed) {
+            if(parent) {
+                int argi = 0;
+                for(;argi < parent->parameters.size(); argi++) {
+                    if (macro_name == parent->parameters.get(argi)) {
+                        break;
+                    }
+                }
+                if (argi < parent_args->size()) {
+                    int prev_len = text.size();
+                    text = text.substr(0, macro_start) + parent_args->get(argi) + text.substr(macro_end);
+                    head = macro_start + parent_args->get(argi).size();
+                    continue;
+                }
+            }
+            auto pair = context->macros.find(macro_name);
+            if(pair != context->macros.end()) {
+                macro = &pair->second;
+            }
+            if(!macro || macro == parent) {
+                continue;
+            }
+        } else {
+            parsed = parse_string(text, &head, &macro_name);
+            if(!parsed) {
+                head++;
+                // do nothing, nothing to expand
+            } else {
+                // string, nothing to expand
+            }
+            continue;
+        }
+
+        parse_space(text, &head);
+
+        DynamicArray<std::string> arguments;
+        if (text[head] == '(' && macro->has_params) {
+            head++;
+            parse_space(text, &head);
+            int depth = 1;
+            int arg_start = head;
+            std::string buffer;
+            while (head < text.size()) {
+                if(text[head] == ')') {
+                    depth--;
+                    if(depth==0) {
+                        head++;
+                        break;
+                    }
+                } else if(text[head] == ',' && depth == 1) {
+                    head++;
+                    parse_space(text, &head);
+                    arguments.add({});
+                    continue;
+                }
+                if(text[head] == '(')
+                    depth++;
+
+                if(arguments.size() == 0)
+                    arguments.add({});
+                
+                arguments.last() += text[head];
+                head++;
+            }
+            macro_end = head;
+        }
+
+        if (macro->parameters.size() != arguments.size()) {
+            // TODO: Handle VA ARGS
+            report_error(text, context->current_pos, origin_path, "Args mismatch here somewhere. macro: " + macro_name);
+            return;
+        }
+        DynamicArray<std::string> raw_arguments;
+        raw_arguments.resize(arguments.size());
+        for(int i=0;i<raw_arguments.size();i++) {
+            raw_arguments[i] = arguments[i];
+            expand_macros(context,  arguments[i], origin_path, parent, parent_args, parent_raw_args);
+        }
+
+        std::string macro_body = macro->content;
+        expand_macros(context, macro_body, macro->origin_file, macro, &arguments, &raw_arguments);
+        
+        int prev_len = text.size();
+        text = text.substr(0, macro_start) + macro_body + text.substr(macro_end);
+        head = macro_start + macro_body.size();
+    }
+}
+int eval_expression(CPreprocContext* context, std::string& text, int* head, const std::string& origin_path, int expression_start) {
+    using namespace engone;
     /* Some grammar
     expr        := or_expr
     or_expr     := and_expr ( "||" and_expr )*
@@ -285,7 +575,272 @@ int eval_expression(CPreprocContext* context, const std::string& text, int* head
     mul_expr    := unary_expr ( ("*" | "/" | "%") unary_expr )*
     unary_expr  := ("!" | "~" | "-" | "defined") unary_expr | primary
     primary     := integer | identifier | "(" expr ")"
-    */
+     */
+
+
+    struct Value {
+        int literal;
+    };
+    struct Op {
+        Op(char a=0, char b = 0) : kind(a | (b << 8)) {
+            
+        }
+        int kind;
+    };
+    DynamicArray<Value> values;
+    DynamicArray<Op> ops;
+
+    const int OP_AND           = '&' | ('&'<<8);
+    const int OP_OR            = '|' | ('|'<<8);
+    const int OP_EQUAL         = '=' | ('='<<8);
+    const int OP_NOT_EQUAL     = '!' | ('='<<8);
+    const int OP_LESS_EQUAL    = '<' | ('='<<8);
+    const int OP_GREATER_EQUAL = '>' | ('='<<8);
+
+    auto precedence = [&](int kind) {
+        switch(kind) {
+            case OP_OR:
+                return -1;
+            case OP_AND:
+                return 0;
+            case OP_EQUAL:
+            case OP_NOT_EQUAL:
+            case OP_LESS_EQUAL:
+            case OP_GREATER_EQUAL:
+            case '<':
+            case '>':
+                return 1;
+            case '+':
+            case '-':
+                return 2;
+            case '*':
+            case '/':
+            case '%':
+                return 3;
+        }
+        Assert(false);
+        return -1;
+    };
+    int head_start = *head;
+    bool finalize = false;
+    bool expect_primary = true;
+    while (true) {
+        parse_space(text, head);
+        char c = 0, c2 = 0;
+        if (*head < text.size())
+            c = text[*head];
+        if(*head+1 < text.size())
+            c2 = text[*head + 1];
+
+        if (c == '\\' && c2 == '\n') {
+            *head += 2;
+            continue;
+        }
+
+        std::string comment;
+        parse_comment(text, head, &comment);
+        if(comment.size())
+            continue;
+
+        if (expect_primary) {
+            int unary = 0;
+            if(c == '-' || c == '!' || c == '~') {
+                *head += 1;
+                unary = c;
+                parse_space(text, head);
+                c = text[*head];
+                c2 = 0;
+                if(*head+1 < text.size())
+                    c2 = text[*head + 1];
+            }
+
+            if(isdigit(c)) {
+                int value = 0;
+                int parsed = parse_int(text, head, &value);
+                values.add({value});
+            } else if (c == '(') {
+                *head += 1;
+                int value = eval_expression(context, text, head, origin_path, expression_start);
+                int parsed = parse_int(text, head, &value);
+                values.add({value});
+                if(text[*head] != ')') {
+                    report_error(text, expression_start + *head, origin_path, "Expected closing parenthesis ')'");
+                    return 0;
+                }
+                *head += 1;
+            } else if(isalpha(c) || c == '_') {
+                std::string name;
+                int macro_start = *head;
+                int parsed = parse_name(text, head, &name);
+
+                if(name == "defined") {
+                    parse_space(text, head);
+                    bool has_paren = false;
+                    if(text[*head] == '(') {
+                        *head += 1;
+                        has_paren = true;
+                        parse_space(text, head);
+                    }
+                    parsed = parse_name(text, head, &name);
+                    if(parsed == 0) {
+                        report_error(text, expression_start + *head, origin_path, "Expected identifier after defined");
+                        return 0;
+                    }
+
+                    if(has_paren) {
+                        parse_space(text, head);
+                        if (text[*head] == ')') {
+                            *head += 1;
+                        } else {
+                            report_error(text, expression_start + *head, origin_path, "Expected closing parenthesis ')'");
+                            return 0;
+                        }
+                    }
+                    auto pair = context->macros.find(name);
+                    values.add({pair != context->macros.end()});
+                } else {
+                    auto pair = context->macros.find(name);
+                    if (pair == context->macros.end()) {
+                        values.add({0});
+                    } else {
+                        parse_space(text, head);
+                        // skip arguments since macro isn't defined
+                        if (text[*head] == '(') {
+                            *head += 1;
+                            int depth = 1;
+                            while(*head < text.size()) {
+                                if(text[*head] == '(') {
+                                    depth++;
+                                } else if(text[*head] == ')') {
+                                    depth--;
+                                    if (depth == 0) {
+                                        *head += 1;
+                                        break;
+                                    }
+                                } else {
+                                    *head += 1;
+                                }
+                            }
+                        }
+                        std::string macro_text = text.substr(macro_start, *head - macro_start);
+                        expand_macros(context, macro_text, origin_path);
+                        text = text.substr(0, macro_start) + macro_text + text.substr(*head);
+                        *head = macro_start;
+                        continue;
+                    }
+                }
+            } else {
+                // log::out << text << "\n";
+                report_error(text, expression_start + *head, origin_path, "Bad value in #if expression.");
+                return 0;
+            }
+            if(unary != 0) {
+                auto& val = values.last().literal;
+                switch(unary) {
+                    case '-': val = -val; break;
+                    case '!': val = !val; break;
+                    case '~': val = ~val; break;
+                    default: Assert(false);
+                }
+            }
+            expect_primary = false;
+            continue;
+        } else {
+            *head += 1;
+            if(c == '+') {
+                ops.add({c});
+            } else if(c == '-') {
+                ops.add({c});
+            } else if(c == '*') {
+                ops.add({c});
+            } else if(c == '/') {
+                ops.add({c});
+            } else if(c == '%') {
+                ops.add({c});
+            } else if(c == '&' && c2 == '&') {
+                *head += 1;
+                ops.add({c, c2});
+            } else if(c == '|' && c2 == '|') {
+                *head += 1;
+                ops.add({c, c2});
+            } else if(c == '=' && c2 == '=') {
+                *head += 1;
+                ops.add({c, c2});
+            } else if(c == '!' && c2 == '=') {
+                *head += 1;
+                ops.add({c, c2});
+            } else if(c == '<' && c2 == '=') {
+                *head += 1;
+                ops.add({c, c2});
+            } else if(c == '>' && c2 == '=') {
+                *head += 1;
+                ops.add({c, c2});
+            } else if(c == '>') {
+                ops.add({c});
+            } else if(c == '<') {
+                ops.add({c});
+            } else {
+                *head -= 1;
+                finalize = true;
+            }
+            
+            expect_primary = true;
+        }
+
+        while (values.size() >= 2 && ops.size() > 0) {
+            int op = 0;
+            if(ops.size() >= 2) {
+                int op0 = ops[ops.size()-2].kind;
+                int op1 = ops[ops.size()-1].kind;
+
+                if(precedence(op0) >= precedence(op1)) {
+                    op = op0;
+                    ops.removeAt(ops.size()-2);
+                } else if (finalize) {
+                    op = op1;
+                    ops.pop();
+                } else {
+                    break;
+                }
+            } else if(finalize) {
+                op = ops.last().kind;
+                ops.pop();
+            } else {
+                break;
+            }
+            
+            int val1 = values.last().literal;
+            values.pop();
+            int val0 = values.last().literal;
+
+            int value = 0;
+            switch(op) {
+                case OP_AND: value = val0 && val1; break;
+                case OP_OR: value = val0 || val1; break;
+                case OP_EQUAL: value = val0 == val1; break;
+                case OP_NOT_EQUAL: value = val0 != val1; break;
+                case OP_LESS_EQUAL: value = val0 <= val1; break;
+                case OP_GREATER_EQUAL: value = val0 >= val1; break;
+                case '<': value = val0 < val1; break;
+                case '>': value = val0 > val1; break;
+                case '+': value = val0 + val1; break;
+                case '-': value = val0 - val1; break;
+                case '*': value = val0 * val1; break;
+                case '/': value = val0 / val1; break;
+                case '%': value = val0 % val1; break;
+                default: Assert(false);
+            }
+            values.last() = {value};
+        }
+        if(finalize)
+            break;
+    }
+    Assert(values.size() == 1);
+    Assert(ops.size() == 0);
+    CPARSER_VERBOSE(
+    log::out << "val " << values[0].literal << " = " << text.substr(head_start, *head - head_start)<<"\n";
+    )
+    return values[0].literal;
 }
 
 std::string PreprocessText(CPreprocContext* context, const std::string& text, const std::string& origin_path) {
@@ -304,142 +859,124 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
     // backslash?
     int head = 0;
     while (head < text.size()) {
-
         // Preserve comments
         if(head+1 < text.size() && text[head] == '/' && text[head+1] == '/') {
-            output_text += "//";
+            if(!context->should_skip())
+                output_text += "//";
             head+=2;
             while (head < text.size()) {
                 if(text[head] == '\n') {
                     head+=1;
-                    output_text += "\n";
+                    if(!context->should_skip())
+                        output_text += "\n";
                     break;
                 }
-                output_text += text[head];
+                if(!context->should_skip())
+                    output_text += text[head];
                 head+=1;
             }
             continue;
         }
         if(head+1 < text.size() && text[head] == '/' && text[head+1] == '*') {
-            output_text += "/*";
+            if(!context->should_skip())
+                output_text += "/*";
             head+=2;
             while (head < text.size()) {
                 if(head+1 < text.size() && text[head] == '*' && text[head+1] == '/') {
                     head+=2;
-                    output_text += "*/";
+                    if(!context->should_skip())
+                        output_text += "*/";
                     break;
                 }
-                output_text += text[head];
+                if(!context->should_skip())
+                    output_text += text[head];
                 head+=1;
             }
             continue;
         }
         // Preserve strings
         if (text[head] == '"') {
-            output_text += "\"";
+            if(!context->should_skip())
+                output_text += "\"";
             head+=1;
             while (head < text.size()) {
                 if(text[head] == '"' && (head-1 < 0 || text[head-1] != '\\')) {
                     head+=1;
-                    output_text += "\"";
+                    if(!context->should_skip())
+                        output_text += "\"";
                     break;
                 }
-                output_text += text[head];
+                if(!context->should_skip())
+                    output_text += text[head];
                 head+=1;
             }
             continue;
         }
         if (text[head] == '\'') {
-            output_text += "'";
+            if(!context->should_skip())
+                output_text += "'";
             head+=1;
             while (head < text.size()) {
                 if(text[head] == '\'' && (head-1 < 0 || text[head-1] != '\\')) {
                     head+=1;
-                    output_text += "'";
+                    if(!context->should_skip())
+                        output_text += "'";
                     break;
                 }
-                output_text += text[head];
+                if(!context->should_skip())
+                    output_text += text[head];
                 head+=1;
             }
             continue;
         }
 
         if (text[head] != '#') {
+            if(context->should_skip()) {
+                head++;
+                continue;
+            }
             // evaluate macros
 
-            int mac_start = head;
-            int parsed_chars = parse_name(text, &head);
+            int macro_start = head;
+            std::string name;
+            int parsed_chars = parse_name(text, &head, &name);
 
             if (parsed_chars != 0) {
-                std::string name = text.substr(mac_start, parsed_chars);
-
                 auto pair = context->macros.find(name);
                 if (pair == context->macros.end()) {
                     output_text += name;
                     continue;
                 } else {
-                    log::out << "Matched " << name<< "("<<calc_location(text, mac_start, origin_path)<<")\n";
+                    CPARSER_VERBOSE(
+                    log::out << log::YELLOW <<"Matched " << name<<log::NO_COLOR<< "("<<calc_location(text, macro_start, origin_path)<<")\n";
+                    )
                     parse_space(text, &head);
 
-                    // TODO: Handle concatenation
-                    // TODO: Handle text to string
-
-                    if (text[head] == '(' && !pair->second.no_params) {
-                        head++;
-                        DynamicArray<std::string> args{};
-
-                        while (head < text.size()) {
-                            if(text[head] == ')') {
-                                head++;
-                                break;
-                            } else if(text[head] == ',') {
-                                head++;
-                                continue;
-                            }
-                            // TODO: Skip space next to comma?
-
-                            if(args.size() == 0)
-                                args.add({});
-                            
-                            args.last() += text[head];
-                            head++;
-                        }
-
-                        // for(auto& s : args)  log::out << "arg " << s <<"\n";
-
-                        if (pair->second.parameters.size() != args.size()) {
-                            // TODO: Handle VA ARGS
-                            report_error(text, head, origin_path, "Args mismatch.");
-                            Assert(pair->second.parameters.size() == args.size());
-                        }
-
-                        std::string tmp_text = pair->second.content;
-                        for(int i=0;i<pair->second.parameters.size();i++){
-                            
-                            int tmp_head = 0;
-                            while(true) {
-                                int at = tmp_text.find(pair->second.parameters[i], tmp_head);
-                                if(at == -1)
+                    // skip arguments since macro isn't defined
+                    if (text[head] == '(') {
+                        head += 1;
+                        int depth = 1;
+                        while(head < text.size()) {
+                            if(text[head] == '(') {
+                                depth++;
+                            } else if(text[head] == ')') {
+                                depth--;
+                                if (depth == 0) {
+                                    head += 1;
                                     break;
-
-                                tmp_text = tmp_text.substr(0, at) + args[i] + tmp_text.substr(at + pair->second.parameters[i].size());
-                                tmp_head = at + args[i].size();
+                                }
+                            } else {
+                                head += 1;
                             }
                         }
-                        output_text += tmp_text;
-                        // Assert(false);
-                    } else {
-                        // nocheckin evaluate nested macros
-                        output_text += pair->second.content;
-                        continue;
                     }
+                    std::string macro_text = text.substr(macro_start, head - macro_start);
+                    context->current_pos = macro_start;
+                    expand_macros(context, macro_text, origin_path);
+                    output_text += macro_text;
+                    continue;
                 }
             }
-            // evaluate nested macros
-
-            // we may have macro with zero arguments no parenthesis
-
-            // we may have macro with arguments
 
             output_text += text[head];
             head++;
@@ -449,35 +986,101 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
         parse_space(text, &head); // "# ifdef" this does occur in headers
 
         int directive_start = head;
-        int parsed_chars = parse_name(text, &head);
-        if(parsed_chars == 0) {
-            // nocheckin Is this C syntax error
-            output_text += text[head];
-            head++;
+        std::string directive;
+        int parsed_chars = parse_name(text, &head, &directive);
+        if(parsed_chars == 0 && context->should_skip()) {
+            // we probably parsed a concat/quotation hashtag in a macro definition
             continue;
         }
-        std::string directive = text.substr(directive_start, parsed_chars);
+        if(parsed_chars == 0) {
+            report_error(text, head, origin_path, "Expected directive name after #");
+            return "";
+        }
+        parse_space(text, &head);
+        if (directive == "ifdef" || directive == "ifndef" || directive == "if" || directive == "elif" || directive == "elifdef" || directive == "elifndef") {
+            if (directive.substr(0,2) == "if")
+                context->if_blocks.add({});
+            auto& last_block = context->if_blocks.last();
+            if(directive.substr(0,2) != "if" && last_block.in_else_block) {
+                report_error(text, head, origin_path, "Syntax error #elif not allowed after #else");
+                return "";
+            }
+
+            if (last_block.has_enabled_block || (context->if_blocks.size() >= 2 && context->if_blocks[context->if_blocks.size()-2].skip)) {
+                // if previous if, elif block was enabled then always skip remaining elifs
+                // if parent if block was skipped then we should always skip too
+                last_block.skip = true;
+            } else if (directive == "if" || directive == "elif") {
+                int expr_start = head;
+                while(head < text.size()) {
+                    if(text[head] == '\\' && head+1 < text.size() && text[head+1] == '\n') {
+                        head+=1;
+                    } else if(text[head] == '\n') {
+                        head+=1;
+                        break;
+                    }
+                    head+=1;
+                }
+                std::string expr_text = text.substr(expr_start, head - expr_start);
+                int head = 0;
+                context->current_pos = expr_start;
+                int value = eval_expression(context, expr_text, &head, origin_path, expr_start);
+                last_block.skip = value == 0;
+                if(!last_block.skip)
+                    last_block.has_enabled_block = true;
+            } else {
+                std::string name;
+                parsed_chars = parse_name(text, &head, &name);
+                if (parsed_chars == 0) {
+                    report_error(text, head - parsed_chars, origin_path, "Syntax error?");
+                    return "";
+                }
+
+                auto pair = context->macros.find(name);
+                last_block.skip = pair == context->macros.end();
+                if(directive == "ifndef" || directive == "elifndef")
+                    last_block.skip = !last_block.skip;
+                if(!last_block.skip)
+                    last_block.has_enabled_block = true;
+            }
+            continue;
+        } else if (directive == "else") {
+            context->if_blocks.last().skip = !context->if_blocks.last().skip;
+            context->if_blocks.last().in_else_block = true;
+            // if parent if block has skip, the child if block whether in else or not should ALSO always skip
+            if(context->if_blocks.last().has_enabled_block || (context->if_blocks.size() >= 2 && context->if_blocks[context->if_blocks.size()-2].skip)) {
+                context->if_blocks.last().skip = true;
+            }
+            continue;
+        } else if(directive == "endif") {
+            context->if_blocks.pop();
+            continue;
+        }
+        if(context->should_skip()) {
+            continue;
+        }
+
         if(directive == "define") {
             // parse macro definition
-            parse_space(text, &head);
-
             int macro_name_start = head;
-            int name_length = parse_name(text, &head);
-            std::string macro_name = "";
-            macro_name.resize(name_length);
-            memcpy((char*)macro_name.data(), text.c_str() + macro_name_start, name_length);
+            std::string macro_name;
+            int name_length = parse_name(text, &head, &macro_name);
 
-            log::out << "Define "<<macro_name << " ("<<calc_location(text, macro_name_start, origin_path)<< ")\n";
+            CPARSER_VERBOSE(
+            log::out <<log::LIME<< "Define "<<macro_name << log::NO_COLOR<<" ("<<calc_location(text, macro_name_start, origin_path)<< ")\n";
+            )
 
-            parse_space(text, &head);
+            int parsed_space = parse_space(text, &head);
 
             CMacro& macro = context->macros[macro_name] = {};
-            macro.name = macro_name;
+            macro.origin_file = origin_path;
+
 
             // Parse arguments
-            if(text[head] != '(') {
-                macro.no_params = true;
+            if(text[head] != '(' || parsed_space) {
+
             } else {
+                macro.has_params = true;
                 head++;
 
                 // nocheckin VA_ARGS
@@ -496,18 +1099,19 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
                     }
                     
                     int param_start = head;
-                    int parsed_chars = parse_name(text, &head);
+                    std::string param_name;
+                    int parsed_chars = parse_name(text, &head, &param_name);
                     if(parsed_chars == 0) {
                         // nocheckin Syntax error
                         break;
                     }
-                    macro.parameters.add(text.substr(param_start, parsed_chars));
+                    macro.parameters.add(param_name);
 
                     parse_space(text, &head);
 
                     if (text[head] == ',') {
                         head+=1;
-                        break;
+                        continue;
                     } else if (text[head] == ')') {
                         head+=1;
                         break;
@@ -520,7 +1124,11 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             }
 
             // parse character content
+            macro.pos_in_file = head;
             while (head < text.size()) {
+                // TODO: parse string
+                if(text[head] == '/' && head+1 < text.size() && (text[head+1] == '/' || text[head+1] == '*'))
+                    break;
                 if(text[head] == '\n' && (head-1 < 0 || text[head-1] != '\\')) {
                     // head++;
                     break;
@@ -530,16 +1138,12 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             }
             continue;
         } else if (directive == "undef") {
-            parse_space(text, &head);
-
-            int parsed_chars = parse_name(text, &head);
+            std::string name;
+            int parsed_chars = parse_name(text, &head, &name);
             Assert(parsed_chars);
-            std::string name = text.substr(head-parsed_chars, parsed_chars);
             context->macros.erase(name);
             continue;
         } else if (directive == "include") {
-            parse_space(text, &head);
-
             std::string path = "";
 
             if(text[head] == '<') {
@@ -579,13 +1183,14 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             } else {
                 // nocheckin syntax error
             }
-
-            log::out << "Include " << path << "\n";
-            std::string found_path="";
+            CPARSER_VERBOSE(
+            log::out << log::AQUA<<"Include " << log::NO_COLOR<<path << "\n";
+            )
+        std::string found_path="";
             for(int i=0;i<context->options->include_dirs.size();i++) {
                 std::string real_path = context->options->include_dirs[i] + "/" + path;
                 if (FileExist(real_path)) {
-                    found_path = real_path;
+                    found_path = annihilate_forsaken_space_in_program_files(real_path);
                 } else {
                     // log::out << " not found in " << context->options->include_dirs[i] << "\n";
                 }
@@ -595,86 +1200,154 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
                 log::out << "File not found " << found_path << "\n";
                 continue;
             }
-            // Look for path in include dirs.
-            u64 filesize;
-            auto file = FileOpen(found_path, FILE_READ_ONLY, &filesize);
-            if(!file) {
-                log::out << "File denied " << found_path << "\n";
-                // nocheckin File read denied
+            bool found = false;
+            bool has_pragma_once = false;
+            for(int i=0;i<context->included_files.size();i++) {
+                if(found_path == context->included_files[i].path) {
+                    found = true;
+                    if(context->included_files[i].pragma_once)
+                        has_pragma_once = true;
+                    break;
+                }
+            }
+            if (!has_pragma_once) {
+                u64 filesize;
+                auto file = FileOpen(found_path, FILE_READ_ONLY, &filesize);
+                if(!file) {
+                    log::out << "File denied " << found_path << "\n";
+                    // nocheckin File read denied
+                    continue;
+                }
+                // log::out << "Process "<< found_path << "\n";
+                std::string new_text{};
+                new_text.resize(filesize);
+                FileRead(file, (char*)new_text.data(), filesize);
+                FileClose(file);
+
+                if(!found) {
+                    context->included_files.add({});
+                    context->included_files.last().path = found_path;
+                    // context->included_files.last().pragma_once = we don't know yet
+                }
+                auto prev_pos = context->current_pos;
+                output_text += PreprocessText(context, new_text, found_path);
+                context->current_pos = prev_pos;
+            }
+            continue;
+        } else if(directive == "pragma") {
+            std::string name;
+            parse_name(text, &head, &name);
+
+            if(name.size() == 0) {
+                report_error(text, head, origin_path, "Invalid syntax for pragma. Missing pragma name/type.\n");
+                return "";
+            }
+            
+            if (name == "pack") {
+                output_text += "#" + text.substr(directive_start, parsed_chars) + " " + name;
                 continue;
-            }
-            log::out << "Process "<< found_path << "\n";
-            std::string new_text{};
-            new_text.resize(filesize);
-            FileRead(file, (char*)new_text.data(), filesize);
-            FileClose(file);
-
-            context->included_files.add(found_path);
-
-            output_text += PreprocessText(context, new_text, found_path);
-            continue;
-        } else if (directive == "ifdef" || directive == "ifndef" || directive == "if") {
-            parse_space(text, &head);
-
-            bool skip_block = false; 
-
-            if (directive == "if") {
-                int value = eval_expression(context, text, &head, origin_path);
-                skip_block = value == 0;
-            } else {
-                parsed_chars = parse_name(text, &head);
-                if (parsed_chars == 0) {
-                    report_error(text, head - parsed_chars, origin_path, "Syntax error?");
-                    Assert(false);
+            } else if (name == "push_macro") {
+                parse_space(text, &head);
+                if(text[head] != '(') {
+                    report_error(text, head, origin_path, "Missing parenthesis\n");
+                    return "";
                 }
-                std::string name = text.substr(head - parsed_chars, parsed_chars);
+                head++;
 
-                auto pair = context->macros.find(name);
-                skip_block = pair == context->macros.end();
-                if(directive == "ifndef")
-                    skip_block = !skip_block;
-            }
+                parse_space(text, &head);
+                
+                std::string name;
+                parse_string(text, &head, &name);
+                
+                parse_space(text, &head);
 
-            if(skip_block) {
-                while(head < text.size()) {
-                    // TODO: Parse literal string and comments so we ignore #endif inside them
+                if(text[head] != ')') {
+                    report_error(text, head, origin_path, "Missing parenthesis\n");
+                    return "";
+                }
+                head++;
 
-                    if(text[head] == '#') {
-                        head++;
-                        parse_space(text, &head);
-                        parsed_chars = parse_name(text, &head);
-                        if (parsed_chars != 0) {
-                            if (!strncmp(text.c_str() + head - parsed_chars, "endif", parsed_chars)) {
-                                break;
-                            }
-                        }
-                        continue;
+                auto pair = context->stacked_macros.find(name);
+                if(pair == context->stacked_macros.end()) {
+                    context->stacked_macros[name] = {};
+                }
+                auto& list = context->stacked_macros[name];
+                auto pair_m = context->macros.find(name);
+                if(pair_m == context->macros.end()) {
+                    list.add({});
+                } else {
+                    list.add(pair_m->second);
+                    context->macros[name] = {};
+                }
+                continue;
+            } else if (name == "pop_macro") {
+                parse_space(text, &head);
+                if(text[head] != '(') {
+                    report_error(text, head, origin_path, "Missing parenthesis\n");
+                    return "";
+                }
+                head++;
+                parse_space(text, &head);
+
+                std::string name;
+                parse_string(text, &head, &name);
+
+                parse_space(text, &head);
+
+                if(text[head] != ')') {
+                    report_error(text, head, origin_path, "Missing parenthesis\n");
+                    return "";
+                }
+                head++;
+
+                auto pair = context->stacked_macros.find(name);
+                if(pair != context->stacked_macros.end()) {
+                    context->macros[name] = pair->second.last();
+                    pair->second.pop();
+                }
+                continue;
+            } else if (name == "once") {
+                bool found = false;
+                for(int i=0;i<context->included_files.size();i++) {
+                    if(origin_path == context->included_files[i].path) {
+                        found = true;
+                        context->included_files[i].pragma_once = true;
+                        break;
                     }
-                    head++;
                 }
+                Assert(found);
+                continue;
+            } else {
+                report_error(text, head, origin_path, "Missing support pragma\n");
+                return "";
             }
+        } else if (directive == "error") {
+            int err_start = head;
+            while(head < text.size()) {
+                if(text[head] == '\n') {
+                    head++;
+                    break;
+                }
+                head++;
+            }
+            log::out << log::GRAY << calc_location(text, directive_start, origin_path) << "\n";
+            log::out << log::RED << "error: " << log::NO_COLOR<< text.substr(err_start, head - err_start) << "\n";
             continue;
-        } else if(directive == "endif") {
-            // do nothing
+        } else if (directive == "warning") {
+            int err_start = head;
+            while(head < text.size()) {
+                if(text[head] == '\n') {
+                    head++;
+                    break;
+                }
+                head++;
+            }
+            log::out << log::GRAY << calc_location(text, directive_start, origin_path) << "\n";
+            log::out << log::GOLD << "warning: " << log::NO_COLOR<< text.substr(err_start, head - err_start) << "\n";
             continue;
         }
-
-        output_text += "#" + text.substr(directive_start, parsed_chars);
-
-        //  else if(!strncmp(text.c_str(), "if", parsed_chars)) {
-        //     // parse macro definition
-        //     Assert(false);
-        // } else if(!strncmp(text.c_str(), "ifdef", parsed_chars)) {
-        //     // parse macro definition
-        //     Assert(false);
-        // } else if(!strncmp(text.c_str(), "undef", parsed_chars)) {
-        //     // parse macro definition
-        //     Assert(false);
-        // } else if(!strncmp(text.c_str(), "pragma", parsed_chars)) {
-        //     // parse macro definition
-        //     Assert(false);
-        // }
-        // nocheckin Unknown directive
+        report_error(text, head, origin_path, "Unknown directive '"+directive+"'\n");
+        return "";
     }
     output_text += "// END include " + origin_path + "\n";
     return output_text;

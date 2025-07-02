@@ -1,4 +1,5 @@
 #include "BetBat/decl_gen.h"
+#include "BetBat/Compiler.h"
 
 #include "Engone/PlatformLayer.h"
 
@@ -9,11 +10,21 @@ std::string ToCTypeName(AST* ast, TypeId type) {
         case TYPE_UINT8: out = "unsigned char"; break;
         case TYPE_UINT16: out = "unsigned short"; break;
         case TYPE_UINT32: out = "unsigned int"; break;
-        case TYPE_UINT64: out = "unsigned long int"; break;
+        case TYPE_UINT64: {
+            if (ast->compiler->options->target == TARGET_WINDOWS_x64)
+                out = "unsigned long int";
+            else
+                out = "unsigned long long int";
+        } break;
         case TYPE_INT8: out = "char"; break;
         case TYPE_INT16: out = "short"; break;
         case TYPE_INT32: out = "int"; break;
-        case TYPE_INT64: out = "long int"; break;
+        case TYPE_INT64: {
+            if (ast->compiler->options->target == TARGET_WINDOWS_x64)
+                out = "long int";
+            else
+                out = "long long int";
+        } break;
         case TYPE_BOOL: out = "int"; break;
         // case TYPE_CHAR:
         case TYPE_FLOAT32: out = "float"; break;
@@ -140,6 +151,13 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
             log::out << log::YELLOW << "No funcimpl for "<<tinycode->name<<"\n";
             continue;
         }
+        if(tinycode->funcImpl->astFunction->export_alias.size() == 0) {
+            // All exported functions have an export_alias.
+            // If it doesn't then it's function pointer we half exported to see it as a symbol
+            // in objdump.
+            continue;
+        }
+
         Assert(tinycode->funcImpl->signature.polyArgs.size() == 0);
         
         // we add tinycodes to a list so we don't have to have duplicated filter out logic
@@ -238,11 +256,11 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                 // TODO: annotations
                 text_c += typeinfo->astEnum->name;
                 if(typeinfo->astEnum->typeId != TYPE_INT32 || typeinfo->astEnum->typeId != TYPE_UINT32) {
-                    text_btb += " {\n";
+                    text_c += " {\n";
                 } else {
                     // Enums are always int in C, C++ allows ": inttype"
                     // TODO: How we deal with it?
-                    text_btb += " : " + ToCTypeName(ast, typeinfo->astEnum->typeId) + " {\n";
+                    text_c += " : " + ToCTypeName(ast, typeinfo->astEnum->colonType) + " {\n";
                 }
             }
             
@@ -263,7 +281,7 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                 if(file_type & DECL_C) {
                     text_c += "    " + mem.name;
                     for(int j=0;j<max_name_len - mem.name.size();j++)
-                        text_btb += " ";
+                        text_c += " ";
                     text_c += " = " + std::to_string(mem.enumValue) + ",\n";
                 }
             }
@@ -387,6 +405,10 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
                     text_c += "#pragma pack(pop)\n";
             }
         }
+        if(file_type & DECL_BTB) {
+            text_btb += "\n";
+            text_c += "\n";
+        }
         // other types are primitives
     }
     
@@ -477,14 +499,19 @@ bool WriteDeclFiles(const std::string& lib_path, Bytecode* bytecode, AST* ast, b
             }
             arg_str += ")";
             
-            text_c += upper_raw_name + "_API ";
-            text_c += ret_str;
-            text_c += astfunc->export_alias;
-            text_c += arg_str + ";\n";
-            
-            if(astfunc->export_alias.size() != 0 && astfunc->export_alias != tinycode->name) {
+            if(astfunc->export_alias == tinycode->name) {
+                text_c += upper_raw_name + "_API ";
                 text_c += ret_str;
-                text_c += tinycode->name;
+                text_c += astfunc->name;
+                text_c += arg_str + ";\n";
+            } else {
+                text_c += upper_raw_name + "_API ";
+                text_c += ret_str;
+                text_c += astfunc->export_alias;
+                text_c += arg_str + ";\n";
+
+                text_c += "static inline " + ret_str;
+                text_c += astfunc->name;
                 text_c += arg_str;
                 text_c += " { ";
                 if(signature.returnTypes.size() == 1) {

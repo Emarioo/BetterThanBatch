@@ -244,7 +244,15 @@ bool CheckDeveloperCommand(const BaseArray<std::string>& args) {
         std::string in_path = args[1];
         std::string out_path = args[2];
         TranspileOptions options{};
-        std::string text = TranspileCFileToBTB(in_path, &options);
+        CompileOptions opts;
+        #ifdef OS_WINDOWS
+        opts.target = TARGET_WINDOWS_x64;
+        #elif OS_LINUX_x64
+        opts.target = TARGET_LINUX_x64;
+        #else
+        incomplete
+        #endif
+        std::string text = TranspileCFileToBTB(in_path, &options, &opts);
         
         auto file = FileOpen(out_path,FILE_CLEAR_AND_WRITE);
         FileWrite(file, text.c_str(), text.size());

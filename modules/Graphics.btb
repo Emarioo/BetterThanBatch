@@ -5,9 +5,9 @@
 */
 
 // only OpenGL for now
-#import "GLFW"
-#import "GLAD"
-#import "STB"
+#import "vendor/GLFW"
+#import "vendor/GLAD"
+#import "vendor/STB"
 // #import "GLEW"
 
 #import "Logger"

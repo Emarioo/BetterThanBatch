@@ -1,8 +1,8 @@
 **VERY EXPERIMENTAL FEATURE**
 
-When importing a C header, the function declarations in that file will be converted to BTB and available to you. This includes structs, enums, and typedefs.
+Importing C headers allows you to call functions and use structs and enums from those headers. Note that you will need to link with the library or object file that contains the implementation for the functions, otherwise you will get linker errors.
 
-You can find this example in `examples/cparser`.
+You can find an example in `examples/cparser`.
 ```c++
 // util.c
 int calculate(int x, int y) {
@@ -22,12 +22,14 @@ x: i32 = calculate(2, 7)
 log(x)
 ```
 
-The purpose of importing C headers in BTB is to eliminate the need to manually write bindings for C libraries. For example, by importing glfw3.h and glad.h, you gain access to all GLFW and OpenGL functions directly. While there are partial bindings in `modules/vendor` many functions are missing because writing complete bindings by hand is time-consuming.
+Linking is done by adding `#load "libs/glfw3-3.8.0/glfw3.lib"` to your source code (assuming you’ve placed the GLFW library in a libs folder).
 
-When importing a C header you still need to link against the corresponding library, just like in C. This is done by adding `#load "libs/glfw3-3.8.0/glfw3.lib"` to your source code (assuming you’ve placed the GLFW library in a libs folder). If you forget to link the library you’ll get linker errors, just as you would in a C project.
+The main purpose of importing C headers is to eliminate the need to manually write bindings for C libraries. For example, by importing glfw3.h and glad.h, you gain access to all GLFW and OpenGL functions directly. While there are partial bindings in `modules/vendor` many functions are missing because writing complete bindings by hand is time-consuming. We still have `modules/vendor` for when the BTB's C parser is buggy or can't handle certain headers for whatever reason.
 
 # Limitations (there's a ton)
 This feature is not guarranteed to work especially on different operating systems with different code styles in system headers. You will have to try importing a C header and if it doesn't work then it doesn't work. If it does then great.
+
+You can add the `--verbose` flag to get more information about how the C parsing is going. If the error message is confusing, the extra verbosity may give you a clue to what is wrong. You are welcome to report issues you find (github or discord).
 
 The goal is to support headers from most libraries: GLFW, GLAD, STB image, OpenXR, OpenAL, OpenSSL, and C standard headers. None of these work at the time of writing this (2025-06-07).
 
@@ -38,7 +40,7 @@ The goal is to support headers from most libraries: GLFW, GLAD, STB image, OpenX
 - We have problems handling includes in C headers
 - You cannot import defines
 
-Some of these problems will be fixed in due time but it may take many years depending on how important they are compared to everything else in the compiler.
+Some of these problems will be fixed in due time but it may take many months depending on how important they are compared to everything else in the compiler.
 
 # Implementation and details
 

@@ -10,18 +10,22 @@
 // #import "examples/sound/sample_wasapi.btb"
 // #import "bad.btb"
 
+// #import "examples/cparser/main.btb"
+// #import "stdlib.h"
+#import "./cparser/ga.h"
+
 
 
 // #import "Logger"
 // This test is here to catch compiler bugs.
 // Assert(id.isNormalType()) when calling ast->getTypeInfo
 
-struct Core {
-    y: i32[2];
-    x: i32*[2];
-}
-na := Core{{5,5},{null,null}}
-nas: void* = {null}
+// struct Core {
+//     y: i32[2];
+//     x: i32*[2];
+// }
+// na := Core{{5,5},{null,null}}
+// nas: void* = {null}
 
 // log(arr[0], ", ", arr[1], ", ", arr[2], ", ", arr[3], ", ", arr[4])
 

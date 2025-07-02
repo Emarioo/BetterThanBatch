@@ -2337,7 +2337,7 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
             TranspileOptions options{};
             for (const auto& p : importDirectories)
                 options.include_dirs.add(p.text);
-            new_text = TranspileCToBTB(text, &options, abs_path.text);
+            new_text = TranspileCToBTB(text, &options, abs_path.text, this->options);
             auto file = FileOpen(actual_path, FILE_CLEAR_AND_WRITE);
             if(!file) {
                 log::out << log::RED << "ERROR:"<<log::NO_COLOR<<" Could not save temporary converted C file '"<<log::GREEN<<actual_path<<log::NO_COLOR<<"'\n";

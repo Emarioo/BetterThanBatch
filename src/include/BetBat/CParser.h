@@ -26,22 +26,41 @@
 
 #include <string>
 #include "Engone/Util/Array.h"
+#include "BetBat/CompilerOptions.h"
 
 struct CMacro {
-    std::string name;
-    DynamicArray<std::string> parameters;
     std::string content;
-    bool no_params;
+    DynamicArray<std::string> parameters;
+    std::string origin_file;
+    int pos_in_file;
+    bool has_params;
 };
 struct TranspileOptions {
     DynamicArray<std::string> include_dirs;
+};
+struct IncludedFile {
+    std::string path;
+    bool pragma_once;
+};
+struct IfBlock {
+    bool skip; // whether to skip current text in the current if,elif,else selective block
+    bool in_else_block; // whether we have seen else, used to print error if we see a second one
+    bool has_enabled_block; // whether an if, elif block was enabled, if so the other elif sections should be skipped
 };
 struct CPreprocContext {
     // const std::string& text;
     // std::string output;
     TranspileOptions* options;
     std::unordered_map<std::string, CMacro> macros;
-    DynamicArray<std::string> included_files; // for pragma once
+    DynamicArray<IncludedFile> included_files;
+    std::unordered_map<std::string, DynamicArray<CMacro>> stacked_macros;
+
+    DynamicArray<IfBlock> if_blocks;
+    int current_pos = 0;
+
+    bool should_skip() const {
+        return if_blocks.size() != 0 && if_blocks.last().skip;
+    }
 };
 
 namespace clexer {
@@ -178,8 +197,8 @@ namespace clexer {
     };
 }
 
-std::string TranspileCToBTB(const std::string& in_text, TranspileOptions* options, const std::string& path);
+std::string TranspileCToBTB(const std::string& in_text, TranspileOptions* options, const std::string& path, CompileOptions* compile_options);
 
-std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options);
+std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options, CompileOptions* compile_options);
 
 std::string PreprocessText(CPreprocContext* context, const std::string& text, const std::string& origin_path);
