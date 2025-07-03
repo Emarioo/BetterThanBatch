@@ -2527,7 +2527,7 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std
     for(int i=0;i<(int)importDirectories.size();i++){
         const Path& dir = importDirectories[i];
         // Assert(dir.isDir() && dir.isAbsolute());
-        Assert(dir.isAbsolute());
+        // Assert(dir.isAbsolute());
         if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
             temp = dir.text + fullPath.text;
         else

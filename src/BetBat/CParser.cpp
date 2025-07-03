@@ -280,12 +280,11 @@ int parse_space(StringView text, int* head) {
 }
 int parse_name(StringView text, int* head, std::string* name) {
     Assert(head);
-    Assert(name);
     int start = *head;
     while(*head < text.len) {
         char c = text.ptr[*head];
         if (!( 
-            ((c|32) >= 'a' && (c|32) <= 'z') ||
+            (((c|32) >= 'a' && (c|32) <= 'z')) ||
             (c == '_') ||
             (start != *head && c >= '0' && c <= '9')
             )) {
@@ -293,7 +292,9 @@ int parse_name(StringView text, int* head, std::string* name) {
         }
         *head += 1;
     }
-    *name = std::string(text.ptr + start, *head - start);
+    if(name) {
+        *name = std::string(text.ptr + start, *head - start);
+    }
     return *head - start;
 }
 int parse_string(StringView text, int* head, std::string* name) {
@@ -427,7 +428,7 @@ std::string calc_location(const std::string& text, int pos, const std::string& p
     return path + ":" + std::to_string(line) + ":" + std::to_string(column);
 }
 
-void expand_macros(CPreprocContext* context, std::string& text, const std::string& origin_path, CMacro* parent = nullptr, DynamicArray<std::string>* parent_args = nullptr, DynamicArray<std::string>* parent_raw_args = nullptr) {
+void expand_macros(CPreprocContext* context, std::string& text, const std::string& origin_path, bool inside_expression, CMacro* parent = nullptr, DynamicArray<std::string>* parent_args = nullptr, DynamicArray<std::string>* parent_raw_args = nullptr) {
     int head = 0;
     while(head < text.size()) {
         if(text[head] == '#' && head+1 < text.size() && text[head+1] == '#') {
@@ -477,6 +478,29 @@ void expand_macros(CPreprocContext* context, std::string& text, const std::strin
         int macro_end = head;
         CMacro* macro = nullptr;
         if (parsed) {
+            if(macro_name == "defined" && inside_expression) {
+                parse_space(text, &head);
+
+                int parsed = parse_name(text, &head, nullptr);
+                if(!parsed) {
+                    Assert(text[head] == '(');
+                    head++;
+                    int depth = 1;
+                    while(head < text.size()) {
+                        if(text[head] == '(') {
+                            depth++;
+                        } else if (text[head] == ')') {
+                            depth--;
+                            if(depth == 0) {
+                                head++;
+                                break;
+                            }
+                        }
+                        head++;
+                    }
+                    continue;
+                }
+            }
             if(parent) {
                 int argi = 0;
                 for(;argi < parent->parameters.size(); argi++) {
@@ -552,11 +576,11 @@ void expand_macros(CPreprocContext* context, std::string& text, const std::strin
         raw_arguments.resize(arguments.size());
         for(int i=0;i<raw_arguments.size();i++) {
             raw_arguments[i] = arguments[i];
-            expand_macros(context,  arguments[i], origin_path, parent, parent_args, parent_raw_args);
+            expand_macros(context,  arguments[i], origin_path, inside_expression, parent, parent_args, parent_raw_args);
         }
 
         std::string macro_body = macro->content;
-        expand_macros(context, macro_body, macro->origin_file, macro, &arguments, &raw_arguments);
+        expand_macros(context, macro_body, macro->origin_file, inside_expression, macro, &arguments, &raw_arguments);
         
         int prev_len = text.size();
         text = text.substr(0, macro_start) + macro_body + text.substr(macro_end);
@@ -592,6 +616,8 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
 
     const int OP_AND           = '&' | ('&'<<8);
     const int OP_OR            = '|' | ('|'<<8);
+    const int OP_SHL           = '<' | ('<'<<8);
+    const int OP_SHR           = '>' | ('>'<<8);
     const int OP_EQUAL         = '=' | ('='<<8);
     const int OP_NOT_EQUAL     = '!' | ('='<<8);
     const int OP_LESS_EQUAL    = '<' | ('='<<8);
@@ -600,23 +626,33 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
     auto precedence = [&](int kind) {
         switch(kind) {
             case OP_OR:
-                return -1;
+                return -2;
             case OP_AND:
-                return 0;
+                return -1;
+            case '|':
+                return 2;
+            case '^':
+                return 3;
+            case '&':
+                return 4;
             case OP_EQUAL:
             case OP_NOT_EQUAL:
+                return 5;
             case OP_LESS_EQUAL:
             case OP_GREATER_EQUAL:
             case '<':
             case '>':
-                return 1;
+                return 6;
+            case OP_SHL:
+            case OP_SHR:
+                return 7;
             case '+':
             case '-':
-                return 2;
+                return 10;
             case '*':
             case '/':
             case '%':
-                return 3;
+                return 20;
         }
         Assert(false);
         return -1;
@@ -626,13 +662,17 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
     bool expect_primary = true;
     while (true) {
         parse_space(text, head);
-        char c = 0, c2 = 0;
+        char c = 0, c2 = 0, c3 = 0;
         if (*head < text.size())
             c = text[*head];
         if(*head+1 < text.size())
             c2 = text[*head + 1];
+        if(*head+2 < text.size())
+            c3 = text[*head + 2];
 
-        if (c == '\\' && c2 == '\n') {
+        if (c == '\\' && (c2 == '\n' || (c2 == '\r' && c3 == '\n'))) {
+            if(c2 == '\r')
+                *head += 1;
             *head += 2;
             continue;
         }
@@ -661,7 +701,6 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
             } else if (c == '(') {
                 *head += 1;
                 int value = eval_expression(context, text, head, origin_path, expression_start);
-                int parsed = parse_int(text, head, &value);
                 values.add({value});
                 if(text[*head] != ')') {
                     report_error(text, expression_start + *head, origin_path, "Expected closing parenthesis ')'");
@@ -723,7 +762,7 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
                             }
                         }
                         std::string macro_text = text.substr(macro_start, *head - macro_start);
-                        expand_macros(context, macro_text, origin_path);
+                        expand_macros(context, macro_text, origin_path, true);
                         text = text.substr(0, macro_start) + macro_text + text.substr(*head);
                         *head = macro_start;
                         continue;
@@ -775,9 +814,21 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
             } else if(c == '>' && c2 == '=') {
                 *head += 1;
                 ops.add({c, c2});
+            } else if(c == '<' && c2 == '<') {
+                *head += 1;
+                ops.add({c, c2});
+            } else if(c == '>' && c2 == '>') {
+                *head += 1;
+                ops.add({c, c2});
             } else if(c == '>') {
                 ops.add({c});
             } else if(c == '<') {
+                ops.add({c});
+            } else if(c == '&') {
+                ops.add({c});
+            } else if(c == '|') {
+                ops.add({c});
+            } else if(c == '^') {
                 ops.add({c});
             } else {
                 *head -= 1;
@@ -823,11 +874,16 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
                 case OP_GREATER_EQUAL: value = val0 >= val1; break;
                 case '<': value = val0 < val1; break;
                 case '>': value = val0 > val1; break;
+                case OP_SHL: value = val0 << val1; break;
+                case OP_SHR: value = val0 >> val1; break;
                 case '+': value = val0 + val1; break;
                 case '-': value = val0 - val1; break;
                 case '*': value = val0 * val1; break;
                 case '/': value = val0 / val1; break;
                 case '%': value = val0 % val1; break;
+                case '&': value = val0 & val1; break;
+                case '|': value = val0 | val1; break;
+                case '^': value = val0 ^ val1; break;
                 default: Assert(false);
             }
             values.last() = {value};
@@ -972,7 +1028,7 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
                     }
                     std::string macro_text = text.substr(macro_start, head - macro_start);
                     context->current_pos = macro_start;
-                    expand_macros(context, macro_text, origin_path);
+                    expand_macros(context, macro_text, origin_path, false);
                     output_text += macro_text;
                     continue;
                 }
@@ -993,6 +1049,7 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             continue;
         }
         if(parsed_chars == 0) {
+            // parsed_chars = parse_name(text, &head, &directive);
             report_error(text, head, origin_path, "Expected directive name after #");
             return "";
         }
@@ -1013,7 +1070,9 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             } else if (directive == "if" || directive == "elif") {
                 int expr_start = head;
                 while(head < text.size()) {
-                    if(text[head] == '\\' && head+1 < text.size() && text[head+1] == '\n') {
+                    if(text[head] == '\\' && ((head+1 < text.size() && text[head+1] == '\n') || (head+2 < text.size() && text[head+1] == '\r' &&  text[head+2] == '\n'))) {
+                        if(text[head+1] == '\r')
+                            head++;
                         head+=1;
                     } else if(text[head] == '\n') {
                         head+=1;
@@ -1186,7 +1245,7 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             CPARSER_VERBOSE(
             log::out << log::AQUA<<"Include " << log::NO_COLOR<<path << "\n";
             )
-        std::string found_path="";
+            std::string found_path="";
             for(int i=0;i<context->options->include_dirs.size();i++) {
                 std::string real_path = context->options->include_dirs[i] + "/" + path;
                 if (FileExist(real_path)) {
@@ -1197,7 +1256,7 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             }
             if (found_path.size() == 0) {
                 // nocheckin File not found error
-                log::out << "File not found " << found_path << "\n";
+                log::out << "File not found " << path << "\n";
                 continue;
             }
             bool found = false;

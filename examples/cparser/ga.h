@@ -1,11 +1,53 @@
 
 
-// __declspec(WAAA)
 
-Def this dude? __cdecl
-Def this dude? __stdcall
-Def this dude? __fadadstcall
+#include "libs/glfw-3.3.9/include/GLFW/glfw3.h"
+// #include "libs/glad/include/glad/glad.h"
 
+
+// #define OSVERSION_MASK      0xFFFF0000
+
+// #define NTDDI_VERSION    0x0A00
+
+// #define OSVER(Version)  ((Version) & OSVERSION_MASK)
+
+// ((OSVER(NTDDI_VERSION) == NTDDI_WIN2K) && (_WIN32_WINNT != _WIN32_WINNT_WIN2K))
+
+// #if ((OSVER(NTDDI_VERSION) == NTDDI_WIN2K) && (_WIN32_WINNT != _WIN32_WINNT_WIN2K))
+// YES
+// #endif
+
+// #define HELLO
+
+// #define MAC 1 + defined(HELLO) + 2
+
+
+// MAC
+
+// #if MAC == 4
+// yes
+// #endif
+
+// #if defined(GLFW_INCLUDE_GLU)
+// x
+// #elif !defined(GLFW_INCLUDE_NONE) && \
+//       !defined(__gl_h_) && \
+//       !defined(__gles1_gl_h_) && \
+//       !defined(__gles2_gl2_h_) && \
+//       !defined(__gles2_gl3_h_) && \
+//       !defined(__gles2_gl31_h_) && \
+//       !defined(__gles2_gl32_h_) && \
+//       !defined(__gl_glcorearb_h_) && \
+//       !defined(__gl2_h_) /*legacy*/ && \
+//       !defined(__gl3_h_) /*legacy*/ && \
+//       !defined(__gl31_h_) /*legacy*/ && \
+//       !defined(__gl32_h_) /*legacy*/ && \
+//       !defined(__glcorearb_h_) /*legacy*/ && \
+//       !defined(__GL_H__) /*non-standard*/ && \
+//       !defined(__gltypes_h_) /*non-standard*/ && \
+//       !defined(__glee_h_) /*non-standard*/
+// eaedad
+//       #endif
 // #include "stdlib.h"
 /* C/C++ specific language defines.  */
 // #ifndef __GNUC__

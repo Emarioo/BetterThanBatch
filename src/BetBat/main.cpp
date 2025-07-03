@@ -61,6 +61,8 @@ int main(int argc, const char** argv){
     CompileOptions options{};
     bool valid = InterpretArguments(arguments, &options);
 
+    options.importDirectories.add("."); // nocheckin TEMPORARY
+
     int exit_code = EXIT_CODE_SUCCESS;
 
     if(!valid)

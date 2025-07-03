@@ -122,7 +122,7 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
 // | LOG_PREPROCESSOR
         } else if (arg == "--profiling") {
             options->show_profiling = true;
-        } else if (arg == "-idr"||arg=="--import-dir") {
+        } else if (arg == "-I"||arg=="--import-dir") {
             i++;
             if(i<commands.size()) {
                 options->importDirectories.add(commands[i]);

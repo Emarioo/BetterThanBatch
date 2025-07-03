@@ -31,7 +31,7 @@ struct StringView {
     }
 
     const char* ptr=nullptr;
-    u16 len=0;
+    int len=0;
     bool equals(const char* str) const {
         int slen = strlen(str);
         if(len!=slen) return false;
