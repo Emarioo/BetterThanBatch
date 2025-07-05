@@ -209,23 +209,36 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } else {
             // log::out << "VM lib "<< path<<"\n";
             // if static library was specified, try to replace file extension with dynamic library.
-            int slash = path.find_last_of("/");
-            int dot = path.substr(slash == -1 ? 0 : slash).find(".");
-            if (dot != -1 && slash != -1)
-                dot += slash;
+            int slash = path.find_last_of("/") + 1;
+            int dot = path.find_last_of(".");
             // TODO: check out of bounds
-            std::string alt_path = path;
-            if(path.substr(dot+1) == "a") {
-                alt_path = path.substr(0, dot);
+            std::string alt_path = "";
+            if(path.substr(dot+1) == "a" && path.substr(slash,3) == "lib") {
+                alt_path = path.substr(0, slash) + path.substr(slash+3, dot-slash-3);
                 alt_path += ".so";
+                if (!FileExist(alt_path)) {
+                    alt_path =path.substr(0, slash) + path.substr(slash+3, dot-slash-3);
+                    alt_path += ".dll";
+                    if (!FileExist(alt_path)) {
+                        any_failure = true;
+                        log::out << log::RED << "VM ERROR:"<<log::NO_COLOR<<" Cannot load static library "<<log::LIME<<path<<log::NO_COLOR<<" in VM, tried but couldn't load "<<log::LIME<<alt_path<<log::NO_COLOR<<" instead. (when calling "<<tinycode_name<<")\n";
+                        continue;
+                    }
+                }
             } else if(path.substr(dot+1) == "lib") { 
                 alt_path = path.substr(0, dot);
                 alt_path += ".dll";
+                if (!FileExist(alt_path) && slash != 0) { // On windows we may load Kernel32.lib, we convert to Kernel32.dll, It doesn't exist as a file we can find but we can still load it so we don't cause error.
+                    any_failure = true;
+                    log::out << log::RED << "VM ERROR:"<<log::NO_COLOR<<" Cannot load static library "<<log::LIME<<path<<log::NO_COLOR<<" in VM, tried but couldn't load "<<log::LIME<<alt_path<<log::NO_COLOR<<" instead. (when calling "<<tinycode_name<<")\n";
+                    continue;
+                }
             }
+
             pair_lib.second->dll = LoadDynamicLibrary(alt_path, false);
             if(!pair_lib.second->dll) {
                 any_failure = true;
-                log::out << log::RED << "Could not load library "<<path<<"\n";
+                log::out << log::RED << "VM ERROR:"<<log::NO_COLOR<<" Could not load library "<<log::LIME<<path<<log::NO_COLOR<<", calling "<<tinycode_name<<"\n";
                 continue;
             } else {
                 // log::out << log::LIME << "Load '"<<alt_path<<"'\n";

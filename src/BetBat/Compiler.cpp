@@ -1944,6 +1944,7 @@ void Compiler::run(CompileOptions* options) {
             //   For system libraries -lKernel32 should be used.
             //   For relative user libraries libs/glad/glad.dll should be used, no -L or -l.
             //   How does /load indicate this though?
+            //   -rpath=$ORIGIN or something?
 
             DynamicArray<std::string> dynamic_libs{};
             for(auto& path : program->libraries) {

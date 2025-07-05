@@ -7,7 +7,7 @@ bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* 
     using namespace engone;
     if (commands.size() == 0) {
         print_version();
-        log::out << log::GOLD << "The compiler suggests 'btb.exe -help'.\n";
+        log::out << log::GOLD << "The compiler suggests 'btb.exe --help'.\n";
         // print_help();
         options->quit = true;
         return true;

@@ -2823,18 +2823,18 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         ScopeId scopeId = currentScopeId;
         ASTExpression* expression = base_expression;
 
-        CALLBACK_ON_ASSERT(
-        // @nocheckin add this back
-        //     ERR_SECTION(
-        //         ERR_HEAD2(expression->location)
-        //         ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
-        //         for(int i=0;i<vm.call_stack.size();i++) {
-        //             log::out << " " << vm.call_stack[i].func->name << "\n";
-        //         }
-        //         // TODO: Call stack
-        //         ERR_LINE2(expression->location, "here")
-        //     )
-        )
+        // CALLBACK_ON_ASSERT(
+        // // @nocheckin add this back
+        // //     ERR_SECTION(
+        // //         ERR_HEAD2(expression->location)
+        // //         ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+        // //         for(int i=0;i<vm.call_stack.size();i++) {
+        // //             log::out << " " << vm.call_stack[i].func->name << "\n";
+        // //         }
+        // //         // TODO: Call stack
+        // //         ERR_LINE2(expression->location, "here")
+        // //     )
+        // )
 
         // TODO: Code below should be the same as the one in generateFunction.
         //   If we change the code in generateFunction but forget to here then
@@ -8046,18 +8046,18 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
     ASTStatement* statement = run_directive->statement;
     lexer::SourceLocation location = statement->location;
 
-    CALLBACK_ON_ASSERT(
-        // @nocheckin add back
-        // ERR_SECTION(
-        //     ERR_HEAD2(location)
-        //     ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
-        //     for(int i=0;i<vm.call_stack.size();i++) {
-        //         log::out << " " << vm.call_stack[i].func->name << "\n";
-        //     }
-        //     // TODO: Call stack
-        //     ERR_LINE2(location, "here")
-        // )
-    )
+    // CALLBACK_ON_ASSERT(
+    //     // @nocheckin add back
+    //     // ERR_SECTION(
+    //     //     ERR_HEAD2(location)
+    //     //     ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+    //     //     for(int i=0;i<vm.call_stack.size();i++) {
+    //     //         log::out << " " << vm.call_stack[i].func->name << "\n";
+    //     //     }
+    //     //     // TODO: Call stack
+    //     //     ERR_LINE2(location, "here")
+    //     // )
+    // )
 
     // TODO: Code below should be the same as the one in generateFunction.
     //   If we change the code in generateFunction but forget to here then

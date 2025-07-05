@@ -37,7 +37,7 @@ Most modules in the standard library work for Windows and Linux.
 - **Graphics** - Function to create a window, draw rectangles, text and images. This works on Linux and Windows. GLAD, GLFW, stb_image is used.
 ![](/docs/img/game_blobs_0.png)
 
-### Library bindings
+### Library bindings (/modules/vendor)
 These are some modules with bindings for popular libraries. They provide common functions but you may need to declare some functions yourself.
 - **OpenSSL** - Encryption
 - **GLAD** - Bindings for OpenGL
@@ -47,6 +47,8 @@ These are some modules with bindings for popular libraries. They provide common 
 - **Linux**
 
 You are more than welcome to contribute your own bindings!
+
+There is an **experimental** C import feature which you can try. It allows you to include functions from C headers, such as `#import "GLFW/glfw3.h"`.
 
 ## Other useful features
 
@@ -70,19 +72,25 @@ Lastly, if you are using vscode then install the BTB Language extension [btb-lan
 
 **Requirements**: Python 3.9+, GCC/Clang/MSVC
 
-The project is written in C++ and uses a python script (`build.py`) to build the compiler. Once compiled, the executable can be found in `bin/btb.exe`. I recommend editing the environment variable `PATH` so that you have access to `btb.exe` from anywhere.
+The project is written in C++ and does not require any libraries. `build.py` is used when building the compiler. Once compiled, the executable can be found in `bin/btb.exe`. I recommend editing the environment variable `PATH` so that you have access to `btb.exe` from anywhere.
 
-Begin by cloning the repository then follow the instructions based on your operating system. If you're on macOS then you're out of luck. (if you want to be the one implementing macOS support then join the discord and let's have a chat: https://discord.gg/gVzQhm9pwH).
+
+Begin by cloning the repository then follow the instructions based on your operating system. We support `Linux` and `Windows` so if you're on macOS then you're out of luck (compiler doesn't support the Mach-O object file format). If you want to help implement macOS support then join the discord and let's have a chat: https://discord.gg/gVzQhm9pwH.
 ```
 git clone https://github.com/Emarioo/BetterThanBatch
 ```
 
+You can find more build information here [docs/building.md](/docs/building.md).
+
+While the BTB Compiler doesn't *require* any libraries, you can use [Tracy Profiler](https://github.com/wolfpld/tracy) to profile it. The project also contains libraries such as [GLFW](https://www.glfw.org/), [stb_image](https://github.com/nothings/stb), and [Glad](https://glad.dav1d.de/) which are distributed with the compiler.
+
 ## Linux
-1. Install `g++` or `clang++`:
+1. Install `python3` and `g++` or `clang++`:
 ```bash
 # on Ubuntu
+sudo apt install python3
+sudo apt install clang++
 sudo apt install g++
-sudo apt install clang
 ```
 
 2. Run the build script:
@@ -94,47 +102,15 @@ python3 build.py clang
 ```
 
 ## Windows
-1. Install one of these toolchains: Visual Studio, GCC, Clang.
-2. Run the build script:
+1. Install Python
+2. Install one of these toolchains: Visual Studio, GCC, or Clang.
+3. Run the build script:
 ```bash
 python build.py
 
-# msvc is default, you can change toolchain like this:
-python build.py gcc
+# gcc is default, you can change toolchain like this:
+python build.py msvc
 ```
-
-A full rebuild can take 7-12 seconds with MSVC, 25-50 seconds with gcc or clang. If you modify .cpp files then about 1-3 seconds.
-
-### Installing/using MSVC
-1. Install Visual Studio and select `C/C++ desktop development` in the Visual Studio Installer.
-2. Navigate to the cloned repository and run `python build.py`.
-
-If that didn't work and you get a message like this: "MSVC could not be configured". Then the automatic setup of temporary environment variables for MSVC failed.
-
-To setup the environment you can hit the windows key and search for `VS Developer Command Prompt`. This will open up a terminal where `cl` and `link` are available. Navigate to the cloned repo folder and run `python build.py`.
-
-If you have Visual Studio Code then you can type `code` in the *VS Developer* terminal. From there you can `Open Folder` and choose the cloned repo folder. Then in VSCode `Create New Terminal` and `cl` should be available. Now run `python build.py`.
-
-If you want MSVC on the command line (without starting the *VS Developer* terminal) then run a command similar to this: `"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat"`. The path may be different if you installed Visual Studio elsewhere or if you have a different version. You can add the path to the environment variable PATH which allows you to just type `vcvars64.bat`.
-<!-- This needs more explaination.
-- (manually adding environment variables from vcvars64) If you are tired of *VS Developer* and *vcvars64.bat* then you can check the content and which environment paths you have before running vcvars64.bat and compare them with the ones you have after running vcvars64.bat. Then you add the missing content to environment variables permanently.
--->
-
-**NOTE:** When using the compiler you also need to setup the environment variables. The compiler will try to do it automatically but may fail if you are using an older version of Visual Studio or if you changed the default install location.
-
-### Installing GCC
-Look for a tutorial on the internet. This link may be helpful: https://sourceforge.net/projects/mingw/files/Installer/
-
-### Installing clang
-Look for a tutorial on the internet. 
-
-## Other build information
-If you want to compile with debug information, tracy profiler or optimizations then you can toggle these options inside `build.py`. You can also pass them as arguments to the script like this: `python build.py use_debug use_optimizations use_tracy`.
-
-You can change the path of the executable like this: `python build.py output=bin/release/btb.exe`.
-All object files will still end up in `bin`, this cannot be changed at the moment.
-
-The `main` branch is always well tested and works on Linux and Windows all the time. The `dev` branch contains the latest commits where I may have broken something.
 
 # Join the community
 If you find the compiler and language interesting and want to chat about it or have questions or problems getting started then feel free to join our discord: https://discord.gg/gVzQhm9pwH
@@ -149,7 +125,7 @@ Reads files and counts newlines using multiple threads: [Line counter](/examples
 
 <!-- (incomplete) Parses and read binary file formats: [Binary viewer](/examples/binary_viewer/main.btb) -->
 
-## Licensing
+## Licensing of BTB Compiler source code
 
 This repository contains two separately licensed components:
 
@@ -165,9 +141,12 @@ Commercial use is allowed, but proprietary forks or closed-source redistribution
 See [LICENSE](./LICENSE) for the full terms of the GPL.
 
 ### Standard Library (in `/modules`)
-The standard library is released under the [MIT License](./modules/LICENSE). You are free to use, modify, and include this library in **commercial and non-commercial projects**. Do whatever you want with it.
+The standard library is released under the [MIT License](./modules/LICENSE). You are free to use, modify, and include this library in commercial projects. Do whatever you want with it.
 
-Other folders like `/docs`, `/tests`, and `/btb-lang` (vscode syntax highlighting) are also free to use in any way you want.
+### Everything else
+Other folders like `/docs`, `/examples`, `/tests`, and `/btb-lang` (vscode syntax highlighting) are free to use in any way you want.
+
+Content under `libs` is not owned by me.
 
 # A personal note on the present and the future
 The compiler is work in progress and bugs in the code generation do occur which are really hard to catch. If you do encounter strange behaviour and are about to pull out your hair then don't hesitate to ask for help on the discord. I (Emarioo) am happy to help.

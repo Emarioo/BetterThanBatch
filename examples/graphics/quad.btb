@@ -6,8 +6,8 @@
         https://www.glfw.org/documentation.html
 */
 
-#import "GLAD"
-#import "GLFW"
+#import "vendor/GLAD"
+#import "vendor/GLFW"
 #import "Logger"
 #import "OS"
 

@@ -1,194 +1,447 @@
 #!/usr/bin/python3
 
 ### What is this ###
-# This is the new build system that replaces makefiles and most of build.bat and build.sh.
+# This is the new build system that replaces makefiles, build.bat and build.sh.
 # Build the project with: python build.py
 # For extra options: python build.py msvc use_debug use_optimizations
 # Run this if you have linking problems: python build.py clean
 #   the system may not have recognized a file as changed
 #   if you change compile options then you must run clean (we will automatically detect this later)
 
-import glob, os, sys, time, platform, threading, shutil, multiprocessing
+import glob, os, sys, time, platform, threading, shutil, multiprocessing, subprocess, dataclasses, shlex
 
-global global_config
-global_config = {}
-def enabled(what):
-    global global_config
-    return what in global_config and global_config[what]
+@dataclasses.dataclass
+class BuildConfig:
+    toolchain: str = "gcc"
+    debug: bool = True
+    optimize: bool = False
+    tracy: bool = False
+    int_dir: str = "bin/int"
+    build_steps: list[str] = dataclasses.field(default_factory=list) # TODO: 
+
+    # extra options, does not affect the binary
+    exe_output: str = "bin/btb"
+    threads: int = multiprocessing.cpu_count()
+    verbose: bool = False
+    silent: bool = False
+
+    # methods
+    def get_state(self):
+        config = f'''
+        toolchain {self.toolchain}
+        debug {self.debug}
+        optimize {self.optimize}
+        tracy {self.tracy}
+        int_dir {self.int_dir}
+        '''
+        config = "\n".join([l.strip() for l in config.split("\n") if len(l) > 0]) + "\n" # remove trailing whitespace on lines
+        
+        # TODO: Include build steps in state. We aren't currently
+        #   because of threading and incremental compilation.
+        config += "build_steps\n"
+        for step in self.build_steps:
+            config += f"  {step}\n"
+        return config
+
+    def save(self, path: str):
+        config = self.get_state()
+
+        # default should be config_path = f"{self.int_dir}/last_build.config"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(config)
+
+    def has_config_changed(self, path: str):
+        cur_config = self.get_state()
+        try:
+            with open(path, "r") as f:
+                file_config = f.read()
+        except FileNotFoundError as ex:
+            return True
+
+        return cur_config != file_config
 
 # main is called at the bottom
-def main():
-    min_ver = (3,9)
-    if sys.version_info < min_ver:
-        print("WARNING in build.py: Script is tested with "+str(min_ver[0])+"."+str(min_ver[1])+", earlier python versions ("+str(sys.version_info[0])+"."+str(sys.version_info[1])+") may not work.")
+def main(arguments: list[str]):
+    # build.py               - default btb dev build (with debug info)
+    # build.py release 0.1.2 - build and bundle a btb release (no debug, with optimizations)
+    # build.py clean         - remove intermediate files
+    # build.py clean build   - clean and build
 
-    config = {}
-    global global_config
-    global_config = config
-    #####################
-    #   CONFIGURATIONS
-    #     Comment/uncomment the options you want
-    #     'build.py clean' if you change the options
-    #####################
+    action_clean = False
+    action_release = False
+    action_vendor = True
+    action_build = True
+    action_create_wrapper = False
+    _had_explicit_build = False
+    _had_explicit_output = False
 
-    config["bin_dir"] = "bin"
-    if platform.system() == "Windows":
-        config["output"] = "bin/btb.exe"
-    else:
-        config["output"] = "bin/btb"
+    release_version = ""
 
-    config["use_compiler"] = "gcc"
-    # config["use_compiler"] = "msvc"
-    # config["use_compiler"] = "clang"
+    # Parse arguments
+    config = BuildConfig()
+    argi = 0
+    while argi < len(arguments):
+        arg = arguments[argi]
+        argi+=1
 
-    config["use_debug"] = True
-    # config["use_tracy"] = True
-    # config["use_optimizations"] = True
-    # config["run_when_finished"] = True
-
-    # config["log_sources"] = True
-    # config["log_objects"] = True
-    # config["log_compilation"] = True
-    # config["verbose"] = True
-    # config["log_cmds"] = True
-    # config["silent"] = True # TODO: Fix
-    config["build_times"] = True
-    config["exclude_src"] = ["PDB.cpp", "Fuzzer.cpp", "UserProfile.cpp"]
-
-    # config["use_opengl"] = True # rarely used
-    # config["thread_count"] = 8
-    config["thread_count"] = multiprocessing.cpu_count()
-    yes = True
-    if not enabled("run"):
-        yes = compile(config)
-    
-    # print(config)
-
-    if not yes:
-        print("Compile failed")
-    elif os.path.exists(config["output"]) and not enabled("run"):
-        filename = os.path.basename(config["output"])
-        try:
-            shutil.copy(config["output"], filename)
-        except PermissionError as ex:
-            print("CANNOT copy",config["output"],"->",filename)
-
-    if yes and os.path.exists(config["output"]) and (enabled("run_when_finished") or enabled("run")):
-        # cmd("bin/btb -dev")
-        cmd("./"+config["output"]+" -dev")
-        cmd("objdump bin/main.o -W > out0.txt")
-
-        # cmd("bin/btb --test")
-        
-        # err = cmd("bin/btb examples/graphics/chat")
-
-        # if err == 0:
-        #     cmd("start main server")
-        #     cmd("timeout 1")
-        #     cmd("start main ")
-
-        # err = cmd("bin/btb examples/graphics/game")
-        
-        # if err == 0:
-        #     cmd("start test")
-        #     cmd("timeout 1")
-        #     cmd("start test client")
-
-
-    sys.exit(0 if yes else 1)
-
-def compile(config):
-    global global_config
-    ###################################
-    #   Validate and fix config
-    ###################################
-
-    start_build_time = time.time()
-
-    if len(sys.argv) > 1:
-        # clean config, use settings from command line instead of those specified above
-        # YO! this is strange, perhaps skip it completly?
-        #new_config = {}
-        #new_config["output"] = config["output"]
-        #new_config["use_compiler"] = config["use_compiler"]
-        #new_config["thread_count"] = config["thread_count"]
-        #config = new_config
-        global_config = config
-
-    do_clean = False
-    
-    # parse command line arguments
-    for i in range(1,len(sys.argv)):
-        arg = sys.argv[i]
-        # print(i, arg)
         index_of_equal = arg.find("=")
-        if index_of_equal != -1:
+        if index_of_equal == -1:
+            if arg == "gcc" or arg == "msvc" or arg == "clang":
+                config.toolchain = arg
+            elif arg == "debug":
+                config.debug = True
+            elif arg == "optimize":
+                config.optimize = True
+            elif arg == "tracy":
+                config.tracy = True
+            elif arg == "clean":
+                action_clean = True
+                if not _had_explicit_build:
+                    action_build = False
+            elif arg == "build":
+                action_build = True
+                _had_explicit_build = True
+            elif arg == "release":
+                if argi >= len(arguments):
+                    print(f"Expected version after {arg}")
+                    exit(1)
+                action_release = True
+                action_build = False
+                release_version = arguments[argi]
+                argi += 1
+            elif arg == 'verbose':
+                config.verbose = True
+            elif arg == 'silent':
+                config.silent = True
+            elif arg == "wrap":
+                action_create_wrapper = True
+            else:
+                print(f"Unknown argument '{arg}'")
+        else:
             key = arg[0:index_of_equal].strip()
             val = arg[index_of_equal+1:].strip() # NOTE: We may not want to remove whitespace from value
             
-            if val == "False" or val == "false":
-                val = False
-            elif val == "True" or val == "true":
-                val = True
+            if key == "toolchain":
+                if val != "gcc" or val != "msvc" or val != "clang":
+                    print(f"Argument '{val}' is not a supported toolchain.\nUse one of these: gcc, msvc, clang")
+                    exit(1)
+                config.toolchain = val
+            elif key == "debug":
+                assert val.lower() == "true" or val.lower() == "false"
+                if val.lower() == "true":
+                    config.debug = True
+                elif val.lower() == "false":
+                    config.debug = False
+                else:
+                    print(f"Value to argument '{key}' should be 'true' or 'false'. Not '{val}'.")
+                    exit(1)
+            elif key == "optimize":
+                assert val.lower() == "true" or val.lower() == "false"
+                if val.lower() == "true":
+                    config.optimize = True
+                elif val.lower() == "false":
+                    config.optimize = False
+                else:
+                    print(f"Value to argument '{key}' should be 'true' or 'false'. Not '{val}'.")
+                    exit(1)
+            elif key == "tracy":
+                assert val.lower() == "true" or val.lower() == "false"
+                if val.lower() == "true":
+                    config.tracy = True
+                elif val.lower() == "false":
+                    config.tracy = False
+                else:
+                    print(f"Value to argument '{key}' should be 'true' or 'false'. Not '{val}'.")
+                    exit(1)
+            elif key == "output":
+                config.exe_output = val
+                _had_explicit_output = True
+            elif key == "threads":
+                config.threads = int(val)
             else:
-                try:
-                    val = int(val)
-                except ValueError:
-                    pass
-            config[key] = val
-        elif arg == "gcc" or arg == "msvc" or arg == "clang":
-            config["use_compiler"] = arg
-        elif arg == "clean":
-            do_clean = True
-        else:
-            config[arg] = True
-            # this allows use to write
-            #   py build.py use_tracy
-            # instead of
-            #   py build.py use_tracy=true
+                print(f"Unknown argument key '{arg}'")
 
-    if do_clean:
-        counter = 0
-        counter += remove_files(config["bin_dir"] + "/*")
-        counter += remove_files("libs/stb/lib-*")
-        counter += remove_files("libs/glad/lib-*")
-        
-        print("Removed " + str(counter) + " files in bin")
-        return True
-        
-    # TODO: How do we check that cl exists, cmd("cl") will print compiler version information if it does exist. Piping it won't get us the exit code we want.
-    # if config["use_compiler"] == "msvc":
-    #     if 0 != cmd("cl /nologo 2> nul > nul"): # cl isn't available, use gcc instead
-    #         print("NOTE: Using gcc instead of msvc because 'cl' compiler isn't available.")
-    #         config["use_compiler"] = "gcc"
-    #         # TODO: Find and run vcvars64.bat
-    if config["use_compiler"] == "msvc" and platform.system() == "Linux":
-        config["use_compiler"] = "gcc"
+    if action_release and action_build:
+        print("Cannot 'release' and 'build' at the same time.")
+        exit(1)
 
-    if config["use_compiler"] == "msvc":
-        # Check if MSVC is configured
-        if not is_msvc_configured():
-            if configure_msvc_toolchain(enabled("verbose")):
-                print("MSVC toolchain configured automatically.")
+    # Perform build, release, clean actions
+
+    if action_clean:
+        shutil.rmtree("bin")
+        # TODO: Remove libraries in libs
+
+    if action_create_wrapper:
+        try_create_btb_wrapper()
+
+    if has_wrapper() and not _had_explicit_output and action_build:
+        config.exe_output = "bin/btb-dev"
+        if platform.system() == "Windows":
+            config.exe_output += ".exe"
+
+
+    if action_build:
+        start = time.time()
+        newly_compiled_btb = build_btb(config)
+        comp_time = time.time() - start
+        if not config.silent or config.verbose:
+            if newly_compiled_btb:
+                print(f"Compiled BTB in {comp_time:.3} s")
             else:
-                print("MSVC toolchain could not be configured.")
-                return False
+                print("btb is up to date")
 
-    if enabled("verbose"):
-        print("Options:",config)
-        if "log_cmds" not in config:
-            config["log_cmds"] = True
+    if action_vendor:
+        if platform.system() == "Windows":
+            compile_vendor(config, "glad","glad.c", "glad", "GLAD_GLAPI_EXPORT GLAD_GLAPI_EXPORT_BUILD")
+            # NOTE: stb_image was modified to support STB_IMAGE_BUILD_DLL.
+            compile_vendor(config, "stb","stb_image.c", "stb_image", "STB_IMAGE_BUILD_DLL")
+            
+        elif platform.system() == "Linux":
+            compile_vendor(config, "glad","glad.c", "glad", "GLAD_GLAPI_EXPORT GLAD_GLAPI_EXPORT_BUILD")
+            # NOTE: stb_image was modified to support STB_IMAGE_BUILD_DLL.
+            compile_vendor(config, "stb","stb_image.c", "stb_image", "STB_IMAGE_BUILD_DLL")
+            
+    if action_release:
+        release_btb(config, release_version)
 
-    if not "output" in config:
-        print("config does not specify output path")
+
+def build_btb(config: BuildConfig) -> bool:
+    if config.verbose:
+        print("Build btb with", config)
+
+    if config.toolchain == 'msvc':
+        try_configure_msvc_toolchain(config.verbose)
+
+    start_compute_time = time.time()
+    files = gather_btb_files(config)
+    if config.tracy:
+        files.append(("libs/tracy-0.10/public/TracyClient.cpp", config.int_dir + "/TracyClient.o"))
+
+    @dataclasses.dataclass
+    class BuildRuntime:
+        config: BuildConfig
+        commands: list[str] = dataclasses.field(default_factory=list)
+        next_command_index: int = 0
+        failed: bool = False
+
+    runtime = BuildRuntime(config)
+
+    for srcdst in files:
+        src_file = srcdst[0]
+        obj_file = srcdst[1]
+        if config.toolchain == 'msvc':
+            FLAGS = "/std:c++17 /nologo /EHsc /TP /wd4129 /Isrc/include /Ilibs/tracy-0.10/public /FI pch.h /DCOMPILER_MSVC"
+            if platform.system() == "Windows":
+                FLAGS += " -DOS_WINDOWS"
+            elif platform.system() == "Linux":
+                FLAGS += " -DOS_LINUX"
+            if config.debug:
+                FLAGS += " /Z7"
+            if config.optimize:
+                FLAGS += " /O2"
+            if config.tracy:
+                FLAGS += " /DTRACY_ENABLE"
+            pdb_path, _ = os.path.splitext(obj_file)
+            pdb_path += ".pdb"
+            command = f"cl {FLAGS} /c /Fd:{pdb_path} /Fo:{obj_file} {src_file}"
+        elif config.toolchain == 'gcc' or config.toolchain == 'clang':
+            FLAGS = "-std=c++17 -Isrc/include -Ilibs/tracy-0.10/public -include src/include/pch.h -DCOMPILER_GNU"
+            FLAGS += " -Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point -Wno-class-conversion -Wno-address -Wno-strict-aliasing -Wno-sign-compare"
+
+            if platform.system() == "Windows":
+                FLAGS += " -DOS_WINDOWS"
+            elif platform.system() == "Linux":
+                FLAGS += " -DOS_LINUX"
+            if config.debug:
+                FLAGS += " -g"
+            if config.optimize:
+                FLAGS += " -O3"
+            if config.tracy:
+                FLAGS += " -DTRACY_ENABLE"
+            CC = 'g++' if config.toolchain == 'gcc' else 'clang++'
+            command = f"{CC} {FLAGS} -c -o {obj_file} {src_file}"
+
+        config.build_steps.append(command)
+
+    object_files = " ".join([dst for src, dst in files])
+
+    config.exe_output = os.path.abspath(config.exe_output) # relative and absolute path can refer to the same file, it should not trigger a changed config.
+
+    if config.toolchain == 'msvc':
+        FLAGS = "/nologo /ignore:4099 Advapi32.lib shell32.lib"
+        if config.debug:
+            FLAGS += " /DEBUG"
+
+        link_command = f"link {FLAGS} {object_files} /OUT:{config.exe_output}"
+    elif config.toolchain == 'gcc' or config.toolchain == 'clang':
+        FLAGS = ""
+        if config.debug:
+            FLAGS += " -g"
+
+        CC = 'g++' if config.toolchain == 'gcc' else 'clang++'
+
+        link_command = f"{CC} {FLAGS} {object_files} -o {config.exe_output.replace("\\","/")}"
+
+    config.build_steps.append(link_command)
+
+    CONFIG_PATH = "bin/last_build.config"
+    config_changed = config.has_config_changed(CONFIG_PATH)
+
+    if config_changed:
+        # do a full rebuild
+        modified_files = files
+    else:
+        modified_files = compute_modified_files(config, files)
+    compute_time = time.time() - start_compute_time
+
+    if config.verbose:
+        print(f"Computed dependencies in {compute_time:.3} s")
+
+    if len(modified_files) == 0:
         return False
+    
+    config.save(CONFIG_PATH)
 
-    #########################
-    #    FIND SOURCE FILES
-    #########################
+    for i in range(0, len(files)):
+        if files[i] in modified_files:
+            runtime.commands.append(config.build_steps[i])
 
-    global source_files
-    source_files = []
+    os.makedirs(config.int_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(config.exe_output), exist_ok=True)
+    for f in modified_files:
+        os.makedirs(os.path.dirname(f[1]), exist_ok=True)
+
+    def compile_objects(runtime: BuildRuntime):
+        while runtime.next_command_index < len(runtime.commands):
+            command = runtime.commands[runtime.next_command_index]
+            runtime.next_command_index += 1
+
+            if runtime.config.verbose:
+                print(command, flush=True)
+            result = cmd(command, config.silent)
+            
+            if result != 0:
+                runtime.next_command_index = len(runtime.commands)
+                runtime.failed = True
+    threads = []
+    for i in range(config.threads):
+        t = threading.Thread(target=compile_objects, args=[runtime])
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    if runtime.failed:
+        exit(1)
+    
+    if runtime.config.verbose:
+        print(link_command)
+    result = cmd(link_command, config.silent)
+    if result != 0:
+        exit(1)
+
+    return True
+
+def release_btb(config: BuildConfig, version):
+    if config.verbose:
+        print("Build btb release with", config)
+
+    bundle_name = f"btb-{version}"
+    if platform.system() == "Windows":
+        bundle_name += "-windows-x86-64"
+    elif platform.system() == "Linux":
+        bundle_name += "-linux-x86_64"
+    else:
+        assert False
+
+    bundle_dir = f"bin/{bundle_name}"
+
+    shutil.rmtree(bundle_dir) # make sure we deleted files from docs/libs/modules don't remain in the bundle dir
+
+    os.makedirs(f"{bundle_dir}", exist_ok=True)
+    os.makedirs("releases", exist_ok=True)
+
+    config.debug = False
+    config.optimize = True
+    config.tracy = False
+
+    config.exe_output = f"{bundle_dir}/btb-{version}"
+    if platform.system() == "Windows":
+        config.exe_output += ".exe"
+
+    def get_commit_hash():
+        proc = subprocess.run(["git", "rev-parse","--short=12","HEAD"], text=True,stdout=subprocess.PIPE)
+        if proc.returncode != 0:
+            print(proc.stdout)
+            exit(1)
+        return proc.stdout.strip()
+
+    git_commit = get_commit_hash()
+
+    with open("src/BetBat/const_commit.cpp", "w") as f:
+        f.write(f'// THIS FILE IS AUTO-GENERATED BY build.py\nconst char* GIT_COMMIT="{git_commit}";\n')
+
+    build_btb(config)
+
+    shutil.copytree("docs", f"{bundle_dir}/docs", dirs_exist_ok=True)
+    shutil.copytree("libs", f"{bundle_dir}/libs", dirs_exist_ok=True)
+    shutil.copytree("modules", f"{bundle_dir}/modules", dirs_exist_ok=True)
+    shutil.copy("README.md", f"{bundle_dir}/README.md")
+    shutil.copy(config.exe_output, f"{bundle_dir}/btb{'.exe' if platform.system() == 'Windows' else ''}")
+
+    path_release = os.path.abspath(f"releases/{bundle_name}")
+
+    if platform.system() == "Windows":
+        path_release += ".zip"
+        command = f"7z a -tzip {path_release} {os.path.abspath(bundle_dir)}/"
+    elif platform.system() == "Linux":
+        path_release += ".tar.gz"
+        # TODO: This has not been tested on Linux yet
+        command = f"tar -czf {path_release} -C bin {bundle_name}"
+
+    if config.verbose:
+        print(command)
+    result = cmd(command, config.silent)
+    if result != 0:
+        exit(1)
+    
+    print(f"Prepared release in {path_release}")
+
+def has_wrapper():
+    if platform.system() == "Windows":
+        file = "btb.bat"
+    else:
+        file = "btb.sh"
+    wrapper = os.path.dirname(__file__) + "/bin/" + file
+    return os.path.exists(wrapper)
+
+def try_create_btb_wrapper():
+    if platform.system() == "Windows":
+        file = "btb.bat"
+        code = '''
+        @echo off
+        python %~dp0../build.py output=%~dp0btb-dev.exe
+        %~dp0btb-dev.exe %*
+        '''
+    else:
+        file = "btb.sh"
+        code = '''
+        #!/bin/bash
+        echo btb dev wrapper incomplete
+        '''
+
+    wrapper = os.path.dirname(__file__) + "/bin/" + file
+    if not os.path.exists(wrapper):
+        os.makedirs(os.path.dirname(wrapper), exist_ok=True)
+        with open(wrapper, "w") as f:
+            f.write(code)
+        os.chmod(wrapper, 0o764)
+    
+
+def gather_btb_files(config: BuildConfig) -> list[tuple[str,str]]:
+    files = []
 
     for file in glob.glob("src/**/*.cpp", recursive = True):
         file = file.replace("\\","/")
@@ -207,300 +460,17 @@ def compile(config):
         if file.find("/BetBat/") == -1 and file.find("/Engone/") == -1:
             continue
 
-        if os.path.basename(file) in config["exclude_src"]:
+        if os.path.basename(file) in ["PDB.cpp", "Fuzzer.cpp", "UserProfile.cpp"]:
             continue
 
-        source_files.append(file)
+        obj_file = file.replace(".cpp",".o").replace("src/", config.int_dir + "/")
+        files.append((file, obj_file))
 
-    global object_files
-    object_files = []
+    return files
 
-    for f in source_files:
-        object_files.append(f.replace(".cpp",".o").replace("src/",config["bin_dir"]+"/"))
-    
-    # With MSVC, we compile all source files every time, we therefore don't need to compute modified files
-    # However, if we want to skip compiling the executable because it's up to date, we must compute modified files
-    global modified_files
-    start_compute_time = time.time()
-    modified_files = compute_modified_files(source_files, object_files, config["output"])
-    compute_time = time.time() - start_compute_time
-    
-    if enabled("log_sources"):
-        print("Source files:", source_files)
-
-    ##############################
-    #   COMPILE based on config
-    ##############################
-        
-    global head_compiled
-    global object_failed
-
-    compile_success = False
-
-    if not enabled("silent"):
-        print("Compiling...")
-        
-    start_compile_time = time.time()
-
-    os.makedirs(config["bin_dir"], exist_ok = True)
-
-    if platform.system() == "Windows" and config["use_compiler"] == "msvc":
-        MSVC_COMPILE_OPTIONS    = "/std:c++17 /nologo /EHsc /TP /wd4129"
-        MSVC_LINK_OPTIONS       = "/nologo /ignore:4099 Advapi32.lib shell32.lib"
-        MSVC_INCLUDE_DIRS       = "/Isrc/include /Ilibs/tracy-0.10/public"
-        MSVC_DEFINITIONS        = "/DOS_WINDOWS /DCOMPILER_MSVC"
-
-        if enabled("use_debug"):
-            MSVC_COMPILE_OPTIONS += " /Z7"
-            MSVC_LINK_OPTIONS += " /DEBUG" # /PROFILE
-
-        if enabled("use_optimizations"):
-            MSVC_COMPILE_OPTIONS += " /O2"
-        
-        if enabled("use_tracy"):
-            MSVC_DEFINITIONS  += " /DTRACY_ENABLE"
-            MSVC_LINK_OPTIONS += " "+config["bin_dir"]+"/tracy.obj"
-            if not os.path.exists(config["bin_dir"]+"/tracy.obj"):
-                cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+ MSVC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp /Fo"+config["bin_dir"]+"/tracy.obj")
-
-        MSVC_COMPILE_OPTIONS += " /FI pch.h"
-
-        # Create sub directories in bin, this part must be single-threaded
-        for f in modified_files:
-            index = source_files.index(f)
-            obj = object_files[index]
-            at = obj.rfind("/")
-            predir = obj[0:at]
-            if not os.path.exists(predir):
-                os.mkdir(predir)
-
-        if len(modified_files) == 0 and os.path.exists(config["output"]):
-            compile_success = True
-            # print("files up to date, skipping")
-            # skipping like this won't work if compile flags change
-            # because we should recompile if so.
-        else:
-            if enabled("unity_build"):
-                # With MSVC we do a unity build, compile on source file that includes all other source files
-                srcfile = config["bin_dir"]+"/all.cpp"
-                fd = open(srcfile, "w")
-                for file in source_files:
-                    fd.write("#include \"" + os.path.abspath(file) + "\"\n")
-                fd.close()
-
-                err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /link "+MSVC_LINK_OPTIONS+" /OUT:"+config["output"])
-                # err = cmd("cl "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+srcfile+" /Fobin/all.obj /link "+MSVC_LINK_OPTIONS+" /OUT:"+config["output"])
-                # TODO: How do we silence cl, it prints out all.cpp. If a user specifies silent then we definitively don't want that.
-
-                compile_success = err == 0
-            else:
-                # Compile the object files using multiple threads
-                head_compiled = 0
-                object_failed = False
-
-                def compile_objects():
-                    global head_compiled
-                    global modified_files
-                    global object_files
-                    global object_failed
-                    while head_compiled < len(modified_files):
-                        src = modified_files[head_compiled]
-                        index = source_files.index(src)
-                        obj = object_files[index]
-                        head_compiled+=1
-
-                        trimmed_obj = obj[4:] # skip bin/
-
-                        at = obj.rfind(".")
-                        pdb_path = obj[:at] + ".pdb"
-
-                        if enabled("log_compilation"):
-                            print("Compile", trimmed_obj)
-                        
-                        err = cmd("cl /c "+MSVC_COMPILE_OPTIONS+" "+MSVC_INCLUDE_DIRS+" "+MSVC_DEFINITIONS+" "+src+" /Fo:"+obj + " /Fd:"+pdb_path)
-                        
-                        if err != 0:
-                            object_failed = True
-
-                        if enabled("log_compilation"):
-                            print("Done", trimmed_obj)
-
-                thread_count = 8
-                if "thread_count" in config:
-                    thread_count = config["thread_count"]
-                threads = []
-                for i in range(thread_count-1):
-                    t = threading.Thread(target=compile_objects)
-                    threads.append(t)
-                    t.start()
-
-                compile_objects()
-
-                for t in threads:
-                    t.join()
-
-                if object_failed:
-                    return False
-
-                objs_str = ""
-                for f in object_files:
-                    objs_str += " " + f
-
-                    if not os.path.exists(f):
-                        print(f,"was not compiled")
-                        return False
-
-                err = cmd("link "+MSVC_LINK_OPTIONS+" "+objs_str +" /OUT:"+config["output"])
-                compile_success = err == 0
-        
-        # TODO: Precompiled headers?
-
-    elif config["use_compiler"] == "gcc" or config["use_compiler"] == "clang":
-        GCC_COMPILE_OPTIONS = "-std=c++14"
-        GCC_INCLUDE_DIRS    = "-Isrc/include -Ilibs/tracy-0.10/public -include src/include/pch.h "
-        GCC_DEFINITIONS     = "-DCOMPILER_GNU"
-        GCC_LINK_OPTIONS    = ""
-        if platform.system() == "Windows":
-            GCC_DEFINITIONS += " -DOS_WINDOWS"
-        else:
-            GCC_DEFINITIONS += " -DOS_LINUX"
-
-        GCC_WARN = "-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point -Wno-class-conversion -Wno-address -Wno-strict-aliasing"
-        # GCC complains about dereferencing nullptr (-Wsequence-point)
-        GCC_WARN += " -Wno-sign-compare"
-
-        if enabled("use_debug"):
-            GCC_COMPILE_OPTIONS += " -g"
-            GCC_LINK_OPTIONS += " -g"
-
-        if enabled("use_optimizations"):
-            GCC_COMPILE_OPTIONS += " -O3"
-            
-        CC = "g++"
-        if config["use_compiler"] == "clang":
-            CC = "clang++"
-
-        if enabled("use_tracy"):
-            if platform.system() == "Windows":
-                GCC_DEFINITIONS += " -DTRACY_ENABLE"
-                GCC_LINK_OPTIONS += " "+config["bin_dir"]+"/tracy.o"
-                if not os.path.exists(config["bin_dir"]+"/tracy.o"):
-                    cmd(CC+" -c "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" libs/tracy-0.10/public/TracyClient.cpp -o "+config["bin_dir"]+"/tracy.o")
-                
-            else:
-                print("build.py doesn't support tracy on Linux, tracy is ignored")
-            
-        # Code below compiles the necessary object files
-      
-        # TODO: Add include directories to compute_modified_files? We assume that all includes come from "include/"
-
-        # Find source files that were updated since last compilation, incremental build
-        # NOTE: This was moved up
-        # global modified_files
-        # modified_files = compute_modified_files(source_files, object_files, config["output"])
-
-        # print(modified_files)
-
-        if enabled("log_objects"):
-            print("Object files", object_files)
-
-        # Create sub directories in bin, this part must be single-threaded
-        for f in modified_files:
-            index = source_files.index(f)
-            obj = object_files[index]
-            at = obj.rfind("/")
-            predir = obj[0:at]
-            if not os.path.exists(predir):
-                os.mkdir(predir)
-        
-        # Compile the object files using multiple threads
-        head_compiled = 0
-        object_failed = False
-
-        def compile_objects():
-            global head_compiled
-            global modified_files
-            global object_files
-            global object_failed
-            while head_compiled < len(modified_files):
-                src = modified_files[head_compiled]
-                index = source_files.index(src)
-                obj = object_files[index]
-                head_compiled+=1
-
-                trimmed_obj = obj[4:] # skip bin/
-
-                if enabled("log_compilation"):
-                    print("Compile", trimmed_obj)
-                err = cmd(CC+" "+GCC_WARN+" "+GCC_COMPILE_OPTIONS+" "+GCC_INCLUDE_DIRS+" "+GCC_DEFINITIONS+" -c "+src +" -o "+ obj)
-                
-                if err != 0:
-                    object_failed = True
-
-                if enabled("log_compilation"):
-                    print("Done", trimmed_obj)
-
-        thread_count = 8
-        if "thread_count" in config:
-            thread_count = config["thread_count"]
-        threads = []
-        for i in range(thread_count-1):
-            t = threading.Thread(target=compile_objects)
-            threads.append(t)
-            t.start()
-
-        compile_objects()
-
-        for t in threads:
-            t.join()
-
-        if object_failed:
-            return False
-
-        objs_str = ""
-        for f in object_files:
-            objs_str += " " + f
-
-            if not os.path.exists(f):
-                print(f,"was not compiled")
-                return False
-
-        err = cmd(CC+" "+GCC_LINK_OPTIONS+" "+objs_str+" -o "+config["output"])
-        compile_success = err == 0
-    else:
-        print("Platform/compiler ",platform.system()+"/"+config["use_compiler"],"is not supported in build.py")
-
-    compile_time = time.time() - start_compile_time
-    build_time = time.time() - start_build_time
-    
-    if compile_success:
-        if enabled("build_times"):
-            print("Dependency computation in", int(compute_time*100)/100)
-            print("Compiled in", int(compile_time*100)/100)
-        if not enabled("silent"):
-            print("Built in", int(build_time*100)/100)
-
-    ################################
-    #   COMPILE VENDOR LIBRARIES
-    ################################
-    if platform.system() == "Windows":
-        compile_vendor("glad","glad.c", "glad", "GLAD_GLAPI_EXPORT GLAD_GLAPI_EXPORT_BUILD")
-        # NOTE: stb_image was modified to support STB_IMAGE_BUILD_DLL.
-        compile_vendor("stb","stb_image.c", "stb_image", "STB_IMAGE_BUILD_DLL")
-        
-    elif platform.system() == "Linux":
-        compile_vendor("glad","glad.c", "glad", "GLAD_GLAPI_EXPORT GLAD_GLAPI_EXPORT_BUILD")
-        # NOTE: stb_image was modified to support STB_IMAGE_BUILD_DLL.
-        compile_vendor("stb","stb_image.c", "stb_image", "STB_IMAGE_BUILD_DLL")
-        
-    
-    return compile_success
-
-def compile_vendor(vendor, src, bin_name, dll_defs = ""):
+def compile_vendor(config: BuildConfig, vendor, src, bin_name, dll_defs = ""):
     # GCC_PATHS = "-Llibs/glfw-3.3.9/lib-mingw-w64 -Ilibs/glfw-3.3.9/include -Ilibs/glad/include -Lbin -Ilibs/stb/include"
-    global global_config
-    config = global_config
-    GCC_PATHS = "-Ilibs/glad/include -L"+config["bin_dir"]+" -Ilibs/stb/include"
+    GCC_PATHS = "-Ilibs/glad/include -L"+config.int_dir+" -Ilibs/stb/include"
     # MSVC_PATHS = "/Ilibs/glfw-3.3.9/include /Ilibs/glad/include /Ilibs/stb/include"
     MSVC_PATHS = "/Ilibs/glad/include /Ilibs/stb/include"
 
@@ -509,18 +479,18 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
     mingw_path = "libs/"+vendor+"/lib-mingw-w64/"
     mingw_lib = mingw_path + bin_name + ".lib"
     mingw_dll = mingw_path + bin_name + ".dll"
-    mingw_obj = config["bin_dir"]+"/" + bin_name + ".o"
+    mingw_obj = config.int_dir+"/" + bin_name + ".o"
     
     vc_path = "libs/"+vendor+"/lib-vc2022/"
     vc_lib = vc_path + bin_name + ".lib"
     vc_dll = vc_path + bin_name + ".dll"
     vc_dlllib = vc_path + bin_name + "dll.lib"
-    vc_obj = config["bin_dir"]+"/" + bin_name + ".obj"
+    vc_obj = config.int_dir+"/" + bin_name + ".obj"
     
     ubuntu_path = "libs/"+vendor+"/lib-ubuntu/"
     ubuntu_lib = ubuntu_path + "lib" + bin_name + ".a"
     ubuntu_dll = ubuntu_path + "lib" +bin_name + ".so"
-    ubuntu_obj = config["bin_dir"]+"/" + bin_name + ".o"
+    ubuntu_obj = config.int_dir+"/" + bin_name + ".o"
 
     mingw_dll_defs = ""
     vc_dll_defs = ""
@@ -535,40 +505,43 @@ def compile_vendor(vendor, src, bin_name, dll_defs = ""):
         os.makedirs(vc_path, exist_ok=True)
 
         if not os.path.exists(mingw_lib):
-            cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ mingw_obj)
-            cmd("ar rcs "+mingw_lib+" " + mingw_obj)
+            cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ mingw_obj, config.silent)
+            cmd("ar rcs "+mingw_lib+" " + mingw_obj, config.silent)
         if not os.path.exists(mingw_dll):
-            cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ mingw_dll_defs + " " + src + " -o "+mingw_dll)
+            cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ mingw_dll_defs + " " + src + " -o "+mingw_dll, config.silent)
         
         if shutil.which("cl"): # only compile with cl if it's available
             if not os.path.exists(vc_lib):
-                cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj)
-                cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib)
+                cmd("cl /c /nologo /TC "+MSVC_PATHS+" " + src + " /Fo:"+vc_obj, config.silent)
+                cmd("lib /nologo "+vc_obj+" /OUT:"+vc_lib, config.silent)
             
             if not os.path.exists(vc_dll) or not os.path.exists(vc_dlllib):
-                cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib)
+                cmd("cl /nologo /TC "+MSVC_PATHS+" "+vc_dll_defs +" "+src+" /link /DLL /OUT:"+vc_dll+" /IMPLIB:"+vc_dlllib, config.silent)
         
     if platform.system() == "Linux":
         os.makedirs(ubuntu_path, exist_ok=True)
             
         if not os.path.exists(ubuntu_lib):
             # Use clang if available? if it's faster?
-            cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ ubuntu_obj)
-            cmd("ar rcs "+ubuntu_lib+" " + ubuntu_obj)
+            cmd("gcc -c "+GCC_PATHS+" " + src + " -o "+ ubuntu_obj, config.silent)
+            cmd("ar rcs "+ubuntu_lib+" " + ubuntu_obj, config.silent)
         if not os.path.exists(ubuntu_dll):
-            cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ ubuntu_dll_defs + " " + src + " -o "+ubuntu_dll)
+            cmd("gcc -shared -fPIC "+GCC_PATHS + " "+ ubuntu_dll_defs + " " + src + " -o "+ubuntu_dll, config.silent)
 
 # returns a list of object files to compile
-def compute_modified_files(source_files, object_files, exe_file):
+def compute_modified_files(config: BuildConfig, files: list[tuple[str,str]]) -> list[str,str]:
     modified_files = []
     file_dependencies = {}
     source_times = []
 
+    SRC=0
+    DST=1
+
     # Calculate the modified timestamp for each source file
     # source files that include other files will "inherit"
     # the timestamp of the include if it's newer.
-    for fi in range(len(source_files)):
-        f = source_files[fi]
+    for fi in range(len(files)):
+        f = files[fi][SRC]
         dependencies = [f]
         index_of_deps = 0
 
@@ -605,19 +578,19 @@ def compute_modified_files(source_files, object_files, exe_file):
         source_times.append(latest_time)
 
     exe_time = -1
-    if os.path.exists(exe_file):
-        exe_time = os.path.getmtime(exe_file)
+    if os.path.exists(config.exe_output):
+        exe_time = os.path.getmtime(config.exe_output)
 
     # Find the newly modified files
     for i in range(len(source_times)):
         time = source_times[i]
         obj_time = -1
-        if not os.path.exists(object_files[i]):
-            modified_files.append(source_files[i])
+        if not os.path.exists(files[i][DST]):
+            modified_files.append(files[i])
         else:
-            obj_time = os.path.getmtime(object_files[i])
-            if time > exe_time and time > obj_time:
-                modified_files.append(source_files[i])
+            obj_time = os.path.getmtime(files[i][DST])
+            if time > exe_time or time > obj_time:
+                modified_files.append(files[i])
 
     return modified_files
 
@@ -713,7 +686,11 @@ def is_msvc_configured():
         return True
     return False
 
-def configure_msvc_toolchain(verbose):
+def try_configure_msvc_toolchain(verbose):
+    if is_msvc_configured():
+        # already configured
+        return True
+    
     # Find and set up MSVC environment variables.
     
     base_vs = "C:\\Program Files\\Microsoft Visual Studio"
@@ -721,26 +698,29 @@ def configure_msvc_toolchain(verbose):
 
     # Find Visual Studio version
     version_vs = find_first_folder(base_vs)
+    if not version_vs:
+        print(f"Could not find Visual Studio version in '{base_vs}'")
+        exit(1)
     if verbose:
         print(f"Found VS version: {version_vs}")
-    if not version_vs:
-        return False
 
     # Find MSVC version
     base_tools_nov = os.path.join(base_vs, version_vs, "Community", "VC", "Tools", "MSVC")
     version_msvc = find_first_folder(base_tools_nov)
+    if not version_msvc:
+        print(f"Could not find Visual Studio stuff in '{base_tools_nov}'")
+        exit(1)
     if verbose:
         print(f"Found MSVC version: {version_msvc}")
-    if not version_msvc:
-        return False
 
     # Find Windows Kits version
     base_kits_include = os.path.join(base_kits, "include")
     version_kits = find_first_folder(base_kits_include)
+    if not version_kits:
+        print(f"Could not stuff in '{base_kits_include}'")
+        exit(1)
     if verbose:
         print(f"Found kits version: {version_kits}")
-    if not version_kits:
-        return False
 
     # Set paths based on the found versions
     base_tools = os.path.join(base_tools_nov, version_msvc)
@@ -770,7 +750,7 @@ def configure_msvc_toolchain(verbose):
 
     return True
 
-# files or directories
+# remove files or directories with glob pattern
 def remove_files(path):
     counter = 0
     for f in glob.glob(path):
@@ -782,7 +762,7 @@ def remove_files(path):
         counter+=1
     return counter
 
-def cmd(c):
+def cmd(c, silent = False):
     # Convert Windows style command to Linux style and vice versa.
     if platform.system() == "Windows":
         if len(c) > 1 and c[0:2] == './':
@@ -807,10 +787,15 @@ def cmd(c):
         if is_relative:
             c = "./" + c
 
-    if enabled("log_cmds"):
-        print(c)
+    proc = subprocess.run(shlex.split(c), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if (proc.returncode != 0 or len(proc.stdout) > 0) and not silent:
+        print(proc.stdout, end="")
 
-    return os.system(c)
+    return proc.returncode
 
 if __name__ == "__main__":
-    main()
+    min_ver = (3,9)
+    if sys.version_info < min_ver:
+        print("WARNING in build.py: Script is tested with "+str(min_ver[0])+"."+str(min_ver[1])+", earlier python versions ("+str(sys.version_info[0])+"."+str(sys.version_info[1])+") may not work.")
+
+    main(sys.argv[1:])

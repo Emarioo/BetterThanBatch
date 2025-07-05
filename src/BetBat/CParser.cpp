@@ -614,14 +614,14 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
     DynamicArray<Value> values;
     DynamicArray<Op> ops;
 
-    const int OP_AND           = '&' | ('&'<<8);
-    const int OP_OR            = '|' | ('|'<<8);
-    const int OP_SHL           = '<' | ('<'<<8);
-    const int OP_SHR           = '>' | ('>'<<8);
-    const int OP_EQUAL         = '=' | ('='<<8);
-    const int OP_NOT_EQUAL     = '!' | ('='<<8);
-    const int OP_LESS_EQUAL    = '<' | ('='<<8);
-    const int OP_GREATER_EQUAL = '>' | ('='<<8);
+    #define OP_AND            ('&' | ('&'<<8))
+    #define OP_OR             ('|' | ('|'<<8))
+    #define OP_SHL            ('<' | ('<'<<8))
+    #define OP_SHR            ('>' | ('>'<<8))
+    #define OP_EQUAL          ('=' | ('='<<8))
+    #define OP_NOT_EQUAL      ('!' | ('='<<8))
+    #define OP_LESS_EQUAL     ('<' | ('='<<8))
+    #define OP_GREATER_EQUAL  ('>' | ('='<<8))
 
     auto precedence = [&](int kind) {
         switch(kind) {

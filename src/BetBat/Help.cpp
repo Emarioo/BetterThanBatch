@@ -8,9 +8,19 @@ void print_version(){
     char buffer[100];
     CompilerVersion version = CompilerVersion::Current();
     version.serialize(buffer, sizeof(buffer),CompilerVersion::INCLUDE_AVAILABLE);
-    log::out << "BTB Compiler, version: " << log::LIME<< buffer <<"\n";
+    log::out << "btb version " << log::LIME<< COMPILER_VERSION <<"\n";
+    log::out << "target ";
+    #ifdef OS_WINDOWS
+        log::out << log::LIME<< "x86_64-windows" <<"\n";
+    #elif defined(OS_LINUX)
+        log::out << log::LIME<< "x86_64-linux" <<"\n";
+    #else
+        log::out << log::LIME<< "x86_64-unknown" <<"\n";
+    #endif
     if(strlen(GIT_COMMIT) > 0) {
-        log::out << log::GRAY << "git commit: " << GIT_COMMIT << "\n";
+        log::out << log::GRAY << "commit " << GIT_COMMIT << "\n";
+    } else {
+        log::out << log::GRAY << "commit missing (dev build)\n";
     }
     // log::out << log::GRAY << "(major.minor.patch.revision/name-year.month.day)\n";
     // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)\n";

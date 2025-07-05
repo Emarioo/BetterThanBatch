@@ -12,11 +12,13 @@
 
 // #import "examples/cparser/main.btb"
 // #import "stdlib.h"
-#import "./cparser/ga.h"
+// #import "./cparser/ga.h"
 
 
 
-// #import "Logger"
+#import "Logger"
+
+log("Hello sailor")
 // This test is here to catch compiler bugs.
 // Assert(id.isNormalType()) when calling ast->getTypeInfo
 

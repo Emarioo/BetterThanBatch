@@ -226,6 +226,9 @@ int main(int argc, const char** argv){
 bool CheckDeveloperCommand(const BaseArray<std::string>& args) {
     using namespace engone;
     
+    if(args.size() == 0)
+        return false;
+
     // TODO: Should developer commands be described in help messages?
     if(args[0] == "decode") {
         if(1 < args.size()) {
