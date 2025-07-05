@@ -1,9 +1,25 @@
-/* Compile and run with:
+/*
+Depencencies
+    apt install gcc-arm-none-eabi qemu-system-arm gdb-multiarch
+
+Compile
+    btb examples/arm/hello -t arm -g
+
+Run
+    qemu-system-arm -kernel main.elf -M xilinx-zynq-a9 -cpu cortex-a9 -semihosting -nographic -serial mon:stdio
+  Add these for gdb server
+    qemu-system-arm ... -S -gdb tcp::10123
+
+Build and run
     btb examples/arm/hello -t arm -g -r
     
-   To start gdb server in qemu, default port is 1234
+Start qemu gdb server, default port is 10123
     btb examples/arm/hello -t arm -g -r --qemu-gdb
     btb examples/arm/hello -t arm -g -r --qemu-gdb 4321
+    
+Connect to qemu
+    gdb-multiarch main.elf
+    target remote :10123
 */
 
 #import "arm/xilinx-zynq-a9"

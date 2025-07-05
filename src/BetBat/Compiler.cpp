@@ -1255,7 +1255,7 @@ void Compiler::run(CompileOptions* options) {
         } else if (options->linker == LINKER_CLANG) {
             cmd = "clang -E -x c nil -v";
         }
-        const char* temp_path = "bin/gcc_includes.txt";
+        const char* temp_path = "bin/int/gcc_includes.txt";
         auto file = FileOpen(temp_path, FILE_READ_AND_WRITE);
         if(!file) {
             log::out << log::YELLOW << "WARNING: Compiler couldn't create "<<temp_path<<" to write gcc include directories too. This means you can't import C standard headers (stdlib.h).\n";
@@ -1409,7 +1409,7 @@ void Compiler::run(CompileOptions* options) {
     std::string output_filename = output_path.substr(slash_index+1, dot_index - (slash_index+1));
     std::string output_extension = ExtractExtension(output_path);
     
-    std::string object_path = "bin/" + output_filename + ".o";
+    std::string object_path = "bin/int/" + output_filename + ".o";
     // std::string object_path = output_filename + ".o";
     std::string temp_path{};
     bool perform_copy = false;
@@ -1432,7 +1432,7 @@ void Compiler::run(CompileOptions* options) {
             output_type = OUTPUT_LIB;
             // NOTE: Linux uses libNAME.a but we just check .a, should we warn the user if they forgot lib at the start of the file?
         } else if(output_extension == ".elf") {
-            output_type = OUTPUT_ELF;
+            output_type = OUTPUT_IMAGE;
             // NOTE: We assume the user intends to compile a "kernel" image for qemu.
         }
     } else {
@@ -1459,11 +1459,11 @@ void Compiler::run(CompileOptions* options) {
         object_path = output_path;
     }
 
-    if(options->target == TARGET_ARM && output_type != OUTPUT_OBJ && output_type != OUTPUT_ELF && output_type != OUTPUT_BC) {
+    if(options->target == TARGET_ARM && output_type != OUTPUT_OBJ && output_type != OUTPUT_IMAGE && output_type != OUTPUT_BC) {
         log::out << log::RED << "The compiler can only generate "<<log::NO_COLOR<<".o .elf .bc "<<log::RED<<" when targeting ARM, not '"<<output_extension<<"'.\n";
         return;
     }
-    if(options->target != TARGET_ARM && output_type == OUTPUT_ELF) {
+    if(options->target != TARGET_ARM && output_type == OUTPUT_IMAGE) {
         log::out << log::RED << "Compiler will only output an .elf file when targeting ARM. ELF extension is meant for kernel image. We may support kernel image for 'x86_64' target in the future.\n";
         return;
     }
@@ -2029,7 +2029,7 @@ void Compiler::run(CompileOptions* options) {
             compile_stats.errors++;
             return;
         }    
-    } else if (output_type == OUTPUT_ELF){
+    } else if (output_type == OUTPUT_IMAGE){
         if(program->libraries.size() > 0) {
             // TODO: Better error messages that shows where libraries came from.
             log::out << log::RED << "Libraries cannot be linked when compiling for ARM." << log::NO_COLOR;
@@ -2077,9 +2077,9 @@ void Compiler::run(CompileOptions* options) {
             // "   RAM (rw) : ORIGIN = 0x0x "
             // "}"
             "SECTIONS {\n"
-            "    . = 0x10000;"
+            "    . = 0x10000;\n"
             "    .text : {\n"
-            "        bin/arm_startup.o(.text)\n"
+            "        bin/int/arm_startup.o(.text)\n"
             "        *(.text)\n"
             "    }\n"
             "    .data : { *(.data) }\n"
@@ -2088,11 +2088,11 @@ void Compiler::run(CompileOptions* options) {
             "    _stack_top = . + 0x10000; /* 64kB of stack memory */\n"
             "}\n";
             
-        auto file_startup = FileOpen("bin/arm_startup.s", FILE_CLEAR_AND_WRITE);
+        auto file_startup = FileOpen(intermediate_dir + "/arm_startup.s", FILE_CLEAR_AND_WRITE);
         FileWrite(file_startup, startup, strlen(startup));
         FileClose(file_startup);
         
-        std::string cmd_startup = as + " bin/arm_startup.s -o bin/arm_startup.o"; // NOTE: linker script needs to know path of arm_startup.o
+        std::string cmd_startup = as + " "+intermediate_dir+"/arm_startup.s -o "+intermediate_dir+"/arm_startup.o"; // NOTE: linker script needs to know path of arm_startup.o
         if(options->useDebugInformation)
             cmd_startup += " -g";
         int as_exit_code=0;
@@ -2103,11 +2103,11 @@ void Compiler::run(CompileOptions* options) {
             return;
         }
         
-        auto file_lscript = FileOpen("bin/arm_lscript.ld", FILE_CLEAR_AND_WRITE);
+        auto file_lscript = FileOpen(intermediate_dir+"/arm_lscript.ld", FILE_CLEAR_AND_WRITE);
         FileWrite(file_lscript, linker_script, strlen(linker_script));
         FileClose(file_lscript);
         
-        cmd += " bin/arm_startup.o -T bin/arm_lscript.ld";
+        cmd += " "+intermediate_dir+"/arm_startup.o -T "+intermediate_dir+"/arm_lscript.ld";
         
         for (int i = 0;i<(int)linkDirectives.size();i++) {
             auto& dir = linkDirectives[i];
@@ -2186,7 +2186,7 @@ JUMP_TO_EXEC:
         vm.execute(bytecode, entry_point, false, options);
         return;
     } 
-    if(options->executeOutput && (output_type == OUTPUT_EXE || output_type == OUTPUT_ELF)) {
+    if(options->executeOutput && (output_type == OUTPUT_EXE || output_type == OUTPUT_IMAGE)) {
         switch(options->target) {
             case TARGET_WINDOWS_x64: {
                 #ifdef OS_WINDOWS

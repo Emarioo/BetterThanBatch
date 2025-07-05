@@ -2823,18 +2823,20 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
         ScopeId scopeId = currentScopeId;
         ASTExpression* expression = base_expression;
 
-        // CALLBACK_ON_ASSERT(
-        // // @nocheckin add this back
-        // //     ERR_SECTION(
-        // //         ERR_HEAD2(expression->location)
-        // //         ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
-        // //         for(int i=0;i<vm.call_stack.size();i++) {
-        // //             log::out << " " << vm.call_stack[i].func->name << "\n";
-        // //         }
-        // //         // TODO: Call stack
-        // //         ERR_LINE2(expression->location, "here")
-        // //     )
-        // )
+        CALLBACK_ON_ASSERT(
+            ERR_SECTION(
+                ERR_HEAD2(expression->location)
+                ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+                if(vm.states.size()) {
+                    auto& state = vm.states.last();
+                    for(int i=0;i<state.call_stack.size();i++) {
+                        log::out << " " << state.call_stack[i].func->name << "\n";
+                    }
+                }
+                // TODO: Call stack
+                ERR_LINE2(expression->location, "here")
+            )
+        )
 
         // TODO: Code below should be the same as the one in generateFunction.
         //   If we change the code in generateFunction but forget to here then
@@ -7474,10 +7476,10 @@ SignalIO GenContext::generatePreload() {
 }
 SignalIO GenContext::preparePreloadData() {
     // We need to use memory mapping if we want to allow preparePreloadData in VM on 32-bit systems
-    Assert(REGISTER_SIZE == 8);
 
     int polyVersion = 0;
     if(compiler->varInfos[VAR_INFOS]) {
+        Assert(REGISTER_SIZE == 8);
         // Reset type info pointers in global data section
         // because we set them at compile time since it uses them
         // but we want to keep them zero at start of runtime
@@ -7490,6 +7492,7 @@ SignalIO GenContext::preparePreloadData() {
         memcpy(bytecode->dataSegment.data() + compiler->varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion], &ptr, REGISTER_SIZE);
     }    
     for (int i=0;i<compiler->runtime_global_data_fixups.size();i++) {
+        Assert(REGISTER_SIZE == 8);
         auto& var = compiler->runtime_global_data_fixups[i];
         i64 ptr = (i64)(bytecode->dataSegment.data() + var.src_data_offset);
         memcpy(bytecode->dataSegment.data() + var.dst_data_offset, &ptr, REGISTER_SIZE);
@@ -7989,7 +7992,9 @@ SignalIO GenContext::generateGlobalData() {
             auto env = stack.last();
             stack.pop();
             
-            if(env.type.getPointerLevel()) {
+            // For embedded systems hardcoded addresses are normal and we should allow them.
+            bool target_embedded = compiler->output_type == OUTPUT_IMAGE;
+            if(env.type.getPointerLevel() && !target_embedded) {
                 i64 value = 0;
                 memcpy(&value, env.ptr, REGISTER_SIZE);
                 if(value != 0) {
@@ -8046,18 +8051,19 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
     ASTStatement* statement = run_directive->statement;
     lexer::SourceLocation location = statement->location;
 
-    // CALLBACK_ON_ASSERT(
-    //     // @nocheckin add back
-    //     // ERR_SECTION(
-    //     //     ERR_HEAD2(location)
-    //     //     ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
-    //     //     for(int i=0;i<vm.call_stack.size();i++) {
-    //     //         log::out << " " << vm.call_stack[i].func->name << "\n";
-    //     //     }
-    //     //     // TODO: Call stack
-    //     //     ERR_LINE2(location, "here")
-    //     // )
-    // )
+    CALLBACK_ON_ASSERT(
+        ERR_SECTION(
+            ERR_HEAD2(location)
+            ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
+            if(vm.states.size() > 0) {
+                auto& state = vm.states.last();
+                for(int i=0;i<state.call_stack.size();i++) {
+                    log::out << " " << state.call_stack[i].func->name << "\n";
+                }
+            }
+            ERR_LINE2(location, "here")
+        )
+    )
 
     // TODO: Code below should be the same as the one in generateFunction.
     //   If we change the code in generateFunction but forget to here then

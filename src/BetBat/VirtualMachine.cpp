@@ -64,6 +64,40 @@ TinyBytecode* VirtualMachine::fetch_tinycode(Bytecode* bytecode, const std::stri
     return nullptr;
 }
 
+int LevenshteinDistance(const std::string& w0, const std::string& w1) {
+    // https://en.wikipedia.org/wiki/Levenshtein_distance#Iterative_with_two_matrix_rows
+    
+    int m = w0.size();
+    int n = w1.size();
+    
+    // malloc memory once and reuse it.
+    int* base = (int*)malloc(2 * (4 * n+1));
+    int* v0 = base;
+    int* v1 = base + n+1;
+    
+    for (int i=0;i<n+1;i++)
+        v0[i] = i;
+
+    for (int i=0;i<m;i++) {
+        v1[0] = i+1;
+        
+        for (int j=0;j<n;j++) {
+            int dcost = v0[j+1] + 1;
+            int icost = v1[j] + 1;
+            int scost = v0[j];
+            if (w0[i] != w1[i])
+                scost++;
+            v1[j+1] = dcost < icost ? (dcost < scost ? dcost : scost) : (icost < scost ? icost : scost);
+        }
+        int* tmp = v0;
+        v0 = v1;
+        v1 = tmp;
+    }
+
+    int score = v0[n];
+    free(base);
+    return score;
+}
 
 void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name, bool apply_related_relocations, CompileOptions* options){
     using namespace engone;
@@ -208,37 +242,104 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             pair_lib.second->dll = nullptr;
         } else {
             // log::out << "VM lib "<< path<<"\n";
-            // if static library was specified, try to replace file extension with dynamic library.
-            int slash = path.find_last_of("/") + 1;
-            int dot = path.find_last_of(".");
+            
+            // If static library was specified then try to load dynamic library instead.
+            // When compiling exe we'll link with static library but in VM we can't and must
+            // link with dynamic library.
             // TODO: check out of bounds
-            std::string alt_path = "";
-            if(path.substr(dot+1) == "a" && path.substr(slash,3) == "lib") {
-                alt_path = path.substr(0, slash) + path.substr(slash+3, dot-slash-3);
-                alt_path += ".so";
-                if (!FileExist(alt_path)) {
-                    alt_path =path.substr(0, slash) + path.substr(slash+3, dot-slash-3);
-                    alt_path += ".dll";
-                    if (!FileExist(alt_path)) {
-                        any_failure = true;
-                        log::out << log::RED << "VM ERROR:"<<log::NO_COLOR<<" Cannot load static library "<<log::LIME<<path<<log::NO_COLOR<<" in VM, tried but couldn't load "<<log::LIME<<alt_path<<log::NO_COLOR<<" instead. (when calling "<<tinycode_name<<")\n";
-                        continue;
+            int slash = path.find_last_of("/") + 1;
+            int dot = path.substr(slash).find("."); // handles libc.so.3.3
+            int dot2 = path.substr(dot+1).find("."); // handles libc.so.3.3
+            if (dot == -1) {
+                dot = path.size();   
+            } else {
+                dot += slash;   
+            }
+            if (dot2 == -1) {
+                dot2 = path.size();
+            } else {
+                dot2 += dot+1;
+            }
+            
+            std::string dir_with_slash = path.substr(0, slash);
+            std::string filename = path.substr(slash, dot - slash);
+            std::string fileext = path.substr(dot, dot2 - (dot+1));
+
+            // log::out << "parts '" << dir_with_slash << "' '" << filename << "' '" << fileext << "' "<<dot << " " << dot2 << "\n";
+
+            DynamicArray<std::string> alt_paths;
+            alt_paths.add(path);
+            if(fileext == ".a" && filename.substr(0,3) == "lib") {
+                alt_paths.add(dir_with_slash + filename.substr(3) + ".so");
+                alt_paths.add(dir_with_slash + filename + ".so");
+                alt_paths.add(dir_with_slash + filename.substr(3) + ".dll");
+                alt_paths.add(dir_with_slash + filename + ".dll");
+            } else if(fileext == ".lib") { 
+                alt_paths.add(dir_with_slash + filename + ".dll");
+            }
+            
+            // If our guesses above didn't work then try to find any dll in
+            // the directory of the static lib. One such case is GLFW
+            //    libglfw3.a
+            //    libglfw.so.3.3  <- filename is 'glfw' not 'glfw3' which our guesses above doesn't handle
+            if(dir_with_slash.size() > 0 && ((fileext == ".a" && filename.substr(0,3) == "lib") || fileext == ".lib")) {
+                std::string best_path;
+                int best_score=999999; // low is better
+                auto iter = DirectoryIteratorCreate(dir_with_slash.c_str(), dir_with_slash.size()-1);
+                DirectoryIteratorData data;
+                while(DirectoryIteratorNext(iter, &data)) {
+                    if (data.isDirectory) continue;
+                        
+                    std::string name = std::string(data.name, data.namelen);
+                    int slash = name.find_last_of("/") + 1;
+                    int dot = name.substr(slash).find(".");
+                    int dot2 = name.substr(dot+1).find("."); // handles libc.so.3.3
+                    if (dot == -1) {
+                        dot = name.size();   
+                    } else {
+                        dot += slash;   
+                    }
+                    if (dot2 == -1) {
+                        dot2 = name.size();
+                    } else {
+                        dot2 += dot+1;
+                    }
+                    std::string dll_name = name.substr(slash, dot - slash);
+                    std::string dll_ext = name.substr(dot, dot2 - (dot+1));
+                    // log::out << "is a thing "<<name << " " << dll_name <<" ext "<< dll_ext << "\n";
+                    if(dll_ext == ".so" || dll_ext == ".dll") {
+                        int score = LevenshteinDistance(filename, dll_name);
+                        // log::out << "check "<<name<< " score" << score << "\n";
+                        if (score < best_score) {
+                            best_path = name;
+                        }
                     }
                 }
-            } else if(path.substr(dot+1) == "lib") { 
-                alt_path = path.substr(0, dot);
-                alt_path += ".dll";
-                if (!FileExist(alt_path) && slash != 0) { // On windows we may load Kernel32.lib, we convert to Kernel32.dll, It doesn't exist as a file we can find but we can still load it so we don't cause error.
-                    any_failure = true;
-                    log::out << log::RED << "VM ERROR:"<<log::NO_COLOR<<" Cannot load static library "<<log::LIME<<path<<log::NO_COLOR<<" in VM, tried but couldn't load "<<log::LIME<<alt_path<<log::NO_COLOR<<" instead. (when calling "<<tinycode_name<<")\n";
-                    continue;
+                DirectoryIteratorDestroy(iter, &data);
+                if(best_path.size() > 0) {
+                    alt_paths.add(best_path);
                 }
             }
-
-            pair_lib.second->dll = LoadDynamicLibrary(alt_path, false);
+            
+            for(auto& path : alt_paths) {
+                pair_lib.second->dll = LoadDynamicLibrary(path, false);
+                if (pair_lib.second->dll) {
+                    // log::out << "found " << path<<"\n";
+                    break;
+                }
+            }
+            
             if(!pair_lib.second->dll) {
                 any_failure = true;
-                log::out << log::RED << "VM ERROR:"<<log::NO_COLOR<<" Could not load library "<<log::LIME<<path<<log::NO_COLOR<<", calling "<<tinycode_name<<"\n";
+                log::out << log::RED << "VM ERROR:"<<log::NO_COLOR<<" Could not load library "<<log::LIME<<path<<log::NO_COLOR<<". calling "<<tinycode_name<<"\n";
+                
+                if(alt_paths.size() > 0) {
+                    log::out << log::GRAY << " Tried these paths: ";
+                    for(auto& path : alt_paths) {
+                        log::out << path<<", ";
+                    }
+                    log::out << "\n";
+                }
                 continue;
             } else {
                 // log::out << log::LIME << "Load '"<<alt_path<<"'\n";
@@ -1448,8 +1549,8 @@ void VirtualMachine::execute(){
                     Assert(-i*8-16 >= -128 && -i*8-16 <= 127);
                     Assert(inputs*8-i*8-8 >= -128 && inputs*8-i*8-8 <= 127);
                     u8 code[] {
-                        /* mov rax, [rsp - 24] */ 0x48, 0x8B, 0x44, 0x24, (i8)(-i*8-16),
-                        /* mov [rdi - 8], rax  */ 0x48, 0x89, 0x47, (i8)(inputs*8-i*8-8),
+                        /* mov rax, [rsp - 24] */ 0x48, 0x8B, 0x44, 0x24, (u8)(-i*8-16),
+                        /* mov [rdi - 8], rax  */ 0x48, 0x89, 0x47, (u8)(inputs*8-i*8-8),
                     };
                 #else
                     Assert(false);

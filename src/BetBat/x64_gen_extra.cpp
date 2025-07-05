@@ -3974,8 +3974,9 @@ bool prepare_assembly(Compiler* compiler, TinyBytecode* tinycode, BytecodeASM& a
     //   bin path gets full of assembly files otherwise.
     //   The only downside is that if there was a problem, the user can't take a look at
     //   the assembly because it might have been overwritten so spamming assembly files will do for the time being.
-    std::string asm_file = "bin/inline_asm"+std::to_string(tinycode->index)+".asm";
-    std::string obj_file = "bin/inline_asm"+std::to_string(tinycode->index)+".o";
+    // TODO: Don't hardcode bin/int/
+    std::string asm_file = "bin/int/inline_asm"+std::to_string(tinycode->index)+".asm";
+    std::string obj_file = "bin/int/inline_asm"+std::to_string(tinycode->index)+".o";
     auto file = engone::FileOpen(asm_file,FILE_CLEAR_AND_WRITE);
     defer { if(file) engone::FileClose(file); };
     if(!file) {
@@ -4020,7 +4021,7 @@ bool prepare_assembly(Compiler* compiler, TinyBytecode* tinycode, BytecodeASM& a
     //    separate them out later. This is probably faster than doing one by one. Altough, be wary 
     //    of command line character limit.
     //  
-    auto asmLog = engone::FileOpen("bin/asm.log",FILE_CLEAR_AND_WRITE);
+    auto asmLog = engone::FileOpen("bin/int/asm.log",FILE_CLEAR_AND_WRITE);
     defer { if(asmLog) engone::FileClose(asmLog); };
     
     int exitCode = 0;

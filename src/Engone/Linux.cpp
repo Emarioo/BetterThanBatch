@@ -57,12 +57,20 @@ namespace engone {
 		char* tempPtr = nullptr; // used in result
 		u32 max = 0; // not including \0
 	};
-	static std::unordered_map<DirectoryIterator,RDIInfo> s_rdiInfos;
+	static std::unordered_map<DirectoryIterator,RDIInfo>* s_rdiInfos;
+    static Mutex rdi_mutex;
 	static u64 s_uniqueRDI=0;
 	
 	DirectoryIterator DirectoryIteratorCreate(const char* name, int pathlen){
+        if(!s_rdiInfos) {
+            rdi_mutex.lock();
+            if(!s_rdiInfos) {
+                s_rdiInfos = new std::unordered_map<DirectoryIterator,RDIInfo>();
+            }
+            rdi_mutex.unlock();
+        }
 		DirectoryIterator iterator = (DirectoryIterator)(++s_uniqueRDI);
-		auto& info = s_rdiInfos[iterator] = {};
+		auto& info = (*s_rdiInfos)[iterator] = {};
 		// if(pathlen == 0) {
 		// 	info.root = "."; // CWD
 		// } else {
@@ -84,8 +92,8 @@ namespace engone {
 		return iterator;
 	}
 	bool DirectoryIteratorNext(DirectoryIterator iterator, DirectoryIteratorData* result){
-		auto info = s_rdiInfos.find(iterator);
-		if(info==s_rdiInfos.end()){
+		auto info = s_rdiInfos->find(iterator);
+		if(info==s_rdiInfos->end()){
 			return false;
 		}
         // printf("NEXT\n");
@@ -217,16 +225,16 @@ namespace engone {
 		return true;
 	}
 	void DirectoryIteratorSkip(DirectoryIterator iterator){
-		auto info = s_rdiInfos.find(iterator);
-		if(info==s_rdiInfos.end()){
+		auto info = s_rdiInfos->find(iterator);
+		if(info==s_rdiInfos->end()){
 			return;
 		}
 		if(info->second.directories.size()!=0)
 			info->second.directories.pop();
 	}
 	void DirectoryIteratorDestroy(DirectoryIterator iterator, DirectoryIteratorData* dataToDestroy){
-		auto info = s_rdiInfos.find(iterator);
-		if(info==s_rdiInfos.end()){
+		auto info = s_rdiInfos->find(iterator);
+		if(info==s_rdiInfos->end()){
 			return;
 		}
 		
@@ -244,7 +252,7 @@ namespace engone {
 			dataToDestroy->name = nullptr;
 			dataToDestroy->namelen = 0;
 		}
-		s_rdiInfos.erase(iterator);
+		s_rdiInfos->erase(iterator);
 	}
 
 #define NS (u64)1000000000
@@ -296,6 +304,10 @@ namespace engone {
 		// 	fileFlags = O_CREAT | O_RDWR;
         //     mode = S_IRUSR | S_IWUSR;
         // }
+        if(flags & FILE_READ_AND_WRITE) {
+			fileFlags = O_CREAT | O_RDWR;
+			mode = S_IRUSR | S_IWUSR;
+        }
 		if(flags&FILE_CLEAR_AND_WRITE){
 			fileFlags = O_CREAT | O_TRUNC | O_RDWR;
 			mode = S_IRUSR | S_IWUSR;

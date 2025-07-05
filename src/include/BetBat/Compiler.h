@@ -178,7 +178,7 @@ enum OutputType {
     OUTPUT_INVALID,
     OUTPUT_OBJ,
     OUTPUT_EXE,
-    OUTPUT_ELF,
+    OUTPUT_IMAGE,
     OUTPUT_LIB,
     OUTPUT_DLL,
     OUTPUT_BC,
@@ -230,6 +230,8 @@ struct Compiler {
     int compiler_library_index = -1;
 
     ArchitectureInfo arch = {};
+    
+    std::string intermediate_dir = "bin/int";
 
     std::string entry_point = "main";
     lexer::SourceLocation location_of_entry_point;

@@ -252,7 +252,7 @@ bool CheckDeveloperCommand(const BaseArray<std::string>& args) {
         CompileOptions opts;
         #ifdef OS_WINDOWS
         opts.target = TARGET_WINDOWS_x64;
-        #elif OS_LINUX_x64
+        #elif OS_LINUX
         opts.target = TARGET_LINUX_x64;
         #else
         incomplete
