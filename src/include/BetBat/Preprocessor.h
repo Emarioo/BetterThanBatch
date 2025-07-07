@@ -142,6 +142,8 @@ struct PreprocContext : PhaseContext {
     Preprocessor::Import* current_import = nullptr;
     u32 head=0;
 
+    DynamicArray<std::string> extra_defines;
+
     struct CachedMacro {
         MacroRoot* root;
     };
@@ -397,7 +399,7 @@ struct PreprocContext : PhaseContext {
     SignalIO parseMacroEvaluation();
     SignalIO parseLink();
     SignalIO parseLoad();
-    SignalIO parseImport();
+    SignalIO parseImport(DynamicArray<std::string>& macro_defines);
     SignalIO parseIf();
     SignalIO parseInformational(lexer::Token hashtag_tok, lexer::Token directive_tok, StringView directive_str, lexer::Token* out_tok, std::string* out_str);
     SignalIO parseFunctionInsert();

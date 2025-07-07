@@ -2276,7 +2276,7 @@ JUMP_TO_EXEC:
     if(!options->silent)
         log::out << log::GRAY << "not executing program\n";
 }
-u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs) {
+u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs, DynamicArray<std::string>* passed_c_macros) {
     using namespace engone;
     Path abs_path{};
     if (from_cwd_ignore_import_dirs) {
@@ -2302,7 +2302,7 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
 
     if(abs_path.text.substr(abs_path.text.size()-2) == ".h") {
         int at = abs_path.text.find_last_of("/");
-        std::string tmp_path = "bin" + abs_path.text.substr(at)+".btb";
+        std::string tmp_path = "bin/int" + abs_path.text.substr(at)+".btb";
         actual_path = tmp_path;
     }
 
@@ -2336,6 +2336,11 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
 
             std::string new_text;
             TranspileOptions options{};
+            if(passed_c_macros) {
+                for(int i=0;i<passed_c_macros->size();i++) {
+                    options.c_defines.add(passed_c_macros->get(i));
+                }
+            }
             for (const auto& p : importDirectories)
                 options.include_dirs.add(p.text);
             new_text = TranspileCToBTB(text, &options, abs_path.text, this->options);

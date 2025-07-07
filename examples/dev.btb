@@ -12,13 +12,15 @@
 
 // #import "examples/cparser/main.btb"
 // #import "stdlib.h"
-// #import "./cparser/ga.h"
+@define(GLFW_DLL)
+#import "./cparser/ga.h"
+// #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib"
 
 
 
-#import "Logger"
+// #import "Logger"
 
-log("Hello sailor")
+// log("Hello sailor")
 // This test is here to catch compiler bugs.
 // Assert(id.isNormalType()) when calling ast->getTypeInfo
 

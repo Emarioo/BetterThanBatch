@@ -71,7 +71,7 @@ int LevenshteinDistance(const std::string& w0, const std::string& w1) {
     int n = w1.size();
     
     // malloc memory once and reuse it.
-    int* base = (int*)malloc(2 * (4 * n+1));
+    int* base = (int*)malloc(2 * (4 * (n+1)));
     int* v0 = base;
     int* v1 = base + n+1;
     

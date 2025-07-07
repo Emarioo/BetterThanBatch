@@ -439,7 +439,9 @@ def try_create_btb_wrapper():
         code = '''
         @echo off
         python %~dp0../build.py output=%~dp0btb-dev.exe
-        %~dp0btb-dev.exe %*
+        IF %errorlevel%==0 (
+            %~dp0btb-dev.exe %*
+        )
         '''
     else:
         file = "btb"

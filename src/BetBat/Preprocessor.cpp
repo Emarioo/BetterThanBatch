@@ -564,6 +564,7 @@ SignalIO PreprocContext::parseIf(){
     inside_conditional = true;
     defer { inside_conditional = prev_cond; };
 
+
     _MLOG(log::out << log::GRAY<< "   #if "<<(not_modifier?"!":"")<<name<<"\n";)
     while(true){
         lexer::Token token = gettok();
@@ -575,6 +576,53 @@ SignalIO PreprocContext::parseIf(){
             )
             return SIGNAL_COMPLETE_FAILURE;
         }
+
+
+        while (token.type == lexer::TOKEN_ANNOTATION) {
+            StringView string;
+            gettok(&string);
+            if (string == "define") {
+                advance();
+                auto tok = gettok();
+                if(tok.type != '(') {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Expected ( after @define.")
+                        ERR_LINE2(tok, "here")
+                    )
+                    return SIGNAL_COMPLETE_FAILURE;
+                }
+                advance();
+                
+                tok = gettok(&string);
+                if(tok.type == lexer::TOKEN_IDENTIFIER) {
+                    extra_defines.add(string);
+                    // TODO: Support @define(GLFW_DLL=99) and @define(GLFW_DLL="Hello")
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Expected macro name.")
+                        ERR_LINE2(tok, "here")
+                    )
+                    return SIGNAL_COMPLETE_FAILURE;
+                }
+                advance();
+                
+                tok = gettok();
+                if(tok.type != ')') {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Expected ) to end @define.")
+                        ERR_LINE2(tok, "here")
+                    )
+                    return SIGNAL_COMPLETE_FAILURE;
+                }
+                advance();
+            } else
+                break;
+        }
+        token = gettok();
+        // if #import doesn't follow @define, warn about unused, ignored define?
         
         if(token.type == '#' && !(token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)){
             token = gettok(1);
@@ -674,7 +722,7 @@ SignalIO PreprocContext::parseIf(){
                 if(!evaluateTokens || active) {
                     advance();
                     advance();
-                    auto signal = parseImport();
+                    auto signal = parseImport(extra_defines);
                     if(signal == SIGNAL_COMPLETE_FAILURE) {
                         return SIGNAL_COMPLETE_FAILURE;
                     }
@@ -1056,7 +1104,7 @@ SignalIO PreprocContext::parseFunctionInsert(){
     }
     return SIGNAL_SUCCESS;
 }
-SignalIO PreprocContext::parseImport() {
+SignalIO PreprocContext::parseImport(DynamicArray<std::string>& macro_defines) {
     using namespace engone;
     StringView path;
     lexer::Token str_token = gettok(&path);
@@ -1102,7 +1150,7 @@ SignalIO PreprocContext::parseImport() {
         std::string orig_dir = TrimLastFile(lexer_imp->path);
         
         std::string assumed_path{};
-        u32 dep_id = compiler->addOrFindImport(path, orig_dir, &assumed_path);
+        u32 dep_id = compiler->addOrFindImport(path, orig_dir, &assumed_path, false, &macro_defines);
         
         bool prev_show = info.showErrors;
         if(!evaluateTokens) { // only print errors on the second preprocessing
@@ -2083,6 +2131,7 @@ SignalIO PreprocContext::parseInformational(lexer::Token hashtag_tok, lexer::Tok
     return signal;
 }
 SignalIO PreprocContext::parseOne() {
+    using namespace engone;
     StringView string{};
     // lexer::Token token = gettok();
     // auto token = getinfo(&string);
@@ -2091,6 +2140,51 @@ SignalIO PreprocContext::parseOne() {
     if(token->type == lexer::TOKEN_EOF)
         return SIGNAL_COMPLETE_FAILURE;
     
+    while (token->type == lexer::TOKEN_ANNOTATION) {
+        if (string == "define") {
+            advance();
+            auto tok = gettok();
+            if(tok.type != '(') {
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Expected ( after @define.")
+                    ERR_LINE2(tok, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+            advance();
+            
+            tok = gettok(&string);
+            if(tok.type == lexer::TOKEN_IDENTIFIER) {
+                extra_defines.add(string);
+                // TODO: Support @define(GLFW_DLL=99) and @define(GLFW_DLL="Hello")
+            } else {
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Expected macro name.")
+                    ERR_LINE2(tok, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+            advance();
+            
+            tok = gettok();
+            if(tok.type != ')') {
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Expected ) to end @define.")
+                    ERR_LINE2(tok, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+            advance();
+        } else
+            break;
+    }
+
+    tok = gettok(&string);
+
+
     if(token->type != '#' || (token->flags & (lexer::TOKEN_FLAG_NEWLINE|lexer::TOKEN_FLAG_SPACE))) {
         if(evaluateTokens) {
             if(tok.type == lexer::TOKEN_IDENTIFIER) {
@@ -2127,7 +2221,7 @@ SignalIO PreprocContext::parseOne() {
             signal = parseMacroDefinition(true);
         } else if(string == "import") {
             advance();
-            signal = parseImport();
+            signal = parseImport(extra_defines);
         } else if(string == "link") {
             advance();
             signal = parseLink();

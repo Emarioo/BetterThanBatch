@@ -23,7 +23,7 @@ u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
         };
 
         // TODO: Reuse buffers
-        buffer = TRACK_ARRAY_ALLOC(char, size);
+        buffer = TRACK_ARRAY_ALLOC(char, size+1); // +1 in case size is zero
         if(!buffer) return 0;
 
         u64 readBytes = engone::FileRead(file, buffer, size);
@@ -34,11 +34,10 @@ u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
         file = {};
     }
     std::string actual_path = path;
-        
     u32 file_id = tokenize(buffer, size, actual_path, existing_import_id);
 
     if(!vfile && buffer) {
-        TRACK_ARRAY_FREE(buffer, char, size);
+        TRACK_ARRAY_FREE(buffer, char, size + 1);
     }
 
     return file_id;

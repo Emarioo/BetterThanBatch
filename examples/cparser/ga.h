@@ -2,8 +2,14 @@
 
 
 #include "libs/glfw-3.3.9/include/GLFW/glfw3.h"
+// #include "errno.h"
 // #include "libs/glad/include/glad/glad.h"
+// __attribute__((dllimport)) void __attribute__((__stdcall__)) glAccum(GLenum op,GLfloat value);
 
+
+// typedef struct threadlocaleinfostruct {
+//     int x;
+// } hellos;
 
 // #define OSVERSION_MASK      0xFFFF0000
 

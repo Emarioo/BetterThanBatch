@@ -10,6 +10,14 @@
 
 std::string annihilate_forsaken_space_in_program_files(const std::string& path);
 
+engone::Logger& operator<<(engone::Logger& logger, const clexer::Token& tok) {
+    using namespace clexer;
+    if(tok.kind < END_OF_FILE)
+        return logger << (char)tok.kind;
+    else 
+        return logger << tok.data;
+}
+
 std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options, CompileOptions* compile_options) {
     using namespace engone;
     u64 filesize = 0;
@@ -32,161 +40,64 @@ std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* o
 std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, const std::string& path, CompileOptions* compile_options) {
     using namespace clexer;
     using namespace engone;
-    {
-        CPreprocContext context{};
 
-        /*
-            Predefined macros
-        */
-        context.macros["__STDC__"] = {"1"};
-        context.macros["__STDC_VERSION__"] = {"201112"};
-        // TODO: Don't assume gnu? we may link with clang or msvc
-        context.macros["__GNUC__"] = {"14"};
-        context.macros["_DLL"] = {};
-        
-        // GCC behaviour defining declspec and cdecl and stuff
-        auto& macro_declspec = context.macros["__declspec"] = {"__attribute__((X))"};
-            macro_declspec.has_params = true;
-            macro_declspec.parameters.add("X");
-        context.macros["__cdecl"] = {"__attribute__((__cdecl__))"};
-        context.macros["__stdcall"] = {"__attribute__((__stdcall__))"};
-        context.macros["__fastcall"] = {"__attribute__((__fastcall__))"};
-
-        switch(compile_options->target) {
-            // https://github.com/cpredef/predef/blob/master/Architectures.md
-            case TARGET_WINDOWS_x64: {
-                context.macros["_WIN32"] = {"1"};
-                context.macros["_WIN64"] = {"1"};
-                context.macros["__x86_64__"] = {""};
-            } break;
-            case TARGET_LINUX_x64: {
-                context.macros["__linux__"] = {};
-                // TODO: Which macros on Linux?
-            } break;
-            case TARGET_AARCH64: {
-                context.macros["__aarch64__"] = {};
-            } break;
-            case TARGET_ARM: {
-                context.macros["__arm__"] = {};
-            } break;
-            default: {
-                // TODO: Print the line where we imported the C header.
-                log::out << log::YELLOW << "No predefined macros when importing C header on target '"<<compile_options->target<<"'.\n";
-            }
-        }
-
-        context.options = options;
-        std::string stoff = PreprocessText(&context, text, annihilate_forsaken_space_in_program_files(path));
-        auto f = FileOpen("temp.h", FILE_CLEAR_AND_WRITE);
-        Assert(f);
-        FileWrite(f, stoff.c_str(), stoff.size());
-        FileClose(f);
-        // log::out << stoff << "\n";
-    }
-
-    return "";
+    ParserContext context{};
+    CPreprocContext& preproc = context.preproc;
 
     /*
-        TODO:
-            typedefs
-            defines
-            function defs
-            variable defs
-            ifdef
-            attributes/declspec
-
-            struct
-            include
-
-        Process
-            Tokens (easy to work with)
-            Parse and preprocess at the same time?
-                accumulate language constructs and convert
-                to BTB equivalent
+        Predefined macros
     */
+   preproc.macros["__STDC__"] = {"1"};
+   preproc.macros["__STDC_VERSION__"] = {"201112"};
+    // TODO: Don't assume gnu? we may link with clang or msvc
+    preproc.macros["__GNUC__"] = {"14"};
+    preproc.macros["_DLL"] = {};
+    
+    // GCC behaviour defining declspec and cdecl and stuff
+    auto& macro_declspec = preproc.macros["__declspec"] = {"__attribute__((X))"};
+        macro_declspec.has_params = true;
+        macro_declspec.parameters.add("X");
+        preproc.macros["__cdecl"] = {"__attribute__((__cdecl__))"};
+        preproc.macros["__stdcall"] = {"__attribute__((__stdcall__))"};
+        preproc.macros["__fastcall"] = {"__attribute__((__fastcall__))"};
 
-    // ====================
-    //      LEX TOKENS
-    // ====================
-
-    #define isalnum(chr) (((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' && chr <= '9') || chr == '_')
-
-    LexerContext context{};
-
-    DynamicArray<Token>& tokens = context.tokens;
-    int head = 0;
-    int line = 1;
-    int column = 1;
-    while(head < text.size()) {
-        char chr = text[head];
-        // char chr2 = text[head+1];
-        head++;
-        
-        if(chr == '\n') {
-            if(tokens.size() > 0)
-                tokens.last().has_newline = true;
-            line++;
-            column = 1;
-            continue;
+    switch(compile_options->target) {
+        // https://github.com/cpredef/predef/blob/master/Architectures.md
+        case TARGET_WINDOWS_x64: {
+            preproc.macros["_WIN32"] = {"1"};
+            preproc.macros["_WIN64"] = {"1"};
+            preproc.macros["__x86_64__"] = {""};
+        } break;
+        case TARGET_LINUX_x64: {
+            preproc.macros["__linux__"] = {};
+            // TODO: Which macros on Linux?
+        } break;
+        case TARGET_AARCH64: {
+            preproc.macros["__aarch64__"] = {};
+        } break;
+        case TARGET_ARM: {
+            preproc.macros["__arm__"] = {};
+        } break;
+        default: {
+            // TODO: Print the line where we imported the C header.
+            log::out << log::YELLOW << "No predefined macros when importing C header on target '"<<compile_options->target<<"'.\n";
         }
-        if(chr == ' ') {
-            column++;
-            continue;
-        }
-        if(chr == '\t') {
-            column += 4;
-            continue;
-        }
-        if(chr == '\r') {
-            continue;
-        }
-
-        if(isalnum(chr)) {
-            int start = head-1;
-            int end = head;
-            while(true) {
-                if(!isalnum(text[end]))
-                    break;
-                end++;
-            }
-            Token tok{};
-            tok.data = text.substr(start, end-start);
-            tok.line = line;
-            tok.column = column;
-            tokens.add(tok);
-            head = end;
-            column += end - start;
-            continue;
-        }
-        if(chr == '"') {
-            int start = head-1;
-            int end = head;
-            while(true) {
-                char chr = text[end];
-                end++;
-                // handle escaped quotes
-                if(chr == '"')
-                    break;
-            }
-            Token tok{};
-            tok.data = text.substr(start, end-start);
-            tok.line = line;
-            tok.column = column;
-            tokens.add(tok);
-            head = end;
-            column += end - start;
-            continue;
-        }
-
-        Token tok{};
-        tok.data = chr;
-        tok.line = line;
-        tok.column = column;
-        column += 1;
-        tokens.add(tok);
-        continue;
     }
 
+    for(int i=0;i<options->c_defines.size();i++) {
+        preproc.macros[options->c_defines[i]] = {"1"};
+    }
+
+    preproc.options = options;
+    std::string stoff = PreprocessText(&preproc, text, annihilate_forsaken_space_in_program_files(path));
+    auto f = FileOpen("temp.h", FILE_CLEAR_AND_WRITE);
+    Assert(f);
+    FileWrite(f, stoff.c_str(), stoff.size());
+    FileClose(f);
+    // log::out << stoff << "\n";
+
+    
+    context.lexer.lex_tokens(stoff);
     // for(int i=0;i<tokens.size();i++) {
     //     auto& tok = tokens[i];
     //     context.write(tok);
@@ -194,77 +105,16 @@ std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, 
     // context.cur_column = 1;
     // context.head = 0;
     // context.cur_line = 1;
-    
-    // ====================
-    //      PARSE TOKENS
-    // ====================
-
     context.parse_top();
 
-    // for(auto& pair : context.macros) {
-    //     context.out += "#macro " + pair.first;
-    //     if(pair.second.args.size() < 0) {
-    //         context.out += "(";
-    //         for(int i=0;i<pair.second.args.size(); i++) {
-    //             auto& arg = pair.second.args[i];
-    //             if(i != 0)
-    //                 context.out += ", ";
-    //             context.out += arg;
-    //         }
-    //         context.out += ")\n";
-    //     } else {
-    //         context.out += " ";
-    //     }
-    //     if(pair.second.content.size() > 3) {
-    //         for(int i=0;i<pair.second.content.size(); i++) {
-    //             auto& tok = pair.second.content[i];
-    //             if(i != 0)
-    //                 context.out += " ";
-    //             context.out += tok.data;
-    //             if(tok.has_newline)
-    //                 context.out += "\n";
-    //         }
-    //         context.out += "#endmacro\n";
-    //     } else {
-    //         for(int i=0;i<pair.second.content.size(); i++) {
-    //             auto& tok = pair.second.content[i];
-    //             if(i != 0)
-    //                 context.out += " ";
-    //             context.out += tok.data;
-    //         }
-    //         context.out += "\n";
-    //     }
-    // }
-    // for(auto& pair : context.typedefs) {
-    //     context.out += "#macro " + pair.first + " " + pair.second + "\n";
-    // }
-    for(auto& var : context.variables) {
-        context.out += "global " + var.name + ": " + var.type + "\n";
-    }
-    for(auto& fun : context.functions) {
-        context.out += "fn @import(__c_import__) " + fun.name + "(";
-        for(int i=0;i<fun.args.size();i++){
-            if(i!=0) {
-                context.out+=", ";
-            }
-            context.out += fun.args[i].name + ": " + fun.args[i].type;
-        }
-        context.out += ")";
+    context.walk();
 
-        context.out += " -> " + fun.return_type + ";\n";
-    }
-    // for(auto& str : context.structures) {
-    //     context.out += "struct " + str.name + " {\n";
-    //     for(int i=0;i<str.fields.size();i++){
-    //         context.out += "   " + str.fields[i].name + ": " + str.fields[i].type;
-    //         context.out+=";\n";
-    //     }
-    //     context.out += "}\n";
-    // }
+    // TODO: Any memory we need to free or does destructors do that already?
 
-    return context.out;
+    return context.output;
 }
 
+#pragma region preproc
 int parse_space(StringView text, int* head) {
     Assert(head);
     int start = *head;
@@ -909,42 +759,49 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
 
     output_text += "// include " + origin_path + "\n";
 
+    bool preserve_comments = false;
+
     // find directives and expand macros
     // string
     // comments
     // backslash?
     int head = 0;
     while (head < text.size()) {
+        if(text[head] == '\r') {
+            head++;
+            continue;
+        }
+
         // Preserve comments
         if(head+1 < text.size() && text[head] == '/' && text[head+1] == '/') {
-            if(!context->should_skip())
+            if(!context->should_skip() && preserve_comments)
                 output_text += "//";
             head+=2;
             while (head < text.size()) {
                 if(text[head] == '\n') {
                     head+=1;
-                    if(!context->should_skip())
+                    if(!context->should_skip() && preserve_comments)
                         output_text += "\n";
                     break;
                 }
-                if(!context->should_skip())
+                if(!context->should_skip() && preserve_comments)
                     output_text += text[head];
                 head+=1;
             }
             continue;
         }
         if(head+1 < text.size() && text[head] == '/' && text[head+1] == '*') {
-            if(!context->should_skip())
+            if(!context->should_skip() && preserve_comments)
                 output_text += "/*";
             head+=2;
             while (head < text.size()) {
                 if(head+1 < text.size() && text[head] == '*' && text[head+1] == '/') {
                     head+=2;
-                    if(!context->should_skip())
+                    if(!context->should_skip() && preserve_comments)
                         output_text += "*/";
                     break;
                 }
-                if(!context->should_skip())
+                if(!context->should_skip() && preserve_comments)
                     output_text += text[head];
                 head+=1;
             }
@@ -1034,7 +891,12 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
                 }
             }
 
-            output_text += text[head];
+
+            if(output_text.size() > 1 && output_text[output_text.size()-2] == '\n' && output_text.back() == '\n' && text[head] == '\n') {
+                // skip consecutive newlines
+            } else {
+                output_text += text[head];
+            }
             head++;
             continue;
         }
@@ -1411,408 +1273,527 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
     output_text += "// END include " + origin_path + "\n";
     return output_text;
 }
+#pragma endregion preproc
 
 namespace clexer {
-    bool LexerContext::parse_comment() {
-        if (gettok(head).data == "/" && gettok(head+1).data == "/") {
-            head+=2;
-            auto& token = gettok(head);
-            
-            write("//", token.line, token.column, false);
-            while(true) {
-                write(gettok(head));
-                if (gettok(head).has_newline)
-                    break;
-                head++;
-            }
 
-            return true;
-        } else if (gettok(head).data == "/" && gettok(head+1).data == "*") {
-            head+=2;
-
-
-            return true;
-        }
-        return false;
-    }
-    void LexerContext::parse_top() {
+    
+    void LexerContext::lex_tokens(const std::string& text) {
         using namespace engone;
-        while (head < tokens.size()) {
-            auto& token = tokens[head];
+        // #define isalnum(chr) (((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' && chr <= '9') || chr == '_')
 
-            // if(token[])
-
-            // When importing C header we can skip comments but
-            // if you manually want to convert C then this might be nice.
-            if (token.data == "/" && gettok(head).data == "/" && token.column+1 == gettok(head).column && token.line == gettok(head).line) {
-                // log::out << token.data << " "<<token.line<<" "<<token.column << " " << gettok(head).line << " " << gettok(head).column<<"\n";
-                head++;
-                write("//", token.line, token.column, false);
-                while(true) {
-                    write(gettok(head));
-                    if (gettok(head).has_newline)
-                        break;
-                    head++;
-                }
-                continue;
-            }
-            if (token.data == "/" && gettok(head).data == "*" && token.column+1 == gettok(head).column && token.line == gettok(head).line) {
-                // log::out << token.data << " "<<token.line<<" "<<token.column << " " << gettok(head).line << " " << gettok(head).column<<"\n";
-                write("/*", token.line, token.column, gettok(head).has_newline);
-                head++;
-                while(true) {
-                    Token& tok0 = gettok(head);
-                    Token& tok1 = gettok(head+1);
-                    if (tok0.data == "*" && tok1.data == "/" && !tok0.has_newline) {
-                        write("*/", tok0.line, tok0.column, tok1.has_newline);
-                        // write(tok0);
-                        // write(tok1);
-                        head+=2;
-                        break;
-                    } else { 
-                        write(tok0);
-                        head++;
-                    }
-                }
-                continue;
-            }
+        int head = 0;
+        int line = 1;
+        int column = 1;
+        while(head < text.size()) {
+            char chr = text[head];
+            char chr2 = 0;
+            if(head < text.size())
+                chr2 = text[head+1];
             head++;
 
-            if(token.data == "typedef") {
-                if(head == tokens.size())
-                    continue;
-                auto& token0 = tokens[head];
-                auto& token1 = head+1 < tokens.size() ? tokens[head+1] : toknull;
-                std::string first_type = parse_base_type(head);
-
-                std::string name = tokens[head].data;
-
-                typedefs[name] = first_type;
-                write("#macro", token);
-                write(name, token.line, token.column + 7, false);
-                write(first_type, token.line, token.column + 8 + name.size(), false);
-                // void unsigned int char short long signed float double struct
-            } else if(token.data == "#") {
-                auto& token = tokens[head];
+            if(chr == '/' && chr2 == '/') {
                 head++;
-                if(token.data == "undef") {
-                    // TODO: Proper error message
-                    log::out << log::RED << "#undef is not supported\n";
-                    return;
-                } else if(token.data == "define") {
-                    if(head == tokens.size())
-                        continue;
-                    write("#macro", token);
-                    std::string macro_name = tokens[head].data;
-                    Token nametok = tokens[head];
+                while(head < text.size() && text[head] != '\n') {
                     head++;
-                    write(nametok);
-
-                    auto& macro = (macros[macro_name] = {});
-
-                    // parse define arguments
-                    if(tokens[head].data == "(") {
-                        write(gettok(head));
-                        head++;
-                        while(head < tokens.size()) {
-                            auto& tok = tokens[head];
-                            head++;
-                            if(tok.data == ")") {
-                                write(tok);
-                                break;
-                            } else if(tok.data == ",") {
-                                write(tok);
-                                continue;
-                            }
-                            macro.args.add(tok.data);
-                            write(tok);
-                        }
-                    }
-                    bool had_import=false;
-                    bool had_export=false;
-                    // parse define content
-                    int head_bef = head;
-                    if(!gettok(head_bef).has_newline) {
-                        while(head < tokens.size()) {
-                            auto& tok = tokens[head];
-                            head++;
-                            if(tok.data == "\\" && tok.has_newline) {
-                                writeln();
-                                if(macro.content.size() > 0) 
-                                    macro.content.last().has_newline = true;
-                                continue;
-                            }
-                            if(tok.data == "extern") {
-                                // skip
-                                if(!had_export) {
-                                    std::string word = "@import(LIB_" + macro_name + ")";
-                                    macro.content.add({word, tok.line, tok.column, tok.has_newline});
-                                    write(word, tok);
-                                }
-                            } else if(getstr(head-1) == "__attribute__" && getstr(head) == "(" && getstr(head+1) == "(" && (getstr(head+2) == "dllexport"||getstr(head+2) == "dllimport") && getstr(head+3) == ")" && getstr(head+4) == ")") {
-                                if(getstr(head+2) == "dllexport") {
-                                    had_export = true;
-                                    auto last = gettok(head+4);
-                                    std::string word = "@export";
-                                    macro.content.add({word, tok.line, tok.column, last.has_newline});
-                                    write(word, tok.line, tok.column, last.has_newline);
-                                } else {
-                                    // Header shouldn't import?
-                                    // It should import actually.
-                                    // It shouldn't export.
-                                }
-                                head += 5;
-                                // skip
-                            } else if(getstr(head-1) == "__attribute__" && getstr(head) == "(" && getstr(head+1) == "(" && getstr(head+2) == "visibility" && getstr(head+3) == "(" && getstr(head+4) == "\"default\"" && getstr(head+5) == ")" && getstr(head+6) == ")" && getstr(head+7) == ")") {
-                                // NO export, what about import
-                                had_export = true;
-                                std::string word = "@export";
-                                auto last = gettok(head+7);
-                                macro.content.add({word, tok.line, tok.column, last.has_newline});
-                                write(word, tok);
-                                head += 8;
-                            } else if(getstr(head-1) == "__declspec" && getstr(head) == "(" && (getstr(head+1) == "dllexport"||getstr(head+1) == "dllimport") && getstr(head+2) == ")") {
-                                if(getstr(head+1) == "dllexport") {
-                                    had_export = true;
-                                    auto last = gettok(head+2);
-                                    std::string word = "@export";
-                                    macro.content.add({word, tok.line, tok.column, last.has_newline});
-                                    write(word, tok.line, tok.column, last.has_newline);
-                                } else {
-                                    // Should be IMPORT NOT EXPORT
-                                }
-                                head += 3;
-                                // skip
-                            } else {
-                                macro.content.add(tok);
-                                write(tok);
-                            }
-                            // if (macro.content.size() == 0) {
-                                if(tok.has_newline || head == tokens.size()) {
-                                //     write("#endmacro", tok);
-                                    break;
-                                }
-                            // }
-                        }
-                    }
-                    if (head_bef == head || gettok(head_bef).line != gettok(head-1).line) {
-                        write(" #endmacro", gettok(head-1));
-                    }
-                } else if(token.data == "ifdef" || token.data == "ifndef") {
-                    auto& name = gettok(head);
-                    write("#if", token);
-                    if(token.data == "ifndef")
-                        write("!", name.line, name.column, false);
-                    write(name);
-                    head++;
-                } else if(token.data == "include") {
-                    auto& name = gettok(head);
-                    if (name.data[0] == '"') {
-                        head++;
-                        log::out << "include "<<name.data<<"\n";
-                    } else if (name.data[0] == '<') {
-                        head++;
-                        std::string path;
-                        while(head < tokens.size()){
-                            auto& tok = gettok(head);
-                            head++;
-                            if (tok.data == ">") {
-                                break;
-                            }
-                            path += tok.data;
-                        }
-                        log::out << "include "<<path<<"\n";
-                    } else {
-                        head++;
-                    }
-                } else if(token.data == "if" || token.data == "elif") {
-                    write(gettok(head-2)); // #
-                    write(token);
-
-                    while(head < tokens.size()) {
-                        auto& token = tokens[head];
-                        head++;
-                        if(token.data == "defined") {
-                            // skip 
-                           if(getstr(head) == "(" && getstr(head+2) == ")") {
-                                write(gettok(head+1));
-                                head += 3;
-                                if(gettok(head+2-3).has_newline) {
-                                    writeln();
-                                    break;
-                                }
-                           }
-                        // if(token.data == "!") {
-                        //     out += "!";
-                        // } else if(token.data == "(") {
-                        //     out += "(";
-                        // } else if(token.data == ")") {
-                        //     out += ")";
-                        // } else if(token.data == "&") {
-                        //     out += "&";
-                        // } else if(token.data == "|") {
-                        //     out += "|";
-                        } else {
-                            out += token.data;
-                            if(token.has_newline)
-                                break;
-                                // out += "\n";
-                        }
-                    }
-                    // numbers we handle later
-                } else if(token.data == "else") {
-                    write("#else", token);
-                }  else if(token.data == "endif") {
-                    write("#endif", token);
-                } else {
-                    head--;
                 }
-            } else {
-                head--;
-                
-                if(getstr(head) == "struct" && is_tok_alnum(head+1) && getstr(head+2) == "{") {
-                    std::string name = getstr(head+1);
-                    head+=3;
-                    Structure structure{};
-                    structure.name = name;
-
-                    write("struct", token);
-                    write(name, token.line, token.column + 7, false);
-                    write("{", token.line, token.column + 7 + name.size() + 1, false);
-
-                    parse_struct_fields(head, structure);
-
-                    write("}", token);
-                    // TODO: Handle error
-                    structures.add(structure);
-                } else {
-                    // is token a type?
-                    int prev_head = head;
-                    std::string first_type = parse_base_type(head);
-                    if(prev_head != head) {
-                        auto& name = tokens[head];
-                        auto& token = head+1 < tokens.size() ? tokens[head+1] : toknull;
-                        if(name.data.size() > 0 && isalnum(name.data[0])) {
-                            if(token.data == "(") {
-                                head += 2;
-                                // function
-
-                                Function func{};
-                                func.return_type = first_type;
-                                func.name = name.data;
-                                while(head < tokens.size()) {
-                                    auto& token = tokens[head];
-
-                                    int prev_head = head;
-                                    std::string argtype = parse_base_type(head);
-
-                                    if (prev_head == head) {
-                                        // assume typedef
-                                        argtype = token.data;
-                                        head++;
-                                    }
-
-                                    std::string name = "arg"+std::to_string(func.args.size());
-
-                                    auto& nametok = tokens[head];
-
-                                    if(isalnum(nametok.data[0])) {
-                                        name = nametok.data;
-                                        head++;
-                                    }
-                                    
-                                    auto& token0 = tokens[head];
-                                    head++;
-
-                                    if(token0.data == ",") {
-                                        func.args.add({name, argtype});
-                                        continue;
-                                    }
-                                    if(token0.data == ")") {
-                                        // if(argtype != "void")
-                                        func.args.add({name, argtype});
-                                        break;
-                                    }
-                                }
-                                
-                                auto& token0 = tokens[head];
-                                if (token0.data == ";") {
-                                    head++;
-                                }
-                                functions.add(func);
-                            } else if(token.data == ";"){
-                                head += 2;
-                                // variable
-                                Variable var{};
-                                var.name = name.data;
-                                var.type = first_type;
-                                variables.add(var);
-                            }
-                        }
-                    } else {
-                        head++;
-                    }
-                    // not a base type
-                }
+                continue;
             }
+            if(chr == '/' && chr2 == '*') {
+                head++;
+                while(head+1 < text.size()) {
+                    if(text[head] == '*' && text[head+1] == '/') {
+                        head++;
+                        break;
+                    }
+                    head++;
+                }
+                head++;
+                continue;
+            }
+            
+            if(chr == '\n') {
+                line++;
+                column = 1;
+                continue;
+            }
+            if(chr == ' ') {
+                column++;
+                continue;
+            }
+            if(chr == '\t') {
+                column += 4;
+                continue;
+            }
+            if(chr == '\r') {
+                continue;
+            }
+
+            if(isalpha(chr) || chr == '_') {
+                int start = head-1;
+                while(isalnum(text[head]) || text[head] == '_') {
+                    head++;
+                }
+                int end = head;
+                Token tok{};
+                std::string word = text.substr(start, end-start);
+                // log::out << "WORD "<<word<<"\n";
+                if(word == "const") tok.kind = CONST;
+                else if(word == "typedef") tok.kind = TYPEDEF;
+                else if(word == "struct") tok.kind = STRUCT;
+                else if(word == "enum") tok.kind = ENUM;
+                else if(word == "union") tok.kind = UNION;
+                else if(word == "volatile") tok.kind = VOLATILE;
+                else if(word == "__attribute__") {
+                    tok.kind = ATTRIBUTE;
+                    while(head < text.size() && isspace(text[head])) {
+                        head++;
+                    }
+                    if(head+1 < text.size() && text[head] == '(' && text[head+1] == '(') {
+                        head+=2;
+                        int word_start = head;
+                        int paren_depth =  0;
+                        while(head < text.size()) {
+                            char chr = text[head];
+                            if(text[head] == '(') {
+                                paren_depth++;
+                            } else if(text[head] == ')') {
+                                paren_depth--;
+                                if(paren_depth == -2) {
+                                    head++;
+                                    break;
+                                }
+                            }
+                            head++;
+                        }
+                        end = head;
+                        tok.data = text.substr(word_start, head-2 - word_start);
+                    }
+                }
+                else if(word == "extern") tok.kind = EXTERN;
+                else if(word == "__extension__") {
+                    // Skip
+                    head = end;
+                    column += end - start;
+                    continue;
+                }
+                else {
+                    tok.kind = IDENTIFIER;
+                    tok.data = word;
+                }
+                tok.line = line;
+                tok.column = column;
+                tokens.add(tok);
+                head = end;
+                column += end - start;
+                continue;
+            }
+            if(isdigit(chr)) {
+                int start = head-1;
+                // Handle hexidecimal, float
+                while(isdigit(text[head])) {
+                    head++;
+                }
+                int end = head;
+                Token tok{};
+                tok.kind = NUMBER;
+                tok.data = text.substr(start, end-start);
+                tok.line = line;
+                tok.column = column;
+                tokens.add(tok);
+                head = end;
+                column += end - start;
+                continue;
+            }
+            if(chr == '"') {
+                int start = head-1;
+                while(true) {
+                    char chr = text[head];
+                    head++;
+                    // handle escaped quotes
+                    if(chr == '"')
+                        break;
+                }
+                int end = head;
+                Token tok{};
+                tok.kind = STRING;
+                tok.data = text.substr(start, end-start);
+                tok.line = line;
+                tok.column = column;
+                tokens.add(tok);
+                head = end;
+                column += end - start;
+                continue;
+            }
+
+            Token tok{};
+            tok.kind = (TokenKind)chr;
+            tok.line = line;
+            tok.column = column;
+            column += 1;
+            tokens.add(tok);
+            continue;
         }
     }
-    
-    void LexerContext::parse_struct_fields(int& index, Structure& structure) {
-        using namespace engone;
-        // we have parsed {
 
-        while(index < tokens.size()) {
-            auto& token = tokens[index];
-            if (token.data == "}") {
-                index++;
+    CRoot* ParserContext::parse_top() {
+        using namespace engone;
+
+        // TODO: 32-bit will have 4 bytemight be a different
+        pack_stack.add(8); // default is 8-byte packing
+
+        int result = 0;
+        int head = 0;
+        while (true) {
+            result = 0;
+            int head_start = head;
+            auto& token = gettok(head);
+
+            if (token.kind == END_OF_FILE) {
+                break;
+            }
+            #define CHECK_FAIL if(!result) goto parse_fail;
+
+            if(token.kind == '#') {
+                if (gettok(head+1).data == "pragma" && gettok(head+2).data == "pack") {
+                    Token num;
+                    int pack_value;
+                    head += 3;
+                    result = match(head, '(');
+                    if(!result) goto cant_handle_pragma_pack;
+                    
+                    num = gettok(head);
+                    result = match(head, IDENTIFIER);
+                    if(!result) goto cant_handle_pragma_pack;
+
+                    if(num.data == "push") {
+                    
+                        if(!result) goto cant_handle_pragma_pack;
+                        result = match(head, ',');
+                        
+                        num = gettok(head);
+                        result = match(head, NUMBER);
+                        if(!result) goto cant_handle_pragma_pack;
+
+                        pack_value = atoi(num.data.c_str());
+
+                        if(pack_value != 8 && pack_value != 1) {
+                            log::out << "ERROR: Can't handle struct packing "<<pack_value<<". BTB only supports 8-byte and 1-byte packing." << "\n";
+                            goto parse_fail;
+                        }
+                        result = match(head, ')');
+                        if(!result) goto cant_handle_pragma_pack;
+                        
+                        pack_stack.add(pack_value);
+                    } else if (num.data == "pop"){
+                        result = match(head, ')');
+                        if(!result) goto cant_handle_pragma_pack;
+
+                        if(pack_stack.size() == 0) {
+                            log::out << "WARNING: C parser pack stack is empty, line " << token.line << "\n";
+                        }
+                        pack_stack.pop();
+                    } else {
+                        result = false;
+                    }
+
+                    if(!result) {
+                        cant_handle_pragma_pack:
+                        log::out << "ERROR: Can't handle syntax for #pragma pack, line " << token.line << "\n";
+                        CHECK_FAIL
+                    }
+                }
+            }
+
+            if(token.kind == TYPEDEF) {
+                head++;
+                CType* type;
+                result = parse_type(head, &type); // function pointers are special
+                CHECK_FAIL
+                
+                auto& token_id= gettok(head);
+                result = match(head, IDENTIFIER);
+                CHECK_FAIL
+                
+                // Handle multiple identifiers and pointers
+                
+                result = match(head, ';');
+                CHECK_FAIL
+
+                if(type->obj || type->name != token_id.data) {
+                    CTypedef* node = create_typedef();
+                    node->name = token_id.data;
+                    node->type = type;
+                    root.nodes.add(node);
+                } else {
+                    type->name = "void";
+                    CTypedef* node = create_typedef();
+                    node->name = token_id.data;
+                    node->type = type;
+                    node->weak_void_type = true;
+                    root.nodes.add(node);
+                }
+            } else if(token.kind == STRUCT) {
+                head++;
+
+                std::string name = gettok(head).data;
+
+                result = match(head, IDENTIFIER);
+                CHECK_FAIL
+
+                if(gettok(head).kind == ';') {
+                    // skip declaration
+                    head++;
+                    continue;
+                }
+
+                result = match(head, '{');
+                CHECK_FAIL
+                
+                CStruct* obj = create_struct();
+                obj->packing = pack_stack.last();
+                
+                result = parse_struct_fields(head, obj);
+                CHECK_FAIL
+                
+                result = match(head, '}');
+                CHECK_FAIL
+                result = match(head, ';');
+                CHECK_FAIL
+            } else {
+                // assume function or variable
+                // TODO: Function pointers
+                // TODO: Attributes
+
+
+                bool has_dllimport = false;
+                if(token.kind == ATTRIBUTE) {
+                    head++;
+                    if(token.data == "dllimport") {
+                        has_dllimport = true;
+                    } else {
+                        // Some attribute we don't recorgnize.
+                        // Skip function/variable to be safe.
+                        goto parse_fail;
+                    }
+                }
+                
+                bool has_extern = false;
+                if(gettok(head).kind == EXTERN) {
+                    head++;
+                    has_extern = true;
+                }
+
+                CType* type;
+                result = parse_type(head, &type);
+                CHECK_FAIL
+
+                int convention = 0;
+                auto& tok2 = gettok(head);
+                if(tok2.kind == ATTRIBUTE) {
+                    head++;
+                    if(tok2.data == "__stdcall__" || tok2.data == "__cdecl__") {
+                        // OI, is __cdecl__ okay because BTB can't generate cdecl?
+                        convention = 1;
+                        // nocheckin TODO: do something with calling convention
+                    } else {
+                        // Some attribute we don't recorgnize.
+                        // Skip function/variable to be safe.
+                        goto parse_fail;
+                    }
+                }
+                
+                auto& token_id = gettok(head);
+                result = match(head, IDENTIFIER);
+                CHECK_FAIL
+
+                if(gettok(head).kind == ';') {
+                    head++;
+                    // variable
+                    if(has_extern) {
+                        CVariable* var = create_variable();
+                        var->name = token_id.data;
+                        var->type = type;
+                        root.nodes.add(var);
+                    } else {
+                        // variables not marked extern are defined variables.
+                        // not declared as coming from static or dynamic library.
+                        // We do not want to create global variables.
+                    }
+                } else if(gettok(head).kind == '(') {
+                    head++;
+                    
+                    CFunction* func = create_function();
+                    result = parse_function_parameters(head, func);
+                    CHECK_FAIL
+                    
+                    result = match(head, ')');
+                    CHECK_FAIL
+                    
+                    func->name = token_id.data;
+                    if(type->name != "void")
+                        func->return_type = type;
+                    root.nodes.add(func);
+                }
+            }
+
+            if (result > 0) {
+            parse_fail:
+                // log::out << "Skipping " << gettok(head_start) <<" at "<< gettok(head_start).line << "\n";
+                head = head_start;
+                skip_construct(head);
+            }
+        }
+        return &root;
+    }
+    
+    void ParserContext::skip_construct(int& head) {
+        int paren_depth = 0;
+        int bracket_depth = 0;
+        int curly_depth = 0;
+        int start = head;
+
+        while(true) {
+            auto& tok = gettok(head);
+            head++;
+
+            if(tok.kind == END_OF_FILE)
+                break;
+
+            if(tok.kind == ';' && paren_depth == 0 && bracket_depth == 0 && curly_depth == 0) {
+                break;
+            }
+            if(tok.kind == '(') {
+                paren_depth++;
+            } else if(tok.kind == ')') {
+                paren_depth--;
+            } else if(tok.kind == '{') {
+                curly_depth++;
+            } else if(tok.kind == '}') {
+                curly_depth--;
+            } else if(tok.kind == '[') {
+                bracket_depth++;
+            } else if(tok.kind == ']') {
+                bracket_depth--;
+            }
+        }
+        int end = head;
+    }
+
+    bool ParserContext::parse_struct_fields(int& head, CStruct* obj) {
+        using namespace engone;
+        bool result = false;
+        // TODO: Handle attribute
+        while(true) {
+            auto& token = gettok(head);
+            if(token.kind == END_OF_FILE)
+                return false;
+            if (token.kind == '}') {
                 break;
             }
 
-            int prev_head = index;
-            std::string fieldtype = parse_base_type(index);
-            if(prev_head == index) {
-                log::out << "could not parse field type\n";
+            CType* type;
+            result = parse_type(head, &type);
+            if(!result) return false;
+
+            auto& id = gettok(head);
+            result = match(head, IDENTIFIER);
+            if(!result) return false;
+
+            auto tok = &gettok(head);
+            if(tok->kind == '[') {
+                head++;
+                tok = &gettok(head);
+                if(tok->kind != NUMBER) return false;
+                head++;
+                
+                type->name += "[" + tok->data + "]";
+
+                result = match(head, ']');
+                if(!result) return false;
             }
 
-            auto& tokname = tokens[index];
-            index++;
+            obj->fields.add({});
+            obj->fields.last().name = id.data;
+            obj->fields.last().type = type;
 
-            std::string name = tokname.data;
-
-            auto token0 = tokens[index];
-            if(token0.data == ";") {
-                index++;
-            }
-            token0.has_newline = false;
-            write(name, token);
-            write(":", token);
-            write(fieldtype, token);
-            write(";", token);
-            writeln();
-
-            structure.fields.add({name, fieldtype});
+            result = match(head, ';');
+            if(!result) return false;
         }
+        return true;
     }
-    std::string LexerContext::parse_base_type(int& index) {
+    bool ParserContext::parse_function_parameters(int& head, CFunction* obj) {
+        using namespace engone;
+        bool result = false;
+        auto& tok0 = gettok(head);
+        auto& tok1 = gettok(head+1);
+
+        if(tok0.data == "void" && tok1.kind == ')') {
+            // int myliteral(void)
+            // means no parameters
+            head++;
+            return true;
+        }
+
+
+        // TODO: Handle attribute
+        int paren_depth = 0;
+        while(true) {
+            auto& token = gettok(head);
+            if(token.kind == END_OF_FILE)
+                return false;
+            if (token.kind == ')') {
+                break;
+            }
+
+
+            CType* type;
+            result = parse_type(head, &type);
+            if(!result) return false;
+
+            auto& id = gettok(head);
+            if(id.kind == IDENTIFIER) {
+                head++;
+                obj->parameters.add({});
+                obj->parameters.last().name = id.data;
+            } else {
+                obj->parameters.add({});
+                obj->parameters.last().name = "arg"+std::to_string(obj->parameters.size()-1);
+            }
+            obj->parameters.last().type = type;
+
+            auto& tok2 = gettok(head);
+            if(tok2.kind == ',') {
+                head++;
+            } else if(tok2.kind == ')') {
+
+            } else {
+                return false;
+            }
+        }
+        return true;
+    }
+    bool ParserContext::parse_type(int& head, CType** type) {
         std::string typestring = "";
-        if(tokens[index].data == "const")
-            index++;
-        auto& token0 = tokens[index];
-        auto& token1 = index+1 < tokens.size() ? tokens[index+1] : toknull;
-        auto& token2 = index+2 < tokens.size() ? tokens[index+2] : toknull;
+        bool result;
+        if (gettok(head).kind == CONST)
+            head++;
+
+        auto& token0 = gettok(head);
+        auto& token1 = gettok(head+1);
+        auto& token2 = gettok(head+2);
         if(token0.data == "void" || token0.data == "bool") {
             // C doesn't have bool type, we handle it
             // anyway because you might want to parse C++ header
             // that is mostly C with some C++ elements (like bool)
             typestring = token0.data;
-            index+=1;
+            head++;
         } else if(token0.data == "float") {
             typestring = "f32";
-            index+=1;
+            head++;
         } else if(token0.data == "double") {
             typestring = "f64";
-            index+=1;
+            head++;
         } else if (token0.data == "char" || token0.data == "short" || token0.data == "int") {
             if(token0.data == "char")
                 typestring += "i8";
@@ -1820,10 +1801,10 @@ namespace clexer {
                 typestring += "i16";
             else if(token0.data == "int")
                 typestring += "i32";
-            index+=1;
+            head++;
         } else if (token0.data == "long" && (token1.data == "long" || token1.data == "int")) {
             typestring += "i64";
-            index+=2;
+            head+=2;
         } else if((token0.data == "unsigned" || token0.data == "signed") && (token1.data == "char" || token1.data == "short" || token1.data == "int")) {
             if(token0.data == "signed")
                 typestring += "i";
@@ -1835,43 +1816,140 @@ namespace clexer {
                 typestring += "16";
             else if(token1.data == "int")
                 typestring += "32";
-            index += 2;
-        } else if(token0.data == "struct") {
+            head+=2;
+        } else if(token0.kind == STRUCT) {
+            head++;
+            
+            
+            auto& tok = gettok(head);
+            if(tok.kind == IDENTIFIER) {
+                head++;
+            }
+            
+            if (gettok(head).kind == '{') {
+                CStruct* obj = create_struct();
+                obj->packing = pack_stack.last();
+                if(tok.kind == IDENTIFIER) {
+                    obj->name = tok.data;
+                }
+
+                result = match(head, '{');
+                if(!result) return false;
+
+                parse_struct_fields(head, obj);
+
+                result = match(head, '}');
+                if(!result) return false;
+
+                *type = create_type();
+                (*type)->name = typestring;
+                (*type)->obj = obj;
+                // TODO: trailing pointers
+                return true;
+            } else if(tok.kind == IDENTIFIER) {
+                typestring = tok.data;
+            } else {
+                return false;
+            }
+        } else if(token0.kind == ENUM) {
+            Assert(("parse type enums",false));
             typestring += token1.data;
-            index+=2;
-        } else if(token0.data == "enum") {
-            typestring += token1.data;
-            index+=2;
+            head+=1;
         } else if((token0.data == "unsigned" || token0.data == "signed") && token1.data == "long" && (token2.data == "long" || token2.data == "int")) {
             if(token0.data == "signed")
                 typestring += "i";
             else
                 typestring += "u";
             typestring += "64";
-            index+=3;
+            head+=3;
+        } else if(token0.data == "unsigned") {
+            typestring = "u32";
+            head++;
+        }else if(token0.data == "signed") {
+            typestring = "i32";
+            head++;
         } else {
             // named thing?
-            if(isalnum(token0.data[0])) {
-                typestring = token0.data;
-                index++;
-            }
+            typestring = token0.data;
+            head++;
+            // TODO: Handle pointers
             // TODO: handle function pointer
         }
-        return typestring;
-    };
-    void LexerContext::skip_paren(int& index, int in_depth) {
-        int depth = in_depth;
-        while(index < tokens.size()) {
-            auto& tok = tokens[index];
-            index++;
-            if(tok.data == "(") {
-                depth++;
+        *type = create_type();
+        (*type)->name = typestring;
+        while(true) {
+            auto& tok3 = gettok(head);
+            if(tok3.kind != '*') {
+                break;
             }
-            if(tok.data == ")") {
-                depth--;
-                if(depth == 0)
-                    break;
+            head++;
+            (*type)->name += "*";
+        }
+
+        return true;
+    };
+
+    std::string ParserContext::type_to_string(CType* type) {
+        return type->name;
+    }
+    void ParserContext::walk() {
+        for(int ni=0;ni<root.nodes.size();ni++) {
+            CNode* base = root.nodes[ni];
+            switch(base->kind) {
+                case KIND_TYPEDEF: {
+                    auto* node = (CTypedef*)base;
+                    std::string type_name;
+                    if(node->type && node->type->obj) {
+                        CStruct* struc = node->type->obj;
+                        output += "struct ";
+                        if(struc->packing != 8) {
+                            output += "@no_padding ";
+                        }
+                        type_name = node->name;
+                        output += type_name + " {\n";
+                        for(int fi=0;fi<struc->fields.size();fi++) {
+                            auto& field = struc->fields[fi];
+                            output += "    " + field.name + ": " + type_to_string(field.type) + ";\n";
+                        }
+                        output += "}\n";
+                    } else {
+                        type_name = type_to_string(node->type);
+                        output += "#macro " + node->name + " " + type_name + "\n";
+                    }
+                }
+                break; case KIND_STRUCT: {
+                    auto node = (CStruct*)base;
+                    output += "struct ";
+                    if(node->packing != 8) {
+                        output += "@no_padding ";
+                    }
+                    output += node->name + " {\n";
+                    for(int fi=0;fi<node->fields.size();fi++) {
+                        auto& field = node->fields[fi];
+                        output += "    " + field.name + ": " + type_to_string(field.type) + ";\n";
+                    }
+                    output += "}\n";
+                }
+                break; case KIND_FUNCTION: {
+                    auto node = (CFunction*)base;
+                    output += "fn @import(__c_import__) " + node->name + "(";
+                    for(int fi=0;fi<node->parameters.size();fi++) {
+                        auto& parameter = node->parameters[fi];
+                        if(fi != 0)
+                            output += ", ";
+                        output += parameter.name + ": " + type_to_string(parameter.type);
+                    }
+                    output += ")";
+                    if(node->return_type)
+                        output += " -> " + type_to_string(node->return_type);
+                    output += ";\n";
+                }
+                break; case KIND_VARIABLE: {
+                    auto node = (CVariable*)base;
+                    output += "global @import(__c_import__) " + node->name + ": " + type_to_string(node->type) + ";\n";
+                }
+                break; default: Assert(false);
             }
         }
-    };
+    }
 }
