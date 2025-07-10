@@ -191,8 +191,29 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     bool any_failure = false;
     for(int i=0;i<bytecode->externalRelocations.size();i++) {
         auto& r = bytecode->externalRelocations[i];
-        if(r.library_index == -1)
-            continue;
+        if(r.library_index == -1) {
+            TinyBytecode* tinycode = bytecode->tinyBytecodes[r.tinycode_index];
+            bool required_reloc = false;
+            for(auto& t : checked_codes) {
+                if(t == tinycode) {
+                    required_reloc = true;
+                    break;
+                }
+            }
+            if(!required_reloc)
+                continue;
+            // nocheckin TODO: Show location of compile time run directive so developer can remove or comment it out to avoid this error.
+            log::out << log::RED << "VM ERROR:"<<log::NO_COLOR<<" Incomplete external relocation " << log::LIME << r.name << log::NO_COLOR << ", ";
+            if(tinycode->debugFunction) {
+                const std::string& filename = bytecode->debugInformation->files[tinycode->debugFunction->fileIndex];
+                int line = tinycode->lines[tinycode->index_of_lines[r.pc]].line_number;
+                log::out << filename << ":" << line << "\n";
+                compiler->compile_stats.errors++;
+            } else {
+                log::out << "no source info\n";
+            }
+            return;
+        }
         auto& proglib = bytecode->libraries->get(r.library_index);
         // log::out << log::LIME << r.name << " " << r.library_path<<"\n";
         if(proglib.path.size() == 0) {
@@ -263,7 +284,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             
             std::string dir_with_slash = path.substr(0, slash);
             std::string filename = path.substr(slash, dot - slash);
-            std::string fileext = path.substr(dot, dot2 - (dot+1));
+            std::string fileext = path.substr(dot, dot2 - (dot));
 
             // log::out << "parts '" << dir_with_slash << "' '" << filename << "' '" << fileext << "' "<<dot << " " << dot2 << "\n";
 
@@ -305,7 +326,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                         dot2 += dot+1;
                     }
                     std::string dll_name = name.substr(slash, dot - slash);
-                    std::string dll_ext = name.substr(dot, dot2 - (dot+1));
+                    std::string dll_ext = name.substr(dot, dot2 - (dot));
                     // log::out << "is a thing "<<name << " " << dll_name <<" ext "<< dll_ext << "\n";
                     if(dll_ext == ".so" || dll_ext == ".dll") {
                         int score = LevenshteinDistance(filename, dll_name);
@@ -1936,7 +1957,7 @@ void* VirtualMachine::map_pointer(u64 virtual_pointer, bool& was_mapped) {
 }
 void VirtualMachine::push_state(int index, i64 sp) {
     if(states.size() == 0) {
-        states.reserve(4);
+        states.reserve(6);
     } else {
         // Prepare 4 states and crash if we use more than that.
         // We reference fields of the last state in the main execute function

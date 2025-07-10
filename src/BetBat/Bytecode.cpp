@@ -1311,7 +1311,10 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 if(line.line_number != print_cache->prev_line || tiny_index != print_cache->prev_tinyindex) {
                     if(tiny_index != print_cache->prev_tinyindex) {
                         if(!print_one_inst ||specified_cache) {
-                            log::out << log::GOLD  << tinycode->name <<"\n";
+                            log::out << log::GOLD  << tinycode->name << " ";
+                            const std::string filename = code->debugInformation->files[debugFunction->fileIndex];
+                            log::out << log::GRAY << filename << "\n";
+                            // log::out << log::GOLD  << tinycode->name <<"\n";
                             print_cache->prev_tinyindex = tiny_index;
                         }
                     }
@@ -1321,7 +1324,9 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 }
             } else if(tiny_index != print_cache->prev_tinyindex) {
                 if(!print_one_inst || specified_cache) {
-                    log::out << log::GOLD  << tinycode->name <<"\n";
+                    const std::string filename = code->debugInformation->files[debugFunction->fileIndex];
+                    log::out << log::GOLD  << tinycode->name << " ";
+                    log::out << log::GRAY << filename << "\n";
                     print_cache->prev_tinyindex = tiny_index;
                 }
             }
@@ -1345,7 +1350,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             // }
         }
         
-        char buf[8];
+        char buf[12];
         sprintf(buf, "%3d", prev_pc);
         log::out << log::GRAY << " " << buf << log::PURPLE << " " << opcode;
         log::out << log::NO_COLOR;

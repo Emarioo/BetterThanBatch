@@ -356,7 +356,7 @@ void GenContext::generate_ext_dataptr(BCRegister reg, IdentifierVariable* varinf
     // if (link_convention == LinkConvention::IMPORT && lib_path.size() != 0) {
     //     link_convention = DetermineLinkConvention(lib_path);
     // }
-    if (lib_index == -1) {
+    if (lib_index == -1 && varinfo->declaration->linked_library != "__c_import__") {
         int errs = reporter->get_lib_errors(varinfo->declaration->linked_library);
         reporter->add_lib_error(varinfo->declaration->linked_library);
         if (errs >= Reporter::LIB_ERROR_LIMIT) {
@@ -8050,15 +8050,25 @@ SignalIO GenContext::executeGlobalRunDirective(GlobalRunDirective* run_directive
     ScopeId scopeId = run_directive->scope;
     ASTStatement* statement = run_directive->statement;
     lexer::SourceLocation location = statement->location;
-
     CALLBACK_ON_ASSERT(
         ERR_SECTION(
             ERR_HEAD2(location)
             ERR_MSG_LOG("Virtual machine failed when executing run directive. Call stack:\n")
             if(vm.states.size() > 0) {
                 auto& state = vm.states.last();
+                state.call_stack.add({});
+                state.call_stack.last().func = state.tinycode;
+                state.call_stack.last().return_address = state.pc;
                 for(int i=0;i<state.call_stack.size();i++) {
-                    log::out << " " << state.call_stack[i].func->name << "\n";
+                    auto& frame = state.call_stack[i];
+                    log::out << " " << frame.func->name;
+                    if(frame.func->debugFunction) {
+                        std::string filename = bytecode->debugInformation->files[frame.func->debugFunction->fileIndex];
+                        int line = frame.func->lines[frame.func->index_of_lines[frame.return_address-6]].line_number;
+                        log::out << " " << log::GRAY<< filename << ":" << line << " (pc="<< frame.return_address<< ")\n";
+                    } else {
+                        log::out << "\n";
+                    }
                 }
             }
             ERR_LINE2(location, "here")

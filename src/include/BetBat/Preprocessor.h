@@ -42,6 +42,7 @@ struct MacroRoot {
     std::string name;
     
     std::unordered_map<int,MacroSpecific*> specificMacros;
+    bool has_parameters = false;
     bool hasVariadic=false;
     bool hasBlank=false;
     MacroSpecific variadicMacro;
@@ -92,7 +93,7 @@ struct Preprocessor {
     void add_function_insert(FunctionInsert* insert);
     void match_function_insert(const std::string& name, const std::string& file, DynamicArray<const FunctionInsert*>* out) const;
     
-    MacroRoot* create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank);
+    MacroRoot* create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank, bool* was_created = nullptr);
     void insertCertainMacro(u32 import_id, MacroRoot* rootMacro, MacroSpecific* localMacro);
     bool removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int argumentAmount, bool variadic);
     MacroRoot* matchMacro(u32 import_id, const std::string& name, PreprocContext* context = nullptr);

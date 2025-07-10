@@ -38,7 +38,7 @@ struct Core {
 na := Core{{5,5},{null,null}}
 nas: void* = {null}
 
-@TEST_CASE(to_many_value_in_direct_initializer)
+@TEST_CASE(too_many_value_in_direct_initializer)
 
 struct Core {
     y: i32[2];

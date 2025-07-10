@@ -42,6 +42,8 @@ std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, 
     using namespace engone;
 
     ParserContext context{};
+    context.origin_path = path;
+    context.compile_options = compile_options;
     CPreprocContext& preproc = context.preproc;
 
     /*
@@ -57,9 +59,9 @@ std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, 
     auto& macro_declspec = preproc.macros["__declspec"] = {"__attribute__((X))"};
         macro_declspec.has_params = true;
         macro_declspec.parameters.add("X");
-        preproc.macros["__cdecl"] = {"__attribute__((__cdecl__))"};
-        preproc.macros["__stdcall"] = {"__attribute__((__stdcall__))"};
-        preproc.macros["__fastcall"] = {"__attribute__((__fastcall__))"};
+    preproc.macros["__cdecl"] = {"__attribute__((__cdecl__))"};
+    preproc.macros["__stdcall"] = {"__attribute__((__stdcall__))"};
+    preproc.macros["__fastcall"] = {"__attribute__((__fastcall__))"};
 
     switch(compile_options->target) {
         // https://github.com/cpredef/predef/blob/master/Architectures.md
@@ -165,7 +167,7 @@ int parse_string(StringView text, int* head, std::string* name) {
         }
         *head += 1;
     }
-    *name = std::string(text.ptr + start, *head - start);
+    *name = std::string(text.ptr + start, *head - start - 1);
     return *head - start;
 }
 // DOES NOT RETURN PARSED INTEGER, check 'value' instead
@@ -996,6 +998,10 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             CMacro& macro = context->macros[macro_name] = {};
             macro.origin_file = origin_path;
 
+            if(macro_name == "__has_builtin") {
+                int x=23;
+            }
+
 
             // Parse arguments
             if(text[head] != '(' || parsed_space) {
@@ -1388,9 +1394,25 @@ namespace clexer {
                 column += end - start;
                 continue;
             }
-            if(isdigit(chr)) {
+            if((chr == '0' && chr2 == 'x')) {
                 int start = head-1;
-                // Handle hexidecimal, float
+                head++; // skip x
+                while(isdigit(text[head]) || ((text[head]|32) >= 'a' && (text[head]|32) <= 'f')) {
+                    head++;
+                }
+                int end = head;
+                Token tok{};
+                tok.kind = NUMBER;
+                tok.data = text.substr(start, end-start);
+                tok.line = line;
+                tok.column = column;
+                tokens.add(tok);
+                head = end;
+                column += end - start;
+                continue;
+            } else if(isdigit(chr)) {
+                int start = head-1;
+                // Handle float
                 while(isdigit(text[head])) {
                     head++;
                 }
@@ -1442,10 +1464,10 @@ namespace clexer {
         // TODO: 32-bit will have 4 bytemight be a different
         pack_stack.add(8); // default is 8-byte packing
 
-        int result = 0;
+        bool result = false;
         int head = 0;
         while (true) {
-            result = 0;
+            result = false;
             int head_start = head;
             auto& token = gettok(head);
 
@@ -1475,7 +1497,10 @@ namespace clexer {
                         result = match(head, NUMBER);
                         if(!result) goto cant_handle_pragma_pack;
 
-                        pack_value = atoi(num.data.c_str());
+                        
+                        char* endptr;
+                        pack_value = strtol(num.data.c_str(), &endptr, 0);
+                        // pack_value = atoi(num.data.c_str());
 
                         if(pack_value != 8 && pack_value != 1) {
                             log::out << "ERROR: Can't handle struct packing "<<pack_value<<". BTB only supports 8-byte and 1-byte packing." << "\n";
@@ -1510,29 +1535,75 @@ namespace clexer {
                 CType* type;
                 result = parse_type(head, &type); // function pointers are special
                 CHECK_FAIL
-                
-                auto& token_id= gettok(head);
-                result = match(head, IDENTIFIER);
-                CHECK_FAIL
-                
-                // Handle multiple identifiers and pointers
+
+                std::string type_name;
+                if(!type->obj_func)  {
+                    CTypedef* node = create_typedef();
+                    node->type = type;
+                    if(node->type->obj && node->type->obj->name.size()) {
+                        node->typeNames.add({node->type->obj->name});
+                    }
+                    while(true) {
+                        int ptr_level = 0;
+                        while(true) {
+                            auto tok = &gettok(head);
+                            if(tok->kind != '*') {
+                                break;
+                            }
+                            head++;
+                            ptr_level++;
+                        }
+                        auto& token_id= gettok(head);
+                        result = match(head, IDENTIFIER);
+                        CHECK_FAIL
+                        type_name = token_id.data;
+                        
+                        if(type->obj || type->obj_enum || type->obj_func || type->name != type_name) {
+                            node->typeNames.add({});
+                            node->typeNames.last().name = type_name;
+                            node->typeNames.last().ptr_level = ptr_level;
+                        } else {
+                            type->name = "void";
+                            node->typeNames.add({});
+                            node->typeNames.last().name = type_name;
+                            node->typeNames.last().ptr_level = 0;
+                            node->weak_void_type = true; // TODO: Weak type means we have: typedef struct SomeType SomeType; In GLFW this is how opaque objects are declared.
+                            // However, in C you can define the struct later in which case we shouldn't add: #macro SomeType void
+                        }
+                        
+                        auto tok = &gettok(head);
+                        if(tok->kind != ',') {
+                            break;
+                        }
+                        head++; // skip ,
+                    }
+                    Assert(!node->weak_void_type || node->typeNames.size() == 1);
+                    root.nodes.add(node);
+                } else {
+                    type_name = type->obj_func->name;
+
+                    // TODO: Refactor
+                    if(type->obj || type->obj_enum || type->obj_func || type->name != type_name) {
+                        CTypedef* node = create_typedef();
+                        node->typeNames.add({});
+                        node->typeNames.last().name = type_name;
+                        node->typeNames.last().ptr_level = 0;
+                        node->type = type;
+                        root.nodes.add(node);
+                    } else {
+                        type->name = "void";
+                        CTypedef* node = create_typedef();
+                        node->typeNames.add({});
+                        node->typeNames.last().name = type_name;
+                        node->typeNames.last().ptr_level = 0;
+                        node->type = type;
+                        node->weak_void_type = true;
+                        root.nodes.add(node);
+                    }
+                }
                 
                 result = match(head, ';');
                 CHECK_FAIL
-
-                if(type->obj || type->name != token_id.data) {
-                    CTypedef* node = create_typedef();
-                    node->name = token_id.data;
-                    node->type = type;
-                    root.nodes.add(node);
-                } else {
-                    type->name = "void";
-                    CTypedef* node = create_typedef();
-                    node->name = token_id.data;
-                    node->type = type;
-                    node->weak_void_type = true;
-                    root.nodes.add(node);
-                }
             } else if(token.kind == STRUCT) {
                 head++;
 
@@ -1552,6 +1623,7 @@ namespace clexer {
                 
                 CStruct* obj = create_struct();
                 obj->packing = pack_stack.last();
+                obj->name = name;
                 
                 result = parse_struct_fields(head, obj);
                 CHECK_FAIL
@@ -1560,11 +1632,12 @@ namespace clexer {
                 CHECK_FAIL
                 result = match(head, ';');
                 CHECK_FAIL
+
+                mark_strong(name);
+
+                root.nodes.add(obj);
             } else {
                 // assume function or variable
-                // TODO: Function pointers
-                // TODO: Attributes
-
 
                 bool has_dllimport = false;
                 if(token.kind == ATTRIBUTE) {
@@ -1630,14 +1703,18 @@ namespace clexer {
                     result = match(head, ')');
                     CHECK_FAIL
                     
+                    result = match(head, ';');
+                    CHECK_FAIL
+                    
                     func->name = token_id.data;
                     if(type->name != "void")
                         func->return_type = type;
                     root.nodes.add(func);
+
                 }
             }
 
-            if (result > 0) {
+            if (!result) {
             parse_fail:
                 // log::out << "Skipping " << gettok(head_start) <<" at "<< gettok(head_start).line << "\n";
                 head = head_start;
@@ -1722,6 +1799,50 @@ namespace clexer {
         }
         return true;
     }
+    bool ParserContext::parse_enum_fields(int& head, CEnum* obj) {
+        using namespace engone;
+        bool result = false;
+        // TODO: Handle attribute
+        while(true) {
+            auto& token = gettok(head);
+            if(token.kind == END_OF_FILE)
+                return false;
+            if (token.kind == '}') {
+                break;
+            }
+
+            auto& id = gettok(head);
+            result = match(head, IDENTIFIER);
+            if(!result) return false;
+
+            int value = 0;
+            if (obj->fields.size())
+                value = obj->fields.last().value + 1;
+            
+            auto tok = &gettok(head);
+            if(tok->kind == '=') {
+                head++;
+                tok = &gettok(head);
+                if(tok->kind != NUMBER) return false;
+                head++;
+                
+                char* endptr;
+                value = strtol(tok->data.c_str(), &endptr, 0);
+            }
+            
+            obj->fields.add({});
+            obj->fields.last().name = id.data;
+            obj->fields.last().value = value;
+            
+            auto& toke = gettok(head);
+            if(toke.kind == '}') {
+                break;
+            }
+            result = match(head, ',');
+            if(!result) return false;
+        }
+        return true;
+    }
     bool ParserContext::parse_function_parameters(int& head, CFunction* obj) {
         using namespace engone;
         bool result = false;
@@ -1735,7 +1856,6 @@ namespace clexer {
             return true;
         }
 
-
         // TODO: Handle attribute
         int paren_depth = 0;
         while(true) {
@@ -1745,7 +1865,6 @@ namespace clexer {
             if (token.kind == ')') {
                 break;
             }
-
 
             CType* type;
             result = parse_type(head, &type);
@@ -1761,6 +1880,23 @@ namespace clexer {
                 obj->parameters.last().name = "arg"+std::to_string(obj->parameters.size()-1);
             }
             obj->parameters.last().type = type;
+
+            auto tok = &gettok(head);
+            if(tok->kind == '[') {
+                head++;
+
+                tok = &gettok(head);
+                if(tok->kind == NUMBER) {
+                    head++;
+                    type->name += "[" + tok->data + "]";
+                } else {
+                    // fun(int array[]) becomes fun(array: int*)
+                    type->name += "*";
+                }
+
+                result = match(head, ']');
+                if(!result) return false;
+            }
 
             auto& tok2 = gettok(head);
             if(tok2.kind == ',') {
@@ -1779,47 +1915,21 @@ namespace clexer {
         if (gettok(head).kind == CONST)
             head++;
 
-        auto& token0 = gettok(head);
-        auto& token1 = gettok(head+1);
-        auto& token2 = gettok(head+2);
-        if(token0.data == "void" || token0.data == "bool") {
+        auto token = &gettok(head);
+        if(token->data == "void" || token->data == "bool" || token->data == "char") {
             // C doesn't have bool type, we handle it
             // anyway because you might want to parse C++ header
             // that is mostly C with some C++ elements (like bool)
-            typestring = token0.data;
+            typestring = token->data;
             head++;
-        } else if(token0.data == "float") {
+        } else if(token->data == "float") {
             typestring = "f32";
             head++;
-        } else if(token0.data == "double") {
+        } else if(token->data == "double") {
             typestring = "f64";
             head++;
-        } else if (token0.data == "char" || token0.data == "short" || token0.data == "int") {
-            if(token0.data == "char")
-                typestring += "i8";
-            else if(token0.data == "short")
-                typestring += "i16";
-            else if(token0.data == "int")
-                typestring += "i32";
+        } else if(token->kind == STRUCT) {
             head++;
-        } else if (token0.data == "long" && (token1.data == "long" || token1.data == "int")) {
-            typestring += "i64";
-            head+=2;
-        } else if((token0.data == "unsigned" || token0.data == "signed") && (token1.data == "char" || token1.data == "short" || token1.data == "int")) {
-            if(token0.data == "signed")
-                typestring += "i";
-            else
-                typestring += "u";
-            if(token1.data == "char")
-                typestring += "8";
-            else if(token1.data == "short")
-                typestring += "16";
-            else if(token1.data == "int")
-                typestring += "32";
-            head+=2;
-        } else if(token0.kind == STRUCT) {
-            head++;
-            
             
             auto& tok = gettok(head);
             if(tok.kind == IDENTIFIER) {
@@ -1831,6 +1941,7 @@ namespace clexer {
                 obj->packing = pack_stack.last();
                 if(tok.kind == IDENTIFIER) {
                     obj->name = tok.data;
+                    mark_strong(obj->name);
                 }
 
                 result = match(head, '{');
@@ -1848,51 +1959,225 @@ namespace clexer {
                 return true;
             } else if(tok.kind == IDENTIFIER) {
                 typestring = tok.data;
+                mark_weak(typestring);
             } else {
                 return false;
             }
-        } else if(token0.kind == ENUM) {
-            Assert(("parse type enums",false));
-            typestring += token1.data;
-            head+=1;
-        } else if((token0.data == "unsigned" || token0.data == "signed") && token1.data == "long" && (token2.data == "long" || token2.data == "int")) {
-            if(token0.data == "signed")
-                typestring += "i";
-            else
-                typestring += "u";
-            typestring += "64";
-            head+=3;
-        } else if(token0.data == "unsigned") {
-            typestring = "u32";
+        } else if(token->kind == ENUM) {
             head++;
-        }else if(token0.data == "signed") {
-            typestring = "i32";
-            head++;
+            
+            auto& tok = gettok(head);
+            if(tok.kind == IDENTIFIER) {
+                head++;
+            }
+            
+            if (gettok(head).kind == '{') {
+                CEnum* obj = create_enum();
+                if(tok.kind == IDENTIFIER) {
+                    obj->name = tok.data;
+                }
+
+                result = match(head, '{');
+                if(!result) return false;
+
+                parse_enum_fields(head, obj);
+
+                result = match(head, '}');
+                if(!result) return false;
+
+                *type = create_type();
+                (*type)->name = typestring;
+                (*type)->obj_enum = obj;
+                // TODO: trailing pointers
+                return true;
+            } else if(tok.kind == IDENTIFIER) {
+                typestring = tok.data;
+            } else {
+                return false;
+            }
         } else {
-            // named thing?
-            typestring = token0.data;
-            head++;
-            // TODO: Handle pointers
-            // TODO: handle function pointer
+            /* This code handles
+                [signed|unsigned] char
+                [signed|unsigned] short
+                [signed|unsigned] int
+                [signed|unsigned] short int
+                [signed|unsigned] long [long] [int]
+
+                Noteworthy quirk: long in GCC in NixOS (Linux) is 8 bytes, on Windows it's 4 bytes.
+            */
+           bool explicit_sign = false;
+            if(token->data == "unsigned") {
+                explicit_sign = true;
+                typestring += "u";
+                head++;
+            } else if(token->data == "signed") {
+                explicit_sign = true;
+                typestring += "i";
+                head++;
+            } else {
+                typestring += "i";
+            }
+            auto tok = &gettok(head);
+            if(tok->data == "char") {
+                typestring += "8";
+                head++;
+            } else if (tok->data == "short") {
+                typestring += "16";
+                head++;
+
+                auto& tok1 = gettok(head);
+                if(tok1.data == "int") {
+                    head++;
+                }
+            } else if (tok->data == "int") {
+                typestring += "32";
+                head++;
+            } else {
+                auto& tok1 = gettok(head+1);
+                auto& tok2 = gettok(head+2);
+                if(tok->data == "long") {
+                    head+=1;
+
+                    if(tok1.data == "long") {
+                        head++;
+                        typestring += "64";
+                    } else {
+                        if(compile_options->target == TARGET_WINDOWS_x64) {
+                            typestring += "32";
+                        } else {
+                            typestring += "64";
+                        }
+                    }
+                    
+                    if(tok2.data == "int") {
+                        head++;
+                    }
+                } else {
+                    if(explicit_sign) {
+                        typestring += "32";
+                    } else {
+                        head++;
+                        // Some named type
+                        typestring = token->data;
+                    }
+                }
+            }
         }
-        *type = create_type();
-        (*type)->name = typestring;
+
+        if (gettok(head).kind == CONST)
+            head++;
+
+        CType* base_type = create_type();
+        base_type->name = typestring;
         while(true) {
             auto& tok3 = gettok(head);
             if(tok3.kind != '*') {
                 break;
             }
             head++;
-            (*type)->name += "*";
+            base_type->name += "*";
+
+            if (gettok(head).kind == CONST)
+                head++;
+        }
+
+        auto& tok0 = gettok(head);
+        if(tok0.kind == '(') {
+            head++;
+            auto tok = &gettok(head);
+            if(tok->kind == ATTRIBUTE) {
+                if(tok->data != "__stdcall__" && tok->data != "__cdecl__")
+                    return false;
+                head++;
+            }
+            result = match(head, '*');
+            if(!result) return false;
+
+            // likely a function pointer, syntax error otherwise i think?
+            CFunction* func = create_function();
+            CType* func_type = create_type();
+            func_type->obj_func = func;
+            if(base_type->name != "void")
+                func->return_type = base_type;
+            
+            auto& tok2 = gettok(head);
+            if(tok2.kind == ')') {
+                // no identifier
+            } else if(tok2.kind == IDENTIFIER) {
+                head++;
+                func_type->name = tok2.data;
+                func->name = tok2.data;
+            } else {
+                return false;
+            }
+            result = match(head, ')');
+            if(!result) return false;
+            
+            result = match(head, '(');
+            if(!result) return false;
+            
+            result = parse_function_parameters(head, func);
+            if(!result) return false;
+
+            result = match(head, ')');
+            if(!result) return false;
+
+            *type = func_type;
+        } else {
+            *type = base_type;
         }
 
         return true;
     };
 
     std::string ParserContext::type_to_string(CType* type) {
-        return type->name;
+        using namespace engone;
+        if(type->obj_func) {
+            CFunction* func = type->obj_func;
+            std::string out = "fn @oscall (";
+            // log::out << func->name << "  " << func->parameters.size() << "\n";
+            for(int i=0;i<func->parameters.size();i++) {
+                auto& param = func->parameters[i];
+                if(i!=0)
+                    out += ", ";
+                if(param.name.size()) {
+                    out += param.name + ": " + type_to_string(param.type);
+                } else {
+                    out += type_to_string(param.type);
+                }
+            }
+            out += ")";
+            if(func->return_type) {
+                out += " -> " + type_to_string(func->return_type);
+            }
+            return out;
+        } else if(type->obj) {
+            std::string name = "unnamed_" + std::to_string(unnamed_count++);
+            unnamed_types.add({});
+            unnamed_types.last().unique_name = name;
+            unnamed_types.last().type = type;
+            return name + type->name;
+        } else {
+            return type->name;
+        }
     }
     void ParserContext::walk() {
+        output += "// Auto-generated BTB declarations from " + origin_path + "\n\n";
+
+        // define opaque struct types
+        bool has_weak = false;
+        for(auto& pair : weak_structs) {
+            if(!pair.second.defined) {
+                if(!has_weak) {
+                    output += "// Opaque struct types\n";
+                    has_weak = true;
+                }
+                output += "struct " + pair.first + " {}\n";
+            }
+        }
+        if(has_weak)
+            output += "\n";
+
         for(int ni=0;ni<root.nodes.size();ni++) {
             CNode* base = root.nodes[ni];
             switch(base->kind) {
@@ -1900,21 +2185,57 @@ namespace clexer {
                     auto* node = (CTypedef*)base;
                     std::string type_name;
                     if(node->type && node->type->obj) {
+                        std::string base_name = "base_typedef" + std::to_string(ni);
+                        int base_index = -1;
+                        for(int i=0;i<node->typeNames.size();i++) {
+                            if(node->typeNames[i].ptr_level == 0) {
+                                base_index = i;
+                                base_name = node->typeNames[i].name;
+                                break;
+                            }
+                        }
                         CStruct* struc = node->type->obj;
                         output += "struct ";
                         if(struc->packing != 8) {
                             output += "@no_padding ";
                         }
-                        type_name = node->name;
-                        output += type_name + " {\n";
+                        output += base_name + " {\n";
                         for(int fi=0;fi<struc->fields.size();fi++) {
                             auto& field = struc->fields[fi];
                             output += "    " + field.name + ": " + type_to_string(field.type) + ";\n";
                         }
                         output += "}\n";
+                        for(int i=0;i<node->typeNames.size();i++) {
+                            if(i == base_index)
+                                continue;
+                            if(node->typeNames[i].name == base_name)
+                                continue;
+                            output += "#macro " + node->typeNames[i].name + " " + base_name;
+                            for (int j=0;j<node->typeNames[i].ptr_level;j++) {
+                                output += "*";
+                            }
+                            output += "\n";
+                        }
+                    } else if(node->type && node->type->obj_enum) {
+                        CEnum* enu = node->type->obj_enum;
+                        output += "enum ";
+                        type_name = node->typeNames[0].name;
+                        output += type_name + " {\n";
+                        for(int fi=0;fi<enu->fields.size();fi++) {
+                            auto& field = enu->fields[fi];
+                            output += "    " + field.name + " = " + std::to_string(field.value);
+                            if(fi != enu->fields.size()-1)
+                                output += ", \n";
+                            else
+                                output += "\n";
+                        }
+                        output += "}\n";
                     } else {
-                        type_name = type_to_string(node->type);
-                        output += "#macro " + node->name + " " + type_name + "\n";
+                        auto pair = weak_structs.find(node->typeNames[0].name);
+                        if(pair == weak_structs.end() || pair->second.defined) {
+                            type_name = type_to_string(node->type);
+                            output += "#macro " + node->typeNames[0].name + " " + type_name + "\n";
+                        }
                     }
                 }
                 break; case KIND_STRUCT: {
@@ -1927,6 +2248,19 @@ namespace clexer {
                     for(int fi=0;fi<node->fields.size();fi++) {
                         auto& field = node->fields[fi];
                         output += "    " + field.name + ": " + type_to_string(field.type) + ";\n";
+                    }
+                    output += "}\n";
+                }
+                break; case KIND_ENUM: {
+                    CEnum* enu = (CEnum*)base;
+                    output += "enum " + enu->name + " {\n";
+                    for(int fi=0;fi<enu->fields.size();fi++) {
+                        auto& field = enu->fields[fi];
+                        output += "    " + field.name + " = " + std::to_string(field.value);
+                        if(fi != enu->fields.size()-1)
+                            output += ", \n";
+                        else
+                            output += "\n";
                     }
                     output += "}\n";
                 }
@@ -1950,6 +2284,80 @@ namespace clexer {
                 }
                 break; default: Assert(false);
             }
+            while(unnamed_types.size()) {
+                auto obj = unnamed_types.last();
+                unnamed_types.pop();
+                
+                if(obj.type->obj) {
+                    auto node = (CStruct*)obj.type->obj;
+                    output += "struct ";
+                    if(node->packing != 8) {
+                        output += "@no_padding ";
+                    }
+                    output += obj.unique_name + " {\n";
+                    for(int fi=0;fi<node->fields.size();fi++) {
+                        auto& field = node->fields[fi];
+                        output += "    " + field.name + ": " + type_to_string(field.type) + ";\n";
+                    }
+                    output += "}\n";
+                } else if(obj.type->obj_enum) {
+                    Assert(false);
+                }
+            }
+        }
+        output += "\n";
+        output += "// Macros\n";
+        for(const auto& pair : preproc.macros) {
+            const auto& macro = pair.second;
+            // if(pair.first == "GL_DEBUG_CALLBACK_USER_PARAM") {
+            //     int x=23;
+            // }
+            output += "#macro " + pair.first;
+            if(macro.has_params) {
+                output += "(";
+                for(int i=0;i<macro.parameters.size();i++) {
+                    const auto& param = macro.parameters[i];
+                    if(i!=0)
+                        output += ", ";
+                    output += param;
+                }
+                output += ")";
+            }
+            output += " ";
+            bool is_empty = true;
+            for(int i=0;i<macro.content.size();i++) {
+                if(!isspace(macro.content[i])) {
+                    is_empty = false;
+                    break;
+                }
+            }
+            if(is_empty)
+                output += "#endmacro";
+            else {
+                // Handles backslash
+                bool has_backslash = false;
+                int head = 0;
+                while(head < macro.content.size()) {
+                    int at = macro.content.substr(head).find("\\");
+                    if(at == -1) {
+                        output += macro.content.substr(head);
+                        break;
+                    } else {
+                        if(head == 0)
+                            output += "\n";
+                        has_backslash = true;
+                        at += head;
+                        output += macro.content.substr(head, at - head);
+                        head = at + 1;
+                        // output += "\n"; // content should have newline after backslash
+                    }
+                }
+                if(has_backslash) {
+                    output += " #endmacro";
+                }
+            }
+            output += "\n";
         }
     }
+
 }

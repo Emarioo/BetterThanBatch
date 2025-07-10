@@ -534,7 +534,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
                     // that you keep going on errors to find more errors when you return the broken function type
                     // like nothing happened. - Emarioo, 2024-09-18
                     
-                    // Also, I don't care if it's good to find more types, the terminal is probably filled
+                    // Also, I don't care if it's good to find more errors, the terminal is normally filled
                     // with them anyway. Let's just return.
                     return {};
                 }

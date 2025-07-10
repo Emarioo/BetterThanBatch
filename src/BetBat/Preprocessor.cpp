@@ -30,7 +30,6 @@ SignalIO PreprocContext::parseMacroDefinition(bool is_global_macro) {
     ZoneScopedC(tracy::Color::Gold);
 
     bool multiline = false;
-    
     lexer::Token name_token = gettok();
     
     if(name_token.type != lexer::TOKEN_IDENTIFIER){
@@ -49,6 +48,7 @@ SignalIO PreprocContext::parseMacroDefinition(bool is_global_macro) {
     
     bool has_newline = name_token.flags & lexer::TOKEN_FLAG_NEWLINE;
     MacroSpecific localMacro{};
+    bool has_parameters = false;
     
     if(name_token.flags&lexer::TOKEN_FLAG_ANY_SUFFIX){
 
@@ -63,6 +63,8 @@ SignalIO PreprocContext::parseMacroDefinition(bool is_global_macro) {
             return SIGNAL_COMPLETE_FAILURE;
         }
         advance();
+        has_parameters = true;
+
         int hadError = false;
         while(true){
             lexer::Token token = gettok();
@@ -210,7 +212,20 @@ SignalIO PreprocContext::parseMacroDefinition(bool is_global_macro) {
         u32 the_import_id = import_id;
         if(is_global_macro)
             the_import_id = compiler->preload_import_id;
-        MacroRoot* rootMacro = preprocessor->create_or_get_macro(the_import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1);
+        
+        bool was_created;
+        MacroRoot* rootMacro = preprocessor->create_or_get_macro(the_import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1, &was_created);
+        if(!was_created) {
+            if(rootMacro->has_parameters != has_parameters) {
+                ERR_SECTION(
+                    ERR_HEAD2(name_token)
+                    ERR_MSG("Macro already defined as non-parameterized. Use a different name.")
+                    ERR_LINE2(name_token, "here")
+                )
+                return SIGNAL_FAILURE;
+            }
+        }
+        rootMacro->has_parameters = has_parameters;
         
         localMacro.location = { name_token };
         preprocessor->insertCertainMacro(the_import_id, rootMacro, &localMacro);
@@ -1289,7 +1304,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     first->ending_suffix = macro_token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
     
     lexer::Token tok = gettok();
-    if(!(macro_token.flags & (lexer::TOKEN_FLAG_ANY_SUFFIX)) && tok.type == '(') {
+    if(!(macro_token.flags & (lexer::TOKEN_FLAG_ANY_SUFFIX)) && tok.type == '(' && root->has_parameters) {
         advance();
         Layer* second = createLayer(false);
         layers.add(second);
@@ -1568,7 +1583,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
 
                     token = layer->get(lexer);
-                    if(token.type == '(') {
+                    if(token.type == '(' && macroroot->has_parameters) {
                         layer->step();
                         
                         Layer* layer_arg = createLayer(false);
@@ -1822,7 +1837,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     layer_macro->unwrapped = layer->unwrapped;
                     
                     token = layer->get(lexer);
-                    if(token.type == '(') {
+                    if(token.type == '(' && macroroot->has_parameters) {
                         layer->step();
                         
                         Layer* layer_arg = createLayer(false);
@@ -2365,7 +2380,7 @@ int MacroSpecific::matchArg(lexer::Token token, lexer::Lexer* lexer) {
     }
     return -1;
 }
-MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank) {
+MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank, bool* was_created) {
     Assert(name.type == lexer::TOKEN_IDENTIFIER);
     
     lock_imports.lock();
@@ -2382,8 +2397,12 @@ MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, b
     
     auto pair = imp->rootMacros.find(str_name);
     if(pair != imp->rootMacros.end()){
+        if(was_created)
+            *was_created = false;
         macroRoot = pair->second;
     } else {
+        if(was_created)
+            *was_created = true;
         macroRoot = TRACK_ALLOC(MacroRoot);
         // engone::log::out << "yes\n";160
         new(macroRoot)MacroRoot();

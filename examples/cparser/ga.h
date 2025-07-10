@@ -1,17 +1,57 @@
 
 
 
-#include "libs/glfw-3.3.9/include/GLFW/glfw3.h"
 // #include "errno.h"
-// #include "libs/glad/include/glad/glad.h"
-// __attribute__((dllimport)) void __attribute__((__stdcall__)) glAccum(GLenum op,GLfloat value);
+#include "libs/glad/include/glad/glad.h"
+#include "libs/glfw-3.3.9/include/GLFW/glfw3.h"
+// #define APIENTRYP __stdcall*
+// #  define GLAPI extern
+INT_FAST64_MAX
+// typedef unsigned int GLenum;
+// typedef unsigned char GLboolean;
+// typedef unsigned int GLbitfield;
+// typedef void GLvoid;
+// typedef khronos_int8_t GLbyte;
+// typedef khronos_uint8_t GLubyte;
+// typedef khronos_int16_t GLshort;
+// typedef khronos_uint16_t GLushort;
+// typedef int GLint;
+// typedef unsigned int GLuint;
+// typedef khronos_int32_t GLclampx;
+// typedef int GLsizei;
+// typedef khronos_float_t GLfloat;
+// typedef khronos_float_t GLclampf;
+// typedef double GLdouble;
+// typedef double GLclampd;
+// typedef void *GLeglClientBufferEXT;
+// typedef void *GLeglImageOES;
+// typedef char GLchar;
+// typedef char GLcharARB;
+// #ifdef __APPLE__
+// typedef void *GLhandleARB;
+// #else
+// typedef unsigned int GLhandleARB;
+// #endif
+// typedef khronos_uint16_t GLhalf;
+// typedef khronos_uint16_t GLhalfARB;
+// typedef khronos_int32_t GLfixed;
+// typedef khronos_intptr_t GLintptr;
+// typedef khronos_intptr_t GLintptrARB;
+// typedef khronos_ssize_t GLsizeiptr;
+// typedef khronos_ssize_t GLsizeiptrARB;
+// typedef khronos_int64_t GLint64;
+// typedef khronos_int64_t GLint64EXT;
+// typedef khronos_uint64_t GLuint64;
+// typedef khronos_uint64_t GLuint64EXT;
+// typedef struct __GLsync *GLsync;
+// struct _cl_context;
+// struct _cl_event;
 
+// typedef void (APIENTRYP PFNGLBINDVERTEXBUFFERPROC)(GLuint bindingindex, GLuint buffer, GLintptr offset, GLsizei stride);
+// GLAPI PFNGLBINDVERTEXBUFFERPROC glad_glBindVertexBuffer;
+// // #define OSVERSION_MASK      0xFFFF0000
 
-// typedef struct threadlocaleinfostruct {
-//     int x;
-// } hellos;
-
-// #define OSVERSION_MASK      0xFFFF0000
+// typedef struct { int x; } *PVE;
 
 // #define NTDDI_VERSION    0x0A00
 

@@ -122,11 +122,14 @@ namespace clexer {
     enum CNodeKind {
         KIND_TYPEDEF,
         KIND_STRUCT,
+        KIND_ENUM,
         KIND_FUNCTION,
         KIND_VARIABLE,
         KIND_TYPE,
     };
     struct CStruct;
+    struct CEnum;
+    struct CFunction;
     struct CNode {
         CNode(CNodeKind k) : kind(k) {}
         int nodeid;
@@ -136,6 +139,9 @@ namespace clexer {
         CType() : CNode(KIND_TYPE) {}
         std::string name;
         CStruct* obj;
+        CEnum* obj_enum;
+        CFunction* obj_func;
+        bool weak_name; // struct myobj; enum myobj;
     };
     struct CFunction : CNode {
         CFunction() : CNode(KIND_FUNCTION) {}
@@ -159,6 +165,15 @@ namespace clexer {
         DynamicArray<Field> fields;
         int packing = 8;
     };
+    struct CEnum : CNode {
+        CEnum() : CNode(KIND_ENUM) {}
+        std::string name;
+        struct Field {
+            std::string name;
+            int value;
+        };
+        DynamicArray<Field> fields;
+    };
     struct CVariable : CNode {
         CVariable() : CNode(KIND_VARIABLE) {}
         std::string name;
@@ -166,9 +181,14 @@ namespace clexer {
     };
     struct CTypedef : CNode {
         CTypedef() : CNode(KIND_TYPEDEF) {}
-        std::string name;
         CType* type;
         bool weak_void_type;
+        
+        struct TypeName {
+            std::string name;
+            int ptr_level;
+        };
+        DynamicArray<TypeName> typeNames;
     };
     struct CRoot {
         DynamicArray<CNode*> nodes;
@@ -178,12 +198,45 @@ namespace clexer {
         CPreprocContext preproc;
         LexerContext lexer;
 
+        std::string origin_path;
+        CompileOptions* compile_options;
+
         CRoot root{};
         BucketArray<CFunction> functions{100};
         BucketArray<CStruct> structs{100};
+        BucketArray<CEnum> enums{100};
         BucketArray<CType> types{100};
         BucketArray<CVariable> variables{100};
         BucketArray<CTypedef> typedefs{100};
+
+        struct UnnamedType {
+            std::string unique_name;
+            CType* type;
+        };
+        DynamicArray<UnnamedType> unnamed_types; // items are popped when written
+        int unnamed_count = 0;
+
+        struct WeakStruct {
+            // std::string name;
+            bool defined;
+        };
+        std::unordered_map<std::string, WeakStruct> weak_structs;
+        
+        void mark_weak(const std::string& name) {
+            auto pair = weak_structs.find(name);
+            if(pair == weak_structs.end()) {
+                weak_structs[name] = {};
+            }
+        }
+        void mark_strong(const std::string& name) {
+            auto pair = weak_structs.find(name);
+            if(pair == weak_structs.end()) {
+                auto& o = weak_structs[name] = {};
+                o.defined = true;
+            } else {
+                pair->second.defined = true;
+            }
+        }
 
         std::string output;
 
@@ -211,6 +264,12 @@ namespace clexer {
         CStruct* create_struct() {
             CStruct* node;
             structs.add(nullptr, &node);
+            node->nodeid = next_nodeid++;
+            return node;
+        }
+        CEnum* create_enum() {
+            CEnum* node;
+            enums.add(nullptr, &node);
             node->nodeid = next_nodeid++;
             return node;
         }
@@ -245,7 +304,8 @@ namespace clexer {
 
         bool match(int& head, int kind) {
             using namespace engone;
-            if(gettok(head).kind == kind) {
+            auto& tok = gettok(head);
+            if(tok.kind == kind) {
                 head++;
                 return true;
             } else {
@@ -256,6 +316,7 @@ namespace clexer {
         CRoot* parse_top();
         bool parse_type(int& head, CType** type);
         bool parse_struct_fields(int& head, CStruct* obj);
+        bool parse_enum_fields(int& head, CEnum* obj);
         bool parse_function_parameters(int& head, CFunction* obj);
         void skip_construct(int& head);
 

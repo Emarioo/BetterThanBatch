@@ -13,7 +13,7 @@
         #if BUILD_DLL
             #load "libs/glad/lib-mingw-w64/glad.dll" as GLAD
         #else
-            #load "libs/glad/lib-mingw-w64/glad.lib" as GLAD
+            #load @force "libs/glad/lib-mingw-w64/glad.lib" as GLAD
         #endif
     #endif
 #else
@@ -30,6 +30,8 @@ global glErrCode: bool = false;
 #if !GLCHECK
     #macro GLCHECK #endmacro
 #endif
+
+// #import "libs/glad/include/glad/glad.h"
 
 #macro GLAD_IMPORT @import(GLAD)
 #macro GLAD_VARIMPORT(X) @import(GLAD, alias = #quoted glad_##X) X

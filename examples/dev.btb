@@ -4,7 +4,7 @@
     This file contains the latest stuff i'm working on and
     some examples you can just uncomment and import.
 */
-// #import "examples/graphics/quad.btb"
+#import "examples/graphics/quad.btb"
 // #import "D:/dev/wander/src/main.btb"
 // #import "examples/sound/proper_sound.btb"
 // #import "examples/sound/sample_wasapi.btb"
@@ -12,64 +12,18 @@
 
 // #import "examples/cparser/main.btb"
 // #import "stdlib.h"
-@define(GLFW_DLL)
-#import "./cparser/ga.h"
+// @define(GLFW_DLL)
+// #import "./cparser/ga.h"
+// #import "libs/glfw-3.3.9/include/GLAD/glad.h"
+// #import "libs/glfw-3.3.9/include/GLFW/glfw3.h"
 // #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib"
-
-
-
-// #import "Logger"
-
-// log("Hello sailor")
-// This test is here to catch compiler bugs.
-// Assert(id.isNormalType()) when calling ast->getTypeInfo
-
-// struct Core {
-//     y: i32[2];
-//     x: i32*[2];
-// }
-// na := Core{{5,5},{null,null}}
-// nas: void* = {null}
-
-// log(arr[0], ", ", arr[1], ", ", arr[2], ", ", arr[3], ", ", arr[4])
-
-// #import "Date"
-
-// date: DateTime
-// DateUTCNow(&date)
-// log("UTC time: ",&date)
-// DateLocalNow(&date)
-// log("Local time: ",&date)
-
-// test_date()
-// test_range_days()
-// test_range_days(true)
-
-
-/*
-    Today's quest:
-        Fixed array type.
-*/
-
-// local_arr: i32[5];
-
-// global glob_arr: i32[5];
-
-// struct Model {
-//     x: i32;
-//     y: i32[5];
-// }
-
-// model: Model;
-// model = { }
-
-// model = { 1, {2, 3} }
 
 
 /*
     Todays quest:
         String concatenation using +, gone are the days we have to use the append method on strings.
 */
+
 
 // #import "String"
 // #import "Logger"

@@ -204,14 +204,19 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
     // Array < char [
     
     /* a sketch in BNF of type syntax
-        type = "(" normal_type ")" | "(" function_type ")"
+        type = ( normal_type | function_type ) { "*" | "[]" | ("[" integer "]") }
 
-        normal_type = identifier [ poly_list ] { "*" }
-
-        poly_list = "<" [ type_list ] ">"
+        normal_type = identifier [ "<" [ type_list ] ">" ]
 
         type_list = type { "," type }
 
+        function_type = "fn" [ convention ] "(" [ type_list ] ")" [ "->" return_types ]
+
+        return_types = ( "(" type_list ")" ) | type
+
+        convention = "@stdcall" | "@betcall" | "@unixcall" | "@oscall"
+
+    Examples:
         fn < (fn () -> i32) * >
 
         fn ( fn() -> i32, i32 )
@@ -222,26 +227,12 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
 
         var: fn () -> i32, i32
 
-        function_type = "fn" [ convention ] [ poly_list ] "(" [ type_list ] ")" [ "->" return_types ] { "*" }
-
-        return_types = [ "(" type_list ")" ] | type if inside(type_list) else type_list
-
-        convention = "@stdcall" | "@betcall" | "@unixcall"
     */
     
     struct Env {
         std::string buffer="";
-        // bool new_type = true;
-        // bool type_list = false;
-        bool func_params = false;
-        bool func_returns = false;
-        bool multiple_return_values = false;
-        
-        bool only_pointer = false;
-        bool may_be_name = true;
-        
-        // bool expect_closing_paren = false;
-        // bool consume_closing_paren = false;
+        bool func_params = false; // allows and ignores argument names (arg0: i32)
+        bool type_suffix = false;
     };
     DynamicArray<Env> envs;
     envs.add({});
@@ -258,65 +249,18 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
     while(true) {
         CURTOK();
         
-        if(envs.last().func_params) {
-            if(token->type == ')') {
-                info.advance();
-                envs.last().buffer += ")";
-            } else Assert(false); // TODO: throw error?
-            CURTOK();
-            auto token2 = info.getinfo(1);
-            if (( 0 == (token->flags & lexer::TOKEN_FLAG_ANY_SUFFIX) && token->type == '-' && token2->type == '>')) {
-                info.advance(2);
-                envs.last().buffer += "->";
-                envs.last().func_returns = true;
-                envs.last().func_params = false;
-                envs.last().may_be_name = false;
-                auto token3 = info.getinfo();
-                if(token3->type == '(') {
-                    info.advance();
-                    envs.last().multiple_return_values = true;
-                    envs.last().buffer += "(";
-                }
-                envs.add({});
-                continue;
-            } else {
-                // no return values
-                // ERR_SECTION(
-                //     ERR_HEAD2(loc)
-                //     ERR_MSG("Function ")
-                // )
-            }
-            if(envs.size() > 1) {
-                envs[envs.size()-2].buffer += envs.last().buffer;
-                envs.pop();
-            } else {
-                break;
-            }
-            continue;
-        } else if(envs.last().func_returns) {
-            if(envs.size() > 1) {
-                envs[envs.size()-2].buffer += envs.last().buffer;
-                envs.pop();
-            } else {
-                // envs[envs.size()-2].buffer += envs.last().buffer;
-                break;
-            }
-            continue;
-        }
-        if(!envs.last().only_pointer) {
+        if(!envs.last().type_suffix) {
             // Skip arg names in function pointer, they don't serve a purpose but it's
             // nice to easily take a function with names and turn it into a func pointer.
-            if(envs.size() > 1) {
-                if(envs[envs.size()-2].func_params) {
-                    auto tok2 = getinfo(1);
-                    if (token->type == lexer::TOKEN_IDENTIFIER && tok2->type == ':') {
-                        info.advance(2);
-                        continue;
-                    }
+            if(envs.last().func_params) {
+                auto tok2 = getinfo(1);
+                if (token->type == lexer::TOKEN_IDENTIFIER && tok2->type == ':') {
+                    info.advance(2);
+                    continue;
                 }
             }
                 
-            if (token->type == lexer::TOKEN_FUNCTION && envs.last().may_be_name) {
+            if (token->type == lexer::TOKEN_FUNCTION) {
                 info.advance();
                 envs.last().buffer.append("fn");
                 
@@ -341,54 +285,34 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 }
                 info.advance();
                 envs.last().buffer.append("(");
-                envs.last().func_params = true;
+                envs.last().type_suffix = true;
                 envs.add({});
-                // envs.last().expect_closing_paren = true;
-                // envs.last().consume_closing_paren = false;
+                envs.last().func_params = true;
                 continue;
-            } else if (token->type == lexer::TOKEN_IDENTIFIER && envs.last().may_be_name) {
+            } else if (token->type == lexer::TOKEN_IDENTIFIER) {
                 info.advance();
                 if(view == "uword" || view == "iword") {
                     envs.last().buffer += view.ptr[0]+std::to_string(compiler->arch.REGISTER_SIZE * 8);
                 } else {
                     envs.last().buffer += view;
                 }
+
+                envs.last().type_suffix = true;
                 
-                envs.last().may_be_name = false;
-                continue;
-            } else if (token->type == lexer::TOKEN_NAMESPACE_DELIM) {
-                info.advance();
-                envs.last().buffer += "::";
-                envs.last().may_be_name = true;
-                // flawed?
-                continue;
-            } else if (token->type == '<') {
-                info.advance();
-                envs.last().buffer += "<";
-                envs.last().may_be_name = false;
-                envs.add({});
-                continue;
+                CURTOK()
+                if (token->type == '<') {
+                    info.advance();
+                    envs.last().buffer += "<";
+                    envs.add({});
+                    continue;
+                }
             }
-            //  else if (token->type == '(' && envs.last().may_be_name) {
-            //     if(envs.size() == 1) {
-            //         break;
-            //     }
-            //     info.advance();
-            //     envs.last().buffer += "(";
-            //     envs.last().may_be_name = false;
-            //     envs.add({});
-            //     envs.last().expect_closing_paren = true;
-            //     // envs.last().consume_closing_paren = false;
-            //     continue;
-            // }
         }
+        CURTOK()
         if (token->type == '*') {
-            if(envs.last().may_be_name) {
-                return SIGNAL_FAILURE;
-            }
             info.advance();
             envs.last().buffer += "*";
-            envs.last().only_pointer = true;
+            continue;
         } else if (token->type == '[') {
             auto tok = info.gettok(&view, 1);
             auto token = info.getinfo(&view, 1);
@@ -418,9 +342,6 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 token = info.getinfo(&view, 2);
             }
             if(token->type == ']') {
-                if(envs.last().may_be_name) {
-                    return SIGNAL_FAILURE;
-                }
                 if(is_fixed_array) {
                     info.advance(3);
                     envs.last().buffer += "[" + std::to_string(array_len)+"]";
@@ -431,36 +352,22 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
                 }
                 continue;
             } else {
+                // We break here to handle dynamic arrays: i32[.]
+                // We would have parsed i32 and then caller of parseTypeId handles [.]
                 break;
             }
         } else if (token->type == ',') {
             if(envs.size() == 1) {
                 break;
             }
-            if(envs[envs.size()-2].multiple_return_values) {
-                
-            } else if(envs[envs.size()-2].func_returns) {
-                // we break here because
-                //  func: fn ()->i32, param: i32
-                // should be treated as
-                //  a function pointer type with one return value
-                // and not two return values (i32 and param where ": i32" is left out)
-                // User should enclose return values in parenthesis if they need multiple return values
-                break;
-            }
-
             info.advance();
             envs[envs.size()-2].buffer += envs.last().buffer;
             envs[envs.size()-2].buffer += ",";
             envs.last().buffer.clear();
-            envs.last().may_be_name = true;
-            envs.last().only_pointer = false;
+            envs.last().type_suffix = false;
         } else if (token->type == '>') {
             if(envs.size() == 1) {
                 break;
-            }
-            if(envs[envs.size()-2].func_returns) {
-                break; // in function pointers, we have 2 envs, not just one so we check function pointer too.
             }
             info.advance();
             envs[envs.size()-2].buffer += envs.last().buffer;
@@ -470,22 +377,37 @@ SignalIO ParseContext::parseTypeId(std::string& outTypeId, int* tokensParsed){
             if(envs.size() == 1) {
                 break;
             }
-            if(envs[envs.size()-2].multiple_return_values) {
+            if(envs.last().func_params) {
                 info.advance();
                 envs.last().buffer += ")";
-            } else if(envs[envs.size()-2].func_returns) {
-                break; // in function pointers, we have 2 envs, not just one so we check function pointer too.
-            }
-            // if(envs.last().expect_closing_paren) {
                 envs[envs.size()-2].buffer += envs.last().buffer;
-                envs.pop();   
+                envs.pop();
+                CURTOK();
+                auto token2 = info.getinfo(1);
+                if (( 0 == (token->flags & lexer::TOKEN_FLAG_ANY_SUFFIX) && token->type == '-' && token2->type == '>')) {
+                    info.advance(2);
+                    envs.last().buffer += "->";
+                    auto token3 = info.getinfo();
+                    if(token3->type == '(') {
+                        info.advance();
+                        envs.last().type_suffix = true;
+                        envs.last().buffer += "(";
+                        envs.add({});
+                    } else {
+                        envs.last().type_suffix = false;
+                    }
+                }
                 continue;
-            // }
-            // info.advance();
-            // envs[envs.size()-2].buffer += envs.last().buffer;
-            // envs[envs.size()-2].buffer += ")";
-            // envs.pop();
+            }
+            info.advance();
+            envs.last().buffer += ")";
+            envs[envs.size()-2].buffer += envs.last().buffer;
+            envs.pop();   
+            continue;
         } else {
+            if(!envs.last().type_suffix) {
+                return SIGNAL_FAILURE;   
+            }
             break;
         }
     }
@@ -2585,7 +2507,6 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 values.add(initExpr);
             } else if(token->type == lexer::TOKEN_IDENTIFIER){
                 auto loc = info.getloc();
-                info.advance();
                 // int startToken=info.gethead();
                 
                 // log::out << view << "\n";
@@ -2594,8 +2515,8 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                 // could be a slice if tok[]{}
                 // if something is within [] then it's a array access
                 // polytypes exist for struct initializer and function calls
-                auto tok = info.gettok();
-                auto poly_tok = info.gettok();
+                auto tok = info.gettok(1);
+                auto poly_tok = info.gettok(2);
                 std::string polyTypes="";
                 // TODO: func<i32>() and i < 5 has ambiguity when
                 //  parsing. Currently using space to differentiate them.
@@ -2614,6 +2535,8 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                     // default: Assert(false);
                     // }
                     tok = info.gettok();
+                } else {
+                    info.advance();
                 }
 
                 // NOTE: I removed code that parsed poly types and replaced it with ParseTypeId.
@@ -2638,12 +2561,13 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                             break;
                         }
                     }
-                    ns += pure_name;
-                    ns += polyTypes;
+                    if(polyTypes.size())
+                        ns += polyTypes;
+                        else
+                        ns += pure_name;
 
                     ASTExpressionCall* tmp = (ASTExpressionCall*)info.ast->createExpression(EXPR_CALL);
                     tmp->location = loc;
-                    // tmp->name = pure_name + polyTypes;
                     tmp->name = ns;
 
                     int count = 0;
@@ -2684,8 +2608,10 @@ SignalIO ParseContext::parseExpression(ASTExpression*& expression){
                             break;
                         }
                     }
-                    ns += pure_name;
-                    ns += polyTypes;
+                    if(polyTypes.size())
+                        ns += polyTypes;
+                    else
+                        ns += pure_name;
                     initExpr->castType = info.ast->getTypeString(ns);
                     // TODO: A little odd to use castType. Renaming castType to something more
                     //  generic which works for AST_CAST and AST_INITIALIZER would be better.
@@ -4235,10 +4161,16 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
     if(tok.type == '-' && !(tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX) && tok2.type == '>'){
         info.advance(2);
         tok = info.gettok();
+
+        bool has_paren = false;
+        if(tok.type == '(') {
+            has_paren = true;
+            advance();
+        }
         
         WHILE_TRUE {
             auto tok = info.gettok();
-            if(tok.type == '{' || tok.type == ';'){
+            if(tok.type == '{' || tok.type == ';' || (has_paren && tok.type == ')')){
                 break;   
             }
             
@@ -4280,6 +4212,19 @@ SignalIO ParseContext::parseFunction(ASTFunction*& function, ASTStruct* parentSt
                 // Continuing since we are inside of return values and expect
                 // something to end it
             }
+        }
+
+        tok = info.gettok();
+        if(has_paren) {
+            if(tok.type != ')') {
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Expected closing parenthesis for the opening parenthesis on return values. You can skip parenthesis for functions. It is function pointers that require parenthesis for multiple return values to resolve ambiguity.")
+                    ERR_LINE2(tok, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+            advance();
         }
     }
     // function->tokenRange.endIndex = info.at()+1; // don't include body in function's token range
