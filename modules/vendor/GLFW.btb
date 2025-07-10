@@ -32,6 +32,7 @@
         #load "libs/glfw-3.3.9/lib-ubuntu/libglfw3.a" as GLFW
     #endif
     #load "m.so" // math
+    #load "GL.so"
     #load "X11.so"
     // #load "wayland-client.so"
 #endif
