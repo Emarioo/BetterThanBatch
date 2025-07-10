@@ -65,6 +65,11 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         // section_comment = objectFile.createSection(".comment", FLAG_NONE, 1);
         section_arm_attr = objectFile.createSection(".ARM.attributes", FLAG_NONE, 1);
     }
+    if(compiler->options->target == TARGET_LINUX_x64) {
+        // Prevent warning about:
+        //    missing .note.GNU-stack section implies executable stack.
+        objectFile.createSection(".note.GNU-stack", FLAG_NONE, 1);
+    }
 
     DynamicArray<u32> tinyprogram_offsets;
     auto text_stream = objectFile.getStreamFromSection(section_text);

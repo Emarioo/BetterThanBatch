@@ -116,6 +116,7 @@ python build.py msvc
 If you find the compiler and language interesting and want to chat about it or have questions or problems getting started then feel free to join our discord: https://discord.gg/gVzQhm9pwH
 
 ## Mini-projects
+**NOTE:** The graphics examples require libGL.so and libX11.so.
 
 Simple rendering using GLAD and GLFW: [Rendering test](/examples/graphics/quad.btb)
 

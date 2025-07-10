@@ -431,7 +431,9 @@ def has_wrapper():
     else:
         file = "btb"
     wrapper = os.path.dirname(__file__) + "/bin/" + file
-    return os.path.exists(wrapper)
+
+    # wrapper is not a bash script (it shouldn't be this large so it's probably btb executable)
+    return os.path.exists(wrapper) and os.stat(wrapper).st_size <= 200
 
 def try_create_btb_wrapper():
     if platform.system() == "Windows":
@@ -445,7 +447,7 @@ def try_create_btb_wrapper():
         '''
     else:
         file = "btb"
-        code = '''#!/bin/bash
+        code = '''
         set -e
         SCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})
         python3 $SCRIPT_DIR/../build.py 
@@ -453,7 +455,8 @@ def try_create_btb_wrapper():
         '''
 
     wrapper = os.path.dirname(__file__) + "/bin/" + file
-    if not os.path.exists(wrapper):
+
+    if not os.path.exists(wrapper) or os.stat(wrapper).st_size > 200:
         os.makedirs(os.path.dirname(wrapper), exist_ok=True)
         with open(wrapper, "w") as f:
             f.write(code)
