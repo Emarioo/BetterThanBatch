@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 ### What is this ###
 # This is the new build system that replaces makefiles, build.bat and build.sh.
@@ -214,10 +214,12 @@ def build_btb(config: BuildConfig) -> bool:
     if config.toolchain == 'msvc':
         try_configure_msvc_toolchain(config.verbose)
 
+    TRACY_DIR = "libs/tracy-0.12.2"
+
     start_compute_time = time.time()
     files = gather_btb_files(config)
     if config.tracy:
-        files.append(("libs/tracy-0.10/public/TracyClient.cpp", config.int_dir + "/TracyClient.o"))
+        files.append((f"{TRACY_DIR}/public/TracyClient.cpp", config.int_dir + "/TracyClient.o"))
 
     @dataclasses.dataclass
     class BuildRuntime:
@@ -232,7 +234,7 @@ def build_btb(config: BuildConfig) -> bool:
         src_file = srcdst[0]
         obj_file = srcdst[1]
         if config.toolchain == 'msvc':
-            FLAGS = "/std:c++17 /nologo /EHsc /TP /wd4129 /Isrc/include /Ilibs/tracy-0.10/public /FI pch.h /DCOMPILER_MSVC"
+            FLAGS = f"/std:c++17 /nologo /EHsc /TP /wd4129 /Isrc/include /I{TRACY_DIR}/public /FI pch.h /DCOMPILER_MSVC"
             if platform.system() == "Windows":
                 FLAGS += " -DOS_WINDOWS"
             elif platform.system() == "Linux":
@@ -247,8 +249,8 @@ def build_btb(config: BuildConfig) -> bool:
             pdb_path += ".pdb"
             command = f"cl {FLAGS} /c /Fd:{pdb_path} /Fo:{obj_file} {src_file}"
         elif config.toolchain == 'gcc' or config.toolchain == 'clang':
-            FLAGS = "-std=c++17 -Isrc/include -Ilibs/tracy-0.10/public -include src/include/pch.h -DCOMPILER_GNU"
-            FLAGS += " -Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point -Wno-class-conversion -Wno-address -Wno-strict-aliasing -Wno-sign-compare"
+            FLAGS = f"-std=c++17 -Isrc/include -I{TRACY_DIR}/public -include src/include/pch.h -DCOMPILER_GNU"
+            FLAGS += " -Wall -Wno-unused-variable -Wno-unused-function -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unused-but-set-variable -Wno-nonnull-compare -Wno-sequence-point -Wno-class-conversion -Wno-address -Wno-strict-aliasing -Wno-sign-compare"
 
             if platform.system() == "Windows":
                 FLAGS += " -DOS_WINDOWS"
