@@ -144,6 +144,7 @@ struct PreprocContext : PhaseContext {
     u32 head=0;
 
     DynamicArray<std::string> extra_defines;
+    DynamicArray<std::string> extra_c_includes;
 
     struct CachedMacro {
         MacroRoot* root;

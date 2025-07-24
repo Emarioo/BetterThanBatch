@@ -514,6 +514,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     // }
     ObjectFileExtraInfo extra_info{};
     extra_info.target = compiler->options->target;
+    extra_info.arch = compiler->options->arch;
     bool yes = false;
     if(objType == OBJ_COFF)
         yes = objectFile.writeFile_coff(path, &extra_info);
@@ -751,8 +752,9 @@ bool ObjectFile::writeFile_elf(const std::string& path, ObjectFileExtraInfo* ext
     bool suc = true;
     #define CHECK Assert(suc);
 
-    bool small_elf = extra_info->target == TARGET_ARM;
-    int REGISTER_SIZE = extra_info->target == TARGET_ARM ? 4 : 8;
+    int REGISTER_SIZE = extra_info->arch.REGISTER_SIZE;
+    bool small_elf = extra_info->arch.REGISTER_SIZE == 4;
+    // bool small_elf = extra_info->target == TARGET_ARM;
     
     #define ELF_SET(P,M,V) (small_elf ? P##32->M=V : P##64->M=V)
     #define ELF_GET(P,M) (small_elf ? P##32->M : P##64->M )

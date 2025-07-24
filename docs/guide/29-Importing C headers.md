@@ -1,6 +1,7 @@
-**VERY EXPERIMENTAL FEATURE**
+**EXPERIMENTAL FEATURE, see _Limitations_ section further down**
 
-You can import a C header with `#import "util.h"`. The functions, structs, and enums in the header and further included files from C #include will then be available in the BTB source code. Internally the compiler has it's own C parser which parses the headers and converts them to BTB code. The C parser is not complete and will therefore ignore parts it cannot parse such as complex function pointers (function pointers from the GLFW library does work). This is why you see "Function/Type/variable does not exist" because the parser skipped it.
+You can import a C header with `#import "util.h"`. The functions, structs, and enums in the header and further included files from C #include will then be available in the BTB source code.
+
 
 When compiling code that imports C headers you must not forget to link with the C library using `#load "util.lib"`. You can also link with object files this way.
 
@@ -42,23 +43,45 @@ glfwInit() // would crash without GLFW_DLL
 
 `@define` will define a macro to `1` and C imports after it will have the macro defined. C imports preceding a @define will not have the macro defined. Once defined there is no way to undefine it.
 
+# Performance
+The C to BTB transpiler is slower than just using bindings in BTB. It should be acceptable for an experimental feature. We will make some improvements and provide metrics in the future.
+
+We will implement these to speed it up and make it better:
+- Reuse transpiled BTB code to avoid transpiling every compilation. If last write timestamp on any included header changes then we must re-transpile.
+- If multiple BTB files import the same header then we shouldn't transpile every time we import it. We can transpile it once and reuse it for all imports. If include directories or macros passed to imported C header is different then we need to transpile multiple times.
 
 # Bindings in vendor
 
 The main purpose of importing C headers is to eliminate the need to manually write bindings for C libraries. For example, by importing glfw3.h and glad.h, you gain access to all GLFW and OpenGL functions directly. While there are partial bindings in `modules/vendor` many functions are missing because writing complete bindings by hand is time-consuming. We still have `modules/vendor` for when the BTB's C parser is buggy or can't handle certain headers for whatever reason.
 
+## Known working library headers
+|Library|Lib version|Last checked|BTB version|Note|
+|-|-|-|-|-|
+|glfw3.h|v3.3.9|2025-07-24|v0.2.1, ce6aba572efe||
+|libs/glad/include/glad.h||2025-07-24|v0.2.1, ce6aba572efe||
+|libs/stb/include/stb_image.h||2025-07-24|v0.2.1, ce6aba572efe||
+|libs/stb/include/stb_image_write.h||2025-07-24|v0.2.1, ce6aba572efe||
+
+Libraries we want to support: `OpenXR`, `OpenSSL`, `libopus`. `Tracy` (more or less).
+
 # Limitations
+The BTB Compiler has a C parser which handles most C syntax but not all. That which it cannot handle is skipped an in theory the syntax it can handle is available to you. But since some types are skipped it usually means that function declarations complain about a missing type. For example system headers have *\_\_attribute\_\_* keyword on struct fields which C parser can't handle. The whole struct is therefore skipped and any functions that use it will cause error in BTB compiler about unknown type.
+
 This feature is not guarranteed to work especially on different operating systems with different code styles in system headers. You will have to try importing a C header and if it doesn't work then it doesn't work and you must write bindings. If it does then great.
 
 You can add the `--verbose` flag to get more information about how the C parsing is going. If the error message is confusing, the extra verbosity may give you a clue to what is wrong. You are welcome to report issues you find (github or discord).
 
-The goal is to support headers from most libraries: GLFW, GLAD, STB image, OpenXR, OpenAL, OpenSSL, and C standard headers. None of these work at the time of writing this (2025-06-07).
-
 ## Known issues
 - BTB compiler does not support `cdecl` calling convention.
 - BTB compiler does not support variadic functions.
-- BTB's C preprocessor may behave differently compared to C compilers when expanding macros and evaluation `#if` expressions.
-- The C parser will skip most of the extension and extra content in C standard headers specific to GCC and MSVC compilers. Functions like `strlen` and `atoi` works just fine.
+- BTB compiler does not handle *\_\_attribute\_\_* on struct fields.
+- BTB does not support 128-bit floats, meaning functions, variables, types with `long double` are skipped.
+- BTB's C preprocessor may behave differently compared to C compilers when expanding macros and evaluating `#if` expressions.
+- Importing the same header in multiple BTB files can cause issues or collisions (might be fine but we have not considered this)
+
+<!--
+We should move this to "details/C parsing.md".
+Not relevant for the guide.
 
 # Implementation and details (old)
 
@@ -87,3 +110,5 @@ We first fully preprocess the file. Macros and includes recursively.
 Then we parse the flattened C header and ignore anything that isn't typedef, struct, enum or function. We parse it into a temporary AST.
 
 We then write out a BTB file based on the AST. typedefs become macros, and struct, enum, function become the BTB equivalent.
+
+-->

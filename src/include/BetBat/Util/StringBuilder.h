@@ -10,6 +10,7 @@
 // struct Token;
 // struct TokenRange;
 
+
 struct StringView {
     StringView() {  }
     StringView(const char* cstr) {
@@ -20,15 +21,16 @@ struct StringView {
         ptr = cstr;
         this->len = len;
     }
-    StringView(const std::string& str) {
-        // TODO: Memory leak. Some part of the code damaged the heap. I believe this could be a culprit.
-        //   There may be more though so I am leaving it like this.
-        std::string* s = new std::string(str);
-        ptr = s->c_str();
-        len = s->length();
-        // ptr = str.c_str();
-        // len = str.length();
-    }
+    StringView(const std::string& str) = delete;
+    // StringView(const std::string& str) {
+    //     // TODO: Memory leak. Some part of the code damaged the heap. I believe this could be a culprit.
+    //     //   There may be more though so I am leaving it like this.
+    //     std::string* s = new std::string(str);
+    //     ptr = s->c_str();
+    //     len = s->length();
+    //     // ptr = str.c_str();
+    //     // len = str.length();
+    // }
 
     const char* ptr=nullptr;
     int len=0;
@@ -50,6 +52,10 @@ struct StringView {
 
 
 };
+
+static StringView strview(const std::string& text) {
+    return StringView(text.data(), text.size());
+}
 bool operator==(const std::string& str, const StringView& view);
 bool operator==(const StringView& view, const std::string& str);
 bool operator==(const StringView& str, const StringView& view);

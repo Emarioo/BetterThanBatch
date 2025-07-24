@@ -502,16 +502,19 @@ fn ExecuteCommand(cmd: char[], args: char**, exit_code: i32* = null, asynchronou
         // while args[t.len++] { }
         // log(&t)
 
+        // TODO: Don't use libc, we use it to find command in PATH.
+        #load "libc.so.6" as LIBC
+        fn @import(LIBC) execvpe(file: char*, args: char**, env: char**) -> i32;
+
         if real_path.ptr {
-            res := execve(real_path.ptr, real_args, global_environment)
+            res := execvpe(real_path.ptr, real_args, global_environment)
             if res < 0 {
-                log("Error in 'ExecuteCommand': execve, ", name_of_error(res), " cmd: '",cmd.ptr, " ",real_path,"'")
+                log("Error in 'ExecuteCommand': execvpe, ", name_of_error(res), " cmd: '",cmd.ptr, " ",real_path,"'")
             }
         } else {
-            res := execve(cmd.ptr, real_args, global_environment)
-            // res := execve(cmd.ptr, real_args, cast<void**>null)
+            res := execvpe(cmd.ptr, real_args, global_environment)
             if res < 0 {
-                log("Error in 'ExecuteCommand': execve, ", name_of_error(res), " cmd: '",cmd.ptr,"' ", real_args)
+                log("Error in 'ExecuteCommand': execvpe, ", name_of_error(res), " cmd: '",cmd.ptr,"' ", real_args)
             }
         }
         exit(0)

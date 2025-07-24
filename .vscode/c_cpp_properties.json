@@ -30,7 +30,8 @@
         {
             "name": "LINUX",
             "includePath": [
-                "~/btb/**"
+                "${workspaceFolder}/src/include",
+                "${workspaceFolder}/libs/tracy-0.12.2/public"
             ],
             "defines": [
                 "_DEBUG",
@@ -40,7 +41,7 @@
                 "COMPILER_GNU"
             ],
             "windowsSdkVersion": "10.0.19041.0",
-            "compilerPath": "/usr/bin/g++",
+            "compilerPath": "/run/current-system/sw/bin/g++",
             "cStandard": "c17",
             "cppStandard": "c++17",
             "intelliSenseMode": "linux-gcc-x64",

@@ -14,6 +14,7 @@ enum ObjectFileType {
 typedef u32 SectionNr; // 0 = invalid/null
 struct ObjectFileExtraInfo {
     TargetPlatform target;
+    ArchitectureInfo arch;
 };
 struct ObjectFile {
     enum SectionFlags : u32 {

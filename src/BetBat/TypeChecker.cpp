@@ -53,7 +53,7 @@ SignalIO TyperContext::checkEnums(ASTScope* scope){
                 aenum->colonType = colonType;
             }
         }
-        TypeInfo* typeInfo = info.ast->createType(aenum->name, scope->scopeId);
+        TypeInfo* typeInfo = info.ast->createType(strview(aenum->name), scope->scopeId);
         // log::out << "Enum " << aenum->name<<"\n";
         if(typeInfo){
             aenum->typeId = typeInfo->id;
@@ -512,7 +512,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
                 int str_end = head-1;
                 if(!(depth == 0 && chr == ')') && head == tmp.size() && !process_args)
                     str_end = head;
-                std::string inner_type = std::string(tmp.data() + str_start, str_end - str_start);
+                StringView inner_type = StringView(tmp.data() + str_start, str_end - str_start);
                 bool printedError = false;
                 auto type = checkType(scopeId, inner_type, err_location, &printedError); // transformVirtual is false because we don't handle it correctly
                 
@@ -610,7 +610,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
         realTypeNameNoarray = arrayFreeType;
         realTypeName += typeName;
     }
-    typeId = info.ast->convertToTypeId(realTypeName, scopeId, true);
+    typeId = info.ast->convertToTypeId(strview(realTypeName), scopeId, true);
 
     if(typeId.isValid()) {
         auto ti = info.ast->getTypeInfo(typeId.baseType());
@@ -692,7 +692,7 @@ TypeId TyperContext::checkType(ScopeId scopeId, StringView typeString, lexer::So
         return {}; // type isn't polymorphic and does just not exist
     }
 
-    TypeInfo* typeInfo = info.ast->createType(realTypeName, baseInfo->scopeId);
+    TypeInfo* typeInfo = info.ast->createType(strview(realTypeName), baseInfo->scopeId);
     typeInfo->astStruct = baseInfo->astStruct;
     typeInfo->structImpl = info.ast->createStructImpl(typeInfo->id);
     // typeInfo->structImpl = baseInfo->astStruct->createImpl();
@@ -737,7 +737,7 @@ SignalIO TyperContext::checkStructs(ASTScope* scope) {
         //-- Get struct info
         TypeInfo* structInfo = nullptr;
         if(astStruct->state==ASTStruct::TYPE_EMPTY){
-            structInfo = info.ast->createType(astStruct->name, scope->scopeId);
+            structInfo = info.ast->createType(strview(astStruct->name), scope->scopeId);
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
                 // ignoreErors and showErrors stop us from printing error so we have to ensure we can print errors first
@@ -764,13 +764,13 @@ SignalIO TyperContext::checkStructs(ASTScope* scope) {
 
                 for(int i=0;i<(int)astStruct->polyArgs.size();i++){
                     auto& arg = astStruct->polyArgs[i];
-                    arg.virtualType = info.ast->createType(arg.name, astStruct->scopeId);
+                    arg.virtualType = info.ast->createType(strview(arg.name), astStruct->scopeId);
                 }
             }
         }
         if(astStruct->state == ASTStruct::TYPE_CREATED){
             if(!structInfo) // TYPE_EMPTY may have set structInfo. No need to do it again.
-                structInfo = info.ast->convertToTypeInfo(astStruct->name, scope->scopeId, true);   
+                structInfo = info.ast->convertToTypeInfo(strview(astStruct->name), scope->scopeId, true);   
             Assert(structInfo); // compiler bug
 
             // log::out << "Evaluating "<<*astStruct->name<<"\n";
@@ -938,7 +938,7 @@ SignalIO TyperContext::checkFncall(ScopeId scopeId, ASTExpression* base_expr, Qu
     } else {
         auto expr = base_expr->as<ASTExpressionCall>();
         // baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
-        AST::DecomposePolyTypes(expr->name, &baseName, &polyTypes);
+        AST::DecomposePolyTypes(strview(expr->name), &baseName, &polyTypes);
         for(int i=0;i<(int)polyTypes.size();i++){
             bool printedError = false;
             TypeId id = checkType(scopeId, polyTypes[i], expr->location, &printedError);
@@ -2457,7 +2457,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         auto stmp = expr->as<ASTExpressionIdentifier>();
         bool crossed_function_boundary = false;
         // BREAK(expr->name == "argc")
-        auto _iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), stmp->name, &crossed_function_boundary);
+        auto _iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), strview(stmp->name), &crossed_function_boundary);
         if(_iden){
             stmp->identifier = _iden;
             if(_iden->is_var()){
@@ -2583,7 +2583,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             // Perhaps it's an enum member?
             int memberIndex = -1;
             ASTEnum* astEnum = nullptr;
-            bool found = info.ast->findEnumMember(scopeId, stmp->name, &astEnum, &memberIndex);
+            bool found = info.ast->findEnumMember(scopeId, strview(stmp->name), &astEnum, &memberIndex);
             if(found){
                 stmp->enum_ast = astEnum;
                 stmp->enum_member = memberIndex;
@@ -2638,7 +2638,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 // This code may need to update when code for AST_ID does
 
                 bool crossed_boundary = false;
-                Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
+                Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), strview(name), &crossed_boundary);
 
                 if(iden && !iden->is_fn() && (iden->type == Identifier::GLOBAL_VARIABLE || !crossed_boundary)){
                     auto var = iden->cast_var();
@@ -2646,7 +2646,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 } else {
                     // auto sc = info.ast->getScope(scopeId);
                     // sc->print(info.ast);
-                    finalType = checkType(scopeId, name, expr->location, nullptr);
+                    finalType = checkType(scopeId, strview(name), expr->location, nullptr);
                 }
             }
             if(!finalType.isValid()) {
@@ -2658,7 +2658,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
         } else {
             auto& name = stmp->name;
             bool crossed_boundary = false;
-            Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name, &crossed_boundary);
+            Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), strview(name), &crossed_boundary);
 
             if(iden && !iden->is_fn() && (iden->type == Identifier::GLOBAL_VARIABLE || !crossed_boundary)){
                 auto var = iden->cast_var();
@@ -2666,7 +2666,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             } else {
                 // auto sc = info.ast->getScope(scopeId);
                 // sc->print(info.ast);
-                finalType = checkType(scopeId, name, expr->location, nullptr);
+                finalType = checkType(scopeId, strview(name), expr->location, nullptr);
             }
             if(!finalType.isValid()) {
                 if(!hasForeignErrors()) {
@@ -2674,7 +2674,7 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
                 } else {
                     // return SIGNAL_FAILURE; // OI, WE DO NOTHING HERE, OK!
                 }
-                finalType = checkType(scopeId, stmp->name, expr->location, nullptr);
+                finalType = checkType(scopeId, strview(stmp->name), expr->location, nullptr);
             }
         }
         
@@ -2987,10 +2987,10 @@ SignalIO TyperContext::checkExpression(ScopeId scopeId, ASTExpression* expr, Qui
             // TODO: Generator passes idScope. What is it and is it required in type checker?
             // A simple check to see if the identifier in the expr node is an enum type.
             // no need to check for pointers or so.
-            TypeInfo *typeInfo = info.ast->convertToTypeInfo(iden_expr->name, scopeId, true);
+            TypeInfo *typeInfo = info.ast->convertToTypeInfo(strview(iden_expr->name), scopeId, true);
             if (typeInfo && typeInfo->astEnum) {
                 i32 enumValue;
-                bool found = typeInfo->astEnum->getMember(stmp->name, &enumValue);
+                bool found = typeInfo->astEnum->getMember(strview(stmp->name), &enumValue);
                 if (!found) {
                     ERR_SECTION(
                         ERR_HEAD2(stmp->location)
@@ -3657,7 +3657,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
     // Create virtual types
     for(int i=0;i<(int)function->polyArgs.size();i++){
         auto& arg = function->polyArgs[i];
-        arg.virtualType = info.ast->createType(arg.name, function->scopeId);
+        arg.virtualType = info.ast->createType(strview(arg.name), function->scopeId);
         // _TCLOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
     }
     // _TCLOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
@@ -3666,10 +3666,10 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
     if(parentStruct){
         fnOverloads = parentStruct->getMethod(function->name, true);
     } else {
-        iden = (IdentifierFunction*)info.ast->findIdentifier(scope->scopeId, CONTENT_ORDER_MAX, function->name, nullptr);
+        iden = (IdentifierFunction*)info.ast->findIdentifier(scope->scopeId, CONTENT_ORDER_MAX, strview(function->name), nullptr);
         if(!iden){
             // cast operator won't work
-            iden = info.ast->addFunction(scope->scopeId, function->name, CONTENT_ORDER_ZERO);
+            iden = info.ast->addFunction(scope->scopeId, strview(function->name), CONTENT_ORDER_ZERO);
         }
         if(iden->type != Identifier::FUNCTION){
             ERR_SECTION(
@@ -3695,7 +3695,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
         for(int i=0;i<(int)parentStruct->members.size();i++){
             auto& mem = parentStruct->members[i];
             bool reused = false;
-            auto varinfo = info.ast->addVariable(Identifier::MEMBER_VARIABLE, function->scopeId, mem.name, CONTENT_ORDER_ZERO, &reused);
+            auto varinfo = info.ast->addVariable(Identifier::MEMBER_VARIABLE, function->scopeId, strview(mem.name), CONTENT_ORDER_ZERO, &reused);
             function->memberIdentifiers[i] = varinfo;
             varinfo->memberIndex = i;
         }
@@ -3703,7 +3703,7 @@ SignalIO TyperContext::checkFunction(ASTFunction* function, ASTStruct* parentStr
     for(int i=0;i<(int)function->arguments.size();i++){
         auto& arg = function->arguments[i];
         bool reused = false;
-        auto var = info.ast->addVariable(Identifier::ARGUMENT_VARIABLE, function->scopeId, arg.name, CONTENT_ORDER_ZERO, &reused);
+        auto var = info.ast->addVariable(Identifier::ARGUMENT_VARIABLE, function->scopeId, strview(arg.name), CONTENT_ORDER_ZERO, &reused);
         if(!var) {
             // TODO: Specify exactly which member or argument has the same name.
             //   Also show where it is.
@@ -4116,7 +4116,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                 // a polymorphic version fixed identifier for us
             } else {
                 // info.ast->getScope(scope->scopeId)->print(info.ast);
-                Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name, nullptr);
+                Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, strview(varname.name), nullptr);
                 if(!possible_identifier) {
                     ERR_SECTION(
                         ERR_HEAD2(varname.location)
@@ -4169,13 +4169,13 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
             // Based on all that, we may use the one we found or create a new variable identifier.
             Identifier* possible_identifier = nullptr;
             if(!varname.identifier) {
-                possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name, nullptr);
+                possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, strview(varname.name), nullptr);
                 if(!possible_identifier) {
                     // identifier does not exist, we should create it.
                     if(now->globalDeclaration) {
-                        varinfo = info.ast->addVariable(Identifier::GLOBAL_VARIABLE, scope->scopeId, varname.name, CONTENT_ORDER_ZERO, nullptr);
+                        varinfo = info.ast->addVariable(Identifier::GLOBAL_VARIABLE, scope->scopeId, strview(varname.name), CONTENT_ORDER_ZERO, nullptr);
                     } else {
-                        varinfo = info.ast->addVariable(Identifier::LOCAL_VARIABLE, scope->scopeId, varname.name, contentOrder, nullptr);
+                        varinfo = info.ast->addVariable(Identifier::LOCAL_VARIABLE, scope->scopeId, strview(varname.name), contentOrder, nullptr);
                     }
                     varname.identifier = varinfo;
                     Assert(varinfo);
@@ -4218,7 +4218,7 @@ SignalIO TyperContext::checkDeclaration(ASTStatement* now, ContentOrder contentO
                     } else {
                         // varname.identifier = possible_identifier->cast_var();
                         // variable does not exist in scope, we can therefore create it
-                        varinfo = info.ast->addVariable(now->globalDeclaration ? Identifier::GLOBAL_VARIABLE : Identifier::LOCAL_VARIABLE, scope->scopeId, varname.name, contentOrder, nullptr);
+                        varinfo = info.ast->addVariable(now->globalDeclaration ? Identifier::GLOBAL_VARIABLE : Identifier::LOCAL_VARIABLE, scope->scopeId, strview(varname.name), contentOrder, nullptr);
                         varname.identifier = varinfo;
                         Assert(varinfo);
                         // ACTUALLY! I thought global assignment in local scopes didn't work but I believe it does.
@@ -4636,12 +4636,12 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     auto& varnameIt = now->varnames[0];
                     auto& varnameNr = now->varnames[1];
     
-                    auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameIt.name, CONTENT_ORDER_ZERO, &reused_item);
+                    auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, strview(varnameIt.name), CONTENT_ORDER_ZERO, &reused_item);
                     varnameIt.identifier = varinfo_item;
                     
                     bad_var(varinfo_item, varnameIt.name);
                     
-                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameNr.name, CONTENT_ORDER_ZERO, &reused_index);
+                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, strview(varnameNr.name), CONTENT_ORDER_ZERO, &reused_index);
                     varnameNr.identifier = varinfo_index;
             
                     bad_var(varinfo_index, varnameNr.name);
@@ -4670,7 +4670,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     if(now->varnames[0].name.size() == 0)
                         now->varnames[0].name = "nr";
                     auto& varnameNr = now->varnames[0];
-                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameNr.name, CONTENT_ORDER_ZERO, &reused_index);
+                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, strview(varnameNr.name), CONTENT_ORDER_ZERO, &reused_index);
                     varnameNr.identifier = varinfo_index;
 
                     bad_var(varinfo_index, varnameNr.name);
@@ -4745,12 +4745,12 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     auto& varnameIt = now->varnames[0];
                     auto& varnameNr = now->varnames[1];
     
-                    auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameIt.name, CONTENT_ORDER_ZERO, &reused_item);
+                    auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, strview(varnameIt.name), CONTENT_ORDER_ZERO, &reused_item);
                     varnameIt.identifier = varinfo_item;
                     
                     bad_var(varinfo_item, varnameIt.name);
                     
-                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameNr.name, CONTENT_ORDER_ZERO, &reused_index);
+                    auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, strview(varnameNr.name), CONTENT_ORDER_ZERO, &reused_index);
                     varnameNr.identifier = varinfo_index;
             
                     bad_var(varinfo_index, varnameNr.name);
@@ -4984,12 +4984,12 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                 auto& varnameIt = now->varnames[0];
                 auto& varnameNr = now->varnames[1];
 
-                auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameIt.name, CONTENT_ORDER_ZERO, &reused_item);
+                auto varinfo_item = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, strview(varnameIt.name), CONTENT_ORDER_ZERO, &reused_item);
                 varnameIt.identifier = varinfo_item;
                 
                 bad_var(varinfo_item, varnameIt.name);
                 
-                auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, varnameNr.name, CONTENT_ORDER_ZERO, &reused_index);
+                auto varinfo_index = info.ast->addVariable(Identifier::LOCAL_VARIABLE, varScope, strview(varnameNr.name), CONTENT_ORDER_ZERO, &reused_index);
                 varnameNr.identifier = varinfo_index;
         
                 bad_var(varinfo_index, varnameNr.name);
@@ -5149,7 +5149,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                     )
                 }
                 if(catch_part.catch_exception_name.size() > 0) {
-                    auto varinfo = info.ast->addVariable(Identifier::LOCAL_VARIABLE, catch_body->scopeId, catch_part.catch_exception_name, CONTENT_ORDER_ZERO, nullptr);
+                    auto varinfo = info.ast->addVariable(Identifier::LOCAL_VARIABLE, catch_body->scopeId, strview(catch_part.catch_exception_name), CONTENT_ORDER_ZERO, nullptr);
                     catch_part.variable = varinfo;
                     
                     if(!varinfo) {
@@ -5230,7 +5230,7 @@ SignalIO TyperContext::checkRest(ASTScope* scope){
                 if(astEnum && it.caseExpr->type == EXPR_IDENTIFIER) {
                     auto id_expr = it.caseExpr->as<ASTExpressionIdentifier>();
                     int index = -1;
-                    bool yes = astEnum->getMember(id_expr->name, &index);
+                    bool yes = astEnum->getMember(strview(id_expr->name), &index);
                     if(yes) {
                         wasMember = true;
                         if(usedMembers[index]) {

@@ -1,0 +1,20 @@
+#if OS_LINUX
+    #import "sys/vfs.h"
+#else
+    incomplete
+#endif
+#import "Logger"
+
+fn main() {
+    #if OS_LINUX
+        buf: statfs;
+        err := statfs("/".ptr, &buf);
+        log("statfs err: ", err)
+        log("buf: ", &buf)
+
+        log("Total storage: ", cast<f64>buf.f_blocks * buf.f_bsize / 1024.0 / 1024.0 / 1024.0)
+        log("Available storage: ", cast<f64>buf.f_bavail * buf.f_bsize / 1024.0 / 1024.0 / 1024.0)
+    #else
+        incomplete
+    #endif
+}

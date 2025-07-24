@@ -6,6 +6,10 @@
         https://www.glfw.org/documentation.html
 */
 
+/*#load "libs/glfw-3.3.9/lib-ubuntu/libglfw3.a"
+#load "libs/glad/lib-ubuntu/libglad.a"
+#import "libs/glfw-3.3.9/include/GLFW/glfw3.h"
+#import "libs/glad/include/glad/glad.h"*/
 #import "vendor/GLAD"
 #import "vendor/GLFW"
 #import "Logger"

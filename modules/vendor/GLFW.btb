@@ -29,7 +29,7 @@
     #if BUILD_DLL
         #load "libs/glfw-3.3.9/lib-ubuntu/libglfw.so.3.3" as GLFW
     #else
-        #load "libs/glfw-3.3.9/lib-ubuntu/libglfw3.a" as GLFW
+        #load @force "libs/glfw-3.3.9/lib-ubuntu/libglfw3.a" as GLFW
     #endif
     #load "m.so" // math
     #load "GL.so"
@@ -37,7 +37,11 @@
     // #load "wayland-client.so"
 #endif
 
-// #import "libs/glfw-3.3.9/include/GLFW/glfw3.h"
+#if USE_VENDOR_C_HEADERS
+
+#import "libs/glfw-3.3.9/include/GLFW/glfw3.h"
+
+#else
 
 #macro GLFWAPI @import(GLFW)
 #macro GLFWwindow void
@@ -395,3 +399,5 @@ fn GLFWAPI glfwGetClipboardString(window: GLFWwindow*) -> char*; // returns cons
 #macro GLFW_GAMEPAD_AXIS_LEFT_TRIGGER  4
 #macro GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER 5
 #macro GLFW_GAMEPAD_AXIS_LAST          GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER
+
+#endif // USE_VENDOR_C_HEADERS

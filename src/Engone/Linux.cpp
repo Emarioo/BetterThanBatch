@@ -314,7 +314,7 @@ namespace engone {
 		}
         // Assert(("Not implemented for linux",0 == (flags&FILE_CLEAR_AND_WRITE)));
         
-		if(flags&FILE_CLEAR_AND_WRITE){
+		if((flags&FILE_CLEAR_AND_WRITE) || (flags &FILE_READ_AND_WRITE)){
 			std::string temp;
 			uint i=0;
 			int at = path.find_first_of(':');

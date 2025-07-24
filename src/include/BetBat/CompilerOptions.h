@@ -108,6 +108,8 @@ struct CompileOptions {
     DynamicArray<std::string> importDirectories; // Directories to look for imports (source files)
     int threadCount=0; // zero will use the CPU's number of core
     // int threadCount=1; // zero will use the CPU's number of core
+
+    ArchitectureInfo arch; // set when running compiler based on target
 };
 // returns false if failure, error message is printed, you just have to exit the program
 bool InterpretArguments(const BaseArray<std::string>& commands, CompileOptions* options);

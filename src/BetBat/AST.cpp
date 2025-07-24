@@ -1416,7 +1416,6 @@ void AST::cleanup() {
     using namespace engone;
 
     for (auto &scope : search_scope_map) {
-        scope.second->~SearchScope();
         delete scope.second;
     }
     search_scope_map.clear();
@@ -1852,7 +1851,7 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
                 int str_end = head-1;
                 if(head == tmp.size() && !process_args)
                     str_end = head;
-                std::string inner_type = std::string(tmp.data() + str_start, str_end - str_start);
+                StringView inner_type = StringView(tmp.data() + str_start, str_end - str_start);
                 // log::out << "type "<<inner_type << "\n";
                 auto type = convertToTypeId(inner_type, scopeId, false); // transformVirtual is false because we don't handle it correctly
                 // type may not be converted if polymorphic version wasn't created?

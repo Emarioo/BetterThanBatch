@@ -114,7 +114,7 @@ fn EpochSecondsToDateTime(seconds: i64) -> DateTime {
     }
     datetime.year = approx_year // no longer an approximation
                                 //     31, 28, 31, 30,  31,  30,  31,  31,  30,  31,  30,  31
-    CUMULATIVE_DAYS_IN_MONTH: i32[13] { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 }
+    CUMULATIVE_DAYS_IN_MONTH: i32[13] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 }
 
     days_left: i32 = days - days_until_year(approx_year)
     approx_month: i32 = days_left / 30
@@ -150,7 +150,7 @@ fn EpochSecondsToDateTime(seconds: i64) -> DateTime {
 fn DateTimeToEpochSeconds(datetime: DateTime*) -> i64 {
     // TODO: Check that datetime has valid year, month, day, hour, minute, second.
     //   Return -1, ERROR if not?
-    CUMULATIVE_DAYS_IN_MONTH: i32[13] { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 }
+    CUMULATIVE_DAYS_IN_MONTH: i32[13] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365 }
     days: i64 = CUMULATIVE_DAYS_IN_MONTH[datetime.month-1]
     if is_leap_year(datetime.year) && datetime.month > 2
         days++

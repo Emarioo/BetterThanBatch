@@ -1,6 +1,16 @@
 /*
-    C header parser for transpiling C to BTB
+    Transpiler from C headers to BTB
 
+    The transpiler converts what it can and skips functions and types it
+    can't handle. This means that C standard headers on one from one compiler (GCC, Clang, MSVC, MinGW)
+    may correctly parse everything while headers from a different compiler cannot be parsed at all.
+
+    This is why the C header transpiler feature in BTB Compiler is EXPERIMENTAL. It is not
+    recommended for developing stable software.
+
+    - Emarioo, 2025-07-24
+*/
+/*
     Features:
         Parse macros
         Parse comments
@@ -11,10 +21,12 @@
         Parse external global variables
 
     Limitations:
+        Varadic arguments (macros and functions)
+        Function pointers inside function pointers (simple function pointers work fine such as those from glad.h)
+        Constants (like this: const int MAX_SIZE = 24;)
         Ignore function bodies
         Statements
         Non-external global variables
-        Undef is ignored, it does not exist in BTB
     
     Output:
         A btb file with import declarations
@@ -29,6 +41,18 @@
 #include "Engone/Util/BucketArray.h"
 #include "BetBat/CompilerOptions.h"
 
+//##############################
+//     PUBLIC FUNCTIONS 
+//###############################
+
+struct TranspileOptions;
+std::string TranspileCToBTB(const std::string& in_text, TranspileOptions* options, const std::string& path, CompileOptions* compile_options);
+std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options, CompileOptions* compile_options);
+
+//################################
+//      INTERNAL FUNCTIONS
+//################################
+
 struct CMacro {
     std::string content;
     DynamicArray<std::string> parameters;
@@ -39,6 +63,11 @@ struct CMacro {
 struct TranspileOptions {
     DynamicArray<std::string> include_dirs;
     DynamicArray<std::string> c_defines;
+
+    int readBytes;
+    int lines;
+    int comment_lines;
+    int blank_lines;
 };
 struct IncludedFile {
     std::string path;
@@ -79,9 +108,9 @@ namespace clexer {
         ENUM,
         UNION,
         CONST,
-        VOLATILE,
         ATTRIBUTE,
         EXTERN,
+        // restrict and volatile are skipped
     };
     struct Token {
         TokenKind kind;
@@ -141,7 +170,8 @@ namespace clexer {
         CStruct* obj;
         CEnum* obj_enum;
         CFunction* obj_func;
-        bool weak_name; // struct myobj; enum myobj;
+        int size;
+        int alignment;
     };
     struct CFunction : CNode {
         CFunction() : CNode(KIND_FUNCTION) {}
@@ -163,7 +193,13 @@ namespace clexer {
             CType* type;
         };
         DynamicArray<Field> fields;
-        int packing = 8;
+        int packing = 8; // packing from #pragma pack(push, X)
+        int size = 0;
+        int alignment = 0; // alignment of the field with highest alignment
+        bool is_union = false;
+
+        void union_ify();
+        void calculate_size();
     };
     struct CEnum : CNode {
         CEnum() : CNode(KIND_ENUM) {}
@@ -202,12 +238,12 @@ namespace clexer {
         CompileOptions* compile_options;
 
         CRoot root{};
-        BucketArray<CFunction> functions{100};
-        BucketArray<CStruct> structs{100};
+        BucketArray<CFunction> functions{500};
+        BucketArray<CStruct> structs{500};
         BucketArray<CEnum> enums{100};
-        BucketArray<CType> types{100};
-        BucketArray<CVariable> variables{100};
-        BucketArray<CTypedef> typedefs{100};
+        BucketArray<CType> types{500};
+        BucketArray<CVariable> variables{500};
+        BucketArray<CTypedef> typedefs{500};
 
         struct UnnamedType {
             std::string unique_name;
@@ -221,6 +257,15 @@ namespace clexer {
             bool defined;
         };
         std::unordered_map<std::string, WeakStruct> weak_structs;
+
+        std::unordered_map<std::string, CNode*> identifiers;
+
+        std::unordered_map<std::string, CNode*> function_map;
+
+        void set_identifier(const std::string& name, CNode* node) {
+            // engone::log::out << "SET ID " << name << "\n";
+            identifiers[name] = node;
+        }
         
         void mark_weak(const std::string& name) {
             auto pair = weak_structs.find(name);
@@ -237,11 +282,13 @@ namespace clexer {
                 pair->second.defined = true;
             }
         }
+        int REGISTER_SIZE = 0;
 
         std::string output;
 
         DynamicArray<int> pack_stack;
         int next_nodeid=0;
+
 
         CType* create_type() {
             CType* node;
@@ -318,53 +365,12 @@ namespace clexer {
         bool parse_struct_fields(int& head, CStruct* obj);
         bool parse_enum_fields(int& head, CEnum* obj);
         bool parse_function_parameters(int& head, CFunction* obj);
+        bool parse_literal(int& head, i64* number);
         void skip_construct(int& head);
 
         void walk();
         std::string type_to_string(CType* type);
-
-        // void write(const Token& token) {
-        //     write(token.data, token.line, token.column, token.has_newline);
-        // }
-        // void write(const std::string& str, const Token& token) {
-        //     write(str, token.line, token.column, token.has_newline);
-        // }
-        // void writeln() {
-        //     out += "\n";
-        //     cur_line++;
-        //     cur_column=1;
-        // }
-        // void write(const std::string& str, int line, int column, bool has_newline) {
-        //     while(cur_line < line) {
-        //         out += "\n";
-        //         cur_line++;
-        //         cur_column=1;
-        //     }
-        //     if (cur_column != 1) {
-        //         out += " ";
-        //     //     while(cur_column < column-1) {
-        //     //         out += " ";
-        //     //         cur_column++;
-        //     //     }
-        //     // } else {
-        //     }
-        //     // while(cur_column < column) {
-        //     //     out += " ";
-        //     //     cur_column++;
-        //     // }
-        //     out += str;
-        //     cur_column += str.size();
-        //     if(has_newline) {
-        //         out += "\n";
-        //         cur_line++;
-        //         cur_column=1;
-        //     }
-        // }
     };
 }
-
-std::string TranspileCToBTB(const std::string& in_text, TranspileOptions* options, const std::string& path, CompileOptions* compile_options);
-
-std::string TranspileCFileToBTB(const std::string& filepath, TranspileOptions* options, CompileOptions* compile_options);
 
 std::string PreprocessText(CPreprocContext* context, const std::string& text, const std::string& origin_path);

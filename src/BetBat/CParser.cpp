@@ -2,12 +2,14 @@
 
 #include "Engone/PlatformLayer.h"
 #include "Engone/Logger.h"
-#include "BetBat/Util/StringBuilder.h"
 #include "BetBat/CompilerOptions.h"
+#include "tracy/Tracy.hpp"
+#include "string.h"
 
 #define CPARSER_VERBOSE(X) 
 // #define CPARSER_VERBOSE(X) X
 
+// TODO: We should get this from compile options and target.
 std::string annihilate_forsaken_space_in_program_files(const std::string& path);
 
 engone::Logger& operator<<(engone::Logger& logger, const clexer::Token& tok) {
@@ -41,11 +43,15 @@ std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, 
     using namespace clexer;
     using namespace engone;
 
+    ZoneScopedC(tracy::Color::Bisque1);
+
     ParserContext context{};
     context.origin_path = path;
     context.compile_options = compile_options;
     CPreprocContext& preproc = context.preproc;
-
+    // for (int i=0;i<options->include_dirs.size();i++) {
+    //     log::out << options->include_dirs[i] << "\n";
+    // }
     /*
         Predefined macros
     */
@@ -68,11 +74,11 @@ std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, 
         case TARGET_WINDOWS_x64: {
             preproc.macros["_WIN32"] = {"1"};
             preproc.macros["_WIN64"] = {"1"};
-            preproc.macros["__x86_64__"] = {""};
+            preproc.macros["__x86_64__"] = {};
         } break;
         case TARGET_LINUX_x64: {
             preproc.macros["__linux__"] = {};
-            // TODO: Which macros on Linux?
+            preproc.macros["__x86_64__"] = {"1"};
         } break;
         case TARGET_AARCH64: {
             preproc.macros["__aarch64__"] = {};
@@ -89,15 +95,18 @@ std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, 
     for(int i=0;i<options->c_defines.size();i++) {
         preproc.macros[options->c_defines[i]] = {"1"};
     }
+    context.REGISTER_SIZE = compile_options->arch.REGISTER_SIZE;
 
     preproc.options = options;
     std::string stoff = PreprocessText(&preproc, text, annihilate_forsaken_space_in_program_files(path));
-    auto f = FileOpen("temp.h", FILE_CLEAR_AND_WRITE);
+    
+    // TODO: Debug feature, writing to temp.h
+    int slash = path.rfind("/");
+    std::string temp_path = path.substr(slash+1);
+    auto f = FileOpen("bin/int/" + temp_path, FILE_CLEAR_AND_WRITE);
     Assert(f);
     FileWrite(f, stoff.c_str(), stoff.size());
     FileClose(f);
-    // log::out << stoff << "\n";
-
     
     context.lexer.lex_tokens(stoff);
     // for(int i=0;i<tokens.size();i++) {
@@ -117,11 +126,11 @@ std::string TranspileCToBTB(const std::string& text, TranspileOptions* options, 
 }
 
 #pragma region preproc
-int parse_space(StringView text, int* head) {
+int parse_space(const std::string& text, int* head) {
     Assert(head);
     int start = *head;
-    while(*head < text.len) {
-        char c = text.ptr[*head];
+    while(*head < text.size()) {
+        char c = text[*head];
         if(c != ' ' && c != '\t') {
         // if(c != ' ' && c != '\t' && c != '\n' && c != '\r') {
             break;
@@ -130,11 +139,12 @@ int parse_space(StringView text, int* head) {
     }
     return *head - start;
 }
-int parse_name(StringView text, int* head, std::string* name) {
+
+int parse_name(const std::string& text, int* head, std::string* name) {
     Assert(head);
     int start = *head;
-    while(*head < text.len) {
-        char c = text.ptr[*head];
+    while(*head < text.size()) {
+        char c = text[*head];
         if (!( 
             (((c|32) >= 'a' && (c|32) <= 'z')) ||
             (c == '_') ||
@@ -145,33 +155,33 @@ int parse_name(StringView text, int* head, std::string* name) {
         *head += 1;
     }
     if(name) {
-        *name = std::string(text.ptr + start, *head - start);
+        *name = text.substr(start, *head - start);
     }
     return *head - start;
 }
-int parse_string(StringView text, int* head, std::string* name) {
+int parse_string(const std::string& text, int* head, std::string* name) {
     Assert(head);
     Assert(name);
 
-    if(text.ptr[*head] != '"') {
+    if(text[*head] != '"') {
         return 0;
     }
     *head += 1;
 
     int start = *head;
-    while(*head < text.len) {
-        char c = text.ptr[*head];
+    while(*head < text.size()) {
+        char c = text[*head];
         if(c == '"') {
             *head += 1;
             break;
         }
         *head += 1;
     }
-    *name = std::string(text.ptr + start, *head - start - 1);
+    *name = text.substr(start, *head - start - 1);
     return *head - start;
 }
 // DOES NOT RETURN PARSED INTEGER, check 'value' instead
-int parse_int(StringView text, int* head, int* value) {
+int parse_int(const std::string& text, int* head, int* value) {
     Assert(head);
     Assert(value);
 
@@ -186,11 +196,11 @@ int parse_int(StringView text, int* head, int* value) {
     // }
     // // *value = atoi(text.ptr + start);
     char* end_ptr;
-    *value = strtol(text.ptr + *head, &end_ptr, 0);
-    *head = (u64)end_ptr - (u64)text.ptr;
+    *value = strtol(text.data() + *head, &end_ptr, 0);
+    *head = (u64)end_ptr - (u64)text.data();
 
-    while(*head < text.len) {
-        char c = text.ptr[*head];
+    while(*head < text.size()) {
+        char c = text[*head];
         if((c|32) == 'l' || (c|32) == 'u') {
             *head += 1;
             continue;
@@ -201,7 +211,7 @@ int parse_int(StringView text, int* head, int* value) {
 }
 // comment includes slash and newlines
 // comment may be null
-int parse_comment(StringView text, int* head, std::string* comment) {
+int parse_comment(const std::string& text, int* head, std::string* comment) {
     if(comment)
         *comment = {};
     
@@ -210,28 +220,28 @@ int parse_comment(StringView text, int* head, std::string* comment) {
     if(*head + 1 >= text.size())
         return 0;
 
-    if(text.ptr[*head] == '/' && text.ptr[*head+1] == '/') {
+    if(text[*head] == '/' && text[*head+1] == '/') {
         *head += 2;
-        while(*head < text.len) {
-            char c = text.ptr[*head];
+        while(*head < text.size()) {
+            char c = text[*head];
             if (c == '\n') {
                 break;
             }
             *head += 1;
         }
-        *comment = std::string(text.ptr + start, *head - start);
+        *comment = std::string(text.data() + start, *head - start);
         return *head - start;
-    } else if(text.ptr[*head] == '/' && *head + 1 < text.size() && text.ptr[*head+1] == '*') {
+    } else if(text[*head] == '/' && *head + 1 < text.size() && text[*head+1] == '*') {
         *head += 2;
-        while(*head + 1 < text.len) {
-            char c = text.ptr[*head];
-            if (c == '*' && text.ptr[*head + 1] == '/') {
+        while(*head + 1 < text.size()) {
+            char c = text[*head];
+            if (c == '*' && text[*head + 1] == '/') {
                 *head += 2;
                 break;
             }
             *head += 1;
         }
-        *comment = std::string(text.ptr + start, *head - start);
+        *comment = std::string(text.data() + start, *head - start);
         return *head - start;
     }
     return 0;
@@ -442,7 +452,8 @@ void expand_macros(CPreprocContext* context, std::string& text, const std::strin
 int eval_expression(CPreprocContext* context, std::string& text, int* head, const std::string& origin_path, int expression_start) {
     using namespace engone;
     /* Some grammar
-    expr        := or_expr
+    expr        := ternary_expr
+    ternary_expr := or_expr ? or_expr : or_expr
     or_expr     := and_expr ( "||" and_expr )*
     and_expr    := equality_expr ( "&&" equality_expr )*
     equality_expr := rel_expr ( ("==" | "!=") rel_expr )*
@@ -477,6 +488,9 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
 
     auto precedence = [&](int kind) {
         switch(kind) {
+            case '?':
+            case ':':
+                return -3;
             case OP_OR:
                 return -2;
             case OP_AND:
@@ -608,9 +622,8 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
                                         *head += 1;
                                         break;
                                     }
-                                } else {
-                                    *head += 1;
                                 }
+                                *head += 1;
                             }
                         }
                         std::string macro_text = text.substr(macro_start, *head - macro_start);
@@ -682,6 +695,10 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
                 ops.add({c});
             } else if(c == '^') {
                 ops.add({c});
+            } else if(c == '?') {
+                ops.add({c});
+            } else if(c == ':') {
+                ops.add({c});
             } else {
                 *head -= 1;
                 finalize = true;
@@ -690,15 +707,37 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
             expect_primary = true;
         }
 
+       // log::out << "ops " << ops.size() << " " << values.size() << "\n";
+
         while (values.size() >= 2 && ops.size() > 0) {
             int op = 0;
             if(ops.size() >= 2) {
                 int op0 = ops[ops.size()-2].kind;
                 int op1 = ops[ops.size()-1].kind;
+                // log::out << (char)op0 << " " << (char)op1 << "\n";
 
-                if(precedence(op0) >= precedence(op1)) {
-                    op = op0;
-                    ops.removeAt(ops.size()-2);
+                int opm3 = 0;
+                if(ops.size() >= 3)
+                    opm3 = ops[ops.size()-3].kind;
+
+                if(op0 == '?' && op1 == ':') {
+                    if (!finalize) {
+                        break;
+                    }
+                    // perform ternary operation
+                    // how about nested ternary operation.
+                    op = '?';
+                    ops.pop();
+                    ops.pop();
+                } else if(precedence(op0) >= precedence(op1) && op0 != '?') {
+                    if (opm3 == '?' && op0 == ':') {
+                        op = '?';
+                        ops.removeAt(ops.size()-2);
+                        ops.removeAt(ops.size()-2);
+                    } else {
+                        op = op0;
+                        ops.removeAt(ops.size()-2);
+                    }
                 } else if (finalize) {
                     op = op1;
                     ops.pop();
@@ -715,7 +754,6 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
             int val1 = values.last().literal;
             values.pop();
             int val0 = values.last().literal;
-
             int value = 0;
             switch(op) {
                 case OP_AND: value = val0 && val1; break;
@@ -736,6 +774,13 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
                 case '&': value = val0 & val1; break;
                 case '|': value = val0 | val1; break;
                 case '^': value = val0 ^ val1; break;
+                case '?': {
+                    values.pop();
+                    int val_cond = values.last().literal;
+                    // log::out << "cond " << val_cond << " " << val0 << " " << val1 << "\n";
+                    value = val_cond ? val0 : val1;
+                    break;
+                }
                 default: Assert(false);
             }
             values.last() = {value};
@@ -753,6 +798,7 @@ int eval_expression(CPreprocContext* context, std::string& text, int* head, cons
 
 std::string PreprocessText(CPreprocContext* context, const std::string& text, const std::string& origin_path) {
     using namespace engone;
+    ZoneScopedC(tracy::Color::Bisque4);
     // ifdef, macros, include, pragma once, pragma pack push/pop
     // include dirs, pre-defines
     // CPreprocContext context;
@@ -762,6 +808,10 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
     output_text += "// include " + origin_path + "\n";
 
     bool preserve_comments = false;
+
+    context->options->readBytes += text.size();
+
+    context->options->lines++;
 
     // find directives and expand macros
     // string
@@ -781,6 +831,8 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             head+=2;
             while (head < text.size()) {
                 if(text[head] == '\n') {
+                    context->options->comment_lines++;
+                    context->options->lines++;
                     head+=1;
                     if(!context->should_skip() && preserve_comments)
                         output_text += "\n";
@@ -797,6 +849,11 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
                 output_text += "/*";
             head+=2;
             while (head < text.size()) {
+                if(text[head] == '\n') {
+                    context->options->comment_lines++;
+                    context->options->lines++;
+                }
+
                 if(head+1 < text.size() && text[head] == '*' && text[head+1] == '/') {
                     head+=2;
                     if(!context->should_skip() && preserve_comments)
@@ -847,6 +904,9 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
 
         if (text[head] != '#') {
             if(context->should_skip()) {
+                if(text[head] == '\n') {
+                    context->options->lines++;
+                }
                 head++;
                 continue;
             }
@@ -872,6 +932,9 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
                         head += 1;
                         int depth = 1;
                         while(head < text.size()) {
+                            if(text[head] == '\n') {
+                                context->options->lines++;
+                            }
                             if(text[head] == '(') {
                                 depth++;
                             } else if(text[head] == ')') {
@@ -880,9 +943,8 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
                                     head += 1;
                                     break;
                                 }
-                            } else {
-                                head += 1;
                             }
+                            head+=1;
                         }
                     }
                     std::string macro_text = text.substr(macro_start, head - macro_start);
@@ -896,7 +958,11 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
 
             if(output_text.size() > 1 && output_text[output_text.size()-2] == '\n' && output_text.back() == '\n' && text[head] == '\n') {
                 // skip consecutive newlines
+                context->options->blank_lines++;
             } else {
+                if(text[head] == '\n') {
+                    context->options->lines++;
+                }
                 output_text += text[head];
             }
             head++;
@@ -935,10 +1001,12 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
                 int expr_start = head;
                 while(head < text.size()) {
                     if(text[head] == '\\' && ((head+1 < text.size() && text[head+1] == '\n') || (head+2 < text.size() && text[head+1] == '\r' &&  text[head+2] == '\n'))) {
+                        context->options->lines++;
                         if(text[head+1] == '\r')
                             head++;
                         head+=1;
                     } else if(text[head] == '\n') {
+                        context->options->lines++;
                         head+=1;
                         break;
                     }
@@ -990,18 +1058,13 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             int name_length = parse_name(text, &head, &macro_name);
 
             CPARSER_VERBOSE(
-            log::out <<log::LIME<< "Define "<<macro_name << log::NO_COLOR<<" ("<<calc_location(text, macro_name_start, origin_path)<< ")\n";
+            log::out <<log::LIME<< "Define "<<macro_name << "  " << context->macros.size() << log::NO_COLOR<<" ("<<calc_location(text, macro_name_start, origin_path)<< ")\n";
             )
 
             int parsed_space = parse_space(text, &head);
 
             CMacro& macro = context->macros[macro_name] = {};
             macro.origin_file = origin_path;
-
-            if(macro_name == "__has_builtin") {
-                int x=23;
-            }
-
 
             // Parse arguments
             if(text[head] != '(' || parsed_space) {
@@ -1054,6 +1117,9 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             macro.pos_in_file = head;
             while (head < text.size()) {
                 // TODO: parse string
+                if(text[head] == '\n') {
+                    context->options->lines++;
+                }
                 if(text[head] == '/' && head+1 < text.size() && (text[head+1] == '/' || text[head+1] == '*'))
                     break;
                 if(text[head] == '\n' && (head-1 < 0 || text[head-1] != '\\')) {
@@ -1124,7 +1190,7 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             }
             if (found_path.size() == 0) {
                 // nocheckin File not found error
-                log::out << "File not found " << path << "\n";
+                log::out << log::YELLOW << "WARNING: " << log::NO_COLOR << "File not found " << path << "\n";
                 continue;
             }
             bool found = false;
@@ -1252,6 +1318,7 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             int err_start = head;
             while(head < text.size()) {
                 if(text[head] == '\n') {
+                    context->options->lines++;
                     head++;
                     break;
                 }
@@ -1265,6 +1332,7 @@ std::string PreprocessText(CPreprocContext* context, const std::string& text, co
             while(head < text.size()) {
                 if(text[head] == '\n') {
                     head++;
+                    context->options->lines++;
                     break;
                 }
                 head++;
@@ -1349,7 +1417,6 @@ namespace clexer {
                 else if(word == "struct") tok.kind = STRUCT;
                 else if(word == "enum") tok.kind = ENUM;
                 else if(word == "union") tok.kind = UNION;
-                else if(word == "volatile") tok.kind = VOLATILE;
                 else if(word == "__attribute__") {
                     tok.kind = ATTRIBUTE;
                     while(head < text.size() && isspace(text[head])) {
@@ -1377,7 +1444,7 @@ namespace clexer {
                     }
                 }
                 else if(word == "extern") tok.kind = EXTERN;
-                else if(word == "__extension__") {
+                else if(word == "__extension__" || word == "restrict" || word == "volatile") {
                     // Skip
                     head = end;
                     column += end - start;
@@ -1496,7 +1563,6 @@ namespace clexer {
                         num = gettok(head);
                         result = match(head, NUMBER);
                         if(!result) goto cant_handle_pragma_pack;
-
                         
                         char* endptr;
                         pack_value = strtol(num.data.c_str(), &endptr, 0);
@@ -1529,11 +1595,13 @@ namespace clexer {
                     }
                 }
             }
-
             if(token.kind == TYPEDEF) {
                 head++;
                 CType* type;
                 result = parse_type(head, &type); // function pointers are special
+                if(!result) {
+                    log::out << "ERROR: bad type?, line " << token.line << "\n";
+                }
                 CHECK_FAIL
 
                 std::string type_name;
@@ -1555,6 +1623,9 @@ namespace clexer {
                         }
                         auto& token_id= gettok(head);
                         result = match(head, IDENTIFIER);
+                        if(!result) {
+                            log::out << "ERROR: bad type2?, line " << token.line << "\n";
+                        }
                         CHECK_FAIL
                         type_name = token_id.data;
                         
@@ -1570,6 +1641,7 @@ namespace clexer {
                             node->weak_void_type = true; // TODO: Weak type means we have: typedef struct SomeType SomeType; In GLFW this is how opaque objects are declared.
                             // However, in C you can define the struct later in which case we shouldn't add: #macro SomeType void
                         }
+                        set_identifier(type_name, type);
                         
                         auto tok = &gettok(head);
                         if(tok->kind != ',') {
@@ -1579,6 +1651,13 @@ namespace clexer {
                     }
                     Assert(!node->weak_void_type || node->typeNames.size() == 1);
                     root.nodes.add(node);
+                    
+                    // TODO: Not sure if we handle this case when we need to find identifier for type size.
+                    //    typedef struct Hello { int x; } Hello;
+
+                    // if(type->obj && type->obj->name.size()) {
+                    //     set_identifier(name, obj);
+                    // }
                 } else {
                     type_name = type->obj_func->name;
 
@@ -1600,6 +1679,7 @@ namespace clexer {
                         node->weak_void_type = true;
                         root.nodes.add(node);
                     }
+                    set_identifier(type_name, type);
                 }
                 
                 result = match(head, ';');
@@ -1628,6 +1708,48 @@ namespace clexer {
                 result = parse_struct_fields(head, obj);
                 CHECK_FAIL
                 
+                obj->calculate_size();
+
+                set_identifier(name, obj);
+                
+                result = match(head, '}');
+                CHECK_FAIL
+                result = match(head, ';');
+                CHECK_FAIL
+
+                mark_strong(name);
+
+                root.nodes.add(obj);
+            } else if(token.kind == UNION) {
+                // TODO: BTB doesn't support unions so we use the first field in the union.
+                head++;
+
+                std::string name = gettok(head).data;
+
+                result = match(head, IDENTIFIER);
+                CHECK_FAIL
+
+                if(gettok(head).kind == ';') {
+                    // skip declaration
+                    head++;
+                    continue;
+                }
+
+                result = match(head, '{');
+                CHECK_FAIL
+                
+                CStruct* obj = create_struct();
+                obj->packing = pack_stack.last();
+                obj->name = name;
+                
+                result = parse_struct_fields(head, obj);
+                CHECK_FAIL
+                
+                obj->union_ify();
+                obj->calculate_size();
+                
+                set_identifier(name, obj);
+
                 result = match(head, '}');
                 CHECK_FAIL
                 result = match(head, ';');
@@ -1655,6 +1777,11 @@ namespace clexer {
                 if(gettok(head).kind == EXTERN) {
                     head++;
                     has_extern = true;
+                }
+
+                if(gettok(head).kind == IDENTIFIER && gettok(head).data == "static") {
+                    // static functions are not supported.
+                    goto parse_fail;
                 }
 
                 CType* type;
@@ -1748,6 +1875,10 @@ namespace clexer {
                 curly_depth++;
             } else if(tok.kind == '}') {
                 curly_depth--;
+                if(curly_depth == 0) {
+                    // end of function definition body
+                    break;
+                }
             } else if(tok.kind == '[') {
                 bracket_depth++;
             } else if(tok.kind == ']') {
@@ -1755,6 +1886,326 @@ namespace clexer {
             }
         }
         int end = head;
+    }
+    bool ParserContext::parse_literal(int& head, i64* number) {
+        using namespace engone;
+
+        /* Some grammar
+        expr        := ternary_expr
+        ternary_expr := or_expr ? or_expr : or_expr
+        or_expr     := and_expr ( "||" and_expr )*
+        and_expr    := equality_expr ( "&&" equality_expr )*
+        equality_expr := rel_expr ( ("==" | "!=") rel_expr )*
+        rel_expr    := add_expr ( ("<" | ">" | "<=" | ">=") add_expr )*
+        add_expr    := mul_expr ( ("+" | "-") mul_expr )*
+        mul_expr    := unary_expr ( ("*" | "/" | "%") unary_expr )*
+        unary_expr  := ("!" | "~" | "-" | "defined") unary_expr | primary
+        primary     := integer | identifier | "(" expr ")"
+        */
+        bool result;
+
+        struct Value {
+            i64 literal;
+        };
+        struct Op {
+            Op(TokenKind a=(TokenKind)0, TokenKind b = (TokenKind)0) : kind((int)a | ((int)b << 8)) {
+                
+            }
+            int kind;
+        };
+        DynamicArray<Value> values;
+        DynamicArray<Op> ops;
+
+        //  defined in 
+        // #define OP_AND            ('&' | ('&'<<8))
+        // #define OP_OR             ('|' | ('|'<<8))
+        // #define OP_SHL            ('<' | ('<'<<8))
+        // #define OP_SHR            ('>' | ('>'<<8))
+        // #define OP_EQUAL          ('=' | ('='<<8))
+        // #define OP_NOT_EQUAL      ('!' | ('='<<8))
+        // #define OP_LESS_EQUAL     ('<' | ('='<<8))
+        // #define OP_GREATER_EQUAL  ('>' | ('='<<8))
+
+        auto precedence = [&](int kind) {
+            switch(kind) {
+                case '?':
+                case ':':
+                    return -3;
+                case OP_OR:
+                    return -2;
+                case OP_AND:
+                    return -1;
+                case '|':
+                    return 2;
+                case '^':
+                    return 3;
+                case '&':
+                    return 4;
+                case OP_EQUAL:
+                case OP_NOT_EQUAL:
+                    return 5;
+                case OP_LESS_EQUAL:
+                case OP_GREATER_EQUAL:
+                case '<':
+                case '>':
+                    return 6;
+                case OP_SHL:
+                case OP_SHR:
+                    return 7;
+                case '+':
+                case '-':
+                    return 10;
+                case '*':
+                case '/':
+                case '%':
+                    return 20;
+            }
+            Assert(false);
+            return -1;
+        };
+        // int head_start = *head;
+        bool finalize = false;
+        bool expect_primary = true;
+        while (true) {
+            auto tok = &gettok(head);
+            auto tok2 = &gettok(head+1);
+            // auto tok3 = &gettok(head+2);
+
+            // don't think we need to handle comment?
+
+
+            // __fd_mask __fds_bits[1024 / (8 * (int) sizeof (__fd_mask))];
+
+            if (expect_primary) {
+                TokenKind unary = END_OF_FILE;
+                if(tok->kind == '-' || tok->kind == '!' || tok->kind == '~') {
+                    head++;
+                    unary = tok->kind;
+                    
+                    tok = &gettok(head);
+                    tok2 = &gettok(head+1);
+                }
+
+                if(tok->kind == NUMBER) {
+                    head++;
+                    char* endptr;
+                    i64 value = strtoll(tok->data.c_str(), &endptr, 0);
+                    values.add({(int)value});
+                } else if (tok->kind == '(') {
+                    head++;
+                    // nocheckin casting
+                    int head_start = head;
+                    CType* type;
+                    result = parse_type(head, &type);
+                    if(result) {
+                        // type cast, we ignore them for now.
+                        // we assume the cast is an integer.
+                        // We need to properly cast between short,int,long if code
+                        // relies on integer overflow.
+                        if(gettok(head).kind != ')') {
+                            return false;
+                        }
+                        head++;
+                        continue; // parse primary again, cast is not a primary.
+                    } else {
+                        head = head_start;
+                        i64 value;
+                        result = parse_literal(head, &value);
+                        if(!result) return false;
+                        values.add({value});
+                    }
+                    if(gettok(head).kind != ')') {
+                        return false;
+                        // report_error(text, expression_start + *head, origin_path, "Expected closing parenthesis ')'");
+                        // return 0;
+                    }
+                    head++;
+                } else if(tok->kind == IDENTIFIER) {
+                    if(tok->data == "sizeof") {
+                        head++;
+
+                        if(gettok(head).kind != '(') {
+                            return false;
+                        }
+                        head++;
+
+                        CType* type;
+                        result = parse_type(head, &type);
+                        if(!result) return false;
+
+                        if(gettok(head).kind != ')') {
+                            return false;
+                        }
+                        head++;
+
+                        values.add({type->size});
+                    } else {
+                        // we don't handle constants
+                        // Code usually uses macros for contant literals so it should be fine in most cases.
+                        return false;
+                    }
+                } else {
+                    return false;
+                    // report_error(text, expression_start + *head, origin_path, "Bad value in #if expression.");
+                }
+                if(unary != END_OF_FILE) {
+                    auto& val = values.last().literal;
+                    switch((int)unary) {
+                        case '-': val = -val; break;
+                        case '!': val = !val; break;
+                        case '~': val = ~val; break;
+                        default: Assert(false);
+                    }
+                }
+                expect_primary = false;
+                continue;
+            } else {
+                head++;
+                if(tok->kind == '+') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '-') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '*') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '/') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '%') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '&' && tok2->kind == '&') {
+                    head++;
+                    ops.add({tok->kind, tok2->kind});
+                } else if(tok->kind == '|' && tok2->kind == '|') {
+                    head++;
+                    ops.add({tok->kind, tok2->kind});
+                } else if(tok->kind == '=' && tok2->kind == '=') {
+                    head++;
+                    ops.add({tok->kind, tok2->kind});
+                } else if(tok->kind == '!' && tok2->kind == '=') {
+                    head++;
+                    ops.add({tok->kind, tok2->kind});
+                } else if(tok->kind == '<' && tok2->kind == '=') {
+                    head++;
+                    ops.add({tok->kind, tok2->kind});
+                } else if(tok->kind == '>' && tok2->kind == '=') {
+                    head++;
+                    ops.add({tok->kind, tok2->kind});
+                } else if(tok->kind == '<' && tok2->kind == '<') {
+                    head++;
+                    ops.add({tok->kind, tok2->kind});
+                } else if(tok->kind == '>' && tok2->kind == '>') {
+                    head++;
+                    ops.add({tok->kind, tok2->kind});
+                } else if(tok->kind == '>') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '<') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '&') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '|') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '^') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == '?') {
+                    ops.add({tok->kind});
+                } else if(tok->kind == ':') {
+                    ops.add({tok->kind});
+                } else {
+                    head--;
+                    finalize = true;
+                }
+                
+                expect_primary = true;
+            }
+
+            // log::out << "ops " << ops.size() << " " << values.size() << "\n";
+
+            while (values.size() >= 2 && ops.size() > 0) {
+                int op = 0;
+                if(ops.size() >= 2) {
+                    int op0 = ops[ops.size()-2].kind;
+                    int op1 = ops[ops.size()-1].kind;
+                    // log::out << (char)op0 << " " << (char)op1 << "\n";
+
+                    int opm3 = 0;
+                    if(ops.size() >= 3)
+                        opm3 = ops[ops.size()-3].kind;
+
+                    if(op0 == '?' && op1 == ':') {
+                        if (!finalize) {
+                            break;
+                        }
+                        // perform ternary operation
+                        // how about nested ternary operation.
+                        op = '?';
+                        ops.pop();
+                        ops.pop();
+                    } else if(precedence(op0) >= precedence(op1) && op0 != '?') {
+                        if (opm3 == '?' && op0 == ':') {
+                            op = '?';
+                            ops.removeAt(ops.size()-2);
+                            ops.removeAt(ops.size()-2);
+                        } else {
+                            op = op0;
+                            ops.removeAt(ops.size()-2);
+                        }
+                    } else if (finalize) {
+                        op = op1;
+                        ops.pop();
+                    } else {
+                        break;
+                    }
+                } else if(finalize) {
+                    op = ops.last().kind;
+                    ops.pop();
+                } else {
+                    break;
+                }
+                
+                i64 val1 = values.last().literal;
+                values.pop();
+                i64 val0 = values.last().literal;
+                i64 value = 0;
+                switch(op) {
+                    case OP_AND: value = val0 && val1; break;
+                    case OP_OR: value = val0 || val1; break;
+                    case OP_EQUAL: value = val0 == val1; break;
+                    case OP_NOT_EQUAL: value = val0 != val1; break;
+                    case OP_LESS_EQUAL: value = val0 <= val1; break;
+                    case OP_GREATER_EQUAL: value = val0 >= val1; break;
+                    case '<': value = val0 < val1; break;
+                    case '>': value = val0 > val1; break;
+                    case OP_SHL: value = val0 << val1; break;
+                    case OP_SHR: value = val0 >> val1; break;
+                    case '+': value = val0 + val1; break;
+                    case '-': value = val0 - val1; break;
+                    case '*': value = val0 * val1; break;
+                    case '/': value = val0 / val1; break;
+                    case '%': value = val0 % val1; break;
+                    case '&': value = val0 & val1; break;
+                    case '|': value = val0 | val1; break;
+                    case '^': value = val0 ^ val1; break;
+                    case '?': {
+                        values.pop();
+                        i64 val_cond = values.last().literal;
+                        // log::out << "cond " << val_cond << " " << val0 << " " << val1 << "\n";
+                        value = val_cond ? val0 : val1;
+                        break;
+                    }
+                    default: Assert(false);
+                }
+                values.last() = {value};
+            }
+            if(finalize)
+                break;
+        }
+        Assert(values.size() == 1);
+        Assert(ops.size() == 0);
+        // CPARSER_VERBOSE(
+        // log::out << "parse val " << values[0].literal << " = " << text.substr(head_start, *head - head_start)<<"\n";
+        // )
+        Assert(number);
+        *number = values[0].literal;
+        return true;
     }
 
     bool ParserContext::parse_struct_fields(int& head, CStruct* obj) {
@@ -1780,11 +2231,11 @@ namespace clexer {
             auto tok = &gettok(head);
             if(tok->kind == '[') {
                 head++;
-                tok = &gettok(head);
-                if(tok->kind != NUMBER) return false;
-                head++;
+                i64 value;
+                result = parse_literal(head, &value);
+                if(!result) return false;
                 
-                type->name += "[" + tok->data + "]";
+                type->name += "[" + std::to_string(value) + "]";
 
                 result = match(head, ']');
                 if(!result) return false;
@@ -1815,19 +2266,15 @@ namespace clexer {
             result = match(head, IDENTIFIER);
             if(!result) return false;
 
-            int value = 0;
+            i64 value = 0;
             if (obj->fields.size())
                 value = obj->fields.last().value + 1;
             
             auto tok = &gettok(head);
             if(tok->kind == '=') {
                 head++;
-                tok = &gettok(head);
-                if(tok->kind != NUMBER) return false;
-                head++;
-                
-                char* endptr;
-                value = strtol(tok->data.c_str(), &endptr, 0);
+                result = parse_literal(head, &value);
+                if(!result) return false;
             }
             
             obj->fields.add({});
@@ -1909,11 +2356,41 @@ namespace clexer {
         }
         return true;
     }
-    bool ParserContext::parse_type(int& head, CType** type) {
+    bool ParserContext::parse_type(int& head, CType** out_type) {
+        using namespace engone;
         std::string typestring = "";
+        int typesize = 0;
+        int typealign = 0;
         bool result;
         if (gettok(head).kind == CONST)
             head++;
+
+        auto find_and_set_sizes = [this,&typesize,&typealign](const std::string name) {
+            auto pair = identifiers.find(name);
+            if (pair == identifiers.end()) {
+                log::out << "Cannot find " << name << "\n";
+                typesize = 0;
+                typealign = 0;
+            } else {
+                switch(pair->second->kind) {
+                    case KIND_ENUM: {
+                        typesize = 4;
+                        typealign = 4;
+                        break;
+                    } case KIND_TYPE: {
+                        auto t = (CType*)pair->second;
+                        // log::out << "A " << t->name << " " << t->size << " " << t->alignment << "\n";
+                        typesize = ((CType*)pair->second)->size;
+                        typealign = ((CType*)pair->second)->alignment;
+                        break;
+                    } case KIND_STRUCT: {
+                        typesize = ((CStruct*)pair->second)->size;
+                        typealign = ((CStruct*)pair->second)->alignment;
+                        break;
+                    } default: Assert(false);
+                }
+            }
+        };
 
         auto token = &gettok(head);
         if(token->data == "void" || token->data == "bool" || token->data == "char") {
@@ -1922,12 +2399,18 @@ namespace clexer {
             // that is mostly C with some C++ elements (like bool)
             typestring = token->data;
             head++;
+            typesize = 1;
+            typealign = 1;
         } else if(token->data == "float") {
             typestring = "f32";
             head++;
+            typesize = 4;
+            typealign = 4;
         } else if(token->data == "double") {
             typestring = "f64";
             head++;
+            typesize = 8;
+            typealign = 8;
         } else if(token->kind == STRUCT) {
             head++;
             
@@ -1952,14 +2435,20 @@ namespace clexer {
                 result = match(head, '}');
                 if(!result) return false;
 
-                *type = create_type();
-                (*type)->name = typestring;
-                (*type)->obj = obj;
+                obj->calculate_size();
+
+                CType* type = create_type();
+                *out_type = type;
+                type->name = typestring;
+                type->obj = obj;
+                type->size = obj->size;
+                type->alignment = obj->alignment;
                 // TODO: trailing pointers
                 return true;
             } else if(tok.kind == IDENTIFIER) {
                 typestring = tok.data;
                 mark_weak(typestring);
+                find_and_set_sizes(typestring);
             } else {
                 return false;
             }
@@ -1985,13 +2474,61 @@ namespace clexer {
                 result = match(head, '}');
                 if(!result) return false;
 
-                *type = create_type();
-                (*type)->name = typestring;
-                (*type)->obj_enum = obj;
+                CType* type = create_type();
+                *out_type = type;
+                type->name = typestring;
+                type->obj_enum = obj;
+                type->size = 4;
+                type->alignment = 4;
+
                 // TODO: trailing pointers
                 return true;
             } else if(tok.kind == IDENTIFIER) {
                 typestring = tok.data;
+                typesize = 4;
+                typealign = 4;
+            } else {
+                return false;
+            }
+        } else if(token->kind == UNION) {
+            head++;
+            
+            auto& tok = gettok(head);
+            if(tok.kind == IDENTIFIER) {
+                head++;
+            }
+            
+            if (gettok(head).kind == '{') {
+                CStruct* obj = create_struct();
+                obj->packing = pack_stack.last();
+                if(tok.kind == IDENTIFIER) {
+                    obj->name = tok.data;
+                    mark_strong(obj->name);
+                }
+
+                result = match(head, '{');
+                if(!result) return false;
+
+                parse_struct_fields(head, obj);
+
+                result = match(head, '}');
+                if(!result) return false;
+
+                obj->union_ify();
+                obj->calculate_size();
+
+                CType* type = create_type();
+                *out_type = type;
+                type->name = typestring;
+                type->obj = obj;
+                type->size = obj->size;
+                type->alignment = obj->alignment;
+                // TODO: trailing pointers
+                return true;
+            } else if(tok.kind == IDENTIFIER) {
+                typestring = tok.data;
+                mark_weak(typestring);
+                find_and_set_sizes(typestring);
             } else {
                 return false;
             }
@@ -2005,62 +2542,105 @@ namespace clexer {
 
                 Noteworthy quirk: long in GCC in NixOS (Linux) is 8 bytes, on Windows it's 4 bytes.
             */
-           bool explicit_sign = false;
-            if(token->data == "unsigned") {
-                explicit_sign = true;
-                typestring += "u";
+           // these can be in any order..
+            int has_int = 0;
+            int has_char = 0;
+            int has_short = 0;
+            int long_count = 0;
+            int has_unsigned = 0;
+            int has_signed = 0;
+            int head_before = head;
+            while(true) {
+                auto tok = &gettok(head);
                 head++;
-            } else if(token->data == "signed") {
-                explicit_sign = true;
-                typestring += "i";
-                head++;
-            } else {
-                typestring += "i";
-            }
-            auto tok = &gettok(head);
-            if(tok->data == "char") {
-                typestring += "8";
-                head++;
-            } else if (tok->data == "short") {
-                typestring += "16";
-                head++;
-
-                auto& tok1 = gettok(head);
-                if(tok1.data == "int") {
-                    head++;
-                }
-            } else if (tok->data == "int") {
-                typestring += "32";
-                head++;
-            } else {
-                auto& tok1 = gettok(head+1);
-                auto& tok2 = gettok(head+2);
-                if(tok->data == "long") {
-                    head+=1;
-
-                    if(tok1.data == "long") {
-                        head++;
-                        typestring += "64";
-                    } else {
-                        if(compile_options->target == TARGET_WINDOWS_x64) {
-                            typestring += "32";
-                        } else {
-                            typestring += "64";
-                        }
+                if(tok->data == "unsigned") {
+                    if(has_unsigned) {
+                        // duplicate specifier
+                        return false;
                     }
-                    
-                    if(tok2.data == "int") {
-                        head++;
+                    has_unsigned = 1;
+                } else if(tok->data == "signed") {
+                    if(has_signed) {
+                        // duplicate specifier
+                        return false;
                     }
+                    has_signed = 1;
+                } else if(tok->data == "char") {
+                    if(has_char) {
+                        // duplicate specifier
+                        return false;
+                    }
+                    has_char = 1;
+                } else if(tok->data == "short") {
+                    if(has_short) {
+                        // duplicate specifier
+                        return false;
+                    }
+                    has_short = 1;
+                } else if(tok->data == "int") {
+                    if(has_int) {
+                        // duplicate specifier
+                        return false;
+                    }
+                    has_int = 1;
+                } else if(tok->data == "long") {
+                    if(long_count >= 2) {
+                        // too many longs
+                        return false;
+                    }
+                    long_count++;
                 } else {
-                    if(explicit_sign) {
-                        typestring += "32";
-                    } else {
-                        head++;
-                        // Some named type
-                        typestring = token->data;
-                    }
+                    head--;
+                    break;
                 }
+            }
+
+            if ((has_char + (has_short || has_int) > 1) || (has_char + has_short && long_count)) {
+                // invalid combination
+                return false;
+            }
+        
+            if(has_char) {
+                if(has_unsigned) {
+                    typestring = "u8";
+                } else if(has_signed) {
+                    typestring = "i8";
+                } else {
+                    typestring = "char";
+                }
+                typesize = 1;
+                typealign = 1;
+            } else if(has_short) {
+                if(has_unsigned) {
+                    typestring = "u16";
+                } else {
+                    typestring = "i16";
+                }
+                typesize = 2;
+                typealign = 2;
+            } else if (has_signed || has_unsigned || has_int || long_count) {
+                if(has_unsigned) {
+                    typestring = "u";
+                } else {
+                    typestring = "i";
+                }
+                if(long_count == 2 || (long_count == 1 && compile_options->target != TARGET_WINDOWS_x64)) {
+                    typestring += "64";
+                    typesize = 8;
+                    typealign = 8;
+                } else {
+                    typestring += "32";
+                    typesize = 4;
+                    typealign = 4;
+                }
+            } else if(gettok(head).kind == IDENTIFIER) {
+                head++;
+                // Some named type
+                typestring = token->data;
+                find_and_set_sizes(typestring);
+            } else {
+                // parsed nothing
+                return false;
             }
         }
 
@@ -2069,6 +2649,8 @@ namespace clexer {
 
         CType* base_type = create_type();
         base_type->name = typestring;
+        base_type->size = typesize;
+        base_type->alignment = typealign;
         while(true) {
             auto& tok3 = gettok(head);
             if(tok3.kind != '*') {
@@ -2079,6 +2661,9 @@ namespace clexer {
 
             if (gettok(head).kind == CONST)
                 head++;
+            
+            base_type->size = REGISTER_SIZE;
+            base_type->alignment = REGISTER_SIZE;
         }
 
         auto& tok0 = gettok(head);
@@ -2096,6 +2681,8 @@ namespace clexer {
             // likely a function pointer, syntax error otherwise i think?
             CFunction* func = create_function();
             CType* func_type = create_type();
+            func_type->size = REGISTER_SIZE;
+            func_type->alignment = REGISTER_SIZE;
             func_type->obj_func = func;
             if(base_type->name != "void")
                 func->return_type = base_type;
@@ -2122,14 +2709,57 @@ namespace clexer {
             result = match(head, ')');
             if(!result) return false;
 
-            *type = func_type;
+            *out_type = func_type;
         } else {
-            *type = base_type;
+            *out_type = base_type;
         }
 
         return true;
     };
+    void CStruct::union_ify() {
+        using namespace engone;
+        is_union = true;
+        int index_of_largest_field = -1;
+        int size_of_largest_field = 0;
+        for(int i=0;i<fields.size();i++) {
+            if (index_of_largest_field == -1 || fields[i].type->size > size_of_largest_field) {
+                index_of_largest_field = i;
+                size_of_largest_field = fields[i].type->size;
+            }
+        }
+        
+        if(index_of_largest_field != 0)
+            fields[0] = fields[index_of_largest_field];
+        while(fields.size() >= 2) {
+            fields.pop();
+        }
+    }
+    void CStruct::calculate_size() {
+        int final_alignment = 1;
 
+        int offset = 0;
+        for(int i=0;i<fields.size();i++) {
+            auto& field = fields[i];
+            
+            int align = field.type->alignment;
+            // We don't assert because some types may not been parsed.
+            // Align will be 0 for such types and we don't want to prevent compilation.
+            // The C header to BTB transpiler is about best effort, it converts declarations
+            // it can and sometimes it can't to better.
+            // Assert(align > 0);
+            if(align > packing)
+                align = packing;
+            if(align > final_alignment)
+                final_alignment = align;
+            
+            if(offset % align)
+                offset += align - (offset % align); // add padding to get proper alignment
+            offset += field.type->size;
+        }
+        // Assert(final_alignment >= 1);
+        size = ((offset + final_alignment-1) / final_alignment) * final_alignment;
+        alignment = final_alignment;
+    }
     std::string ParserContext::type_to_string(CType* type) {
         using namespace engone;
         if(type->obj_func) {
@@ -2240,6 +2870,8 @@ namespace clexer {
                 }
                 break; case KIND_STRUCT: {
                     auto node = (CStruct*)base;
+                    if(node->is_union)
+                        output += "// should be a C union but BTB doesn't support them\n";
                     output += "struct ";
                     if(node->packing != 8) {
                         output += "@no_padding ";
@@ -2266,6 +2898,19 @@ namespace clexer {
                 }
                 break; case KIND_FUNCTION: {
                     auto node = (CFunction*)base;
+
+                    auto pair = function_map.find(node->name);
+                    if (pair != function_map.end()) {
+                        // function already exists, skip we don't want to add duplicates.
+                        // In C headers it is valid semantics to declare the same function multiple times.
+                        // Not the case in BTB so we must deduplicate.
+                        
+                        // To reduce computation we assume the function types match.
+                        // We may decide to check this in the future anyway: node->type == pair->second->type
+                        break;
+                    }
+                        
+                    function_map[node->name] = node;
                     output += "fn @import(__c_import__) " + node->name + "(";
                     for(int fi=0;fi<node->parameters.size();fi++) {
                         auto& parameter = node->parameters[fi];

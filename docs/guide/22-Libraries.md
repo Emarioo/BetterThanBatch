@@ -80,14 +80,16 @@ fn @import(Sound, alias="PlaySoundFromFile") do_sound(path: char*);
 fn @export(Sound, alias="btb_sendmsg") sendmsg(path: char*) { /* ... */ }
 ```
 
-Exported functions cannot be polymorphic. You cannot export functions with the same name.
+Exported functions cannot be polymorphic. You cannot export functions with the same name. BTB does not apply name mangling when exporting functions.
 
-You can use `#link` to pass an argument to the linker, useful when the compiler is lacking support for something. This may require one `#link` per toolchain since all linkers don't have the same options (MSVC vs GCC).
+You can use `#link` to pass an argument to the linker, useful when the compiler is lacking support for something. This may require one `#link` per toolchain since all linkers don't have the same options (MSVC vs GCC). You may be better off compiling object file from BTB and then calling linker yourself with a bunch of flags in a `build.sh` script (or `build.btb` if that is preferred).
 ```cpp
 #link "nostdlib"
 ```
 
 `#load` exists to link with libraries independently from the linker. The compiler uses the right compiler options depending on the linker. `g++ -Ldir_to_lib -llib_file` (GNU Linux or MinGW Windows), `link path_to_lib` (MSVC Windows).
+
+By specifying the path to libraries with `#load "path/to/mylib.so" as LIB` the compiler's **Virtual Machine** can find the libraries and therefore fully run your program in the **VM**. `btb src/main.btb -o app.o` + `gcc app.o path/to/mylib.so -o app` where main.btb declares `#load LIB` without a path means that the **VM** can't call external functions from that LIB. If you have compile time code that doesn't call external functions then that's fine, it will still run.
 
 The path specified in the `#load` directive should be one of these:
 - Relative to current working directory
@@ -306,6 +308,17 @@ fn main() {
 **NOTE:** There is an extra thing that linkers do which is stubs for functions from dynamic libraries. These are created if the compiler created a `call rel32` (`call Play_dll`) instead of a `call reg` (`call [__imp_Play_dll]`). Since the `call rel32` instruction cannot call functions from dlls and you can't convert it to a `call reg`, a stub is created where the relative call (`call Play_dll`, Play_dll is a symbol to the stub) jumps to the stub which contains a jump instruction that can jump to code in dlls (`jmp [__imp_Play_dll]`). This is not relevant in the BTB Compiler because you have to explicitly state where the function comes from (dynamic library or not). Therefore, we always know what type of call to use.
 
 **NOTE:** I have not explained the various relocation types and symbols because I barely now what the different types do myself. I have managed to make things work by analyzing the object files created by gcc and msvc but I plan to take some time to better understand the relocation types.
+
+
+## Compiling stuff on NixOS
+When compiling BTB projects (and C/C++ projects) that depend on libraries such as OpenGL and X11 then you must do this in NixOS:
+```bash
+nix-shell -p libGL xorg.libX11
+btb examples/graphics/quad.btb --run
+```
+Above, `quad.btb` uses GLFW and GLAD which need libGL.so and libX11.so. In NixOS you need to be explicit about which libraries and linker directories you need. BTB will generate `bin/int/gcc_includes.txt` to find include directories in case you import C headers. In there you will find somthing like `/nix/store/SOME_HASH-libgl/include` and same for X11. Same for linker directories. 
+
+**TODO:** Provide a clearer explanation?
 
 # Experimental features
 

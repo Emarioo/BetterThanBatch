@@ -3662,13 +3662,13 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
 
         if(expression->left->type == EXPR_IDENTIFIER){
             auto id_expr = expression->left->as<ASTExpressionIdentifier>();
-            TypeInfo *typeInfo = info.ast->convertToTypeInfo(id_expr->name, idScope, true);
+            TypeInfo *typeInfo = info.ast->convertToTypeInfo(strview(id_expr->name), idScope, true);
             // A simple check to see if the identifier in the expr node is an enum type.
             // no need to check for pointers or so.
             if (typeInfo && typeInfo->astEnum) {
                 // SAMECODE as when checking AST_ID further up
                 i32 enumValue;
-                bool found = typeInfo->astEnum->getMember(expression->name, &enumValue);
+                bool found = typeInfo->astEnum->getMember(strview(expression->name), &enumValue);
                 if (!found) {
                     Assert(info.hasForeignErrors());
                     // ERR_SECTION(
@@ -6136,7 +6136,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             if(typeInfo->astEnum && it->caseExpr->type == EXPR_IDENTIFIER) {
                 auto id_expr = it->caseExpr->as<ASTExpressionIdentifier>();
                 int index = -1;
-                bool yes = typeInfo->astEnum->getMember(id_expr->name, &index);
+                bool yes = typeInfo->astEnum->getMember(strview(id_expr->name), &index);
                 if(yes) {
                     // members_not_covered.add(index);
                     wasMember = true;
@@ -7286,6 +7286,11 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
             vm.init_stack();
             vm.execute(bytecode, temp_tinycode->name, true);
 
+            if(vm.error.type != VM_ERROR_NONE) {
+                printVMFailedMessage(vm, statement->location);
+                return SIGNAL_FAILURE;
+            }
+
             int* value = (int*)(vm.states.last().stack_pointer);
             block.filter_exception_code = *value;
             temp_tinycode->restore_to_empty();
@@ -7980,6 +7985,11 @@ SignalIO GenContext::generateGlobalData() {
         }
         // let VM evaluate expression and put into global data
         vm.execute(bytecode, temp_tinycode->name, true);
+
+        if(vm.error.type != VM_ERROR_NONE) {
+            printVMFailedMessage(vm, stmt->location);
+            return SIGNAL_FAILURE;
+        }
         
         struct Env {
             TypeId type;
@@ -8164,16 +8174,23 @@ void GenContext::printVMFailedMessage(VirtualMachine& vm, lexer::SourceLocation 
             // }
             ERR_LINE2(location, "here")
         )
+    } else if(vm.error.type == VM_ERROR_ALREADY_PRINTED) {
+        info.errors++;
     } else {
-        // @noceckin add this back
-        // ERR_SECTION(
-        //     ERR_HEAD2(location)
-        //     ERR_MSG_LOG("Virtual machine failed for an unspecified reason. Call stack:\n")
-        //     for(int i=0;i<vm.call_stack.size();i++) {
-        //         log::out << " " << vm.call_stack[i].func->name << "\n";
-        //     }
-        //     ERR_LINE2(location, "here")
-        // )
+        ERR_SECTION(
+            ERR_HEAD2(location)
+            ERR_MSG_LOG("Virtual machine failed for an unspecified reason.")
+            if(vm.states.size()) {
+                log::out << " Call stack:\n";
+                auto& state = vm.states.last();
+                for(int i=0;i<state.call_stack.size();i++) {
+                    log::out << " " << state.call_stack[i].func->name << "\n";
+                }
+            } else {
+                log::out << " No call stack (failure didn't happen at runtime)\n";
+            }
+            ERR_LINE2(location, "here")
+        )
     }
 }
 
@@ -8198,7 +8215,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     // if(is_initial_import && !gen_func_with_run_directives) {
     if(is_initial_import && gen_func_with_run_directives) {
         if(compiler->entry_point.size() != 0) {
-            iden = compiler->ast->findIdentifier(imp->scopeId,0,compiler->entry_point, nullptr, true, true);
+            iden = compiler->ast->findIdentifier(imp->scopeId,0,strview(compiler->entry_point), nullptr, true, true);
             if(!iden) {
                 // If no main function exists then the code in global scope of
                 // initial import will be the main function.

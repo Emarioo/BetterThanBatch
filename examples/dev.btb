@@ -18,7 +18,6 @@
 // #import "libs/glfw-3.3.9/include/GLFW/glfw3.h"
 // #load "libs/glfw-3.3.9/lib-mingw-w64/glfw3.lib"
 
-
 /*
     Todays quest:
         String concatenation using +, gone are the days we have to use the append method on strings.

@@ -11,6 +11,7 @@ struct Compiler;
 enum VMErrorType {
     VM_ERROR_NONE = 0,
     VM_ERROR_UNKNOWN,
+    VM_ERROR_ALREADY_PRINTED,
     VM_UNRESOLVED_CALL,
     VM_STACK_VIOLATION,
 };

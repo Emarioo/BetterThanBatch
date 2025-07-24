@@ -1,22 +1,33 @@
+/*
+    This example shows that you can import C headers and call functions from them.
 
-// #import "Logger"
+    This includes functions from the C standard library, your own C headers and
+    other popular C libraries like GLFW, Opus, OpenSSL.
 
-// #import "wa.btb"
-// #import "util.btb"
+    NOTE: Functions with variadic arguments are not supported. Such as printf.
+*/
 
-// #import "stdlib.h"
-#import "./ga.h"
-// text := "-255"
-// x: i32 = atoi(text.ptr)
-// log(x)
+#run {
+    #import "OS"
 
-// hello()
+    // Automatically compile 'util.lib'
+    ExecuteCommand("gcc -g -c -o util.o util.c")
+    ExecuteCommand("ar rcs util.lib util.o")
+}
 
-// #load "./util.lib"
-// #load "./util.dll"
-// #import "./util.h"
-// // fn @import(clib) calculate(x: i32, y: i32) -> i32;
-// x: i32 = calculate(1, 5)
-// log(x)
+#import "Logger"
 
+// ---------------------
 
+#import "stdlib.h"
+
+num: i32 = atoi("-255".ptr)
+log("atoi: ", num)
+
+// ---------------------
+
+#load "./util.lib"
+#import "./util.h"
+
+x: i32 = calculate(1, 5)
+log("calculte: ", x)

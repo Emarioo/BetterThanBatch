@@ -20,7 +20,7 @@
     #if BUILD_DLL
         #load "libs/glad/lib-ubuntu/libglad.so" as GLAD
     #else
-        #load "libs/glad/lib-ubuntu/libglad.a" as GLAD
+        #load @force "libs/glad/lib-ubuntu/libglad.a" as GLAD
     #endif
 #endif
 
@@ -31,7 +31,12 @@ global glErrCode: bool = false;
     #macro GLCHECK #endmacro
 #endif
 
-// #import "libs/glad/include/glad/glad.h"
+#if USE_VENDOR_C_HEADERS
+
+@includedir("libs/glad/include") // needed for #include <KHR/khrplatform.h>
+#import "libs/glad/include/glad/glad.h"
+
+#else
 
 #macro GLAD_IMPORT @import(GLAD)
 #macro GLAD_VARIMPORT(X) @import(GLAD, alias = #quoted glad_##X) X
@@ -166,3 +171,5 @@ DEF_GLAD_VAR(glDisable)(cap: u32);
 DEF_GLAD_VAR(glBlendFunc)(sfactor: u32, dfactor: u32);
 
 DEF_GLAD_VAR(glGetError)() -> u32;
+
+#endif // USE_VENDOR_C_HEADERS

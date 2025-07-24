@@ -212,6 +212,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             } else {
                 log::out << "no source info\n";
             }
+            error.type = VMErrorType::VM_ERROR_ALREADY_PRINTED;
             return;
         }
         auto& proglib = bytecode->libraries->get(r.library_index);
@@ -361,6 +362,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                     }
                     log::out << "\n";
                 }
+                
                 continue;
             } else {
                 // log::out << log::LIME << "Load '"<<alt_path<<"'\n";
@@ -403,6 +405,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         }
     }
     if(any_failure){
+        error.type = VMErrorType::VM_ERROR_ALREADY_PRINTED;
         return;
     }
 

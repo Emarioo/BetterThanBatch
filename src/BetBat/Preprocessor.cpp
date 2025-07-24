@@ -633,6 +633,42 @@ SignalIO PreprocContext::parseIf(){
                     return SIGNAL_COMPLETE_FAILURE;
                 }
                 advance();
+            } else if (string == "includedir") {
+                advance();
+                auto tok = gettok();
+                if(tok.type != '(') {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Expected ( after @includedir.")
+                        ERR_LINE2(tok, "here")
+                    )
+                    return SIGNAL_COMPLETE_FAILURE;
+                }
+                advance();
+                
+                tok = gettok(&string);
+                if(tok.type == lexer::TOKEN_LITERAL_STRING) {
+                    extra_c_includes.add(string);
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Expected literal string as path to additional include directory.")
+                        ERR_LINE2(tok, "here")
+                    )
+                    return SIGNAL_COMPLETE_FAILURE;
+                }
+                advance();
+                
+                tok = gettok();
+                if(tok.type != ')') {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Expected ) to end @includedir.")
+                        ERR_LINE2(tok, "here")
+                    )
+                    return SIGNAL_COMPLETE_FAILURE;
+                }
+                advance();
             } else
                 break;
         }
@@ -1165,7 +1201,7 @@ SignalIO PreprocContext::parseImport(DynamicArray<std::string>& macro_defines) {
         std::string orig_dir = TrimLastFile(lexer_imp->path);
         
         std::string assumed_path{};
-        u32 dep_id = compiler->addOrFindImport(path, orig_dir, &assumed_path, false, &macro_defines);
+        u32 dep_id = compiler->addOrFindImport(path, orig_dir, &assumed_path, false, &macro_defines, &extra_c_includes);
         
         bool prev_show = info.showErrors;
         if(!evaluateTokens) { // only print errors on the second preprocessing
@@ -1287,7 +1323,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     };
     auto deleteLayer = [&](Layer* layer) {
         scratch_allocator.destroy(layer);
-        layer->~Layer();
+        // layer->~Layer();
     };
     DynamicArray<Layer*> layers{};
     layers.init(&scratch_allocator);
@@ -1381,12 +1417,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         }
 
         if(layer->quote_next_token) {
-            StringView new_view = new_data;
             lexer::Token new_token{};
             new_token.type = lexer::TOKEN_LITERAL_STRING;
             new_token.flags = lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_DOUBLE_QUOTED | lexer::TOKEN_FLAG_NULL_TERMINATED;
             new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
-            lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, macro_source->line, macro_source->column);
+            StringView view = strview(new_data);
+            lexer->appendToken(new_lexer_import, new_token, compute_source, &view, 0, macro_source->line, macro_source->column);
         } else if(layer->concat_next_token) {
             MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, new_data, this);
             if (macroroot) {
@@ -1403,7 +1439,6 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 // the tokens should be appended to input_arguments
                 layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
             } else {
-                StringView new_view = new_data;
                 lexer::Token new_token{};
                 new_token.type = token_type;
                 new_token.flags = lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED;
@@ -1411,7 +1446,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     new_token.flags |= lexer::TOKEN_FLAG_DOUBLE_QUOTED;
                 }
                 new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
-                lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, ln, col);
+                StringView view = strview(new_data);
+                lexer->appendToken(new_lexer_import, new_token, compute_source, &view, 0, ln, col);
             }
         } else {
             return false;
@@ -1733,14 +1769,14 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                     bool is_line_or_column = signal != SIGNAL_NO_MATCH;
                                     bool compute_source = signal == SIGNAL_NO_MATCH;
                                     if(signal == SIGNAL_NO_MATCH)
-                                        signal = parseInformational(token, directive_tok, directive_str, &some_tok, &some_str);
+                                        signal = parseInformational(token, directive_tok, strview(directive_str), &some_tok, &some_str);
                                     if(signal == SIGNAL_SUCCESS) {
                                         j++; // skip directive name too
                                         // layer->step(2); // hashtag + directive name
                                         // if(layer->is_last(lexer)) {
                                         //     SET_SUFFIX(token.flags, layer->ending_suffix);
                                         // }
-                                        StringView tmp = some_str;
+                                        StringView tmp = strview(some_str);
                                         
                                         bool concated = false;
                                         if((layer->concat_next_token && new_lexer_import->chunks.size() > 0) || layer->quote_next_token) {
@@ -1915,7 +1951,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     if(layer->is_last(lexer)) {
                         SET_SUFFIX(token.flags, layer->ending_suffix);
                     }
-                    StringView tmp = some_str;
+                    StringView tmp = strview(some_str);
                     if(layer->adjacent_callee) {
                         if(is_line_or_column) {
                             if(layer->adjacent_callee->input_arguments.size() == 0)
@@ -2193,6 +2229,42 @@ SignalIO PreprocContext::parseOne() {
                 return SIGNAL_COMPLETE_FAILURE;
             }
             advance();
+        } else if (string == "includedir") {
+            advance();
+            auto tok = gettok();
+            if(tok.type != '(') {
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Expected ( after @includedir.")
+                    ERR_LINE2(tok, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+            advance();
+            
+            tok = gettok(&string);
+            if(tok.type == lexer::TOKEN_LITERAL_STRING) {
+                extra_c_includes.add(string);
+            } else {
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Expected macro name.")
+                    ERR_LINE2(tok, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+            advance();
+            
+            tok = gettok();
+            if(tok.type != ')') {
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Expected ) to end @includedir.")
+                    ERR_LINE2(tok, "here")
+                )
+                return SIGNAL_COMPLETE_FAILURE;
+            }
+            advance();
         } else
             break;
     }
@@ -2256,7 +2328,7 @@ SignalIO PreprocContext::parseOne() {
                 signal = parseInformational(tok, macro_tok, string, &some_tok, &some_str);
                 if(signal == SIGNAL_SUCCESS) {
                     advance();
-                    StringView view = some_str;
+                    StringView view = strview(some_str);
                     lexer->appendToken(new_lexer_import, some_tok, &view);
                 }
             }

@@ -107,9 +107,11 @@ namespace engone {
     void Sleep(double seconds);
 	
 	enum FileOpenFlags : u32 {
+		// These flags are messed up, fix them.
 		FILE_READ_ONLY	 		= 0x1,
 		FILE_CLEAR_AND_WRITE 	= 0x2,
 		FILE_READ_AND_WRITE 	= 0x4,
+		// FILE_CLEAR_AND_READ_WRITE 	= 0x8,
 		// FILE_SHARE_READ = 8, // always true
 		// FILE_SHARE_WRITE = 16,
 	};

@@ -298,15 +298,23 @@ void CompileStats::printSuccess(CompileOptions* opts){
     using namespace engone;
     double time_compile = DiffMeasure(end_compile - start_compile);
     double time_linker = DiffMeasure(end_linker - start_linker);
+    double time_c_parse = DiffMeasure(c_parse_time);
     
-    log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " lines, "<<log::AQUA<<FormatBytes(readBytes)<<log::NO_COLOR<<"\n";
+    log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " lines, "<<log::AQUA<<FormatBytes(readBytes);
+    if(c_lines) {
+        log::out << " (" << log::AQUA << FormatUnit((u64)c_lines) << log::NO_COLOR << " C lines, " << log::AQUA << FormatBytes(c_readBytes) << log::NO_COLOR<<")\n";
+    } else {
+        log::out << log::NO_COLOR<<"\n";
+    }
     
     log::out << " total time: "<<log::AQUA<< FormatTime(time_compile)<<log::NO_COLOR;
     if(time_linker != 0) {
-        log::out << ", link time: "<<log::AQUA<<FormatTime(time_linker)<<"\n";
-    } else {
-        log::out << "\n";
+        log::out << ", link time: "<<log::AQUA<<FormatTime(time_linker) <<log::NO_COLOR;
     }
+    if(c_parse_time != 0) {
+        log::out << ", C parse time: "<<log::AQUA<<FormatTime(time_c_parse);
+    }
+    log::out << "\n";
     
     if(opts) {
         log::out << " options: "<<log::AQUA<<opts->target<<log::NO_COLOR<<", " << log::AQUA<< opts->linker<<log::NO_COLOR << "\n";
@@ -932,7 +940,7 @@ void Compiler::processImports() {
                     compiler_imp->state = (TaskType)(compiler_imp->state | picked_task.type);
                     
                     if (entry_point.size() != 0) {
-                        auto iden = ast->findIdentifier(compiler_imp->scopeId,0,entry_point,nullptr, true, false);
+                        auto iden = ast->findIdentifier(compiler_imp->scopeId,0, strview(entry_point),nullptr, true, false);
                         if(iden && iden->is_fn()) {
                             auto fun = iden->cast_fn();
                             Assert(fun->funcOverloads.overloads.size());
@@ -1022,6 +1030,7 @@ void Compiler::processImports() {
                         c.init_context(this);
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
                         have_prepared_global_data = true;
+                        compile_stats.errors += c.errors;
                     }
                     lock_miscellaneous.unlock();
                 }
@@ -1034,6 +1043,7 @@ void Compiler::processImports() {
                         c.init_context(this);
                         c.generateGlobalData();
                         have_generated_comp_time_global_data = true;
+                        compile_stats.errors += c.errors;
                     }
                     lock_miscellaneous.unlock();
                 }
@@ -1047,6 +1057,7 @@ void Compiler::processImports() {
                             c.executeGlobalRunDirective(&rundir);
                         }
                         have_run_global_run_directives = true;
+                        compile_stats.errors += c.errors;
                     }
                     lock_miscellaneous.unlock();
                 }
@@ -1256,7 +1267,7 @@ void Compiler::run(CompileOptions* options) {
             cmd = "clang -E -x c nil -v";
         }
         const char* temp_path = "bin/int/gcc_includes.txt";
-        auto file = FileOpen(temp_path, FILE_READ_AND_WRITE);
+        auto file = FileOpen(temp_path, FILE_CLEAR_AND_WRITE); // also allows read
         if(!file) {
             log::out << log::YELLOW << "WARNING: Compiler couldn't create "<<temp_path<<" to write gcc include directories too. This means you can't import C standard headers (stdlib.h).\n";
         } else {
@@ -1382,7 +1393,6 @@ void Compiler::run(CompileOptions* options) {
         dot_index = output_path.size();
     }
 
-    
     output_type = OUTPUT_INVALID;
 
     bool obj_write_success = false;
@@ -1405,6 +1415,8 @@ void Compiler::run(CompileOptions* options) {
         } break;
         default: Assert(false);
     }
+
+    options->arch = arch;
 
     std::string output_filename = output_path.substr(slash_index+1, dot_index - (slash_index+1));
     std::string output_extension = ExtractExtension(output_path);
@@ -2276,7 +2288,7 @@ JUMP_TO_EXEC:
     if(!options->silent)
         log::out << log::GRAY << "not executing program\n";
 }
-u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs, DynamicArray<std::string>* passed_c_macros) {
+u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error, bool from_cwd_ignore_import_dirs, DynamicArray<std::string>* passed_c_macros, DynamicArray<std::string>* passed_c_includes) {
     using namespace engone;
     Path abs_path{};
     if (from_cwd_ignore_import_dirs) {
@@ -2343,7 +2355,11 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
             }
             for (const auto& p : importDirectories)
                 options.include_dirs.add(p.text);
+            for (const auto& p : *passed_c_includes)
+                options.include_dirs.add(p);
+            u64 start = StartMeasure();
             new_text = TranspileCToBTB(text, &options, abs_path.text, this->options);
+            u64 diff = StartMeasure() - start;
             auto file = FileOpen(actual_path, FILE_CLEAR_AND_WRITE);
             if(!file) {
                 log::out << log::RED << "ERROR:"<<log::NO_COLOR<<" Could not save temporary converted C file '"<<log::GREEN<<actual_path<<log::NO_COLOR<<"'\n";
@@ -2352,6 +2368,13 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
                 FileWrite(file, new_text.data(), new_text.size());
                 FileClose(file);
             }
+
+            atomic_add(&compile_stats.c_readBytes, options.readBytes);
+            atomic_add(&compile_stats.c_lines, options.lines);
+            atomic_add(&compile_stats.c_comments, options.comment_lines);
+            lock_miscellaneous.lock();
+            compile_stats.c_parse_time += diff;
+            lock_miscellaneous.unlock();
         }
     }
     
