@@ -12,7 +12,7 @@
 #include "BetBat/Fuzzer.h"
 #include "BetBat/Lexer.h"
 
-#include "BetBat/CParser.h"
+#include "BetBat/CHeaderTranspiler.h"
 
 #undef FILE_READ_ONLY // bye bye Windows defined flag
 #undef IMAGE_REL_AMD64_REL32

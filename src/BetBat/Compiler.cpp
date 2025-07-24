@@ -1,6 +1,6 @@
 #include "BetBat/Compiler.h"
 #include "BetBat/CompilerInterface.h"
-#include "BetBat/CParser.h"
+#include "BetBat/CHeaderTranspiler.h"
 
 #ifdef OS_WINDOWS
 #include <intrin.h>

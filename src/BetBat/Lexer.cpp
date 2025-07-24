@@ -1,7 +1,7 @@
 
 #include "BetBat/Lexer.h"
 #include "BetBat/Util/Perf.h"
-#include "BetBat/CParser.h"
+#include "BetBat/CHeaderTranspiler.h"
 
 namespace lexer {
 u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
