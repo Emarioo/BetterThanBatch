@@ -88,25 +88,28 @@ struct GenContext : public PhaseContext {
     LoopScope* getLoop(int index);
     bool popLoop();
 
-    DynamicArray<int> frame_size_fixes{};
+    // DynamicArray<int> frame_size_fixes{};
     // int max_size_of_function_arguments = 0;
     // int sum_frame_size = 0;
     // void alloc_local(int size) {
     //     sum_frame_size += size;
     // }
-    void add_frame_fix(int index) {
-        if(disableCodeGeneration) return;
-        frame_size_fixes.add(index);
-    }
+    // void add_frame_fix(int index) {
+    //     if(disableCodeGeneration) return;
+    //     frame_size_fixes.add(index);
+    // }
     void fix_frame_values(FuncImpl* funcImpl, TinyBytecode* tinycode) {
         int frame_size = funcImpl->get_frame_size();
-        for(auto index : frame_size_fixes) {
-            builder.fix_local_imm(index, frame_size);
-        }
+        // for(auto index : frame_size_fixes) {
+        //     builder.fix_local_imm(index, frame_size);
+        // }
+        Assert(tinycode->frame_size == 0); // if programmer set frame_size and we try to override it then we made a whoopsie
+        tinycode->frame_size = frame_size;
+
         for(auto& block : tinycode->try_blocks) {
             block.frame_offset_before_try = -frame_size; // it should be -frame_size
         }
-        frame_size_fixes.clear();
+        // frame_size_fixes.clear();
     }
 
     struct ResolveCall {

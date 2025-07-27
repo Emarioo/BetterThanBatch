@@ -228,4 +228,4 @@ v: void*
 
 nah: i32;
 pt := &nah;
-@TEST_ERROR(ERROR_UNDECLARED) nah * sizeof *pt
+@TEST_ERROR(ERROR_UNSPECIFIED) nah * sizeof *pt

@@ -4,7 +4,7 @@ The BTB Calling Convention follows *System V ABI* with a few tweaks to handle mu
 This document describes how a BTB function signature relates to a CPU architecture's registers. By reading this document you will understand how
 to write assembly that can correctly call functions from a BTB static/dynamic library.
 
-We currently support one architecture: x64
+We currently support one architecture: x86_64
 
 (at the time of writing this we use an old BTB calling convention where we support ARMv7 but it will be some time before i revisit ARM and implement the new convention)
 
@@ -17,7 +17,7 @@ The calling conventions specifies:
 - Which registers are volatile
 - Stack alignment 
 
-## x64
+## x86_64
 Overview of the call stack.
 
 |Stack|What|
@@ -40,21 +40,20 @@ What differs is that we allow more than 2 return values. With four integers the 
 Then we have complex situations like this: `fn () -> i32, char[], i32, i32`. The first and third value are placed in `RAX`, `RDX` since the second value is 16 bytes and the doesn't fit in `RDX` and `RAX` is already occupied. The second and fourth value are placed in return pointer `struct { a: char[]; b: i32; }`.
 
 ### Non-volatile registers
-These registers should maintain their value from a function call: `rbp`, `rbp`, `r12 - r15`.
+These registers should maintain their value from a function call: `rbx`, `rbp`, `r12 - r15`.
 
 All float registers, `xmm0 - xmm15`, are volatile.
 
 ### A function with zero return values follows this:
 First 8 arguments of type `float` are placed in: `xmm0 - xmm7`. The rest are placed on the stack.
 
-First 6 arguments where type size is less or equal to `16 bytes` are placed in: `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`. The rest are placed on the stack. `integer`, `pointer`, `char`, `bool`, and struct
+First 6 arguments of type `integer`, `pointer`, `char`, `bool`, or `struct` less or equal to 16 bytes are placed in: `rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`. The rest are placed on the stack. Larger structs are placed on the stack right away.
 
+Arguments placed on the stack are "pushed" onto the stack in reverse order where the first argument becomes the last object pushed to the stack before a function is called.
 
-If the general/float registers are filled up then the remaining arguments are placed on the stack.
+Note that the `array` type is treated as a pointer even if it is less or equal to 16 bytes.
 
-If the argument type isn't allowed in a register (eg. it's a `struct` or `array`) then it is placed on the stack.
-
-The alignment for arguments placed on the stack are treated as fields in a struct. A 16-bit integer is 2-byte aligned, a 64-bit integer is 8-byte aligned. A struct with two 32-bit integers is 4-byte aligned, a struct with one 32-bit integer and one 64-bit integer is 8-byte aligned.
+The alignment for arguments placed on the stack are treated as fields in a struct. A 16-bit integer is 2-byte aligned, a 64-bit integer is 8-byte aligned. A struct with two 32-bit integers is 4-byte aligned, a struct with one 32-bit integer and one 64-bit integer is 8-byte aligned so there will be paddin between the 32-bit integer and 64-bit integer so that the 64-bit integer is aligned.
 
 **nocheckin TODO:** When do we pass a pointer to a struct? const ref
 

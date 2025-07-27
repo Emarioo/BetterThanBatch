@@ -163,9 +163,7 @@ bool X64Builder::generate() {
         || t == BC_ASM
         || t == BC_TEST_VALUE
         || t == BC_ALLOC_ARGS
-        || t == BC_ALLOC_LOCAL
         || t == BC_FREE_ARGS
-        || t == BC_FREE_LOCAL
         ;
     };
 
@@ -201,7 +199,6 @@ bool X64Builder::generate() {
         || t == BC_LI64
         || t == BC_CAST
         // || t == BC_STRLEN // it takes input and overwrites
-        || t == BC_ALLOC_LOCAL
         || t == BC_GET_PARAM
         || t == BC_GET_VAL
         || t == BC_PTR_TO_LOCALS
@@ -465,20 +462,20 @@ bool X64Builder::generate() {
                     } else if(base->op0 == BC_REG_LOCALS) {
                         n->reg0 = alloc_artifical_reg(-1, X64_REG_BP); // we don't free BP and don't pass bc_index
                     }
-                } else if(n->base->opcode == BC_ALLOC_LOCAL || n->base->opcode == BC_ALLOC_ARGS) {
-                    auto base = (InstBase_op1*)n->base;
-                    if(base->op0 != BC_REG_INVALID) {
-                        auto& v = bc_register_map[base->op0];
-                        auto recipient = v.used_by;
-                        auto reg_nr = v.reg_nr;
-                        if(recipient) {
-                            n->reg0 = recipient->regs[reg_nr];
-                            map_reg(n,0);
-                            free_map_reg(n,0);
-                        } else {
-                            Assert(recipient);
-                        }
-                    }
+                } else if(n->base->opcode == BC_ALLOC_ARGS) {
+                    // auto base = (InstBase_op1*)n->base;
+                    // if(base->op0 != BC_REG_INVALID) {
+                    //     auto& v = bc_register_map[base->op0];
+                    //     auto recipient = v.used_by;
+                    //     auto reg_nr = v.reg_nr;
+                    //     if(recipient) {
+                    //         n->reg0 = recipient->regs[reg_nr];
+                    //         map_reg(n,0);
+                    //         free_map_reg(n,0);
+                    //     } else {
+                    //         Assert(recipient);
+                    //     }
+                    // }
                 } else {
                     auto base = (InstBase_op1*)n->base;
                     if (OVERWRITES_OP0(base->opcode)) {
@@ -926,7 +923,28 @@ bool X64Builder::generate() {
         }
     }
     
-    
+     auto init_frame=[&](int value = -1) {
+        if(value == -1)  value = tinycode->frame_size;
+
+        if(value != 0) {
+            emit_sub_imm32(X64_REG_SP, value);
+            virtual_stack_pointer -= value;
+        }
+        push_offsets.add(0); // needed for SET_ARG
+    };
+    auto deinit_frame=[&](int value = -1) {
+        if(value == -1)  value = tinycode->frame_size;
+        else   push_offsets.pop(); // only if opcode is BC_ALLOC_ARGS
+
+        if(value != 0) {
+            emit_add_imm32(X64_REG_SP, (i32)value);
+        }
+        ret_offset -= value;
+        virtual_stack_pointer += value;
+    };
+
+    init_frame();
+
     // TODO: Stack pointers moments were used when the stack pointer changed a lot.
     //   Especially between jumps and return statements in a if or while scope.
     //   Now however, the stack pointer is fixed because we allocate space for local
@@ -1174,65 +1192,36 @@ bool X64Builder::generate() {
                 }
                 FIX_POST_IN_OPERAND(0)
             } break;
-            case BC_ALLOC_LOCAL:
             case BC_ALLOC_ARGS: {
-                auto base = (InstBase_op1_imm16*)n->base;
+                auto base = (InstBase_imm16*)n->base;
                 int imm = (i32)base->imm16; // IMPORTANT: immediate is modified, do not used base->imm16 directly!
                 // if (imm == 0) {
                 //     // PRINT_BYTECODE("why");
                 //     break;
                 // }
-                if(opcode == BC_ALLOC_ARGS) {
-                    int misalignment = (virtual_stack_pointer + imm) & 0xf;
-                    misalignments.add(misalignment);
-                    if(misalignment != 0) {
-                        imm += 16 - misalignment;
-                    }
+                int misalignment = (virtual_stack_pointer + imm) & 0xf;
+                misalignments.add(misalignment);
+                if(misalignment != 0) {
+                    imm += 16 - misalignment;
                 }
+            
                 // TODO: unixcall does not need stack space for first 6 args.
                 //   BUT, we do right now since SET_ARG temporarily places
                 //   the args their and then loads them into registers
                 //   before BC_CALL
-                if(imm != 0) {
-                    if(base->op0 != BC_REG_INVALID) {
-                        FIX_PRE_OUT_OPERAND(0)
-
-                        emit_sub_imm32(X64_REG_SP, imm);
-                        emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_SP);
-                        emit1(OPCODE_MOV_REG_RM);
-                        emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), X64_REG_SP);
-
-                        FIX_POST_OUT_OPERAND(0)                
-                    } else {
-                        emit_sub_imm32(X64_REG_SP, imm);
-                    }
-                    virtual_stack_pointer -= imm;
-                    push_offsets.add(0); // needed for SET_ARG
-                } else {
-                    Assert(base->op0 == BC_REG_INVALID); // we can't get pointer if we didn't allocate anything
-                    push_offsets.add(0); // needed for SET_ARG
-                }
+                init_frame(imm);
             } break;
-            case BC_FREE_LOCAL:
             case BC_FREE_ARGS: {
                 auto base = (InstBase_imm16*)n->base;
                 int imm = (i32)base->imm16;
                 
-                if(opcode == BC_FREE_ARGS) {
-                    int misalignment = misalignments.last();
-                    misalignments.pop();
-                    if(misalignment != 0) {
-                        imm += 16 - misalignment;
-                    }
+                int misalignment = misalignments.last();
+                misalignments.pop();
+                if(misalignment != 0) {
+                    imm += 16 - misalignment;
                 }
-                if(imm != 0) {
-                    emit_add_imm32(X64_REG_SP, (i32)imm);
-                }
-                ret_offset -= imm;
-                virtual_stack_pointer += imm;
-                if(opcode == BC_FREE_ARGS) {
-                    push_offsets.pop();
-                }
+
+                deinit_frame(imm);
             } break;
             case BC_SET_ARG: {
                 auto base = (InstBase_op1_ctrl_imm16*)n->base;
@@ -1579,6 +1568,8 @@ bool X64Builder::generate() {
             case BC_RET: {
                 // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
                 
+                deinit_frame(); // free local variables
+
                 int total = 0;
                 if(callee_saved_space - args_offset > 0) {
                     total += callee_saved_space - args_offset;

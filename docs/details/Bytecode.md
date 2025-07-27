@@ -1,9 +1,36 @@
 **INCOMPLETE**
 
-# Bytecode
-The compiler produces bytecode which can be executed by a virtual machine or further compiled to machine instructions.
+The compiler has internal **Bytecode** which is generated from the **Abstract Syntax Tree** (**AST**).
 
-The bytecode is independent from computer architecture and operating system. It is a mix of a register-based and stack-based design.
+The bytecode allows the compiler to have one component for converting **AST** to some code and then multiple components for converting **Bytecode** to **Machine code** (`x86_gen` or `ARM`). Without an intermediate representation we would need to duplicate a lot of logic in the current BytecodeGenerator into X86Generator and ARMGenerator, or we would need to have one MachineGenerator with a bunch of if statements for each target we support (x86_64, ARM). Imagine adding a new target and forgetting to add code generation for switch or for loop statement.
+
+**Bytecode** also allows us to easily execute it (in our **VirtualMachine**). No bytecode means executing a x86 function we generated at runtime and tweaking the code for relocations which is troublesome. We have more issues if we target ARM when our host is x86, then we need to generate it twice if we also want to execute it. Side note: our **VirtualMachine** still needs to generate a x86 stubs at runtime for BTB functions we want to pass as callback to C code (GLFW3s key/mouse callback for example).
+
+As a user of the compiler you do not need to know anything about the **Bytecode**. While the compiler can output .bc files there is no reason to do this other than diagnosing compiler bugs.
+
+# BTB's Bytecode
+
+The bytecode is independent from CPU architectures (x86_64, ARM) and operating systems. This includes calling conventions where bytecode instructions are written the same for all conventions. The `call` instruction does however specify what calling convention should be used by the **Machine Code Generator** (**MCG**). It also specifies whether an internal bytecode function is called, a function from a static library, or a function from a dynamic library.
+
+<!-- Linking with static or dynamic library should be known when generating bytecode, this is specified in BTB source with `#load "mylib.lib"` or `#load "mylib.dll` (`.a` and `.so` on Linux). -->
+
+The instruction set is a mix of a register and stack-based design.
+
+## Information in a Bytecode object
+The **Bytecode** struct contains information about the whole compiled program. This struct alone allows you to generate machine code. This information exists in this struct:
+- A list of BTB functions (**TinyBytecode**)
+- The target (**TargetPlatform**)
+- ...
+
+This information is stored in a bytecode file:
+**TinyBytecode** structs represent a single BTB function. It contains this information:
+- ...
+
+**NOTE:** The target in bytecode should maybe be the *intended target* since we can override it when doing `btb program.bc --target ARM_x86`. Compiling for Windows and changing target to Linux is a bad idea though. Compiling for x86_64 and then switching to ARM also seems strange unless your doing bare metal? Probably should allow overriding it like this. If none is specified we use the one in .bc, if it is specified then they must be equal .
+
+**NOTE:** In the x86_64 generator and other files you will see that **Compiler** struct is available alongside **Bytecode**. This is because of errors, statistics and other metadata. The actual program is located in **Bytecode**.
+
+### File format
 
 ## Instruction set
 See `include/BetBat/Bytecode.h`.

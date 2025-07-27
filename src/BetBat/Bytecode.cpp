@@ -174,7 +174,7 @@ void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode, Compiler* com
     disable_code_gen = false;
     pushed_offset = 0;
     pushed_offset_max = 0;
-    ret_offset = 0;
+    // ret_offset = 0;
     has_return_values = false;
     virtual_stack_pointer = 0;
     m_has_emitted_call = false;
@@ -284,73 +284,7 @@ void BytecodeBuilder::emit_asm(int asm_instance, int inputs, int outputs) {
     
     tinycode->required_asm_instances.add(asm_instance);
 }
-void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
-    if(disable_code_gen) return;
-    if(compiler->compile_stats.errors == 0) {
-        // We would need an array of pushed offsets
-        // Assert(pushed_offset == 0);
-    }
-    Assert(size > 0);
-    emit_opcode(BC_ALLOC_LOCAL);
-    emit_operand(reg);
-    emit_imm16(size);
-
-    has_return_values = false;
-    // pushed_offset = 0;
-    // virtual_stack_pointer -= size;
-}
-void BytecodeBuilder::emit_alloc_local(BCRegister reg, int* index_to_size) {
-    if(disable_code_gen) return;
-    if(compiler->compile_stats.errors == 0) {
-        // We would need an array of pushed offsets
-        // Assert(pushed_offset == 0);
-    }
-    emit_opcode(BC_ALLOC_LOCAL);
-    emit_operand(reg);
-    *index_to_size = get_pc();
-    emit_imm16(0);
-
-    has_return_values = false;
-    // pushed_offset = 0;
-    // virtual_stack_pointer -= size;
-}
-void BytecodeBuilder::fix_local_imm(int index, u16 size) {
-    if(disable_code_gen) return;
-    *(u16*)&tinycode->instructionSegment[index] = size;
-}
-void BytecodeBuilder::emit_free_local(u16 size) {
-    if(disable_code_gen) return;
-
-    if(compiler->compile_stats.errors == 0) {
-        // Assert(pushed_offset == 0); // We have some pushed values in the way and can't free local variables
-    }
-    // If size=0 is passed then it's probably a bug.
-    // We should not do "if(size==0) return;" because then we won't catch those bugs.
-    Assert(size > 0);
-    emit_opcode(BC_FREE_LOCAL);
-    emit_imm16(size);
-
-    if(has_return_values)
-        ret_offset -= size;
-    // virtual_stack_pointer += size;
-}
-void BytecodeBuilder::emit_free_local(int* index_to_size) {
-    if(disable_code_gen) return;
-
-    if(compiler->compile_stats.errors == 0) {
-        // Assert(pushed_offset == 0); // We have some pushed values in the way and can't free local variables
-    }
-    // If size=0 is passed then it's probably a bug.
-    // We should not do "if(size==0) return;" because then we won't catch those bugs.
-    emit_opcode(BC_FREE_LOCAL);
-    *index_to_size = get_pc();
-    emit_imm16(0);
-
-    // if(has_return_values)
-    //     ret_offset -= size;
-    // virtual_stack_pointer += size;
-}
-void BytecodeBuilder::emit_alloc_args(BCRegister reg, u16 size) {
+void BytecodeBuilder::emit_alloc_args(u16 size) {
     if(disable_code_gen) return;
     if(compiler->compile_stats.errors == 0) {
 
@@ -358,7 +292,6 @@ void BytecodeBuilder::emit_alloc_args(BCRegister reg, u16 size) {
     // Assert(size > 0); zero size = zero arguments can happen and we can't skip instruction because
     // we want alignment
     emit_opcode(BC_ALLOC_ARGS);
-    emit_operand(reg);
     emit_imm16(size);
 
     has_return_values = false;
@@ -389,8 +322,7 @@ void BytecodeBuilder::emit_empty_alloc_args(int* out_size_offset) {
 }
 void BytecodeBuilder::fix_alloc_args(int index, u16 size) {
     auto ptr = tinycode->instructionSegment.data();
-    *(u8*)(ptr + index - 2) = BC_ALLOC_ARGS;
-    *(u8*)(ptr + index - 1) = BC_REG_INVALID;
+    *(u8*)(ptr + index - 1) = BC_ALLOC_ARGS;
     *(u16*)(ptr + index) = size;
     
     // virtual_stack_pointer -= size;
@@ -404,8 +336,8 @@ void BytecodeBuilder::emit_free_args(u16 size) {
     emit_opcode(BC_FREE_ARGS);
     emit_imm16(size);
 
-    if(has_return_values)
-        ret_offset -= size;
+    // if(has_return_values)
+        // ret_offset -= size;
     // virtual_stack_pointer += size;
 }
 
@@ -486,7 +418,7 @@ void BytecodeBuilder::emit_call(LinkConvention l, CallConvention c, i32* index_o
     emit_imm32(imm);
 
     has_return_values = true;
-    ret_offset = pushed_offset;
+    // ret_offset = pushed_offset;
     pushed_offset_max = pushed_offset;
     m_has_emitted_call = true;
 }
@@ -499,7 +431,7 @@ void BytecodeBuilder::emit_call_reg(BCRegister reg, LinkConvention l, CallConven
     emit_imm8(c);
 
     has_return_values = true;
-    ret_offset = pushed_offset;
+    // ret_offset = pushed_offset;
     pushed_offset_max = pushed_offset;
     m_has_emitted_call = true;
 }
@@ -1117,13 +1049,11 @@ BCInstructionInfo instruction_contents[256] {
     { 2, BASE_op1 },                   // BC_PUSH,
     { 2, BASE_op1 },                   // BC_POP,
     { 6, BASE_op1 | BASE_imm32 },      // BC_LI32,
-    { 10, BASE_op1 | BASE_imm64 },      // BC_LI64,
+    { 10, BASE_op1 | BASE_imm64 },     // BC_LI64,
     { 6, BASE_op1 | BASE_imm32 },      // BC_INCR,
-    { 4, BASE_op1 | BASE_imm16 },      // BC_ALLOC_LOCAL,
-    { 3, BASE_imm16 },                   // BC_FREE_LOCAL,
     
-    { 4, BASE_op1 | BASE_imm16 },        // BC_ALLOC_ARGS,
-    { 3, BASE_imm16 },                   // BC_FREE_ARGS,
+    { 3, BASE_imm16 },                 // BC_ALLOC_ARGS,
+    { 3, BASE_imm16 },                 // BC_FREE_ARGS,
 
     { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_SET_ARG,
     { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_GET_PARAM,
@@ -1481,17 +1411,11 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             pc+=4;
             log::out << " " << register_names[op0] << ", " << log::GREEN << imm;
         } break;
-        case BC_ALLOC_LOCAL:
         case BC_ALLOC_ARGS: {
-            op0 = (BCRegister)instructions[pc++];
             imm = *(u16*)&instructions[pc];
             pc+=2;
-            if(op0 == BC_REG_INVALID)
-                log::out << " " << log::GREEN << imm;
-            else
-                log::out << " " << register_names[op0]<<", "<<log::GREEN << imm;
+            log::out << " " << log::GREEN << imm;
         } break;
-        case BC_FREE_LOCAL:
         case BC_FREE_ARGS: {
             imm = *(u16*)&instructions[pc];
             pc+=2;

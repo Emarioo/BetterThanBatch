@@ -338,6 +338,31 @@ bool ARMBuilder::generate() {
         }
     } else Assert(false);
 
+    auto init_frame=[&](int value = -1) {
+        if(value == -1)  value = tinycode->frame_size;
+
+        if(value != 0) {
+            ARMRegister reg_dst = ARM_REG_SP;
+            emit_sub_imm(reg_dst, reg_dst, value);
+        }
+        virtual_stack_pointer -= value;
+        push_offsets.add(0); // needed for SET_ARG
+    };
+    auto deinit_frame=[&](int value = -1) {
+        if(value == -1)  value = tinycode->frame_size;
+
+        if(value != 0) {
+            ARMRegister reg_dst = ARM_REG_SP;
+            emit_add_imm(reg_dst, reg_dst, value);
+        }
+        
+        ret_offset -= value;
+        virtual_stack_pointer += value;
+        push_offsets.pop(); // needed for SET_ARG
+    };
+
+    init_frame(); // allocate stack space for local variables
+
     struct DataptrReloc {
         int pc_offset; // arm code offset (not bytecode)
         int data_offset;
@@ -477,49 +502,29 @@ bool ARMBuilder::generate() {
                     emit_add_imm(reg_dst, reg_dst, inst->imm16);
                 }
             } break;
-            case BC_ALLOC_ARGS:
-            case BC_ALLOC_LOCAL: {
-                auto inst = (InstBase_op1_imm16*)base;
-                int imm = inst->imm16;
-                
-                Assert(inst->op0 == BC_REG_INVALID);
-                
-                if(opcode == BC_ALLOC_ARGS) {
-                    int misalignment = (virtual_stack_pointer + imm) % FRAME_SIZE;
-                    misalignments.add(misalignment);
-                    if(misalignment != 0) {
-                        imm += FRAME_SIZE - misalignment;
-                    }
-                }
-                
-                if(imm != 0) {
-                    ARMRegister reg_dst = ARM_REG_SP;
-                    emit_sub_imm(reg_dst, reg_dst, imm);
-                }
-                virtual_stack_pointer -= imm;
-                push_offsets.add(0); // needed for SET_ARG
-            } break;
-            case BC_FREE_ARGS:
-            case BC_FREE_LOCAL: {
+            case BC_ALLOC_ARGS: {
                 auto inst = (InstBase_imm16*)base;
                 int imm = inst->imm16;
                 
-                if(opcode == BC_FREE_ARGS) {
-                    int misalignment = misalignments.last();
-                    misalignments.pop();
-                    if(misalignment != 0) {
-                        imm += FRAME_SIZE - misalignment;
-                    }
+                int misalignment = (virtual_stack_pointer + imm) % FRAME_SIZE;
+                misalignments.add(misalignment);
+                if(misalignment != 0) {
+                    imm += FRAME_SIZE - misalignment;
+                }
+
+                init_frame(imm);
+            } break;
+            case BC_FREE_ARGS: {
+                auto inst = (InstBase_imm16*)base;
+                int imm = inst->imm16;
+                
+                int misalignment = misalignments.last();
+                misalignments.pop();
+                if(misalignment != 0) {
+                    imm += FRAME_SIZE - misalignment;
                 }
                 
-                if(imm != 0) {
-                    ARMRegister reg_dst = ARM_REG_SP;
-                    emit_add_imm(reg_dst, reg_dst, imm);
-                }
-                
-                ret_offset -= imm;
-                virtual_stack_pointer += imm;
-                push_offsets.pop(); // needed for SET_ARG
+                deinit_frame(imm);
             } break;
             case BC_SET_ARG: {
                 auto inst = (InstBase_op1_ctrl_imm16*)base;
@@ -799,8 +804,10 @@ bool ARMBuilder::generate() {
                 map_strict_translation(prev_pc + 3, offset);
             } break;
             case BC_RET: {
-                 // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
-                
+                // NOTE: We should not modify sp_moments / virtual_stack_pointer because BC_RET_ may exist in a conditional block. This is fine since we only need sp_moment if we have instructions that require alignment, if we return then there are no more instructions.
+             
+                deinit_frame();
+
                 int total = 0;
                 if(callee_saved_space - args_offset > 0) {
                     total += callee_saved_space - args_offset;

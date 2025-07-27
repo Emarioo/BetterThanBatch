@@ -562,6 +562,25 @@ void VirtualMachine::execute(){
             log::out << log::RED << "VirtualMachine: Stack overflow\n";
         }
     };
+
+    auto init_frame = [&](int value = -1) {
+        if(value == -1)  value = tinycode->frame_size;
+
+        registers[BC_REG_LOCALS] = base_pointer;
+        stack_pointer -= value;
+        has_return_values_on_stack = false; // alloc_local overwrites return values
+        ret_offset = 0;
+    };
+    auto deinit_frame = [&](int value = -1) {
+        if(value == -1)  value = tinycode->frame_size;
+
+        stack_pointer += value;
+        if(has_return_values_on_stack) {
+            ret_offset -= value;
+        }
+    };
+
+    init_frame();
     
     #define instructions tinycode->instructionSegment
     while(running) {
@@ -684,50 +703,31 @@ void VirtualMachine::execute(){
         } break;
         case BC_NOP: {
         } break;
-        case BC_ALLOC_LOCAL:
         case BC_ALLOC_ARGS: {
-            op0 = (BCRegister)instructions[pc++];
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
-
-            // if (imm == 0) // nop
-            //     break;
-
-            registers[BC_REG_LOCALS] = base_pointer;
-
-            if(opcode == BC_ALLOC_ARGS) {
-                push_offsets.add(0);
-                i64 misalignment = (stack_pointer + imm) % FRAME_SIZE;
-                misalignments.add(misalignment);
-                if(misalignment != 0) {
-                    imm += FRAME_SIZE - misalignment;
-                }
+            
+            push_offsets.add(0);
+            i64 misalignment = (stack_pointer + imm) % FRAME_SIZE;
+            misalignments.add(misalignment);
+            if(misalignment != 0) {
+                imm += FRAME_SIZE - misalignment;
             }
-            stack_pointer -= imm;
-            
-            if(op0 != BC_REG_INVALID)
-                registers[op0] = stack_pointer;
-            
-            has_return_values_on_stack = false; // alloc_local overwrites return values
-            ret_offset = 0;
+
+            init_frame(imm);
         } break;
-        case BC_FREE_LOCAL:
         case BC_FREE_ARGS: {
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
-            if(opcode == BC_FREE_ARGS) {
-                push_offsets.pop();
-                i64 misalignment = misalignments.last();
-                misalignments.pop();
-                if(misalignment != 0) {
-                    imm += FRAME_SIZE - misalignment;
-                }
+            
+            push_offsets.pop();
+            i64 misalignment = misalignments.last();
+            misalignments.pop();
+            if(misalignment != 0) {
+                imm += FRAME_SIZE - misalignment;
             }
-            stack_pointer += imm;
-
-            if(has_return_values_on_stack) {
-                ret_offset -= imm;
-            }
+            
+            deinit_frame(imm);
         } break;
         case BC_MOV_RR: {
             op0 = (BCRegister)instructions[pc++];
@@ -1060,6 +1060,8 @@ void VirtualMachine::execute(){
                 pc = 0;
                 tiny_index = new_tiny_index;
                 tinycode = bytecode->tinyBytecodes[tiny_index];
+
+                init_frame(); // allocate stack space for local variables of new function
                 
                 if(enable_fncall_logging) {
                     auto pair = number_of_fncalls.find(tinycode->name);
@@ -1187,6 +1189,8 @@ void VirtualMachine::execute(){
             }
         } break;
         case BC_RET: {
+            deinit_frame(); // free local variables
+
             call_stack.pop();
             if(call_stack.size() == 0) {
                 running = false;

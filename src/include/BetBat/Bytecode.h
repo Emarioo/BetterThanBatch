@@ -81,9 +81,6 @@ enum InstructionOpcode : u8 {
     BC_LI64,
     BC_INCR, // usually used with stack pointer
     
-    BC_ALLOC_LOCAL,      // opcode, op, size16         - allocate local memory (max 64KB)
-    BC_FREE_LOCAL,       // opcode,  size16         - allocate args memory (max 64KB)
-
     BC_ALLOC_ARGS,
     BC_FREE_ARGS,
 
@@ -372,10 +369,27 @@ typedef u32 TinyBytecodeID;
 // Look at me I'm tiny bytecode! 
 struct TinyBytecode {
     std::string name;
+    
     QuickArray<u8> instructionSegment{};
+    int size() const { return instructionSegment.size(); }
+    
     CallConvention call_convention = CallConvention::BETCALL;
     int index = 0;
-    int size() const { return instructionSegment.size(); }
+    
+    enum ParameterKind {
+        INTEGER,    // includes char, enum (these are passed in general registers)
+        POINTER,    // passed in general registers
+        FLOAT,      // passed in floating point registers
+        STRUCTURAL, // includes struct, fixed arrays (passed in general register if less than 8 bytes, passed in stack or by pointer if larger) see BTB calling convention for details.
+    };
+    struct Parameter {
+        ParameterKind kind;
+        int size;
+    };
+    DynamicArray<Parameter> arguments;
+    DynamicArray<Parameter> return_values;
+    int frame_size; // for local variables.
+
     // debug information
     QuickArray<u32> index_of_lines{};
     struct Line {
@@ -388,6 +402,7 @@ struct TinyBytecode {
     DynamicArray<TryBlock> try_blocks{};
     DynamicArray<int> required_asm_instances; // x64 gen needs to know what inline assembly to generate
     int asm_index=-1;
+
 
     // bool is_used_as_function_pointer = false; // used in x64 gen for enabling/disabling callee saved registers
 
@@ -422,6 +437,7 @@ struct TinyBytecode {
         call_relocations.resize(0);
         try_blocks.resize(0);
         funcImpl = nullptr;
+        frame_size = 0;
     }
     
     std::unordered_map<int, FunctionSignature*> pc_signature_map{};
@@ -547,15 +563,8 @@ struct BytecodeBuilder {
     
     void emit_incr(BCRegister reg, i32 imm);
 
-    // allocates space on the stack for local variables
-    // reg may be invalid
-    void emit_alloc_local(BCRegister reg, u16 size);
-    void emit_free_local(u16 size);
-    void emit_free_local(int* index_to_size);
-    void emit_alloc_local(BCRegister reg, int* index_to_size);
-    void fix_local_imm(int index, u16 size);
     // allocates space on stack for arguments but ensures 16-byte alignment DURING EXECUTION or final x64 gen
-    void emit_alloc_args(BCRegister reg, u16 size);
+    void emit_alloc_args(u16 size);
     void emit_empty_alloc_args(int* out_size);
     void fix_alloc_args(int index, u16 size);
     void emit_free_args(u16 size);
@@ -718,7 +727,7 @@ private:
     // used to detect bc_push overwriting values accessed by bc_get_val
     int pushed_offset = 0; // grows down
     int pushed_offset_max = 0; // grows down
-    int ret_offset = 0; // grows down
+    // int ret_offset = 0; // grows down, TODO: We don't need ret_offset in builder. It's in VM and x86 gen we need it.
     bool has_return_values = false;
 
     int virtual_stack_pointer = 0; // needed to ensure 16-byte alignment on function calls
