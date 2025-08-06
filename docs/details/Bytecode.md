@@ -33,7 +33,7 @@ This information is stored in a bytecode file:
 ### File format
 
 ## Instruction set
-See `include/BetBat/Bytecode.h`.
+See `src/basin/core/Bytecode.h`.
 
 
 ## Example

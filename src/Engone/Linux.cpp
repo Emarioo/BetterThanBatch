@@ -35,12 +35,12 @@
 #define PL_PRINTF(...)
 #endif
 #ifndef NATIVE_BUILD
-#include "BetBat/Config.h"
+#include "basin/Config.h"
 #else
 #define _LOG(...)
 #endif
 #include "Engone/Util/Array.h"
-#include "BetBat/Util/Perf.h"
+#include "basin/util/Perf.h"
 
 namespace engone {
     

@@ -33,7 +33,7 @@ I will not go through writing an exception handler in detail but I will link to 
 
 When creating the .xdata section you can either follow the C standard and use it's language specific handler data structures OR you can create your own. If you want interoperability with C libraries then that is probably a good idea, otherwise you can create your own structure for the try-blocks and even specify zero unwind codes in the UNWIND_INFO structure. However, if your exception handler relies on Windows functions for unwinding the call frames then you do need to specify the unwind codes. Otherwise, you can unwind the stack yourself.
 
-You can find code for writing the section data in [ObjectFile::WriteFile - ObjectFile.cpp](/src/BetBat/ObjectFile.cpp). The code is spread out a bit, you can search for *.xdata* *UNWIND_INFO* and *exception_handler*.
+You can find code for writing the section data in [ObjectFile::WriteFile - ObjectFile.cpp](/src/basin/machine/ObjectFile.cpp). The code is spread out a bit, you can search for *.xdata* *UNWIND_INFO* and *exception_handler*.
 
 **NOTE**: I know this isn't all information you will need to implement exception handling but it should suffice if you also take a look at the resources further down.
 

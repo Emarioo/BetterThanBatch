@@ -3,9 +3,9 @@
         {
             "name": "Windows",
             "includePath": [
-                "${workspaceFolder}/src/include/*",
+                "${workspaceFolder}/src/*",
+                "${workspaceFolder}/include/*",
                 "${workspaceFolder}/libs/glad/include/*",
-                "${workspaceFolder}/libs/glew-2.1.0/include/*",
                 "${workspaceFolder}/libs/glfw-3.3.9/include/*",
                 "${workspaceFolder}/libs/stb/include/*",
                 "${workspaceFolder}/libs/tracy-0.10/public/*"
@@ -24,7 +24,7 @@
             "cppStandard": "c++14",
             "intelliSenseMode": "windows-msvc-x64",
             "forcedInclude": [
-                "${workspaceFolder}/src/include/pch.h"
+                "${workspaceFolder}/src/Engone/pch.h"
             ]
         },
         {

@@ -5,7 +5,7 @@
 fn main() {
     #import "Lang"
     st: stat
-    stat("src/BetBat/main.cpp".ptr, &st)
+    stat("src/basin/main.cpp".ptr, &st)
     std_print_any(&st, true)
 
     // buf: char[1024]

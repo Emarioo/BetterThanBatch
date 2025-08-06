@@ -1,0 +1,384 @@
+#pragma once
+
+#include "basin/CompilerOptions.h"
+
+#include "basin/core/IntrinsicRegistry.h"
+#include "basin/core/TypeChecker.h"
+#include "basin/core/Generator.h"
+#include "basin/core/Lexer.h"
+#include "basin/core/Preprocessor.h"
+#include "basin/core/Parser.h"
+#include "basin/core/VirtualMachine.h"
+
+#include "basin/machine/COFF.h"
+#include "basin/machine/ELF.h"
+#include "basin/machine/ObjectFile.h"
+#include "basin/machine/x64_gen.h"
+#include "basin/machine/arm_gen.h"
+#include "basin/machine/Program.h"
+
+#include "basin/extension/decl_gen.h"
+
+typedef void(*FnMakeshift)(engone::VoidFunction, void*);
+
+// This class is here to standardise the usage of paths.
+// It also provides a contained/maintained place with functions related to paths.
+// The Unix way is the standard
+struct Path {
+    Path() = default;
+    Path(const std::string& path);
+    Path(const char* path);
+    // ~Path() {
+    //     // text.~basic_string();
+    // }
+    enum Type : u32 {
+        DIR = 0x1,
+        ABSOLUTE = 0x2,
+    };
+    bool isDir() const { return _type & DIR; }
+    bool isAbsolute() const;
+    //  { return  _type & ABSOLUTE; }
+    // Turns path into the absolute form based on CWD.
+    // Nothing happens if it already is in absolute form
+    Path getAbsolute() const;
+    Path getDirectory() const;
+    Path getFileName(bool withoutFormat = false) const;
+    // does not include .
+    std::string getFormat() const;
+
+    std::string text{};
+    u32 _type = 0;
+};
+engone::Logger& operator<<(engone::Logger& logger, const Path& v);
+
+struct CompileStats {
+    volatile int errors=0;
+    volatile int warnings=0;
+    volatile int lines=0;
+    volatile int readBytes=0; // from the files, DOES NOT COUNT includeStreams! yet?
+    volatile int commentCount=0;
+
+    volatile int c_lines = 0;
+    volatile int c_readBytes = 0;
+    volatile int c_comments = 0;
+    volatile u64 c_parse_time = 0;
+
+    // time measurements
+    u64 start_compile = 0; // whole compiler
+    u64 end_compile = 0;
+    u64 start_linker = 0; // just linker
+    u64 end_linker = 0;
+
+    u32 bytecodeSize = 0;
+
+    ~CompileStats(){
+        generatedFiles.cleanup();
+    }
+    DynamicArray<std::string> generatedFiles;
+    
+    void printSuccess(CompileOptions* options);
+    void printFailed();
+    void printWarnings();
+};
+struct CompilerVersion {
+    static const char* global_version;
+    static const int MAX_STRING_VERSION_LENGTH = 4*4 + 19 + 4 + 2 + 2 + 7; // integers are limited to 9999 and 99
+    u16 major; // 1-3 year
+    u16 minor; // 1-3 months
+    u16 patch; // 3 - 10 days
+    u16 revision; // 0 - 24 hours (optional)
+    // sublimentary information
+    char name[20];
+    u16 year;
+    u8 month;
+    u8 day;
+    static CompilerVersion Current();
+    void deserialize(const char* str);
+    enum Flags : u32 {
+        INCLUDE_DATE=0x1,
+        EXCLUDE_DATE=0x1, // exclude applies when INCLUDE_AVAILABLE is used
+        INCLUDE_REVISION=0x2,
+        EXCLUDE_REVISION=0x2,
+        INCLUDE_NAME=0x4,
+        EXCLUDE_NAME=0x4,
+        INCLUDE_AVAILABLE=0x10,
+    };
+    // bufferSize should include null termination
+    void serialize(char* outString, int bufferSize, u32 flags = INCLUDE_AVAILABLE|EXCLUDE_REVISION);
+};
+
+enum TaskType : u32 {
+    TASK_NONE = 0,
+    TASK_LEX                  = 0x1, // lex and import-preprocess
+    TASK_PREPROCESS_AND_PARSE = 0x2,
+
+    TASK_TYPE_ENUMS           = 0x10,
+    TASK_TYPE_STRUCTS         = 0x20,
+    TASK_TYPE_FUNCTIONS       = 0x40,
+    TASK_TYPE_BODY            = 0x80,
+    
+    TASK_GEN_BYTECODE         = 0x100,
+    TASK_GEN_BYTECODE_RUNDIR  = 0x200,
+    TASK_GEN_MACHINE_CODE     = 0x400,
+};
+struct CompilerTask {
+    TaskType type;
+    u32 import_id;
+    ScopeId scopeId;
+    bool no_change = false;
+    ASTStatement* stmt=nullptr;
+
+    // used with TASK_TYPE_BODY
+    ASTFunction* astFunc=nullptr;
+    FuncImpl* funcImpl=nullptr;
+};
+struct CompilerImport {
+    TaskType state = TASK_NONE;
+    std::string path; // file path (sometimes name for preloaded imports)
+    
+    u32 import_id=0;
+    u32 preproc_import_id=0;
+    bool type_checked_import_scope = false;
+
+    ScopeId scopeId = 0;
+
+    DynamicArray<TinyBytecode*> tinycodes;
+    
+    struct Dep {
+        u32 id;
+        std::string as_name;
+        bool disabled = false;
+        bool circular_dependency_to_myself = false;
+    };
+    DynamicArray<Dep> dependencies;
+    DynamicArray<int> libraries; // index to Compiler::libraries
+};
+extern const char* const PRELOAD_NAME;
+extern const char* const TYPEINFO_NAME;
+struct TestLocation {
+    // TODO: store file name elsewhere, duplicated data
+    std::string file;
+    int line=0;
+    int column=0;
+};
+struct GlobalRunDirective {
+    // statement or expression?
+    ASTStatement* statement = nullptr;
+    // ASTExpression* expression = nullptr;
+    ScopeId scope{};
+};
+// static/dynamic library
+// struct ProgramLibrary {
+//     int index = 0;
+//     std::string name;
+//     std::string path; // can be changed in compile time execution
+// };
+enum OutputType {
+    OUTPUT_INVALID,
+    OUTPUT_OBJ,
+    OUTPUT_EXE,
+    OUTPUT_IMAGE,
+    OUTPUT_LIB,
+    OUTPUT_DLL,
+    OUTPUT_BC,
+};
+struct Compiler {
+    ~Compiler() {
+        cleanup();   
+    }
+    void cleanup() {
+        if(bytecode && bytecode->debugInformation)
+            DebugInformation::Destroy(bytecode->debugInformation);
+        if(program)
+            Program::Destroy(program);
+        program = nullptr;
+
+        if(ast)
+            AST::Destroy(ast);
+        ast = nullptr;
+        if(bytecode)
+            Bytecode::Destroy(bytecode);
+        bytecode = nullptr;
+        lexer.cleanup();
+        preprocessor.cleanup();
+        typeChecker.cleanup();
+
+        imports.cleanup();
+        tasks.cleanup();
+        importDirectories.cleanup();
+        linkDirectives.cleanup();
+        import_id_to_base_id.cleanup();
+        errorTypes.cleanup();
+    }
+
+    lexer::Lexer lexer{};
+    preproc::Preprocessor preprocessor{};
+    TypeChecker typeChecker{};
+    AST* ast = nullptr;
+    Bytecode* bytecode = nullptr;
+    
+    Program* program = nullptr;
+    
+    Reporter reporter{};
+
+    CompileOptions* options = nullptr;
+    std::string compiler_executable_dir="";
+    CompileStats compile_stats{};
+
+    DynamicArray<ProgramLibrary> libraries;
+    int compiler_library_index = -1;
+
+    ArchitectureInfo arch = {};
+    
+    std::string intermediate_dir = "bin/int";
+
+    std::string entry_point = "main";
+    lexer::SourceLocation location_of_entry_point;
+    bool has_generated_entry_point = false;
+    bool force_default_entry_point = false; // libc requires it's own entry point
+    bool aligned_16_byte_on_entry_point = false;
+    OutputType output_type;
+
+    u32 initial_import_id = 0;
+    u32 preload_import_id = 0;
+    u32 typeinfo_import_id = 0;
+
+    double last_modified_time = 0.0;
+    bool output_is_up_to_date = false;
+
+    bool code_has_exceptions = false; // true if source code contains at least one try-catch
+    bool have_prepared_global_data = false;
+    bool have_run_global_run_directives = false;
+    volatile bool have_generated_comp_time_global_data = false; // this variable should be volatile to prevent compiler from rearraning it in dangerous ways when multiple threads modify it.
+    bool compiler_got_stuck = false;
+   
+    DynamicArray<GlobalRunDirective> global_run_directives;
+
+    int struct_tasks_since_last_change = 0;
+
+    CompilerImport* getImport(u32 import_id);
+    BucketArray<CompilerImport> imports{256};
+    long volatile globalUniqueCounter = 0; // type must be long volatile because of _InterlockedIncrement
+    engone::Mutex otherLock{};
+
+    QuickArray<int> import_id_to_base_id{}; // preproc id -> import id, import id -> import id
+    void map_id(u32 preproc_id, u32 import_id) {
+        Assert(preproc_id > import_id);
+        if(import_id_to_base_id.size() <= preproc_id) {
+            import_id_to_base_id.resize(preproc_id + 1);
+        }
+        // Assert if the slot was mapped already.
+        Assert(import_id_to_base_id[preproc_id] == 0);
+        Assert(import_id_to_base_id[import_id] == 0);
+        import_id_to_base_id[preproc_id] = import_id;
+        import_id_to_base_id[import_id] = import_id;
+    }
+    u32 get_map_id(u32 id) {
+        return import_id_to_base_id[id];
+    }
+    
+    DynamicArray<CompilerTask> tasks;
+
+    void addTask_type_body(ASTFunction* ast_func, FuncImpl* func_impl);
+    void addTask_type_body(u32 import_id);
+    void addTask_type_body(ScopeId scope_id, u32 import_id);
+    void addTask_type_stmt(ASTStatement* stmt, u32 import_id);
+    
+    // DynamicArray<u32> queue_import_ids;
+        
+    // Lex, preprocess, parse.
+    // Multiple threads can call this function to perform
+    // processing faster.
+    void processImports();
+    
+    // does stuff based on options (compiling, executing...)
+    void run(CompileOptions* options);
+    
+    // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
+    // adds task if new import was created
+    u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "", std::string* assumed_path_on_error = nullptr, bool from_cwd_ignore_import_dirs = false, DynamicArray<std::string>* passed_c_macros = nullptr, DynamicArray<std::string>* passed_c_includes = nullptr);
+    // addImport existed but was removed because of addOrFindImport
+    void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "", bool disabled = false);
+    void addLibrary(u32 import_id, const std::string& path, const std::string& as_name);
+    
+    DynamicArray<Path> importDirectories;
+    Path findSourceFile(const Path& path, const Path& sourceDirectory = "", std::string* assumed_path_on_error = nullptr);
+    
+    DynamicArray<std::string> linkDirectives; // no duplicates, passed to the linker, not with interpreter
+    engone::Mutex lock_miscellaneous;
+    // thread safe, duplicates will be ignored
+    void addLinkDirective(const std::string& text);
+
+    double compute_last_modified_time();
+
+    struct Error {
+        CompileError errorType;
+        u32 line;
+    };
+    DynamicArray<Error> errorTypes;
+    void addError(const lexer::SourceLocation& location, CompileError errorType = ERROR_UNSPECIFIED);
+    void addError(const lexer::Token& token, CompileError errorType = ERROR_UNSPECIFIED);
+
+    // #############################
+    //    Generator stuff
+    // #############################
+    #define VAR_INFOS 0
+    #define VAR_MEMBERS 1
+    #define VAR_STRINGS 2
+    #define VAR_COUNT 3
+    IdentifierVariable* varInfos[VAR_COUNT]{nullptr};
+    int dataOffset_types = -1;
+    int dataOffset_members = -1;
+    int dataOffset_strings = -1;
+
+    engone::Mutex lock_imports;
+
+    struct GlobalDataPtrFixup {
+        int dst_data_offset; // example: offset to ptr field in slice struct
+        int src_data_offset; //          offset to array data in data section
+    };
+    DynamicArray<GlobalDataPtrFixup> runtime_global_data_fixups;
+    
+    const char* const TEMP_TINYCODE_NAME = "_comp_time_";
+    TinyBytecode* temp_tinycode = nullptr;
+    TinyBytecode* get_temp_tinycode() {
+        if(!temp_tinycode) {
+            temp_tinycode = bytecode->createTiny(TEMP_TINYCODE_NAME, BETCALL);
+        }
+        temp_tinycode->restore_to_empty();
+        return temp_tinycode;
+    }
+    
+    struct MakeshiftAssembly {
+        FnMakeshift func;
+        int size;
+    };
+    std::unordered_map<FunctionSignature*, MakeshiftAssembly> makeshift_map;
+    FnMakeshift get_makeshift(FunctionSignature* signature);
+    
+    DynamicArray<TestLocation> testLocations;
+    // returns index of the newly added test location
+    TestLocation* getTestLocation(int index);
+    // int addTestLocation(TokenRange& range);
+    int addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer);
+
+    // returns true if already setup or if successfully setup right now.
+    // returns false if it couldn't
+    bool is_msvc_configured();
+    bool configure_msvc();
+
+private:
+    engone::Semaphore lock_wait_for_imports;
+    bool signaled = true;
+    volatile int waiting_threads = 0;
+    volatile int total_threads = 0;
+    volatile int next_thread_id = 0;
+    
+};
+
+// In custom iterator in for loops, this is the name of the field in the iterator
+// that it/nr variables in for loop will refer to.
+const char* const NAME_OF_CUSTOM_IT = "value";
+const char* const NAME_OF_CUSTOM_NR = "index";
+const char* const NAME_OF_CREATE_ITER = "create_iterator";
+const char* const NAME_OF_ITERATE = "iterate";
