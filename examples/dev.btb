@@ -4,7 +4,7 @@
     This file contains the latest stuff i'm working on and
     some examples you can just uncomment and import.
 */
-#import "examples/graphics/quad.btb"
+// #import "examples/graphics/quad.btb"
 // #import "D:/dev/wander/src/main.btb"
 // #import "examples/sound/proper_sound.btb"
 // #import "examples/sound/sample_wasapi.btb"
@@ -23,6 +23,35 @@
         String concatenation using +, gone are the days we have to use the append method on strings.
 */
 
+// matrix operation multiplication efficient.
+
+#load "libc.so.6" as LIBC
+
+
+fn @import(LIBC, alias="malloc")  _malloc(n: i32) -> void*;
+
+ptr := _malloc(8);
+
+fn @import(LIBC) malloc(n: i32) -> void*;
+
+ptr2 := malloc(32);
+
+// func : fn hey(x: i32) -> i32;
+func : fn (i32) -> i32;
+
+
+
+// struct mat4 {
+//     v: f32[16];
+// }
+
+// operator *(a: mat4*, b: mat4*) -> mat4 {
+//     mat4_multiply(a, b)
+// }
+
+// fn @asm mat4_multiply(out: mat4*, a: mat4*, b: mat4*) {
+
+// }
 
 // #import "String"
 // #import "Logger"

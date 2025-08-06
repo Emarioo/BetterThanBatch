@@ -94,7 +94,20 @@ bool X64Builder::generate() {
     bool logging = false;
     // logging = true;
     
-    DynamicArray<Arg> accessed_params;
+    // DynamicArray<Arg> accessed_params;
+    
+    struct Parameter {
+        int offset_from_rbp = -1;
+        int offset_from_retptr = -1;
+        X64Register reg = X64_REG_INVALID;
+        bool normal_return = false;
+        bool stored_in_local_frame = false;
+        InstructionControl control;
+    };
+    DynamicArray<Parameter> parameters;
+    parameters.resize(tinycode->funcImpl->signature.argumentTypes.size());
+    DynamicArray<Parameter> return_values;
+    return_values.resize(tinycode->funcImpl->signature.returnTypes.size());
 
     auto& instructions = tinycode->instructionSegment;
     bool find_push = false;
@@ -123,23 +136,23 @@ bool X64Builder::generate() {
         // log::out << n->base->opcode<<"\n";
         
         if(opcode == BC_GET_PARAM) {
-            auto base = (InstBase_op1_ctrl_imm16*)n->base;
-            int param_index = base->imm16 / 8;
-            if(param_index >= accessed_params.size()) {
-                accessed_params.resize(param_index+1);
-            }
+            auto base = (InstBase_op1_ctrl_imm16_imm8*)n->base;
+            // int param_index = base->imm16 / 8;
+            // if(param_index >= accessed_params.size()) {
+            //     accessed_params.resize(param_index+1);
+            // }
             // log::out << "param "<<param_index<<" " << base->control<<"\n";
-            accessed_params[param_index].control = base->control;
+            parameters[base->imm8].control = base->control;
         }
         if(opcode == BC_PTR_TO_PARAMS) {
             // TODO: Dude, sometimes I just am a cat playing around with stupid things. accessed_params is A TERRIBLE IDEA and should not have been created EVER. It relies on the user using the parameters in order to know what the parameters are, their size and if they are float, signed or unsigned. What if the user doesn't use all passed arguments? What if we add new instructions that touch parameters without modifying accessed_params. PLEASE FOR THE LOVE OF THE CAT GOD FIX THIS GARBAGE.
-            auto base = (InstBase_op1_imm16*)n->base;
-            int param_index = base->imm16 / 8;
-            if(param_index >= accessed_params.size()) {
-                accessed_params.resize(param_index+1);
-            }
+            auto base = (InstBase_op1_imm16_imm8*)n->base;
+            // int param_index = base->imm16 / 8;
+            // if(param_index >= accessed_params.size()) {
+            //     accessed_params.resize(param_index+1);
+            // }
             // log::out << "param "<<param_index<<" " << base->control<<"\n";
-            accessed_params[param_index].control = CONTROL_64B; // we don't know the size, if it's float, if it's unsigned so we just assume unsigned 64-bit type.
+            parameters[base->imm8].control = CONTROL_64B; // we don't know the size, if it's float, if it's unsigned so we just assume unsigned 64-bit type.
         }
     }
 
@@ -672,20 +685,24 @@ bool X64Builder::generate() {
     //   they might forget to restore the stack and free
     //   allocated memory so there are bigger problems.
 
+    // Depending on calling convention
+    //   we save non-volatile registers
+    //   we move arguments (in registers, rdi,rsi,xmm0...) onto the stack, if argument was placed on the stack by the caller we can just access them from there
+
     const X64Register stdcall_callee_saved_regs[]{
         X64_REG_B,
         X64_REG_DI,
         X64_REG_SI,
         X64_REG_R12,
     };
-    const X64Register stdcall_callee_saved_regs_with_rsp[]{
-        X64_REG_SP,
-        X64_REG_B,
-        X64_REG_DI,
-        X64_REG_SI,
-        X64_REG_R12,
-        // X64_REG_R13,
-    };
+    // const X64Register stdcall_callee_saved_regs_with_rsp[]{
+    //     X64_REG_SP,
+    //     X64_REG_B,
+    //     X64_REG_DI,
+    //     X64_REG_SI,
+    //     X64_REG_R12,
+    //     // X64_REG_R13,
+    // };
 
     const X64Register unixcall_callee_saved_regs[]{
         X64_REG_B,
@@ -709,7 +726,7 @@ bool X64Builder::generate() {
             callee_saved_regs_len = sizeof(stdcall_callee_saved_regs)/sizeof(*stdcall_callee_saved_regs);
         // }
 
-    } else if (tinycode->call_convention == UNIXCALL) {
+    } else if (tinycode->call_convention == UNIXCALL || tinycode->call_convention == BETCALL) {
         enable_callee_saved_registers = true;
         callee_saved_regs = unixcall_callee_saved_regs;
         callee_saved_regs_len = sizeof(unixcall_callee_saved_regs)/sizeof(*unixcall_callee_saved_regs);
@@ -749,6 +766,7 @@ bool X64Builder::generate() {
         X64_REG_XMM3,
     };
 
+    const int unixcall_normal_regs_len = 6;
     const X64Register unixcall_normal_regs[6]{
         X64_REG_DI,
         X64_REG_SI,
@@ -757,6 +775,7 @@ bool X64Builder::generate() {
         X64_REG_R8,
         X64_REG_R9,
     };
+    const int unixcall_float_regs_len = 8;
     const X64Register unixcall_float_regs[8] {
         X64_REG_XMM0,
         X64_REG_XMM1,
@@ -768,6 +787,7 @@ bool X64Builder::generate() {
         X64_REG_XMM7, // luckily they are all VOLATILE with System V ABI calling convention.
     };
 
+    virtual_stack_pointer = 0;
     virtual_stack_pointer -= callee_saved_space; // if callee saved space is misaligned then we need to consider that when 16-byte alignment is required. (BC_ALLOC_ARGS)
 
     // use these when calling intrinsics with call instructions that need 16-byte alignment
@@ -800,34 +820,35 @@ bool X64Builder::generate() {
     if(tinycode->call_convention == STDCALL) {
         args_offset = callee_saved_space;
         // Assert(false);
-        for(int i=0;i<accessed_params.size() && i < 4; i++) {
-            auto& param = accessed_params[i];
+        for(int i=0;i<parameters.size(); i++) {
+            auto& param = parameters[i];
 
             int off = i * 8 + FRAME_SIZE;
             param.offset_from_rbp = off;
+            
+            if(i < 4) {
+                // move arguments in registers to the obligatory 32-byte stack space from caller.
+                X64Register reg_args = X64_REG_BP;
+                X64Register reg = stdcall_normal_regs[i];
+                if(IS_CONTROL_FLOAT(param.control))
+                    reg = stdcall_float_regs[i];
 
-            X64Register reg_args = X64_REG_BP;
-            X64Register reg = stdcall_normal_regs[i];
-            if(IS_CONTROL_FLOAT(param.control))
-                reg = stdcall_float_regs[i];
+                // stdcall always use 64-bit registers, well, not really but kind of.
+                DECL_SIZED_PARAM(param.control)
 
-            // stdcall always use 64-bit registers, well, not really but kind of.
-            DECL_SIZED_PARAM(param.control)
-
-            emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+            }
         }
-    } else if(tinycode->call_convention == UNIXCALL) {
+    } else if(tinycode->call_convention == UNIXCALL || tinycode->call_convention == BETCALL) {
         args_offset = callee_saved_space;
         // If the function only accesses arguments through inline assembly then the user must save the registers manually.
         // unless we provide a special get_arg instruction in the inline assembly?
-        if(is_blank && accessed_params.size()) {
-            log::out << log::RED << "ERROR in " << tinycode->name << log::NO_COLOR<< ": the function accesses parameters which have not been setup due to @asm!\n";
-            log::out << "  Don't use @asm or limit yourself to inline assembly.\n";
-            compiler->compile_stats.errors++; // nocheckin, TODO: call some function instead
-        }
+        
         if (is_entry_point) {
+            Assert(tinycode->call_convention == UNIXCALL); // shouldn't be betcall
+
             // entry point has it's arguments put on the stack, not in rdi, rsi...
-            int count = accessed_params.size();
+            int count = parameters.size();
             if(count != 0) {
                 // TODO: Proper error
                 Assert(("entry point can't have more than 3 args",count <= 3));
@@ -837,22 +858,25 @@ bool X64Builder::generate() {
                 virtual_stack_pointer -= 8 * num;
             }
             X64Register tmp_reg = X64_REG_A;
-            if(accessed_params.size() > 0) {
-                auto& param = accessed_params[0];
+            if(parameters.size() > 0) {
+                auto& param = parameters[0];
                 param.offset_from_rbp = 0;
+                param.stored_in_local_frame = true;
             }
-            if(accessed_params.size() > 1) {
-                auto& param = accessed_params[1];
+            if(parameters.size() > 1) {
+                auto& param = parameters[1];
                 DECL_SIZED_PARAM(param.control)
                 param.offset_from_rbp = -8;
+                param.stored_in_local_frame = true;
                 emit_mov_reg_reg(tmp_reg, X64_REG_BP);
                 emit_add_imm32(tmp_reg, 8);
                 emit_mov_mem_reg(X64_REG_BP,tmp_reg,control,param.offset_from_rbp);
             }
-            if(accessed_params.size() > 2) {
-                auto& param = accessed_params[2];
+            if(parameters.size() > 2) {
+                auto& param = parameters[2];
                 DECL_SIZED_PARAM(param.control)
                 param.offset_from_rbp = -16;
+                param.stored_in_local_frame = true;
                 // emit_mov_reg_reg(tmp_reg, X64_REG_BP); reuse rax from second param
                 emit_add_imm32(tmp_reg, 8); // +8 (null of argv)
 
@@ -873,57 +897,129 @@ bool X64Builder::generate() {
                 emit_mov_mem_reg(X64_REG_BP,tmp_reg,control,param.offset_from_rbp);
             }
         } else {
-            int count = accessed_params.size();
-            if(count != 0) {
-                emit_sub_imm32(X64_REG_SP, (i32)(count * 8));
-                callee_saved_space += count * 8;
-                virtual_stack_pointer -= 8 * count;
-            }
+            // Calculate which parameters are passed in registers and on stack
+            //   and create local space for those passed in registers.
+            int locally_stored_size = -args_offset;
+            int stacked_offset_from_rbp = FRAME_SIZE;
             int normal_count = 0;
             int float_count = 0;
-            int stacked_count = 0;
-            for(int i=0;i<accessed_params.size();i++) {
-                auto& param = accessed_params[i];
-                DECL_SIZED_PARAM(param.control)
+            int return_offset = 0;
 
-                int off = -args_offset - (1+i) * 8;
-                param.offset_from_rbp = off;
+            bool has_normal_return_val = false;
 
-                X64Register reg_args = X64_REG_BP;
-                X64Register reg = X64_REG_INVALID;
-                if(IS_CONTROL_FLOAT(control)) {
-                    if(float_count < 8) {
-                        // NOTE: Type checker provides a better error, this assert is here as a reminder to fix this code.
-                        reg = unixcall_float_regs[float_count];
-                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+            // if return value is integer ,pointer then pass in EAX
+            // if return value is large struct, pass in RDI as a pointer to return value.
+            for(int i=0;i<return_values.size();i++) {
+                auto& param = return_values[i];
+                auto& type = tinycode->funcImpl->signature.returnTypes[i].typeId;
+
+                int size = compiler->ast->getTypeSize(type);
+                if (size > 16 || has_normal_return_val) {
+                    if(normal_count < unixcall_normal_regs_len) {
+                        param.stored_in_local_frame = true;
+                        
+                        locally_stored_size += 8; // note we increment first since we grow downwards
+                        param.offset_from_rbp = -args_offset - locally_stored_size;
                     } else {
-                        Assert(("x64 generator can't handle more than 8 floats",false));
-                        reg = X64_REG_A; // since we're just moving float values We can pass it in rax (no need to use xmm registers)
-                        int src_off = FRAME_SIZE + stacked_count * 8;
-                        InstructionControl non_float_control = (InstructionControl)(control & ~CONTROL_FLOAT_OP);
-                        emit_mov_reg_mem(reg,reg_args,non_float_control,src_off);
-                        emit_mov_mem_reg(reg_args,reg,non_float_control,param.offset_from_rbp);
-                        stacked_count++;
+                        param.offset_from_rbp = stacked_offset_from_rbp;
+                        stacked_offset_from_rbp += 8; // note we increment last since we grow upwards
+                    }
+                    normal_count++;
+                } else {
+                    param.normal_return = true;
+                    has_normal_return_val = true;
+                }
+            }
+            for(int i=0;i<parameters.size();i++) {
+                auto& param = parameters[i];
+                auto& type = tinycode->funcImpl->signature.argumentTypes[i].typeId;
+                
+                int stack_off = stacked_offset_from_rbp;
+
+                if(AST::IsDecimal(type)) {
+                    if(float_count < unixcall_float_regs_len) {
+                        param.stored_in_local_frame = true;
+
+                        locally_stored_size += 8; // note we increment first since we grow downwards
+                        param.offset_from_rbp = -args_offset - locally_stored_size;
+                    } else {
+                        param.offset_from_rbp = stacked_offset_from_rbp;
+                        stacked_offset_from_rbp += 8; // note we increment last since we grow upwards
                     }
                     float_count++;
                 } else {
-                    if(normal_count < 6) {
-                        reg = unixcall_normal_regs[normal_count];
-                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
+                    // integer, pointer, enum, small struct and even large struct.
+                    // large struct is passed as pointer though.
+                    // nocheckin TODO: Small struct and large structs needs special handling.
+                    if(normal_count < unixcall_normal_regs_len) {
+                        param.stored_in_local_frame = true;
+
+                        locally_stored_size += 8; // note we decrement first since we grow downwards
+                        param.offset_from_rbp = -args_offset - locally_stored_size;
                     } else {
-                        reg = X64_REG_A;
-                        int src_off = FRAME_SIZE + stacked_count * 8;
-                        emit_mov_reg_mem(reg,reg_args,control,src_off);
-                        emit_mov_mem_reg(reg_args,reg,control,param.offset_from_rbp);
-                        stacked_count++;
+                        param.offset_from_rbp = stacked_offset_from_rbp;
+                        stacked_offset_from_rbp += 8; // note we increment last since we grow upwards
                     }
+                    normal_count++;
+                }
+            }
+            if(locally_stored_size != 0) {
+                // nocheckin TODO: Some parameters are 16 bytes in size...
+                //   Some are 4 bytes and we can pack them tightly.
+                emit_sub_imm32(X64_REG_SP, (i32)(locally_stored_size));
+                callee_saved_space += locally_stored_size;
+                virtual_stack_pointer -= locally_stored_size;
+            }
+            float_count = 0;
+            normal_count = 0;
+            has_normal_return_val = false;
+            for(int i=0;i<return_values.size();i++) {
+                auto& param = return_values[i];
+                auto& type = tinycode->funcImpl->signature.returnTypes[i].typeId;
+
+                if(!param.stored_in_local_frame)
+                    continue;
+
+                if(compiler->ast->getTypeSize(type) > 16 || has_normal_return_val) {
+                    DECL_SIZED_PARAM(param.control)
+                    if(IS_CONTROL_FLOAT(control)) {
+                        // NOTE: Type checker provides a better error, this assert is here as a reminder to fix this code.
+                        X64Register reg = unixcall_float_regs[float_count];
+                        emit_mov_mem_reg(X64_REG_BP, reg, control, param.offset_from_rbp);
+                        float_count++;
+                    } else {
+                        // nocheckin TODO: Handle small and large structs.
+                        X64Register reg = unixcall_normal_regs[normal_count];
+                        emit_mov_mem_reg(X64_REG_BP, reg, control, param.offset_from_rbp);
+                        normal_count++;
+                    }
+                } else {
+                    has_normal_return_val = true;
+                }
+            }
+            for(int i=0;i<parameters.size();i++) {
+                auto& param = parameters[i];
+                
+                if(!param.stored_in_local_frame)
+                    continue;
+                
+                DECL_SIZED_PARAM(param.control)
+                if(IS_CONTROL_FLOAT(control)) {
+                    // NOTE: Type checker provides a better error, this assert is here as a reminder to fix this code.
+                    X64Register reg = unixcall_float_regs[float_count];
+                    emit_mov_mem_reg(X64_REG_BP, reg, control, param.offset_from_rbp);
+                    float_count++;
+                } else {
+                    // nocheckin TODO: Handle small and large structs.
+                    X64Register reg = unixcall_normal_regs[normal_count];
+                    emit_mov_mem_reg(X64_REG_BP, reg, control, param.offset_from_rbp);
                     normal_count++;
                 }
             }
         }
     }
     
-     auto init_frame=[&](int value = -1) {
+    auto init_frame=[&](int value = -1) {
         if(value == -1)  value = tinycode->frame_size;
 
         if(value != 0) {
@@ -1224,12 +1320,12 @@ bool X64Builder::generate() {
                 deinit_frame(imm);
             } break;
             case BC_SET_ARG: {
-                auto base = (InstBase_op1_ctrl_imm16*)n->base;
+                auto base = (InstBase_op1_ctrl_imm16_imm8*)n->base;
                 FIX_PRE_IN_OPERAND(0)
 
                 // this code is required with stdcall or unixcall
                 // betcall ignores this
-                int arg_index = base->imm16 / 8;
+                int arg_index = base->imm8;
                 if(arg_index >= recent_set_args.size()) {
                     recent_set_args.resize(arg_index + 1);
                 }
@@ -1238,25 +1334,27 @@ bool X64Builder::generate() {
                 Assert(push_offsets.size()); // bytecode is missing ALLOC_ARGS if this fires
                 
                 int off = base->imm16 + push_offsets.last();
-                X64Register reg_args = X64_REG_SP;
-                emit_mov_mem_reg(reg_args, reg0->reg, base->control, off);
+                emit_mov_mem_reg(X64_REG_SP, reg0->reg, base->control, off);
 
                 FIX_POST_IN_OPERAND(0)
             } break;
             case BC_GET_PARAM: {
-                auto base = (InstBase_op1_ctrl_imm16*)n->base;
+                auto base = (InstBase_op1_ctrl_imm16_imm8*)n->base;
                 FIX_PRE_OUT_OPERAND(0)
 
-                X64Register reg_params = X64_REG_BP;
-                int off = base->imm16 + FRAME_SIZE;
-                if(tinycode->call_convention == UNIXCALL) {
-                    int param_index = base->imm16 / 8;
-                    Assert(param_index < accessed_params.size());
-                    off = accessed_params[param_index].offset_from_rbp;
+                int arg_index = base->imm8;
+                auto& param = parameters[arg_index];
+                auto& type = tinycode->funcImpl->signature.argumentTypes[arg_index].typeId;
+                int off = param.offset_from_rbp;
+                
+                // disable_modrm_asserts = true;
+                if (compiler->ast->getTypeSize(type) > 16) {
+                    emit_mov_reg_mem(reg0->reg, X64_REG_BP, base->control, param.offset_from_rbp);
+                    emit_mov_reg_mem(reg0->reg, reg0->reg, base->control, base->imm16);
+                } else {
+                    emit_mov_reg_mem(reg0->reg, X64_REG_BP, base->control, param.offset_from_rbp + base->imm16);
                 }
-                disable_modrm_asserts = true;
-                emit_mov_reg_mem(reg0->reg, reg_params, base->control, off);
-                disable_modrm_asserts = false;
+                // disable_modrm_asserts = false;
                 
                 if(IS_CONTROL_SIGNED(base->control)) {
                     emit_movsx(reg0->reg, reg0->reg, base->control);
@@ -1267,7 +1365,10 @@ bool X64Builder::generate() {
                 FIX_POST_OUT_OPERAND(0)
             } break;
             case BC_GET_VAL: {
-                auto base = (InstBase_op1_ctrl_imm16*)n->base;
+                auto base = (InstBase_op1_ctrl_imm16_imm8*)n->base;
+                int arg_index = base->imm8;
+                auto& param = return_values[arg_index];
+                auto& type = tinycode->funcImpl->signature.returnTypes[arg_index].typeId;
                 auto call_base = (InstBase_link_call_imm32*)last_inst_call->base;
                 auto call_base_r = (InstBase_op1_link_call*)last_inst_call->base;
                 CallConvention conv = call_base->call;
@@ -1277,9 +1378,8 @@ bool X64Builder::generate() {
                     case BETCALL: {
                         FIX_PRE_OUT_OPERAND(0)
 
-                        X64Register reg_params = X64_REG_SP;
                         int off = base->imm16 - FRAME_SIZE + ret_offset;
-                        emit_mov_reg_mem(reg0->reg, reg_params, base->control, off);
+                        emit_mov_reg_mem(reg0->reg, X64_REG_SP, base->control, off);
                     
                         if(IS_CONTROL_SIGNED(base->control)) {
                             emit_movsx(reg0->reg, reg0->reg, base->control);
@@ -1296,30 +1396,50 @@ bool X64Builder::generate() {
                         //   Should we reserve RAX after a call until we reach BC_GET_VAL
                         //   and use the return value? No because some function do not
                         //   anything so we would have wasted rax. Then what do we do?
+                        
+                        if(return_values[arg_index].normal_return) {
+                            auto reg0 = get_artifical_reg(n->reg0);
+                            if(reg0->floaty) {
+                                reg0->reg = alloc_register(n->reg0, X64_REG_XMM0, true); 
+                                Assert(reg0->reg != X64_REG_INVALID);
+                            } else {
+                                // X64_REG_A is used by mul and rdtsc, we can't reserve it
+                                // (well, we could but then we would need to temporarily push/pop rax before using it, instead we move A to a new register)
+                                FIX_PRE_OUT_OPERAND(0)
+                                
+                                if(IS_CONTROL_SIGNED(base->control)) {
+                                    emit_movsx(reg0->reg, X64_REG_A, base->control);
+                                } else if(!IS_CONTROL_FLOAT(base->control)) {
+                                    emit_movzx(reg0->reg, X64_REG_A, base->control);
+                                } else Assert(false);
+                                
+                                Assert(reg0->reg != X64_REG_INVALID);
 
-                        auto reg0 = get_artifical_reg(n->reg0);
-                        if(reg0->floaty) {
-                            reg0->reg = alloc_register(n->reg0, X64_REG_XMM0, true); 
-                            Assert(reg0->reg != X64_REG_INVALID);
+                                FIX_POST_OUT_OPERAND(0)
+                            }
                         } else {
-                            // X64_REG_A is used by mul and rdtsc, we can't reserve it
-                            // (well, we could but then we would need to temporarily push/pop rax before using it, instead we move A to a new register)
                             FIX_PRE_OUT_OPERAND(0)
-                            
+
+                            if (compiler->ast->getTypeSize(type) > 16) {
+                                emit_mov_reg_mem(reg0->reg, X64_REG_BP, base->control, param.offset_from_rbp);
+                                emit_mov_reg_mem(reg0->reg, reg0->reg, base->control, base->imm16);
+                            } else {
+                                emit_mov_reg_mem(reg0->reg, X64_REG_BP, base->control, param.offset_from_rbp + base->imm16);
+                            }
                             if(IS_CONTROL_SIGNED(base->control)) {
                                 emit_movsx(reg0->reg, X64_REG_A, base->control);
                             } else if(!IS_CONTROL_FLOAT(base->control)) {
                                 emit_movzx(reg0->reg, X64_REG_A, base->control);
-                            } else Assert(false);
+                            }
                             
-                            Assert(reg0->reg != X64_REG_INVALID);
+                            FIX_POST_OUT_OPERAND(0)
                         }
                     } break;
                     default: Assert(false);
                 }
             } break;
             case BC_SET_RET: {
-                auto base = (InstBase_op1_ctrl_imm16*)n->base;
+                auto base = (InstBase_op1_ctrl_imm16_imm8*)n->base;
                 switch(tinycode->call_convention) {
                     case BETCALL: {
                         FIX_PRE_IN_OPERAND(0)
@@ -1334,6 +1454,7 @@ bool X64Builder::generate() {
                     case STDCALL:
                     case UNIXCALL: {
                         FIX_PRE_IN_OPERAND(0)
+
 
                         Assert(base->imm16 == -8);
                         Assert(reg0->floaty == (0 != IS_CONTROL_FLOAT(base->control)));
@@ -1372,34 +1493,30 @@ bool X64Builder::generate() {
                 FIX_POST_OUT_OPERAND(0);
             } break;
             case BC_PTR_TO_PARAMS: {
-                auto base = (InstBase_op1_imm16*)n->base;
+                auto base = (InstBase_op1_imm16_imm8*)n->base;
                 FIX_PRE_OUT_OPERAND(0);
+                int arg_index = base->imm8;
 
-                X64Register reg_params = X64_REG_BP;
-
-                int off = base->imm16 + FRAME_SIZE;
-                if(tinycode->call_convention == UNIXCALL) {
-                    // In STDCALL, caller makes space for args and they are put there.
-                    // Sys V ABI convention does not so we make space for them in this call frame.
-                    // The offset is therefore not 'imm+FRAME_SIZE'.
-                    if(is_entry_point) {
-                        off -= 16; // args on stack, no return address or previous rbp
-                    } else {
-                        // TODO: Is the hardcoded 6 okay?
-                        if(base->imm16 < 6 * 8) {
-                            off = -args_offset - base->imm16 - 8;
-                        }
-                    }
-                }
+                auto& param = parameters[arg_index];
+                auto& type = tinycode->funcImpl->signature.argumentTypes[arg_index].typeId;
+                int off = param.offset_from_rbp;
                 
-                emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
-                emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
-                emit4((u32)(off));
+                if (compiler->ast->getTypeSize(type) > 16) {
+                    // we pass by pointer, we must deref to get pointer into register
+                    emit_mov_reg_mem(reg0->reg, reg0->reg, CONTROL_64B, off);
+                    emit_add_imm32(reg0->reg, base->imm16);
+                } else {
+                    emit_lea(reg0->reg, X64_REG_BP, off + base->imm16);
+                }
 
-                emit_prefix(PREFIX_REXW, reg0->reg, reg_params);
-                emit1(OPCODE_ADD_REG_RM);
-                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), reg_params);
+                // emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
+                // emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                // emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
+                // emit4((u32)(off));
+
+                // emit_prefix(PREFIX_REXW, reg0->reg, X64_REG_BP);
+                // emit1(OPCODE_ADD_REG_RM);
+                // emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), X64_REG_BP);
 
                 FIX_POST_OUT_OPERAND(0);
             } break;

@@ -1,0 +1,130 @@
+game.btb
+
+import "Compiler" // API to interract with compiler
+
+// Compiler.btb
+struct Program {
+    id: i32;
+    // ... internal compiler data
+
+    // If @compiler is specified on a method then note that "this" field is implicit.
+
+    // You can call these while the program is being compiled.
+    // the path to a library may be used when calling that library at compile time.
+    // if you call set_library and it has been used by a VM a warning will be printed just so you know.
+    @compiler fn set_library(name: char[], path: char[]);
+    // You can add include_dir during compilation but the compiler may have tried to find imports
+    // and not found them because the compiler called your add_include_dir to late.
+    // It is recommended to have a build.btb script which calls create_program and program.compile()
+    @compiler fn add_include_dir(path: char[]);
+
+    // if you want to replace source specified in create_program
+    // you cannot call this function if the program is being compiled because it's too late.
+    @compiler fn set_source_file(path: char[]);
+
+    // asynchronous or no?
+    @compiler fn compile(path: char[]);
+}
+
+@compiler fn create_program(out_path: char[], src_file: char[]) -> Program*;
+
+// build.btb
+
+#run build()
+
+struct Config {
+    hotreload : bool = true
+
+}
+fn read_config() -> Config* {
+    global config: Config
+    // read from file or hardcode in this file
+    return &config
+
+    // text := ReadFile("config.cfg")
+    // head := 0
+    // while head < text.len {
+    //     name: char[]
+    //     chars: char[]
+    //     num: i32
+    //     res: i32
+
+    //     // name = value
+    //     name, res = parse_name(&head)
+    //     chars, res := parse_non_space(&head)
+    //     num, res := parse_int(&head)
+    // }
+}
+
+fn build () {
+
+    cur_program := current_program()
+    cur_program.set_output("") // disable output
+
+    config := read_config()
+
+    progs: Program*[2]
+    #macro program_normal progs[0]
+    #macro program_driver progs[0]
+    #macro program_game_code progs[1]
+
+    if config.hotreload {
+        // Compiler handles Windows extensions even if you are on Linux so you don't need
+        // to worry about that. When distributing binaries you should use libNAME.a and libNAME.so on Linux and not .lib, .dll.
+        program_driver = create_program("game.exe", "src/driver.btb")
+        program_driver.set_source_file("src/driver.btb")
+
+        program_game_code = create_program("code.dll", "stc/game.btb")
+        program_game_code.set_source_file("src/game.btb")
+    } else {
+        program_normal = create_program("game.exe", "src/main.btb")
+    }
+
+    // Specify libraries
+    for p : progs { // always use @ptr
+        p.set_library("LIBC","libc.so.6")
+        p.set_library("GLFW","libs/glfw-3.3.9/lib-ubuntu/glfw3.lib")
+        p.set_library("GLAD","libs/glad/lib-buntu/glad.lib")
+        p.add_include_dir("libs/glfw-3.3.9/include")
+        p.add_include_dir("libs/glad/include")
+
+        // should call to compile be asynchronous?
+        // maybe we queue the compile task?
+        // end then exit the build function?
+        // maybe we put current execution on hold as a IN_WAITING compile time execution?
+        // it needs to specify what it's waiting on though.
+        // I guess it's waiting on another task.
+        p.compile() // warns if you forgot to specify set_output
+    }
+}
+
+// driver.btb
+
+fn main() {
+    InitWindow()
+
+    StartHotreloadLoop()
+
+    CleanupWindow()
+}
+
+// main.btb
+
+fn main() {
+    // render thread
+    // main thread
+}
+
+// game.btb
+
+// hotreload events
+
+// Each thread is aware of the hotreload game loop and will pause when we switch game code DLL
+
+fn RenderGame() {
+
+}
+
+fn UpdateGame() {
+
+}

@@ -341,7 +341,7 @@ void BytecodeBuilder::emit_free_args(u16 size) {
     // virtual_stack_pointer += size;
 }
 
-void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed) {
+void BytecodeBuilder::emit_set_arg(BCRegister reg, i8 arg_index, i16 imm, int size, bool is_float, bool is_signed) {
     emit_opcode(BC_SET_ARG);
     emit_operand(reg);
     
@@ -352,8 +352,9 @@ void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_fl
     emit_control(control);
     
     emit_imm16(imm);
+    emit_imm8(arg_index);
 }
-void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed){
+void BytecodeBuilder::emit_get_param(BCRegister reg, i8 arg_index, i16 imm, int size, bool is_float, bool is_signed){
     emit_opcode(BC_GET_PARAM);
     emit_operand(reg);
     
@@ -363,8 +364,9 @@ void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_
     control = apply_size(control, size);
     emit_control(control);
     emit_imm16(imm);
+    emit_imm8(arg_index);
 }
-void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed){
+void BytecodeBuilder::emit_set_ret(BCRegister reg, i8 arg_index, i16 imm, int size, bool is_float, bool is_signed){
     if(tinycode->call_convention == CallConvention::STDCALL||tinycode->call_convention == CallConvention::UNIXCALL) {
         Assert(imm == -8 || imm == -4);
     }
@@ -378,8 +380,9 @@ void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_fl
     control = apply_size(control, size);
     emit_control(control);
     emit_imm16(imm);
+    emit_imm8(arg_index);
 }
-void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed){
+void BytecodeBuilder::emit_get_val(BCRegister reg, i8 arg_index, i16 imm, int size, bool is_float, bool is_signed){
     Assert(has_return_values);
     const int FRAME_SIZE = 16;
     // int off = imm + ret_offset - FRAME_SIZE;
@@ -405,6 +408,7 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
     control = apply_size(control, size);
     emit_control(control);
     emit_imm16(imm);
+    emit_imm8(arg_index);
 }
 void BytecodeBuilder::emit_call(LinkConvention l, CallConvention c, i32* index_of_relocation, i32 imm) {
     if(disable_code_gen) return;
@@ -441,11 +445,12 @@ void BytecodeBuilder::emit_ptr_to_locals(BCRegister reg, int imm16) {
     Assert(imm16 >= -0x8000 && imm16 <= 0x7FFF); // imm16 is int and not i16 so that we catch mistakes
     emit_imm16(imm16);
 }
-void BytecodeBuilder::emit_ptr_to_params(BCRegister reg, int imm16) {
+void BytecodeBuilder::emit_ptr_to_params(BCRegister reg, int arg_index, int imm16) {
     emit_opcode(BC_PTR_TO_PARAMS);
     emit_operand(reg);
     Assert(imm16 >= -0x8000 && imm16 <= 0x7FFF); // imm16 is int and not i16 so that we catch mistakes
     emit_imm16(imm16);
+    emit_imm8(arg_index);
 }
 void BytecodeBuilder::emit_ret() {
     // We have a bug if we pushed more or less values than we popped.
@@ -1055,12 +1060,12 @@ BCInstructionInfo instruction_contents[256] {
     { 3, BASE_imm16 },                 // BC_ALLOC_ARGS,
     { 3, BASE_imm16 },                 // BC_FREE_ARGS,
 
-    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_SET_ARG,
-    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_GET_PARAM,
-    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_GET_VAL,
-    { 5, BASE_op1 | BASE_ctrl | BASE_imm16 },  // BC_SET_RET,
+    { 6, BASE_op1 | BASE_ctrl | BASE_imm16 | BASE_imm8 },  // BC_SET_ARG,
+    { 6, BASE_op1 | BASE_ctrl | BASE_imm16 | BASE_imm8 },  // BC_GET_PARAM,
+    { 6, BASE_op1 | BASE_ctrl | BASE_imm16 | BASE_imm8 },  // BC_GET_VAL,
+    { 6, BASE_op1 | BASE_ctrl | BASE_imm16 | BASE_imm8 },  // BC_SET_RET,
     { 4, BASE_op1 | BASE_imm16 },  // BC_PTR_TO_LOCALS,
-    { 4, BASE_op1 | BASE_imm16 },  // BC_PTR_TO_PARAMS,
+    { 4, BASE_op1 | BASE_imm16 | BASE_imm8 },  // BC_PTR_TO_PARAMS,
 
     { 5, BASE_imm32 },                         // BC_JMP,
     { 7, BASE_link | BASE_call | BASE_imm32 }, // BC_CALL
@@ -1229,6 +1234,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         BCRegister op0, op1, op2;
         InstructionControl control;
         i64 imm;
+        i8 arg_index;
 
         if(print_debug_info) {
             // TODO: Code was copied from Virtual Machine. Can we abstract debug printing
@@ -1350,6 +1356,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
+            arg_index = *(i8*)&instructions[pc++];
             
             // switch(opcode) {
             //     case BC_GET_VAL:   log::out << " " << register_names[op0] << ", [val"; if(imm >= 0) log::out << "+"; log::out << imm << "]"; break;
@@ -1359,22 +1366,28 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             //     default: Assert(false);
             // }
             switch(opcode) {
-                case BC_GET_VAL:   log::out << " " << register_names[op0] << ", ["; if(imm > 0) log::out << "+"; log::out << imm << "]"; break;
-                case BC_GET_PARAM: log::out << " " << register_names[op0] << ", ["; if(imm > 0) log::out << "+"; log::out << imm << "]"; break;
-                case BC_SET_ARG:   log::out << " ["; if(imm > 0) log::out << "+"; log::out << imm << "], " << register_names[op0]; break;
-                case BC_SET_RET:   log::out << " ["; if(imm > 0) log::out << "+"; log::out << imm << "], " << register_names[op0]; break;
+                case BC_GET_VAL:   log::out << " " << register_names[op0] << ", "<<arg_index<<":["; if(imm > 0) log::out << "+"; log::out << imm << "]"; break;
+                case BC_GET_PARAM: log::out << " " << register_names[op0] << ", "<<arg_index<<":["; if(imm > 0) log::out << "+"; log::out << imm << "]"; break;
+                case BC_SET_ARG:   log::out << arg_index<<":["; if(imm > 0) log::out << "+"; log::out << imm << "], " << register_names[op0]; break;
+                case BC_SET_RET:   log::out << arg_index<<":["; if(imm > 0) log::out << "+"; log::out << imm << "], " << register_names[op0]; break;
                 default: Assert(false);
             }
             
             print_control(control);
                 
         } break;
-        case BC_PTR_TO_LOCALS:
-        case BC_PTR_TO_PARAMS: {
+        case BC_PTR_TO_LOCALS: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
             log::out << " " << register_names[op0] << ", " << log::GREEN <<  imm;
+        } break;
+        case BC_PTR_TO_PARAMS: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            arg_index = *(i8*)&instructions[pc++];
+            log::out << " " << register_names[op0] << ", " << log::GREEN << arg_index << ":" << imm;
         } break;
         case BC_PUSH:
         case BC_POP: {

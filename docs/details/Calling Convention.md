@@ -1,5 +1,5 @@
 # BTB Calling convention
-The BTB Calling Convention follows *System V ABI* with a few tweaks to handle multiple return values
+The BTB Calling Convention follows *System V ABI*. There are some differences when multiple return values are involved and 128-bit floats which BTB doesn't support.
 
 This document describes how a BTB function signature relates to a CPU architecture's registers. By reading this document you will understand how
 to write assembly that can correctly call functions from a BTB static/dynamic library.

@@ -131,12 +131,12 @@ struct GenContext : public PhaseContext {
         GEN_POP_SET_ARG    = 0x21,
         GEN_POP_SET_RET    = 0x22,
     };
-    SignalIO generatePushPop_base(PushPopKind kind, BCRegister baseReg, int offset, TypeId typeId);
+    SignalIO generatePushPop_base(PushPopKind kind, BCRegister baseReg, int offset, TypeId typeId, int arg_index = -1);
 
-    SignalIO generatePush_get_param (int offset, TypeId typeId);
-    SignalIO generatePop_set_arg    (int offset, TypeId typeId);
-    SignalIO generatePush_get_val   (int offset, TypeId typeId);
-    SignalIO generatePop_set_ret    (int offset, TypeId typeId);
+    SignalIO generatePush_get_param (int arg_index, int offset, TypeId typeId);
+    SignalIO generatePop_set_arg    (int arg_index, int offset, TypeId typeId);
+    SignalIO generatePush_get_val   (int arg_index, int offset, TypeId typeId);
+    SignalIO generatePop_set_ret    (int arg_index, int offset, TypeId typeId);
 
     SignalIO generateArtificialPush(TypeId typeId);
     // Generate a push from pointer (baseReg) where a list of pushed values are stored. generatePush reads memory from a struct layout while this function "copies" pushed values from a pointer.

@@ -785,7 +785,10 @@ void VirtualMachine::execute(){
             control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
+            int arg_index = *(i8*)&instructions[pc++];
             int size = GET_CONTROL_SIZE(control);
+
+            Assert(false); // nocheckin we put return value elsewhere.
 
             void* ptr = map_pointer(stack_pointer + push_offsets.last() + imm, temp_ptr_was_mapped);
             CHECK_PTR_MAPPED(ptr);
@@ -804,7 +807,10 @@ void VirtualMachine::execute(){
             imm = *(i16*)&instructions[pc];
             pc+=2;
             int size = GET_CONTROL_SIZE(control);
-            
+            int arg_index = *(i8*)&instructions[pc++];
+
+            Assert(false); // nocheckin we put return value elsewhere.
+
             void* ptr = map_pointer(base_pointer + FRAME_SIZE + imm, temp_ptr_was_mapped);
             CHECK_PTR_MAPPED(ptr);
 
@@ -818,12 +824,15 @@ void VirtualMachine::execute(){
             control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
+            int arg_index = *(i8*)&instructions[pc++];
             int size = GET_CONTROL_SIZE(control);
             
             Assert(imm < 0);
             void* ptr = map_pointer(base_pointer + imm, temp_ptr_was_mapped);
             CHECK_PTR_MAPPED(ptr);
             ptr_from_mov = ptr;
+
+            Assert(false); // nocheckin we put return value elsewhere.
 
             if(size == CONTROL_8B)       *(i8*) ptr = registers[op0];
             else if(size == CONTROL_16B) *(i16*)ptr = registers[op0];
@@ -832,12 +841,18 @@ void VirtualMachine::execute(){
             // log::out << "SET RET " << (void*)(ptr) << " " << registers[op0]<<"\n";
         } break;
         case BC_GET_VAL: {
-            op0 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            imm = *(i16*)&instructions[pc];
-            pc+=2;
+            auto inst = (InstBase_op1_ctrl_imm16_imm8*)&instructions[pc];
+            pc += sizeof(InstBase_op1_ctrl_imm16_imm8);
+            op0 = inst->op0;
+            control = inst->control;
+            imm = inst->imm16; 
+            int arg_index = inst->imm8;
+            // op0 = (BCRegister)instructions[pc++];
+            // control = (InstructionControl)instructions[pc++];
+            // imm = *(i16*)&instructions[pc];
+            // pc+=2;
             int size = GET_CONTROL_SIZE(control);
-            
+            Assert(false); // nocheckin we put return value elsewhere.
             Assert(has_return_values_on_stack);
             Assert(imm < 0);
             // NOTE: push_offset makes sure push and pop instructions doesn't mess with vals/args registers/references
@@ -860,8 +875,10 @@ void VirtualMachine::execute(){
             op0 = (BCRegister)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
+            int arg_index = *(i8*)&instructions[pc++];
 
-
+            Assert(false); // TODO: We need to calculate parameter offset.
+                           // immediate is 0 for non-structs. I'ts arg_index that's interesting
             registers[op0] = base_pointer + FRAME_SIZE + imm;
         } break;
         case BC_PUSH: {

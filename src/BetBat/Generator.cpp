@@ -590,151 +590,24 @@ SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
     // }    
     // return SIGNAL_SUCCESS;
 }
-SignalIO GenContext::generatePush_get_param (int offset, TypeId typeId) {
+SignalIO GenContext::generatePush_get_param (int arg_index, int offset, TypeId typeId) {
     using namespace engone;
-    return generatePushPop_base(GEN_PUSH_GET_PARAM, BC_REG_INVALID, offset, typeId);
-    // if(typeId == TYPE_VOID) {
-    //     return SIGNAL_FAILURE;
-    // }
-    
-    // TypeInfo *typeInfo = 0;
-    // if(typeId.isNormalType())
-    //     typeInfo = ast->getTypeInfo(typeId);
-    // u32 size = ast->getTypeSize(typeId);
-    // if(size == 0) {
-    //     Assert(hasForeignErrors());
-    //     return SIGNAL_FAILURE;
-    // }
-
-    // if(!typeInfo || !typeInfo->astStruct) {
-    //     BCRegister reg = BC_REG_T0;
-    //     builder.emit_get_param(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
-    //     builder.emit_push(reg);
-    // } else if(typeInfo->isArray()) {
-    //     int esize = ast->getTypeSize(typeInfo->element_type);
-    //     _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-    //     for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
-    //         generatePush_get_param(offset + ei*esize, typeInfo->element_type);
-    //     }
-    // } else {
-    //     for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
-    //         auto& member = typeInfo->astStruct->members[i];
-    //         auto memdata = typeInfo->getMember(i);
-
-    //         _GLOG(log::out << "push " << member.name << "\n";)
-    //         generatePush_get_param(offset + memdata.offset, memdata.typeId);
-    //     }
-    // }
-    // return SIGNAL_SUCCESS;
+    return generatePushPop_base(GEN_PUSH_GET_PARAM, BC_REG_INVALID, offset, typeId, arg_index);
 }
-SignalIO GenContext::generatePop_set_arg    (int offset, TypeId typeId) {
+SignalIO GenContext::generatePop_set_arg    (int arg_index, int offset, TypeId typeId) {
     using namespace engone;
-    return generatePushPop_base(GEN_POP_SET_ARG, BC_REG_INVALID, offset, typeId);
-    // Assert(baseReg!=BC_REG_RCX);
-    // TypeInfo *typeInfo = 0;
-    // if(typeId.isNormalType())
-    //     typeInfo = ast->getTypeInfo(typeId);
-    // int size = ast->getTypeSize(typeId);
-    // if(size == 0) {
-    //     Assert(hasForeignErrors());
-    //     return SIGNAL_FAILURE;
-    // }
-    // if (!typeInfo || !typeInfo->astStruct) {
-    //     _GLOG(log::out << "move return value\n";)
-    //     BCRegister reg = BC_REG_T0;
-    //     builder.emit_pop(reg);
-    //     builder.emit_set_arg(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
-
-    // } else if(typeInfo->isArray()) {
-    //     int esize = ast->getTypeSize(typeInfo->element_type);
-    //     _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-    //     for(int ei=0;ei<typeInfo->array_length;ei++) {
-    //         generatePop_set_arg(offset + ei*esize, typeInfo->element_type);
-    //     }
-    // } else {
-    //     for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
-    //         auto &member = typeInfo->astStruct->members[i];
-    //         auto memdata = typeInfo->getMember(i);
-            
-    //         _GLOG(log::out << "move return value member " << member.name << "\n";)
-    //         generatePop_set_arg(offset + memdata.offset, memdata.typeId);
-    //     }
-    // }    
-    // return SIGNAL_SUCCESS;
+    return generatePushPop_base(GEN_POP_SET_ARG, BC_REG_INVALID, offset, typeId, arg_index);
 }
-SignalIO GenContext::generatePush_get_val   (int offset, TypeId typeId) {
+SignalIO GenContext::generatePush_get_val   (int arg_index, int offset, TypeId typeId) {
     using namespace engone;
-    return generatePushPop_base(GEN_PUSH_GET_VAL, BC_REG_INVALID, offset, typeId);
-    // if(typeId == TYPE_VOID) {
-    //     return SIGNAL_FAILURE;
-    // }
-    
-    // TypeInfo *typeInfo = nullptr;
-    // if(typeId.isNormalType())
-    //     typeInfo = ast->getTypeInfo(typeId);
-    // u32 size = ast->getTypeSize(typeId);
-    // if(size == 0) {
-    //     Assert(hasForeignErrors());
-    //     return SIGNAL_FAILURE;
-    // }
-
-    // if(!typeInfo || !typeInfo->astStruct) {
-    //     BCRegister reg = BC_REG_T0;
-    //     builder.emit_get_val(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
-    //     builder.emit_push(reg);
-    // } else if(typeInfo->isArray()) {
-    //     int esize = ast->getTypeSize(typeInfo->element_type);
-    //     _GLOG(log::out << "push " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-    //     for(int ei=typeInfo->array_length-1;ei>=0;ei--) {
-    //         generatePush_get_val(offset + ei*esize, typeInfo->element_type);
-    //     }
-    // } else {
-    //     for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
-    //         auto& member = typeInfo->astStruct->members[i];
-    //         auto memdata = typeInfo->getMember(i);
-
-    //         _GLOG(log::out << "push " << member.name << "\n";)
-    //         generatePush_get_val(offset + memdata.offset, memdata.typeId);
-    //     }
-    // }
-    // return SIGNAL_SUCCESS;
+    return generatePushPop_base(GEN_PUSH_GET_VAL, BC_REG_INVALID, offset, typeId, arg_index);
 }
-SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
+SignalIO GenContext::generatePop_set_ret    (int arg_index, int offset, TypeId typeId) {
     using namespace engone;
-    return generatePushPop_base(GEN_POP_SET_RET, BC_REG_INVALID, offset, typeId);
-    // // Assert(baseReg!=BC_REG_RCX);
-    // TypeInfo *typeInfo = 0;
-    // if(typeId.isNormalType())
-    //     typeInfo = ast->getTypeInfo(typeId);
-    // int size = ast->getTypeSize(typeId);
-    // if(size == 0) {
-    //     Assert(hasForeignErrors());
-    //     return SIGNAL_FAILURE;
-    // }
-    // if (!typeInfo || !typeInfo->astStruct) {
-    //     _GLOG(log::out << "move return value\n";)
-    //     BCRegister reg = BC_REG_T0;
-    //     builder.emit_pop(reg);
-    //     builder.emit_set_ret(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
-    // } else if(typeInfo->isArray()) {
-    //     int esize = ast->getTypeSize(typeInfo->element_type);
-    //     _GLOG(log::out << "move return value member " << typeInfo->name << "["<<typeInfo->array_length<<"] \n";)
-    //     for(int ei=0;ei<typeInfo->array_length;ei++) {
-    //         generatePop_set_ret(offset + ei*esize, typeInfo->element_type);
-    //     }
-    // } else {
-    //     for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
-    //         auto &member = typeInfo->astStruct->members[i];
-    //         auto memdata = typeInfo->getMember(i);
-            
-    //         _GLOG(log::out << "move return value member " << member.name << "\n";)
-    //         generatePop_set_ret(offset + memdata.offset, memdata.typeId);
-    //     }
-    // }    
-    // return SIGNAL_SUCCESS;
+    return generatePushPop_base(GEN_POP_SET_RET, BC_REG_INVALID, offset, typeId, arg_index);
 }
 
-SignalIO GenContext::generatePushPop_base(PushPopKind kind, BCRegister baseReg, int offset, TypeId typeId) {
+SignalIO GenContext::generatePushPop_base(PushPopKind kind, BCRegister baseReg, int offset, TypeId typeId, int arg_index) {
     using namespace engone;
     // Assert(baseReg!=BC_REG_RCX);
     TypeInfo *typeInfo = 0;
@@ -765,17 +638,17 @@ SignalIO GenContext::generatePushPop_base(PushPopKind kind, BCRegister baseReg, 
                     }
                 }
             } else if (kind == GEN_POP_SET_RET)
-                builder.emit_set_ret(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+                builder.emit_set_ret(reg, arg_index, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
             else if(kind == GEN_POP_SET_ARG)
-                builder.emit_set_arg(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+                builder.emit_set_arg(reg, arg_index, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
             else Assert(false);
         } else if (kind & GEN_PUSH_REG) {
             if(kind == GEN_PUSH_REG) {
                 builder.emit_mov_rm_disp(reg, baseReg, size, offset);
             } else if (kind == GEN_PUSH_GET_VAL)
-                builder.emit_get_val(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+                builder.emit_get_val(reg, arg_index, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
             else if(kind == GEN_PUSH_GET_PARAM)
-                builder.emit_get_param(reg, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
+                builder.emit_get_param(reg, arg_index, offset, size, AST::IsDecimal(typeId), AST::IsSigned(typeId));
             else Assert(false);
 
             builder.emit_push(reg);
@@ -1140,7 +1013,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 case Identifier::MEMBER_VARIABLE: {
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
                     // Assert(info.currentFunction->callConvention == BETCALL);
-                    builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false, true);
+                    builder.emit_get_param(BC_REG_B, BC_ARG_INDEX0, 0, REGISTER_SIZE, false, true);
                     
                     // auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
                     // auto memtype = ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
@@ -1161,7 +1034,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     // }
                 } break;
                 case Identifier::ARGUMENT_VARIABLE: {
-                    builder.emit_ptr_to_params(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    builder.emit_ptr_to_params(BC_REG_B, varinfo->cast_var()->argument_index, varinfo->versions_dataOffset[info.currentPolyVersion]);
 
                     // Crazy idea:
                     //   BC_SET_PARAM and force the caller of this generateReference to directly set
@@ -1701,7 +1574,7 @@ SignalIO GenContext::generateSpecialFncall(ASTExpressionCall* expression){
                     builder.emit_alloc_args(allocated_stack_space);
                 }
 
-                builder.emit_set_arg(BC_REG_B, signature->argumentTypes[0].offset, REGISTER_SIZE, false, true);
+                builder.emit_set_arg(BC_REG_B, 0 /* arg index */, signature->argumentTypes[0].offset, REGISTER_SIZE, false, true);
 
                 TEMP_ARRAY_N(TypeId, tempTypes, 5);
                 // Code copied from generateFncall
@@ -1733,7 +1606,7 @@ SignalIO GenContext::generateSpecialFncall(ASTExpressionCall* expression){
 
                 for(int i=overload->astFunc->arguments.size()-1;i >= 1;i--) {
                     auto arg = overload->astFunc->arguments[i].defaultValue;
-                    generatePop_set_arg(signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
+                    generatePop_set_arg(i, signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
                 }
 
                 int reloc = 0;
@@ -1936,7 +1809,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
             // Assert(info.currentFunction->callConvention == BETCALL);
             // NOTE: Is member variable/argument always at this offset with all calling conventions?
             // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, REGISTER_SIZE, GenContext::FRAME_SIZE);
-            builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false);
+            builder.emit_get_param(BC_REG_B, i, 0, REGISTER_SIZE, false);
             builder.emit_push(BC_REG_B);
             continue;
         } else {
@@ -2016,7 +1889,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
                         if(currentFuncImpl)
                             currentFuncImpl->update_max_arguments(arg_space);
                         Assert(cast_sig->argumentTypes.size() == 1);
-                        generatePop_set_arg(cast_sig->argumentTypes[0].offset, cast_sig->argumentTypes[0].typeId);
+                        generatePop_set_arg(BC_ARG_INDEX0, cast_sig->argumentTypes[0].offset, cast_sig->argumentTypes[0].typeId);
 
                         int reloc;
                         builder.emit_call(cast_overload.astFunc->linkConvention, cast_overload.astFunc->callConvention, &reloc);
@@ -2028,7 +1901,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
 
                         auto &ret = cast_sig->returnTypes[0];
                         TypeId typeId = ret.typeId;
-                        generatePush_get_val(ret.offset - cast_sig->returnSize, typeId);
+                        generatePush_get_val(BC_ARG_INDEX0, ret.offset - cast_sig->returnSize, typeId);
                     }
                     if(!wasSafelyCasted && !info.hasAnyErrors()){
                         if(!is_function_pointer) {
@@ -2150,7 +2023,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
     //  it's arguments should be put in registers and those are probably used when generating expressions. 
     for(int i=all_arguments.size()-1;i>=0;i--){
         auto arg = all_arguments[i];
-        generatePop_set_arg(signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
+        generatePop_set_arg(i, signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
     }
     
     i32 reloc = 0;
@@ -2201,13 +2074,13 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
                     builder.emit_mov_rm_disp(reg, BC_REG_LOCALS, REGISTER_SIZE, varinfo->versions_dataOffset[info.currentPolyVersion]);
                 } break;
                 case Identifier::ARGUMENT_VARIABLE: {
-                    builder.emit_get_param(reg, varinfo->versions_dataOffset[info.currentPolyVersion], REGISTER_SIZE, false);
+                    builder.emit_get_param(reg, varinfo->cast_var()->argument_index, varinfo->versions_dataOffset[info.currentPolyVersion], REGISTER_SIZE, false);
                 } break;
                 case Identifier::MEMBER_VARIABLE: {
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
                     auto type = varinfo->versions_typeId[info.currentPolyVersion];
                 
-                    builder.emit_get_param(reg, 0, REGISTER_SIZE, false);
+                    builder.emit_get_param(reg, BC_ARG_INDEX0, 0, REGISTER_SIZE, false);
 
                     auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
                     // if (mem.array_length) {
@@ -2368,7 +2241,7 @@ SignalIO GenContext::generateFncall(ASTExpression* base_expression, QuickArray<T
         TypeId typeId = ret.typeId;
 
         // log::out << "ret "<<i<<" off: " << (ret.offset - signature->returnSize) << "\n";
-        generatePush_get_val(ret.offset - signature->returnSize, typeId);
+        generatePush_get_val(i, ret.offset - signature->returnSize, typeId);
         outTypeIds->add(ret.typeId);
     }
     return SIGNAL_SUCCESS;
@@ -3062,13 +2935,13 @@ SignalIO GenContext::generateExpression(ASTExpression *base_expression, QuickArr
                             varinfo->versions_typeId[info.currentPolyVersion]);
                     } break;
                     case Identifier::ARGUMENT_VARIABLE: {
-                        generatePush_get_param(varinfo->versions_dataOffset[info.currentPolyVersion],
+                        generatePush_get_param(varinfo->cast_var()->argument_index, varinfo->versions_dataOffset[info.currentPolyVersion],
                             varinfo->versions_typeId[info.currentPolyVersion]);
                     } break;
                     case Identifier::MEMBER_VARIABLE: {
                         // NOTE: Is member variable/argument 'this' always at this offset with all calling conventions?
                         // type = varinfo->versions_typeId[info.currentPolyVersion];
-                        builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false); // pointer
+                        builder.emit_get_param(BC_REG_B, BC_ARG_INDEX0, 0, REGISTER_SIZE, false); // pointer
                         if(currentFunction->parentStruct) {
                             // auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
                             // auto& memtype = varinfo->versions_typeId[info.currentPolyVersion];
@@ -5438,7 +5311,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 BCRegister reg = BC_REG_A;
                 builder.emit_dataptr(reg, 0);
                 // -16 is hardcode, use sizeof slice.
-                builder.emit_set_ret(reg, -16, REGISTER_SIZE, false);
+                builder.emit_set_ret(reg, BC_ARG_INDEX0, -16, REGISTER_SIZE, false);
 
                 // NOTE: We return preallocated data which is the globals defined by the user instead
                 //   of dataSegment.size() which also contains string literals and type information.
@@ -5452,7 +5325,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 // Assert(!compiler->global_size_relocation.valid()); // Setting this twice would be an error
                 // compiler->global_size_relocation = builder.get_relocation(-4);
 
-                builder.emit_set_ret(reg, -REGISTER_SIZE, REGISTER_SIZE, false);
+                builder.emit_set_ret(reg, BC_ARG_INDEX0, -REGISTER_SIZE, REGISTER_SIZE, false);
             } else {
                 // TODO: Provide a list or the docs where you can read about the builtins
                 ERR_SECTION(
@@ -5884,7 +5757,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                     Assert(currentFunction && currentFunction->parentStruct);
                     auto type = varinfo->versions_typeId[currentPolyVersion];
                     Assert(type.getPointerLevel() > 0);
-                    builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false);
+                    builder.emit_get_param(BC_REG_B, BC_ARG_INDEX0, 0, REGISTER_SIZE, false);
                     offset = varinfo->versions_dataOffset[currentPolyVersion];
                 } break;
                 default: Assert(false);
@@ -5977,7 +5850,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                         // NOTE: Is member variable/argument always at this offset with all calling conventions?
                         
                     // type = varinfo->versions_typeId[info.currentPolyVersion];
-                        builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, false); // pointer
+                        builder.emit_get_param(BC_REG_B, BC_ARG_INDEX0, 0, REGISTER_SIZE, false); // pointer
 
                         auto& mem = currentFunction->parentStruct->members[varinfo->memberIndex];
                         // if (mem.array_length > 0) {
@@ -5987,8 +5860,8 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                         //         ERR_LINE2(statement->location,"here")
                         //     )
                         // }
-                        auto type = varinfo->versions_typeId[info.currentPolyVersion];
-                        builder.emit_get_param(BC_REG_B, 0, REGISTER_SIZE, AST::IsDecimal(type));
+                        // auto type = varinfo->versions_typeId[info.currentPolyVersion];
+                        // builder.emit_get_param(BC_REG_B, BC_ARG_INDEX0, 0, REGISTER_SIZE, AST::IsDecimal(type));
                         // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, REGISTER_SIZE, GenContext::FRAME_SIZE);
                         
                         // builder.emit_li32(BC_REG_A,varinfo->versions_dataOffset[info.currentPolyVersion]);
@@ -6797,7 +6670,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
 
                 Assert(signature->argumentTypes[0].typeId == iter_type);
                 for(int i=signature->argumentTypes.size()-1;i>=0;i--) {
-                    result = generatePop_set_arg(signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
+                    result = generatePop_set_arg(i, signature->argumentTypes[i].offset, signature->argumentTypes[i].typeId);
                     if (result != SIGNAL_SUCCESS)
                         return result;
                 }
@@ -6811,7 +6684,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                 auto &ret = signature->returnTypes[0];
                 TypeId returned_type = ret.typeId;
                 
-                result = generatePush_get_val(ret.offset - signature->returnSize, returned_type);
+                result = generatePush_get_val(BC_ARG_INDEX0, ret.offset - signature->returnSize, returned_type);
                 if (result != SIGNAL_SUCCESS)
                     return result;
                     
@@ -6845,11 +6718,11 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                 builder.emit_ptr_to_locals(BC_REG_B, iterator_offset);
                 builder.emit_push(BC_REG_B);
                 
-                result = generatePop_set_arg(signature->argumentTypes[1].offset, signature->argumentTypes[1].typeId);
+                result = generatePop_set_arg(BC_ARG_INDEX1, signature->argumentTypes[1].offset, signature->argumentTypes[1].typeId);
                 if (result != SIGNAL_SUCCESS)
                     return result;
                 
-                result = generatePop_set_arg(signature->argumentTypes[0].offset, signature->argumentTypes[0].typeId);
+                result = generatePop_set_arg(BC_ARG_INDEX0, signature->argumentTypes[0].offset, signature->argumentTypes[0].typeId);
                 if (result != SIGNAL_SUCCESS)
                     return result;
                 
@@ -6863,7 +6736,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                 auto &ret = signature->returnTypes[0];
                 TypeId returned_type = ret.typeId;
                 
-                result = generatePush_get_val(ret.offset - signature->returnSize, returned_type);
+                result = generatePush_get_val(BC_ARG_INDEX0, ret.offset - signature->returnSize, returned_type);
                 if (result != SIGNAL_SUCCESS)
                     return result;
                     
@@ -7016,7 +6889,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                             
                             generatePop(BC_REG_INVALID, 0, dtype);
                         } else {
-                            generatePop_set_ret(retType.offset - info.currentFuncImpl->signature.returnSize, retType.typeId);
+                            generatePop_set_ret(ret_index, retType.offset - info.currentFuncImpl->signature.returnSize, retType.typeId);
                             // generatePop(BC_REG_BP, retType.offset - info.currentFuncImpl->returnSize, retType.typeId);
                         }
                     } else {
@@ -7037,7 +6910,7 @@ SignalIO GenContext::generateStatement(ASTStatement *statement) {
                         ERRTYPE1(expr->location, dtype, retType, ".");
                         generatePop(BC_REG_INVALID, 0, dtype);
                     } else {
-                        generatePop_set_ret(0-REGISTER_SIZE, retType);
+                        generatePop_set_ret(ret_index, 0-REGISTER_SIZE, retType);
                     }
                 }
             }
@@ -8302,160 +8175,4 @@ void GenContext::init_context(Compiler* compiler) {
     scratch_allocator.init(0x10000);
     FRAME_SIZE = compiler->arch.FRAME_SIZE;
     REGISTER_SIZE = compiler->arch.REGISTER_SIZE;
-}
-
-void TestGenerate(BytecodeBuilder& b) {
-    // Tests for x64 generator. How well does it convert the code?
-    
-    // #############3
-    // Complex code, good test for x64 generator
-    // #############
-
-    // b.emit_alloc_local(BC_REG_INVALID, 8);
-
-    // b.emit_li32(BC_REG_B,9);
-    // b.emit_mov_rm_disp(BC_REG_A,BC_REG_LOCALS,4,-8);
-
-    // // b.emit_add(BC_REG_A,BC_REG_A,false,4);
-    // b.emit_add(BC_REG_A,BC_REG_B,false,4);
-    // b.emit_push(BC_REG_B);
-    // b.emit_add(BC_REG_B,BC_REG_B,false,4);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
-    // // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
-
-    // b.emit_pop(BC_REG_D);
-    // // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_D,4,-8);
-    
-    // b.emit_jz(BC_REG_A, 0);
-
-    // b.emit_free_local(8);
-
-    // #############
-    // Efficient register usage
-    // #################
-    // b.emit_alloc_local(BC_REG_INVALID, 8);
-
-    // b.emit_li32(BC_REG_A,9);
-    // b.emit_li32(BC_REG_B,9);
-    // b.emit_li32(BC_REG_C,9);
-
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_C,4,-8);
-
-    // // will x64 reuse registers since we overwrite the values?
-    // b.emit_li32(BC_REG_E,9);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_E,4,-8);
-
-    // b.emit_li32(BC_REG_C,9);
-    // b.emit_li32(BC_REG_B,9);
-
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_C,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
-    
-    // b.emit_free_local(8);
-
-    // #############
-    // Calls and register allocation
-    // #################
-    
-    // b.emit_alloc_local(BC_REG_INVALID, 8);
-    
-    // b.emit_li32(BC_REG_A,9);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
-
-    // b.emit_alloc_local(BC_REG_INVALID, 8);
-    // b.emit_mov_rm_disp(BC_REG_A,BC_REG_LOCALS,4,-8);
-    // b.emit_set_arg(BC_REG_A, 0, 4, false);
-    // int n;
-    // b.emit_call(LinkConvention::NONE, CallConvention::BETCALL, &n);
-    // b.emit_free_local(8);
-    // b.emit_get_val(BC_REG_B, -8, 4, false);
-    
-    // b.emit_push(BC_REG_B);
-    
-    // b.emit_alloc_local(BC_REG_INVALID, 8);
-    // b.emit_mov_rm_disp(BC_REG_A,BC_REG_LOCALS,4,-8);
-    // b.emit_set_arg(BC_REG_A, 0, 4, false);
-    // b.emit_call(LinkConvention::NONE, CallConvention::BETCALL, &n);
-    // b.emit_free_local(8);
-    // b.emit_get_val(BC_REG_C, -8, 4, false);
-    
-    // b.emit_pop(BC_REG_B);
-    
-    // b.emit_alloc_local(BC_REG_INVALID, 8);
-    // b.emit_set_arg(BC_REG_B, 0, 4, false);
-    // b.emit_set_arg(BC_REG_C, 4, 4, false);
-    // b.emit_call(LinkConvention::NONE, CallConvention::BETCALL, &n);
-    // b.emit_free_local(8);
-    
-    // b.emit_free_local(8);
-
-    // #############
-    // Push and pop management
-    // (bytecode push/pop and x64 automatic push/pop or other way of dealing wi)
-    // #################
-    
-    // b.emit_alloc_local(BC_REG_INVALID, 8);
-
-    // b.emit_li32(BC_REG_A,9);
-    // b.emit_li32(BC_REG_B,9);
-    // b.emit_li32(BC_REG_C,9);
-    // b.emit_li32(BC_REG_D,9);
-    // b.emit_li32(BC_REG_E,9);
-    // b.emit_li32(BC_REG_F,9);
-    // b.emit_li32(BC_REG_G,9);
-    // b.emit_li32(BC_REG_H,9);
-    // b.emit_li32(BC_REG_I,9);
-
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_C,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_D,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_E,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_F,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_G,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_H,4,-8);
-    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_I,4,-8);
-    
-    // b.emit_free_local(8);
-    
-    // #############
-    // Read / write ordering
-    // #################
-
-    // b.emit_li32(BC_REG_A, 2);
-    // b.emit_li32(BC_REG_D, 5);
-    // b.emit_push(BC_REG_D);
-    // b.emit_push(BC_REG_A);
-    
-    // b.emit_pop(BC_REG_A); // throw range.now
-    // b.emit_pop(BC_REG_D); // range.end we care about
-
-    // b.emit_mov_rm_disp(BC_REG_C, BC_REG_LOCALS, 4, -8);
-    // // builder.emit_mov_rm_disp(index_reg, BC_REG_BP, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
-
-    // b.emit_incr(BC_REG_C, 1);
-    
-    // b.emit_mov_mr_disp(BC_REG_LOCALS, BC_REG_C, 4, -8);
-    // // builder.emit_mov_mr_disp(BC_REG_BP, index_reg, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
-
-    // // bytecode->addDebugText("For condition\n");
-    // b.emit_add(BC_REG_C, BC_REG_D, false, 4);
-
-    // b.emit_jz(BC_REG_C, 0);
-
-    // b.emit_jmp(0);
-
-
-    // ########################3
-    //  EDGE CASE
-    // ########################3
-
-    // b.emit_
-
-    // b.emit_li32(BC_REG_A, 9);
-    // b.emit_add(BC_REG_F, BC_REG_A, false, 4);
-
-    // b.emit_mov_mr(BC_REG_LOCALS, BC_REG_F, 4);
 }

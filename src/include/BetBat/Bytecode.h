@@ -209,8 +209,7 @@ struct BCInstructionInfo {
     InstBaseType type;
 };
 extern BCInstructionInfo instruction_contents[256];
-#pragma pack(push)
-#pragma pack(1)
+#pragma pack(push, 1)
 struct InstBase {
     InstructionOpcode opcode;
 };
@@ -242,6 +241,12 @@ struct InstBase_op1_imm16 {
     BCRegister op0;
     i16 imm16;
 };
+struct InstBase_op1_imm16_imm8 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    i16 imm16;
+    i8 imm8;
+};
 struct InstBase_op1_imm32 {
     InstructionOpcode opcode;
     BCRegister op0;
@@ -257,6 +262,13 @@ struct InstBase_op1_ctrl_imm16 {
     BCRegister op0;
     InstructionControl control;
     i16 imm16;
+};
+struct InstBase_op1_ctrl_imm16_imm8 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    InstructionControl control;
+    i16 imm16;
+    i8 imm8;
 };
 struct InstBase_op2 {
     InstructionOpcode opcode;
@@ -376,18 +388,18 @@ struct TinyBytecode {
     CallConvention call_convention = CallConvention::BETCALL;
     int index = 0;
     
-    enum ParameterKind {
-        INTEGER,    // includes char, enum (these are passed in general registers)
-        POINTER,    // passed in general registers
-        FLOAT,      // passed in floating point registers
-        STRUCTURAL, // includes struct, fixed arrays (passed in general register if less than 8 bytes, passed in stack or by pointer if larger) see BTB calling convention for details.
-    };
-    struct Parameter {
-        ParameterKind kind;
-        int size;
-    };
-    DynamicArray<Parameter> arguments;
-    DynamicArray<Parameter> return_values;
+    // enum ParameterKind {
+    //     INTEGER,    // includes char, enum (these are passed in general registers)
+    //     POINTER,    // passed in general registers
+    //     FLOAT,      // passed in floating point registers
+    //     STRUCTURAL, // includes struct, fixed arrays (passed in general register if less than 8 bytes, passed in stack or by pointer if larger) see BTB calling convention for details.
+    // };
+    // struct Parameter {
+    //     ParameterKind kind;
+    //     int size;
+    // };
+    // DynamicArray<Parameter> arguments;
+    // DynamicArray<Parameter> return_values;
     int frame_size; // for local variables.
 
     // debug information
@@ -569,13 +581,17 @@ struct BytecodeBuilder {
     void fix_alloc_args(int index, u16 size);
     void emit_free_args(u16 size);
 
-    void emit_set_arg  (BCRegister reg, i16 imm, int size, bool is_float, bool is_signed = true);
-    void emit_get_param(BCRegister reg, i16 imm, int size, bool is_float, bool is_signed = true);
-    void emit_set_ret  (BCRegister reg, i16 imm, int size, bool is_float, bool is_signed = true);
-    void emit_get_val  (BCRegister reg, i16 imm, int size, bool is_float, bool is_signed = true); // get return value
+    // for readability
+    #define BC_ARG_INDEX0 0
+    #define BC_ARG_INDEX1 1
+
+    void emit_set_arg  (BCRegister reg, i8 arg_index, i16 imm, int size, bool is_float, bool is_signed = true);
+    void emit_get_param(BCRegister reg, i8 arg_index, i16 imm, int size, bool is_float, bool is_signed = true);
+    void emit_set_ret  (BCRegister reg, i8 arg_index, i16 imm, int size, bool is_float, bool is_signed = true);
+    void emit_get_val  (BCRegister reg, i8 arg_index, i16 imm, int size, bool is_float, bool is_signed = true); // get return value
     
     void emit_ptr_to_locals(BCRegister reg, int imm16);
-    void emit_ptr_to_params(BCRegister reg, int imm16);
+    void emit_ptr_to_params(BCRegister reg, int arg_index, int imm16);
 
     void emit_call(LinkConvention l, CallConvention c, i32* index_of_relocation, i32 imm = 0);
     void emit_call_reg(BCRegister reg, LinkConvention l, CallConvention c);
