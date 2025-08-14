@@ -1035,9 +1035,9 @@ SignalIO ParseContext::parseNamespace(ASTScope*& astNamespace){
         } else if(token->type == lexer::TOKEN_ENUM) {
             info.advance();
             signal = parseEnum(tempEnum);
-        } else if(token->type == lexer::TOKEN_NAMESPACE) {
-            info.advance();
-            signal = parseNamespace(tempNamespace);
+        // } else if(token->type == lexer::TOKEN_NAMESPACE) {
+        //     info.advance();
+        //     signal = parseNamespace(tempNamespace);
         } else {
             auto token = info.gettok();
             ERR_SECTION(
@@ -4923,13 +4923,13 @@ SignalIO ParseContext::parseBody(ASTScope*& bodyLoc, ScopeId parentScope, ParseF
             if(tempEnum)
                 bodyLoc->add(info.ast, tempEnum);
             info.nextContentOrder.last()++;
-        } else if(token->type == lexer::TOKEN_NAMESPACE) {
-            info.advance();
-            signal = parseNamespace(tempNamespace);
-            astNode = (ASTNode*)tempNamespace;
-            if(tempNamespace)
-                bodyLoc->add(info.ast, tempNamespace);
-            info.nextContentOrder.last()++;
+        // } else if(token->type == lexer::TOKEN_NAMESPACE) {
+        //     info.advance();
+        //     signal = parseNamespace(tempNamespace);
+        //     astNode = (ASTNode*)tempNamespace;
+        //     if(tempNamespace)
+        //         bodyLoc->add(info.ast, tempNamespace);
+        //     info.nextContentOrder.last()++;
         }
         if(signal==SIGNAL_NO_MATCH)
             signal = parseFlow(tempStatement);

@@ -4,7 +4,7 @@
         When linking with dynamic library of the compiler define BASIN_DLL before including headers.
 */
 
-#pragma one
+#pragma once
 
 #if defined(_MSC_VER)
     #ifdef BASIN_DLL
@@ -28,14 +28,17 @@
 
 enum BasinError {
     BASIN_SUCCESS,
+    BASIN_INVALID_OPTIONS,
+    BASIN_COMPILE_ERROR,
+    // TODO: BASIN_VM_ERROR,
 };
 
 enum BasinTarget {
     BASIN_TARGET_host,
     BASIN_TARGET_windows_x86_64,
     BASIN_TARGET_linux_x86_64,
-    BASIN_TARGET_ARM,
-    BASIN_TARGET_AARCH64,
+    BASIN_TARGET_arm,     // baremetal
+    BASIN_TARGET_aarch64, // baremetal
 };
 
 enum BasinBinaryType {
@@ -45,9 +48,12 @@ enum BasinBinaryType {
     BASIN_BINARY_object_file,
 };
 
-struct BasinErrorResult {
-    BasinError error;
-    const char* message;
+struct BasinResult {
+    BasinError error_type;
+    const char* error_message;
+
+    const char* const* compile_errors;
+    int compile_errors_len;
 };
 
 /*
@@ -58,7 +64,7 @@ struct BasinCompileOptions {
     BasinBinaryType binary_output_type;
     bool disable_debug; // yes debug is default
     bool optimize; /* does nothing, reserved for future */
-    const char** include_dirs;
+    const char* const* include_dirs;
     int include_dirs_len;
 };
 
@@ -79,7 +85,8 @@ extern "C" {
         version - Optional array where major, minor, and revision is written to.
 
     Returns:
-        A string in the format "major.minor.revision".
+        A string in the format "major.minor.revision-suffix".
+        The suffix only exists on pre releases.
 */
 BASIN_API const char* basin_version(int version[3]);
 
@@ -87,19 +94,50 @@ BASIN_API const char* basin_version(int version[3]);
     Compiles a source file into an object file.
 
     Parameters:
-        path         - Path to input file.
-        output:      - Path to ouput file.
-        options:     - Optional structure for specifying debug info, optimizations, include directories,
+        path        - Path to input file.
+        output:     - Path to ouput file.
+        options:    - Optional structure for specifying debug info, optimizations, include directories,
                          ouput file format, architecture, etc. A zeroed struct is used if null is passed.
-        error_result - Optional structure to receive details about the error (error message).
+        result      - Optional structure to receive details about compilation such as errors.
     
     Returns:
         Success or kind of error.
 */
-BASIN_API BasinError basin_compile_file(const char* path, const char* output, const BasinCompileOptions* options, const BasinErrorResult* error_result);
+BASIN_API BasinError basin_compile_file(const char* path, const char* output, const BasinCompileOptions* options, BasinResult* result);
 
 
+typedef struct {
 
+} BasinContext;
+
+typedef enum {
+    BASIN_STEP_PARSE_AST = 0x1,
+    BASIN_STEP_GEN_BYTECODE = 0x2,
+    BASIN_STEP_GEN_MACHINE = 0x4,
+} BasinContextSteps;
+
+/*
+    Gives you finer control over the compile process
+        
+
+    Returns:
+        A compile context. Is null if error occured.
+*/
+BASIN_API BasinContext* basin_create_context(BasinResult* result);
+
+BASIN_API BasinError basin_context_set_options(BasinContext* context, const BasinCompileOptions* options, BasinResult* result);
+
+BASIN_API BasinError basin_context_run_steps(BasinContext* context, , BasinResult* result);
+
+
+void main() {
+    BasinContext* context = basin_create_context(NULL);
+
+    BasinCompileOptions options = {};
+    basin_context_set_options(context, &options, NULL);
+
+    basin_context_run_steps(context);
+}
 
 #ifdef __cplusplus
 } // extern "C"

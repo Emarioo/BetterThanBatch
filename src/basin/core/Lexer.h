@@ -63,14 +63,13 @@ namespace lexer {
         TOKEN_FUNCTION,
         TOKEN_OPERATOR,
         TOKEN_ENUM,
-        TOKEN_NAMESPACE,
         TOKEN_UNION,
         TOKEN_ASM,
         TOKEN_TEST, 
         TOKEN_TRY,
         TOKEN_CATCH,
-        TOKEN_FINALLY,
-        TOKEN_KEYWORD_END = TOKEN_FINALLY, // inclusive
+        TOKEN_FINALLY, TOKEN_KEYWORD_END = TOKEN_FINALLY, // inclusive
+        // TOKEN_NAMESPACE, 
 
         TOKEN_NAMESPACE_DELIM,
 
@@ -378,3 +377,7 @@ namespace lexer {
     // 0x is optional. Asserts if first character is minus
     u64 ConvertHexadecimal(const StringView& view);
 }
+
+void find_collision_free_table();
+int construct_keyword_table();
+lexer::TokenType convert_token_type(StringView text);

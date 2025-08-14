@@ -55,6 +55,7 @@ void Reporter::start_report() {
         engone::log::out.setInput(&stream);
         engone::log::out.enableConsole(false);
     }
+    error_messages.add({});
 }
 void Reporter::end_report() {
     if(!instant_report) {
@@ -82,6 +83,8 @@ void Reporter::err_head(lexer::Token token, CompileError errcode){
 
     log::out << " ("<<ToCompileErrorString({true,errcode})<<")";
     log::out << ": " <<  MESSAGE_COLOR;
+
+    error_messages.last() += path + ":" + std::to_string(line) + ":" + std::to_string(column) + " (" + ToCompileErrorString({true, errcode}) + "): ";
 }
 
 // void Reporter::err_desc(const StringBuilder& text) {

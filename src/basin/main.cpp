@@ -12,27 +12,15 @@
 
 #include "basin/extension/CHeaderTranspiler.h"
 
-#undef FILE_READ_ONLY // bye bye Windows defined flag
-#undef IMAGE_REL_AMD64_REL32
-#undef coff
-
 // returns true if no command was matched or if command should be executed together with the compiler
 // returns false if program should quit, or if something failed
 bool CheckDeveloperCommand(const BaseArray<std::string>& args);
-
-typedef void*(*FnCreateWindow)(int,int,const char*,void*,void*);
 
 int main(int argc, const char** argv){
     using namespace engone;
     #define EXIT_CODE_SUCCESS 0
     #define EXIT_CODE_FAILURE 1
 
-    // auto lib = LoadDynamicLibrary("libs/glfw-3.3.9/lib-mingw-w64-debug/glfw3.dll");
-    // auto f = (FnCreateWindow)GetFunctionPointer(lib, "glfwCreateWindow");
-
-    // auto ret = f(600,400,"title",nullptr,nullptr);
-
-    // return 0;
 
     auto main_start = StartMeasure();
 

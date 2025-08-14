@@ -49,6 +49,13 @@ u32 Lexer::tokenize(const char* text, u64 length, const std::string& path_name, 
     using namespace engone;
     ZoneScopedC(tracy::Color::Gold);
 
+    int collisions = construct_keyword_table();
+    if(collisions > 0) {
+        printf("Computing hash table.\n");
+        find_collision_free_table();
+        Assert(collisions == 0);
+    }
+
     Import* lexer_import=nullptr;
     u32 file_id = 0;
     
@@ -654,73 +661,82 @@ u32 Lexer::tokenize(const char* text, u64 length, const std::string& path_name, 
                 new_tokens->type = TOKEN_IDENTIFIER;
             
                 StringView temp{text + str_start, str_end - str_start};
+
+                TokenType kind = convert_token_type(temp);
+
+                if(kind != TOKEN_EOF) {
+                    new_tokens->type = kind;
+                    has_data = false;
+                }
+
                 // TODO: Optimize. For example, if first character isn't one of these 'tfsenu' then it's not a special token and we don't have to run all ifs.
                 // log::out << "check " << temp << "\n";
                 
-                #define CASE(S, STR, TOK)  if(S-1 == temp.len && temp == (char*)((u8*)STR+1)) {\
-                    new_tokens->type = TOK; has_data = false; }
+                // #define CASE(S, STR, TOK)  if(S-1 == temp.len && temp == (char*)((u8*)STR+1)) {
+                //     new_tokens->type = TOK; has_data = false; }
 
-                char f = *(text+str_start);
-                temp.ptr++; // not need to check first character
-                temp.len--;
-                switch(f){
-                    case 'n': {
-                        CASE(4, "null",        TOKEN_NULL)
-                        else CASE(9, "namespace",   TOKEN_NAMESPACE)
-                        else CASE(6, "nameof",      TOKEN_NAMEOF)
-                    } break;
-                    case 't': {
-                        CASE(4, "true",        TOKEN_TRUE)
-                        else CASE(6, "typeid",      TOKEN_TYPEID)
-                        else CASE(3, "try",      TOKEN_TRY)
-                    } break;
-                    case 'f': {
-                        CASE(5, "false",       TOKEN_FALSE)
-                        else CASE(3, "for",         TOKEN_FOR)
-                        else CASE(2, "fn",          TOKEN_FUNCTION)
-                        else CASE(7, "finally",          TOKEN_FINALLY)
-                    } break;
-                    case 'i': {
-                        CASE(2, "if",          TOKEN_IF)
-                    } break;
-                    case 'e': {
-                        CASE(4, "else",        TOKEN_ELSE)
-                        else CASE(4, "enum",        TOKEN_ENUM)
-                    } break;
-                    case 'w': {
-                        CASE(5, "while",       TOKEN_WHILE)
-                    } break;
-                    case 's': {
-                        CASE(6, "switch",      TOKEN_SWITCH)
-                        else CASE(6, "struct",      TOKEN_STRUCT)
-                        else CASE(6, "sizeof",      TOKEN_SIZEOF)
-                    } break;
-                    case 'd': {
-                        CASE(5, "defer",       TOKEN_DEFER)
-                    } break;
-                    case 'r': {
-                        CASE(6, "return",      TOKEN_RETURN)
-                    } break;
-                    case 'b': {
-                        CASE(5, "break",       TOKEN_BREAK)
-                    } break;
-                    case 'c': {
-                        CASE(8, "continue",    TOKEN_CONTINUE)
-                        CASE(5, "catch",    TOKEN_CATCH)
-                    } break;
-                    case 'u': {
-                        CASE(5, "using",       TOKEN_USING)
-                        else CASE(5, "union",       TOKEN_UNION)
-                    } break;
-                    case 'o': {
-                        CASE(8, "operator",    TOKEN_OPERATOR)
-                    } break;
-                    case 'a': {
-                        CASE(3, "asm",         TOKEN_ASM)
-                    } break;
-                    case '_': {
-                        CASE(5, "_test",         TOKEN_TEST)
-                    } break;
+                // char f = *(text+str_start);
+                // temp.ptr++; // not need to check first character
+                // temp.len--;
+                // switch(f){
+                //     case 'n': {
+                //         CASE(4, "null",        TOKEN_NULL)
+                //         else CASE(9, "namespace",   TOKEN_NAMESPACE)
+                //         else CASE(6, "nameof",      TOKEN_NAMEOF)
+                //     } break;
+                //     case 't': {
+                //         CASE(4, "true",        TOKEN_TRUE)
+                //         else CASE(6, "typeid",      TOKEN_TYPEID)
+                //         else CASE(3, "try",      TOKEN_TRY)
+                //     } break;
+                //     case 'f': {
+                //         CASE(5, "false",       TOKEN_FALSE)
+                //         else CASE(3, "for",         TOKEN_FOR)
+                //         else CASE(2, "fn",          TOKEN_FUNCTION)
+                //         else CASE(7, "finally",          TOKEN_FINALLY)
+                //     } break;
+                //     case 'i': {
+                //         CASE(2, "if",          TOKEN_IF)
+                //     } break;
+                //     case 'e': {
+                //         CASE(4, "else",        TOKEN_ELSE)
+                //         else CASE(4, "enum",        TOKEN_ENUM)
+                //     } break;
+                //     case 'w': {
+                //         CASE(5, "while",       TOKEN_WHILE)
+                //     } break;
+                //     case 's': {
+                //         CASE(6, "switch",      TOKEN_SWITCH)
+                //         else CASE(6, "struct",      TOKEN_STRUCT)
+                //         else CASE(6, "sizeof",      TOKEN_SIZEOF)
+                //     } break;
+                //     case 'd': {
+                //         CASE(5, "defer",       TOKEN_DEFER)
+                //     } break;
+                //     case 'r': {
+                //         CASE(6, "return",      TOKEN_RETURN)
+                //     } break;
+                //     case 'b': {
+                //         CASE(5, "break",       TOKEN_BREAK)
+                //     } break;
+                //     case 'c': {
+                //         CASE(8, "continue",    TOKEN_CONTINUE)
+                //         CASE(5, "catch",    TOKEN_CATCH)
+                //     } break;
+                //     case 'u': {
+                //         CASE(5, "using",       TOKEN_USING)
+                //         else CASE(5, "union",       TOKEN_UNION)
+                //     } break;
+                //     case 'o': {
+                //         CASE(8, "operator",    TOKEN_OPERATOR)
+                //     } break;
+                //     case 'a': {
+                //         CASE(3, "asm",         TOKEN_ASM)
+                //     } break;
+                //     case '_': {
+                //         CASE(5, "_test",         TOKEN_TEST)
+                //     } break;
+
                     // Non-optimize version
                     // #define CASE(STR, TOK)  if(temp == STR) { new_tokens->type = TOK; has_data = false; }
                     // CASE("null",        TOKEN_NULL)
@@ -746,8 +762,8 @@ u32 Lexer::tokenize(const char* text, u64 length, const std::string& path_name, 
                     // else CASE("nameof",      TOKEN_NAMEOF)
                     // else CASE("typeid",      TOKEN_TYPEID)
                     // else CASE("asm",         TOKEN_ASM)
-                    #undef CASE
-                }
+                //     #undef CASE
+                // }
             }
             // if(nextLiteralSuffix) {
             //     index++;

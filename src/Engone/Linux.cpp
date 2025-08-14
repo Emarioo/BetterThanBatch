@@ -812,6 +812,10 @@ namespace engone {
         i32 res = value + __atomic_fetch_add((volatile long*)ptr, value, __ATOMIC_SEQ_CST);
         return res;
     }
+	i64 atomic_add64(volatile i64* ptr, i64 value) {
+        // i32 res = value + __atomic_fetch_add((volatile long*)ptr, value, __ATOMIC_SEQ_CST);
+        // return res;
+    }
 	Semaphore::Semaphore(u32 initial, u32 max) {
 		Assert(!m_initialized);
 		m_initial = initial;

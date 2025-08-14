@@ -797,6 +797,14 @@ fn parse_line(head: i32*, text: char[]) {
             break
     }
 }
+fn skip_lines(head: i32*, text: char[]) {
+    while *head < text.len {
+        c := text[*head]
+        if c != ' ' && c != '\r' && c != '\t' c != '\n'
+            break
+        (*head)++
+    }
+}
 fn parse_non_space(head: i32*, text: char[]) -> char[] {
     start := *head
     while *head < text.len {

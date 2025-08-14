@@ -344,6 +344,7 @@ namespace engone {
 	// these should be intrinsics
     // returns the result
 	i32 atomic_add(volatile i32* ptr, i32 value);
+	i64 atomic_add64(volatile i64* ptr, i64 value);
 	// returns the old value, if old value is equals to expected then new_value will replace the old value at the pointer.
 	i32 atomic_compare_swap(volatile i32* ptr, i32 expected_value, i32 new_value);
     

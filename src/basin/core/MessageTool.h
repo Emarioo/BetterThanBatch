@@ -45,7 +45,7 @@
 
 #define BASE_WARN_SECTION(CODE, CONTENT) { info.compiler.compile_stats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compiler) info.compiler->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compiler) info.compiler->reporter.end_report(); }
 
-#define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n\n";
+#define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n\n"; info.reporter->error_messages.last() += (std::string)(StringBuilder{} + STR) + "\n\n";
 #define ERR_MSG_LOG(STR) engone::log::out << STR;
 #define ERR_MSG_COLORED(STR) engone::log::out << STR << "\n\n";
 // #define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
@@ -168,4 +168,6 @@ struct Reporter {
             return 0;
         return pair->second;
     }
+
+    DynamicArray<std::string> error_messages;
 };

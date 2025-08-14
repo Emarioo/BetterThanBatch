@@ -1067,6 +1067,10 @@ namespace engone {
         i32 res = InterlockedAdd((volatile long*)ptr, value);
         return res;
     }
+	i64 atomic_add64(volatile i64* ptr, i64 value) {
+        i64 res = InterlockedAdd64((volatile long long*)ptr, value);
+        return res;
+    }
 	int atomic_compare_swap(volatile i32* ptr, i32 expected_value, i32 new_value) {
 		int result = InterlockedCompareExchange((volatile long*)ptr, new_value, expected_value);
 		return result == expected_value;

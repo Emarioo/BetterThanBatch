@@ -25,20 +25,22 @@
 
 // matrix operation multiplication efficient.
 
-#load "libc.so.6" as LIBC
+fn main() {
+
+    #load "libc.so.6" as LIBC
 
 
-fn @import(LIBC, alias="malloc")  _malloc(n: i32) -> void*;
+    fn @import(LIBC, alias="malloc")  _malloc(n: i32) -> void*;
 
-ptr := _malloc(8);
+    ptr := _malloc(8);
 
-fn @import(LIBC) malloc(n: i32) -> void*;
+    fn @import(LIBC) malloc(n: i32) -> void*;
 
-ptr2 := malloc(32);
+    ptr2 := malloc(32);
 
-// func : fn hey(x: i32) -> i32;
-func : fn (i32) -> i32;
-
+    // func : fn hey(x: i32) -> i32;
+    func : fn (i32) -> i32;
+}
 
 
 // struct mat4 {

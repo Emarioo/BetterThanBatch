@@ -1,0 +1,80 @@
+/*
+    File backup sync system
+
+
+    backup between computers
+    you can have a continous computer running (server) or latop and PC being on off now and then which
+    backups and synchronizes when active at same time.
+
+    We synchronize a directory on two computers.
+
+    Network
+
+    sha256 on files?
+*/
+
+import "File"
+import "String" // parsing utility
+
+struct Config_server {
+    name: StringBuilder;
+    address: StringBuilder;
+}
+struct Config_unit {
+    name: StringBuilder;
+    root: StringBuilder;
+    key: StringBuilder;
+    allowed_servers: Array<StringBuilder>;
+}
+struct Config {
+    servers: Array<Config_server>;
+    units: Array<Config_unit>;
+}
+
+fn parse_config(path: char[], config: Config*) {
+    /*
+        [servers]
+        vps = ""
+
+        [units.notes]
+        root = ""
+        key = ""
+        servers = []
+
+        [units.notes]
+        vps = ""
+    */
+    text, error := ReadWholeFile(path)
+    if error {
+        log("bad file", path)
+        return;
+    }
+
+    current_header : StringBuilder
+
+    head := 0
+    while head < text.len {
+        skip_lines(&head, text)
+
+        if(text[head] == '[') {
+            parse_space(&head, text)
+            head++
+
+            current_header = parse_non_space(&head, text)
+
+            if(text[head] == ']') {
+                head++
+            }
+        }
+    }
+
+
+
+}
+
+
+fn main() {
+    // check connections
+
+
+}
