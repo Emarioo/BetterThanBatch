@@ -410,10 +410,11 @@ def release_btb(config: BuildConfig, version):
     shutil.copy(config.exe_output, f"{bundle_dir}/bin/btb{'.exe' if platform.system() == 'Windows' else ''}")
 
     path_release = os.path.abspath(f"releases/{bundle_name}")
+    path_release = path_release.replace("\\", "/")
 
     if platform.system() == "Windows":
         path_release += ".zip"
-        command = f"7z a -tzip {path_release} {os.path.abspath(bundle_dir)}/"
+        command = f"7z a -tzip {path_release} {os.path.abspath(bundle_dir).replace("\\", "/")}/"
     elif platform.system() == "Linux":
         path_release += ".tar.gz"
         # TODO: This has not been tested on Linux yet

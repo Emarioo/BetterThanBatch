@@ -5,8 +5,8 @@
    Make most edits here with global variables
 ############### */
 
-const char* COMPILER_VERSION = "0.2.1-pre";
-const char* COMPILER_DESC = "cparser 2025-07-24";
+const char* COMPILER_VERSION = "0.2.1";
+const char* COMPILER_DESC = "cparser 2025-08-24";
 
 LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_ALL
