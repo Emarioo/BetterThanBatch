@@ -9,7 +9,7 @@
 #if defined(_MSC_VER)
     #ifdef BASIN_DLL
         #define BASIN_API extern __declspec(dllimport)
-    #elif define(BASIN_DLL_EXPORT)
+    #elif defined(BASIN_DLL_EXPORT)
         #define BASIN_API extern __declspec(dllexport)
     #else
         #define BASIN_API extern
@@ -127,17 +127,17 @@ BASIN_API BasinContext* basin_create_context(BasinResult* result);
 
 BASIN_API BasinError basin_context_set_options(BasinContext* context, const BasinCompileOptions* options, BasinResult* result);
 
-BASIN_API BasinError basin_context_run_steps(BasinContext* context, , BasinResult* result);
+// BASIN_API BasinError basin_context_run_steps(BasinContext* context, , BasinResult* result);
 
 
-void main() {
-    BasinContext* context = basin_create_context(NULL);
+// int main() {
+//     BasinContext* context = basin_create_context(NULL);
 
-    BasinCompileOptions options = {};
-    basin_context_set_options(context, &options, NULL);
+//     BasinCompileOptions options = {};
+//     basin_context_set_options(context, &options, NULL);
 
-    basin_context_run_steps(context);
-}
+//     basin_context_run_steps(context);
+// }
 
 #ifdef __cplusplus
 } // extern "C"
